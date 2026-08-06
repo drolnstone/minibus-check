@@ -33,10 +33,17 @@ app/
 
 Full detail for steps 3 to 5 is in `app/README.md`.
 
+## Already set for you
+
+- Apps Script URL is in `config.js`
+- `COORDINATOR_EMAIL` is set to asimbassey@yahoo.com in `Code.gs`
+- Both MOT dates, verified from DVSA
+- Driver register, all seven names with roles
+- Seat counts: YS70 has 16 passenger seats, NH56 has 14
+
 ## Still outstanding
 
-- Apps Script URL in `config.js` — the app sends nothing until this is set
-- `COORDINATOR_EMAIL` in `Code.gs` — no defect alerts until this is set
-- Service, insurance and parking permit dates for both buses. MOT dates are correct and verified. The others are placeholders set close to today so you can see both banner states working. NH56 will show a red overdue banner until you replace them.
-- Passenger seat count and gross weight from both V5C documents
+- **Redeploy the Apps Script.** It has changed since you last deployed. Deploy → Manage deployments → pencil → Version: **New version**. Saving alone does not update the live URL.
+- Service, insurance and parking permit dates for both buses. The MOT dates are real; the other six are placeholders set close to today so you can see both banner states working. **NH56 will show a red overdue banner until you replace them.**
+- Gross weight from both V5C documents. For NH56 this decides whether D1 is required or whether a car licence holder can drive it under the volunteer concession.
 - Licence category evidence for all seven names on the register

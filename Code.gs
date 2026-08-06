@@ -16,8 +16,9 @@
 /* ---- settings ---------------------------------------------------------- */
 
 var TOKEN = "dominion-minibus";          // must match config.js
-var COORDINATOR_EMAIL = "";              // leave blank for no email alerts
+var COORDINATOR_EMAIL = "asimbassey@yahoo.com";   // blank = no email alerts
 var CHECKS_SHEET = "Checks";
+var STATUS_OPTIONS = ["Open", "Booked in", "Parts on order", "Fixed", "Monitoring", "Not a defect"];
 var DEFECTS_SHEET = "Defects";
 
 /* ---- entry points ------------------------------------------------------ */
@@ -81,13 +82,14 @@ function doPost(e) {
     if ((c.defects || []).length) {
       var defs = sheet(ss, DEFECTS_SHEET, [
         "Received", "Check ID", "Date", "Registration", "Driver",
-        "Item", "Critical", "What the driver found", "Status"
+        "Item", "Critical", "What the driver found", "Status", "Action taken", "Closed on"
       ]);
       c.defects.forEach(function (d) {
         defs.appendRow([
           new Date(), c.id, c.date || "", c.reg || "", c.driver || "",
-          d.name, d.crit ? "YES" : "", d.note || "", "Open"
+          d.name, d.crit ? "YES" : "", d.note || "", "Open", "", ""
         ]);
+        applyStatusDropdown(defs, defs.getLastRow());
       });
     }
 
@@ -155,8 +157,67 @@ function sheet(ss, name, headers) {
     sh.appendRow(headers);
     sh.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sh.setFrozenRows(1);
+    if (name === DEFECTS_SHEET) setUpDefectsSheet(sh);
   }
   return sh;
+}
+
+/**
+ * Status column (I) becomes a dropdown, and colours itself so open defects
+ * stand out from closed ones at a glance.
+ */
+function setUpDefectsSheet(sh) {
+  // Dropdown down the whole column, so pasted or future rows get it too.
+  applyStatusDropdown(sh, null);
+
+  var range = sh.getRange("I2:I1000");
+  var rules = sh.getConditionalFormatRules();
+
+  function colourRule(value, bg, fg) {
+    return SpreadsheetApp.newConditionalFormatRule()
+      .whenTextEqualTo(value)
+      .setBackground(bg)
+      .setFontColor(fg)
+      .setRanges([range])
+      .build();
+  }
+
+  rules.push(colourRule("Open", "#FBE9E7", "#A8231B"));
+  rules.push(colourRule("Booked in", "#FDF3E2", "#8A5300"));
+  rules.push(colourRule("Parts on order", "#FDF3E2", "#8A5300"));
+  rules.push(colourRule("Monitoring", "#FDF3E2", "#8A5300"));
+  rules.push(colourRule("Fixed", "#E6F2EB", "#146B41"));
+  rules.push(colourRule("Not a defect", "#F1F1F1", "#666666"));
+  sh.setConditionalFormatRules(rules);
+
+  sh.setColumnWidth(8, 320);   // what the driver found
+  sh.setColumnWidth(9, 130);   // status
+  sh.setColumnWidth(10, 300);  // action taken
+}
+
+/**
+ * Applies the status dropdown. Pass a row number for one row, or null for
+ * the whole column.
+ */
+function applyStatusDropdown(sh, row) {
+  var rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(STATUS_OPTIONS, true)
+    .setAllowInvalid(false)
+    .setHelpText("Pick a status: " + STATUS_OPTIONS.join(", "))
+    .build();
+
+  var range = row ? sh.getRange(row, 9) : sh.getRange("I2:I1000");
+  range.setDataValidation(rule);
+}
+
+/**
+ * Run this once by hand from the Apps Script editor if you already have a
+ * Defects sheet and want the dropdown added to it.
+ */
+function addDropdownToExistingSheet() {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DEFECTS_SHEET);
+  if (!sh) throw new Error("No sheet named " + DEFECTS_SHEET);
+  setUpDefectsSheet(sh);
 }
 
 function alreadyHave(sh, id) {

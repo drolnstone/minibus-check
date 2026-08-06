@@ -84,7 +84,7 @@ window.VEHICLES = [
     reg: "YS70 PWE",
     id: "ys70pwe",
     name: "Ford Transit 460 Trend",
-    detail: "2020 \u00B7 silver \u00B7 manual \u00B7 16 seats",
+    detail: "2020 \u00B7 2.0 diesel \u00B7 manual \u00B7 16 passenger seats",
     colour: "Silver",
 
     dates: {
@@ -117,8 +117,8 @@ window.VEHICLES = [
   {
     reg: "NH56 FWP",
     id: "nh56fwp",
-    name: "Ford Transit",
-    detail: "2007 \u00B7 white \u00B7 manual",
+    name: "Ford Transit 2.4",
+    detail: "2007 \u00B7 2.4 diesel \u00B7 manual \u00B7 14 passenger seats",
     colour: "White",
 
     dates: {
@@ -142,6 +142,12 @@ window.VEHICLES = [
       lights:
         "A cracked rear stop lamp lens failed it in 2025. Check the lenses themselves, not just that the bulbs light up."
     },
+
+    /* V5C: Ford Transit, 2.4 diesel, 2007, manual, body plan VAN.
+       15 seats including the driver, so 14 passenger seats. Still a minibus.
+       The gross weight is the remaining unknown and decides the licence
+       position: at or under 3,500kg the volunteer concession can apply to a
+       car licence holder; above it, D1 is required. Confirm from the V5C. */
 
     /* This bus has no retractable step and no side step. You step straight in
        through the side door. There is a fixed step at the rear. */

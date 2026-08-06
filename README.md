@@ -188,6 +188,24 @@ If you ever do need real authentication, the honest route is Google Sign-In thro
 
 ---
 
+## The Defects sheet
+
+Every defect a driver reports gets its own row, separate from the check it came from, so you can work a list rather than read through clear checks looking for problems.
+
+| Column | Filled by |
+|---|---|
+| Received, Check ID, Date, Registration, Driver, Item, Critical, What the driver found | The app |
+| **Status** | You, from a dropdown |
+| **Action taken**, **Closed on** | You, by hand |
+
+The Status column is a dropdown with six options: **Open**, **Booked in**, **Parts on order**, **Fixed**, **Monitoring**, **Not a defect**. Each colours its cell, so open defects sit red, in-progress ones amber and closed ones green. You can see the state of both buses by glancing down one column.
+
+Change the options by editing `STATUS_OPTIONS` near the top of `Code.gs`, then run `addDropdownToExistingSheet` once from the editor to push the change onto rows that already exist.
+
+**If you already have a Defects sheet** from an earlier version, it has fewer columns and no dropdown. Either delete the tab and let it rebuild on the next defect, or add the two missing headers and run `addDropdownToExistingSheet` from the Apps Script editor.
+
+---
+
 ## Renewal reminders
 
 Each vehicle has a `dates` block:
@@ -217,12 +235,14 @@ Update the date as soon as you renew something. The banner is only useful while 
 Bump the version in `sw.js`, or phones will keep serving the copy they already have:
 
 ```js
-const CACHE = "minibus-check-v8";   // v4, v5 and so on
+const CACHE = "minibus-check-v9";   // v4, v5 and so on
 ```
 
 ---
 
 ## Things to know
+
+**The endpoint URL is in a public file.** `config.js` sits in a public repo, so anyone who finds it has the URL and the token and could write rows to the sheet. Nothing can be read back except the last mileage figure. If junk ever appears, change the token in both files and redeploy, and the old URL stops working.
 
 **The token is a lock, not a safe.** It is visible in the page source, so treat it as protection against stray traffic rather than a determined person. Keep the spreadsheet itself private, and share it only with the people who need it.
 
