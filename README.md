@@ -118,6 +118,24 @@ Everything vehicle-specific lives in `config.js`. Nothing else needs touching.
 - **`watch`** adds the amber "known history" note to a check item. The keys must match item ids in the checklist (see below). This is what makes the app worth more than a paper sheet: a driver checks harder when told why.
 - **`skip`** removes items that do not apply, for example AdBlue on a pre-2015 diesel.
 - **`dates`** drives the renewal banner (see below).
+- **`override`** rewrites the name or wording of a check for one vehicle only.
+
+### skip or override?
+
+Use **`skip`** when the vehicle does not have the thing at all. NH56 FWP skips `adblue` because a 2007 diesel has none.
+
+Use **`override`** when it has the thing in a different form. Both buses have a step, but YS70 has a powered retractable one and NH56 has a fixed rear step you walk straight past into the side door. Same check id, different words:
+
+```js
+override: {
+  step: {
+    name: "Rear step and door thresholds",
+    what: "Fixed rear step secure, not loose or lifting at the edge..."
+  }
+}
+```
+
+This matters more than it looks. A check describing hardware the bus does not have teaches drivers that the list is approximate, and that habit spreads to the items that count. If wording does not fit a vehicle, override it rather than leaving it generic.
 
 ### Check item ids
 
@@ -199,7 +217,7 @@ Update the date as soon as you renew something. The banner is only useful while 
 Bump the version in `sw.js`, or phones will keep serving the copy they already have:
 
 ```js
-const CACHE = "minibus-check-v7";   // v4, v5 and so on
+const CACHE = "minibus-check-v8";   // v4, v5 and so on
 ```
 
 ---
@@ -211,6 +229,8 @@ const CACHE = "minibus-check-v7";   // v4, v5 and so on
 **Duplicates are handled.** Every check carries an id, and the script refuses to write the same id twice, so a phone retrying after a failure cannot create a double entry.
 
 **Export for the folder.** Download the sheet as a spreadsheet every few months for the vehicle records. A cloud sheet is not a substitute for a record you still hold if the account goes away.
+
+**Mileage comes from the record, not the config.** When the app opens it asks the sheet for the last mileage logged against each vehicle, and shows it under the mileage field along with who entered it and how far the bus has gone since. Enter something lower than last time and it says so in red. With no signal it falls back to the last figure that phone saw. Nothing about mileage is hardcoded, so nothing about it goes stale.
 
 **Keep the paper sheet in the glovebox.** Flat battery, forgotten phone, or a driver who prefers paper. The app should reduce the pad, not become a single point of failure.
 

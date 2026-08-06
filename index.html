@@ -421,7 +421,7 @@ var STAGES = [
   { title:"Inside the saloon", lede:"Where the passengers sit. Take your time here.", items:[
     { id:"belts_seat", name:"Seat belts", crit:true, what:"Pull each belt fully out, look for fraying, click it into the buckle, check it locks and releases. Every seat." },
     { id:"anchor", name:"Seat anchorages", crit:true, what:"Push and pull each seat frame. Any movement where it meets the floor is a defect. Do not carry passengers in it." },
-    { id:"step", name:"Step", what:"Deploys and retracts fully and smoothly, or is solid and secure if fixed. No trip edge." },
+    { id:"step", name:"Step", what:"Whatever step this bus has: smooth and complete if it deploys, secure and not slippery if it is fixed. No trip edge where passengers put their feet." },
     { id:"exits", name:"Emergency exits", crit:true, what:"Rear door and side exit open from the inside. Roof hatch works. Nothing stored in front of an exit." },
     { id:"gangway", name:"Gangway and hammers", what:"Gangway clear of bags and equipment, floor dry. Break glass hammers clipped into their brackets, not loose." },
     { id:"extinguisher", name:"Fire extinguisher", what:"Present, in date, gauge in the green, seal unbroken, bracket tight." },
@@ -462,6 +462,12 @@ function buildFor(v){
       return !(v.skip||[]).length || (v.skip||[]).indexOf(it.id) === -1;
     }).map(function(it){
       var copy = { id:it.id, name:it.name, what:it.what, crit:!!it.crit };
+      var ov = v.override && v.override[it.id];
+      if(ov){
+        if(ov.name) copy.name = ov.name;
+        if(ov.what) copy.what = ov.what;
+        if(ov.crit !== undefined) copy.crit = !!ov.crit;
+      }
       if(v.watch && v.watch[it.id]) copy.history = v.watch[it.id];
       return copy;
     })};
@@ -469,6 +475,54 @@ function buildFor(v){
   ALL = [];
   stages.forEach(function(s){ s.items.forEach(function(it){ ALL.push(it); }); });
   TOTAL = ALL.length;
+}
+
+/* ---------------- last recorded mileage ---------------- */
+var MKEY = "fleet.lastmiles.v1";
+var LASTMILES = {};
+(function(){
+  try { LASTMILES = JSON.parse(store.get(MKEY) || "{}"); } catch(e){ LASTMILES = {}; }
+})();
+
+function fetchLastMiles(){
+  if(!LIVE || !navigator.onLine) return;
+  fetch(CFG.endpoint + "?last=1", { method:"GET", redirect:"follow" })
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      var out = JSON.parse(t);
+      if(out && out.ok && out.last){
+        LASTMILES = out.last;
+        store.set(MKEY, JSON.stringify(LASTMILES));
+        if(st.screen === "prep") paintMilesHint();
+      }
+    })
+    .catch(function(){});
+}
+function lastFor(reg){
+  var r = LASTMILES[reg];
+  return (r && r.miles) ? r : null;
+}
+function paintMilesHint(){
+  var hint = $("milesHint");
+  var prev = st.veh ? lastFor(st.veh.reg) : null;
+  var now  = String(st.miles).trim();
+
+  if(prev && now !== "" && Number(now) < Number(prev.miles)){
+    hint.textContent = "That is lower than the last reading of " +
+      Number(prev.miles).toLocaleString("en-GB") + " on " + prev.date + ". Check it.";
+    hint.style.color = "#A8231B";
+    return;
+  }
+  if(prev){
+    var added = now !== "" ? Number(now) - Number(prev.miles) : null;
+    hint.textContent = "Last recorded: " + Number(prev.miles).toLocaleString("en-GB") +
+      " on " + prev.date + (prev.driver ? " by " + prev.driver : "") +
+      (added !== null && added >= 0 ? "  \u00B7  " + added.toLocaleString("en-GB") + " since" : "");
+    hint.style.color = "";
+    return;
+  }
+  hint.textContent = "Read it off the dashboard before you set off.";
+  hint.style.color = "";
 }
 
 /* ---------------- renewal dates ---------------- */
@@ -665,8 +719,7 @@ function renderPrep(){
   $("prepTitle").textContent = "Before you start";
   $("dueBox").innerHTML = dueHTML(v);
   $("miles").value = st.miles;
-  $("milesHint").textContent = "Read it off the dashboard before you set off.";
-  $("milesHint").style.color = "";
+  paintMilesHint();
 }
 
 /* ---------------- stages ---------------- */
@@ -843,9 +896,13 @@ function submit(){
 
   if(!LIVE){ queueUp(rec); paintSend("practice"); return; }
 
+  LASTMILES[rec.reg] = { miles: rec.miles, date: rec.date, driver: rec.driver };
+  store.set(MKEY, JSON.stringify(LASTMILES));
+
   paintSend("sending");
   sendRec(rec).then(function(){
     paintSend("ok");
+    fetchLastMiles();
     if(rec.level==="stop") toast("Sent. Now ring the coordinator.");
   }).catch(function(err){
     queueUp(rec);
@@ -925,7 +982,7 @@ $("driver").addEventListener("input",function(){
 });
 $("pin").addEventListener("input",function(){ st.pin=this.value; paintFoot(); });
 $("miles").addEventListener("input",function(){
-  st.miles=this.value; paintFoot();
+  st.miles=this.value; paintMilesHint(); paintFoot();
 });
 $("sign").addEventListener("input",function(){ st.sign=this.value; paintFoot(); });
 $("toPending").addEventListener("click",function(){ renderPending(); show("pending"); });
@@ -947,7 +1004,7 @@ $("share").addEventListener("click",function(){
   else toast("Screenshot this page to share it.");
 });
 
-window.addEventListener("online",function(){ if(loadQ().length) flush(); });
+window.addEventListener("online",function(){ fetchLastMiles(); if(loadQ().length) flush(); });
 
 /* driver register: entries may be "Name" or { name, role, pin } */
 var REGISTER = (CFG.drivers||[]).map(function(d){
@@ -994,6 +1051,7 @@ $("modeNote").textContent = LIVE
   : "Practice mode: no record address is set up yet, so nothing is being sent.";
 
 paintBanner();
+fetchLastMiles();
 show("driver");
 if(LIVE && loadQ().length && navigator.onLine) setTimeout(flush, 1200);
 

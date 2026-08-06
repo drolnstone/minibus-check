@@ -9,7 +9,7 @@ window.CONFIG = {
      Paste the Apps Script Web App URL here after deploying it.
      It looks like: https://script.google.com/macros/s/AKfy..../exec
      Until this is filled in, the app runs in practice mode and sends nothing. */
-  endpoint: "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec",
+  endpoint: "",
 
   /* Must match the token in Code.gs. It stops stray traffic writing to the
      sheet. It is visible in the page source, so it is a lock on the door,
@@ -72,6 +72,9 @@ window.CONFIG = {
 
      watch    per-vehicle fault history, keyed by check item id
      skip     ids of checks that do not apply to this vehicle
+     override rewrite the name or wording of a check for this vehicle.
+              Use this when a bus has the thing but in a different form.
+              Use skip only when it does not have it at all.
    ========================================================================== */
 
 window.VEHICLES = [
@@ -81,7 +84,7 @@ window.VEHICLES = [
     reg: "YS70 PWE",
     id: "ys70pwe",
     name: "Ford Transit 460 Trend",
-    detail: "2020 \u00B7 silver \u00B7 manual \u00B7 57,363 miles",
+    detail: "2020 \u00B7 silver \u00B7 manual \u00B7 16 seats",
     colour: "Silver",
 
     dates: {
@@ -89,6 +92,14 @@ window.VEHICLES = [
       service:   "2026-08-28",   // PLACEHOLDER
       insurance: "2027-02-01",   // PLACEHOLDER
       permit:    "2026-11-30"    // PLACEHOLDER
+    },
+
+    /* This bus has a powered retractable step. */
+    override: {
+      step: {
+        name: "Retractable step",
+        what: "Deploys and retracts fully and smoothly every time. Tread not worn smooth. Step light works."
+      }
     },
 
     watch: {
@@ -107,7 +118,7 @@ window.VEHICLES = [
     reg: "NH56 FWP",
     id: "nh56fwp",
     name: "Ford Transit",
-    detail: "2007 \u00B7 white \u00B7 manual \u00B7 53,280 miles",
+    detail: "2007 \u00B7 white \u00B7 manual",
     colour: "White",
 
     dates: {
@@ -130,6 +141,15 @@ window.VEHICLES = [
         "An anti-roll bar ball joint was replaced in 2025 and a leaf spring bush was flagged in 2015. Knocking over bumps is worth reporting on a vehicle this age.",
       lights:
         "A cracked rear stop lamp lens failed it in 2025. Check the lenses themselves, not just that the bulbs light up."
+    },
+
+    /* This bus has no retractable step and no side step. You step straight in
+       through the side door. There is a fixed step at the rear. */
+    override: {
+      step: {
+        name: "Rear step and door thresholds",
+        what: "Fixed rear step secure, not loose or lifting at the edge, and not slippery. Side door threshold free of a trip lip. This bus has no retractable step, so passengers step straight in: check the drop is clear and lit."
+      }
     },
 
     /* No AdBlue on a 2007 diesel. */

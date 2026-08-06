@@ -102,8 +102,42 @@ function doPost(e) {
   }
 }
 
-function doGet() {
-  return reply({ ok: true, service: "minibus check recorder" });
+/**
+ * The app calls this with ?last=1 to find the most recent mileage recorded
+ * for each vehicle, so a driver sees what was logged last week and gets a
+ * warning if the new reading is lower.
+ */
+function doGet(e) {
+  var wantLast = e && e.parameter && e.parameter.last;
+  if (!wantLast) {
+    return reply({ ok: true, service: "minibus check recorder" });
+  }
+
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHECKS_SHEET);
+    if (!sh || sh.getLastRow() < 2) return reply({ ok: true, last: {} });
+
+    // Columns: 1 Received, 2 Check ID, 3 Date, 4 Time, 5 Vehicle,
+    //          6 Registration, 7 Driver, 8 Role, 9 Mileage ...
+    var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues();
+    var last = {};
+
+    rows.forEach(function (r) {
+      var reg = String(r[5] || "").trim();
+      var miles = Number(r[8]);
+      if (!reg || !miles) return;
+      var when = r[0] instanceof Date ? r[0].getTime() : 0;
+      if (!last[reg] || when >= last[reg]._t) {
+        last[reg] = { miles: miles, date: String(r[2] || ""), driver: String(r[6] || ""), _t: when };
+      }
+    });
+
+    Object.keys(last).forEach(function (k) { delete last[k]._t; });
+    return reply({ ok: true, last: last });
+
+  } catch (err) {
+    return reply({ ok: false, error: String(err) });
+  }
 }
 
 /* ---- helpers ----------------------------------------------------------- */
