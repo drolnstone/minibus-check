@@ -1,13 +1,14 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
-const CACHE = "minibus-check-v9";
+const CACHE = "minibus-check-v10";
 
 const SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./icon-192.png",
-  "./icon-512.png"
+  "./icon-512.png",
+  "./logo.png"
 ];
 
 self.addEventListener("install", (e) => {

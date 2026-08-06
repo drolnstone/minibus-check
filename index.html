@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1B222C">
-<title>Minibus Check</title>
+<title>Minibus Check · RCCG Dominion Assembly Liverpool</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -244,6 +244,27 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .callbtn{display:flex;align-items:center;justify-content:center;min-height:52px;margin-top:12px;
   background:var(--stop);color:#fff;border-radius:9px;font-family:"Barlow Condensed",sans-serif;
   font-weight:700;font-size:20px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none}
+
+/* ---------- church branding ---------- */
+.brand{display:flex;align-items:center;gap:12px;margin:0 0 16px}
+.brand img{width:52px;height:52px;flex:none}
+.brand-txt b{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;
+  line-height:1.1;letter-spacing:.02em;color:var(--ink)}
+.brand-txt span{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:500;font-size:13px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+.footer-brand{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:22px;opacity:.75}
+.footer-brand img{width:24px;height:24px}
+.footer-brand span{font-family:"Barlow Condensed",sans-serif;font-size:12.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted)}
+
+/* ---------- dash call button ---------- */
+.dash-call{display:inline-flex;align-items:center;gap:7px;margin-top:8px;background:#fff;color:#8A1710;
+  border-radius:7px;padding:9px 14px;text-decoration:none;font-family:"Barlow Condensed",sans-serif;
+  font-weight:700;font-size:17px;letter-spacing:.05em;text-transform:uppercase}
+
+/* ---------- mileage confirm ---------- */
+.milecheck{margin-top:12px;display:none}
+.milecheck.is-on{display:block}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -261,7 +282,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     </span>
   </div>
   <div class="bar"><i id="bar"></i></div>
-  <div class="dash-alert">Do not run<small id="alertText"></small></div>
+  <div class="dash-alert">Do not run<small id="alertText"></small><a class="dash-call" id="dashCall" href="#">Call</a></div>
 </header>
 
 <div class="banner" id="banner">
@@ -272,6 +293,13 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 
   <!-- 1. DRIVER -->
   <section class="screen is-on" id="s-driver">
+    <div class="brand">
+      <img src="logo.png" alt="">
+      <span class="brand-txt">
+        <b>RCCG Dominion Assembly</b>
+        <span>Liverpool · Transport</span>
+      </span>
+    </div>
     <p class="eyebrow">Before the first pick up</p>
     <h1>Who is driving?</h1>
     <p class="lede">Your check goes straight to the coordinator's record when you finish.</p>
@@ -297,6 +325,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       <button class="btn btn-ghost btn-wide" id="toPending" type="button">Waiting to send</button>
     </div>
     <p class="tiny" id="modeNote"></p>
+    <div class="footer-brand"><img src="logo.png" alt=""><span>RCCG Dominion Assembly Liverpool</span></div>
   </section>
 
   <!-- 2. VEHICLE -->
@@ -317,6 +346,12 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
         <label for="miles">Mileage now</label>
         <input id="miles" type="number" inputmode="numeric" class="mono" placeholder="e.g. 57363">
         <div class="hint" id="milesHint">Read it off the dashboard before you set off.</div>
+        <div class="milecheck" id="mileCheck">
+          <button class="confirm" id="mileConfirm" type="button" aria-pressed="false">
+            <span class="box" aria-hidden="true">&#10003;</span>
+            <span id="mileConfirmLabel">I have read it twice and this is what the dashboard says</span>
+          </button>
+        </div>
       </div>
     </div>
   </section>
@@ -403,6 +438,7 @@ var STAGES = [
     { id:"lights", name:"Lights", what:"Sidelights, dipped, main beam, indicators, hazards, brake lights, reverse, fogs, number plate lamp." },
     { id:"fbrake", name:"Front brakes", crit:true, what:"Look through the front wheels at the disc face. Heavy scoring, a deep lip, or one side much cleaner than the other." },
     { id:"body", name:"Body and glass", what:"Chips or cracks in the wiper area. Sliding door runs freely on its track." },
+    { id:"clean", name:"Clean enough to be safe", what:"Lights, mirrors, windows and both number plates clean enough to work. Inside free of rubbish. If the bus is too dirty to see out of or be seen, that is a defect, not an inconvenience." },
     { id:"corrosion", name:"Rust and structure", what:"Sills, wheel arches, step mounts and anywhere the body meets the chassis. Flaking or soft metal, not surface staining." },
     { id:"under", name:"Underneath", what:"Look under the bus for fresh oil, coolant or fuel on the road after standing all week." },
     { id:"pipes", name:"Brake pipes and lines", crit:true, what:"Look along the chassis rails and behind each wheel for damp or wet patches, or a pipe that is flaking rather than just dusty." },
@@ -434,13 +470,15 @@ var STAGES = [
     { id:"brakes", name:"Brakes", crit:true, what:"Firm pedal, no sinking to the floor. Handbrake holds on a slope. Controlled stop at low speed before the first pick up. Listen for grinding or pulling to one side." },
     { id:"steering", name:"Steering", crit:true, what:"No excess free play. No knocking on full lock." },
     { id:"clutch", name:"Clutch and gears", what:"Bite point where you expect it, not right at the top of the pedal. All gears select cleanly, including reverse. No slipping when you pull away." },
-    { id:"mirrors", name:"Mirrors and wipers", what:"All mirrors clean, adjusted and secure. Blades not torn or smearing." },
+    { id:"reverse_aid", name:"Reversing camera and sensors", what:"Select reverse with the engine running. Picture clear and not fogged or frozen. Sensors and reversing sounder audible. Never rely on them alone: they are an aid, not a substitute for looking." },
+    { id:"mirrors", name:"Mirrors and wipers", what:"All mirrors clean, adjusted and secure, and folded out. Blades not torn or smearing." },
+    { id:"infotainment", name:"Radio and dash display", what:"Radio and speakers work at the back as well as the front, so you can be heard. Dash display readable and not stuck on a warning screen." },
     { id:"cab", name:"Horn, heater, demist", what:"All working. Insurance certificate in date and on board." }
   ]}
 ];
 
 /* ---------------- state ---------------- */
-var st = { screen:"driver", veh:null, stage:0, driver:"", role:"", pin:"", miles:"", sign:"", res:{} };
+var st = { screen:"driver", veh:null, stage:0, driver:"", role:"", pin:"", miles:"", mileOk:false, sign:"", res:{} };
 var stages = [];   /* the stage list for the chosen vehicle */
 var ALL = [];
 var TOTAL = 0;
@@ -502,17 +540,51 @@ function lastFor(reg){
   var r = LASTMILES[reg];
   return (r && r.miles) ? r : null;
 }
-function paintMilesHint(){
-  var hint = $("milesHint");
+var BIG_JUMP = 1500;   // miles since last check that looks like a typo
+
+/* Returns null when the reading looks normal, or a description of the problem. */
+function mileProblem(){
   var prev = st.veh ? lastFor(st.veh.reg) : null;
   var now  = String(st.miles).trim();
+  if(!prev || now === "") return null;
+  var n = Number(now), p = Number(prev.miles);
+  if(isNaN(n)) return null;
 
-  if(prev && now !== "" && Number(now) < Number(prev.miles)){
-    hint.textContent = "That is lower than the last reading of " +
-      Number(prev.miles).toLocaleString("en-GB") + " on " + prev.date + ". Check it.";
+  if(n < p){
+    return { kind:"low",
+      msg:"That is LOWER than the last reading of " + p.toLocaleString("en-GB") +
+          " on " + prev.date + ". An odometer does not go backwards, so one of the two is wrong.",
+      confirm:"I have read it twice and the dashboard really does say this" };
+  }
+  if(n - p > BIG_JUMP){
+    return { kind:"jump",
+      msg:"That is " + (n-p).toLocaleString("en-GB") + " miles since " + prev.date +
+          ". That is a long way for this bus. Check you have not added a digit.",
+      confirm:"I have read it twice and the dashboard really does say this" };
+  }
+  return null;
+}
+
+function paintMilesHint(){
+  var hint = $("milesHint");
+  var box  = $("mileCheck");
+  var prev = st.veh ? lastFor(st.veh.reg) : null;
+  var now  = String(st.miles).trim();
+  var prob = mileProblem();
+
+  if(prob){
+    hint.textContent = prob.msg;
     hint.style.color = "#A8231B";
+    $("mileConfirmLabel").textContent = prob.confirm;
+    box.classList.add("is-on");
     return;
   }
+
+  box.classList.remove("is-on");
+  st.mileOk = false;
+  $("mileConfirm").classList.remove("is-on");
+  $("mileConfirm").setAttribute("aria-pressed","false");
+
   if(prev){
     var added = now !== "" ? Number(now) - Number(prev.miles) : null;
     hint.textContent = "Last recorded: " + Number(prev.miles).toLocaleString("en-GB") +
@@ -581,6 +653,15 @@ function tally(){
   return { done:done, def:def, critDef:critDef };
 }
 function level(){ var t=tally(); return t.critDef>0?"stop":(t.def>0?"warn":"ok"); }
+function coordPhone(){
+  var p = CFG.coordinator && CFG.coordinator.phone;
+  return p ? String(p).replace(/[^0-9+]/g,"") : "";
+}
+function prettyPhone(){
+  var p = coordPhone();
+  if(/^07\d{9}$/.test(p)) return p.slice(0,5) + " " + p.slice(5);
+  return p;
+}
 function critNames(){
   return ALL.filter(function(it){ var r=st.res[it.id]; return it.crit && r && r.v==="def"; })
             .map(function(it){ return it.name; });
@@ -612,7 +693,17 @@ function paintDash(){
   $("dashSub").textContent=sub;
 
   var who = (CFG.coordinator && CFG.coordinator.name) ? CFG.coordinator.name : "the coordinator";
-  $("alertText").textContent = critNames().join(", ") + ". Ring " + who + " before anyone boards.";
+  var ph  = coordPhone();
+  $("alertText").textContent = critNames().join(", ") +
+    ". Ring " + who + (ph ? " on " + prettyPhone() : "") + " before anyone boards.";
+  var link = $("dashCall");
+  if(ph){
+    link.href = "tel:" + ph;
+    link.textContent = "Call " + who.split(" ")[0] + " \u00B7 " + prettyPhone();
+    link.style.display = "";
+  } else {
+    link.style.display = "none";
+  }
 }
 
 /* ---------------- screens ---------------- */
@@ -649,16 +740,28 @@ function paintFoot(){
     return;
   }
   if(st.screen==="prep"){
-    var okm = String(st.miles).trim()!=="";
+    var entered = String(st.miles).trim()!=="";
+    var prob = mileProblem();
+    var okm = entered && (!prob || st.mileOk);
     btn("Back","btn-ghost",function(){ show("vehicle"); });
     btn("Start the check","btn-main",function(){ st.stage=0; renderStage(); show("stage"); }, !okm);
-    if(!okm) c.textContent="Enter the mileage to begin";
+    if(!entered) c.textContent="Enter the mileage to begin";
+    else if(prob && !st.mileOk) c.textContent="Check the mileage, then confirm it below";
     return;
   }
   if(st.screen==="stage"){
     var s=stages[st.stage];
     var left=s.items.filter(function(it){ return !st.res[it.id]; }).length;
-    c.textContent = left===0 ? "Stage complete" : left+" left in this stage";
+    var blank=s.items.filter(function(it){
+      var r=st.res[it.id];
+      return r && r.v==="def" && (!r.note || r.note.trim().length < 3);
+    });
+    if(left>0) c.textContent = left+" left in this stage";
+    else if(blank.length) c.textContent = blank.length===1
+      ? "Describe the defect on " + blank[0].name
+      : blank.length + " defects still need a note";
+    else c.textContent = "Stage complete";
+
     btn("Back","btn-ghost",function(){
       if(st.stage===0) show("prep"); else { st.stage--; renderStage(); show("stage"); }
     });
@@ -666,7 +769,7 @@ function paintFoot(){
     btn(last?"Review":"Next stage","btn-main",function(){
       if(last){ renderReview(); show("review"); }
       else { st.stage++; renderStage(); show("stage"); }
-    }, left>0);
+    }, left>0 || blank.length>0);
     return;
   }
   if(st.screen==="review"){
@@ -705,7 +808,7 @@ function renderVehicles(){
     b.innerHTML='<span class="veh-plate">'+esc(v.reg)+'</span>'+
       '<span class="veh-txt"><b>'+esc(v.name)+'</b><span>'+esc(v.detail||"")+'</span>'+chip+'</span>';
     b.addEventListener("click",function(){
-      st.veh=v; st.res={}; st.miles=""; st.stage=0;
+      st.veh=v; st.res={}; st.miles=""; st.mileOk=false; st.stage=0;
       buildFor(v); renderVehicles(); paintDash(); paintFoot();
     });
     box.appendChild(b);
@@ -773,7 +876,7 @@ function renderStage(){
       bDef.classList.add("on"); bOk.classList.remove("on"); note.classList.add("is-on");
       el.className="item"+(it.crit?" crit":"")+" is-def";
       paintDash(); paintFoot();
-      if(it.crit) toast("Critical defect. The bus does not run.");
+      if(it.crit) toast("Critical defect. The bus does not run. Tap Call at the top.");
       setTimeout(function(){ ta.focus(); },120);
     });
     ta.addEventListener("input",function(){
@@ -797,9 +900,9 @@ function defsHTML(defs){
 function verdictHTML(lv,defs){
   var who=(CFG.coordinator&&CFG.coordinator.name)?CFG.coordinator.name:"the coordinator";
   if(lv==="stop"){
-    var ph = (CFG.coordinator&&CFG.coordinator.phone)?String(CFG.coordinator.phone).replace(/\s+/g,""):"";
-    var call = ph ? '<a class="callbtn" href="tel:'+esc(ph)+'">Call '+esc(who.split(" ")[0])+'</a>' : "";
-    return '<div class="verdict v-stop"><h2>The bus does not run</h2><p>A safety critical item has failed. Do not carry passengers. Ring '+esc(who)+' and arrange lifts. Nobody will be upset with you for stopping the bus.</p>'+defsHTML(defs)+call+'</div>';
+    var ph = coordPhone();
+    var call = ph ? '<a class="callbtn" href="tel:'+esc(ph)+'">Call '+esc(who.split(" ")[0])+' \u00B7 '+esc(prettyPhone())+'</a>' : "";
+    return '<div class="verdict v-stop"><h2>The bus does not run</h2><p>A safety critical item has failed. Do not carry passengers. Ring '+esc(who)+(ph?' on '+esc(prettyPhone()):'')+' and arrange lifts. Nobody will be upset with you for stopping the bus.</p>'+defsHTML(defs)+call+'</div>';
   }
   if(lv==="warn") return '<div class="verdict v-warn"><h2>Safe to drive, with defects</h2><p>Nothing critical, but these are on the record now and need booking in.</p>'+defsHTML(defs)+'</div>';
   return '<div class="verdict v-go"><h2>No defects found</h2><p>Everything checked and clear. Sign below and the bus is good to go.</p></div>';
@@ -882,7 +985,9 @@ function submit(){
     reg: st.veh.reg, vehicle: st.veh.name,
     driver: st.driver.trim(),
     role: st.role || "",
-    miles: st.miles, sign: st.sign.trim(),
+    miles: st.miles,
+    milesFlag: (function(){ var pr=mileProblem(); return pr ? (pr.kind==="low"?"LOWER THAN LAST":"Large jump") : ""; })(),
+    sign: st.sign.trim(),
     level: level(), checked: t.done, total: TOTAL,
     defects: defectList(),
     renewals: dueItems(st.veh).map(function(x){ return x.label+": "+x.words+" ("+prettyDate(x.date)+")"; }).join(" | ")
@@ -966,7 +1071,7 @@ function recText(r){
 
 /* ---------------- reset ---------------- */
 function reset(){
-  st.veh=null; st.res={}; st.stage=0; st.miles=""; st.sign="";
+  st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign="";
   stages=[]; ALL=[]; TOTAL=0; lastRec=null;
   renderVehicles(); show("vehicle");
 }
@@ -982,7 +1087,13 @@ $("driver").addEventListener("input",function(){
 });
 $("pin").addEventListener("input",function(){ st.pin=this.value; paintFoot(); });
 $("miles").addEventListener("input",function(){
-  st.miles=this.value; paintMilesHint(); paintFoot();
+  st.miles=this.value; st.mileOk=false; paintMilesHint(); paintFoot();
+});
+$("mileConfirm").addEventListener("click",function(){
+  st.mileOk=!st.mileOk;
+  this.classList.toggle("is-on",st.mileOk);
+  this.setAttribute("aria-pressed",st.mileOk?"true":"false");
+  paintFoot();
 });
 $("sign").addEventListener("input",function(){ st.sign=this.value; paintFoot(); });
 $("toPending").addEventListener("click",function(){ renderPending(); show("pending"); });

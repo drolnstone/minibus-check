@@ -1,5 +1,7 @@
 # Minibus Check
 
+**RCCG Dominion Assembly Liverpool**
+
 A phone app for the pre-departure inspection of the church minibuses. Drivers sign in, pick a vehicle, work through the checks, and the completed check is written straight to a Google Sheet.
 
 Plain HTML, CSS and JavaScript. No build step, no framework, no accounts. Hosted free on GitHub Pages, with Google Apps Script as the database.
@@ -188,6 +190,18 @@ If you ever do need real authentication, the honest route is Google Sign-In thro
 
 ---
 
+## What the app will not let a driver do
+
+Three things are blocked rather than merely warned about, because a warning that can be swiped past is not a control.
+
+**Skip a check.** The Next button stays disabled until every item in the stage has been answered.
+
+**Log a defect with no description.** If a driver taps Defect, the stage will not advance until they have written at least a few words. "Brakes" as a bare word is useless to a garage; "pulls left under braking" is a work instruction. The footer names which item is still missing its note.
+
+**Enter impossible mileage.** The app knows the last reading for that vehicle. A lower figure, or a jump of more than 1,500 miles, stops the check and asks the driver to read the dashboard again. They can still proceed if the odometer really does say that, by ticking a confirmation, and the record is then marked in a **Mileage flag** column so you can look into it. An odometer that genuinely goes backwards means a swapped instrument cluster or a clocked vehicle, which you want to know about.
+
+---
+
 ## The Defects sheet
 
 Every defect a driver reports gets its own row, separate from the check it came from, so you can work a list rather than read through clear checks looking for problems.
@@ -199,6 +213,16 @@ Every defect a driver reports gets its own row, separate from the check it came 
 | **Action taken**, **Closed on** | You, by hand |
 
 The Status column is a dropdown with six options: **Open**, **Booked in**, **Parts on order**, **Fixed**, **Monitoring**, **Not a defect**. Each colours its cell, so open defects sit red, in-progress ones amber and closed ones green. You can see the state of both buses by glancing down one column.
+
+### Closing dates
+
+**Closed on** has rules, so the record stays coherent:
+
+- It must be a real date, entered as dd/mm/yyyy.
+- It cannot be in the future. A defect is not fixed tomorrow.
+- It cannot be before the defect was reported. If you try, the cell turns red and explains why.
+
+It also keeps itself in step with Status. Set Status to **Fixed** or **Not a defect** and today's date appears automatically. Set it back to Open and the date clears. Type a closing date against a row still marked Open and the Status moves to Fixed for you.
 
 Change the options by editing `STATUS_OPTIONS` near the top of `Code.gs`, then run `addDropdownToExistingSheet` once from the editor to push the change onto rows that already exist.
 
@@ -235,7 +259,7 @@ Update the date as soon as you renew something. The banner is only useful while 
 Bump the version in `sw.js`, or phones will keep serving the copy they already have:
 
 ```js
-const CACHE = "minibus-check-v9";   // v4, v5 and so on
+const CACHE = "minibus-check-v10";   // v4, v5 and so on
 ```
 
 ---

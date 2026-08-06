@@ -1,5 +1,7 @@
 # Minibus transport — complete set
 
+**RCCG Dominion Assembly Liverpool**
+
 Everything as at 6 August 2026. This replaces all earlier versions.
 
 ```
@@ -16,6 +18,7 @@ app/
   icon-192.png
   icon-512.png
   icon-512-maskable.png
+  logo.png              Church logo used in the app
   README.md             Full setup and maintenance guide
   apps-script/
     Code.gs             Goes into Google Apps Script, NOT the repo root
@@ -44,6 +47,7 @@ Full detail for steps 3 to 5 is in `app/README.md`.
 ## Still outstanding
 
 - **Redeploy the Apps Script.** It has changed since you last deployed. Deploy → Manage deployments → pencil → Version: **New version**. Saving alone does not update the live URL.
+- **The printed check sheets are one version behind the app.** The app now has three extra checks (cleanliness, reversing camera, radio and display) and vehicle-specific wording for mirrors. Ask for the sheets to be regenerated so paper and phone match.
 - Service, insurance and parking permit dates for both buses. The MOT dates are real; the other six are placeholders set close to today so you can see both banner states working. **NH56 will show a red overdue banner until you replace them.**
 - Gross weight from both V5C documents. For NH56 this decides whether D1 is required or whether a car licence holder can drive it under the volunteer concession.
 - Licence category evidence for all seven names on the register

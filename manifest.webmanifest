@@ -1,7 +1,7 @@
 {
-  "name": "Minibus Check",
+  "name": "RCCG Dominion Assembly Liverpool — Minibus Check",
   "short_name": "Minibus Check",
-  "description": "Pre-departure inspection for the church minibuses.",
+  "description": "Pre-departure inspection for the RCCG Dominion Assembly Liverpool minibuses.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

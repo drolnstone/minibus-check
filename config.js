@@ -94,11 +94,24 @@ window.VEHICLES = [
       permit:    "2026-11-30"    // PLACEHOLDER
     },
 
-    /* This bus has a powered retractable step. */
+    /* Factory fitted: retractable step, reversing camera, head up display,
+       electrically folding mirrors. */
     override: {
       step: {
         name: "Retractable step",
         what: "Deploys and retracts fully and smoothly every time. Tread not worn smooth. Step light works."
+      },
+      reverse_aid: {
+        name: "Reversing camera and sensors",
+        what: "Select reverse with the engine running. Factory camera picture clear on the screen, not fogged, frozen or black. Parking sensors bleeping. Lens on the tailgate wiped clean."
+      },
+      mirrors: {
+        name: "Mirrors, wipers and washers",
+        what: "Both mirrors folded OUT before you move: they are electric on this bus and fold at the button. Glass clean, adjusted, secure. Blades not torn. Washers reaching the screen."
+      },
+      infotainment: {
+        name: "Radio, screen and head up display",
+        what: "Radio and speakers working front and rear so you can be heard. Screen not stuck on a warning. Head up display showing and not obscuring your view."
       }
     },
 
@@ -152,6 +165,18 @@ window.VEHICLES = [
     /* This bus has no retractable step and no side step. You step straight in
        through the side door. There is a fixed step at the rear. */
     override: {
+      reverse_aid: {
+        name: "Reversing camera and sounder",
+        what: "Aftermarket kit on this bus, so check it properly. Select reverse: picture appears and is not fogged or rolling, and the sounder is audible from outside. Check the camera and its cable at the rear are still secure. If either has failed, do not reverse without someone guiding you."
+      },
+      mirrors: {
+        name: "Mirrors, wipers and washers",
+        what: "Both mirrors folded OUT and firm: they fold by hand on this bus, so check they have not been knocked in or left loose. Glass clean and adjusted. Blades not torn. Washers reaching the screen."
+      },
+      infotainment: {
+        name: "Radio and speakers",
+        what: "Radio and speakers working front and rear so you can be heard down the bus."
+      },
       step: {
         name: "Rear step and door thresholds",
         what: "Fixed rear step secure, not loose or lifting at the edge, and not slippery. Side door threshold free of a trip lip. This bus has no retractable step, so passengers step straight in: check the drop is clear and lit."

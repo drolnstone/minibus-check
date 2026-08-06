@@ -43,7 +43,7 @@ function doPost(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var checks = sheet(ss, CHECKS_SHEET, [
       "Received", "Check ID", "Date", "Time", "Vehicle", "Registration",
-      "Driver", "Role", "Mileage", "Outcome",
+      "Driver", "Role", "Mileage", "Mileage flag", "Outcome",
       "Items checked", "Defect count", "Defects", "Renewals due", "Signed"
     ]);
 
@@ -70,6 +70,7 @@ function doPost(e) {
       c.driver || "",
       c.role || "",
       c.miles || "",
+      c.milesFlag || "",
       outcome,
       (c.checked || "") + "/" + (c.total || ""),
       (c.defects || []).length,
@@ -120,7 +121,7 @@ function doGet(e) {
     if (!sh || sh.getLastRow() < 2) return reply({ ok: true, last: {} });
 
     // Columns: 1 Received, 2 Check ID, 3 Date, 4 Time, 5 Vehicle,
-    //          6 Registration, 7 Driver, 8 Role, 9 Mileage ...
+    //          6 Registration, 7 Driver, 8 Role, 9 Mileage, 10 Mileage flag ...
     var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues();
     var last = {};
 
@@ -193,6 +194,90 @@ function setUpDefectsSheet(sh) {
   sh.setColumnWidth(8, 320);   // what the driver found
   sh.setColumnWidth(9, 130);   // status
   sh.setColumnWidth(10, 300);  // action taken
+  sh.setColumnWidth(11, 110);  // closed on
+
+  applyClosedOnRules(sh);
+}
+
+/**
+ * "Closed on" (column K) must be a real date, not before this system existed
+ * and not in the future. A defect cannot be closed tomorrow.
+ */
+function applyClosedOnRules(sh) {
+  var rule = SpreadsheetApp.newDataValidation()
+    .requireDateBetween(new Date(2026, 0, 1), new Date(2100, 0, 1))
+    .setAllowInvalid(false)
+    .setHelpText("Enter the date the defect was actually put right. It cannot be a future date.")
+    .build();
+  var range = sh.getRange("K2:K1000");
+  range.setDataValidation(rule);
+  range.setNumberFormat("dd/mm/yyyy");
+}
+
+/**
+ * Keeps Status and "Closed on" honest, and warns if a date is impossible.
+ * This is a simple trigger: it runs whenever someone edits the sheet.
+ */
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    var sh = e.range.getSheet();
+    if (sh.getName() !== DEFECTS_SHEET) return;
+
+    var row = e.range.getRow();
+    var col = e.range.getColumn();
+    if (row < 2) return;
+
+    var CLOSED_STATES = ["Fixed", "Not a defect"];
+
+    // Status changed: stamp or clear the closing date to match.
+    if (col === 9) {
+      var status = String(e.range.getValue() || "");
+      var closedCell = sh.getRange(row, 11);
+      var isClosed = CLOSED_STATES.indexOf(status) !== -1;
+
+      if (isClosed && !closedCell.getValue()) {
+        closedCell.setValue(new Date());
+      } else if (!isClosed && closedCell.getValue()) {
+        closedCell.clearContent();
+      }
+      return;
+    }
+
+    // Closing date edited by hand: check it makes sense.
+    if (col === 11) {
+      var val = e.range.getValue();
+      if (!val) return;
+      if (!(val instanceof Date)) {
+        e.range.setNote("That is not a date. Use dd/mm/yyyy.");
+        return;
+      }
+      var today = new Date(); today.setHours(23, 59, 59, 999);
+      var raised = sh.getRange(row, 1).getValue();
+
+      if (val > today) {
+        e.range.setNote("A defect cannot be closed on a future date.");
+        e.range.setBackground("#FBE9E7");
+        return;
+      }
+      if (raised instanceof Date && val < new Date(raised.getFullYear(), raised.getMonth(), raised.getDate())) {
+        e.range.setNote("This is before the defect was reported on " +
+          Utilities.formatDate(raised, Session.getScriptTimeZone(), "dd/MM/yyyy") + ".");
+        e.range.setBackground("#FBE9E7");
+        return;
+      }
+      e.range.clearNote();
+      e.range.setBackground(null);
+
+      // A date implies the work is done, so nudge the status along.
+      var st = String(sh.getRange(row, 9).getValue() || "");
+      if (CLOSED_STATES.indexOf(st) === -1) {
+        sh.getRange(row, 9).setValue("Fixed");
+      }
+    }
+  } catch (err) {
+    // Never let a trigger error block someone editing the sheet.
+  }
 }
 
 /**
@@ -243,7 +328,7 @@ function notify(c, outcome, defectText) {
     "Vehicle:  " + c.reg + " (" + (c.vehicle || "") + ")",
     "Driver:   " + c.driver + (c.role ? " (" + c.role + ")" : ""),
     "When:     " + c.date + " at " + c.time,
-    "Mileage:  " + c.miles,
+    "Mileage:  " + c.miles + (c.milesFlag ? "   [" + c.milesFlag + "]" : ""),
     "Outcome:  " + outcome,
     "",
     "Defects:",
