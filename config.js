@@ -9,7 +9,7 @@ window.CONFIG = {
      Paste the Apps Script Web App URL here after deploying it.
      It looks like: https://script.google.com/macros/s/AKfy..../exec
      Until this is filled in, the app runs in practice mode and sends nothing. */
-  endpoint: "",
+  endpoint: "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec",
 
   /* Must match the token in Code.gs. It stops stray traffic writing to the
      sheet. It is visible in the page source, so it is a lock on the door,
