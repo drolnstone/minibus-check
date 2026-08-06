@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1B222C">
+<title>Minibus Check</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#16191F;--paper:#F4F5F6;--card:#FFFFFF;
+  --steel:#1B222C;--steel-2:#2A3542;--hair:#D3D7DC;--muted:#5C6672;
+  --pass:#146B41;--pass-bg:#E6F2EB;
+  --warn:#B26B00;--warn-bg:#FDF3E2;
+  --stop:#A8231B;--stop-bg:#FBE9E7;
+  --plate:#F4C11E;
+  --r:10px;--tap:56px;--safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
+button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
+input,textarea{font:inherit;color:inherit}
+
+/* ---------- instrument strip ---------- */
+.dash{position:sticky;top:0;z-index:60;background:var(--steel);color:#EEF1F4;
+  border-bottom:3px solid #0C1016;transition:background .25s,border-color .25s}
+.dash.is-warn{background:#6E4300;border-bottom-color:var(--warn)}
+.dash.is-stop{background:#7A1811;border-bottom-color:#E23B2C}
+.dash-top{display:flex;align-items:center;gap:10px;padding:9px 14px}
+.plate{display:inline-flex;align-items:center;background:var(--plate);color:#101010;
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;letter-spacing:.055em;
+  padding:3px 9px 2px;border-radius:4px;border:1.5px solid #101010;flex:none}
+.plate.blank{background:#39424E;color:#9BA7B4;border-color:#556170;letter-spacing:.14em;font-size:14px}
+.dash-id{flex:1;min-width:0}
+.dash-id b{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:16px;
+  letter-spacing:.09em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
+.dash-id span{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#9BA7B4;
+  font-family:"Barlow Condensed",sans-serif;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash.is-warn .dash-id span,.dash.is-stop .dash-id span{color:#F2DCC4}
+.lamps{display:flex;gap:5px;flex:none}
+.lamp{width:11px;height:11px;border-radius:50%;background:#39424E;transition:background .2s,box-shadow .2s}
+.lamp.on-pass{background:#37C97E;box-shadow:0 0 9px rgba(55,201,126,.65)}
+.lamp.on-warn{background:#F5A623;box-shadow:0 0 9px rgba(245,166,35,.7)}
+.lamp.on-stop{background:#FF5A47;box-shadow:0 0 11px rgba(255,90,71,.85)}
+.bar{height:4px;background:#39424E}
+.bar i{display:block;height:100%;background:#7FB4E8;width:0;transition:width .3s}
+.dash.is-warn .bar i{background:#F5A623}
+.dash.is-stop .bar i{background:#FF5A47}
+.dash-alert{display:none;padding:9px 14px 11px;font-family:"Barlow Condensed",sans-serif;font-weight:700;
+  font-size:20px;letter-spacing:.06em;text-transform:uppercase;line-height:1.1}
+.dash-alert small{display:block;font-family:"IBM Plex Sans",sans-serif;font-weight:400;font-size:13px;
+  letter-spacing:0;text-transform:none;margin-top:3px;color:#FFD9D2}
+.dash.is-stop .dash-alert{display:block}
+
+/* ---------- shell ---------- */
+.wrap{max-width:640px;margin:0 auto;padding:16px 14px calc(120px + var(--safe-b))}
+.screen{display:none}
+.screen.is-on{display:block;animation:fade .22s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.eyebrow{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--muted);margin:0 0 5px}
+h1{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:32px;line-height:1.06;margin:0 0 10px}
+h2{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:26px;line-height:1.1;margin:0 0 4px}
+p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
+.card{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);padding:14px}
+.card+.card{margin-top:12px}
+
+/* ---------- fields ---------- */
+.field{margin-bottom:14px}
+.field:last-child{margin-bottom:0}
+.field label{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:14px;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.field input,.field textarea{width:100%;padding:13px 12px;border:1.5px solid var(--hair);border-radius:8px;
+  background:#fff;font-size:17px}
+.field input:focus,.field textarea:focus{outline:3px solid #9CC4EC;outline-offset:1px;border-color:var(--steel-2)}
+.field .hint{font-size:13px;color:var(--muted);margin-top:5px}
+.mono{font-family:"IBM Plex Mono",monospace}
+
+/* ---------- vehicle picker ---------- */
+.veh{display:flex;align-items:center;gap:13px;width:100%;text-align:left;background:var(--card);
+  border:1.5px solid var(--hair);border-left:5px solid var(--steel-2);border-radius:var(--r);
+  padding:14px 13px;margin-bottom:11px;transition:transform .08s}
+.veh:active{transform:scale(.99)}
+.veh.is-on{border-color:var(--steel);border-left-color:var(--steel);background:#FBFCFD;
+  box-shadow:0 0 0 2px rgba(27,34,44,.14)}
+.veh-plate{background:var(--plate);color:#101010;font-family:"Barlow Condensed",sans-serif;font-weight:700;
+  font-size:20px;letter-spacing:.05em;padding:5px 10px 4px;border-radius:5px;border:2px solid #101010;flex:none}
+.veh-txt{flex:1;min-width:0}
+.veh-txt b{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;line-height:1.15}
+.veh-txt span{display:block;font-size:13.5px;color:var(--muted)}
+
+/* ---------- gate ---------- */
+.gatebox{border:1.5px solid var(--stop);background:var(--stop-bg);border-radius:var(--r);padding:14px;margin-bottom:14px}
+.gatebox h3{margin:0 0 6px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;
+  letter-spacing:.03em;text-transform:uppercase;color:var(--stop)}
+.gatebox p{margin:0 0 12px;font-size:14.5px}
+.confirm{display:flex;align-items:center;gap:12px;width:100%;min-height:var(--tap);padding:10px 12px;
+  background:#fff;border:1.5px solid var(--hair);border-radius:8px;text-align:left;font-size:15px;font-weight:500}
+.confirm .box{width:26px;height:26px;border:2px solid var(--muted);border-radius:5px;flex:none;
+  display:grid;place-items:center;font-size:16px;color:#fff}
+.confirm.is-on{border-color:var(--pass);background:var(--pass-bg)}
+.confirm.is-on .box{background:var(--pass);border-color:var(--pass)}
+
+/* ---------- steps + items ---------- */
+.steps{display:flex;gap:6px;margin-bottom:14px}
+.steps div{flex:1;height:5px;border-radius:3px;background:var(--hair)}
+.steps div.done{background:var(--steel-2)}
+.steps div.now{background:#4A7FB5}
+.item{background:var(--card);border:1px solid var(--hair);border-left:5px solid var(--hair);
+  border-radius:var(--r);padding:13px 13px 11px;margin-bottom:11px}
+.item.crit{border-left-color:var(--stop)}
+.item.is-pass{border-left-color:var(--pass);background:#FBFDFC}
+.item.is-def{border-left-color:var(--warn);background:#FFFDF8}
+.item.is-def.crit{border-left-color:var(--stop);background:#FFF9F8}
+.item h3{margin:0 0 3px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:21px;line-height:1.15}
+.tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px}
+.tag{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.11em;
+  text-transform:uppercase;padding:2px 7px;border-radius:4px}
+.tag.t-crit{background:var(--stop-bg);color:var(--stop);border:1px solid #E8BCB7}
+.tag.t-watch{background:var(--warn-bg);color:var(--warn);border:1px solid #EBD3A8}
+.item p.what{margin:0 0 9px;font-size:15px;color:#2E353D}
+.history{font-size:13.5px;background:var(--warn-bg);border-left:3px solid var(--warn);padding:7px 9px;
+  border-radius:0 6px 6px 0;margin:0 0 10px;color:#5A4008}
+.history b{font-weight:600}
+.choose{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.choose button{min-height:var(--tap);border:1.5px solid var(--hair);border-radius:8px;background:#fff;
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;letter-spacing:.06em;
+  text-transform:uppercase;display:flex;align-items:center;justify-content:center;transition:transform .08s}
+.choose button:active{transform:scale(.97)}
+.choose .ok.on{background:var(--pass);border-color:var(--pass);color:#fff}
+.choose .def.on{background:var(--warn);border-color:var(--warn);color:#fff}
+.item.crit .choose .def.on{background:var(--stop);border-color:var(--stop)}
+.note{margin-top:10px;display:none}
+.note.is-on{display:block}
+.note textarea{width:100%;min-height:74px;padding:11px;border:1.5px solid var(--warn);border-radius:8px;
+  background:#fff;font-size:16px;resize:vertical}
+.note .lbl{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--warn);margin-bottom:5px}
+
+/* ---------- footer ---------- */
+.footbar{position:fixed;left:0;right:0;bottom:0;z-index:70;background:rgba(244,245,246,.96);
+  backdrop-filter:blur(8px);border-top:1px solid var(--hair);padding:10px 14px calc(10px + var(--safe-b))}
+.footbar-in{max-width:640px;margin:0 auto;display:flex;gap:9px;align-items:center}
+.btn{min-height:var(--tap);padding:0 18px;border-radius:9px;font-family:"Barlow Condensed",sans-serif;
+  font-weight:700;font-size:20px;letter-spacing:.06em;text-transform:uppercase;display:inline-flex;
+  align-items:center;justify-content:center;border:1.5px solid transparent;transition:transform .08s,opacity .15s}
+.btn:active{transform:scale(.98)}
+.btn-main{background:var(--steel);color:#fff;flex:1}
+.btn-main[disabled]{opacity:.38;pointer-events:none}
+.btn-ghost{background:#fff;border-color:var(--hair);color:var(--ink)}
+.btn-stop{background:var(--stop);color:#fff;flex:1}
+.btn-wide{width:100%}
+.count{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted);text-align:center;margin-bottom:7px}
+
+/* ---------- review / result ---------- */
+.sum{border:1px solid var(--hair);border-radius:var(--r);overflow:hidden;background:#fff;margin-bottom:14px}
+.sum-row{display:flex;justify-content:space-between;gap:12px;padding:11px 13px;border-bottom:1px solid var(--hair);font-size:15px}
+.sum-row:last-child{border-bottom:none}
+.sum-row b{font-weight:600}
+.sum-row .v{font-family:"IBM Plex Mono",monospace;font-size:14px;text-align:right}
+.verdict{border-radius:var(--r);padding:15px;margin-bottom:16px;border:1.5px solid}
+.verdict p{margin:0;font-size:14.5px}
+.v-go{background:var(--pass-bg);border-color:var(--pass);color:#0E4A2D}
+.v-go h2{color:var(--pass)}
+.v-warn{background:var(--warn-bg);border-color:var(--warn);color:#5A4008}
+.v-warn h2{color:var(--warn)}
+.v-stop{background:var(--stop-bg);border-color:var(--stop);color:#6B1710}
+.v-stop h2{color:var(--stop)}
+.deflist{list-style:none;margin:10px 0 0;padding:0}
+.deflist li{padding:8px 0;border-top:1px dashed rgba(0,0,0,.18);font-size:14.5px}
+.deflist li:first-child{border-top:none}
+.deflist b{font-weight:600}
+
+/* ---------- send status ---------- */
+.sendbox{border-radius:var(--r);padding:14px;margin-bottom:14px;border:1.5px solid;display:flex;gap:12px;align-items:flex-start}
+.sendbox .ico{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;
+  font-size:17px;color:#fff;font-weight:700}
+.sendbox b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:700;letter-spacing:.03em}
+.sendbox p{margin:2px 0 0;font-size:14px}
+.s-sending{background:#EEF3F8;border-color:#9CC4EC;color:#1B3A57}
+.s-sending .ico{background:#4A7FB5}
+.s-ok{background:var(--pass-bg);border-color:var(--pass);color:#0E4A2D}
+.s-ok .ico{background:var(--pass)}
+.s-hold{background:var(--warn-bg);border-color:var(--warn);color:#5A4008}
+.s-hold .ico{background:var(--warn)}
+.spin{width:15px;height:15px;border:2.5px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;
+  animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+.pend{background:#fff;border:1px solid var(--hair);border-left:5px solid var(--warn);border-radius:var(--r);
+  padding:12px;margin-bottom:10px}
+.pend-h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.pend-h b{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:700}
+.pend-h .d{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted)}
+.pend p{margin:5px 0 0;font-size:14px;color:#39414B}
+.empty{text-align:center;padding:34px 16px;color:var(--muted)}
+.empty b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:22px;color:var(--ink);margin-bottom:5px}
+.banner{display:none;background:var(--warn-bg);border-bottom:1px solid var(--warn);color:#5A4008;
+  padding:9px 14px;font-size:14px;text-align:center}
+.banner.is-on{display:block}
+.banner button{text-decoration:underline;font-weight:600;color:#5A4008}
+.linkrow{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap}
+.linkrow .btn{flex:1;min-width:140px;font-size:17px}
+.tiny{font-size:12.5px;color:var(--muted);text-align:center;margin-top:20px;line-height:1.5}
+.toast{position:fixed;left:50%;bottom:calc(84px + var(--safe-b));transform:translateX(-50%) translateY(14px);
+  background:var(--steel);color:#fff;padding:11px 17px;border-radius:8px;font-size:14.5px;opacity:0;
+  pointer-events:none;transition:.25s;z-index:90;max-width:90vw;text-align:center}
+.toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------- select ---------- */
+.field select{width:100%;padding:13px 40px 13px 12px;border:1.5px solid var(--hair);border-radius:8px;
+  background:#fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9'><path d='M1 1l6 6 6-6' stroke='%235C6672' stroke-width='2' fill='none' stroke-linecap='round'/></svg>") no-repeat right 14px center;
+  font-size:17px;appearance:none;-webkit-appearance:none}
+.field select:focus{outline:3px solid #9CC4EC;outline-offset:1px;border-color:var(--steel-2)}
+.linkbtn{background:none;text-decoration:underline;font-size:14px;color:var(--muted);padding:6px 0}
+
+/* ---------- due dates ---------- */
+.due{border-radius:var(--r);padding:13px;margin-bottom:14px;border:1.5px solid}
+.due.soon{background:var(--warn-bg);border-color:var(--warn);color:#5A4008;animation:pulseWarn 1.9s ease-in-out infinite}
+.due.over{background:var(--stop-bg);border-color:var(--stop);color:#6B1710;animation:pulseStop 1.4s ease-in-out infinite}
+.due h4{margin:0 0 7px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;
+  letter-spacing:.05em;text-transform:uppercase}
+.due ul{list-style:none;margin:0;padding:0}
+.due li{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:14.5px;
+  border-top:1px dashed rgba(0,0,0,.16)}
+.due li:first-child{border-top:none}
+.due li b{font-weight:600}
+.due li .w{font-family:"IBM Plex Mono",monospace;font-size:13.5px;white-space:nowrap}
+@keyframes pulseWarn{0%,100%{box-shadow:0 0 0 0 rgba(178,107,0,0)}50%{box-shadow:0 0 0 5px rgba(178,107,0,.18)}}
+@keyframes pulseStop{0%,100%{box-shadow:0 0 0 0 rgba(168,35,27,0)}50%{box-shadow:0 0 0 6px rgba(168,35,27,.24)}}
+.chip{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11.5px;
+  letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:4px;margin-top:5px}
+.chip.soon{background:var(--warn-bg);color:var(--warn);border:1px solid #EBD3A8}
+.chip.over{background:var(--stop-bg);color:var(--stop);border:1px solid #E8BCB7}
+.callbtn{display:flex;align-items:center;justify-content:center;min-height:52px;margin-top:12px;
+  background:var(--stop);color:#fff;border-radius:9px;font-family:"Barlow Condensed",sans-serif;
+  font-weight:700;font-size:20px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="dash" id="dash">
+  <div class="dash-top">
+    <span class="plate blank" id="plate">Fleet</span>
+    <span class="dash-id">
+      <b id="dashTitle">Vehicle check</b>
+      <span id="dashSub">Choose a vehicle to begin</span>
+    </span>
+    <span class="lamps">
+      <i class="lamp" id="lampA"></i><i class="lamp" id="lampB"></i><i class="lamp" id="lampC"></i>
+    </span>
+  </div>
+  <div class="bar"><i id="bar"></i></div>
+  <div class="dash-alert">Do not run<small id="alertText"></small></div>
+</header>
+
+<div class="banner" id="banner">
+  <span id="bannerText"></span> <button type="button" id="bannerBtn">Send now</button>
+</div>
+
+<main class="wrap">
+
+  <!-- 1. DRIVER -->
+  <section class="screen is-on" id="s-driver">
+    <p class="eyebrow">Before the first pick up</p>
+    <h1>Who is driving?</h1>
+    <p class="lede">Your check goes straight to the coordinator's record when you finish.</p>
+    <div class="card">
+      <div class="field" id="pickField">
+        <label for="driverPick">Driver name</label>
+        <select id="driverPick"><option value="">Choose your name</option></select>
+        <div class="hint">Only drivers approved by the leadership appear here.</div>
+      </div>
+      <div class="field" id="pinField" style="display:none">
+        <label for="pin">Your PIN</label>
+        <input id="pin" type="password" inputmode="numeric" maxlength="8" class="mono" placeholder="****" autocomplete="off">
+        <div class="hint" id="pinHint">Four digits. Ask the coordinator if you have forgotten it.</div>
+      </div>
+      <div class="field" id="typeField" style="display:none">
+        <label for="driver">Driver name</label>
+        <input id="driver" type="text" autocomplete="name" placeholder="Your full name">
+        <div class="hint">No driver register has been set up yet.</div>
+      </div>
+    </div>
+    <p class="tiny" style="margin-top:14px">If your name is missing, you are not on the register. Ring the coordinator before taking a bus out.</p>
+    <div class="linkrow">
+      <button class="btn btn-ghost btn-wide" id="toPending" type="button">Waiting to send</button>
+    </div>
+    <p class="tiny" id="modeNote"></p>
+  </section>
+
+  <!-- 2. VEHICLE -->
+  <section class="screen" id="s-vehicle">
+    <p class="eyebrow" id="hello">Vehicle</p>
+    <h1>Which one today?</h1>
+    <p class="lede">Each bus has its own checks and its own fault history.</p>
+    <div id="vehList"></div>
+  </section>
+
+  <!-- 3. PREP -->
+  <section class="screen" id="s-prep">
+    <p class="eyebrow" id="prepEyebrow">Vehicle</p>
+    <h1 id="prepTitle">Before you start</h1>
+    <div id="dueBox"></div>
+    <div class="card">
+      <div class="field">
+        <label for="miles">Mileage now</label>
+        <input id="miles" type="number" inputmode="numeric" class="mono" placeholder="e.g. 57363">
+        <div class="hint" id="milesHint">Read it off the dashboard before you set off.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. STAGES -->
+  <section class="screen" id="s-stage">
+    <div class="steps" id="steps"></div>
+    <p class="eyebrow" id="stageEyebrow"></p>
+    <h1 id="stageTitle"></h1>
+    <p class="lede" id="stageLede"></p>
+    <div id="itemList"></div>
+  </section>
+
+  <!-- 5. REVIEW -->
+  <section class="screen" id="s-review">
+    <p class="eyebrow">Last step</p>
+    <h1>Before you sign</h1>
+    <div id="verdict"></div>
+    <div class="sum" id="sumBox"></div>
+    <div class="card">
+      <div class="field">
+        <label for="sign">Type your name to sign</label>
+        <input id="sign" type="text" placeholder="Full name">
+        <div class="hint">This records that you did the check yourself, today.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. SENT -->
+  <section class="screen" id="s-sent">
+    <p class="eyebrow">Finished</p>
+    <h1 id="sentTitle">Check complete</h1>
+    <div id="sendStatus"></div>
+    <div id="sentVerdict"></div>
+    <div class="sum" id="sentSum"></div>
+    <div class="linkrow">
+      <button class="btn btn-ghost" id="share" type="button">Share a copy</button>
+      <button class="btn btn-ghost" id="retry" type="button">Try sending again</button>
+    </div>
+  </section>
+
+  <!-- 7. PENDING -->
+  <section class="screen" id="s-pending">
+    <p class="eyebrow">Held on this phone</p>
+    <h1>Waiting to send</h1>
+    <p class="lede">Checks that could not reach the record, usually because there was no signal. They send themselves as soon as there is.</p>
+    <div id="pendList"></div>
+    <div class="linkrow">
+      <button class="btn btn-ghost btn-wide" id="flush" type="button">Send them all now</button>
+    </div>
+  </section>
+</main>
+
+<div class="footbar" id="footbar">
+  <div class="count" id="count"></div>
+  <div class="footbar-in" id="footIn"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="config.js"></script>
+<script>
+"use strict";
+
+/* ---------------- storage shim (queue only, never the record) ---------------- */
+var mem = {};
+var store = {
+  get:function(k){ try{ var v=localStorage.getItem(k); return v===null?(k in mem?mem[k]:null):v; }catch(e){ return (k in mem)?mem[k]:null; } },
+  set:function(k,v){ mem[k]=v; try{ localStorage.setItem(k,v); }catch(e){} },
+  del:function(k){ delete mem[k]; try{ localStorage.removeItem(k); }catch(e){} }
+};
+var QKEY = "fleet.queue.v1";
+var NKEY = "fleet.driver";
+
+var CFG = window.CONFIG || {};
+var VEHICLES = window.VEHICLES || [];
+var LIVE = !!(CFG.endpoint && CFG.endpoint.indexOf("http") === 0);
+
+/* ---------------- the shared checklist ---------------- */
+var STAGES = [
+  { title:"Outside the bus", lede:"Walk clockwise from the driver's door.", items:[
+    { id:"tyres", name:"Tyres", crit:true, what:"Tread across the full width, edge wear, cuts or bulges in the sidewall, pressures. Include the spare. Look for flat spots from standing." },
+    { id:"nuts", name:"Wheel nuts", crit:true, what:"All present. Position marker arrows still lined up. Rust weeping from a nut means it has moved." },
+    { id:"lights", name:"Lights", what:"Sidelights, dipped, main beam, indicators, hazards, brake lights, reverse, fogs, number plate lamp." },
+    { id:"fbrake", name:"Front brakes", crit:true, what:"Look through the front wheels at the disc face. Heavy scoring, a deep lip, or one side much cleaner than the other." },
+    { id:"body", name:"Body and glass", what:"Chips or cracks in the wiper area. Sliding door runs freely on its track." },
+    { id:"corrosion", name:"Rust and structure", what:"Sills, wheel arches, step mounts and anywhere the body meets the chassis. Flaking or soft metal, not surface staining." },
+    { id:"under", name:"Underneath", what:"Look under the bus for fresh oil, coolant or fuel on the road after standing all week." },
+    { id:"pipes", name:"Brake pipes and lines", crit:true, what:"Look along the chassis rails and behind each wheel for damp or wet patches, or a pipe that is flaking rather than just dusty." },
+    { id:"suspension", name:"Suspension and ride height", what:"Bus sitting level, not down at one corner. Listen for knocking over the first bumps." },
+    { id:"exhaust", name:"Exhaust", what:"Present and secure. Nothing cut away underneath. Listen for a change in note at start up." },
+    { id:"plates", name:"Number plates", what:"Clean, readable and secure front and rear." }
+  ]},
+  { title:"Under the bonnet", lede:"Engine cold, before the first start.", items:[
+    { id:"oil", name:"Engine oil", what:"Dipstick between min and max. If the level is ABOVE max, report it. That is a warning sign, not a good thing." },
+    { id:"coolant", name:"Coolant", what:"Between min and max on the tank, engine cold." },
+    { id:"bfluid", name:"Brake fluid", crit:true, what:"At or near max. If it has dropped, report it. Do not just top it up." },
+    { id:"wash", name:"Screenwash", what:"Full. Winter mix from October onwards." },
+    { id:"adblue", name:"AdBlue", what:"Check the gauge or dash message. Never let it run empty or the engine will not restart." },
+    { id:"belts", name:"Belts and hoses", what:"Look only. Cracking, fraying, or a hose that looks swollen at the clip." }
+  ]},
+  { title:"Inside the saloon", lede:"Where the passengers sit. Take your time here.", items:[
+    { id:"belts_seat", name:"Seat belts", crit:true, what:"Pull each belt fully out, look for fraying, click it into the buckle, check it locks and releases. Every seat." },
+    { id:"anchor", name:"Seat anchorages", crit:true, what:"Push and pull each seat frame. Any movement where it meets the floor is a defect. Do not carry passengers in it." },
+    { id:"step", name:"Step", what:"Deploys and retracts fully and smoothly, or is solid and secure if fixed. No trip edge." },
+    { id:"exits", name:"Emergency exits", crit:true, what:"Rear door and side exit open from the inside. Roof hatch works. Nothing stored in front of an exit." },
+    { id:"gangway", name:"Gangway and hammers", what:"Gangway clear of bags and equipment, floor dry. Break glass hammers clipped into their brackets, not loose." },
+    { id:"extinguisher", name:"Fire extinguisher", what:"Present, in date, gauge in the green, seal unbroken, bracket tight." },
+    { id:"firstaid", name:"First aid kit", what:"Present, sealed, contents in date." },
+    { id:"cabin", name:"General condition", what:"No sharp edges, exposed metal or loose wiring." }
+  ]},
+  { title:"In the cab", lede:"Engine running, before anyone gets on.", items:[
+    { id:"abs", name:"ABS warning lamp", crit:true, what:"Must come on at ignition then go out. If it stays on, the bus does not run." },
+    { id:"lamps", name:"Other warning lights", what:"All lamps come on then go out. An amber engine or DPF light means report before loading passengers." },
+    { id:"brakes", name:"Brakes", crit:true, what:"Firm pedal, no sinking to the floor. Handbrake holds on a slope. Controlled stop at low speed before the first pick up. Listen for grinding or pulling to one side." },
+    { id:"steering", name:"Steering", crit:true, what:"No excess free play. No knocking on full lock." },
+    { id:"clutch", name:"Clutch and gears", what:"Bite point where you expect it, not right at the top of the pedal. All gears select cleanly, including reverse. No slipping when you pull away." },
+    { id:"mirrors", name:"Mirrors and wipers", what:"All mirrors clean, adjusted and secure. Blades not torn or smearing." },
+    { id:"cab", name:"Horn, heater, demist", what:"All working. Insurance certificate in date and on board." }
+  ]}
+];
+
+/* ---------------- state ---------------- */
+var st = { screen:"driver", veh:null, stage:0, driver:"", role:"", pin:"", miles:"", sign:"", res:{} };
+var stages = [];   /* the stage list for the chosen vehicle */
+var ALL = [];
+var TOTAL = 0;
+var lastRec = null;
+
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function toast(m){ var t=$("toast"); t.textContent=m; t.classList.add("is-on");
+  clearTimeout(t._t); t._t=setTimeout(function(){ t.classList.remove("is-on"); },2600); }
+function pad2(n){ return (n<10?"0":"")+n; }
+function ukDate(d){ return pad2(d.getDate())+"/"+pad2(d.getMonth()+1)+"/"+d.getFullYear(); }
+function ukTime(d){ return pad2(d.getHours())+":"+pad2(d.getMinutes()); }
+
+/* ---------------- build vehicle checklist ---------------- */
+function buildFor(v){
+  stages = STAGES.map(function(s){
+    return { title:s.title, lede:s.lede, items:s.items.filter(function(it){
+      return !(v.skip||[]).length || (v.skip||[]).indexOf(it.id) === -1;
+    }).map(function(it){
+      var copy = { id:it.id, name:it.name, what:it.what, crit:!!it.crit };
+      if(v.watch && v.watch[it.id]) copy.history = v.watch[it.id];
+      return copy;
+    })};
+  }).filter(function(s){ return s.items.length; });
+  ALL = [];
+  stages.forEach(function(s){ s.items.forEach(function(it){ ALL.push(it); }); });
+  TOTAL = ALL.length;
+}
+
+/* ---------------- renewal dates ---------------- */
+var DUE_LABELS = { mot:"MOT", service:"Service", insurance:"Insurance", permit:"Parking permit" };
+var DUE_ORDER  = ["mot","service","insurance","permit"];
+var WARN_DAYS  = 30;
+
+function daysUntil(iso){
+  if(!iso) return null;
+  var p = String(iso).split("-");
+  if(p.length !== 3) return null;
+  var d = new Date(Number(p[0]), Number(p[1])-1, Number(p[2]));
+  if(isNaN(d.getTime())) return null;
+  var today = new Date(); today.setHours(0,0,0,0);
+  return Math.round((d - today) / 86400000);
+}
+function prettyDate(iso){
+  var p = String(iso).split("-");
+  return p.length===3 ? p[2]+"/"+p[1]+"/"+p[0] : iso;
+}
+function dueItems(v){
+  var out = [];
+  var dates = (v && v.dates) || {};
+  DUE_ORDER.forEach(function(k){
+    var iso = dates[k];
+    if(!iso) return;
+    var n = daysUntil(iso);
+    if(n === null || n > WARN_DAYS) return;
+    out.push({
+      key:k, label:DUE_LABELS[k], date:iso, days:n,
+      state: n < 0 ? "over" : "soon",
+      words: n < 0 ? "Expired " + Math.abs(n) + (Math.abs(n)===1?" day":" days") + " ago"
+           : n === 0 ? "Due today"
+           : "Due in " + n + (n===1?" day":" days")
+    });
+  });
+  return out;
+}
+function dueHTML(v){
+  var list = dueItems(v);
+  if(!list.length) return "";
+  var over = list.some(function(x){ return x.state==="over"; });
+  return '<div class="due '+(over?"over":"soon")+'">'+
+    '<h4>'+(over?"Renewal overdue":"Renewal coming up")+'</h4><ul>'+
+    list.map(function(x){
+      return '<li><b>'+esc(x.label)+'</b><span class="w">'+esc(x.words)+' \u00B7 '+esc(prettyDate(x.date))+'</span></li>';
+    }).join("")+
+    '</ul></div>';
+}
+
+/* ---------------- tallies ---------------- */
+function tally(){
+  var done=0,def=0,critDef=0;
+  ALL.forEach(function(it){ var r=st.res[it.id]; if(!r) return; done++;
+    if(r.v==="def"){ def++; if(it.crit) critDef++; } });
+  return { done:done, def:def, critDef:critDef };
+}
+function level(){ var t=tally(); return t.critDef>0?"stop":(t.def>0?"warn":"ok"); }
+function critNames(){
+  return ALL.filter(function(it){ var r=st.res[it.id]; return it.crit && r && r.v==="def"; })
+            .map(function(it){ return it.name; });
+}
+
+/* ---------------- dashboard ---------------- */
+function paintDash(){
+  var t=tally(), lv=level(), d=$("dash");
+  d.className = "dash" + (lv==="stop"?" is-stop":lv==="warn"?" is-warn":"");
+  $("bar").style.width = TOTAL ? Math.round(t.done/TOTAL*100)+"%" : "0%";
+
+  var L=[$("lampA"),$("lampB"),$("lampC")];
+  L.forEach(function(l){ l.className="lamp"; });
+  if(lv==="stop") L[2].className="lamp on-stop";
+  else if(lv==="warn") L[1].className="lamp on-warn";
+  else if(TOTAL && t.done===TOTAL) L[0].className="lamp on-pass";
+
+  var p=$("plate");
+  if(st.veh){ p.className="plate"; p.textContent=st.veh.reg; }
+  else { p.className="plate blank"; p.textContent="Fleet"; }
+
+  var title, sub;
+  if(!st.veh){ title="Vehicle check"; sub="Choose a vehicle to begin"; }
+  else if(st.screen==="stage"||st.screen==="review"){ title=t.done+" of "+TOTAL+" checked"; sub=st.veh.name; }
+  else { title=st.veh.reg; sub=st.veh.name; }
+  if(t.critDef>0) sub=t.critDef+" critical defect"+(t.critDef>1?"s":"");
+  else if(t.def>0) sub=t.def+" defect"+(t.def>1?"s":"")+" noted";
+  $("dashTitle").textContent=title;
+  $("dashSub").textContent=sub;
+
+  var who = (CFG.coordinator && CFG.coordinator.name) ? CFG.coordinator.name : "the coordinator";
+  $("alertText").textContent = critNames().join(", ") + ". Ring " + who + " before anyone boards.";
+}
+
+/* ---------------- screens ---------------- */
+var SCREENS = ["driver","vehicle","prep","stage","review","sent","pending"];
+function show(n){
+  st.screen=n;
+  SCREENS.forEach(function(x){ $("s-"+x).classList.toggle("is-on", x===n); });
+  window.scrollTo(0,0);
+  paintDash(); paintFoot();
+}
+
+function paintFoot(){
+  var f=$("footIn"), c=$("count");
+  f.innerHTML=""; c.textContent="";
+  function btn(label,cls,fn,dis){
+    var b=document.createElement("button");
+    b.type="button"; b.className="btn "+cls; b.textContent=label;
+    if(dis) b.setAttribute("disabled","disabled");
+    b.addEventListener("click",fn); f.appendChild(b); return b;
+  }
+
+  if(st.screen==="driver"){
+    var named = st.driver.trim().length>1;
+    var pinOk = !pinNeeded() || String(st.pin) === String(pinFor(st.driver));
+    btn("Continue","btn-main",function(){ renderVehicles(); show("vehicle"); }, !(named && pinOk));
+    if(!named) c.textContent="Choose your name";
+    else if(!pinOk) c.textContent="Enter your PIN";
+    return;
+  }
+  if(st.screen==="vehicle"){
+    btn("Back","btn-ghost",function(){ show("driver"); });
+    btn("Continue","btn-main",function(){ renderPrep(); show("prep"); }, !st.veh);
+    if(!st.veh) c.textContent="Choose a vehicle";
+    return;
+  }
+  if(st.screen==="prep"){
+    var okm = String(st.miles).trim()!=="";
+    btn("Back","btn-ghost",function(){ show("vehicle"); });
+    btn("Start the check","btn-main",function(){ st.stage=0; renderStage(); show("stage"); }, !okm);
+    if(!okm) c.textContent="Enter the mileage to begin";
+    return;
+  }
+  if(st.screen==="stage"){
+    var s=stages[st.stage];
+    var left=s.items.filter(function(it){ return !st.res[it.id]; }).length;
+    c.textContent = left===0 ? "Stage complete" : left+" left in this stage";
+    btn("Back","btn-ghost",function(){
+      if(st.stage===0) show("prep"); else { st.stage--; renderStage(); show("stage"); }
+    });
+    var last = st.stage===stages.length-1;
+    btn(last?"Review":"Next stage","btn-main",function(){
+      if(last){ renderReview(); show("review"); }
+      else { st.stage++; renderStage(); show("stage"); }
+    }, left>0);
+    return;
+  }
+  if(st.screen==="review"){
+    var lv=level(), ok=st.sign.trim().length>1;
+    btn("Back","btn-ghost",function(){ st.stage=stages.length-1; renderStage(); show("stage"); });
+    btn(lv==="stop"?"Sign and stop the bus":"Sign and send", lv==="stop"?"btn-stop":"btn-main", submit, !ok);
+    if(!ok) c.textContent="Type your name to sign";
+    return;
+  }
+  if(st.screen==="sent"){
+    btn("New check","btn-main",reset);
+    btn("Waiting to send","btn-ghost",function(){ renderPending(); show("pending"); });
+    return;
+  }
+  if(st.screen==="pending"){
+    btn("Back","btn-main",function(){ show(st.veh?"sent":"driver"); });
+    return;
+  }
+}
+
+/* ---------------- vehicle picker ---------------- */
+function renderVehicles(){
+  $("hello").textContent = "Hello " + st.driver.trim().split(" ")[0];
+  var box=$("vehList"); box.innerHTML="";
+  VEHICLES.forEach(function(v){
+    var b=document.createElement("button");
+    b.type="button";
+    b.className="veh"+(st.veh && st.veh.id===v.id?" is-on":"");
+    var dl = dueItems(v);
+    var chip = "";
+    if(dl.length){
+      var ov = dl.some(function(x){ return x.state==="over"; });
+      chip = '<span class="chip '+(ov?"over":"soon")+'">'+
+             (ov?"Renewal overdue":"Renewal due soon")+'</span>';
+    }
+    b.innerHTML='<span class="veh-plate">'+esc(v.reg)+'</span>'+
+      '<span class="veh-txt"><b>'+esc(v.name)+'</b><span>'+esc(v.detail||"")+'</span>'+chip+'</span>';
+    b.addEventListener("click",function(){
+      st.veh=v; st.res={}; st.miles=""; st.stage=0;
+      buildFor(v); renderVehicles(); paintDash(); paintFoot();
+    });
+    box.appendChild(b);
+  });
+}
+
+/* ---------------- prep ---------------- */
+function renderPrep(){
+  var v=st.veh;
+  $("prepEyebrow").textContent = v.reg + " \u00B7 " + v.name;
+  $("prepTitle").textContent = "Before you start";
+  $("dueBox").innerHTML = dueHTML(v);
+  $("miles").value = st.miles;
+  $("milesHint").textContent = "Read it off the dashboard before you set off.";
+  $("milesHint").style.color = "";
+}
+
+/* ---------------- stages ---------------- */
+function renderStage(){
+  var s=stages[st.stage];
+  $("stageEyebrow").textContent = "Stage "+(st.stage+1)+" of "+stages.length+" \u00B7 "+st.veh.reg;
+  $("stageTitle").textContent = s.title;
+  $("stageLede").textContent = s.lede;
+
+  var steps=$("steps"); steps.innerHTML="";
+  stages.forEach(function(_,i){
+    var d=document.createElement("div");
+    d.className = i<st.stage?"done":(i===st.stage?"now":"");
+    steps.appendChild(d);
+  });
+
+  var list=$("itemList"); list.innerHTML="";
+  s.items.forEach(function(it){
+    var r=st.res[it.id];
+    var el=document.createElement("article");
+    el.className="item"+(it.crit?" crit":"")+(r?(r.v==="ok"?" is-pass":" is-def"):"");
+    var tags="";
+    if(it.crit) tags+='<span class="tag t-crit">Stops the bus</span>';
+    if(it.history) tags+='<span class="tag t-watch">Known history</span>';
+    el.innerHTML =
+      '<h3>'+esc(it.name)+'</h3>'+
+      (tags?'<div class="tags">'+tags+'</div>':'')+
+      '<p class="what">'+esc(it.what)+'</p>'+
+      (it.history?'<p class="history"><b>On this bus:</b> '+esc(it.history)+'</p>':'')+
+      '<div class="choose">'+
+        '<button type="button" class="ok'+(r&&r.v==="ok"?" on":"")+'">Fine</button>'+
+        '<button type="button" class="def'+(r&&r.v==="def"?" on":"")+'">Defect</button>'+
+      '</div>'+
+      '<div class="note'+(r&&r.v==="def"?" is-on":"")+'">'+
+        '<div class="lbl">What did you find?</div>'+
+        '<textarea placeholder="Describe it plainly. A few words is enough."></textarea>'+
+      '</div>';
+
+    var bOk=el.querySelector(".ok"), bDef=el.querySelector(".def");
+    var note=el.querySelector(".note"), ta=el.querySelector("textarea");
+    if(r&&r.note) ta.value=r.note;
+
+    bOk.addEventListener("click",function(){
+      st.res[it.id]={v:"ok"};
+      bOk.classList.add("on"); bDef.classList.remove("on"); note.classList.remove("is-on");
+      el.className="item"+(it.crit?" crit":"")+" is-pass";
+      paintDash(); paintFoot();
+    });
+    bDef.addEventListener("click",function(){
+      st.res[it.id]={v:"def",note:ta.value};
+      bDef.classList.add("on"); bOk.classList.remove("on"); note.classList.add("is-on");
+      el.className="item"+(it.crit?" crit":"")+" is-def";
+      paintDash(); paintFoot();
+      if(it.crit) toast("Critical defect. The bus does not run.");
+      setTimeout(function(){ ta.focus(); },120);
+    });
+    ta.addEventListener("input",function(){
+      if(st.res[it.id]&&st.res[it.id].v==="def") st.res[it.id].note=ta.value;
+    });
+    list.appendChild(el);
+  });
+}
+
+/* ---------------- review ---------------- */
+function defectList(){
+  return ALL.filter(function(it){ var r=st.res[it.id]; return r&&r.v==="def"; })
+    .map(function(it){ return { name:it.name, crit:!!it.crit, note:(st.res[it.id].note||"").trim() }; });
+}
+function defsHTML(defs){
+  if(!defs.length) return "";
+  return '<ul class="deflist">'+defs.map(function(d){
+    return '<li><b>'+esc(d.name)+(d.crit?" \u2014 critical":"")+'</b>'+(d.note?'<br>'+esc(d.note):'')+'</li>';
+  }).join("")+'</ul>';
+}
+function verdictHTML(lv,defs){
+  var who=(CFG.coordinator&&CFG.coordinator.name)?CFG.coordinator.name:"the coordinator";
+  if(lv==="stop"){
+    var ph = (CFG.coordinator&&CFG.coordinator.phone)?String(CFG.coordinator.phone).replace(/\s+/g,""):"";
+    var call = ph ? '<a class="callbtn" href="tel:'+esc(ph)+'">Call '+esc(who.split(" ")[0])+'</a>' : "";
+    return '<div class="verdict v-stop"><h2>The bus does not run</h2><p>A safety critical item has failed. Do not carry passengers. Ring '+esc(who)+' and arrange lifts. Nobody will be upset with you for stopping the bus.</p>'+defsHTML(defs)+call+'</div>';
+  }
+  if(lv==="warn") return '<div class="verdict v-warn"><h2>Safe to drive, with defects</h2><p>Nothing critical, but these are on the record now and need booking in.</p>'+defsHTML(defs)+'</div>';
+  return '<div class="verdict v-go"><h2>No defects found</h2><p>Everything checked and clear. Sign below and the bus is good to go.</p></div>';
+}
+function sumHTML(rec){
+  var t=tally(), now=new Date();
+  var r = rec || { date:ukDate(now), time:ukTime(now), reg:st.veh?st.veh.reg:"", driver:st.driver,
+                   miles:st.miles, checked:t.done, total:TOTAL, defects:defectList() };
+  function row(k,v){ return '<div class="sum-row"><b>'+esc(k)+'</b><span class="v">'+esc(v)+'</span></div>'; }
+  return row("Vehicle", r.reg) +
+         row("Date", r.date+" "+r.time) +
+         row("Driver", r.driver||"\u2014") +
+         row("Mileage", r.miles?Number(r.miles).toLocaleString("en-GB"):"\u2014") +
+         row("Items checked", r.checked+" of "+r.total) +
+         row("Defects", r.defects.length?String(r.defects.length):"None");
+}
+function renderReview(){
+  $("verdict").innerHTML = verdictHTML(level(), defectList());
+  $("sumBox").innerHTML = sumHTML();
+  $("sign").value = st.sign || st.driver || "";
+  st.sign = $("sign").value;
+}
+
+/* ---------------- queue ---------------- */
+function loadQ(){ try{ return JSON.parse(store.get(QKEY)||"[]"); }catch(e){ return []; } }
+function saveQ(a){ store.set(QKEY, JSON.stringify(a)); }
+function queueUp(rec){ var q=loadQ(); q.push(rec); saveQ(q); paintBanner(); }
+function dropFromQ(id){ saveQ(loadQ().filter(function(r){ return r.id!==id; })); paintBanner(); }
+
+function paintBanner(){
+  var n=loadQ().length, b=$("banner");
+  b.classList.toggle("is-on", n>0);
+  if(n>0) $("bannerText").textContent = n+" check"+(n>1?"s":"")+" not sent yet.";
+}
+
+/* ---------------- send ---------------- */
+function sendRec(rec){
+  if(!LIVE) return Promise.reject(new Error("no endpoint"));
+  return fetch(CFG.endpoint, {
+    method:"POST",
+    redirect:"follow",
+    headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: CFG.token || "", check: rec })
+  }).then(function(res){
+    if(!res.ok) throw new Error("http "+res.status);
+    return res.text();
+  }).then(function(txt){
+    var out;
+    try{ out=JSON.parse(txt); }catch(e){ throw new Error("bad reply"); }
+    if(!out || out.ok !== true) throw new Error(out && out.error ? out.error : "rejected");
+    return out;
+  });
+}
+
+function paintSend(state, extra){
+  var box=$("sendStatus");
+  if(state==="sending"){
+    box.innerHTML='<div class="sendbox s-sending"><span class="ico"><span class="spin"></span></span>'+
+      '<span><b>Sending</b><p>Writing this check to the record.</p></span></div>';
+  } else if(state==="ok"){
+    box.innerHTML='<div class="sendbox s-ok"><span class="ico">&#10003;</span>'+
+      '<span><b>On the record</b><p>Saved to the coordinator\u2019s sheet. Nothing else to do.</p></span></div>';
+  } else if(state==="practice"){
+    box.innerHTML='<div class="sendbox s-hold"><span class="ico">!</span>'+
+      '<span><b>Practice mode</b><p>No record address is set up yet, so this check was not sent anywhere.</p></span></div>';
+  } else {
+    box.innerHTML='<div class="sendbox s-hold"><span class="ico">!</span>'+
+      '<span><b>Held on this phone</b><p>'+esc(extra||"Could not reach the record.")+
+      ' It will send itself as soon as you have signal. Do not close and forget it.</p></span></div>';
+  }
+  $("retry").style.display = (state==="ok"||state==="sending") ? "none" : "";
+}
+
+function submit(){
+  var now=new Date(), t=tally();
+  var rec = {
+    id: "c"+now.getTime()+"-"+Math.random().toString(36).slice(2,7),
+    ts: now.toISOString(),
+    date: ukDate(now), time: ukTime(now),
+    reg: st.veh.reg, vehicle: st.veh.name,
+    driver: st.driver.trim(),
+    role: st.role || "",
+    miles: st.miles, sign: st.sign.trim(),
+    level: level(), checked: t.done, total: TOTAL,
+    defects: defectList(),
+    renewals: dueItems(st.veh).map(function(x){ return x.label+": "+x.words+" ("+prettyDate(x.date)+")"; }).join(" | ")
+  };
+  lastRec = rec;
+
+  $("sentTitle").textContent = rec.level==="stop" ? "Bus stopped" : "Check complete";
+  $("sentVerdict").innerHTML = verdictHTML(rec.level, rec.defects);
+  $("sentSum").innerHTML = sumHTML(rec);
+  show("sent");
+
+  if(!LIVE){ queueUp(rec); paintSend("practice"); return; }
+
+  paintSend("sending");
+  sendRec(rec).then(function(){
+    paintSend("ok");
+    if(rec.level==="stop") toast("Sent. Now ring the coordinator.");
+  }).catch(function(err){
+    queueUp(rec);
+    paintSend("hold", navigator.onLine ? "The record did not accept it." : "No signal right now.");
+  });
+}
+
+function flush(){
+  var q=loadQ();
+  if(!q.length){ toast("Nothing waiting."); return; }
+  if(!LIVE){ toast("No record address set up yet."); return; }
+  var done=0, failed=0;
+  var jobs = q.map(function(rec){
+    return sendRec(rec).then(function(){ dropFromQ(rec.id); done++; },
+                             function(){ failed++; });
+  });
+  Promise.all(jobs).then(function(){
+    renderPending(); paintBanner();
+    if(done && !failed) toast(done+" sent.");
+    else if(done && failed) toast(done+" sent, "+failed+" still waiting.");
+    else toast("Still no connection.");
+    if(lastRec && !loadQ().some(function(r){ return r.id===lastRec.id; }) && st.screen==="sent") paintSend("ok");
+  });
+}
+
+function renderPending(){
+  var q=loadQ(), box=$("pendList");
+  if(!q.length){
+    box.innerHTML='<div class="empty"><b>Nothing waiting</b>Every check has reached the record.</div>';
+    return;
+  }
+  box.innerHTML = q.map(function(r){
+    var line = r.level==="stop" ? "Bus stopped, critical defect"
+             : r.level==="warn" ? r.defects.length+" defect"+(r.defects.length>1?"s":"")
+             : "No defects";
+    return '<article class="pend"><div class="pend-h"><b>'+esc(r.reg)+'</b>'+
+      '<span class="d">'+esc(r.date)+" "+esc(r.time)+'</span></div>'+
+      '<p>'+esc(r.driver)+" \u2014 "+esc(line)+'</p></article>';
+  }).join("");
+}
+
+/* ---------------- share ---------------- */
+function recText(r){
+  var L=[];
+  L.push("MINIBUS CHECK \u2014 "+r.reg);
+  L.push(r.date+" at "+r.time);
+  L.push("Driver: "+r.driver);
+  L.push("Mileage: "+r.miles);
+  L.push("Checked: "+r.checked+" of "+r.total);
+  L.push("");
+  if(r.level==="stop") L.push("*** BUS NOT RUNNING \u2014 CRITICAL DEFECT ***");
+  else if(r.level==="warn") L.push("Safe to drive. Defects to report:");
+  else L.push("NO DEFECTS FOUND.");
+  r.defects.forEach(function(d){
+    L.push("- "+d.name+(d.crit?" (CRITICAL)":"")+(d.note?": "+d.note:""));
+  });
+  L.push("");
+  L.push("Signed: "+r.sign);
+  return L.join("\n");
+}
+
+/* ---------------- reset ---------------- */
+function reset(){
+  st.veh=null; st.res={}; st.stage=0; st.miles=""; st.sign="";
+  stages=[]; ALL=[]; TOTAL=0; lastRec=null;
+  renderVehicles(); show("vehicle");
+}
+
+/* ---------------- wiring ---------------- */
+$("driverPick").addEventListener("change",function(){
+  st.driver=this.value; st.role=roleOf(this.value); st.pin=""; $("pin").value="";
+  if(this.value) store.set(NKEY,this.value);
+  showPinField(); paintFoot();
+});
+$("driver").addEventListener("input",function(){
+  st.driver=this.value; st.role=""; paintFoot();
+});
+$("pin").addEventListener("input",function(){ st.pin=this.value; paintFoot(); });
+$("miles").addEventListener("input",function(){
+  st.miles=this.value; paintFoot();
+});
+$("sign").addEventListener("input",function(){ st.sign=this.value; paintFoot(); });
+$("toPending").addEventListener("click",function(){ renderPending(); show("pending"); });
+$("flush").addEventListener("click",flush);
+$("bannerBtn").addEventListener("click",flush);
+$("retry").addEventListener("click",function(){
+  if(!lastRec) return;
+  if(!LIVE){ toast("No record address set up yet."); return; }
+  paintSend("sending");
+  sendRec(lastRec).then(function(){ dropFromQ(lastRec.id); paintSend("ok"); toast("Sent."); },
+    function(){ paintSend("hold", navigator.onLine?"The record did not accept it.":"Still no signal."); });
+});
+$("share").addEventListener("click",function(){
+  if(!lastRec) return;
+  var text=recText(lastRec);
+  if(navigator.share){ navigator.share({ title:"Minibus check "+lastRec.reg, text:text }).catch(function(){}); }
+  else if(navigator.clipboard){ navigator.clipboard.writeText(text).then(function(){ toast("Copied."); },
+    function(){ toast("Could not copy. Screenshot this page."); }); }
+  else toast("Screenshot this page to share it.");
+});
+
+window.addEventListener("online",function(){ if(loadQ().length) flush(); });
+
+/* driver register: entries may be "Name" or { name, role, pin } */
+var REGISTER = (CFG.drivers||[]).map(function(d){
+  return (typeof d === "string")
+    ? { name:d, role:"", pin:"" }
+    : { name:d.name||"", role:d.role||"", pin:d.pin||"" };
+}).filter(function(d){ return d.name; });
+
+function entryFor(name){
+  for(var i=0;i<REGISTER.length;i++){ if(REGISTER[i].name===name) return REGISTER[i]; }
+  return null;
+}
+function roleOf(name){ var e=entryFor(name); return e?e.role:""; }
+function pinFor(name){ var e=entryFor(name); return e?String(e.pin||""):""; }
+function pinNeeded(){
+  return !!CFG.requirePin && !!pinFor(st.driver);
+}
+function showPinField(){
+  var need = !!CFG.requirePin && !!st.driver && !!pinFor(st.driver);
+  $("pinField").style.display = need ? "" : "none";
+  if(!need){ st.pin=""; $("pin").value=""; }
+}
+
+(function(){
+  var sel=$("driverPick");
+  if(!REGISTER.length){
+    $("pickField").style.display="none";
+    $("typeField").style.display="";
+    return;
+  }
+  REGISTER.forEach(function(d){
+    var o=document.createElement("option");
+    o.value=d.name;
+    o.textContent = d.role ? d.name + " \u2014 " + d.role : d.name;
+    sel.appendChild(o);
+  });
+  var saved=store.get(NKEY);
+  if(saved && entryFor(saved)){ sel.value=saved; st.driver=saved; st.role=roleOf(saved); }
+  showPinField();
+})();
+
+$("modeNote").textContent = LIVE
+  ? "Works with no signal. Checks send themselves when you are back in range."
+  : "Practice mode: no record address is set up yet, so nothing is being sent.";
+
+paintBanner();
+show("driver");
+if(LIVE && loadQ().length && navigator.onLine) setTimeout(flush, 1200);
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load",function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
+}
+</script>
+</body>
+</html>
