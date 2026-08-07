@@ -284,6 +284,55 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .milecheck{margin-top:12px;display:none}
 .milecheck.is-on{display:block}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- rolling driving rota ---------- */
+.rota-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.rota-back{min-height:44px;padding:0 12px;border:1.5px solid var(--hair);border-radius:8px;background:#fff;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase}
+.rota-jump{position:fixed;right:calc(12px + var(--safe-r));top:calc(72px + var(--safe-t));z-index:65;min-height:42px;padding:0 13px;border-radius:8px;background:#fff;color:var(--steel);border:1.5px solid #8D98A5;box-shadow:0 3px 12px rgba(0,0,0,.16);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;letter-spacing:.05em;text-transform:uppercase}
+.rota-jump:active,.rota-back:active{transform:scale(.98)}
+.rota-intro{margin-bottom:14px}
+.rota-legend{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 14px}
+.rota-pill{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:4px 8px;border-radius:5px;border:1px solid var(--hair);background:#fff}
+.rota-pill.primary{border-color:#8DB6D9;background:#EEF5FB;color:#244E72}
+.rota-pill.backup{border-color:#B8C0C9;background:#F2F4F6;color:#4D5864}
+.rota-card{background:#fff;border:1px solid var(--hair);border-radius:var(--r);overflow:hidden;margin-bottom:10px}
+.rota-card.current{border:2px solid var(--steel);box-shadow:0 2px 8px rgba(27,34,44,.08)}
+.rota-row{display:grid;grid-template-columns:82px 1fr;gap:12px;padding:12px 13px;border-bottom:1px solid var(--hair)}
+.rota-row:last-child{border-bottom:none}
+.rota-date{font-family:"IBM Plex Mono",monospace;font-size:13px;font-weight:600;color:var(--muted);padding-top:2px}
+.rota-date b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);margin-bottom:2px}
+.rota-main{min-width:0}
+.rota-main-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rota-driver{font-family:"Barlow Condensed",sans-serif;font-size:21px;font-weight:700;line-height:1.1}
+.rota-label{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#244E72;background:#EEF5FB;border:1px solid #B8D1E6;border-radius:4px;padding:2px 6px;white-space:nowrap}
+.rota-backups{font-size:13.5px;color:var(--muted);margin-top:5px}
+.rota-backups b{font-weight:600;color:#39414B}
+.rota-actions{display:flex;gap:7px;margin-top:9px}
+.rota-edit{min-height:40px;padding:0 11px;border:1.5px solid var(--hair);border-radius:7px;background:#fff;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:14px;letter-spacing:.04em;text-transform:uppercase}
+.rota-current{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#fff;background:var(--steel);border-radius:4px;padding:3px 7px;white-space:nowrap}
+.rota-controls{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap}
+.rota-controls .btn{min-height:46px;font-size:16px}
+.rota-request{border:1.5px solid var(--warn);background:var(--warn-bg);border-radius:var(--r);padding:12px;margin-top:9px}.rota-request b{color:var(--warn)}
+.rota-status{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:4px;border:1px solid var(--hair);white-space:nowrap}.rota-status.pending{background:var(--warn-bg);color:var(--warn);border-color:#EBD3A8}.rota-status.approved{background:var(--pass-bg);color:var(--pass);border-color:#B7D8C6}.rota-status.rejected{background:var(--stop-bg);color:var(--stop);border-color:#E8BCB7}.rota-cover{font-size:13px;color:var(--muted);margin-top:5px}.rota-bus2{margin-top:8px;padding:8px;border:1px dashed var(--hair);border-radius:6px;background:#fafafa;font-size:13px;color:var(--muted)}
+.rota-note{font-size:13px;color:var(--muted);line-height:1.45;margin:8px 0 16px}
+.rota-backup-box{background:#F7F8F9;border:1px solid var(--hair);border-radius:var(--r);padding:13px;margin-bottom:14px}
+.rota-backup-box h3{font-family:"Barlow Condensed",sans-serif;font-size:18px;margin:0 0 3px}
+.rota-backup-box p{margin:0;color:var(--muted);font-size:13px}
+.rota-backup-names{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.rota-backup-names span{background:#fff;border:1px solid var(--hair);border-radius:5px;padding:5px 8px;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:14px}
+.rota-card.past{opacity:.55;background:#FAFBFC}
+.rota-card.past .rota-driver{font-weight:600}
+.rota-card.unfilled{border-color:var(--stop);border-left:4px solid var(--stop)}
+.rota-empty{padding:20px;text-align:center;color:var(--muted)}
+.rota-modal{position:fixed;inset:0;z-index:120;background:rgba(22,25,31,.48);display:none;align-items:flex-end;justify-content:center}
+.rota-modal.is-on{display:flex}
+.rota-sheet{width:min(640px,100%);background:var(--paper);border-radius:14px 14px 0 0;padding:16px calc(14px + var(--safe-r)) calc(18px + var(--safe-b)) calc(14px + var(--safe-l));max-height:88vh;overflow:auto}
+.rota-sheet h2{margin-bottom:10px}
+.rota-sheet .field{margin-bottom:12px}
+.rota-modal-actions{display:flex;gap:8px;margin-top:12px}
+.rota-modal-actions .btn{flex:1}
+@media (min-width:641px){.rota-modal{align-items:center}.rota-sheet{border-radius:14px;max-height:80vh}}
+
 </style>
 </head>
 <body>
@@ -299,6 +348,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       <i class="lamp" id="lampA"></i><i class="lamp" id="lampB"></i><i class="lamp" id="lampC"></i>
     </span>
   </div>
+  <button class="rota-jump" id="rotaJump" type="button" aria-label="Open driving rota">Driving rota</button>
   <div class="bar"><i id="bar"></i></div>
   <div class="dash-alert">Do not run<small id="alertText"></small><a class="dash-call" id="dashCall" href="#">Call</a></div>
 </header>
@@ -341,6 +391,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     <p class="tiny" style="margin-top:14px">If your name is missing, you are not on the register. Ring the coordinator before taking a bus out.</p>
     <div class="linkrow">
       <button class="btn btn-ghost btn-wide" id="toPending" type="button">Waiting to send</button>
+      <button class="btn btn-ghost btn-wide" id="toRota" type="button">Driving rota</button>
     </div>
     <p class="tiny" id="modeNote"></p>
     <div class="footer-brand"><img src="logo.png" alt=""><span>RCCG Dominion Assembly Liverpool</span></div>
@@ -411,7 +462,39 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     </div>
   </section>
 
-  <!-- 7. PENDING -->
+  <!-- 7. DRIVING ROTA -->
+  <section class="screen" id="s-rota">
+    <div class="rota-top">
+      <div>
+        <p class="eyebrow">Sunday transport</p>
+        <h1>Driving rota</h1>
+      </div>
+      <button class="rota-back" id="rotaBack" type="button">Back</button>
+    </div>
+    <div class="card rota-intro">
+      <p style="margin:0 0 5px;font-weight:600">Rolling driving rota</p>
+      <p style="margin:0;color:var(--muted);font-size:14px">One main driver is assigned each Sunday. The assistance pool is available where possible. Drivers can request a change, but only the coordinator changes the official rota. The normal pattern keeps repeating unless the spreadsheet records an override.</p>
+    </div>
+    <div class="rota-controls">
+      <button class="btn btn-main" id="rotaToday" type="button">This Sunday</button>
+      <button class="btn btn-ghost" id="rotaMyDuties" type="button">My duties</button>
+      
+    </div>
+    <div class="rota-legend">
+      <span class="rota-pill primary">Primary driver</span>
+      <span class="rota-pill backup">Backup pool</span>
+    </div>
+    <div class="rota-backup-box">
+      <h3>Backup drivers</h3>
+      <p>These are available to assist where possible. They are not automatically a second driver for every Sunday.</p>
+      <div class="rota-backup-names" id="rotaBackupNames"></div>
+    </div>
+    <p class="rota-note">Scroll forward as far as you need. Future Sundays continue loading as you approach the end. Past Sundays remain available as history, but the view opens at the current Sunday.</p>
+    <div id="rotaNotice"></div>
+    <div id="rotaList"></div>
+  </section>
+
+  <!-- 8. PENDING -->
   <section class="screen" id="s-pending">
     <p class="eyebrow">Held on this phone</p>
     <h1>Waiting to send</h1>
@@ -422,6 +505,14 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     </div>
   </section>
 </main>
+
+<div class="rota-modal" id="rotaModal" aria-hidden="true">
+  <div class="rota-sheet">
+    <p class="eyebrow">Rota request</p>
+    <h2 id="rotaModalTitle">Request a change</h2>
+    <div id="rotaModalBody"></div>
+  </div>
+</div>
 
 <div class="footbar" id="footbar">
   <div class="count" id="count"></div>
@@ -725,7 +816,7 @@ function paintDash(){
 }
 
 /* ---------------- screens ---------------- */
-var SCREENS = ["driver","vehicle","prep","stage","review","sent","pending"];
+var SCREENS = ["driver","vehicle","prep","stage","review","sent","rota","pending"];
 function show(n){
   st.screen=n;
   SCREENS.forEach(function(x){ $("s-"+x).classList.toggle("is-on", x===n); });
@@ -1087,6 +1178,209 @@ function recText(r){
   return L.join("\n");
 }
 
+/* ---------------- rolling driving rota ---------------- */
+var ROTA_PRIMARY_PATTERN = (CFG.rotaPrimaryPattern || ["Bro Adebola", "Bro Abiodun", "Bro Moses", "Bro Asim"]).slice();
+var ROTA_BACKUPS = (CFG.rotaBackups || ["Pst Kehinde", "Bro Calvin", "Bro Tunde"]).slice();
+var rotaRows = [];
+var rotaViewMode = "all";
+var rotaModalMode = "";
+var rotaEditDate = null;
+var rotaLoadedFrom = null;
+var rotaLoadedWeeks = 104;
+var rotaLoading = false;
+var ROTA_CHUNK = 104;
+
+function rotaBaseSunday(offsetWeeks){
+  var d=new Date(); d.setHours(0,0,0,0); var day=d.getDay();
+  if(day!==0) d.setDate(d.getDate()+(7-day));
+  if(offsetWeeks) d.setDate(d.getDate()+offsetWeeks*7);
+  return d;
+}
+function rotaKey(d){ return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
+function rotaDateFromKey(key){ var p=key.split("-"); return new Date(Number(p[0]),Number(p[1])-1,Number(p[2])); }
+/* The Sunday the pattern is counted from. Must match PATTERN_ANCHOR in
+   Code.gs, or the app and the spreadsheet disagree about who drives on any
+   Sunday nobody has written down yet. */
+function rotaAnchorDate(){
+  var s=String(CFG.rotaAnchor||"2026-08-02").split("-");
+  return new Date(Number(s[0]),Number(s[1])-1,Number(s[2]));
+}
+function rotaSeedPrimary(d){
+  var n=ROTA_PRIMARY_PATTERN.length;
+  if(!n) return "";
+  var weeks=Math.round((d-rotaAnchorDate())/604800000);
+  return ROTA_PRIMARY_PATTERN[((weeks%n)+n)%n];
+}
+function rotaPrimary(d){
+  var key=rotaKey(d); for(var i=0;i<rotaRows.length;i++) if(rotaRows[i].date===key) return rotaRows[i].primary;
+  return rotaSeedPrimary(d);
+}
+function rotaRowFor(key){ for(var i=0;i<rotaRows.length;i++) if(rotaRows[i].date===key) return rotaRows[i]; return null; }
+function rotaRequestFor(date,driver){ var r=rotaRowFor(date); return r&&r.request&&(!driver||r.request.driver===driver)?r.request:null; }
+function rotaFetch(fromDate,weeks,cb){
+  if(!LIVE || !navigator.onLine){ cb(); return; }
+  var qs="?rota=1&from="+encodeURIComponent(rotaKey(fromDate))+"&weeks="+weeks;
+  rotaLoading=true;
+  fetch(CFG.endpoint+qs,{method:"GET",redirect:"follow"}).then(function(r){return r.text();}).then(function(t){
+    var out=JSON.parse(t); if(!out||out.ok!==true) throw new Error("rota unavailable");
+    var incoming=out.rows||[];
+
+    /* The spreadsheet is the authority on all three of these. */
+    if(out.pattern && out.pattern.length) ROTA_PRIMARY_PATTERN = out.pattern.slice();
+    if(out.backups && out.backups.length) ROTA_BACKUPS = out.backups.slice();
+    if(out.drivers && out.drivers.length) rotaMergeRegister(out.drivers);
+
+    incoming.forEach(function(row){
+      var idx=rotaRows.findIndex(function(x){return x.date===row.date;});
+      if(idx>=0) rotaRows[idx]=row; else rotaRows.push(row);
+    });
+    rotaRows.sort(function(a,b){return a.date.localeCompare(b.date);});
+    rotaLoading=false; cb();
+  }).catch(function(){
+    rotaLoading=false; cb();
+    /* Only worth saying out loud if they are actually looking at the rota. */
+    if(st.screen==="rota") toast("Could not reach the shared rota. Showing the normal pattern.");
+  });
+}
+
+/* A driver added to the spreadsheet should appear on the phone without
+   anyone editing config.js. Adds them to the register and to the name
+   dropdown, keeping whatever the driver had already chosen. */
+function rotaMergeRegister(names){
+  var known={}, added=false;
+  REGISTER.forEach(function(x){ known[x.name]=true; });
+  names.forEach(function(n){
+    if(n && !known[n]){ REGISTER.push({name:n,role:"",pin:""}); known[n]=true; added=true; }
+  });
+  if(!added) return;
+  var sel=$("driverPick"); if(!sel) return;
+  var chosen=sel.value;
+  sel.innerHTML='<option value="">Choose your name</option>';
+  REGISTER.forEach(function(d){
+    var o=document.createElement("option");
+    o.value=d.name;
+    o.textContent=d.role ? d.name+" \u2014 "+d.role : d.name;
+    sel.appendChild(o);
+  });
+  if(chosen) sel.value=chosen;
+}
+function rotaRender(keepPosition){
+  var start=rotaBaseSunday(-26), today=rotaBaseSunday(0);
+  rotaFetch(start,rotaLoadedWeeks+26,function(){
+    var list=$("rotaList"), names=$("rotaBackupNames"), notice=$("rotaNotice"), html="", shown=0, my=st.driver.trim();
+    names.innerHTML=ROTA_BACKUPS.map(function(n){return '<span>'+esc(n)+'</span>';}).join("");
+    var end=new Date(today); end.setDate(end.getDate()+rotaLoadedWeeks*7);
+    for(var d=new Date(start);d<=end;d.setDate(d.getDate()+7)){
+      var key=rotaKey(d), row=rotaRowFor(key)||{};
+      var primary=row.primary||rotaSeedPrimary(d);
+      var actual=row.actual||primary;
+      var current=key===rotaKey(today), past=d<today;
+      if(rotaViewMode==="mine" && primary!==my && actual!==my) continue;
+
+      /* Nobody rostered. Say so loudly rather than letting the Sunday look
+         normal with a blank name. */
+      var unfilled=!primary && !actual;
+
+      var req=rotaRequestFor(key,null);
+      var reqHtml="";
+      if(req){
+        var cls=String(req.status||"").toLowerCase();
+        cls=cls.indexOf("approv")===0?"approved":cls.indexOf("reject")===0?"rejected":"pending";
+        reqHtml='<div class="rota-request"><b>'+esc(req.type||"Change requested")+'</b> '+
+                '<span class="rota-status '+cls+'">'+esc(req.status||"Pending")+'</span>'+
+                (req.driver?'<div style="font-size:13px;margin-top:3px">Asked by '+esc(req.driver)+'</div>':'')+
+                '</div>';
+      }
+
+      /* A driver can ask about a Sunday that is theirs and still to come,
+         whether they were scheduled for it or are down to cover it. Nothing
+         can be asked about a Sunday that has already happened. */
+      var mine=my && (primary===my || actual===my);
+      var pending=req && String(req.status||"").toLowerCase().indexOf("pend")===0;
+      var action=(!past && mine && !pending)
+        ? '<button class="rota-edit" type="button" data-rota-request="'+key+'">Request change</button>' : '';
+
+      var cover=(actual && primary && actual!==primary)
+        ? '<div class="rota-cover"><b>Covering for '+esc(primary)+'</b></div>' : '';
+
+      var bus2=row.primary2
+        ? '<div class="rota-bus2"><b>Bus 2:</b> '+esc(row.actual2||row.primary2)+
+          (row.actual2&&row.actual2!==row.primary2?' \u00B7 covering '+esc(row.primary2):'')+'</div>' : '';
+
+      var badge=current?'<span class="rota-current">This Sunday</span>'
+              : cover?'<span class="rota-label">Cover</span>'
+              : '<span class="rota-label">Primary</span>';
+
+      var nameCell=unfilled
+        ? '<span class="rota-driver" style="color:var(--stop)">No driver assigned</span>'
+        : '<span class="rota-driver">'+esc(actual)+'</span>';
+
+      html+='<article class="rota-card'+(current?' current':'')+(past?' past':'')+(unfilled?' unfilled':'')+'" id="rota-'+key+'">'+
+        '<div class="rota-row">'+
+          '<div class="rota-date"><b>'+esc(d.toLocaleDateString("en-GB",{weekday:"short"}))+'</b>'+
+            esc(pad2(d.getDate())+"/"+pad2(d.getMonth()+1)+"/"+String(d.getFullYear()).slice(-2))+'</div>'+
+          '<div class="rota-main">'+
+            '<div class="rota-main-head">'+nameCell+badge+'</div>'+
+            cover+bus2+
+            '<div class="rota-backups"><b>Assistance pool:</b> '+esc(ROTA_BACKUPS.join(" \u00B7 "))+'</div>'+
+            reqHtml+
+            (action?'<div class="rota-actions">'+action+'</div>':'')+
+          '</div>'+
+        '</div></article>';
+      shown++;
+    }
+    list.innerHTML=shown?html:'<div class="rota-empty">No duties found for this view.</div>';
+    notice.innerHTML=rotaViewMode==="mine"?'<div class="card" style="margin-bottom:12px"><b>My duties</b><div style="color:var(--muted);font-size:13px;margin-top:3px">Showing Sundays where '+esc(my||"your selected name")+' is scheduled or covering.</div></div>':'';
+    list.querySelectorAll("[data-rota-request]").forEach(function(b){b.addEventListener("click",function(){rotaOpenRequest(this.getAttribute("data-rota-request"));});});
+    if(!keepPosition){var cur=document.getElementById("rota-"+rotaKey(today)); if(cur&&rotaViewMode==="all") setTimeout(function(){cur.scrollIntoView({block:"start"});},0);}
+  });
+}
+function rotaOpen(){ rotaViewMode="all"; rotaRender(false); show("rota"); }
+function rotaOpenRequest(key){
+  var d=rotaDateFromKey(key); rotaEditDate=key;
+  $("rotaModalTitle").textContent="Request a change";
+  $("rotaModalBody").innerHTML='<p class="lede">'+esc(d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))+' · You are currently scheduled as primary.</p><div class="field"><label for="rotaReqType">Request type</label><select id="rotaReqType"><option>Holiday / planned leave</option><option>Unavailable</option><option>Request a swap</option><option>Other</option></select></div><div class="field" id="rotaSwapField" style="display:none"><label for="rotaSwapWith">Preferred swap driver (optional)</label><select id="rotaSwapWith"><option value="">No preference</option></select></div><div class="field"><label for="rotaReqReason">Reason</label><textarea id="rotaReqReason" placeholder="Tell the coordinator what they need to know."></textarea></div><div class="rota-modal-actions"><button class="btn btn-ghost" id="rotaCancel2" type="button">Cancel</button><button class="btn btn-main" id="rotaSubmitRequest" type="button">Send request</button></div>';
+  var sw=$("rotaSwapWith"); REGISTER.forEach(function(x){var o=document.createElement("option");o.value=x.name;o.textContent=x.name;if(x.name===st.driver)o.disabled=true;sw.appendChild(o);});
+  $("rotaReqType").addEventListener("change",function(){$("rotaSwapField").style.display=this.value==="Request a swap"?"":"none";});
+  $("rotaCancel2").addEventListener("click",rotaClose); $("rotaSubmitRequest").addEventListener("click",rotaSubmitRequest);
+  $("rotaModal").classList.add("is-on"); $("rotaModal").setAttribute("aria-hidden","false");
+}
+/* A rota request is never queued for later. A driver must not walk away
+   believing a holiday request is with the coordinator when it is still
+   sitting on the phone. Either it went, or the app says so plainly. */
+function rotaSubmitRequest(){
+  var reason=$("rotaReqReason").value.trim();
+  var type=$("rotaReqType").value;
+  var swap=$("rotaSwapWith")?$("rotaSwapWith").value:"";
+  var btn=$("rotaSubmitRequest");
+
+  if(!st.driver.trim()){ toast("Choose your name on the first screen before asking for a change."); return; }
+  if(reason.length<3){ toast("Give the coordinator a short reason."); return; }
+  if(!LIVE){ toast("Not submitted. The shared rota is not connected yet."); return; }
+  if(!navigator.onLine){ toast("Not submitted. No connection. Try again when you have signal."); return; }
+
+  var body={token:CFG.token||"",action:"rotaRequest",request:{
+    id:"rq"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
+    date:rotaEditDate, driver:st.driver.trim(),
+    type:type, reason:reason, swapWith:swap
+  }};
+
+  btn.disabled=true; btn.textContent="Sending\u2026";
+  fetch(CFG.endpoint,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)})
+    .then(function(r){return r.text();})
+    .then(function(t){
+      var out=JSON.parse(t);
+      if(!out.ok) throw new Error(out.error||"The record would not accept it.");
+      rotaClose(); rotaRender(true);
+      toast("Request sent. The coordinator decides; the rota has not changed yet.");
+    })
+    .catch(function(e){
+      toast("Not submitted. "+(navigator.onLine?(e.message||"The record would not accept it."):"You lost signal. Try again."));
+      btn.disabled=false; btn.textContent="Send request";
+    });
+}
+function rotaClose(){ $("rotaModal").classList.remove("is-on"); $("rotaModal").setAttribute("aria-hidden","true"); }
+
 /* ---------------- reset ---------------- */
 function reset(){
   st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign="";
@@ -1094,6 +1388,12 @@ function reset(){
   renderVehicles(); show("vehicle");
 }
 
+/* ---------------- rota wiring ---------------- */
+$("rotaJump").addEventListener("click",rotaOpen);
+$("rotaBack").addEventListener("click",function(){show("driver");});
+$("rotaToday").addEventListener("click",function(){rotaViewMode="all";rotaRender();window.scrollTo(0,0);});
+$("rotaMyDuties").addEventListener("click",function(){rotaViewMode="mine";rotaRender();window.scrollTo(0,0);});
+$("rotaModal").addEventListener("click",function(e){if(e.target===this)rotaClose();});
 /* ---------------- wiring ---------------- */
 $("driverPick").addEventListener("change",function(){
   st.driver=this.value; st.role=roleOf(this.value); st.pin=""; $("pin").value="";
@@ -1115,6 +1415,17 @@ $("mileConfirm").addEventListener("click",function(){
 });
 $("sign").addEventListener("input",function(){ st.sign=this.value; paintFoot(); });
 $("toPending").addEventListener("click",function(){ renderPending(); show("pending"); });
+$("toRota").addEventListener("click",rotaOpen);
+/* The screen class is "is-on", not "on". With the wrong name this test was
+   always false, so scrolling never loaded another chunk and the rota quietly
+   stopped two years out. */
+window.addEventListener("scroll",function(){
+  if($("s-rota").classList.contains("is-on") &&
+     window.innerHeight+window.scrollY>document.body.offsetHeight-1800 &&
+     !rotaLoading){
+    rotaLoadedWeeks+=ROTA_CHUNK; rotaRender(true);
+  }
+});
 $("flush").addEventListener("click",flush);
 $("bannerBtn").addEventListener("click",flush);
 $("retry").addEventListener("click",function(){
@@ -1182,6 +1493,7 @@ $("modeNote").textContent = LIVE
 paintBanner();
 fetchLastMiles();
 show("driver");
+rotaRender();
 if(LIVE && loadQ().length && navigator.onLine) setTimeout(flush, 1200);
 
 if("serviceWorker" in navigator){

@@ -40,6 +40,10 @@ window.CONFIG = {
      before their first Sunday. If someone should no longer drive, remove
      them and they disappear from every phone at the next refresh.
 
+     The rota also has a Drivers tab in the spreadsheet. That tab is what the
+     ROTA uses. This list is what the CHECK screen uses. Keep the two in step:
+     add a new driver in both places.
+
      Optional per driver: pin: "1234"  (only used when requirePin is true) */
   drivers: [
     { name: "Pst Kehinde", role: "Minister in Charge" },
@@ -49,6 +53,37 @@ window.CONFIG = {
     { name: "Bro Moses",   role: "Driver" },
     { name: "Bro Calvin",  role: "Backup" },
     { name: "Bro Tunde",   role: "Backup" }
+  ],
+
+  /* ---- Driving rota ----------------------------------------------------
+     The rota repeats this pattern, one name per Sunday, for ever:
+       Adebola, Abiodun, Moses, Asim, then back to Adebola.
+
+     THE SPREADSHEET IS THE OFFICIAL ROTA. These settings are only the
+     fallback the app draws from when it cannot reach the sheet, and the
+     starting point the sheet itself was built from. The live pattern comes
+     from the Drivers tab, using the "Primary order" column.
+
+     rotaAnchor is the Sunday the pattern is counted from. It must be a
+     Sunday and it must match PATTERN_ANCHOR in Code.gs. Moving it changes
+     who drives on every future Sunday that has not been written down, so
+     leave it alone unless you mean to reshuffle the whole rota. */
+  rotaAnchor: "2026-08-02",
+
+  rotaPrimaryPattern: [
+    "Bro Adebola",
+    "Bro Abiodun",
+    "Bro Moses",
+    "Bro Asim"
+  ],
+
+  /* Assistance pool. These are not assigned Sundays. They are people who may
+     help where they are available, and any of them can be picked to cover a
+     Sunday when the coordinator needs them. */
+  rotaBackups: [
+    "Pst Kehinde",
+    "Bro Calvin",
+    "Bro Tunde"
   ]
 
 };
