@@ -309,6 +309,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-card.past{opacity:.55;background:#FAFBFC}
 .rota-card.past .rota-driver{font-weight:600}
 .rota-card.unfilled{border-color:var(--stop);border-left:4px solid var(--stop)}
+.rota-hint{margin-top:6px;color:var(--steel);font-weight:600}
 .rota-earlier{display:block;width:100%;min-height:44px;margin-bottom:12px;border:1px dashed var(--hair);
   border-radius:8px;background:transparent;color:var(--muted);
   font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:14px;
@@ -367,6 +368,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
         <label for="driverPick">Driver name</label>
         <select id="driverPick"><option value="">Choose your name</option></select>
         <div class="hint">Only drivers approved by the leadership appear here.</div>
+        <div class="hint rota-hint" id="rotaHint" style="display:none"></div>
       </div>
       <div class="field" id="pinField" style="display:none">
         <label for="pin">Your PIN</label>
@@ -1280,7 +1282,7 @@ function rotaMergeRegister(names){
   REGISTER.forEach(function(d){
     var o=document.createElement("option");
     o.value=d.name;
-    o.textContent=d.role ? d.name+" \u2014 "+d.role : d.name;
+    o.textContent=d.name;
     sel.appendChild(o);
   });
   if(chosen) sel.value=chosen;
@@ -1302,7 +1304,9 @@ function rotaRender(keepPosition,anchorKey){
   rotaLastFetch = Date.now();
 
   rotaFetch(rotaBaseSunday(-rotaFetchedPast), rotaFetchedPast+rotaFetchedWeeks, function(changed){
-    if(changed && st.screen==="rota") rotaPaint(true);
+    if(!changed) return;
+    paintRotaHint();
+    if(st.screen==="rota") rotaPaint(true);
   });
 }
 
@@ -1485,8 +1489,26 @@ $("rotaModal").addEventListener("click",function(e){if(e.target===this)rotaClose
 $("driverPick").addEventListener("change",function(){
   st.driver=this.value; st.role=roleOf(this.value); st.pin=""; $("pin").value="";
   if(this.value) store.set(NKEY,this.value);
-  showPinField(); paintFoot();
+  showPinField(); paintFoot(); paintRotaHint();
 });
+
+/* If the name chosen is not the one on the rota for this Sunday, say who is.
+   Information, never a barrier: covering for someone is normal and the app
+   has no business getting in the way of it. Silent when they match, and
+   silent when we have no rota to go on. */
+function paintRotaHint(){
+  var el=$("rotaHint");
+  if(!el) return;
+  el.textContent=""; el.style.display="none";
+  var me=st.driver.trim();
+  if(!me || !rotaRows.length) return;
+  var row=rotaRowFor(rotaKey(rotaBaseSunday(0)));
+  if(!row) return;
+  var due=(row.actual||row.primary||"").trim();
+  if(!due || due===me) return;
+  el.textContent="Rota has "+due+" this Sunday.";
+  el.style.display="";
+}
 $("driver").addEventListener("input",function(){
   st.driver=this.value; st.role=""; paintFoot();
 });
@@ -1565,7 +1587,11 @@ function showPinField(){
   REGISTER.forEach(function(d){
     var o=document.createElement("option");
     o.value=d.name;
-    o.textContent = d.role ? d.name + " \u2014 " + d.role : d.name;
+    /* Names only. "Pst" and "Bro" already carry the standing, and a man
+       driving on a Sunday is the driver that day whatever his usual role
+       says. The role is still taken from the register and written to the
+       record, it just is not paraded at him while he picks his own name. */
+    o.textContent=d.name;
     sel.appendChild(o);
   });
   var saved=store.get(NKEY);
@@ -1584,6 +1610,7 @@ show("driver");
 /* Load the stored rota straight away so opening the rota screen is instant,
    then let it refresh itself in the background. */
 rotaLoadCache();
+paintRotaHint();
 if(LIVE && navigator.onLine) setTimeout(function(){ rotaRender(true); }, 400);
 if(LIVE && loadQ().length && navigator.onLine) setTimeout(flush, 1200);
 
