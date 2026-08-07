@@ -20,7 +20,11 @@
   --warn:#B26B00;--warn-bg:#FDF3E2;
   --stop:#A8231B;--stop-bg:#FBE9E7;
   --plate:#F4C11E;
-  --r:10px;--tap:56px;--safe-b:env(safe-area-inset-bottom,0px);
+  --r:10px;--tap:56px;
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-l:env(safe-area-inset-left,0px);
+  --safe-r:env(safe-area-inset-right,0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -32,10 +36,20 @@ input,textarea{font:inherit;color:inherit}
 
 /* ---------- instrument strip ---------- */
 .dash{position:sticky;top:0;z-index:60;background:var(--steel);color:#EEF1F4;
-  border-bottom:3px solid #0C1016;transition:background .25s,border-color .25s}
+  border-bottom:3px solid #0C1016;transition:background .25s,border-color .25s;
+  padding-top:calc(var(--safe-t) + 4px)}
+/* Installed to the home screen the app runs full bleed, so the status bar
+   would otherwise sit on top of the registration plate. Give it real room. */
+@media all and (display-mode:standalone){
+  .dash{padding-top:calc(var(--safe-t) + 8px)}
+}
+@media all and (display-mode:fullscreen){
+  .dash{padding-top:calc(var(--safe-t) + 8px)}
+}
 .dash.is-warn{background:#6E4300;border-bottom-color:var(--warn)}
 .dash.is-stop{background:#7A1811;border-bottom-color:#E23B2C}
-.dash-top{display:flex;align-items:center;gap:10px;padding:9px 14px}
+.dash-top{display:flex;align-items:center;gap:10px;
+  padding:9px calc(14px + var(--safe-r)) 9px calc(14px + var(--safe-l))}
 .plate{display:inline-flex;align-items:center;background:var(--plate);color:#101010;
   font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;letter-spacing:.055em;
   padding:3px 9px 2px;border-radius:4px;border:1.5px solid #101010;flex:none}
@@ -55,14 +69,17 @@ input,textarea{font:inherit;color:inherit}
 .bar i{display:block;height:100%;background:#7FB4E8;width:0;transition:width .3s}
 .dash.is-warn .bar i{background:#F5A623}
 .dash.is-stop .bar i{background:#FF5A47}
-.dash-alert{display:none;padding:9px 14px 11px;font-family:"Barlow Condensed",sans-serif;font-weight:700;
+.dash-alert{display:none;
+  padding:9px calc(14px + var(--safe-r)) 11px calc(14px + var(--safe-l));
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;
   font-size:20px;letter-spacing:.06em;text-transform:uppercase;line-height:1.1}
 .dash-alert small{display:block;font-family:"IBM Plex Sans",sans-serif;font-weight:400;font-size:13px;
   letter-spacing:0;text-transform:none;margin-top:3px;color:#FFD9D2}
 .dash.is-stop .dash-alert{display:block}
 
 /* ---------- shell ---------- */
-.wrap{max-width:640px;margin:0 auto;padding:16px 14px calc(120px + var(--safe-b))}
+.wrap{max-width:640px;margin:0 auto;
+  padding:16px calc(14px + var(--safe-r)) calc(120px + var(--safe-b)) calc(14px + var(--safe-l))}
 .screen{display:none}
 .screen.is-on{display:block;animation:fade .22s ease}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -148,7 +165,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 
 /* ---------- footer ---------- */
 .footbar{position:fixed;left:0;right:0;bottom:0;z-index:70;background:rgba(244,245,246,.96);
-  backdrop-filter:blur(8px);border-top:1px solid var(--hair);padding:10px 14px calc(10px + var(--safe-b))}
+  backdrop-filter:blur(8px);border-top:1px solid var(--hair);
+  padding:10px calc(14px + var(--safe-r)) calc(10px + var(--safe-b)) calc(14px + var(--safe-l))}
 .footbar-in{max-width:640px;margin:0 auto;display:flex;gap:9px;align-items:center}
 .btn{min-height:var(--tap);padding:0 18px;border-radius:9px;font-family:"Barlow Condensed",sans-serif;
   font-weight:700;font-size:20px;letter-spacing:.06em;text-transform:uppercase;display:inline-flex;
@@ -205,7 +223,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .empty{text-align:center;padding:34px 16px;color:var(--muted)}
 .empty b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:22px;color:var(--ink);margin-bottom:5px}
 .banner{display:none;background:var(--warn-bg);border-bottom:1px solid var(--warn);color:#5A4008;
-  padding:9px 14px;font-size:14px;text-align:center}
+  padding:9px calc(14px + var(--safe-r)) 9px calc(14px + var(--safe-l));font-size:14px;text-align:center}
 .banner.is-on{display:block}
 .banner button{text-decoration:underline;font-weight:600;color:#5A4008}
 .linkrow{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap}
