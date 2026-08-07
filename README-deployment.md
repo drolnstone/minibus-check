@@ -46,7 +46,7 @@ brand new deployment instead, you must paste the new URL into `config.js`.
 
 Replace `index.html`, `config.js` and `sw.js` on your host.
 
-`sw.js` has been bumped to `minibus-check-v17`. That is what tells every
+`sw.js` has been bumped to `minibus-check-v18`. That is what tells every
 phone to throw away its old copy. If you ever edit `index.html` or
 `config.js` again, bump that number again or phones will keep the old app.
 
@@ -190,12 +190,20 @@ person. Approve or reject is the whole of it.
 
 ## Still on your list
 
-These are not faults in the app, but they were flagged in the original config
-and are still outstanding:
+These are not faults in the app, but they are worth settling:
 
-- The **service, insurance and permit dates** in `config.js` are placeholders.
-  The MOT dates are real, from the DVSA record. Replace the other three before
-  drivers start trusting the renewal banner.
+- **Four renewal dates were given as a month with no day**, so they sit on
+  the 1st: both parking permits (January 2027), and NH56's service and
+  insurance (July 2027). The 1st warns early rather than late, which is the
+  safe way to be wrong, but it can shout up to a month too soon. Put the real
+  day into `config.js` when you have the paperwork to hand.
 - The **gross weight of NH56 FWP** is unconfirmed. It decides the licence
   position: at or under 3,500kg the volunteer concession can apply to a car
   licence holder; above it, D1 is required. Confirm it from the V5C.
+
+## When each renewal banner appears
+
+Nothing shows now. The first is **2 December 2026**, when both parking
+permits go amber. After that: NH56 MOT on 29 March 2027, YS70's MOT, service
+and insurance together on 18 May 2027, and NH56 service and insurance on
+1 June 2027.

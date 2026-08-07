@@ -99,11 +99,18 @@ window.CONFIG = {
                 permit     parking permit renewal
               Leave a date as "" and it is not tracked at all.
 
-     >>> THE MOT DATES BELOW ARE REAL, TAKEN FROM THE DVSA RECORD.
-     >>> THE SERVICE, INSURANCE AND PERMIT DATES ARE PLACEHOLDERS.
-     >>> Replace them with the true dates before drivers rely on the banner.
-     >>> They are set deliberately close so you can see the banner working:
-     >>> YS70 service is due soon (amber), NH56 service reads overdue (red).
+     >>> WHERE THESE DATES CAME FROM
+     >>> The two MOT dates are real, taken from the DVSA record.
+     >>> The rest were set by the coordinator in August 2026:
+     >>>   YS70  service and insurance fall with the MOT, 17 June 2027
+     >>>   NH56  service and insurance, July 2027
+     >>>   both  parking permit, January 2027
+     >>>
+     >>> FOUR OF THOSE WERE GIVEN AS A MONTH WITH NO DAY, so they are set to
+     >>> the 1st: both permits, and NH56 service and insurance. The 1st is
+     >>> the safe end of the month to guess, because it warns early rather
+     >>> than late. Put the real day in when you have the paperwork in front
+     >>> of you, or the app will start shouting up to a month too soon.
 
      watch    per-vehicle fault history, keyed by check item id
      skip     ids of checks that do not apply to this vehicle
@@ -124,9 +131,9 @@ window.VEHICLES = [
 
     dates: {
       mot:       "2027-06-17",   // real, from the DVSA record
-      service:   "2026-08-28",   // PLACEHOLDER
-      insurance: "2027-02-01",   // PLACEHOLDER
-      permit:    "2026-11-30"    // PLACEHOLDER
+      service:   "2027-06-17",   // set to fall with the MOT
+      insurance: "2027-06-17",   // set to fall with the MOT
+      permit:    "2027-01-01"    // January 2027. DAY ASSUMED, see note above
     },
 
     /* Factory fitted: retractable step, reversing camera, head up display,
@@ -171,9 +178,9 @@ window.VEHICLES = [
 
     dates: {
       mot:       "2027-04-28",   // real, from the DVSA record
-      service:   "2026-07-20",   // PLACEHOLDER, deliberately in the past
-      insurance: "2027-03-15",   // PLACEHOLDER
-      permit:    "2026-09-01"    // PLACEHOLDER
+      service:   "2027-07-01",   // July 2027. DAY ASSUMED, see note above
+      insurance: "2027-07-01",   // July 2027. DAY ASSUMED, see note above
+      permit:    "2027-01-01"    // January 2027. DAY ASSUMED, see note above
     },
 
     watch: {
