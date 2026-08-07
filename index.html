@@ -779,10 +779,12 @@ function paintDash(){
   $("dashTitle").textContent=title;
   $("dashSub").textContent=sub;
 
+  /* The number belongs on the button you press, not in the sentence as well.
+     Saying it twice made the banner longer and no clearer. */
   var who = (CFG.coordinator && CFG.coordinator.name) ? CFG.coordinator.name : "the coordinator";
   var ph  = coordPhone();
   $("alertText").textContent = critNames().join(", ") +
-    ". Ring " + who + (ph ? " on " + prettyPhone() : "") + " before anyone boards.";
+    ". Ring the coordinator before anyone boards.";
   var link = $("dashCall");
   if(ph){
     link.href = "tel:" + ph;
@@ -800,6 +802,29 @@ function show(n){
   SCREENS.forEach(function(x){ $("s-"+x).classList.toggle("is-on", x===n); });
   window.scrollTo(0,0);
   paintDash(); paintFoot();
+  if(n==="sent"){ refreshSendState(); armBackGuard(); }
+}
+
+/**
+ * A submitted check is finished. Swiping back from it should not walk into
+ * the review screen where it could be edited or signed and sent a second
+ * time. Pushing a state here gives the back gesture something harmless to
+ * land on, and the popstate handler sends the driver home instead.
+ */
+function armBackGuard(){
+  try{ history.pushState({ minibus:"done" }, "", location.href); }catch(e){}
+}
+
+window.addEventListener("popstate", function(){
+  if(st.screen==="sent" || st.screen==="pending") goHome();
+});
+
+/** Clears the finished check and returns to the first screen. */
+function goHome(){
+  st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign="";
+  stages=[]; ALL=[]; TOTAL=0; lastRec=null;
+  paintBanner();
+  show("driver");
 }
 
 function paintFoot(){
@@ -867,12 +892,15 @@ function paintFoot(){
     return;
   }
   if(st.screen==="sent"){
-    btn("New check","btn-main",reset);
-    btn("Waiting to send","btn-ghost",function(){ renderPending(); show("pending"); });
+    /* Finished means finished. The way on is home, not back into a check
+       that has already been signed and sent. */
+    btn("Done","btn-main",goHome);
+    if(loadQ().length) btn("Waiting to send","btn-ghost",function(){ renderPending(); show("pending"); });
+    else btn("Check another bus","btn-ghost",reset);
     return;
   }
   if(st.screen==="pending"){
-    btn("Back","btn-main",function(){ show(st.veh?"sent":"driver"); });
+    btn("Back","btn-main",function(){ goHome(); });
     return;
   }
 }
@@ -989,7 +1017,7 @@ function verdictHTML(lv,defs){
   if(lv==="stop"){
     var ph = coordPhone();
     var call = ph ? '<a class="callbtn" href="tel:'+esc(ph)+'">Call '+esc(who.split(" ")[0])+' \u00B7 '+esc(prettyPhone())+'</a>' : "";
-    return '<div class="verdict v-stop"><h2>The bus does not run</h2><p>A safety critical item has failed. Do not carry passengers. Ring '+esc(who)+(ph?' on '+esc(prettyPhone()):'')+' and arrange lifts. Nobody will be upset with you for stopping the bus.</p>'+defsHTML(defs)+call+'</div>';
+    return '<div class="verdict v-stop"><h2>The bus does not run</h2><p>A safety critical item has failed. Do not carry passengers. Ring the coordinator and arrange lifts. Nobody will be upset with you for stopping the bus.</p>'+defsHTML(defs)+call+'</div>';
   }
   if(lv==="warn") return '<div class="verdict v-warn"><h2>Safe to drive, with defects</h2><p>Nothing critical, but these are on the record now and need booking in.</p>'+defsHTML(defs)+'</div>';
   return '<div class="verdict v-go"><h2>No defects found</h2><p>Everything checked and clear. Sign below and the bus is good to go.</p></div>';
@@ -1044,6 +1072,25 @@ function sendRec(rec){
   });
 }
 
+/* True only while a check is actually in flight. Without this, a re-check
+   that lands mid-send would wrongly declare success. */
+var sendingNow = false;
+
+/**
+ * "Held on this phone" was sticking. The box was only ever repainted at the
+ * moment a send failed or a flush finished on that exact screen, so a check
+ * that went through later, or while the driver was looking at something
+ * else, left the old warning standing. This re-reads the truth: if the last
+ * check is no longer in the queue, it is on the record. Cheap enough to call
+ * whenever the screen is shown or the queue moves.
+ */
+function refreshSendState(){
+  if(sendingNow || !lastRec) return;
+  if(!LIVE){ paintSend("practice"); return; }
+  var stillWaiting = loadQ().some(function(r){ return r.id===lastRec.id; });
+  if(!stillWaiting) paintSend("ok");
+}
+
 function paintSend(state, extra){
   var box=$("sendStatus");
   if(state==="sending"){
@@ -1080,23 +1127,27 @@ function submit(){
     renewals: dueItems(st.veh).map(function(x){ return x.label+": "+x.words+" ("+prettyDate(x.date)+")"; }).join(" | ")
   };
   lastRec = rec;
+  sendingNow = true;   /* set before the screen paints, or the fresh state
+                          check would call it sent before it has gone */
 
   $("sentTitle").textContent = rec.level==="stop" ? "Bus stopped" : "Check complete";
   $("sentVerdict").innerHTML = verdictHTML(rec.level, rec.defects);
   $("sentSum").innerHTML = sumHTML(rec);
   show("sent");
 
-  if(!LIVE){ queueUp(rec); paintSend("practice"); return; }
+  if(!LIVE){ sendingNow=false; queueUp(rec); paintSend("practice"); return; }
 
   LASTMILES[rec.reg] = { miles: rec.miles, date: rec.date, driver: rec.driver };
   store.set(MKEY, JSON.stringify(LASTMILES));
 
   paintSend("sending");
   sendRec(rec).then(function(){
+    sendingNow = false;
     paintSend("ok");
     fetchLastMiles();
     if(rec.level==="stop") toast("Sent. Now ring the coordinator.");
   }).catch(function(err){
+    sendingNow = false;
     queueUp(rec);
     paintSend("hold", navigator.onLine ? "The record did not accept it." : "No signal right now.");
   });
@@ -1116,7 +1167,10 @@ function flush(){
     if(done && !failed) toast(done+" sent.");
     else if(done && failed) toast(done+" sent, "+failed+" still waiting.");
     else toast("Still no connection.");
-    if(lastRec && !loadQ().some(function(r){ return r.id===lastRec.id; }) && st.screen==="sent") paintSend("ok");
+    /* Not just when the sent screen happens to be open: the box is repainted
+       whichever screen the driver is on, so it is already right when they
+       come back to it. */
+    refreshSendState();
   });
 }
 
