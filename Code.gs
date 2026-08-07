@@ -192,12 +192,32 @@ function lastMileagePayload() {
  */
 function rotaPayload(fromKey, weeks) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  ensureRota(ss);
+
+  /* Reads used to run the full maintenance pass every time: re-reading the
+     driver register, re-reading every rota row, and occasionally rewriting
+     every dropdown across 3000 rows. That is what made the app feel slow.
+     Maintenance now runs at most once a day, and never in front of a
+     waiting driver. */
+  ensureRotaSheets(ss);
+
+  var props = PropertiesService.getScriptProperties();
+  maintainIfDue(ss, props);
 
   var from = sundayOf(fromKey ? keyToDate(fromKey) : new Date());
   if (weeks < 1) weeks = 1;
   if (weeks > 520) weeks = 520;                 // ten years is plenty per call
   var to = addWeeks(from, weeks);
+
+  /* A rota that has not changed does not need building twice. The version
+     number is bumped whenever anything is written, so an edit in the sheet
+     shows up on the next read rather than waiting for a timer. */
+  var version = props.getProperty("rotaVersion") || "1";
+  var cacheKey = "rota_" + version + "_" + dateToKey(from) + "_" + weeks;
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get(cacheKey);
+  if (hit) {
+    try { return JSON.parse(hit); } catch (err) { /* rebuild below */ }
+  }
 
   var drivers = readDrivers(ss);
   var pattern = primaryPattern(drivers);
@@ -229,7 +249,7 @@ function rotaPayload(fromKey, weeks) {
 
   rows.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
 
-  return {
+  var payload = {
     ok: true,
     from: dateToKey(from),
     weeks: weeks,
@@ -238,6 +258,46 @@ function rotaPayload(fromKey, weeks) {
     drivers: drivers.filter(function (d) { return d.active; }).map(function (d) { return d.name; }),
     rows: rows
   };
+
+  try { cache.put(cacheKey, JSON.stringify(payload), 300); } catch (err) { /* too big, no matter */ }
+  return payload;
+}
+
+/** Makes sure the tabs exist. Cheap: no reading, no writing, no formatting. */
+function ensureRotaSheets(ss) {
+  sheet(ss, ROTA_SHEET, [
+    "Sunday", "Bus 1 scheduled", "Bus 1 actual / cover", "Status",
+    "Bus 2 scheduled", "Bus 2 actual / cover", "Notes", "Updated", "Updated by"
+  ]);
+  sheet(ss, DRIVERS_SHEET, ["Name", "Role", "Active", "Primary order", "Backup pool"]);
+  sheet(ss, REQUESTS_SHEET, [
+    "Received", "Request ID", "Sunday", "Driver", "Type", "Reason",
+    "Preferred swap", "Status", "Decided on", "Replacement assigned"
+  ]);
+}
+
+/**
+ * Rolls the filled horizon forward, but only once a day. Anything sooner is
+ * wasted work: the horizon moves by one Sunday a week.
+ */
+function maintainIfDue(ss, props) {
+  try {
+    var last = Number(props.getProperty("rotaFilledAt") || 0);
+    if (Date.now() - last < 86400000) return;
+    props.setProperty("rotaFilledAt", String(Date.now()));
+    fillRotaAhead(ss);
+  } catch (err) { /* a slow tidy-up must never break a read */ }
+}
+
+/**
+ * Call after anything is written. Bumping the number makes every cached
+ * copy unreachable at once, so the next read rebuilds from the sheet.
+ */
+function bumpRotaVersion() {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    props.setProperty("rotaVersion", String(Number(props.getProperty("rotaVersion") || 1) + 1));
+  } catch (err) {}
 }
 
 function decorate(r, requests) {
@@ -347,7 +407,9 @@ function handleRotaRequest(rq) {
   }
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  ensureRota(ss);
+  /* Tabs only. The driver is standing there waiting for this to come back,
+     so the horizon-filling and dropdown pass stays out of the way. */
+  ensureRotaSheets(ss);
 
   var sh = sheet(ss, REQUESTS_SHEET, [
     "Received", "Request ID", "Sunday", "Driver", "Type", "Reason",
@@ -375,6 +437,7 @@ function handleRotaRequest(rq) {
   // do NOT change the driver. Only the coordinator does that.
   markRotaStatus(ss, rq.date, "Change requested");
 
+  bumpRotaVersion();
   if (COORDINATOR_EMAIL) notifyRotaRequest(rq, sunday);
 
   return reply({ ok: true });
@@ -436,6 +499,7 @@ function setUpEverything() {
     "Preferred swap", "Status", "Decided on", "Replacement assigned"
   ]);
   refreshDropdowns();
+  bumpRotaVersion();
   ss.toast("Rota is set up and ready.", "Minibus", 5);
 }
 
@@ -662,6 +726,7 @@ function onEditRequests(e, sh) {
     rota.getRange(rRow, 4).setValue("Confirmed");
     stamp(rota, rRow, "Request rejected");
   }
+  bumpRotaVersion();
 }
 
 /** Keeps the Status column honest when you edit the rota directly. */
@@ -684,6 +749,7 @@ function onEditRota(e, sh) {
     }
   }
   stamp(sh, row, "Coordinator");
+  bumpRotaVersion();
 }
 
 function onEditDefects(e, sh) {

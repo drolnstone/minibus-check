@@ -1168,6 +1168,7 @@ var rotaLoadedFrom = null;
 var rotaLoadedWeeks = 104;
 var rotaPastWeeks = 0;      /* history stays hidden until asked for */
 var rotaAnchorKey = null;   /* Sunday to hold in place across a re-render */
+var rotaLastFetch = 0;      /* when the sheet was last asked, in ms */
 var rotaLoading = false;
 var ROTA_CHUNK = 104;
 
@@ -1198,13 +1199,47 @@ function rotaPrimary(d){
 }
 function rotaRowFor(key){ for(var i=0;i<rotaRows.length;i++) if(rotaRows[i].date===key) return rotaRows[i]; return null; }
 function rotaRequestFor(date,driver){ var r=rotaRowFor(date); return r&&r.request&&(!driver||r.request.driver===driver)?r.request:null; }
+
+/* ---- keeping the rota on the phone --------------------------------------
+   The round trip to Apps Script takes a second or three: a redirect, a cold
+   start, then the sheet read. Waiting on it before drawing anything is what
+   made this feel slow. So the last known rota is kept on the phone, drawn
+   the instant the screen opens, and quietly corrected when the real answer
+   arrives. Nothing blocks. */
+var RKEY = "fleet.rota.v1";
+
+function rotaSaveCache(){
+  try{
+    store.set(RKEY, JSON.stringify({
+      when: Date.now(), rows: rotaRows,
+      pattern: ROTA_PRIMARY_PATTERN, backups: ROTA_BACKUPS
+    }));
+  }catch(e){}
+}
+function rotaLoadCache(){
+  try{
+    var c = JSON.parse(store.get(RKEY)||"null");
+    if(!c || !c.rows) return false;
+    rotaRows = c.rows;
+    if(c.pattern && c.pattern.length) ROTA_PRIMARY_PATTERN = c.pattern.slice();
+    if(c.backups && c.backups.length) ROTA_BACKUPS = c.backups.slice();
+    return true;
+  }catch(e){ return false; }
+}
+
+/* How much of the future we have already asked the sheet for. Stops every
+   scroll from re-requesting a window we already hold. */
+var rotaFetchedWeeks = 0;
+var rotaFetchedPast = 0;
+
 function rotaFetch(fromDate,weeks,cb){
-  if(!LIVE || !navigator.onLine){ cb(); return; }
+  if(!LIVE || !navigator.onLine){ cb(false); return; }
   var qs="?rota=1&from="+encodeURIComponent(rotaKey(fromDate))+"&weeks="+weeks;
   rotaLoading=true;
   fetch(CFG.endpoint+qs,{method:"GET",redirect:"follow"}).then(function(r){return r.text();}).then(function(t){
     var out=JSON.parse(t); if(!out||out.ok!==true) throw new Error("rota unavailable");
     var incoming=out.rows||[];
+    var before=JSON.stringify(rotaRows);
 
     /* The spreadsheet is the authority on all three of these. */
     if(out.pattern && out.pattern.length) ROTA_PRIMARY_PATTERN = out.pattern.slice();
@@ -1216,11 +1251,16 @@ function rotaFetch(fromDate,weeks,cb){
       if(idx>=0) rotaRows[idx]=row; else rotaRows.push(row);
     });
     rotaRows.sort(function(a,b){return a.date.localeCompare(b.date);});
-    rotaLoading=false; cb();
+
+    rotaLoading=false;
+    rotaSaveCache();
+    /* Only redraw if something actually moved. Repainting a hundred cards
+       for no reason is its own kind of slow. */
+    cb(JSON.stringify(rotaRows)!==before);
   }).catch(function(){
-    rotaLoading=false; cb();
+    rotaLoading=false; cb(false);
     /* Only worth saying out loud if they are actually looking at the rota. */
-    if(st.screen==="rota") toast("Could not reach the shared rota. Showing the normal pattern.");
+    if(st.screen==="rota") toast("Could not reach the shared rota. Showing the last copy.");
   });
 }
 
@@ -1245,11 +1285,30 @@ function rotaMergeRegister(names){
   });
   if(chosen) sel.value=chosen;
 }
+/* Draw now, correct later. rotaPaint never waits for the network. */
 function rotaRender(keepPosition,anchorKey){
   if(anchorKey) rotaAnchorKey=anchorKey;
-  var today=rotaBaseSunday(0);
-  var start=rotaBaseSunday(-rotaPastWeeks);
-  rotaFetch(start,rotaPastWeeks+rotaLoadedWeeks,function(){
+  rotaPaint(keepPosition);
+
+  /* Only go to the sheet if we are asking for a window we have not already
+     got, or if enough time has passed to be worth re-checking. */
+  var needFuture = rotaLoadedWeeks > rotaFetchedWeeks;
+  var needPast   = rotaPastWeeks   > rotaFetchedPast;
+  var stale      = Date.now() - rotaLastFetch > 60000;
+  if(!(needFuture || needPast || stale)) return;
+
+  rotaFetchedWeeks = Math.max(rotaFetchedWeeks, rotaLoadedWeeks);
+  rotaFetchedPast  = Math.max(rotaFetchedPast, rotaPastWeeks);
+  rotaLastFetch = Date.now();
+
+  rotaFetch(rotaBaseSunday(-rotaFetchedPast), rotaFetchedPast+rotaFetchedWeeks, function(changed){
+    if(changed && st.screen==="rota") rotaPaint(true);
+  });
+}
+
+function rotaPaint(keepPosition){
+    var today=rotaBaseSunday(0);
+    var start=rotaBaseSunday(-rotaPastWeeks);
     var list=$("rotaList"), notice=$("rotaNotice"), html="", shown=0, my=st.driver.trim();
     var end=new Date(today); end.setDate(end.getDate()+rotaLoadedWeeks*7);
 
@@ -1281,11 +1340,17 @@ function rotaRender(keepPosition,anchorKey){
       }
 
       /* A driver can ask about a Sunday that is theirs and still to come,
-         whether they were scheduled for it or are down to cover it. Nothing
-         can be asked about a Sunday that has already happened. */
+         whether they were scheduled for it or are down to cover it.
+
+         One ask per person per Sunday. Once they have used it the button
+         goes, whatever the answer was. Pending means wait. Approved means
+         it is settled and somebody else is covering. Rejected means the
+         coordinator has said no, and asking the same question again through
+         the app will not change that. The status chip on the card says
+         which, so nothing needs explaining. */
       var mine=my && (primary===my || actual===my);
-      var pending=req && String(req.status||"").toLowerCase().indexOf("pend")===0;
-      var action=(!past && mine && !pending)
+      var alreadyAsked=req && req.driver===my;
+      var action=(!past && mine && !alreadyAsked)
         ? '<button class="rota-edit" type="button" data-rota-request="'+key+'">Request change</button>' : '';
 
       var cover=(actual && primary && actual!==primary)
@@ -1339,7 +1404,6 @@ function rotaRender(keepPosition,anchorKey){
       if(a){ setTimeout(function(){a.scrollIntoView({block:"start"});},0); return; }
     }
     if(!keepPosition) window.scrollTo(0,0);
-  });
 }
 
 /* Which Sunday is currently at the top of the screen. */
@@ -1516,7 +1580,11 @@ $("modeNote").textContent = LIVE
 paintBanner();
 fetchLastMiles();
 show("driver");
-rotaRender();
+
+/* Load the stored rota straight away so opening the rota screen is instant,
+   then let it refresh itself in the background. */
+rotaLoadCache();
+if(LIVE && navigator.onLine) setTimeout(function(){ rotaRender(true); }, 400);
 if(LIVE && loadQ().length && navigator.onLine) setTimeout(flush, 1200);
 
 if("serviceWorker" in navigator){
