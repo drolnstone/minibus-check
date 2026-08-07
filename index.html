@@ -288,13 +288,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 /* ---------- rolling driving rota ---------- */
 .rota-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
 .rota-back{min-height:44px;padding:0 12px;border:1.5px solid var(--hair);border-radius:8px;background:#fff;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase}
-.rota-jump{position:fixed;right:calc(12px + var(--safe-r));top:calc(72px + var(--safe-t));z-index:65;min-height:42px;padding:0 13px;border-radius:8px;background:#fff;color:var(--steel);border:1.5px solid #8D98A5;box-shadow:0 3px 12px rgba(0,0,0,.16);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;letter-spacing:.05em;text-transform:uppercase}
-.rota-jump:active,.rota-back:active{transform:scale(.98)}
-.rota-intro{margin-bottom:14px}
-.rota-legend{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 14px}
-.rota-pill{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:4px 8px;border-radius:5px;border:1px solid var(--hair);background:#fff}
-.rota-pill.primary{border-color:#8DB6D9;background:#EEF5FB;color:#244E72}
-.rota-pill.backup{border-color:#B8C0C9;background:#F2F4F6;color:#4D5864}
+.rota-back:active{transform:scale(.98)}
 .rota-card{background:#fff;border:1px solid var(--hair);border-radius:var(--r);overflow:hidden;margin-bottom:10px}
 .rota-card.current{border:2px solid var(--steel);box-shadow:0 2px 8px rgba(27,34,44,.08)}
 .rota-row{display:grid;grid-template-columns:82px 1fr;gap:12px;padding:12px 13px;border-bottom:1px solid var(--hair)}
@@ -305,8 +299,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-main-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .rota-driver{font-family:"Barlow Condensed",sans-serif;font-size:21px;font-weight:700;line-height:1.1}
 .rota-label{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#244E72;background:#EEF5FB;border:1px solid #B8D1E6;border-radius:4px;padding:2px 6px;white-space:nowrap}
-.rota-backups{font-size:13.5px;color:var(--muted);margin-top:5px}
-.rota-backups b{font-weight:600;color:#39414B}
 .rota-actions{display:flex;gap:7px;margin-top:9px}
 .rota-edit{min-height:40px;padding:0 11px;border:1.5px solid var(--hair);border-radius:7px;background:#fff;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:14px;letter-spacing:.04em;text-transform:uppercase}
 .rota-current{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#fff;background:var(--steel);border-radius:4px;padding:3px 7px;white-space:nowrap}
@@ -314,16 +306,16 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-controls .btn{min-height:46px;font-size:16px}
 .rota-request{border:1.5px solid var(--warn);background:var(--warn-bg);border-radius:var(--r);padding:12px;margin-top:9px}.rota-request b{color:var(--warn)}
 .rota-status{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:4px;border:1px solid var(--hair);white-space:nowrap}.rota-status.pending{background:var(--warn-bg);color:var(--warn);border-color:#EBD3A8}.rota-status.approved{background:var(--pass-bg);color:var(--pass);border-color:#B7D8C6}.rota-status.rejected{background:var(--stop-bg);color:var(--stop);border-color:#E8BCB7}.rota-cover{font-size:13px;color:var(--muted);margin-top:5px}.rota-bus2{margin-top:8px;padding:8px;border:1px dashed var(--hair);border-radius:6px;background:#fafafa;font-size:13px;color:var(--muted)}
-.rota-note{font-size:13px;color:var(--muted);line-height:1.45;margin:8px 0 16px}
-.rota-backup-box{background:#F7F8F9;border:1px solid var(--hair);border-radius:var(--r);padding:13px;margin-bottom:14px}
-.rota-backup-box h3{font-family:"Barlow Condensed",sans-serif;font-size:18px;margin:0 0 3px}
-.rota-backup-box p{margin:0;color:var(--muted);font-size:13px}
-.rota-backup-names{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
-.rota-backup-names span{background:#fff;border:1px solid var(--hair);border-radius:5px;padding:5px 8px;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:14px}
 .rota-card.past{opacity:.55;background:#FAFBFC}
 .rota-card.past .rota-driver{font-weight:600}
 .rota-card.unfilled{border-color:var(--stop);border-left:4px solid var(--stop)}
-.rota-empty{padding:20px;text-align:center;color:var(--muted)}
+.rota-earlier{display:block;width:100%;min-height:44px;margin-bottom:12px;border:1px dashed var(--hair);
+  border-radius:8px;background:transparent;color:var(--muted);
+  font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:14px;
+  letter-spacing:.09em;text-transform:uppercase}
+.rota-earlier:active{background:#EDEFF1}
+.rota-controls .btn.is-active{background:var(--steel);color:#fff;border-color:var(--steel)}
+.rota-empty{padding:34px 16px;text-align:center;color:var(--muted)}
 .rota-modal{position:fixed;inset:0;z-index:120;background:rgba(22,25,31,.48);display:none;align-items:flex-end;justify-content:center}
 .rota-modal.is-on{display:flex}
 .rota-sheet{width:min(640px,100%);background:var(--paper);border-radius:14px 14px 0 0;padding:16px calc(14px + var(--safe-r)) calc(18px + var(--safe-b)) calc(14px + var(--safe-l));max-height:88vh;overflow:auto}
@@ -348,7 +340,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       <i class="lamp" id="lampA"></i><i class="lamp" id="lampB"></i><i class="lamp" id="lampC"></i>
     </span>
   </div>
-  <button class="rota-jump" id="rotaJump" type="button" aria-label="Open driving rota">Driving rota</button>
   <div class="bar"><i id="bar"></i></div>
   <div class="dash-alert">Do not run<small id="alertText"></small><a class="dash-call" id="dashCall" href="#">Call</a></div>
 </header>
@@ -471,25 +462,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       </div>
       <button class="rota-back" id="rotaBack" type="button">Back</button>
     </div>
-    <div class="card rota-intro">
-      <p style="margin:0 0 5px;font-weight:600">Rolling driving rota</p>
-      <p style="margin:0;color:var(--muted);font-size:14px">One main driver is assigned each Sunday. The assistance pool is available where possible. Drivers can request a change, but only the coordinator changes the official rota. The normal pattern keeps repeating unless the spreadsheet records an override.</p>
-    </div>
     <div class="rota-controls">
       <button class="btn btn-main" id="rotaToday" type="button">This Sunday</button>
       <button class="btn btn-ghost" id="rotaMyDuties" type="button">My duties</button>
-      
     </div>
-    <div class="rota-legend">
-      <span class="rota-pill primary">Primary driver</span>
-      <span class="rota-pill backup">Backup pool</span>
-    </div>
-    <div class="rota-backup-box">
-      <h3>Backup drivers</h3>
-      <p>These are available to assist where possible. They are not automatically a second driver for every Sunday.</p>
-      <div class="rota-backup-names" id="rotaBackupNames"></div>
-    </div>
-    <p class="rota-note">Scroll forward as far as you need. Future Sundays continue loading as you approach the end. Past Sundays remain available as history, but the view opens at the current Sunday.</p>
     <div id="rotaNotice"></div>
     <div id="rotaList"></div>
   </section>
@@ -1180,6 +1156,9 @@ function recText(r){
 
 /* ---------------- rolling driving rota ---------------- */
 var ROTA_PRIMARY_PATTERN = (CFG.rotaPrimaryPattern || ["Bro Adebola", "Bro Abiodun", "Bro Moses", "Bro Asim"]).slice();
+/* Kept in step with the spreadsheet, but not shown to drivers: the backup
+   pool is coordinator information, not something a driver needs on a Sunday
+   morning. Nothing reads this today. */
 var ROTA_BACKUPS = (CFG.rotaBackups || ["Pst Kehinde", "Bro Calvin", "Bro Tunde"]).slice();
 var rotaRows = [];
 var rotaViewMode = "all";
@@ -1187,6 +1166,8 @@ var rotaModalMode = "";
 var rotaEditDate = null;
 var rotaLoadedFrom = null;
 var rotaLoadedWeeks = 104;
+var rotaPastWeeks = 0;      /* history stays hidden until asked for */
+var rotaAnchorKey = null;   /* Sunday to hold in place across a re-render */
 var rotaLoading = false;
 var ROTA_CHUNK = 104;
 
@@ -1264,12 +1245,19 @@ function rotaMergeRegister(names){
   });
   if(chosen) sel.value=chosen;
 }
-function rotaRender(keepPosition){
-  var start=rotaBaseSunday(-26), today=rotaBaseSunday(0);
-  rotaFetch(start,rotaLoadedWeeks+26,function(){
-    var list=$("rotaList"), names=$("rotaBackupNames"), notice=$("rotaNotice"), html="", shown=0, my=st.driver.trim();
-    names.innerHTML=ROTA_BACKUPS.map(function(n){return '<span>'+esc(n)+'</span>';}).join("");
+function rotaRender(keepPosition,anchorKey){
+  if(anchorKey) rotaAnchorKey=anchorKey;
+  var today=rotaBaseSunday(0);
+  var start=rotaBaseSunday(-rotaPastWeeks);
+  rotaFetch(start,rotaPastWeeks+rotaLoadedWeeks,function(){
+    var list=$("rotaList"), notice=$("rotaNotice"), html="", shown=0, my=st.driver.trim();
     var end=new Date(today); end.setDate(end.getDate()+rotaLoadedWeeks*7);
+
+    /* The page opens on This Sunday. Anyone who wants what has already gone
+       asks for it. */
+    html+='<button class="rota-earlier" type="button" id="rotaEarlier">'+
+          (rotaPastWeeks?'Earlier still':'Earlier Sundays')+'</button>';
+
     for(var d=new Date(start);d<=end;d.setDate(d.getDate()+7)){
       var key=rotaKey(d), row=rotaRowFor(key)||{};
       var primary=row.primary||rotaSeedPrimary(d);
@@ -1322,20 +1310,48 @@ function rotaRender(keepPosition){
           '<div class="rota-main">'+
             '<div class="rota-main-head">'+nameCell+badge+'</div>'+
             cover+bus2+
-            '<div class="rota-backups"><b>Assistance pool:</b> '+esc(ROTA_BACKUPS.join(" \u00B7 "))+'</div>'+
             reqHtml+
             (action?'<div class="rota-actions">'+action+'</div>':'')+
           '</div>'+
         '</div></article>';
       shown++;
     }
-    list.innerHTML=shown?html:'<div class="rota-empty">No duties found for this view.</div>';
-    notice.innerHTML=rotaViewMode==="mine"?'<div class="card" style="margin-bottom:12px"><b>My duties</b><div style="color:var(--muted);font-size:13px;margin-top:3px">Showing Sundays where '+esc(my||"your selected name")+' is scheduled or covering.</div></div>':'';
-    list.querySelectorAll("[data-rota-request]").forEach(function(b){b.addEventListener("click",function(){rotaOpenRequest(this.getAttribute("data-rota-request"));});});
-    if(!keepPosition){var cur=document.getElementById("rota-"+rotaKey(today)); if(cur&&rotaViewMode==="all") setTimeout(function(){cur.scrollIntoView({block:"start"});},0);}
+    list.innerHTML=shown?html:'<div class="rota-empty">Nothing for you here.</div>';
+    notice.innerHTML="";
+    $("rotaMyDuties").classList.toggle("is-active",rotaViewMode==="mine");
+
+    list.querySelectorAll("[data-rota-request]").forEach(function(b){
+      b.addEventListener("click",function(){rotaOpenRequest(this.getAttribute("data-rota-request"));});
+    });
+
+    /* Loading history pushes everything down, so pin the Sunday the driver
+       was already looking at and put it back where it was. */
+    var earlier=document.getElementById("rotaEarlier");
+    if(earlier) earlier.addEventListener("click",function(){
+      var anchor=rotaTopVisibleKey();
+      rotaPastWeeks+=12;
+      rotaRender(true,anchor);
+    });
+
+    if(rotaAnchorKey){
+      var a=document.getElementById("rota-"+rotaAnchorKey);
+      rotaAnchorKey=null;
+      if(a){ setTimeout(function(){a.scrollIntoView({block:"start"});},0); return; }
+    }
+    if(!keepPosition) window.scrollTo(0,0);
   });
 }
-function rotaOpen(){ rotaViewMode="all"; rotaRender(false); show("rota"); }
+
+/* Which Sunday is currently at the top of the screen. */
+function rotaTopVisibleKey(){
+  var cards=document.querySelectorAll("#rotaList .rota-card");
+  for(var i=0;i<cards.length;i++){
+    if(cards[i].getBoundingClientRect().top>=0) return cards[i].id.replace("rota-","");
+  }
+  return null;
+}
+
+function rotaOpen(){ rotaViewMode="all"; rotaPastWeeks=0; rotaRender(false); show("rota"); }
 function rotaOpenRequest(key){
   var d=rotaDateFromKey(key); rotaEditDate=key;
   $("rotaModalTitle").textContent="Request a change";
@@ -1389,10 +1405,17 @@ function reset(){
 }
 
 /* ---------------- rota wiring ---------------- */
-$("rotaJump").addEventListener("click",rotaOpen);
+/* The floating "Driving rota" button that used to sit over the church name
+   has been removed. The rota is reached from the button on the first screen,
+   beside "Waiting to send". */
 $("rotaBack").addEventListener("click",function(){show("driver");});
-$("rotaToday").addEventListener("click",function(){rotaViewMode="all";rotaRender();window.scrollTo(0,0);});
-$("rotaMyDuties").addEventListener("click",function(){rotaViewMode="mine";rotaRender();window.scrollTo(0,0);});
+$("rotaToday").addEventListener("click",function(){
+  rotaViewMode="all"; rotaPastWeeks=0; rotaRender(); window.scrollTo(0,0);
+});
+$("rotaMyDuties").addEventListener("click",function(){
+  rotaViewMode = rotaViewMode==="mine" ? "all" : "mine";
+  rotaRender(); window.scrollTo(0,0);
+});
 $("rotaModal").addEventListener("click",function(e){if(e.target===this)rotaClose();});
 /* ---------------- wiring ---------------- */
 $("driverPick").addEventListener("change",function(){

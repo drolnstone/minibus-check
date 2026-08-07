@@ -1,6 +1,6 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
-const CACHE = "minibus-check-v12";
+const CACHE = "minibus-check-v14";
 
 const SHELL = [
   "./",

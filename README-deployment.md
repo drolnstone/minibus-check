@@ -46,7 +46,7 @@ brand new deployment instead, you must paste the new URL into `config.js`.
 
 Replace `index.html`, `config.js` and `sw.js` on your host.
 
-`sw.js` has been bumped to `minibus-check-v12`. That is what tells every
+`sw.js` has been bumped to `minibus-check-v14`. That is what tells every
 phone to throw away its old copy. If you ever edit `index.html` or
 `config.js` again, bump that number again or phones will keep the old app.
 
