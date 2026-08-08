@@ -46,7 +46,7 @@ brand new deployment instead, you must paste the new URL into `config.js`.
 
 Replace `index.html`, `config.js` and `sw.js` on your host.
 
-`sw.js` has been bumped to `minibus-check-v30`. That is what tells every
+`sw.js` has been bumped to `minibus-check-v31`. That is what tells every
 phone to throw away its old copy. If you ever edit `index.html` or
 `config.js` again, bump that number again or phones will keep the old app.
 
@@ -318,8 +318,9 @@ so a gap in the record means an item was missed, not that it did not apply.
 ## Fuel and things to arrange
 
 **Fuel** is recorded on the mileage screen as eighths: eight segments, tap what
-the gauge reads. Red at the bottom, amber through the middle, green when full.
-It is required, because a column only half filled in cannot be used to arrange
+the gauge reads. Marked at the quarter, half, three quarters and full. Red up
+to a quarter, amber at three eighths, green from half a tank up. It is
+required, because a column only half filled in cannot be used to arrange
 anything.
 
 Eighths rather than miles remaining, because only YS70 has a range readout and

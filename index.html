@@ -290,10 +290,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   padding:0;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:13px;
   color:var(--muted);display:flex;align-items:flex-end;justify-content:center;
   padding-bottom:5px;transition:background .12s,border-color .12s}
-.fuel button.lit{color:#fff;border-color:transparent}
+.fuel button.lit{color:#fff;border-color:transparent;background:var(--muted)}
 .fuel button.lit.low{background:var(--stop)}
 .fuel button.lit.mid{background:var(--warn)}
-.fuel button.lit.high{background:var(--ok)}
+.fuel button.lit.high{background:var(--pass)}
 .fuel button.edge{box-shadow:inset 0 0 0 2px rgba(0,0,0,.28)}
 .fuel button:active{transform:scale(.96)}
 
@@ -1135,9 +1135,9 @@ function openDefectsHTML(reg){
    A low tank is not a fault. It stops nothing and emails nobody. It just
    needs somebody to put diesel in. */
 
-var FUEL_LABELS = ["E","","\u00BC","","\u00BD","","\u00BE","F"];
+var FUEL_LABELS = ["","\u00BC","","\u00BD","","\u00BE","","F"];
 
-function fuelBand(n){ return n<=2 ? "low" : n<=4 ? "mid" : "high"; }
+function fuelBand(n){ return n<=2 ? "low" : n===3 ? "mid" : "high"; }
 
 function paintFuel(){
   var bar=$("fuelBar"); if(!bar) return;
@@ -1164,8 +1164,8 @@ function paintFuel(){
   if(st.fuel<=2){
     hint.textContent=eighths+". Low. Fill up before you set off.";
     hint.style.color="var(--stop)";
-  } else if(st.fuel<=4){
-    hint.textContent=eighths+". Enough for a run, but worth filling.";
+  } else if(st.fuel===3){
+    hint.textContent=eighths+". Getting low. Worth filling.";
     hint.style.color="var(--warn)";
   } else {
     hint.textContent=eighths+".";
