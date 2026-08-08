@@ -285,6 +285,15 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   font-weight:700;font-size:17px;letter-spacing:.05em;text-transform:uppercase}
 
 /* ---------- mileage confirm ---------- */
+.openbox{border:1.5px solid var(--warn);background:var(--warn-bg);border-radius:var(--r);
+  padding:13px;margin-bottom:14px;color:#5A4008}
+.openbox h4{margin:0 0 7px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;
+  letter-spacing:.05em;text-transform:uppercase}
+.openbox ul{list-style:none;margin:0;padding:0}
+.openbox li{padding:5px 0;font-size:14.5px;border-top:1px dashed rgba(0,0,0,.16)}
+.openbox li:first-child{border-top:none}
+.openbox li b{font-weight:600}
+.openbox .crit{color:var(--stop);font-weight:600}
 .milecheck{margin-top:12px;display:none}
 .milecheck.is-on{display:block}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -407,6 +416,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     <p class="eyebrow" id="prepEyebrow">Vehicle</p>
     <h1 id="prepTitle">Before you start</h1>
     <div id="dueBox"></div>
+    <div id="openBox"></div>
     <div class="card" id="modeCard" style="display:none">
       <div class="lbl" style="margin-bottom:8px">Inspection type</div>
       <div class="choose">
@@ -1070,11 +1080,29 @@ function geoRecord(){
                   : "No location available" };
 }
 
+/* Open defects reported on this bus and not yet closed off in the sheet.
+   Empty until the rota payload arrives, so it never delays the check. */
+var OPEN_DEFECTS = {};
+
+function openDefectsHTML(reg){
+  var list = OPEN_DEFECTS[reg] || [];
+  if(!list.length) return "";
+  return '<div class="openbox"><h4>Still open on this bus</h4><ul>' +
+    list.slice(0,6).map(function(d){
+      return '<li><b>' + esc(d.item) + '</b>' +
+             (d.crit ? ' <span class="crit">critical</span>' : '') +
+             (d.note ? '<br>' + esc(d.note) : '') + '</li>';
+    }).join("") +
+    (list.length > 6 ? '<li>and ' + (list.length-6) + ' more</li>' : '') +
+    '</ul></div>';
+}
+
 function renderPrep(){
   var v=st.veh;
   $("prepEyebrow").textContent = v.reg + " \u00B7 " + v.name;
   $("prepTitle").textContent = "Before you start";
   $("dueBox").innerHTML = dueHTML(v);
+  $("openBox").innerHTML = openDefectsHTML(v.reg);
   $("miles").value = st.miles;
   paintMilesHint();
   paintMode();
@@ -1494,7 +1522,8 @@ function rotaFetch(fromDate,weeks,cb){
     /* The spreadsheet is the authority on all three of these. */
     if(out.pattern && out.pattern.length) ROTA_PRIMARY_PATTERN = out.pattern.slice();
     if(out.backups && out.backups.length) ROTA_BACKUPS = out.backups.slice();
-    if(out.drivers && out.drivers.length) rotaMergeRegister(out.drivers);
+    if(out.drivers && out.drivers.length) rotaSyncRegister(out.drivers);
+    if(out.openDefects) OPEN_DEFECTS = out.openDefects;
 
     incoming.forEach(function(row){
       var idx=rotaRows.findIndex(function(x){return x.date===row.date;});
@@ -1514,26 +1543,53 @@ function rotaFetch(fromDate,weeks,cb){
   });
 }
 
-/* A driver added to the spreadsheet should appear on the phone without
-   anyone editing config.js. Adds them to the register and to the name
-   dropdown, keeping whatever the driver had already chosen. */
-function rotaMergeRegister(names){
-  var known={}, added=false;
-  REGISTER.forEach(function(x){ known[x.name]=true; });
-  names.forEach(function(n){
-    if(n && !known[n]){ REGISTER.push({name:n,role:"",pin:""}); known[n]=true; added=true; }
+/* Full sync with the Drivers tab, not just an add: a name taken off Active
+   there disappears here too, and roles come across so a promotion reaches the
+   full-inspection choice. config.js is the fallback before the sheet is
+   reachable, and is where PINs live. Anyone mid-check keeps their name for
+   this visit even if the sheet has just dropped them. Accepts plain names or
+   {name, role} so an app open during a deploy does not glitch. */
+function rotaSyncRegister(list){
+  if(!list || !list.length) return;
+
+  var incoming = list.map(function(d){
+    return (typeof d === "string")
+      ? { name:d, role:"" }
+      : { name:(d&&d.name)||"", role:(d&&d.role)||"" };
+  }).filter(function(d){ return d.name; });
+
+  var pins={};
+  REGISTER.forEach(function(d){ if(d.pin) pins[d.name]=d.pin; });
+
+  var next = incoming.map(function(d){
+    return { name:d.name, role:d.role, pin:pins[d.name]||"" };
   });
-  if(!added) return;
-  var sel=$("driverPick"); if(!sel) return;
-  var chosen=sel.value;
-  sel.innerHTML='<option value="">Choose your name</option>';
-  REGISTER.forEach(function(d){
-    var o=document.createElement("option");
-    o.value=d.name;
-    o.textContent=d.name;
-    sel.appendChild(o);
-  });
-  if(chosen) sel.value=chosen;
+  var have={}; next.forEach(function(d){ have[d.name]=true; });
+
+  if(st.driver && !have[st.driver]){
+    var mine=entryFor(st.driver);
+    if(mine) next.push(mine);
+  }
+
+  var before = REGISTER.map(function(d){ return d.name+"|"+d.role; }).sort().join(",");
+  var after  = next.map(function(d){ return d.name+"|"+d.role; }).sort().join(",");
+  if(before===after) return;
+
+  REGISTER = next;
+
+  var sel=$("driverPick");
+  if(sel){
+    var chosen=sel.value;
+    sel.innerHTML='<option value="">Choose your name</option>';
+    REGISTER.forEach(function(d){
+      var o=document.createElement("option");
+      o.value=d.name;
+      o.textContent=d.name;
+      sel.appendChild(o);
+    });
+    if(chosen && entryFor(chosen)) sel.value=chosen;
+  }
+  if(st.driver) st.role = roleOf(st.driver);
 }
 /* Draw now, correct later. rotaPaint never waits for the network. */
 function rotaRender(keepPosition,anchorKey){

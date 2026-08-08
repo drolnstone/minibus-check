@@ -297,7 +297,10 @@ function rotaPayload(fromKey, weeks) {
     weeks: weeks,
     pattern: pattern,
     backups: backups,
-    drivers: drivers.filter(function (d) { return d.active; }).map(function (d) { return d.name; }),
+    drivers: drivers.filter(function (d) { return d.active; })
+                     .map(function (d) { return { name: d.name, role: d.role }; }),
+    /* So the next driver sees what the last one reported and still open. */
+    openDefects: openDefectsByReg(ss),
     rows: rows
   };
 
@@ -558,8 +561,43 @@ function setUpEverything() {
 
   refreshDropdowns();
   bumpRotaVersion();
+  try { installWeeklyDigest(); } catch (err) { /* triggers need permission; never block setup */ }
+
   var n = ss.getSheetByName(ROTA_SHEET).getLastRow() - 1;
-  ss.toast("Ready. " + n + " Sundays on the rota.", "Minibus", 6);
+  var tz = timeZoneWarning();
+  if (tz) {
+    /* Folded into this toast, not fired as a second one: a second toast
+       replaces the first straight away, so the warning would never be read. */
+    ss.toast(tz + " Run Minibus \u203a Check time zone for the fix, then run this again.",
+             "Ready, but check this first", 12);
+  } else {
+    ss.toast("Ready. " + n + " Sundays on the rota.", "Minibus", 6);
+  }
+}
+
+/* The rota is worked out from timestamps and matched against phones on UK
+   time. If this sheet's time zone is something else, the two can disagree
+   about which day it is. Returns a warning, or "" if it looks right. */
+function timeZoneWarning() {
+  try {
+    var tz = Session.getScriptTimeZone();
+    if (tz === "Europe/London") return "";
+    return "Time zone is set to " + tz + ", not Europe/London.";
+  } catch (err) {
+    return "";
+  }
+}
+
+function checkTimeZoneMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tz = timeZoneWarning();
+  if (tz) {
+    ss.toast(tz + " Go to File \u203a Settings \u203a Time zone, change it to " +
+             "United Kingdom, then run Set up / refresh rota again.",
+             "Check the time zone", 15);
+  } else {
+    ss.toast("Time zone looks right: " + Session.getScriptTimeZone() + ".", "Minibus", 6);
+  }
 }
 
 function ensureDrivers(ss) {
@@ -798,6 +836,142 @@ function sendTestEmail() {
   return msg;
 }
 
+/* ---- weekly digest ----------------------------------------------------- */
+
+/* The Sunday just gone, or today if today is Sunday. */
+function lastSunday(now) {
+  var x = new Date((now || new Date()).getTime());
+  x = new Date(x.getFullYear(), x.getMonth(), x.getDate());
+  x.setDate(x.getDate() - x.getDay());
+  return x;
+}
+
+/* Registrations the sheet has ever seen, so there is no second fleet list to
+   keep in step with config.js. */
+function knownRegs(ss) {
+  var sh = ss.getSheetByName(CHECKS_SHEET);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var vals = sh.getRange(2, 6, sh.getLastRow() - 1, 1).getValues();
+  var seen = {}, out = [];
+  vals.forEach(function (r) {
+    var reg = String(r[0] || "").trim();
+    if (reg && !seen[reg]) { seen[reg] = true; out.push(reg); }
+  });
+  return out.sort();
+}
+
+/* Every check recorded against a given Sunday, newest first. */
+function checksOn(ss, key) {
+  var sh = ss.getSheetByName(CHECKS_SHEET);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 18).getValues();
+  var out = [];
+  vals.forEach(function (r) {
+    if (anyToKey(r[2]) !== key) return;
+    out.push({ reg: String(r[5] || "").trim(), driver: String(r[6] || ""),
+               outcome: String(r[10] || ""), type: String(r[17] || ""),
+               time: String(r[3] || "") });
+  });
+  return out;
+}
+
+/* Open defects per registration. Anything not Fixed or Not a defect. */
+function openDefectsByReg(ss) {
+  var sh = ss.getSheetByName(DEFECTS_SHEET);
+  var out = {};
+  if (!sh || sh.getLastRow() < 2) return out;
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues();
+  vals.forEach(function (r) {
+    var status = String(r[8] || "");
+    if (status === "Fixed" || status === "Not a defect") return;
+    var reg = String(r[3] || "").trim();
+    if (!reg) return;
+    if (!out[reg]) out[reg] = [];
+    out[reg].push({ reg: reg, item: String(r[5] || ""), crit: String(r[6] || "") === "YES",
+                    note: String(r[7] || ""), date: anyToKey(r[2]) });
+  });
+  return out;
+}
+
+/**
+ * One email a week, whether or not anything happened. Defect emails only fire
+ * when there is a defect, so silence is ambiguous: it means a clean week, or
+ * it means the mail never arrived. This makes silence mean something. If the
+ * digest stops turning up, the email path itself is broken.
+ */
+function weeklyDigest() {
+  if (!COORDINATOR_EMAIL) return "COORDINATOR_EMAIL is blank, so nothing was sent.";
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sunday = lastSunday(new Date());
+  var key = dateToKey(sunday);
+  var pretty = Utilities.formatDate(sunday, Session.getScriptTimeZone(), "d MMMM yyyy");
+
+  var regs = knownRegs(ss);
+  var done = checksOn(ss, key);
+  var open = openDefectsByReg(ss);
+
+  var byReg = {};
+  done.forEach(function (c) { if (!byReg[c.reg]) byReg[c.reg] = c; });
+
+  var missed = [], lines = [];
+
+  regs.forEach(function (reg) {
+    var c = byReg[reg];
+    var n = (open[reg] || []).length;
+    var tail = n ? " &middot; <b>" + n + " open defect" + (n > 1 ? "s" : "") + "</b>" : "";
+    if (c) {
+      lines.push("<b>" + reg + "</b> &mdash; checked by " + (c.driver || "someone") +
+                 (c.outcome ? " (" + c.outcome + ")" : "") + tail);
+    } else {
+      missed.push(reg);
+      lines.push("<b>" + reg + "</b> &mdash; <span style=\"color:#A8231B\"><b>no check recorded</b></span>" + tail);
+    }
+  });
+
+  if (!regs.length) lines.push("No checks have ever been recorded, so there is nothing to report yet.");
+
+  var colour = missed.length ? "#A8231B" : "#146B41";
+  var title = missed.length
+    ? "Sunday " + pretty + ": " + missed.length + " bus" + (missed.length > 1 ? "es" : "") + " not checked"
+    : "Sunday " + pretty + ": all checked";
+
+  var all = [];
+  Object.keys(open).forEach(function (reg) { all = all.concat(open[reg]); });
+  if (all.length) {
+    lines.push("&nbsp;");
+    lines.push("<b>Open defects</b>");
+    all.slice(0, 15).forEach(function (d) {
+      lines.push("&bull; " + esc(d.reg) + ": " + esc(d.item) + (d.crit ? " (critical)" : "") +
+                 (d.note ? " &mdash; " + esc(d.note) : ""));
+    });
+    if (all.length > 15) lines.push("&bull; and " + (all.length - 15) + " more");
+  }
+
+  MailApp.sendEmail({
+    to: COORDINATOR_EMAIL,
+    subject: "Minibus weekly summary \u2014 " + pretty,
+    body: title + "\n\n" + lines.join("\n").replace(/<[^>]+>/g, "").replace(/&[a-z]+;/g, " "),
+    htmlBody: htmlShell(title, colour, lines, "Open spreadsheet", CHECKS_SHEET)
+  });
+
+  return title;
+}
+
+/** Sunday evening, once a week. Safe to run again: it clears its own old one. */
+function installWeeklyDigest() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "weeklyDigest") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("weeklyDigest")
+    .timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(19).create();
+}
+
+function sendDigestNow() {
+  var msg = weeklyDigest();
+  try { SpreadsheetApp.getUi().alert(msg); } catch (err) { Logger.log(msg); }
+}
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("Minibus")
@@ -807,6 +981,8 @@ function onOpen() {
     .addItem("Extend rota further ahead", "extendRota")
     .addSeparator()
     .addItem("Send a test email", "sendTestEmail")
+    .addItem("Send weekly summary now", "sendDigestNow")
+    .addItem("Check time zone", "checkTimeZoneMenu")
     .addToUi();
 }
 
@@ -831,116 +1007,161 @@ function onEdit(e) {
  * driver is left alone and the repeating pattern is untouched.
  */
 function onEditRequests(e, sh) {
-  var row = e.range.getRow();
-  var col = e.range.getColumn();
-  if (row < 2 || (col !== 8 && col !== 10)) return;
+  var topRow = e.range.getRow();
+  var topCol = e.range.getColumn();
+  var numRows = e.range.getNumRows();
+  var numCols = e.range.getNumColumns();
+  var lastCol = topCol + numCols - 1;
 
-  var status = String(sh.getRange(row, 8).getValue() || "");
-  var replacement = String(sh.getRange(row, 10).getValue() || "").trim();
-  var key = anyToKey(sh.getRange(row, 3).getValue());
-  if (!key) return;
+  var touches8  = topCol <= 8  && lastCol >= 8;
+  var touches10 = topCol <= 10 && lastCol >= 10;
+  if (!touches8 && !touches10) return;
 
-  if (status === "Approved" || status === "Rejected") {
-    if (!sh.getRange(row, 9).getValue()) {
-      sh.getRange(row, 9).setValue(new Date()).setNumberFormat("dd/mm/yyyy");
-    }
-  } else {
-    sh.getRange(row, 9).clearContent();
-  }
+  var firstRow = Math.max(topRow, 2);
+  var lastRow = topRow + numRows - 1;
+  if (lastRow < 2) return;
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var rota = ss.getSheetByName(ROTA_SHEET);
-  if (!rota) return;
-  var rRow = findRotaRow(rota, key) || appendRotaRow(ss, rota, keyToDate(key));
+  var touched = false;
 
-  if (status === "Approved" && replacement) {
-    rota.getRange(rRow, 3).setValue(replacement);
-    rota.getRange(rRow, 4).setValue("Covered");
-    stamp(rota, rRow, "Approved request");
-  } else if (status === "Approved" && !replacement) {
-    rota.getRange(rRow, 4).setValue("No driver assigned");
-    stamp(rota, rRow, "Approved, needs cover");
-  } else if (status === "Rejected") {
-    rota.getRange(rRow, 4).setValue("Confirmed");
-    stamp(rota, rRow, "Request rejected");
+  for (var row = firstRow; row <= lastRow; row++) {
+    var status = String(sh.getRange(row, 8).getValue() || "");
+    var replacement = String(sh.getRange(row, 10).getValue() || "").trim();
+    var key = anyToKey(sh.getRange(row, 3).getValue());
+    if (!key) continue;
+
+    if (status === "Approved" || status === "Rejected") {
+      if (!sh.getRange(row, 9).getValue()) {
+        sh.getRange(row, 9).setValue(new Date()).setNumberFormat("dd/mm/yyyy");
+      }
+    } else {
+      sh.getRange(row, 9).clearContent();
+    }
+
+    if (!rota) continue;
+    var rRow = findRotaRow(rota, key) || appendRotaRow(ss, rota, keyToDate(key));
+
+    if (status === "Approved" && replacement) {
+      rota.getRange(rRow, 3).setValue(replacement);
+      rota.getRange(rRow, 4).setValue("Covered");
+      stamp(rota, rRow, "Approved request");
+    } else if (status === "Approved" && !replacement) {
+      rota.getRange(rRow, 4).setValue("No driver assigned");
+      stamp(rota, rRow, "Approved, needs cover");
+    } else if (status === "Rejected") {
+      rota.getRange(rRow, 4).setValue("Confirmed");
+      stamp(rota, rRow, "Request rejected");
+    }
+    touched = true;
   }
-  bumpRotaVersion();
+  if (touched) bumpRotaVersion();
 }
 
 /** Keeps the Status column honest when you edit the rota directly. */
 function onEditRota(e, sh) {
-  var row = e.range.getRow();
-  var col = e.range.getColumn();
-  if (row < 2 || col > 7) return;
+  var topRow = e.range.getRow();
+  var topCol = e.range.getColumn();
+  var numRows = e.range.getNumRows();
+  var numCols = e.range.getNumColumns();
+  var lastCol = topCol + numCols - 1;
 
-  var scheduled = String(sh.getRange(row, 2).getValue() || "").trim();
-  var cover     = String(sh.getRange(row, 3).getValue() || "").trim();
+  if (topCol > 7) return;                       // edit is entirely right of Notes
+  var firstRow = Math.max(topRow, 2);
+  var lastRow = topRow + numRows - 1;
+  if (lastRow < 2) return;                       // edit is entirely in the header
 
-  if (!scheduled && !cover) {
-    sh.getRange(row, 4).setValue("No driver assigned");
-  } else if (col === 2 || col === 3) {
-    var status = String(sh.getRange(row, 4).getValue() || "");
-    if (cover && cover !== scheduled) {
-      sh.getRange(row, 4).setValue("Covered");
-    } else if (status === "Covered" || status === "No driver assigned") {
-      sh.getRange(row, 4).setValue("Confirmed");
+  // True only when this specific edit touched the scheduled or cover column,
+  // so a direct edit to Status or Notes still leaves a manually set status
+  // alone, exactly as a single-cell edit always has.
+  var touchesDriverCols = topCol <= 3 && lastCol >= 2;
+
+  for (var row = firstRow; row <= lastRow; row++) {
+    var scheduled = String(sh.getRange(row, 2).getValue() || "").trim();
+    var cover     = String(sh.getRange(row, 3).getValue() || "").trim();
+    var status    = String(sh.getRange(row, 4).getValue() || "");
+
+    if (!scheduled && !cover) {
+      // A Sunday can be legitimately driverless on purpose (cancelled) as
+      // well as by oversight (nobody assigned yet). Do not clobber a
+      // deliberate "Cancelled/declined" just because some other column on
+      // the same row was touched.
+      if (status !== "Cancelled/declined") {
+        sh.getRange(row, 4).setValue("No driver assigned");
+      }
+    } else if (touchesDriverCols) {
+      if (cover && cover !== scheduled) {
+        sh.getRange(row, 4).setValue("Covered");
+      } else if (status === "Covered" || status === "No driver assigned") {
+        sh.getRange(row, 4).setValue("Confirmed");
+      }
     }
+    stamp(sh, row, "Coordinator");
   }
-  stamp(sh, row, "Coordinator");
   bumpRotaVersion();
 }
 
 function onEditDefects(e, sh) {
-  var row = e.range.getRow();
-  var col = e.range.getColumn();
-  if (row < 2) return;
+  var topRow = e.range.getRow();
+  var topCol = e.range.getColumn();
+  var numRows = e.range.getNumRows();
+  var numCols = e.range.getNumColumns();
+  var lastCol = topCol + numCols - 1;
+
+  var firstRow = Math.max(topRow, 2);
+  var lastRow = topRow + numRows - 1;
+  if (lastRow < 2) return;
+
+  var touchesStatus = topCol <= 9  && lastCol >= 9;
+  var touchesClosed = topCol <= 11 && lastCol >= 11;
+  if (!touchesStatus && !touchesClosed) return;
 
   var CLOSED_STATES = ["Fixed", "Not a defect"];
+  var changed = false;
 
-  // Status changed: stamp or clear the closing date to match.
-  if (col === 9) {
-    var status = String(e.range.getValue() || "");
-    var closedCell = sh.getRange(row, 11);
-    var isClosed = CLOSED_STATES.indexOf(status) !== -1;
-
-    if (isClosed && !closedCell.getValue()) {
-      closedCell.setValue(new Date());
-    } else if (!isClosed && closedCell.getValue()) {
-      closedCell.clearContent();
+  for (var row = firstRow; row <= lastRow; row++) {
+    if (touchesStatus) {
+      var status = String(sh.getRange(row, 9).getValue() || "");
+      var closedCell = sh.getRange(row, 11);
+      var isClosed = CLOSED_STATES.indexOf(status) !== -1;
+      if (isClosed && !closedCell.getValue()) {
+        closedCell.setValue(new Date());
+      } else if (!isClosed && closedCell.getValue()) {
+        closedCell.clearContent();
+      }
+      changed = true;
+      continue; // Status is authoritative for this row; do not also run the
+                // Closed-on branch below even if the same paste touched both.
     }
-    return;
-  }
-
-  // Closing date edited by hand: check it makes sense.
-  if (col === 11) {
-    var val = e.range.getValue();
-    if (!val) return;
-    if (!(val instanceof Date)) {
-      e.range.setNote("That is not a date. Use dd/mm/yyyy.");
-      return;
-    }
-    var today = new Date(); today.setHours(23, 59, 59, 999);
-    var raised = sh.getRange(row, 1).getValue();
-
-    if (val > today) {
-      e.range.setNote("A defect cannot be closed on a future date.");
-      e.range.setBackground("#FBE9E7");
-      return;
-    }
-    if (raised instanceof Date && val < new Date(raised.getFullYear(), raised.getMonth(), raised.getDate())) {
-      e.range.setNote("This is before the defect was reported on " +
-        Utilities.formatDate(raised, Session.getScriptTimeZone(), "dd/MM/yyyy") + ".");
-      e.range.setBackground("#FBE9E7");
-      return;
-    }
-    e.range.clearNote();
-    e.range.setBackground(null);
-
-    var st = String(sh.getRange(row, 9).getValue() || "");
-    if (CLOSED_STATES.indexOf(st) === -1) {
-      sh.getRange(row, 9).setValue("Fixed");
+    if (touchesClosed) {
+      var cell = sh.getRange(row, 11);
+      var val = cell.getValue();
+      if (!val) continue;
+      if (!(val instanceof Date)) { cell.setNote("That is not a date. Use dd/mm/yyyy."); continue; }
+      var today = new Date(); today.setHours(23, 59, 59, 999);
+      var raised = sh.getRange(row, 1).getValue();
+      if (val > today) {
+        cell.setNote("A defect cannot be closed on a future date.");
+        cell.setBackground("#FBE9E7");
+        continue;
+      }
+      if (raised instanceof Date && val < new Date(raised.getFullYear(), raised.getMonth(), raised.getDate())) {
+        cell.setNote("This is before the defect was reported on " +
+          Utilities.formatDate(raised, Session.getScriptTimeZone(), "dd/MM/yyyy") + ".");
+        cell.setBackground("#FBE9E7");
+        continue;
+      }
+      cell.clearNote();
+      cell.setBackground(null);
+      var st = String(sh.getRange(row, 9).getValue() || "");
+      if (CLOSED_STATES.indexOf(st) === -1) {
+        sh.getRange(row, 9).setValue("Fixed");
+      }
+      changed = true;
     }
   }
+  /* The open-defect list rides on the rota payload, which is cached. */
+  if (changed) bumpRotaVersion();
 }
 
 /* ---- emails ------------------------------------------------------------ */
