@@ -167,6 +167,7 @@ function handleCheck(c) {
 function ensureChecksColumns(sh) {
   var want = ["Not applicable", "Check type"];
   var lastCol = sh.getLastColumn();
+  if (lastCol < 1) return;
   var head = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
     return String(h || "").trim();
   });
@@ -691,12 +692,55 @@ function extendRota() {
   ss.toast("Rota extended.", "Minibus", 5);
 }
 
+/**
+ * Sends one test email and tells you exactly what happened. Run it from the
+ * Minibus menu whenever notifications stop arriving, instead of guessing.
+ *
+ * Worth knowing before you do: a CLEAR check never sends an email. Only a
+ * defect or a stopped bus does. If every recent check came back clean, the
+ * silence is the app working, not failing.
+ */
+function sendTestEmail() {
+  var msg;
+  var left = -1;
+  try { left = MailApp.getRemainingDailyQuota(); } catch (err) { left = -1; }
+
+  if (!COORDINATOR_EMAIL) {
+    msg = "COORDINATOR_EMAIL is blank at the top of Code.gs, so nothing is ever sent.";
+  } else if (left === 0) {
+    msg = "Google's daily email allowance for this account is used up. It frees up " +
+          "again about 24 hours after the first one went out. Nothing is wrong " +
+          "with the script.";
+  } else {
+    MailApp.sendEmail({
+      to: COORDINATOR_EMAIL,
+      subject: "Minibus app test",
+      body: "Test from the minibus app. If you can read this, notifications are working.\n\n" +
+            sheetUrl(),
+      htmlBody: htmlShell("Minibus app test", "#1B3A57",
+        ["If you can read this, notifications are working.",
+         "&nbsp;",
+         "Emails this account can still send today: <b>" + (left < 0 ? "unknown" : left - 1) + "</b>"],
+        "Open spreadsheet", CHECKS_SHEET)
+    });
+    msg = "Sent to " + COORDINATOR_EMAIL + ".\n\n" +
+          "Emails left today: " + (left < 0 ? "unknown" : left - 1) + "\n\n" +
+          "If it has not arrived in a few minutes, look in spam. Apps Script mail " +
+          "to Yahoo often lands there the first time.";
+  }
+
+  try { SpreadsheetApp.getUi().alert(msg); } catch (err) { Logger.log(msg); }
+  return msg;
+}
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("Minibus")
     .addItem("Set up / refresh rota", "setUpEverything")
     .addItem("Refresh dropdowns from Drivers tab", "refreshDropdowns")
     .addItem("Extend rota further ahead", "extendRota")
+    .addSeparator()
+    .addItem("Send a test email", "sendTestEmail")
     .addToUi();
 }
 

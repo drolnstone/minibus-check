@@ -46,7 +46,7 @@ brand new deployment instead, you must paste the new URL into `config.js`.
 
 Replace `index.html`, `config.js` and `sw.js` on your host.
 
-`sw.js` has been bumped to `minibus-check-v22`. That is what tells every
+`sw.js` has been bumped to `minibus-check-v23`. That is what tells every
 phone to throw away its old copy. If you ever edit `index.html` or
 `config.js` again, bump that number again or phones will keep the old app.
 
@@ -209,14 +209,44 @@ Every check records which type it was, in the **Check type** column.
 
 ### The three answers
 
-Each item has **Fine**, **Defect**, and **N/A**.
+Each item has **Fine**, **Defect**, and **Not on this bus**.
 
-N/A is for something this bus genuinely does not have — a wheelchair ramp on a
-bus with none, a speed limiter that was never fitted. It counts as answered,
-never as a defect, and never stops the bus. It goes to its own column, so a
-gap in the record means an item was missed, not that it did not apply.
+That third one means **not applicable** — this bus genuinely does not have the
+thing. A wheelchair ramp on a bus with none. A speed limiter that was never
+fitted. It counts as answered, never as a defect, and never stops the bus.
 
-A defect has to be described before the driver can move on. N/A does not.
+It does **not** mean "not available" or "I could not check it". If something is
+fitted but the driver could not check it — the bonnet catch is jammed, the step
+is buried under bags — that is a **Defect** with a note. The coordinator needs
+to know, and burying it under N/A would hide a real problem behind something
+that reads like a shrug.
+
+A defect has to be described before the driver can move on. Not on this bus
+does not. It is recorded in the **Not applicable** column of the Checks sheet,
+so a gap in the record means an item was missed, not that it did not apply.
+
+## When emails stop arriving
+
+**First: a clear check never sends an email.** Only a defect or a stopped bus
+does. If every recent check came back clean, silence is the app working.
+
+If you were expecting one, use **Minibus → Send a test email**. It tells you
+what happened rather than leaving you guessing, and reports how many emails
+the account can still send today.
+
+Common causes, in the order worth checking:
+
+1. **The check had no defects.** By design. Nothing to fix.
+2. **The script needs re-authorising.** It now uses two Google services it did
+   not before. After pasting in new code, open the editor, run
+   `setUpEverything` by hand once, and grant permissions when asked. A web app
+   whose permissions are stale can fail silently.
+3. **The daily email allowance is used up.** Google caps it per account. The
+   test email reports what is left. It frees up about 24 hours later.
+4. **Spam.** Apps Script mail to Yahoo often lands there the first time. Mark
+   it not spam once and it usually behaves after that.
+5. **Deployment not updated.** Saving the script changes nothing on its own.
+   Deploy → Manage deployments → edit → Version: New version.
 
 ### Upgrading an existing sheet
 

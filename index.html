@@ -148,14 +148,14 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .history{font-size:13.5px;background:var(--warn-bg);border-left:3px solid var(--warn);padding:7px 9px;
   border-radius:0 6px 6px 0;margin:0 0 10px;color:#5A4008}
 .history b{font-weight:600}
-.choose{display:grid;grid-template-columns:1fr 1fr auto;gap:9px}
+.choose{display:grid;grid-template-columns:1fr 1fr;gap:9px}
 .choose button{min-height:var(--tap);border:1.5px solid var(--hair);border-radius:8px;background:#fff;
   font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;letter-spacing:.06em;
   text-transform:uppercase;display:flex;align-items:center;justify-content:center;transition:transform .08s}
 .choose button:active{transform:scale(.97)}
 .choose .ok.on{background:var(--pass);border-color:var(--pass);color:#fff}
 .choose .def.on{background:var(--warn);border-color:var(--warn);color:#fff}
-.choose .na{padding:0 16px;color:var(--muted)}
+.choose .na{grid-column:1 / -1;min-height:38px;font-size:14px;color:var(--muted)}
 .choose .na.on{background:var(--muted);border-color:var(--muted);color:#fff}
 .item.is-na{border-left-color:var(--muted);background:#FAFAFB}
 .item.is-na h3{color:var(--muted)}
@@ -569,7 +569,7 @@ var STAGES = [
     { id:"signage", full:true, name:"Safety signage", what:"Emergency exit instructions readable at each exit. Hammer positions marked. Nothing painted over or peeled away." },
     { id:"gangway", name:"Gangway and hammers", what:"Gangway clear of bags and equipment, floor dry and sound underfoot. Break glass hammers clipped into their brackets, not loose." },
     { id:"intlights", full:true, name:"Interior and step lights", what:"Saloon lights and the light over the step. A dark step on a winter evening is how people fall." },
-    { id:"wheelchair", full:true, name:"Wheelchair ramp and restraints", what:"Ramp or lift deploys and stows. Tie-down webbing not frayed, buckles latch, floor anchorages clear of grit and not damaged. Occupant belt works. Not applicable if this bus carries none." },
+    { id:"wheelchair", full:true, name:"Wheelchair ramp and restraints", what:"Ramp or lift deploys and stows. Tie-down webbing not frayed, buckles latch, floor anchorages clear of grit and not damaged. Occupant belt works. If this bus has none, mark it not on this bus." },
     { id:"extinguisher", name:"Fire extinguisher", what:"Present, in date, gauge in the green, seal unbroken, bracket tight." },
     { id:"firstaid", name:"First aid kit", what:"Present, sealed, contents in date." },
     { id:"cabin", full:true, name:"General condition", what:"No sharp edges, exposed metal or loose wiring." }
@@ -582,7 +582,7 @@ var STAGES = [
     { id:"clutch", name:"Clutch and gears", what:"Bite point where you expect it, not right at the top of the pedal. All gears select cleanly, including reverse. No slipping when you pull away." },
     { id:"reverse_aid", name:"Reversing camera and sensors", what:"Select reverse with the engine running. Picture clear and not fogged or frozen. Sensors and reversing sounder audible. Never rely on them alone: they are an aid, not a substitute for looking." },
     { id:"mirrors", name:"Mirrors, wipers and washers", what:"All mirrors clean, adjusted, secure and folded out. Blades not torn or smearing. Washers reaching the screen." },
-    { id:"limiter", full:true, name:"Speed limiter", what:"If this bus has one: no warning lamp, and it is not cutting in below its set speed. Not applicable if none is fitted." },
+    { id:"limiter", full:true, name:"Speed limiter", what:"If this bus has one: no warning lamp, and it is not cutting in below its set speed. If none is fitted, mark it not on this bus." },
     { id:"infotainment", full:true, name:"Radio and dash display", what:"Radio and speakers work at the back as well as the front, so you can be heard. Dash display readable and not stuck on a warning screen." },
     { id:"cab", name:"Horn, heater, demist", what:"All working. Demist clears the whole screen, not just a patch in front of you." },
     { id:"docs", full:true, name:"Documents on board", what:"Insurance in date. Any permit or paperwork this bus must carry. Breakdown number somewhere you could find it in the dark." }
@@ -1034,7 +1034,7 @@ function renderStage(){
       '<div class="choose">'+
         '<button type="button" class="ok'+(r&&r.v==="ok"?" on":"")+'">Fine</button>'+
         '<button type="button" class="def'+(r&&r.v==="def"?" on":"")+'">Defect</button>'+
-        '<button type="button" class="na'+(r&&r.v==="na"?" on":"")+'">N/A</button>'+
+        '<button type="button" class="na'+(r&&r.v==="na"?" on":"")+'">Not on this bus</button>'+
       '</div>'+
       '<div class="note'+(r&&r.v==="def"?" is-on":"")+'">'+
         '<div class="lbl">What did you find?</div>'+
