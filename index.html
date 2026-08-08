@@ -285,6 +285,24 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   font-weight:700;font-size:17px;letter-spacing:.05em;text-transform:uppercase}
 
 /* ---------- mileage confirm ---------- */
+.fuel{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin-top:4px}
+.fuel button{min-height:52px;border:1.5px solid var(--hair);border-radius:6px;background:#fff;
+  padding:0;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:13px;
+  color:var(--muted);display:flex;align-items:flex-end;justify-content:center;
+  padding-bottom:5px;transition:background .12s,border-color .12s}
+.fuel button.lit{color:#fff;border-color:transparent}
+.fuel button.lit.low{background:var(--stop)}
+.fuel button.lit.mid{background:var(--warn)}
+.fuel button.lit.high{background:var(--ok)}
+.fuel button.edge{box-shadow:inset 0 0 0 2px rgba(0,0,0,.28)}
+.fuel button:active{transform:scale(.96)}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{min-height:44px;padding:0 15px;border:1.5px solid var(--hair);border-radius:22px;
+  background:#fff;color:var(--ink);font-size:14.5px;font-weight:500}
+.chips button.on{background:var(--steel);border-color:var(--steel);color:#fff}
+.chips button:active{transform:scale(.97)}
+
 .openbox{border:1.5px solid var(--warn);background:var(--warn-bg);border-radius:var(--r);
   padding:13px;margin-bottom:14px;color:#5A4008}
 .openbox h4{margin:0 0 7px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;
@@ -437,6 +455,11 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
           </button>
         </div>
       </div>
+      <div class="field" style="margin-top:16px">
+        <label>Fuel showing</label>
+        <div class="fuel" id="fuelBar" role="group" aria-label="Fuel level in eighths"></div>
+        <div class="hint" id="fuelHint">Tap what the gauge is reading.</div>
+      </div>
     </div>
     <div class="card" id="geoCard" style="display:none">
       <div class="lbl" style="margin-bottom:6px">Where you are</div>
@@ -459,6 +482,11 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     <h1>Before you sign</h1>
     <div id="verdict"></div>
     <div class="sum" id="sumBox"></div>
+    <div class="card">
+      <div class="lbl" style="margin-bottom:4px">Anything to arrange?</div>
+      <div class="hint" style="margin:0 0 10px">Not faults. Tap any that apply, or none.</div>
+      <div class="chips" id="jobChips"></div>
+    </div>
     <div class="card">
       <div class="field">
         <label for="sign">Type your name to sign</label>
@@ -604,7 +632,7 @@ var STAGES = [
 ];
 
 /* ---------------- state ---------------- */
-var st = { screen:"driver", veh:null, mode:"pre", stage:0, driver:"", role:"", pin:"", miles:"", mileOk:false, sign:"", res:{} };
+var st = { screen:"driver", veh:null, mode:"pre", stage:0, driver:"", role:"", pin:"", miles:"", mileOk:false, fuel:null, jobs:[], sign:"", res:{} };
 var stages = [];   /* the stage list for the chosen vehicle */
 var ALL = [];
 var TOTAL = 0;
@@ -876,6 +904,7 @@ window.addEventListener("popstate", function(){
 /** Clears the finished check and returns to the first screen. */
 function goHome(){
   st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign=""; st.mode="pre";
+  st.fuel=null; st.jobs=[];
   geo={status:"off"};
   stages=[]; ALL=[]; TOTAL=0; lastRec=null;
   paintBanner();
@@ -909,7 +938,7 @@ function paintFoot(){
   if(st.screen==="prep"){
     var entered = String(st.miles).trim()!=="";
     var prob = mileProblem();
-    var okm = entered && (!prob || st.mileOk);
+    var okm = entered && (!prob || st.mileOk) && st.fuel!==null;
     btn("Back","btn-ghost",function(){ show("vehicle"); });
     btn("Start the check","btn-main",function(){ st.stage=0; renderStage(); show("stage"); }, !okm);
     if(!entered) c.textContent="Enter the mileage to begin";
@@ -1097,6 +1126,90 @@ function openDefectsHTML(reg){
     '</ul></div>';
 }
 
+/* ---------------- fuel ----------------
+   Eighths rather than miles remaining. Only the newer bus has a range
+   readout, so miles would give data from one bus and blanks from the other,
+   and range swings about with how it is driven. Eighths is one tap, it means
+   the same thing on both buses, and it compares week to week.
+
+   A low tank is not a fault. It stops nothing and emails nobody. It just
+   needs somebody to put diesel in. */
+
+var FUEL_LABELS = ["E","","\u00BC","","\u00BD","","\u00BE","F"];
+
+function fuelBand(n){ return n<=2 ? "low" : n<=4 ? "mid" : "high"; }
+
+function paintFuel(){
+  var bar=$("fuelBar"); if(!bar) return;
+  bar.innerHTML="";
+  for(var i=1;i<=8;i++){
+    (function(n){
+      var b=document.createElement("button");
+      b.type="button";
+      b.textContent=FUEL_LABELS[n-1];
+      b.setAttribute("aria-label",n+" eighths");
+      if(st.fuel!==null && n<=st.fuel){
+        b.className="lit "+fuelBand(st.fuel)+(n===st.fuel?" edge":"");
+      }
+      b.addEventListener("click",function(){
+        st.fuel = (st.fuel===n) ? null : n;   /* tap the same one again to clear */
+        paintFuel(); paintFoot();
+      });
+      bar.appendChild(b);
+    })(i);
+  }
+  var hint=$("fuelHint");
+  if(st.fuel===null){ hint.textContent="Tap what the gauge is reading."; hint.style.color=""; return; }
+  var eighths=st.fuel+"/8";
+  if(st.fuel<=2){
+    hint.textContent=eighths+". Low. Fill up before you set off.";
+    hint.style.color="var(--stop)";
+  } else if(st.fuel<=4){
+    hint.textContent=eighths+". Enough for a run, but worth filling.";
+    hint.style.color="var(--warn)";
+  } else {
+    hint.textContent=eighths+".";
+    hint.style.color="";
+  }
+}
+
+/* ---------------- things to arrange ----------------
+   Deliberately not defects. The cleanliness check only fires when a bus is
+   too dirty to be safe, which is far too late to book a wash. These are the
+   ordinary jobs a driver notices and nobody records. One tap, skippable,
+   own column on the sheet, no email. */
+
+var JOBS = [
+  { id:"wash",   label:"Needs a wash" },
+  { id:"inside", label:"Inside needs a clean" },
+  { id:"fuel",   label:"Needs fuel" },
+  { id:"tyres",  label:"Tyres need air" }
+];
+
+function paintJobs(){
+  var box=$("jobChips"); if(!box) return;
+  box.innerHTML="";
+  JOBS.forEach(function(j){
+    var b=document.createElement("button");
+    b.type="button";
+    b.textContent=j.label;
+    if(st.jobs.indexOf(j.id)!==-1) b.className="on";
+    b.addEventListener("click",function(){
+      var i=st.jobs.indexOf(j.id);
+      if(i===-1) st.jobs.push(j.id); else st.jobs.splice(i,1);
+      paintJobs();
+    });
+    box.appendChild(b);
+  });
+}
+
+function jobLabels(){
+  return st.jobs.map(function(id){
+    for(var i=0;i<JOBS.length;i++) if(JOBS[i].id===id) return JOBS[i].label;
+    return id;
+  });
+}
+
 function renderPrep(){
   var v=st.veh;
   $("prepEyebrow").textContent = v.reg + " \u00B7 " + v.name;
@@ -1105,6 +1218,7 @@ function renderPrep(){
   $("openBox").innerHTML = openDefectsHTML(v.reg);
   $("miles").value = st.miles;
   paintMilesHint();
+  paintFuel();
   paintMode();
   if(geo.status==="off" || geo.status==="refused" || geo.status==="timeout" ||
      geo.status==="unavailable") geoStart();
@@ -1237,6 +1351,7 @@ function sumHTML(rec){
   var t=tally(), now=new Date();
   var r = rec || { date:ukDate(now), time:ukTime(now), reg:st.veh?st.veh.reg:"", driver:st.driver,
                    miles:st.miles, checked:t.done, total:TOTAL, defects:defectList(), na:naList(),
+                   fuel: st.fuel===null ? "" : st.fuel+"/8", jobs: jobLabels(),
                    kind: st.mode==="full" ? "Full inspection" : "Pre-drive" };
   function row(k,v){ return '<div class="sum-row"><b>'+esc(k)+'</b><span class="v">'+esc(v)+'</span></div>'; }
   return row("Check", r.kind || "Pre-drive") +
@@ -1244,13 +1359,17 @@ function sumHTML(rec){
          row("Date", r.date+" "+r.time) +
          row("Driver", r.driver||"\u2014") +
          row("Mileage", r.miles?Number(r.miles).toLocaleString("en-GB"):"\u2014") +
+         (r.fuel?row("Fuel", r.fuel):"") +
          row("Items checked", r.checked+" of "+r.total) +
          row("Defects", r.defects.length?String(r.defects.length):"None") +
-         ((r.na&&r.na.length)?row("Not applicable", r.na.join(", ")):"");
+         ((r.na&&r.na.length)?row("Not applicable", r.na.join(", ")):"") +
+         ((r.jobs&&r.jobs.length)?row("To arrange", r.jobs.join(", ")):"");
 }
 function renderReview(){
+  if(st.fuel!==null && st.fuel<=2 && st.jobs.indexOf("fuel")===-1) st.jobs.push("fuel");
   $("verdict").innerHTML = verdictHTML(level(), defectList());
   $("sumBox").innerHTML = sumHTML();
+  paintJobs();
   $("sign").value = st.sign || st.driver || "";
   st.sign = $("sign").value;
 }
@@ -1339,6 +1458,9 @@ function submit(){
     level: level(), checked: t.done, total: TOTAL,
     kind: st.mode==="full" ? "Full inspection" : "Pre-drive",
     loc:g.loc, locAcc:g.locAcc, locDist:g.locDist, locNote:g.locNote,
+    fuel: st.fuel===null ? "" : st.fuel+"/8",
+    fuelEighths: st.fuel===null ? "" : st.fuel,
+    jobs: jobLabels(),
     defects: defectList(),
     na: naList(),
     renewals: dueItems(st.veh).map(function(x){ return x.label+": "+x.words+" ("+prettyDate(x.date)+")"; }).join(" | ")
@@ -1415,6 +1537,7 @@ function recText(r){
   L.push(r.date+" at "+r.time);
   L.push("Driver: "+r.driver);
   L.push("Mileage: "+r.miles);
+  if(r.fuel) L.push("Fuel: "+r.fuel);
   L.push("Checked: "+r.checked+" of "+r.total);
   L.push("");
   if(r.level==="stop") L.push("*** BUS NOT RUNNING \u2014 CRITICAL DEFECT ***");
@@ -1423,6 +1546,10 @@ function recText(r){
   r.defects.forEach(function(d){
     L.push("- "+d.name+(d.crit?" (CRITICAL)":"")+(d.note?": "+d.note:""));
   });
+  if(r.jobs && r.jobs.length){
+    L.push("");
+    L.push("To arrange: "+r.jobs.join(", "));
+  }
   if(r.na && r.na.length){
     L.push("");
     L.push("Not applicable to this bus: "+r.na.join(", "));
@@ -1434,10 +1561,6 @@ function recText(r){
 
 /* ---------------- rolling driving rota ---------------- */
 var ROTA_PRIMARY_PATTERN = (CFG.rotaPrimaryPattern || ["Bro Adebola", "Bro Abiodun", "Bro Moses", "Bro Asim"]).slice();
-/* Kept in step with the spreadsheet, but not shown to drivers: the backup
-   pool is coordinator information, not something a driver needs on a Sunday
-   morning. Nothing reads this today. */
-var ROTA_BACKUPS = (CFG.rotaBackups || ["Pst Kehinde", "Bro Calvin", "Bro Tunde"]).slice();
 var rotaRows = [];
 var rotaViewMode = "all";
 var rotaModalMode = "";
@@ -1490,7 +1613,7 @@ function rotaSaveCache(){
   try{
     store.set(RKEY, JSON.stringify({
       when: Date.now(), rows: rotaRows,
-      pattern: ROTA_PRIMARY_PATTERN, backups: ROTA_BACKUPS
+      pattern: ROTA_PRIMARY_PATTERN
     }));
   }catch(e){}
 }
@@ -1500,7 +1623,6 @@ function rotaLoadCache(){
     if(!c || !c.rows) return false;
     rotaRows = c.rows;
     if(c.pattern && c.pattern.length) ROTA_PRIMARY_PATTERN = c.pattern.slice();
-    if(c.backups && c.backups.length) ROTA_BACKUPS = c.backups.slice();
     return true;
   }catch(e){ return false; }
 }
@@ -1521,7 +1643,6 @@ function rotaFetch(fromDate,weeks,cb){
 
     /* The spreadsheet is the authority on all three of these. */
     if(out.pattern && out.pattern.length) ROTA_PRIMARY_PATTERN = out.pattern.slice();
-    if(out.backups && out.backups.length) ROTA_BACKUPS = out.backups.slice();
     if(out.drivers && out.drivers.length) rotaSyncRegister(out.drivers);
     if(out.openDefects) OPEN_DEFECTS = out.openDefects;
 
@@ -1772,6 +1893,7 @@ function rotaClose(){ $("rotaModal").classList.remove("is-on"); $("rotaModal").s
 /* ---------------- reset ---------------- */
 function reset(){
   st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign=""; st.mode="pre";
+  st.fuel=null; st.jobs=[];
   geo={status:"off"};
   stages=[]; ALL=[]; TOTAL=0; lastRec=null;
   renderVehicles(); show("vehicle");

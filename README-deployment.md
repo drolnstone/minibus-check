@@ -46,7 +46,7 @@ brand new deployment instead, you must paste the new URL into `config.js`.
 
 Replace `index.html`, `config.js` and `sw.js` on your host.
 
-`sw.js` has been bumped to `minibus-check-v27`. That is what tells every
+`sw.js` has been bumped to `minibus-check-v30`. That is what tells every
 phone to throw away its old copy. If you ever edit `index.html` or
 `config.js` again, bump that number again or phones will keep the old app.
 
@@ -122,31 +122,52 @@ and Moses covers, the next Asim Sunday is still Asim.
 
 The **Drivers** tab controls it, through the **Primary order** column:
 
-| Name | Role | Active | Primary order | Backup pool |
-|---|---|---|---|---|
-| Bro Adebola | Driver | YES | 1 | |
-| Bro Abiodun | Driver | YES | 2 | |
-| Bro Moses | Driver | YES | 3 | |
-| Bro Asim | Coordinator | YES | 4 | |
-| Pst Kehinde | Minister in Charge | YES | | YES |
-| Bro Calvin | Backup | YES | | YES |
-| Bro Tunde | Backup | YES | | YES |
+| Name | Role | Active | Primary order |
+|---|---|---|---|
+| Bro Adebola | Driver | YES | 1 |
+| Bro Abiodun | Driver | YES | 2 |
+| Bro Moses | Driver | YES | 3 |
+| Bro Asim | Coordinator | YES | 4 |
+| Pst Kehinde | Minister in Charge | YES | |
+| Bro Calvin | Backup | YES | |
+| Bro Tunde | Backup | YES | |
 
 - **To add someone to the normal rotation:** give them the next number.
-- **To add someone as assistance only:** leave Primary order blank, put YES
-  in Backup pool.
+- **To add someone for cover only:** leave Primary order blank. Anyone marked
+  Active can still be picked to cover a Sunday.
 - **To stop someone driving:** set Active to NO. They vanish from every
   dropdown and from the app. Sundays they already drove are left alone.
 - After any change here, run **Minibus → Refresh dropdowns from Drivers tab**.
 
-Anyone marked Active can be picked to cover a Sunday, backups included.
-"Backup" describes their normal role, not a limit on what they can do.
+Anyone marked Active can be picked to cover a Sunday. "Backup" in the Role
+column is just a description of what they normally do, not a limit on it.
 
-**Two registers, keep them in step.** The Drivers tab feeds the rota. The
-`drivers:` list in `config.js` feeds the driver-name dropdown on the check
-screen. Add a new person to both.
+**Adding somebody: the Drivers tab is enough.** The app pulls the register
+from the sheet whenever it connects, so a new person appears on every phone
+without touching `config.js`.
+
+**Removing somebody: do both.** Take them off the Drivers tab and out of the
+`drivers:` list in `config.js`. That list is what a phone falls back to when
+it has no signal or has never connected, so a name left there can still be
+picked by an offline phone.
 
 ---
+
+## Do you need the Drivers tab
+
+Yes, and it is the only tab that earns its keep by being editable from your
+phone. It is the one place you can add or remove a driver without editing a
+code file and re-uploading it. Four columns:
+
+- **Name** — what appears in the app.
+- **Role** — decides who is offered the full inspection.
+- **Active** — NO removes them from every dropdown and every phone.
+- **Primary order** — 1, 2, 3, 4 sets the repeating pattern. Blank means they
+  are not in the normal rotation but can still cover.
+
+The old **Backup pool** column has been dropped. Nothing read it. If your
+sheet still has it, delete column E by hand or leave it: it is ignored either
+way.
 
 ## Why there are two rota tabs
 
@@ -168,6 +189,61 @@ from there. **Extend rota further ahead** fills a whole year at once.
 If the Rota tab is ever empty, run **Minibus → Set up / refresh rota**. That
 fills it immediately whatever the once-a-day timer says.
 
+## The Sunday summary
+
+An email goes out on Sunday evenings: which buses were checked, by whom, fuel
+level, anything to arrange, and every defect still open. It is where the wash
+and fuel requests actually reach you.
+
+It is scheduled by a trigger that is installed during setup inside a
+try/catch, so that a refused permission cannot stop the rota being built. The
+cost of that is it can fail quietly. Run **Minibus → Check weekly summary is
+scheduled** once after deploying. It tells you plainly, and sets it up if it
+is missing.
+
+## Where the check was done
+
+A walkaround is meant to happen at the bus. The app records **one location**
+when an inspection starts, so that shows on the record.
+
+- Nothing is recorded when a driver is only looking at the rota.
+- There is no tracking between checks. One fix, at the start, and that is all.
+- The driver sees a line on the mileage screen telling them it is happening.
+
+**It never blocks a check.** If the phone refuses, has no signal, or takes too
+long, the inspection carries on and the record says why there is no location.
+A bus going out unchecked because the GPS sulked would be far worse than a
+blank cell.
+
+Four columns on the Checks sheet: **Where checked** (a tappable map link),
+**Accuracy (m)**, **Distance from base (m)**, **Location note**. The location
+also appears in defect and bus-stopped emails.
+
+### Where the buses are kept
+
+`busBase` in `config.js` is set to the centre of **L6 4DY**, the postcode for
+3-5 Chester Road, with a 250 m radius.
+
+That is the postcode centre, not the exact parking spot, so it may be fifty
+metres or so out. The radius covers that.
+
+**Worth replacing once.** Do a check standing at the bus, read the **Where
+checked** cell off the Checks tab, and put those two numbers into `busBase`
+instead. That pins it to the actual spot, and it pins it using the same
+satellites the drivers' phones use, which matters more than the map being
+right. After that you can bring the radius down to about 150 m.
+
+```
+busBase: { lat: 53.425024, lng: -2.937394, radius: 250 },
+```
+
+A check done away from that point records the distance, and the driver sees it
+on screen before they start. It is never treated as an accusation: the app
+only calls a check "away" when the phone's own accuracy figure leaves no
+doubt, so a poor fix in a built-up area never flags anyone wrongly.
+
+To switch the whole thing off, set `recordLocation: false`.
+
 ## Two buses
 
 The Rota tab already has **Bus 2 scheduled** and **Bus 2 actual / cover**
@@ -177,12 +253,6 @@ buses on the same Sunday, and the app will show them. Nothing needs rebuilding.
 ---
 
 ## Things worth knowing
-
-**The Rota tab is filled about 18 months ahead.** Sundays past that still show
-in the app, worked out from the pattern. They get written down as the horizon
-rolls forward. If you want to set something further out than that, just type
-the date into a new row on the Rota tab — the app will pick it up. Or use
-**Minibus → Extend rota further ahead**.
 
 **Statuses on the Rota tab:** Confirmed, Change requested, Covered,
 Cancelled/declined, No driver assigned. The last one goes red, so an empty
@@ -245,6 +315,33 @@ A defect has to be described before the driver can move on. Not on this bus
 does not. It is recorded in the **Not applicable** column of the Checks sheet,
 so a gap in the record means an item was missed, not that it did not apply.
 
+## Fuel and things to arrange
+
+**Fuel** is recorded on the mileage screen as eighths: eight segments, tap what
+the gauge reads. Red at the bottom, amber through the middle, green when full.
+It is required, because a column only half filled in cannot be used to arrange
+anything.
+
+Eighths rather than miles remaining, because only YS70 has a range readout and
+range swings about with how the bus is driven. Eighths means the same thing on
+both buses and compares week to week.
+
+A low tank is **not a fault**. It stops nothing and emails nobody. At 2/8 or
+below the app tells the driver to fill up before setting off, and pre-ticks
+*Needs fuel* on the next screen.
+
+**Things to arrange** sits on the review screen: *Needs a wash*, *Inside needs
+a clean*, *Needs fuel*, *Tyres need air*. Optional, any number, no effect on
+the outcome of the check.
+
+These exist because the cleanliness item only fires when a bus is too dirty to
+be **safe** — by then you are not booking a wash, you are dealing with a
+problem. A bus can be perfectly fine to drive and still look poor for a
+wedding, and nothing recorded that until now.
+
+Both get their own column on the Checks sheet, and both appear in the Sunday
+evening digest, which is where you would actually act on them.
+
 ## When emails stop arriving
 
 **First: a clear check never sends an email.** Only a defect or a stopped bus
@@ -270,9 +367,9 @@ Common causes, in the order worth checking:
 
 ### Upgrading an existing sheet
 
-Two columns are new: **Not applicable** and **Check type**. They are added to
-the right-hand end of the Checks sheet automatically on the next check, so
-nothing already recorded moves.
+New columns are always added to the right-hand end of the Checks sheet, never
+inserted in the middle, so nothing already recorded ever moves. They appear
+automatically on the next check.
 
 ## Renewal dates
 

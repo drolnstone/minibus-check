@@ -80,13 +80,6 @@ window.CONFIG = {
     "Bro Abiodun",
     "Bro Moses",
     "Bro Asim"
-  ],
-
-  /* Available to help where they can. Not assigned Sundays. */
-  rotaBackups: [
-    "Pst Kehinde",
-    "Bro Calvin",
-    "Bro Tunde"
   ]
 
 };

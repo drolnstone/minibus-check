@@ -56,13 +56,13 @@ var ROTA_FILL_WEEKS = 16;
 /* The register the sheet starts from if the Drivers tab is empty. After the
    first run the Drivers tab IS the register, not this list. */
 var SEED_DRIVERS = [
-  { name: "Pst Kehinde", role: "Minister in Charge", order: "",  backup: "YES" },
-  { name: "Bro Asim",    role: "Coordinator",        order: 4,   backup: "" },
-  { name: "Bro Adebola", role: "Driver",             order: 1,   backup: "" },
-  { name: "Bro Abiodun", role: "Driver",             order: 2,   backup: "" },
-  { name: "Bro Moses",   role: "Driver",             order: 3,   backup: "" },
-  { name: "Bro Calvin",  role: "Backup",             order: "",  backup: "YES" },
-  { name: "Bro Tunde",   role: "Backup",             order: "",  backup: "YES" }
+  { name: "Pst Kehinde", role: "Minister in Charge", order: "" },
+  { name: "Bro Asim",    role: "Coordinator",        order: 4 },
+  { name: "Bro Adebola", role: "Driver",             order: 1 },
+  { name: "Bro Abiodun", role: "Driver",             order: 2 },
+  { name: "Bro Moses",   role: "Driver",             order: 3 },
+  { name: "Bro Calvin",  role: "Backup",             order: "" },
+  { name: "Bro Tunde",   role: "Backup",             order: "" }
 ];
 
 /* ---- entry points ------------------------------------------------------ */
@@ -119,7 +119,7 @@ function handleCheck(c) {
     "Driver", "Role", "Mileage", "Mileage flag", "Outcome",
     "Items checked", "Defect count", "Defects", "Renewals due", "Signed",
     "Not applicable", "Check type", "Where checked", "Accuracy (m)",
-    "Distance from base (m)", "Location note"
+    "Distance from base (m)", "Location note", "Fuel", "To arrange"
   ]);
   ensureChecksColumns(checks);
 
@@ -146,7 +146,7 @@ function handleCheck(c) {
             '","' + c.loc + '")' : "",
     c.locAcc === 0 || c.locAcc ? c.locAcc : "",
     c.locDist === 0 || c.locDist ? c.locDist : "",
-    c.locNote || ""
+    c.locNote || "", c.fuel || "", (c.jobs || []).join(", ")
   ]);
 
   // One row per defect as well, so the coordinator can filter and chase them.
@@ -178,7 +178,8 @@ function handleCheck(c) {
  */
 function ensureChecksColumns(sh) {
   var want = ["Not applicable", "Check type", "Where checked",
-              "Accuracy (m)", "Distance from base (m)", "Location note"];
+              "Accuracy (m)", "Distance from base (m)", "Location note",
+              "Fuel", "To arrange"];
   var lastCol = sh.getLastColumn();
   if (lastCol < 1) return;
   var head = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
@@ -263,9 +264,6 @@ function rotaPayload(fromKey, weeks) {
 
   var drivers = readDrivers(ss);
   var pattern = primaryPattern(drivers);
-  var backups = drivers.filter(function (d) { return d.active && d.backup; })
-                       .map(function (d) { return d.name; });
-
   var requests = readLatestRequests(ss);
   var written = readRotaRows(ss);
 
@@ -296,7 +294,6 @@ function rotaPayload(fromKey, weeks) {
     from: dateToKey(from),
     weeks: weeks,
     pattern: pattern,
-    backups: backups,
     drivers: drivers.filter(function (d) { return d.active; })
                      .map(function (d) { return { name: d.name, role: d.role }; }),
     /* So the next driver sees what the last one reported and still open. */
@@ -315,7 +312,7 @@ function ensureRotaSheets(ss) {
     "Bus 2 scheduled", "Bus 2 actual / cover", "Notes", "Updated", "Updated by"
   ]);
   var drivers = sheet(ss, DRIVERS_SHEET,
-    ["Name", "Role", "Active", "Primary order", "Backup pool"]);
+    ["Name", "Role", "Active", "Primary order"]);
   sheet(ss, REQUESTS_SHEET, [
     "Received", "Request ID", "Sunday", "Driver", "Type", "Reason",
     "Preferred swap", "Status", "Decided on", "Replacement assigned"
@@ -326,7 +323,7 @@ function ensureRotaSheets(ss) {
      means no dropdowns and no pattern to fill the rota from. */
   if (drivers.getLastRow() < 2) {
     SEED_DRIVERS.forEach(function (d) {
-      drivers.appendRow([d.name, d.role, "YES", d.order, d.backup]);
+      drivers.appendRow([d.name, d.role, "YES", d.order]);
     });
   }
 }
@@ -435,7 +432,7 @@ function readLatestRequests(ss) {
 function readDrivers(ss) {
   var sh = ss.getSheetByName(DRIVERS_SHEET);
   if (!sh || sh.getLastRow() < 2) return [];
-  var values = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
+  var values = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
   var out = [];
   values.forEach(function (r) {
     var name = String(r[0] || "").trim();
@@ -444,8 +441,7 @@ function readDrivers(ss) {
       name: name,
       role: String(r[1] || "").trim(),
       active: yes(r[2]),
-      order: Number(r[3]) || 0,
-      backup: yes(r[4])
+      order: Number(r[3]) || 0
     });
   });
   return out;
@@ -602,10 +598,10 @@ function checkTimeZoneMenu() {
 
 function ensureDrivers(ss) {
   var existing = ss.getSheetByName(DRIVERS_SHEET);
-  var sh = sheet(ss, DRIVERS_SHEET, ["Name", "Role", "Active", "Primary order", "Backup pool"]);
+  var sh = sheet(ss, DRIVERS_SHEET, ["Name", "Role", "Active", "Primary order"]);
   if (!existing) {
     SEED_DRIVERS.forEach(function (d) {
-      sh.appendRow([d.name, d.role, "YES", d.order, d.backup]);
+      sh.appendRow([d.name, d.role, "YES", d.order]);
     });
     sh.setColumnWidth(1, 150);
     sh.setColumnWidth(2, 160);
@@ -699,7 +695,7 @@ function refreshDropdowns() {
   var drivers = readDrivers(ss);
   if (!drivers.length) {
     drivers = SEED_DRIVERS.map(function (d) {
-      return { name: d.name, active: true, order: Number(d.order) || 0, backup: !!d.backup };
+      return { name: d.name, active: true, order: Number(d.order) || 0 };
     });
   }
 
@@ -864,13 +860,15 @@ function knownRegs(ss) {
 function checksOn(ss, key) {
   var sh = ss.getSheetByName(CHECKS_SHEET);
   if (!sh || sh.getLastRow() < 2) return [];
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 18).getValues();
+  var width = Math.max(18, Math.min(sh.getLastColumn(), 24));
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, width).getValues();
   var out = [];
   vals.forEach(function (r) {
     if (anyToKey(r[2]) !== key) return;
     out.push({ reg: String(r[5] || "").trim(), driver: String(r[6] || ""),
                outcome: String(r[10] || ""), type: String(r[17] || ""),
-               time: String(r[3] || "") });
+               time: String(r[3] || ""),
+               fuel: String(r[22] || ""), jobs: String(r[23] || "") });
   });
   return out;
 }
@@ -922,7 +920,8 @@ function weeklyDigest() {
     var tail = n ? " &middot; <b>" + n + " open defect" + (n > 1 ? "s" : "") + "</b>" : "";
     if (c) {
       lines.push("<b>" + reg + "</b> &mdash; checked by " + (c.driver || "someone") +
-                 (c.outcome ? " (" + c.outcome + ")" : "") + tail);
+                 (c.outcome ? " (" + c.outcome + ")" : "") +
+                 (c.fuel ? " &middot; fuel " + esc(c.fuel) : "") + tail);
     } else {
       missed.push(reg);
       lines.push("<b>" + reg + "</b> &mdash; <span style=\"color:#A8231B\"><b>no check recorded</b></span>" + tail);
@@ -935,6 +934,23 @@ function weeklyDigest() {
   var title = missed.length
     ? "Sunday " + pretty + ": " + missed.length + " bus" + (missed.length > 1 ? "es" : "") + " not checked"
     : "Sunday " + pretty + ": all checked";
+
+  /* The ordinary jobs nobody records: a wash, a fill, air in the tyres.
+     They are not defects and never will be, so this digest is the only place
+     they surface anywhere you would act on them. */
+  var jobs = [];
+  done.forEach(function (c) {
+    if (!c.jobs) return;
+    c.jobs.split(",").forEach(function (j) {
+      j = j.trim();
+      if (j) jobs.push(c.reg + ": " + j);
+    });
+  });
+  if (jobs.length) {
+    lines.push("&nbsp;");
+    lines.push("<b>To arrange</b>");
+    jobs.forEach(function (j) { lines.push("&bull; " + esc(j)); });
+  }
 
   var all = [];
   Object.keys(open).forEach(function (reg) { all = all.concat(open[reg]); });
@@ -959,6 +975,38 @@ function weeklyDigest() {
 }
 
 /** Sunday evening, once a week. Safe to run again: it clears its own old one. */
+/**
+ * Says whether the Sunday summary is really scheduled, and schedules it if
+ * not. It is installed inside a try/catch during setup, so that a refused
+ * permission cannot stop the rota being built. The cost of that is it can
+ * quietly fail and nothing would ever tell you, which would mean no Sunday
+ * summary and no wash or fuel reaching you. This tells you.
+ */
+function checkDigestScheduled() {
+  var ui = SpreadsheetApp.getUi();
+  var found = false;
+  try {
+    ScriptApp.getProjectTriggers().forEach(function (t) {
+      if (t.getHandlerFunction() === "weeklyDigest") found = true;
+    });
+  } catch (err) {
+    ui.alert("Could not read the triggers:\n\n" + err);
+    return;
+  }
+  if (found) {
+    ui.alert("The weekly summary is scheduled for Sunday evenings. Nothing to do.");
+    return;
+  }
+  try {
+    installWeeklyDigest();
+    ui.alert("It was not scheduled. It is now, for Sunday evenings.");
+  } catch (err) {
+    ui.alert("It is not scheduled, and it could not be set up:\n\n" + err +
+             "\n\nRun setUpEverything from the script editor and grant " +
+             "permissions when Google asks.");
+  }
+}
+
 function installWeeklyDigest() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === "weeklyDigest") ScriptApp.deleteTrigger(t);
@@ -982,6 +1030,7 @@ function onOpen() {
     .addSeparator()
     .addItem("Send a test email", "sendTestEmail")
     .addItem("Send weekly summary now", "sendDigestNow")
+    .addItem("Check weekly summary is scheduled", "checkDigestScheduled")
     .addItem("Check time zone", "checkTimeZoneMenu")
     .addToUi();
 }
