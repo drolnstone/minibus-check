@@ -43,9 +43,15 @@ var REQ_STATUS     = ["Pending", "Approved", "Rejected"];
 var PATTERN_ANCHOR = "2026-08-02";
 
 /* How far ahead the Rota tab is kept filled in. Sundays past this still show
-   in the app, worked out from the pattern. They get written down here as the
-   horizon rolls forward, or the moment you set one by hand. */
-var ROTA_FILL_WEEKS = 78;
+   in the app, worked out from the pattern, and get written down here as the
+   horizon rolls forward or the moment you change one by hand.
+
+   Sixteen weeks is deliberately short. The rows exist so you have a cell to
+   click, and in practice you only ever change a Sunday in the next month or
+   two. Filling eighteen months made a long sheet that mostly restated what
+   the app already works out for itself. For anything further ahead, use
+   Minibus > Add a Sunday to the rota. */
+var ROTA_FILL_WEEKS = 16;
 
 /* The register the sheet starts from if the Drivers tab is empty. After the
    first run the Drivers tab IS the register, not this list. */
@@ -298,11 +304,21 @@ function ensureRotaSheets(ss) {
     "Sunday", "Bus 1 scheduled", "Bus 1 actual / cover", "Status",
     "Bus 2 scheduled", "Bus 2 actual / cover", "Notes", "Updated", "Updated by"
   ]);
-  sheet(ss, DRIVERS_SHEET, ["Name", "Role", "Active", "Primary order", "Backup pool"]);
+  var drivers = sheet(ss, DRIVERS_SHEET,
+    ["Name", "Role", "Active", "Primary order", "Backup pool"]);
   sheet(ss, REQUESTS_SHEET, [
     "Received", "Request ID", "Sunday", "Driver", "Type", "Reason",
     "Preferred swap", "Status", "Decided on", "Replacement assigned"
   ]);
+
+  /* Seed the register here rather than only in setUpEverything. Whichever
+     path reaches the sheet first must leave it usable: an empty Drivers tab
+     means no dropdowns and no pattern to fill the rota from. */
+  if (drivers.getLastRow() < 2) {
+    SEED_DRIVERS.forEach(function (d) {
+      drivers.appendRow([d.name, d.role, "YES", d.order, d.backup]);
+    });
+  }
 }
 
 /**
@@ -313,8 +329,11 @@ function maintainIfDue(ss, props) {
   try {
     var last = Number(props.getProperty("rotaFilledAt") || 0);
     if (Date.now() - last < 86400000) return;
-    props.setProperty("rotaFilledAt", String(Date.now()));
     fillRotaAhead(ss);
+    /* Stamped only after it worked. Stamping first meant one silent failure
+       switched the fill off for a whole day, and the stamp outlives every
+       redeploy, so the Rota tab stayed empty and nothing said why. */
+    props.setProperty("rotaFilledAt", String(Date.now()));
   } catch (err) { /* a slow tidy-up must never break a read */ }
 }
 
@@ -521,15 +540,19 @@ function stamp(sh, row, who) {
 /** Run this once by hand after pasting the script in. Safe to run again. */
 function setUpEverything() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureRotaSheets(ss);
   ensureDrivers(ss);
   ensureRota(ss);
-  sheet(ss, REQUESTS_SHEET, [
-    "Received", "Request ID", "Sunday", "Driver", "Type", "Reason",
-    "Preferred swap", "Status", "Decided on", "Replacement assigned"
-  ]);
+
+  /* Run by hand means fill now, whatever the once-a-day stamp says. */
+  try { PropertiesService.getScriptProperties().deleteProperty("rotaFilledAt"); }
+  catch (err) {}
+  fillRotaAhead(ss);
+
   refreshDropdowns();
   bumpRotaVersion();
-  ss.toast("Rota is set up and ready.", "Minibus", 5);
+  var n = ss.getSheetByName(ROTA_SHEET).getLastRow() - 1;
+  ss.toast("Ready. " + n + " Sundays on the rota.", "Minibus", 6);
 }
 
 function ensureDrivers(ss) {
@@ -685,11 +708,46 @@ function applyRequestValidation(sh, row) {
 }
 
 /** Pushes the filled horizon another 26 weeks out. Menu item. */
+/**
+ * Creates a row for one Sunday, however far ahead, so you have a cell to
+ * click. The rota only holds Sundays, so anything else is refused rather
+ * than quietly written to a row the app will never look at.
+ */
+function addSunday() {
+  var ui = SpreadsheetApp.getUi();
+  var res = ui.prompt("Add a Sunday to the rota",
+    "Which Sunday? Type it as dd/mm/yyyy.", ui.ButtonSet.OK_CANCEL);
+  if (res.getSelectedButton() !== ui.Button.OK) return;
+
+  var key = anyToKey(res.getResponseText().trim());
+  if (!key) { ui.alert("That did not look like a date. Use dd/mm/yyyy."); return; }
+
+  var d = keyToDate(key);
+  if (d.getDay() !== 0) {
+    ui.alert(Utilities.formatDate(d, Session.getScriptTimeZone(), "d MMMM yyyy") +
+             " is a " + Utilities.formatDate(d, Session.getScriptTimeZone(), "EEEE") +
+             ". The rota only holds Sundays.");
+    return;
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureRotaSheets(ss);
+  var sh = ss.getSheetByName(ROTA_SHEET);
+  if (findRotaRow(sh, key)) { ui.alert("That Sunday is already on the rota."); return; }
+
+  appendRotaRow(ss, sh, d);
+  if (sh.getLastRow() > 2) sh.getRange(2, 1, sh.getLastRow() - 1, 9).sort(1);
+  bumpRotaVersion();
+  ui.alert(Utilities.formatDate(d, Session.getScriptTimeZone(), "d MMMM yyyy") +
+           " added, with the driver the pattern gives. Change it in the Rota tab.");
+}
+
 function extendRota() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  ROTA_FILL_WEEKS = ROTA_FILL_WEEKS + 26;
+  ROTA_FILL_WEEKS = 52;
   fillRotaAhead(ss);
-  ss.toast("Rota extended.", "Minibus", 5);
+  var n = ss.getSheetByName(ROTA_SHEET).getLastRow() - 1;
+  ss.toast("Rota now runs a year ahead. " + n + " Sundays.", "Minibus", 6);
 }
 
 /**
@@ -738,6 +796,7 @@ function onOpen() {
     .createMenu("Minibus")
     .addItem("Set up / refresh rota", "setUpEverything")
     .addItem("Refresh dropdowns from Drivers tab", "refreshDropdowns")
+    .addItem("Add a Sunday to the rota", "addSunday")
     .addItem("Extend rota further ahead", "extendRota")
     .addSeparator()
     .addItem("Send a test email", "sendTestEmail")

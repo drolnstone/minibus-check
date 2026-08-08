@@ -148,6 +148,26 @@ screen. Add a new person to both.
 
 ---
 
+## Why there are two rota tabs
+
+**Rota Requests** is what drivers asked for. **Rota** is what is actually
+happening. You need both, because most changes will never have a request
+behind them — you find out on Friday that somebody cannot make Sunday, and you
+just change it. There is nowhere else for that to live.
+
+The Rota tab holds **16 weeks** of Sundays. Short on purpose: the rows exist so
+you have a cell to click, and in practice you only change a Sunday in the next
+month or two. Everything past 16 weeks still shows in the app, worked out from
+the repeating pattern, and gets written down here as the horizon rolls forward
+or the moment you touch it.
+
+To change a Sunday further ahead, use **Minibus → Add a Sunday to the rota**.
+It creates the row with whatever driver the pattern gives, and you change it
+from there. **Extend rota further ahead** fills a whole year at once.
+
+If the Rota tab is ever empty, run **Minibus → Set up / refresh rota**. That
+fills it immediately whatever the once-a-day timer says.
+
 ## Two buses
 
 The Rota tab already has **Bus 2 scheduled** and **Bus 2 actual / cover**
