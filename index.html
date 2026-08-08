@@ -481,12 +481,12 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     <p class="eyebrow">Last step</p>
     <h1>Before you sign</h1>
     <div id="verdict"></div>
-    <div class="sum" id="sumBox"></div>
     <div class="card">
       <div class="lbl" style="margin-bottom:4px">Anything to arrange?</div>
-      <div class="hint" style="margin:0 0 10px">Not faults. Tap any that apply, or none.</div>
+      <div class="hint" style="margin:0 0 10px">Not faults. Tap what applies, or Nothing needed.</div>
       <div class="chips" id="jobChips"></div>
     </div>
+    <div class="sum" id="sumBox"></div>
     <div class="card">
       <div class="field">
         <label for="sign">Type your name to sign</label>
@@ -574,6 +574,7 @@ var LIVE = !!(CFG.endpoint && CFG.endpoint.indexOf("http") === 0);
 /* ---------------- the shared checklist ---------------- */
 var STAGES = [
   { title:"Outside the bus", lede:"Walk clockwise from the driver's door.", items:[
+    { id:"keys", name:"Keys and remote", what:"Key turns in the door and the ignition. Remote locks and unlocks every door from a normal distance. If you have to stand right up against the bus for it to work, the fob battery is going: report it before it strands somebody." },
     { id:"tyres", name:"Tyres", crit:true, what:"Tread across the full width, edge wear, cuts or bulges in the sidewall, pressures. Look for flat spots from standing." },
     { id:"nuts", name:"Wheel nuts", crit:true, what:"All present. Position marker arrows still lined up. Rust weeping from a nut means it has moved." },
     { id:"spare", full:true, name:"Spare wheel, jack and brace", what:"Spare secure in its carrier, not hanging loose, and with air in it. A flat spare is no spare. Jack and wheelbrace stowed with it." },
@@ -969,10 +970,15 @@ function paintFoot(){
     return;
   }
   if(st.screen==="review"){
-    var lv=level(), ok=st.sign.trim().length>1;
+    var lv=level();
+    var jobsOk=jobsAnswered();
+    var signed=st.sign.trim().length>1;
+    var ok=jobsOk && signed;
     btn("Back","btn-ghost",function(){ st.stage=stages.length-1; renderStage(); show("stage"); });
     btn(lv==="stop"?"Sign and stop the bus":"Sign and send", lv==="stop"?"btn-stop":"btn-main", submit, !ok);
-    if(!ok) c.textContent="Type your name to sign";
+    /* Name the first thing missing, in the order they meet it. */
+    if(!jobsOk) c.textContent="Anything to arrange? Tap one, or Nothing needed";
+    else if(!signed) c.textContent="Type your name to sign";
     return;
   }
   if(st.screen==="sent"){
@@ -1183,8 +1189,13 @@ var JOBS = [
   { id:"wash",   label:"Needs a wash" },
   { id:"inside", label:"Inside needs a clean" },
   { id:"fuel",   label:"Needs fuel" },
-  { id:"tyres",  label:"Tyres need air" }
+  { id:"tyres",  label:"Tyres need air" },
+  { id:"none",   label:"Nothing needed", clears:true }
 ];
+
+/* Answered means either a job was picked or Nothing needed was. An empty
+   list is not an answer: it is a driver who scrolled past. */
+function jobsAnswered(){ return st.jobs.length>0; }
 
 function paintJobs(){
   var box=$("jobChips"); if(!box) return;
@@ -1196,15 +1207,17 @@ function paintJobs(){
     if(st.jobs.indexOf(j.id)!==-1) b.className="on";
     b.addEventListener("click",function(){
       var i=st.jobs.indexOf(j.id);
-      if(i===-1) st.jobs.push(j.id); else st.jobs.splice(i,1);
-      paintJobs();
+      if(i!==-1){ st.jobs.splice(i,1); }
+      else if(j.clears){ st.jobs=[j.id]; }          /* nothing needed stands alone */
+      else { st.jobs=st.jobs.filter(function(x){ return x!=="none"; }); st.jobs.push(j.id); }
+      paintJobs(); paintFoot();
     });
     box.appendChild(b);
   });
 }
 
 function jobLabels(){
-  return st.jobs.map(function(id){
+  return st.jobs.filter(function(id){ return id!=="none"; }).map(function(id){
     for(var i=0;i<JOBS.length;i++) if(JOBS[i].id===id) return JOBS[i].label;
     return id;
   });
@@ -1278,7 +1291,13 @@ function renderStage(){
       '<div class="choose">'+
         '<button type="button" class="ok'+(r&&r.v==="ok"?" on":"")+'">Fine</button>'+
         '<button type="button" class="def'+(r&&r.v==="def"?" on":"")+'">Defect</button>'+
-        '<button type="button" class="na'+(r&&r.v==="na"?" on":"")+'">Not on this bus</button>'+
+        /* Pre-drive lists are already cut to what this particular bus has,
+           so nothing on one can be "not on this bus". Offering it there just
+           gives a driver a third button that will never be right. The full
+           inspection reaches further, so it keeps it. */
+        (st.mode==="full"
+          ? '<button type="button" class="na'+(r&&r.v==="na"?" on":"")+'">Not on this bus</button>'
+          : '')+
       '</div>'+
       '<div class="note'+(r&&r.v==="def"?" is-on":"")+'">'+
         '<div class="lbl">What did you find?</div>'+
@@ -1293,21 +1312,28 @@ function renderStage(){
       st.res[it.id] = v==="def" ? { v:"def", note:ta.value } : { v:v };
       bOk.classList.toggle("on", v==="ok");
       bDef.classList.toggle("on", v==="def");
-      bNa.classList.toggle("on", v==="na");
+      if(bNa) bNa.classList.toggle("on", v==="na");
       note.classList.toggle("is-on", v==="def");
       el.className=itemClass(it, st.res[it.id]);
       paintDash(); paintFoot();
     }
 
     bOk.addEventListener("click",function(){ pick("ok"); });
-    bNa.addEventListener("click",function(){ pick("na"); });
+    if(bNa) bNa.addEventListener("click",function(){ pick("na"); });
     bDef.addEventListener("click",function(){
       pick("def");
       if(it.crit) toast("Critical defect. The bus does not run. Tap Call at the top.");
       setTimeout(function(){ ta.focus(); },120);
     });
     ta.addEventListener("input",function(){
-      if(st.res[it.id]&&st.res[it.id].v==="def") st.res[it.id].note=ta.value;
+      if(st.res[it.id]&&st.res[it.id].v==="def"){
+        st.res[it.id].note=ta.value;
+        /* Without this the footer never re-evaluated while typing, so Next
+           stayed dead until something else happened to repaint it. On the
+           last item of a stage there is nothing else to tap, and the driver
+           was stuck going back to an earlier item to free themselves. */
+        paintFoot();
+      }
     });
     list.appendChild(el);
   });

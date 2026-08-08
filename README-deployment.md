@@ -46,7 +46,7 @@ brand new deployment instead, you must paste the new URL into `config.js`.
 
 Replace `index.html`, `config.js` and `sw.js` on your host.
 
-`sw.js` has been bumped to `minibus-check-v31`. That is what tells every
+`sw.js` has been bumped to `minibus-check-v32`. That is what tells every
 phone to throw away its old copy. If you ever edit `index.html` or
 `config.js` again, bump that number again or phones will keep the old app.
 
@@ -280,13 +280,13 @@ person. Approve or reject is the whole of it.
 
 ## The checklist
 
-There are two lists, built from one set of 48 items.
+There are two lists, built from one set of 49 items.
 
-**Pre-drive — 32 items.** What every driver does before carrying anyone. All
+**Pre-drive — 33 items.** What every driver does before carrying anyone. All
 12 critical items are in it. This is the only list most drivers ever see, and
 they are not shown a choice.
 
-**Full inspection — 48 items.** The pre-drive list plus the slower structural
+**Full inspection — 49 items.** The pre-drive list plus the slower structural
 and equipment checks: corrosion, seat and handrail condition, battery, spare
 wheel, wheelchair restraints, documents. This is coordinator work.
 
@@ -299,7 +299,8 @@ Every check records which type it was, in the **Check type** column.
 
 ### The three answers
 
-Each item has **Fine**, **Defect**, and **Not on this bus**.
+Each item has **Fine** and **Defect**. The full inspection adds a third,
+**Not on this bus**.
 
 That third one means **not applicable** — this bus genuinely does not have the
 thing. A wheelchair ramp on a bus with none. A speed limiter that was never
@@ -310,6 +311,10 @@ fitted but the driver could not check it — the bonnet catch is jammed, the ste
 is buried under bags — that is a **Defect** with a note. The coordinator needs
 to know, and burying it under N/A would hide a real problem behind something
 that reads like a shrug.
+
+The pre-drive list is already cut to what each bus actually has, so nothing on
+it can be "not on this bus" and the button is not shown there. The full
+inspection reaches further, so it keeps it.
 
 A defect has to be described before the driver can move on. Not on this bus
 does not. It is recorded in the **Not applicable** column of the Checks sheet,
@@ -331,9 +336,13 @@ A low tank is **not a fault**. It stops nothing and emails nobody. At 2/8 or
 below the app tells the driver to fill up before setting off, and pre-ticks
 *Needs fuel* on the next screen.
 
-**Things to arrange** sits on the review screen: *Needs a wash*, *Inside needs
-a clean*, *Needs fuel*, *Tyres need air*. Optional, any number, no effect on
-the outcome of the check.
+**Things to arrange** sits on the review screen, above the summary: *Needs a
+wash*, *Inside needs a clean*, *Needs fuel*, *Tyres need air*, and *Nothing
+needed*. Any number of the first four, or Nothing needed on its own.
+
+An answer is **required** before the check can be signed. Nothing needed is a
+real answer and is not recorded as a job; leaving it blank is not, because
+that is a driver who scrolled past rather than one who looked.
 
 These exist because the cleanliness item only fires when a bus is too dirty to
 be **safe** — by then you are not booking a wash, you are dealing with a
