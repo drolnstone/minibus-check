@@ -100,6 +100,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   background:#fff;font-size:17px}
 .field input:focus,.field textarea:focus{outline:3px solid #9CC4EC;outline-offset:1px;border-color:var(--steel-2)}
 .field .hint{font-size:13px;color:var(--muted);margin-top:5px}
+.hint{font-size:13px;color:var(--muted);margin-top:5px}
+.lbl{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:17px;
+  letter-spacing:.05em;text-transform:uppercase;color:var(--ink)}
 .mono{font-family:"IBM Plex Mono",monospace}
 
 /* ---------- vehicle picker ---------- */
@@ -178,6 +181,15 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .btn:active{transform:scale(.98)}
 .btn-main{background:var(--steel);color:#fff;flex:1}
 .btn-main[disabled]{opacity:.38;pointer-events:none}
+/* A blocked button keeps the faded look but stays tappable, so it can explain
+   itself. Doing nothing at all reads as a broken app. */
+.btn.is-off{opacity:.42}
+.flash{animation:flashring 1.5s ease-out}
+@keyframes flashring{
+  0%{box-shadow:0 0 0 0 rgba(178,107,0,0)}
+  12%,58%{box-shadow:0 0 0 3px var(--warn)}
+  100%{box-shadow:0 0 0 0 rgba(178,107,0,0)}
+}
 .btn-ghost{background:#fff;border-color:var(--hair);color:var(--ink)}
 .btn-stop{background:var(--stop);color:#fff;flex:1}
 .btn-wide{width:100%}
@@ -290,13 +302,13 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   padding:0;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:13px;
   color:var(--muted);display:flex;align-items:flex-end;justify-content:center;
   padding-bottom:5px;transition:background .12s,border-color .12s}
+/* The colour is set per segment in script. The grey here is only a fallback,
+   so a lit segment can never end up white on white. */
 .fuel button.lit{color:#fff;border-color:transparent;background:var(--muted)}
-.fuel button.lit.low{background:var(--stop)}
-.fuel button.lit.mid{background:var(--warn)}
-.fuel button.lit.high{background:var(--pass)}
 .fuel button.edge{box-shadow:inset 0 0 0 2px rgba(0,0,0,.28)}
 .fuel button:active{transform:scale(.96)}
 
+#sign{font-style:italic}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chips button{min-height:44px;padding:0 15px;border:1.5px solid var(--hair);border-radius:22px;
   background:#fff;color:var(--ink);font-size:14.5px;font-weight:500}
@@ -444,7 +456,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       <div class="hint" id="modeHint"></div>
     </div>
     <div class="card">
-      <div class="field">
+      <div class="field" id="mileCard">
         <label for="miles">Mileage now</label>
         <input id="miles" type="number" inputmode="numeric" class="mono" placeholder="e.g. 57363">
         <div class="hint" id="milesHint">Read it off the dashboard before you set off.</div>
@@ -455,7 +467,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
           </button>
         </div>
       </div>
-      <div class="field" style="margin-top:16px">
+      <div class="field" id="fuelCard" style="margin-top:16px">
         <label>Fuel showing</label>
         <div class="fuel" id="fuelBar" role="group" aria-label="Fuel level in eighths"></div>
         <div class="hint" id="fuelHint">Tap what the gauge is reading.</div>
@@ -481,16 +493,16 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     <p class="eyebrow">Last step</p>
     <h1>Before you sign</h1>
     <div id="verdict"></div>
-    <div class="card">
+    <div class="card" id="jobsCard">
       <div class="lbl" style="margin-bottom:4px">Anything to arrange?</div>
       <div class="hint" style="margin:0 0 10px">Not faults. Tap what applies, or Nothing needed.</div>
       <div class="chips" id="jobChips"></div>
     </div>
     <div class="sum" id="sumBox"></div>
-    <div class="card">
+    <div class="card" id="signCard">
       <div class="field">
         <label for="sign">Type your name to sign</label>
-        <input id="sign" type="text" placeholder="Full name">
+        <input id="sign" type="text" placeholder="Name or initials" autocomplete="off">
         <div class="hint">This records that you did the check yourself, today.</div>
       </div>
     </div>
@@ -642,6 +654,17 @@ var lastRec = null;
 var $ = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
   return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+/* Brings something into view and rings it, for when a driver has tapped a
+   blocked button and needs showing where the problem is. */
+function flash(id){
+  var el=$(id); if(!el) return;
+  try{ el.scrollIntoView({block:"center",behavior:"smooth"}); }catch(e){ el.scrollIntoView(); }
+  el.classList.remove("flash");
+  void el.offsetWidth;                    /* restart the animation */
+  el.classList.add("flash");
+  setTimeout(function(){ el.classList.remove("flash"); },1700);
+}
+
 function toast(m){ var t=$("toast"); t.textContent=m; t.classList.add("is-on");
   clearTimeout(t._t); t._t=setTimeout(function(){ t.classList.remove("is-on"); },2600); }
 function pad2(n){ return (n<10?"0":"")+n; }
@@ -915,17 +938,24 @@ function goHome(){
 function paintFoot(){
   var f=$("footIn"), c=$("count");
   f.innerHTML=""; c.textContent="";
-  function btn(label,cls,fn,dis){
+  function btn(label,cls,fn,dis,why){
     var b=document.createElement("button");
-    b.type="button"; b.className="btn "+cls; b.textContent=label;
-    if(dis) b.setAttribute("disabled","disabled");
-    b.addEventListener("click",fn); f.appendChild(b); return b;
+    b.type="button"; b.className="btn "+cls+(dis?" is-off":""); b.textContent=label;
+    b.addEventListener("click",function(){
+      if(!dis) return fn();
+      /* The caption under the footer already says what is missing. Say it out
+         loud too, and point at the thing, rather than sitting there dead. */
+      toast(c.textContent || "Something is still needed.");
+      if(typeof why==="function") why();
+    });
+    f.appendChild(b); return b;
   }
 
   if(st.screen==="driver"){
     var named = st.driver.trim().length>1;
     var pinOk = !pinNeeded() || String(st.pin) === String(pinFor(st.driver));
-    btn("Continue","btn-main",function(){ renderVehicles(); show("vehicle"); }, !(named && pinOk));
+    btn("Continue","btn-main",function(){ renderVehicles(); show("vehicle"); }, !(named && pinOk),
+        function(){ if(!named && $("driverPick")) $("driverPick").focus(); });
     if(!named) c.textContent="Choose your name";
     else if(!pinOk) c.textContent="Enter your PIN";
     return;
@@ -941,9 +971,14 @@ function paintFoot(){
     var prob = mileProblem();
     var okm = entered && (!prob || st.mileOk) && st.fuel!==null;
     btn("Back","btn-ghost",function(){ show("vehicle"); });
-    btn("Start the check","btn-main",function(){ st.stage=0; renderStage(); show("stage"); }, !okm);
+    btn("Start the check","btn-main",function(){ st.stage=0; renderStage(); show("stage"); }, !okm,
+        function(){
+          if(!entered || (prob && !st.mileOk)) { flash("mileCard"); $("miles").focus(); }
+          else flash("fuelCard");
+        });
     if(!entered) c.textContent="Enter the mileage to begin";
     else if(prob && !st.mileOk) c.textContent="Check the mileage, then confirm it below";
+    else if(st.fuel===null) c.textContent="Tap the fuel gauge reading";
     return;
   }
   if(st.screen==="stage"){
@@ -975,7 +1010,11 @@ function paintFoot(){
     var signed=st.sign.trim().length>1;
     var ok=jobsOk && signed;
     btn("Back","btn-ghost",function(){ st.stage=stages.length-1; renderStage(); show("stage"); });
-    btn(lv==="stop"?"Sign and stop the bus":"Sign and send", lv==="stop"?"btn-stop":"btn-main", submit, !ok);
+    btn(lv==="stop"?"Sign and stop the bus":"Sign and send", lv==="stop"?"btn-stop":"btn-main",
+        submit, !ok, function(){
+          if(!jobsOk) flash("jobsCard");
+          else { flash("signCard"); $("sign").focus(); }
+        });
     /* Name the first thing missing, in the order they meet it. */
     if(!jobsOk) c.textContent="Anything to arrange? Tap one, or Nothing needed";
     else if(!signed) c.textContent="Type your name to sign";
@@ -1143,6 +1182,19 @@ function openDefectsHTML(reg){
 
 var FUEL_LABELS = ["","\u00BC","","\u00BD","","\u00BE","","F"];
 
+/* Each segment carries its own colour, so the lit part of the bar always
+   runs red through amber to green rather than turning one flat colour. A
+   hue sweep rather than a straight blend, which would go olive in the
+   middle. Dark enough that the white markings stay readable on every step. */
+var FUEL_COLOURS = ["#75201a","#753e1a","#755d1a","#6e751a",
+                    "#50751a","#31751a","#1a7521","#1a7540"];
+
+/* How a person says it. Eighths are how the bar is built, but nobody reads a
+   gauge and thinks "four eighths", so nothing is written down that way. */
+var FUEL_WORDS = ["1/8","1/4","3/8","1/2","5/8","3/4","7/8","Full"];
+function fuelText(n){ return (n>=1 && n<=8) ? FUEL_WORDS[n-1] : ""; }
+
+/* Still used for the wording and the low-tank nudge, not for the colour. */
 function fuelBand(n){ return n<=2 ? "low" : n===3 ? "mid" : "high"; }
 
 function paintFuel(){
@@ -1155,7 +1207,8 @@ function paintFuel(){
       b.textContent=FUEL_LABELS[n-1];
       b.setAttribute("aria-label",n+" eighths");
       if(st.fuel!==null && n<=st.fuel){
-        b.className="lit "+fuelBand(st.fuel)+(n===st.fuel?" edge":"");
+        b.className="lit"+(n===st.fuel?" edge":"");
+        b.style.background=FUEL_COLOURS[n-1];
       }
       b.addEventListener("click",function(){
         st.fuel = (st.fuel===n) ? null : n;   /* tap the same one again to clear */
@@ -1166,15 +1219,16 @@ function paintFuel(){
   }
   var hint=$("fuelHint");
   if(st.fuel===null){ hint.textContent="Tap what the gauge is reading."; hint.style.color=""; return; }
-  var eighths=st.fuel+"/8";
+  /* No numbers here. The bar has already said it, and the eighths still go
+     on the record. Only say something when there is something to say. */
   if(st.fuel<=2){
-    hint.textContent=eighths+". Low. Fill up before you set off.";
+    hint.textContent="Low. Fill up before you set off.";
     hint.style.color="var(--stop)";
   } else if(st.fuel===3){
-    hint.textContent=eighths+". Getting low. Worth filling.";
+    hint.textContent="Getting low. Worth filling.";
     hint.style.color="var(--warn)";
   } else {
-    hint.textContent=eighths+".";
+    hint.textContent="";
     hint.style.color="";
   }
 }
@@ -1377,7 +1431,7 @@ function sumHTML(rec){
   var t=tally(), now=new Date();
   var r = rec || { date:ukDate(now), time:ukTime(now), reg:st.veh?st.veh.reg:"", driver:st.driver,
                    miles:st.miles, checked:t.done, total:TOTAL, defects:defectList(), na:naList(),
-                   fuel: st.fuel===null ? "" : st.fuel+"/8", jobs: jobLabels(),
+                   fuel: fuelText(st.fuel), jobs: jobLabels(),
                    kind: st.mode==="full" ? "Full inspection" : "Pre-drive" };
   function row(k,v){ return '<div class="sum-row"><b>'+esc(k)+'</b><span class="v">'+esc(v)+'</span></div>'; }
   return row("Check", r.kind || "Pre-drive") +
@@ -1396,8 +1450,10 @@ function renderReview(){
   $("verdict").innerHTML = verdictHTML(level(), defectList());
   $("sumBox").innerHTML = sumHTML();
   paintJobs();
-  $("sign").value = st.sign || st.driver || "";
-  st.sign = $("sign").value;
+  /* Left blank on purpose. A name already typed in for them is not a
+     signature, it is the app signing on their behalf. Whatever they put
+     here is theirs: full name, initials, however they sign things. */
+  $("sign").value = st.sign || "";
 }
 
 /* ---------------- queue ---------------- */
@@ -1484,8 +1540,7 @@ function submit(){
     level: level(), checked: t.done, total: TOTAL,
     kind: st.mode==="full" ? "Full inspection" : "Pre-drive",
     loc:g.loc, locAcc:g.locAcc, locDist:g.locDist, locNote:g.locNote,
-    fuel: st.fuel===null ? "" : st.fuel+"/8",
-    fuelEighths: st.fuel===null ? "" : st.fuel,
+    fuel: fuelText(st.fuel),
     jobs: jobLabels(),
     defects: defectList(),
     na: naList(),
