@@ -32,13 +32,29 @@ window.CONFIG = {
      was 103 metres out, which is why this is worth doing once.
 
      radius is how far from this point still counts as being at the buses,
-     in metres. 150 covers parking further along the road on a busy Sunday.
+     in YARDS. 165 covers parking further along the road on a busy Sunday.
      The app only calls a check "away" when the phone's own accuracy figure
      leaves no doubt, so a poor fix never accuses anyone. */
-  busBase: { lat: 53.424169, lng: -2.936799, radius: 150 },
+  busBase: { lat: 53.424169, lng: -2.936799, radius: 165 },
 
-  /* Set true to make drivers key in a PIN. Off by default. */
-  requirePin: false,
+  /* Drivers key in a four digit PIN before they can start a check.
+
+     Set them in the PIN column of the Drivers tab in the spreadsheet, not
+     here. The last four digits of a person's own phone number work well:
+     nobody forgets their own number, which was the thing that made PINs
+     unworkable before. Any four digits will do though.
+
+     The PIN itself never leaves the spreadsheet. The app is sent a one way
+     fingerprint of it and compares that, so the numbers cannot be read off
+     the endpoint. Worth being clear all the same: four digits are few enough
+     that anyone determined can work through them, and people who know each
+     other tend to know each other's phone numbers. This stops a driver
+     casually picking the wrong name, and makes signing as somebody else a
+     deliberate act rather than an easy one. It is not a security boundary.
+
+     A driver with no PIN in the sheet is not asked for one, so adding
+     somebody never locks them out. Set false to turn the whole thing off. */
+  requirePin: true,
 
   /* Who is offered the full inspection as well as the pre-drive check.
      Matched against the role in the register below, so adding a second

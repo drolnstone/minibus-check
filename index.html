@@ -645,7 +645,7 @@ var STAGES = [
 ];
 
 /* ---------------- state ---------------- */
-var st = { screen:"driver", veh:null, mode:"pre", stage:0, driver:"", role:"", pin:"", miles:"", mileOk:false, fuel:null, jobs:[], sign:"", res:{} };
+var st = { screen:"driver", veh:null, mode:"pre", stage:0, driver:"", role:"", pin:"", miles:"", mileOk:false, fuel:null, jobs:[], sign:"", pinOk:false, res:{} };
 var stages = [];   /* the stage list for the chosen vehicle */
 var ALL = [];
 var TOTAL = 0;
@@ -953,7 +953,7 @@ function paintFoot(){
 
   if(st.screen==="driver"){
     var named = st.driver.trim().length>1;
-    var pinOk = !pinNeeded() || String(st.pin) === String(pinFor(st.driver));
+    var pinOk = !pinNeeded() || st.pinOk;
     btn("Continue","btn-main",function(){ renderVehicles(); show("vehicle"); }, !(named && pinOk),
         function(){ if(!named && $("driverPick")) $("driverPick").focus(); });
     if(!named) c.textContent="Choose your name";
@@ -1106,8 +1106,8 @@ function geoDistance(lat,lng){
    A 300 metre accuracy reading proves nothing about a 250 metre radius. */
 function geoAway(){
   if(geo.status!=="ok" || geo.dist===null) return false;
-  var r=(CFG.busBase && CFG.busBase.radius) || 250;
-  return (geo.dist - (geo.acc||0)) > r;
+  var r=(CFG.busBase && CFG.busBase.radius) || 165;      /* yards */
+  return (toYards(geo.dist) - toYards(geo.acc||0)) > r;
 }
 
 function geoText(){
@@ -1122,12 +1122,18 @@ function geoText(){
       var d = geo.dist===null ? ""
         : geoAway() ? " You are about "+geoPretty(geo.dist)+" from where the buses are kept."
         : " You are at the buses.";
-      return "Recorded to within "+geo.acc+" m."+d;
+      return "Recorded to within "+Math.round(toYards(geo.acc))+" yd."+d;
   }
   return "";
 }
 
-function geoPretty(m){ return m<1000 ? m+" m" : (m/1000).toFixed(1)+" km"; }
+function toYards(m){ return m*1.09361; }
+function geoPretty(m){
+  var yd=Math.round(toYards(m));
+  if(yd<1760) return yd+" yd";
+  var mi=m/1609.344;
+  return (mi<10 ? mi.toFixed(1) : Math.round(mi))+(mi<1.05&&mi>=0.95?" mile":" miles");
+}
 
 function paintGeo(){
   var card=$("geoCard"), line=$("geoLine");
@@ -1142,8 +1148,8 @@ function paintGeo(){
 function geoRecord(){
   if(geo.status==="ok"){
     return { loc: geo.lat.toFixed(6)+", "+geo.lng.toFixed(6),
-             locAcc: geo.acc,
-             locDist: geo.dist===null ? "" : geo.dist,
+             locAcc: Math.round(toYards(geo.acc)),
+             locDist: geo.dist===null ? "" : Math.round(toYards(geo.dist)),
              locNote: geoAway() ? "Away from the buses" : "" };
   }
   return { loc:"", locAcc:"", locDist:"",
@@ -1180,7 +1186,7 @@ function openDefectsHTML(reg){
    A low tank is not a fault. It stops nothing and emails nobody. It just
    needs somebody to put diesel in. */
 
-var FUEL_LABELS = ["","\u00BC","","\u00BD","","\u00BE","","F"];
+var FUEL_LABELS = ["E","\u00BC","","\u00BD","","\u00BE","","F"];
 
 /* Each segment carries its own colour, so the lit part of the bar always
    runs red through amber to green rather than turning one flat colour. A
@@ -1694,7 +1700,8 @@ function rotaSaveCache(){
   try{
     store.set(RKEY, JSON.stringify({
       when: Date.now(), rows: rotaRows,
-      pattern: ROTA_PRIMARY_PATTERN
+      pattern: ROTA_PRIMARY_PATTERN,
+      register: REGISTER
     }));
   }catch(e){}
 }
@@ -1704,6 +1711,7 @@ function rotaLoadCache(){
     if(!c || !c.rows) return false;
     rotaRows = c.rows;
     if(c.pattern && c.pattern.length) ROTA_PRIMARY_PATTERN = c.pattern.slice();
+    if(c.register && c.register.length) rotaSyncRegister(c.register);
     return true;
   }catch(e){ return false; }
 }
@@ -1756,15 +1764,12 @@ function rotaSyncRegister(list){
 
   var incoming = list.map(function(d){
     return (typeof d === "string")
-      ? { name:d, role:"" }
-      : { name:(d&&d.name)||"", role:(d&&d.role)||"" };
+      ? { name:d, role:"", pin:"" }
+      : { name:(d&&d.name)||"", role:(d&&d.role)||"", pin:(d&&d.pin)||"" };
   }).filter(function(d){ return d.name; });
 
-  var pins={};
-  REGISTER.forEach(function(d){ if(d.pin) pins[d.name]=d.pin; });
-
   var next = incoming.map(function(d){
-    return { name:d.name, role:d.role, pin:pins[d.name]||"" };
+    return { name:d.name, role:d.role, pin:d.pin };
   });
   var have={}; next.forEach(function(d){ have[d.name]=true; });
 
@@ -1995,7 +2000,7 @@ $("rotaMyDuties").addEventListener("click",function(){
 $("rotaModal").addEventListener("click",function(e){if(e.target===this)rotaClose();});
 /* ---------------- wiring ---------------- */
 $("driverPick").addEventListener("change",function(){
-  st.driver=this.value; st.role=roleOf(this.value); st.pin=""; $("pin").value="";
+  st.driver=this.value; st.role=roleOf(this.value); st.pin=""; st.pinOk=false; $("pin").value="";
   if(this.value) store.set(NKEY,this.value);
   showPinField(); paintFoot(); paintRotaHint();
 });
@@ -2020,7 +2025,11 @@ function paintRotaHint(){
 $("driver").addEventListener("input",function(){
   st.driver=this.value; st.role=""; paintFoot();
 });
-$("pin").addEventListener("input",function(){ st.pin=this.value; paintFoot(); });
+$("pin").addEventListener("input",function(){
+  st.pin=this.value.replace(/\D/g,"").slice(0,4);
+  if(this.value!==st.pin) this.value=st.pin;
+  st.pinOk=false; paintFoot(); checkPin();
+});
 $("miles").addEventListener("input",function(){
   st.miles=this.value; st.mileOk=false; paintMilesHint(); paintFoot();
 });
@@ -2079,12 +2088,41 @@ function entryFor(name){
 function roleOf(name){ var e=entryFor(name); return e?e.role:""; }
 function pinFor(name){ var e=entryFor(name); return e?String(e.pin||""):""; }
 function pinNeeded(){
-  return !!CFG.requirePin && !!pinFor(st.driver);
+  return !!CFG.requirePin && !!pinFor(st.driver) && canHash();
+}
+
+/* Checking a fingerprint needs the browser's crypto, which only exists on a
+   secure connection. If it is missing we let the driver straight through
+   rather than locking them out of a safety check over a speed bump. */
+function canHash(){ return !!(window.crypto && window.crypto.subtle && window.TextEncoder); }
+
+function sha256Hex(str){
+  return crypto.subtle.digest("SHA-256", new TextEncoder().encode(str))
+    .then(function(buf){
+      return Array.prototype.map.call(new Uint8Array(buf), function(b){
+        return ("0"+b.toString(16)).slice(-2);
+      }).join("");
+    });
+}
+
+/* The typed PIN is fingerprinted the same way the sheet did it and the two
+   are compared. The PIN itself is never stored on the phone or sent back. */
+function checkPin(){
+  var want = pinFor(st.driver);
+  if(!pinNeeded() || !want){ st.pinOk = true; paintFoot(); return; }
+  if(String(st.pin).length < 4){ st.pinOk = false; paintFoot(); return; }
+  var tried = st.driver + ":" + st.pin;
+  sha256Hex(tried).then(function(h){
+    /* the driver may have changed name while this was running */
+    if(st.driver + ":" + st.pin !== tried) return;
+    st.pinOk = (h === want);
+    paintFoot();
+  }).catch(function(){ st.pinOk = true; paintFoot(); });
 }
 function showPinField(){
   var need = !!CFG.requirePin && !!st.driver && !!pinFor(st.driver);
   $("pinField").style.display = need ? "" : "none";
-  if(!need){ st.pin=""; $("pin").value=""; }
+  if(!need){ st.pin=""; st.pinOk=false; $("pin").value=""; }
 }
 
 (function(){

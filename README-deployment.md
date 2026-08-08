@@ -46,7 +46,7 @@ brand new deployment instead, you must paste the new URL into `config.js`.
 
 Replace `index.html`, `config.js` and `sw.js` on your host.
 
-`sw.js` has been bumped to `minibus-check-v35`. That is what tells every
+`sw.js` has been bumped to `minibus-check-v37`. That is what tells every
 phone to throw away its old copy. If you ever edit `index.html` or
 `config.js` again, bump that number again or phones will keep the old app.
 
@@ -164,6 +164,8 @@ code file and re-uploading it. Four columns:
 - **Active** — NO removes them from every dropdown and every phone.
 - **Primary order** — 1, 2, 3, 4 sets the repeating pattern. Blank means they
   are not in the normal rotation but can still cover.
+- **PIN** — four digits they key in before starting a check. Blank means they
+  are not asked for one.
 
 The old **Backup pool** column has been dropped. Nothing read it. If your
 sheet still has it, delete column E by hand or leave it: it is ignored either
@@ -216,31 +218,33 @@ A bus going out unchecked because the GPS sulked would be far worse than a
 blank cell.
 
 Four columns on the Checks sheet: **Where checked** (a tappable map link),
-**Accuracy (m)**, **Distance from base (m)**, **Location note**. The location
+**Accuracy (yd)**, **Distance from base (yd)**, **Location note**. The location
 also appears in defect and bus-stopped emails.
+
+Distances are in yards and miles, like the mileage and every road sign the
+driver passes. Anything recorded before this change is in metres under those
+same columns; the headers are renamed in place on the next check.
 
 ### Where the buses are kept
 
-`busBase` in `config.js` is set to the centre of **L6 4DY**, the postcode for
-3-5 Chester Road, with a 250 m radius.
-
-That is the postcode centre, not the exact parking spot, so it may be fifty
-metres or so out. The radius covers that.
-
-**Worth replacing once.** Do a check standing at the bus, read the **Where
-checked** cell off the Checks tab, and put those two numbers into `busBase`
-instead. That pins it to the actual spot, and it pins it using the same
-satellites the drivers' phones use, which matters more than the map being
-right. After that you can bring the radius down to about 150 m.
+`busBase` in `config.js` holds the spot outside 3-5 Chester Road, measured
+standing at the bus rather than taken off a map. The postcode centre was
+113 yards out, which is why it was worth doing once.
 
 ```
-busBase: { lat: 53.425024, lng: -2.937394, radius: 250 },
+busBase: { lat: 53.424169, lng: -2.936799, radius: 165 },
 ```
+
+`radius` is how far from that point still counts as being at the buses, in
+yards. 165 allows for parking further along the road on a busy Sunday.
 
 A check done away from that point records the distance, and the driver sees it
 on screen before they start. It is never treated as an accusation: the app
 only calls a check "away" when the phone's own accuracy figure leaves no
 doubt, so a poor fix in a built-up area never flags anyone wrongly.
+
+If the buses ever move, do one check standing at the new spot and copy the
+**Where checked** figures into `busBase`.
 
 To switch the whole thing off, set `recordLocation: false`.
 
@@ -258,11 +262,21 @@ buses on the same Sunday, and the app will show them. Nothing needs rebuilding.
 Cancelled/declined, No driver assigned. The last one goes red, so an empty
 Sunday cannot quietly look normal.
 
-**The PIN is off.** `requirePin: false` in `config.js`. Turn it on by setting
-it to `true` and adding `pin: "1234"` to a driver. Be clear about what it is:
-the app is static files, so anyone who views the page source can read the
-PINs. It stops one driver casually picking another's name. It is not
-security. The real boundary is who you share the spreadsheet with.
+**PINs are on.** Each driver keys in four digits before they can start a
+check. Set them in the **PIN** column of the Drivers tab, not in a file. The
+last four digits of the person's own phone number work well: nobody forgets
+their own number, which is what made PINs unworkable before.
+
+The PIN itself never leaves the spreadsheet. The app is sent a one way
+fingerprint and compares that, so the numbers cannot be read off the endpoint.
+Worth being clear all the same: four digits are few enough that anyone
+determined can work through them, and people who know each other tend to know
+each other's phone numbers. This stops a driver casually picking the wrong
+name and makes signing as somebody else deliberate rather than easy. It is not
+a security boundary. The real one is who you share the spreadsheet with.
+
+A driver with no PIN in the sheet is not asked for one, so adding somebody
+never locks them out. Set `requirePin: false` in `config.js` to switch it off.
 
 **Emails** go to `COORDINATOR_EMAIL` at the top of `Code.gs`, currently
 `asimbassey@yahoo.com`. Both defect emails and rota emails carry a button

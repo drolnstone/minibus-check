@@ -118,8 +118,8 @@ function handleCheck(c) {
     "Received", "Check ID", "Date", "Time", "Vehicle", "Registration",
     "Driver", "Role", "Mileage", "Mileage flag", "Outcome",
     "Items checked", "Defect count", "Defects", "Renewals due", "Signed",
-    "Not applicable", "Check type", "Where checked", "Accuracy (m)",
-    "Distance from base (m)", "Location note", "Fuel", "To arrange"
+    "Not applicable", "Check type", "Where checked", "Accuracy (yd)",
+    "Distance from base (yd)", "Location note", "Fuel", "To arrange"
   ]);
   ensureChecksColumns(checks);
 
@@ -177,13 +177,25 @@ function handleCheck(c) {
  * nothing already recorded moves.
  */
 function ensureChecksColumns(sh) {
+  /* Older sheets carry these in metres. Rename in place rather than adding a
+     second column for the same measurement. Anything recorded before the
+     change is still in metres, so treat early rows with that in mind. */
+  var RENAMED = { "Accuracy (m)": "Accuracy (yd)",
+                  "Distance from base (m)": "Distance from base (yd)" };
+
   var want = ["Not applicable", "Check type", "Where checked",
-              "Accuracy (m)", "Distance from base (m)", "Location note",
+              "Accuracy (yd)", "Distance from base (yd)", "Location note",
               "Fuel", "To arrange"];
   var lastCol = sh.getLastColumn();
   if (lastCol < 1) return;
   var head = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
     return String(h || "").trim();
+  });
+  head.forEach(function (name, i) {
+    if (RENAMED[name]) {
+      sh.getRange(1, i + 1).setValue(RENAMED[name]);
+      head[i] = RENAMED[name];
+    }
   });
   want.forEach(function (name) {
     if (head.indexOf(name) !== -1) return;
@@ -295,7 +307,10 @@ function rotaPayload(fromKey, weeks) {
     weeks: weeks,
     pattern: pattern,
     drivers: drivers.filter(function (d) { return d.active; })
-                     .map(function (d) { return { name: d.name, role: d.role }; }),
+                     .map(function (d) {
+                       return { name: d.name, role: d.role,
+                                pin: pinHash(d.name, d.pin) };
+                     }),
     /* So the next driver sees what the last one reported and still open. */
     openDefects: openDefectsByReg(ss),
     rows: rows
@@ -312,7 +327,7 @@ function ensureRotaSheets(ss) {
     "Bus 2 scheduled", "Bus 2 actual / cover", "Notes", "Updated", "Updated by"
   ]);
   var drivers = sheet(ss, DRIVERS_SHEET,
-    ["Name", "Role", "Active", "Primary order"]);
+    ["Name", "Role", "Active", "Primary order", "PIN"]);
   sheet(ss, REQUESTS_SHEET, [
     "Received", "Request ID", "Sunday", "Driver", "Type", "Reason",
     "Preferred swap", "Status", "Decided on", "Replacement assigned"
@@ -323,7 +338,7 @@ function ensureRotaSheets(ss) {
      means no dropdowns and no pattern to fill the rota from. */
   if (drivers.getLastRow() < 2) {
     SEED_DRIVERS.forEach(function (d) {
-      drivers.appendRow([d.name, d.role, "YES", d.order]);
+      drivers.appendRow([d.name, d.role, "YES", d.order, ""]);
     });
   }
 }
@@ -432,7 +447,7 @@ function readLatestRequests(ss) {
 function readDrivers(ss) {
   var sh = ss.getSheetByName(DRIVERS_SHEET);
   if (!sh || sh.getLastRow() < 2) return [];
-  var values = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+  var values = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
   var out = [];
   values.forEach(function (r) {
     var name = String(r[0] || "").trim();
@@ -441,10 +456,27 @@ function readDrivers(ss) {
       name: name,
       role: String(r[1] || "").trim(),
       active: yes(r[2]),
-      order: Number(r[3]) || 0
+      order: Number(r[3]) || 0,
+      pin: String(r[4] || "").replace(/\D/g, "")
     });
   });
   return out;
+}
+
+/**
+ * A one-way fingerprint of a PIN, so the phone can check one without the
+ * PIN ever leaving this sheet. Salted with the name, so two people who
+ * happen to pick the same four digits do not produce the same fingerprint.
+ *
+ * Be clear about what this is. Four digits can be worked through by anyone
+ * who sets out to, fingerprint or not. It stops a driver reading the numbers
+ * straight off the endpoint. It is a lock on the door, not a safe.
+ */
+function pinHash(name, pin) {
+  if (!pin) return "";
+  var raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
+                                    name + ":" + pin, Utilities.Charset.UTF_8);
+  return raw.map(function (b) { return ("0" + (b & 0xFF).toString(16)).slice(-2); }).join("");
 }
 
 function yes(v) {
@@ -598,10 +630,10 @@ function checkTimeZoneMenu() {
 
 function ensureDrivers(ss) {
   var existing = ss.getSheetByName(DRIVERS_SHEET);
-  var sh = sheet(ss, DRIVERS_SHEET, ["Name", "Role", "Active", "Primary order"]);
+  var sh = sheet(ss, DRIVERS_SHEET, ["Name", "Role", "Active", "Primary order", "PIN"]);
   if (!existing) {
     SEED_DRIVERS.forEach(function (d) {
-      sh.appendRow([d.name, d.role, "YES", d.order]);
+      sh.appendRow([d.name, d.role, "YES", d.order, ""]);
     });
     sh.setColumnWidth(1, 150);
     sh.setColumnWidth(2, 160);
@@ -1287,7 +1319,7 @@ function notifyCheck(c, outcome, defectText) {
   ].concat(defects.map(function (d) { return "&bull; " + esc(d); }))
    .concat(c.loc ? ["&nbsp;", "<b>Checked at:</b> " +
        '<a href="https://maps.google.com/?q=' + esc(c.loc.replace(/\s/g, "")) + '">' +
-       esc(c.loc) + "</a> (to within " + esc(c.locAcc) + " m)" +
+       esc(c.loc) + "</a> (to within " + esc(c.locAcc) + " yd)" +
        (c.locNote ? " \u2014 " + esc(c.locNote) : "")]
      : (c.locNote ? ["&nbsp;", "<b>Location:</b> " + esc(c.locNote)] : []))
    .concat(["&nbsp;", "<b>Signed:</b> " + esc(c.sign)]);
