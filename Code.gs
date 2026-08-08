@@ -232,7 +232,13 @@ function rotaPayload(fromKey, weeks) {
 
   /* A rota that has not changed does not need building twice. The version
      number is bumped whenever anything is written, so an edit in the sheet
-     shows up on the next read rather than waiting for a timer. */
+     normally shows up on the next read rather than waiting for a timer.
+
+     That bump happens inside a simple onEdit trigger, which runs with
+     restricted permissions and may not be allowed to write a script
+     property. If it fails, this copy is what a driver sees until it ages
+     out. Sixty seconds is the worst case, and it comfortably absorbs seven
+     drivers opening the app at the same time on a Sunday morning. */
   var version = props.getProperty("rotaVersion") || "1";
   var cacheKey = "rota_" + version + "_" + dateToKey(from) + "_" + weeks;
   var cache = CacheService.getScriptCache();
@@ -281,7 +287,7 @@ function rotaPayload(fromKey, weeks) {
     rows: rows
   };
 
-  try { cache.put(cacheKey, JSON.stringify(payload), 300); } catch (err) { /* too big, no matter */ }
+  try { cache.put(cacheKey, JSON.stringify(payload), 60); } catch (err) { /* too big, no matter */ }
   return payload;
 }
 
