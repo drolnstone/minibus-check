@@ -14,6 +14,37 @@ window.CONFIG = {
   /* Who drivers ring when a bus is stopped. Keep the number dialable. */
   coordinator: { name: "Asim Bassey", phone: "07377634214" },
 
+  /* ---- Where the check was done ----------------------------------------
+     Records one location when an inspection starts, so a walkaround can be
+     shown to have happened at the bus rather than at somebody's kitchen
+     table. Nothing is recorded when a driver is only looking at the rota,
+     and there is no tracking of any kind between checks.
+
+     It never blocks a check. If the phone refuses or has no signal, the
+     inspection carries on and the record says why there is no location.
+
+     Set false to turn it off entirely. */
+  recordLocation: true,
+
+  /* Where the buses are kept: 3-5 Chester Road, Liverpool L6 4DY.
+
+     These figures are the centre of the postcode, not the exact parking
+     spot, so they may be fifty metres or so out. Good enough to start with,
+     given the radius below.
+
+     WORTH REPLACING ONCE. Do a check standing at the bus, read the "Where
+     checked" cell off the Checks tab, and put those two numbers here
+     instead. That pins it to the actual spot, and it pins it using the same
+     satellites the drivers' phones use, which matters more than the map
+     being right.
+
+     radius is how far from that point still counts as being at the buses,
+     in metres. 250 allows for the postcode being approximate. Once you have
+     replaced the figures with a real fix you can bring it down to about 150.
+     The app only calls a check "away" when the phone's own accuracy figure
+     leaves no doubt, so a poor fix never accuses anyone. */
+  busBase: { lat: 53.425024, lng: -2.937394, radius: 250 },
+
   /* Set true to make drivers key in a PIN. Off by default. */
   requirePin: false,
 

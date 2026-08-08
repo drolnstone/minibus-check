@@ -118,7 +118,8 @@ function handleCheck(c) {
     "Received", "Check ID", "Date", "Time", "Vehicle", "Registration",
     "Driver", "Role", "Mileage", "Mileage flag", "Outcome",
     "Items checked", "Defect count", "Defects", "Renewals due", "Signed",
-    "Not applicable", "Check type"
+    "Not applicable", "Check type", "Where checked", "Accuracy (m)",
+    "Distance from base (m)", "Location note"
   ]);
   ensureChecksColumns(checks);
 
@@ -140,7 +141,12 @@ function handleCheck(c) {
     c.driver || "", c.role || "", c.miles || "", c.milesFlag || "", outcome,
     (c.checked || "") + "/" + (c.total || ""),
     (c.defects || []).length, defectText, c.renewals || "", c.sign || "",
-    (c.na || []).join(", "), c.kind || "Pre-drive"
+    (c.na || []).join(", "), c.kind || "Pre-drive",
+    c.loc ? '=HYPERLINK("https://maps.google.com/?q=' + c.loc.replace(/\s/g, "") +
+            '","' + c.loc + '")' : "",
+    c.locAcc === 0 || c.locAcc ? c.locAcc : "",
+    c.locDist === 0 || c.locDist ? c.locDist : "",
+    c.locNote || ""
   ]);
 
   // One row per defect as well, so the coordinator can filter and chase them.
@@ -171,7 +177,8 @@ function handleCheck(c) {
  * nothing already recorded moves.
  */
 function ensureChecksColumns(sh) {
-  var want = ["Not applicable", "Check type"];
+  var want = ["Not applicable", "Check type", "Where checked",
+              "Accuracy (m)", "Distance from base (m)", "Location note"];
   var lastCol = sh.getLastColumn();
   if (lastCol < 1) return;
   var head = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
@@ -1008,6 +1015,11 @@ function notifyCheck(c, outcome, defectText) {
     "&nbsp;",
     "<b>Defects</b>"
   ].concat(defects.map(function (d) { return "&bull; " + esc(d); }))
+   .concat(c.loc ? ["&nbsp;", "<b>Checked at:</b> " +
+       '<a href="https://maps.google.com/?q=' + esc(c.loc.replace(/\s/g, "")) + '">' +
+       esc(c.loc) + "</a> (to within " + esc(c.locAcc) + " m)" +
+       (c.locNote ? " \u2014 " + esc(c.locNote) : "")]
+     : (c.locNote ? ["&nbsp;", "<b>Location:</b> " + esc(c.locNote)] : []))
    .concat(["&nbsp;", "<b>Signed:</b> " + esc(c.sign)]);
 
   var plain = [

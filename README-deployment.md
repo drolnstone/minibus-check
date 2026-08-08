@@ -46,7 +46,7 @@ brand new deployment instead, you must paste the new URL into `config.js`.
 
 Replace `index.html`, `config.js` and `sw.js` on your host.
 
-`sw.js` has been bumped to `minibus-check-v23`. That is what tells every
+`sw.js` has been bumped to `minibus-check-v25`. That is what tells every
 phone to throw away its old copy. If you ever edit `index.html` or
 `config.js` again, bump that number again or phones will keep the old app.
 
@@ -167,6 +167,49 @@ from there. **Extend rota further ahead** fills a whole year at once.
 
 If the Rota tab is ever empty, run **Minibus → Set up / refresh rota**. That
 fills it immediately whatever the once-a-day timer says.
+
+## Where the check was done
+
+A walkaround is meant to happen at the bus. The app records **one location**
+when an inspection starts, so that shows on the record.
+
+- Nothing is recorded when a driver is only looking at the rota.
+- There is no tracking between checks. One fix, at the start, and that is all.
+- The driver sees a line on the mileage screen telling them it is happening.
+
+**It never blocks a check.** If the phone refuses, has no signal, or takes too
+long, the inspection carries on and the record says why there is no location.
+A bus going out unchecked because the GPS sulked would be far worse than a
+blank cell.
+
+Four columns on the Checks sheet: **Where checked** (a tappable map link),
+**Accuracy (m)**, **Distance from base (m)**, **Location note**. The location
+also appears in defect and bus-stopped emails.
+
+### Where the buses are kept
+
+`busBase` in `config.js` is set to the centre of **L6 4DY**, the postcode for
+3-5 Chester Road, with a 250 m radius.
+
+That is the postcode centre, not the exact parking spot, so it may be fifty
+metres or so out. The radius covers that.
+
+**Worth replacing once.** Do a check standing at the bus, read the **Where
+checked** cell off the Checks tab, and put those two numbers into `busBase`
+instead. That pins it to the actual spot, and it pins it using the same
+satellites the drivers' phones use, which matters more than the map being
+right. After that you can bring the radius down to about 150 m.
+
+```
+busBase: { lat: 53.425024, lng: -2.937394, radius: 250 },
+```
+
+A check done away from that point records the distance, and the driver sees it
+on screen before they start. It is never treated as an accusation: the app
+only calls a check "away" when the phone's own accuracy figure leaves no
+doubt, so a poor fix in a built-up area never flags anyone wrongly.
+
+To switch the whole thing off, set `recordLocation: false`.
 
 ## Two buses
 

@@ -428,6 +428,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
         </div>
       </div>
     </div>
+    <div class="card" id="geoCard" style="display:none">
+      <div class="lbl" style="margin-bottom:6px">Where you are</div>
+      <div class="hint" id="geoLine"></div>
+    </div>
   </section>
 
   <!-- 4. STAGES -->
@@ -862,6 +866,7 @@ window.addEventListener("popstate", function(){
 /** Clears the finished check and returns to the first screen. */
 function goHome(){
   st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign=""; st.mode="pre";
+  geo={status:"off"};
   stages=[]; ALL=[]; TOTAL=0; lastRec=null;
   paintBanner();
   show("driver");
@@ -971,6 +976,100 @@ function renderVehicles(){
 }
 
 /* ---------------- prep ---------------- */
+/* ---------------- where the check was done ----------------
+   The point of this is that a walkaround happens at the bus. It records a
+   single fix when an inspection starts, and nothing else: no tracking, no
+   background watching, nothing when somebody is only looking at the rota.
+
+   It NEVER blocks the check. If the phone refuses, has no signal, or takes
+   too long, the inspection carries on and the record says why there is no
+   location. A bus that goes out unchecked because the GPS sulked would be a
+   far worse outcome than a check with a blank location cell. */
+
+var geo = { status:"off" };
+
+function geoWanted(){ return CFG.recordLocation !== false; }
+
+function geoStart(){
+  if(!geoWanted()){ geo={status:"off"}; paintGeo(); return; }
+  if(!navigator.geolocation){ geo={status:"unsupported"}; paintGeo(); return; }
+  geo={status:"asking"}; paintGeo();
+  navigator.geolocation.getCurrentPosition(function(p){
+    geo={ status:"ok",
+          lat:p.coords.latitude, lng:p.coords.longitude,
+          acc:Math.round(p.coords.accuracy||0), at:Date.now() };
+    geo.dist=geoDistance(geo.lat,geo.lng);
+    paintGeo();
+  }, function(err){
+    geo={ status: err && err.code===1 ? "refused"
+                : err && err.code===3 ? "timeout" : "unavailable" };
+    paintGeo();
+  }, { enableHighAccuracy:true, timeout:20000, maximumAge:30000 });
+}
+
+/* Metres between the fix and where the buses are kept, if that is set. */
+function geoDistance(lat,lng){
+  var b=CFG.busBase;
+  if(!b || typeof b.lat!=="number" || typeof b.lng!=="number") return null;
+  var R=6371000, rad=Math.PI/180;
+  var dLat=(lat-b.lat)*rad, dLng=(lng-b.lng)*rad;
+  var a=Math.sin(dLat/2)*Math.sin(dLat/2)+
+        Math.cos(b.lat*rad)*Math.cos(lat*rad)*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return Math.round(R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
+}
+
+/* Only call it away from the bus when the fix is good enough to be sure.
+   A 300 metre accuracy reading proves nothing about a 250 metre radius. */
+function geoAway(){
+  if(geo.status!=="ok" || geo.dist===null) return false;
+  var r=(CFG.busBase && CFG.busBase.radius) || 250;
+  return (geo.dist - (geo.acc||0)) > r;
+}
+
+function geoText(){
+  switch(geo.status){
+    case "off":         return "";
+    case "asking":      return "Finding you\u2026";
+    case "refused":     return "Location turned off for this app. The check still counts, and the record will show it was not given.";
+    case "timeout":     return "Could not get a location in time. Carry on: the record will show it was not available.";
+    case "unavailable": return "No location available here. Carry on: the record will show it was not available.";
+    case "unsupported": return "This phone cannot give a location. Carry on as normal.";
+    case "ok":
+      var d = geo.dist===null ? ""
+        : geoAway() ? " You are about "+geoPretty(geo.dist)+" from where the buses are kept."
+        : " You are at the buses.";
+      return "Recorded to within "+geo.acc+" m."+d;
+  }
+  return "";
+}
+
+function geoPretty(m){ return m<1000 ? m+" m" : (m/1000).toFixed(1)+" km"; }
+
+function paintGeo(){
+  var card=$("geoCard"), line=$("geoLine");
+  if(!card) return;
+  if(!geoWanted()){ card.style.display="none"; return; }
+  card.style.display="";
+  line.textContent=geoText();
+  line.style.color = geoAway() ? "var(--warn)" : "";
+}
+
+/* What goes on the record. */
+function geoRecord(){
+  if(geo.status==="ok"){
+    return { loc: geo.lat.toFixed(6)+", "+geo.lng.toFixed(6),
+             locAcc: geo.acc,
+             locDist: geo.dist===null ? "" : geo.dist,
+             locNote: geoAway() ? "Away from the buses" : "" };
+  }
+  return { loc:"", locAcc:"", locDist:"",
+           locNote: geo.status==="refused"     ? "Driver did not allow location"
+                  : geo.status==="timeout"     ? "No fix in time"
+                  : geo.status==="unsupported" ? "Phone cannot give a location"
+                  : geo.status==="off"         ? "Not recorded"
+                  : "No location available" };
+}
+
 function renderPrep(){
   var v=st.veh;
   $("prepEyebrow").textContent = v.reg + " \u00B7 " + v.name;
@@ -979,6 +1078,9 @@ function renderPrep(){
   $("miles").value = st.miles;
   paintMilesHint();
   paintMode();
+  if(geo.status==="off" || geo.status==="refused" || geo.status==="timeout" ||
+     geo.status==="unavailable") geoStart();
+  else paintGeo();
 }
 
 /* The choice only exists for whoever the register says runs the fleet.
@@ -1195,7 +1297,7 @@ function paintSend(state, extra){
 }
 
 function submit(){
-  var now=new Date(), t=tally();
+  var now=new Date(), t=tally(), g=geoRecord();
   var rec = {
     id: "c"+now.getTime()+"-"+Math.random().toString(36).slice(2,7),
     ts: now.toISOString(),
@@ -1208,6 +1310,7 @@ function submit(){
     sign: st.sign.trim(),
     level: level(), checked: t.done, total: TOTAL,
     kind: st.mode==="full" ? "Full inspection" : "Pre-drive",
+    loc:g.loc, locAcc:g.locAcc, locDist:g.locDist, locNote:g.locNote,
     defects: defectList(),
     na: naList(),
     renewals: dueItems(st.veh).map(function(x){ return x.label+": "+x.words+" ("+prettyDate(x.date)+")"; }).join(" | ")
@@ -1613,6 +1716,7 @@ function rotaClose(){ $("rotaModal").classList.remove("is-on"); $("rotaModal").s
 /* ---------------- reset ---------------- */
 function reset(){
   st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign=""; st.mode="pre";
+  geo={status:"off"};
   stages=[]; ALL=[]; TOTAL=0; lastRec=null;
   renderVehicles(); show("vehicle");
 }
