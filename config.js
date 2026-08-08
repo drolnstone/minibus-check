@@ -5,46 +5,29 @@
 
 window.CONFIG = {
 
-  /* ---- Where checks are sent -------------------------------------------
-     Paste the Apps Script Web App URL here after deploying it.
-     It looks like: https://script.google.com/macros/s/AKfy..../exec
-     Until this is filled in, the app runs in practice mode and sends nothing. */
+  /* The Apps Script Web App URL. Blank means practice mode: nothing is sent. */
   endpoint: "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec",
 
-  /* Must match the token in Code.gs. It stops stray traffic writing to the
-     sheet. It is visible in the page source, so it is a lock on the door,
-     not a safe. Keep the sheet itself private. */
+  /* Must match the token in Code.gs. */
   token: "dominion-minibus",
 
-  /* Who drivers ring when a bus is stopped. The number becomes a tappable
-     call button on the stop screen, so keep it in a dialable form. */
+  /* Who drivers ring when a bus is stopped. Keep the number dialable. */
   coordinator: { name: "Asim Bassey", phone: "07377634214" },
 
-  /* ---- Optional PIN ----------------------------------------------------
-     Off by default. Turn it on and any driver with a "pin" below must key it
-     in before continuing.
-
-     Be clear about what this is: the app is static files, so the PINs are
-     readable by anyone who views the page source. It is a speed bump that
-     stops one driver casually selecting another's name. It is not security,
-     and it will not stop anyone determined. Weigh that against a volunteer
-     who has forgotten four digits at seven on a wet Sunday morning. */
+  /* Set true to make drivers key in a PIN. Off by default. */
   requirePin: false,
 
+  /* Who is offered the full inspection as well as the pre-drive check.
+     Matched against the role in the register below, so adding a second
+     coordinator is a one word change. Everyone else only ever sees the
+     pre-drive check and is not shown a choice. */
+  fullInspectionRoles: ["Coordinator", "Minister in Charge"],
+
   /* ---- Authorised driver register --------------------------------------
-     Everyone the leadership has approved to drive a church bus.
-     Shown as a dropdown, with the role beside the name.
-
-     THIS LIST IS THE REGISTER. Only names here can be selected, and the app
-     offers no way round it. If someone is newly approved, add them here
-     before their first Sunday. If someone should no longer drive, remove
-     them and they disappear from every phone at the next refresh.
-
-     The rota also has a Drivers tab in the spreadsheet. That tab is what the
-     ROTA uses. This list is what the CHECK screen uses. Keep the two in step:
-     add a new driver in both places.
-
-     Optional per driver: pin: "1234"  (only used when requirePin is true) */
+     Only names here can be selected. Add someone before their first Sunday.
+     Remove them and they disappear from every phone at the next refresh.
+     The rota uses the Drivers tab in the spreadsheet, so add new people to
+     both. Optional per driver: pin: "1234" */
   drivers: [
     { name: "Pst Kehinde", role: "Minister in Charge" },
     { name: "Bro Asim",    role: "Coordinator" },
@@ -56,18 +39,9 @@ window.CONFIG = {
   ],
 
   /* ---- Driving rota ----------------------------------------------------
-     The rota repeats this pattern, one name per Sunday, for ever:
-       Adebola, Abiodun, Moses, Asim, then back to Adebola.
-
-     THE SPREADSHEET IS THE OFFICIAL ROTA. These settings are only the
-     fallback the app draws from when it cannot reach the sheet, and the
-     starting point the sheet itself was built from. The live pattern comes
-     from the Drivers tab, using the "Primary order" column.
-
-     rotaAnchor is the Sunday the pattern is counted from. It must be a
-     Sunday and it must match PATTERN_ANCHOR in Code.gs. Moving it changes
-     who drives on every future Sunday that has not been written down, so
-     leave it alone unless you mean to reshuffle the whole rota. */
+     One name per Sunday, repeating. The spreadsheet is the official rota;
+     these are the fallback when the phone cannot reach it.
+     rotaAnchor must be a Sunday and must match PATTERN_ANCHOR in Code.gs. */
   rotaAnchor: "2026-08-02",
 
   rotaPrimaryPattern: [
@@ -77,9 +51,7 @@ window.CONFIG = {
     "Bro Asim"
   ],
 
-  /* Assistance pool. These are not assigned Sundays. They are people who may
-     help where they are available, and any of them can be picked to cover a
-     Sunday when the coordinator needs them. */
+  /* Available to help where they can. Not assigned Sundays. */
   rotaBackups: [
     "Pst Kehinde",
     "Bro Calvin",
@@ -91,32 +63,14 @@ window.CONFIG = {
 /* ==========================================================================
    VEHICLES
 
-     dates    renewal dates as YYYY-MM-DD. Anything within 30 days raises a
-              pulsing amber banner; anything past raises a red one.
-                mot        annual test expiry
-                service    next scheduled service
-                insurance  policy renewal
-                permit     parking permit renewal
-              Leave a date as "" and it is not tracked at all.
-
-     >>> WHERE THESE DATES CAME FROM
-     >>> The two MOT dates are real, taken from the DVSA record.
-     >>> The rest were set by the coordinator in August 2026:
-     >>>   YS70  service and insurance fall with the MOT, 17 June 2027
-     >>>   NH56  service and insurance, July 2027
-     >>>   both  parking permit, January 2027
-     >>>
-     >>> FOUR OF THOSE WERE GIVEN AS A MONTH WITH NO DAY, so they are set to
-     >>> the 1st: both permits, and NH56 service and insurance. The 1st is
-     >>> the safe end of the month to guess, because it warns early rather
-     >>> than late. Put the real day in when you have the paperwork in front
-     >>> of you, or the app will start shouting up to a month too soon.
-
-     watch    per-vehicle fault history, keyed by check item id
-     skip     ids of checks that do not apply to this vehicle
-     override rewrite the name or wording of a check for this vehicle.
-              Use this when a bus has the thing but in a different form.
-              Use skip only when it does not have it at all.
+     dates     renewal dates as YYYY-MM-DD. Within 30 days shows amber,
+               past shows red. Leave one as "" and it is not tracked.
+     watch     per-vehicle fault history from past MOTs, keyed by check id.
+               This is what makes the app worth using: it tells a driver what
+               has actually gone wrong on this bus before.
+     skip      ids of checks this vehicle does not have
+     override  reword a check for this vehicle when it has the thing in a
+               different form. Use skip only when it does not have it at all.
    ========================================================================== */
 
 window.VEHICLES = [
@@ -125,15 +79,15 @@ window.VEHICLES = [
   {
     reg: "YS70 PWE",
     id: "ys70pwe",
-    name: "Ford Transit 460 Trend",
-    detail: "2020 \u00B7 2.0 diesel \u00B7 manual \u00B7 16 passenger seats",
+    name: "Ford Transit 460 Trend EcoBlue",
+    detail: "2020 \u00B7 1,995cc diesel \u00B7 manual \u00B7 17 seats including driver",
     colour: "Silver",
 
     dates: {
-      mot:       "2027-06-17",   // real, from the DVSA record
-      service:   "2027-06-17",   // set to fall with the MOT
-      insurance: "2027-06-17",   // set to fall with the MOT
-      permit:    "2027-01-01"    // January 2027. DAY ASSUMED, see note above
+      mot:       "2027-06-17",
+      service:   "2027-06-17",
+      insurance: "2027-06-26",
+      permit:    "2027-01-31"
     },
 
     /* Factory fitted: retractable step, reversing camera, head up display,
@@ -172,15 +126,15 @@ window.VEHICLES = [
   {
     reg: "NH56 FWP",
     id: "nh56fwp",
-    name: "Ford Transit 2.4",
-    detail: "2007 \u00B7 2.4 diesel \u00B7 manual \u00B7 14 passenger seats",
+    name: "Ford Transit 100 17-seat RWD",
+    detail: "2007 \u00B7 2,402cc diesel \u00B7 manual \u00B7 15 seats including driver",
     colour: "White",
 
     dates: {
-      mot:       "2027-04-28",   // real, from the DVSA record
-      service:   "2027-07-01",   // July 2027. DAY ASSUMED, see note above
-      insurance: "2027-07-01",   // July 2027. DAY ASSUMED, see note above
-      permit:    "2027-01-01"    // January 2027. DAY ASSUMED, see note above
+      mot:       "2027-04-28",
+      service:   "2027-07-01",
+      insurance: "2027-07-08",
+      permit:    "2027-01-31"
     },
 
     watch: {
@@ -198,14 +152,8 @@ window.VEHICLES = [
         "A cracked rear stop lamp lens failed it in 2025. Check the lenses themselves, not just that the bulbs light up."
     },
 
-    /* V5C: Ford Transit, 2.4 diesel, 2007, manual, body plan VAN.
-       15 seats including the driver, so 14 passenger seats. Still a minibus.
-       The gross weight is the remaining unknown and decides the licence
-       position: at or under 3,500kg the volunteer concession can apply to a
-       car licence holder; above it, D1 is required. Confirm from the V5C. */
-
-    /* This bus has no retractable step and no side step. You step straight in
-       through the side door. There is a fixed step at the rear. */
+    /* No retractable step and no side step: you step straight in through the
+       side door. There is a fixed step at the rear. */
     override: {
       reverse_aid: {
         name: "Reversing camera and sounder",

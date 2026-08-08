@@ -148,13 +148,17 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .history{font-size:13.5px;background:var(--warn-bg);border-left:3px solid var(--warn);padding:7px 9px;
   border-radius:0 6px 6px 0;margin:0 0 10px;color:#5A4008}
 .history b{font-weight:600}
-.choose{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.choose{display:grid;grid-template-columns:1fr 1fr auto;gap:9px}
 .choose button{min-height:var(--tap);border:1.5px solid var(--hair);border-radius:8px;background:#fff;
   font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;letter-spacing:.06em;
   text-transform:uppercase;display:flex;align-items:center;justify-content:center;transition:transform .08s}
 .choose button:active{transform:scale(.97)}
 .choose .ok.on{background:var(--pass);border-color:var(--pass);color:#fff}
 .choose .def.on{background:var(--warn);border-color:var(--warn);color:#fff}
+.choose .na{padding:0 16px;color:var(--muted)}
+.choose .na.on{background:var(--muted);border-color:var(--muted);color:#fff}
+.item.is-na{border-left-color:var(--muted);background:#FAFAFB}
+.item.is-na h3{color:var(--muted)}
 .item.crit .choose .def.on{background:var(--stop);border-color:var(--stop)}
 .note{margin-top:10px;display:none}
 .note.is-on{display:block}
@@ -403,6 +407,14 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     <p class="eyebrow" id="prepEyebrow">Vehicle</p>
     <h1 id="prepTitle">Before you start</h1>
     <div id="dueBox"></div>
+    <div class="card" id="modeCard" style="display:none">
+      <div class="lbl" style="margin-bottom:8px">Inspection type</div>
+      <div class="choose">
+        <button type="button" class="ok on" id="modePre">Pre-drive</button>
+        <button type="button" class="def" id="modeFull">Full</button>
+      </div>
+      <div class="hint" id="modeHint"></div>
+    </div>
     <div class="card">
       <div class="field">
         <label for="miles">Mileage now</label>
@@ -520,52 +532,65 @@ var LIVE = !!(CFG.endpoint && CFG.endpoint.indexOf("http") === 0);
 /* ---------------- the shared checklist ---------------- */
 var STAGES = [
   { title:"Outside the bus", lede:"Walk clockwise from the driver's door.", items:[
-    { id:"tyres", name:"Tyres", crit:true, what:"Tread across the full width, edge wear, cuts or bulges in the sidewall, pressures. Include the spare. Look for flat spots from standing." },
+    { id:"tyres", name:"Tyres", crit:true, what:"Tread across the full width, edge wear, cuts or bulges in the sidewall, pressures. Look for flat spots from standing." },
     { id:"nuts", name:"Wheel nuts", crit:true, what:"All present. Position marker arrows still lined up. Rust weeping from a nut means it has moved." },
+    { id:"spare", full:true, name:"Spare wheel, jack and brace", what:"Spare secure in its carrier, not hanging loose, and with air in it. A flat spare is no spare. Jack and wheelbrace stowed with it." },
     { id:"lights", name:"Lights", what:"Sidelights, dipped, main beam, indicators, hazards, brake lights, reverse, fogs, number plate lamp." },
+    { id:"reflectors", full:true, name:"Reflectors and markings", what:"Rear reflectors and any reflective markings present, clean and not cracked. These are what make the bus visible when your lights are off." },
     { id:"fbrake", name:"Front brakes", crit:true, what:"Look through the front wheels at the disc face. Heavy scoring, a deep lip, or one side much cleaner than the other." },
-    { id:"body", name:"Body and glass", what:"Chips or cracks in the wiper area. Sliding door runs freely on its track." },
+    { id:"doors", name:"Passenger and cab doors", crit:true, what:"Every door opens, closes and latches from outside and in. Sliding door runs its track without forcing. Seals not hanging off. A door that will not stay shut is a stop." },
+    { id:"body", name:"Body and glass", what:"Chips or cracks in the wiper area. Windows sound. Panels secure with nothing hanging or sharp." },
     { id:"clean", name:"Clean enough to be safe", what:"Lights, mirrors, windows and both number plates clean enough to work. Inside free of rubbish. If the bus is too dirty to see out of or be seen, that is a defect, not an inconvenience." },
-    { id:"corrosion", name:"Rust and structure", what:"Sills, wheel arches, step mounts and anywhere the body meets the chassis. Flaking or soft metal, not surface staining." },
+    { id:"corrosion", full:true, name:"Rust and structure", what:"Sills, wheel arches, step mounts and anywhere the body meets the chassis. Flaking or soft metal, not surface staining." },
     { id:"under", name:"Underneath", what:"Look under the bus for fresh oil, coolant or fuel on the road after standing all week." },
     { id:"pipes", name:"Brake pipes and lines", crit:true, what:"Look along the chassis rails and behind each wheel for damp or wet patches, or a pipe that is flaking rather than just dusty." },
     { id:"suspension", name:"Suspension and ride height", what:"Bus sitting level, not down at one corner. Listen for knocking over the first bumps." },
     { id:"exhaust", name:"Exhaust", what:"Present and secure. Nothing cut away underneath. Listen for a change in note at start up." },
-    { id:"plates", name:"Number plates", what:"Clean, readable and secure front and rear." }
+    { id:"fuel", name:"Fuel and filler cap", what:"Enough for the run and back. Cap present and tight. No smell of diesel or wetness around the filler." },
+    { id:"plates", full:true, name:"Number plates", what:"Clean, readable and secure front and rear." }
   ]},
   { title:"Under the bonnet", lede:"Engine cold, before the first start.", items:[
     { id:"oil", name:"Engine oil", what:"Dipstick between min and max. If the level is ABOVE max, report it. That is a warning sign, not a good thing." },
     { id:"coolant", name:"Coolant", what:"Between min and max on the tank, engine cold." },
     { id:"bfluid", name:"Brake fluid", crit:true, what:"At or near max. If it has dropped, report it. Do not just top it up." },
+    { id:"pas", full:true, name:"Power steering fluid", what:"Between the marks. Look for weeping at the pipes and where the rack sits behind the front wheel." },
     { id:"wash", name:"Screenwash", what:"Full. Winter mix from October onwards." },
     { id:"adblue", name:"AdBlue", what:"Check the gauge or dash message. Never let it run empty or the engine will not restart." },
-    { id:"belts", name:"Belts and hoses", what:"Look only. Cracking, fraying, or a hose that looks swollen at the clip." }
+    { id:"battery", full:true, name:"Battery", what:"Clamped down and not moving. Terminals tight and free of white powder. No cracks, no swelling, nothing weeping underneath." },
+    { id:"belts", full:true, name:"Belts and hoses", what:"Look only. Cracking, fraying, or a hose that looks swollen at the clip." }
   ]},
   { title:"Inside the saloon", lede:"Where the passengers sit. Take your time here.", items:[
     { id:"belts_seat", name:"Seat belts", crit:true, what:"Pull each belt fully out, look for fraying, click it into the buckle, check it locks and releases. Every seat." },
     { id:"anchor", name:"Seat anchorages", crit:true, what:"Push and pull each seat frame. Any movement where it meets the floor is a defect. Do not carry passengers in it." },
+    { id:"seats", full:true, name:"Seat condition", what:"Frames sound, cushions not torn through to metal or springs. Headrests where they should be. Nothing sharp at head height." },
+    { id:"handrails", full:true, name:"Handrails and grab handles", what:"Every one. Pull on it. A handle that turns in its mounting is worse than none, because somebody will trust it." },
     { id:"step", name:"Step", what:"Whatever step this bus has: smooth and complete if it deploys, secure and not slippery if it is fixed. No trip edge where passengers put their feet." },
     { id:"exits", name:"Emergency exits", crit:true, what:"Rear door and side exit open from the inside. Roof hatch works. Nothing stored in front of an exit." },
-    { id:"gangway", name:"Gangway and hammers", what:"Gangway clear of bags and equipment, floor dry. Break glass hammers clipped into their brackets, not loose." },
+    { id:"signage", full:true, name:"Safety signage", what:"Emergency exit instructions readable at each exit. Hammer positions marked. Nothing painted over or peeled away." },
+    { id:"gangway", name:"Gangway and hammers", what:"Gangway clear of bags and equipment, floor dry and sound underfoot. Break glass hammers clipped into their brackets, not loose." },
+    { id:"intlights", full:true, name:"Interior and step lights", what:"Saloon lights and the light over the step. A dark step on a winter evening is how people fall." },
+    { id:"wheelchair", full:true, name:"Wheelchair ramp and restraints", what:"Ramp or lift deploys and stows. Tie-down webbing not frayed, buckles latch, floor anchorages clear of grit and not damaged. Occupant belt works. Not applicable if this bus carries none." },
     { id:"extinguisher", name:"Fire extinguisher", what:"Present, in date, gauge in the green, seal unbroken, bracket tight." },
     { id:"firstaid", name:"First aid kit", what:"Present, sealed, contents in date." },
-    { id:"cabin", name:"General condition", what:"No sharp edges, exposed metal or loose wiring." }
+    { id:"cabin", full:true, name:"General condition", what:"No sharp edges, exposed metal or loose wiring." }
   ]},
   { title:"In the cab", lede:"Engine running, before anyone gets on.", items:[
     { id:"abs", name:"ABS warning lamp", crit:true, what:"Must come on at ignition then go out. If it stays on, the bus does not run." },
     { id:"lamps", name:"Other warning lights", what:"All lamps come on then go out. An amber engine or DPF light means report before loading passengers." },
     { id:"brakes", name:"Brakes", crit:true, what:"Firm pedal, no sinking to the floor. Handbrake holds on a slope. Controlled stop at low speed before the first pick up. Listen for grinding or pulling to one side." },
-    { id:"steering", name:"Steering", crit:true, what:"No excess free play. No knocking on full lock." },
+    { id:"steering", name:"Steering", crit:true, what:"No excess free play. No knocking on full lock. Power assistance working, not heavy at low speed." },
     { id:"clutch", name:"Clutch and gears", what:"Bite point where you expect it, not right at the top of the pedal. All gears select cleanly, including reverse. No slipping when you pull away." },
     { id:"reverse_aid", name:"Reversing camera and sensors", what:"Select reverse with the engine running. Picture clear and not fogged or frozen. Sensors and reversing sounder audible. Never rely on them alone: they are an aid, not a substitute for looking." },
-    { id:"mirrors", name:"Mirrors and wipers", what:"All mirrors clean, adjusted and secure, and folded out. Blades not torn or smearing." },
-    { id:"infotainment", name:"Radio and dash display", what:"Radio and speakers work at the back as well as the front, so you can be heard. Dash display readable and not stuck on a warning screen." },
-    { id:"cab", name:"Horn, heater, demist", what:"All working. Insurance certificate in date and on board." }
+    { id:"mirrors", name:"Mirrors, wipers and washers", what:"All mirrors clean, adjusted, secure and folded out. Blades not torn or smearing. Washers reaching the screen." },
+    { id:"limiter", full:true, name:"Speed limiter", what:"If this bus has one: no warning lamp, and it is not cutting in below its set speed. Not applicable if none is fitted." },
+    { id:"infotainment", full:true, name:"Radio and dash display", what:"Radio and speakers work at the back as well as the front, so you can be heard. Dash display readable and not stuck on a warning screen." },
+    { id:"cab", name:"Horn, heater, demist", what:"All working. Demist clears the whole screen, not just a patch in front of you." },
+    { id:"docs", full:true, name:"Documents on board", what:"Insurance in date. Any permit or paperwork this bus must carry. Breakdown number somewhere you could find it in the dark." }
   ]}
 ];
 
 /* ---------------- state ---------------- */
-var st = { screen:"driver", veh:null, stage:0, driver:"", role:"", pin:"", miles:"", mileOk:false, sign:"", res:{} };
+var st = { screen:"driver", veh:null, mode:"pre", stage:0, driver:"", role:"", pin:"", miles:"", mileOk:false, sign:"", res:{} };
 var stages = [];   /* the stage list for the chosen vehicle */
 var ALL = [];
 var TOTAL = 0;
@@ -581,9 +606,17 @@ function ukDate(d){ return pad2(d.getDate())+"/"+pad2(d.getMonth()+1)+"/"+d.getF
 function ukTime(d){ return pad2(d.getHours())+":"+pad2(d.getMinutes()); }
 
 /* ---------------- build vehicle checklist ---------------- */
+/* Two lists out of one.
+   Pre-drive is what a driver does before carrying anyone: the things that
+   change between Sundays, and the things that stop the bus.
+   The full inspection adds the slower, deeper items on top. It is the
+   coordinator's job, not something to put in front of a volunteer at seven
+   on a wet Sunday morning. */
 function buildFor(v){
+  var full = st.mode === "full";
   stages = STAGES.map(function(s){
     return { title:s.title, lede:s.lede, items:s.items.filter(function(it){
+      if(it.full && !full) return false;
       return !(v.skip||[]).length || (v.skip||[]).indexOf(it.id) === -1;
     }).map(function(it){
       var copy = { id:it.id, name:it.name, what:it.what, crit:!!it.crit };
@@ -600,6 +633,13 @@ function buildFor(v){
   ALL = [];
   stages.forEach(function(s){ s.items.forEach(function(it){ ALL.push(it); }); });
   TOTAL = ALL.length;
+}
+
+/* Who is offered the full inspection. Roles, not names, so adding a second
+   coordinator is a one line change in config.js. */
+function canDoFull(){
+  var roles = CFG.fullInspectionRoles || ["Coordinator"];
+  return roles.indexOf(st.role) !== -1;
 }
 
 /* ---------------- last recorded mileage ---------------- */
@@ -821,7 +861,7 @@ window.addEventListener("popstate", function(){
 
 /** Clears the finished check and returns to the first screen. */
 function goHome(){
-  st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign="";
+  st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign=""; st.mode="pre";
   stages=[]; ALL=[]; TOTAL=0; lastRec=null;
   paintBanner();
   show("driver");
@@ -938,6 +978,30 @@ function renderPrep(){
   $("dueBox").innerHTML = dueHTML(v);
   $("miles").value = st.miles;
   paintMilesHint();
+  paintMode();
+}
+
+/* The choice only exists for whoever the register says runs the fleet.
+   Everyone else gets the pre-drive check and never sees a second option. */
+function paintMode(){
+  var card=$("modeCard");
+  if(!canDoFull()){ st.mode="pre"; card.style.display="none"; buildFor(st.veh); return; }
+  card.style.display="";
+  var full = st.mode==="full";
+  $("modePre").classList.toggle("on", !full);
+  $("modeFull").classList.toggle("on", full);
+  buildFor(st.veh);
+  $("modeHint").textContent = full
+    ? TOTAL+" items. The full inspection, including the slower structural checks."
+    : TOTAL+" items. What a driver checks before carrying anyone.";
+}
+
+function setMode(m){
+  if(st.mode===m) return;
+  st.mode=m;
+  st.res={};          /* a different list means the old answers no longer line up */
+  st.stage=0;
+  paintMode(); paintFoot();
 }
 
 /* ---------------- stages ---------------- */
@@ -958,7 +1022,7 @@ function renderStage(){
   s.items.forEach(function(it){
     var r=st.res[it.id];
     var el=document.createElement("article");
-    el.className="item"+(it.crit?" crit":"")+(r?(r.v==="ok"?" is-pass":" is-def"):"");
+    el.className=itemClass(it,r);
     var tags="";
     if(it.crit) tags+='<span class="tag t-crit">Stops the bus</span>';
     if(it.history) tags+='<span class="tag t-watch">Known history</span>';
@@ -970,27 +1034,31 @@ function renderStage(){
       '<div class="choose">'+
         '<button type="button" class="ok'+(r&&r.v==="ok"?" on":"")+'">Fine</button>'+
         '<button type="button" class="def'+(r&&r.v==="def"?" on":"")+'">Defect</button>'+
+        '<button type="button" class="na'+(r&&r.v==="na"?" on":"")+'">N/A</button>'+
       '</div>'+
       '<div class="note'+(r&&r.v==="def"?" is-on":"")+'">'+
         '<div class="lbl">What did you find?</div>'+
         '<textarea placeholder="Describe it plainly. A few words is enough."></textarea>'+
       '</div>';
 
-    var bOk=el.querySelector(".ok"), bDef=el.querySelector(".def");
+    var bOk=el.querySelector(".ok"), bDef=el.querySelector(".def"), bNa=el.querySelector(".na");
     var note=el.querySelector(".note"), ta=el.querySelector("textarea");
     if(r&&r.note) ta.value=r.note;
 
-    bOk.addEventListener("click",function(){
-      st.res[it.id]={v:"ok"};
-      bOk.classList.add("on"); bDef.classList.remove("on"); note.classList.remove("is-on");
-      el.className="item"+(it.crit?" crit":"")+" is-pass";
+    function pick(v){
+      st.res[it.id] = v==="def" ? { v:"def", note:ta.value } : { v:v };
+      bOk.classList.toggle("on", v==="ok");
+      bDef.classList.toggle("on", v==="def");
+      bNa.classList.toggle("on", v==="na");
+      note.classList.toggle("is-on", v==="def");
+      el.className=itemClass(it, st.res[it.id]);
       paintDash(); paintFoot();
-    });
+    }
+
+    bOk.addEventListener("click",function(){ pick("ok"); });
+    bNa.addEventListener("click",function(){ pick("na"); });
     bDef.addEventListener("click",function(){
-      st.res[it.id]={v:"def",note:ta.value};
-      bDef.classList.add("on"); bOk.classList.remove("on"); note.classList.add("is-on");
-      el.className="item"+(it.crit?" crit":"")+" is-def";
-      paintDash(); paintFoot();
+      pick("def");
       if(it.crit) toast("Critical defect. The bus does not run. Tap Call at the top.");
       setTimeout(function(){ ta.focus(); },120);
     });
@@ -1001,10 +1069,23 @@ function renderStage(){
   });
 }
 
+/* Not applicable is a real answer, not a skipped one: it says the driver
+   looked and this bus does not have the thing. It is recorded as such. */
+function itemClass(it,r){
+  return "item"+(it.crit?" crit":"")+
+    (!r ? "" : r.v==="ok" ? " is-pass" : r.v==="na" ? " is-na" : " is-def");
+}
+
 /* ---------------- review ---------------- */
 function defectList(){
   return ALL.filter(function(it){ var r=st.res[it.id]; return r&&r.v==="def"; })
     .map(function(it){ return { name:it.name, crit:!!it.crit, note:(st.res[it.id].note||"").trim() }; });
+}
+/* Recorded so the sheet shows what was looked at and found not to apply,
+   rather than leaving a silent gap that reads like a missed item. */
+function naList(){
+  return ALL.filter(function(it){ var r=st.res[it.id]; return r&&r.v==="na"; })
+    .map(function(it){ return it.name; });
 }
 function defsHTML(defs){
   if(!defs.length) return "";
@@ -1025,14 +1106,17 @@ function verdictHTML(lv,defs){
 function sumHTML(rec){
   var t=tally(), now=new Date();
   var r = rec || { date:ukDate(now), time:ukTime(now), reg:st.veh?st.veh.reg:"", driver:st.driver,
-                   miles:st.miles, checked:t.done, total:TOTAL, defects:defectList() };
+                   miles:st.miles, checked:t.done, total:TOTAL, defects:defectList(), na:naList(),
+                   kind: st.mode==="full" ? "Full inspection" : "Pre-drive" };
   function row(k,v){ return '<div class="sum-row"><b>'+esc(k)+'</b><span class="v">'+esc(v)+'</span></div>'; }
-  return row("Vehicle", r.reg) +
+  return row("Check", r.kind || "Pre-drive") +
+         row("Vehicle", r.reg) +
          row("Date", r.date+" "+r.time) +
          row("Driver", r.driver||"\u2014") +
          row("Mileage", r.miles?Number(r.miles).toLocaleString("en-GB"):"\u2014") +
          row("Items checked", r.checked+" of "+r.total) +
-         row("Defects", r.defects.length?String(r.defects.length):"None");
+         row("Defects", r.defects.length?String(r.defects.length):"None") +
+         ((r.na&&r.na.length)?row("Not applicable", r.na.join(", ")):"");
 }
 function renderReview(){
   $("verdict").innerHTML = verdictHTML(level(), defectList());
@@ -1123,7 +1207,9 @@ function submit(){
     milesFlag: (function(){ var pr=mileProblem(); return pr ? (pr.kind==="low"?"LOWER THAN LAST":"Large jump") : ""; })(),
     sign: st.sign.trim(),
     level: level(), checked: t.done, total: TOTAL,
+    kind: st.mode==="full" ? "Full inspection" : "Pre-drive",
     defects: defectList(),
+    na: naList(),
     renewals: dueItems(st.veh).map(function(x){ return x.label+": "+x.words+" ("+prettyDate(x.date)+")"; }).join(" | ")
   };
   lastRec = rec;
@@ -1194,6 +1280,7 @@ function renderPending(){
 function recText(r){
   var L=[];
   L.push("MINIBUS CHECK \u2014 "+r.reg);
+  L.push((r.kind||"Pre-drive").toUpperCase());
   L.push(r.date+" at "+r.time);
   L.push("Driver: "+r.driver);
   L.push("Mileage: "+r.miles);
@@ -1205,6 +1292,10 @@ function recText(r){
   r.defects.forEach(function(d){
     L.push("- "+d.name+(d.crit?" (CRITICAL)":"")+(d.note?": "+d.note:""));
   });
+  if(r.na && r.na.length){
+    L.push("");
+    L.push("Not applicable to this bus: "+r.na.join(", "));
+  }
   L.push("");
   L.push("Signed: "+r.sign);
   return L.join("\n");
@@ -1521,7 +1612,7 @@ function rotaClose(){ $("rotaModal").classList.remove("is-on"); $("rotaModal").s
 
 /* ---------------- reset ---------------- */
 function reset(){
-  st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign="";
+  st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign=""; st.mode="pre";
   stages=[]; ALL=[]; TOTAL=0; lastRec=null;
   renderVehicles(); show("vehicle");
 }
@@ -1570,6 +1661,8 @@ $("pin").addEventListener("input",function(){ st.pin=this.value; paintFoot(); })
 $("miles").addEventListener("input",function(){
   st.miles=this.value; st.mileOk=false; paintMilesHint(); paintFoot();
 });
+$("modePre").addEventListener("click",function(){ setMode("pre"); });
+$("modeFull").addEventListener("click",function(){ setMode("full"); });
 $("mileConfirm").addEventListener("click",function(){
   st.mileOk=!st.mileOk;
   this.classList.toggle("is-on",st.mileOk);

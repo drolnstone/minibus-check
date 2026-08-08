@@ -111,8 +111,10 @@ function handleCheck(c) {
   var checks = sheet(ss, CHECKS_SHEET, [
     "Received", "Check ID", "Date", "Time", "Vehicle", "Registration",
     "Driver", "Role", "Mileage", "Mileage flag", "Outcome",
-    "Items checked", "Defect count", "Defects", "Renewals due", "Signed"
+    "Items checked", "Defect count", "Defects", "Renewals due", "Signed",
+    "Not applicable", "Check type"
   ]);
+  ensureChecksColumns(checks);
 
   // Never write the same check twice, even if the phone retries.
   if (alreadyHave(checks, c.id)) {
@@ -131,7 +133,8 @@ function handleCheck(c) {
     new Date(), c.id, c.date || "", c.time || "", c.vehicle || "", c.reg || "",
     c.driver || "", c.role || "", c.miles || "", c.milesFlag || "", outcome,
     (c.checked || "") + "/" + (c.total || ""),
-    (c.defects || []).length, defectText, c.renewals || "", c.sign || ""
+    (c.defects || []).length, defectText, c.renewals || "", c.sign || "",
+    (c.na || []).join(", "), c.kind || "Pre-drive"
   ]);
 
   // One row per defect as well, so the coordinator can filter and chase them.
@@ -154,6 +157,25 @@ function handleCheck(c) {
   }
 
   return reply({ ok: true });
+}
+
+/**
+ * Adds any column this version writes that an older sheet does not have yet.
+ * Only ever appends on the right, so every existing row keeps its meaning and
+ * nothing already recorded moves.
+ */
+function ensureChecksColumns(sh) {
+  var want = ["Not applicable", "Check type"];
+  var lastCol = sh.getLastColumn();
+  var head = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
+    return String(h || "").trim();
+  });
+  want.forEach(function (name) {
+    if (head.indexOf(name) !== -1) return;
+    lastCol++;
+    sh.getRange(1, lastCol).setValue(name).setFontWeight("bold");
+    head.push(name);
+  });
 }
 
 function lastMileagePayload() {

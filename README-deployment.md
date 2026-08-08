@@ -46,7 +46,7 @@ brand new deployment instead, you must paste the new URL into `config.js`.
 
 Replace `index.html`, `config.js` and `sw.js` on your host.
 
-`sw.js` has been bumped to `minibus-check-v18`. That is what tells every
+`sw.js` has been bumped to `minibus-check-v22`. That is what tells every
 phone to throw away its old copy. If you ever edit `index.html` or
 `config.js` again, bump that number again or phones will keep the old app.
 
@@ -188,22 +188,50 @@ person. Approve or reject is the whole of it.
 
 ---
 
-## Still on your list
+## The checklist
 
-These are not faults in the app, but they are worth settling:
+There are two lists, built from one set of 48 items.
 
-- **Four renewal dates were given as a month with no day**, so they sit on
-  the 1st: both parking permits (January 2027), and NH56's service and
-  insurance (July 2027). The 1st warns early rather than late, which is the
-  safe way to be wrong, but it can shout up to a month too soon. Put the real
-  day into `config.js` when you have the paperwork to hand.
-- The **gross weight of NH56 FWP** is unconfirmed. It decides the licence
-  position: at or under 3,500kg the volunteer concession can apply to a car
-  licence holder; above it, D1 is required. Confirm it from the V5C.
+**Pre-drive — 32 items.** What every driver does before carrying anyone. All
+12 critical items are in it. This is the only list most drivers ever see, and
+they are not shown a choice.
 
-## When each renewal banner appears
+**Full inspection — 48 items.** The pre-drive list plus the slower structural
+and equipment checks: corrosion, seat and handrail condition, battery, spare
+wheel, wheelchair restraints, documents. This is coordinator work.
 
-Nothing shows now. The first is **2 December 2026**, when both parking
-permits go amber. After that: NH56 MOT on 29 March 2027, YS70's MOT, service
-and insurance together on 18 May 2027, and NH56 service and insurance on
-1 June 2027.
+Who gets the choice is set by `fullInspectionRoles` in `config.js`, matched
+against the role in the driver register. It is currently Coordinator and
+Minister in Charge. The choice appears on the mileage screen. Switching type
+clears any answers already given, because the two lists are different.
+
+Every check records which type it was, in the **Check type** column.
+
+### The three answers
+
+Each item has **Fine**, **Defect**, and **N/A**.
+
+N/A is for something this bus genuinely does not have — a wheelchair ramp on a
+bus with none, a speed limiter that was never fitted. It counts as answered,
+never as a defect, and never stops the bus. It goes to its own column, so a
+gap in the record means an item was missed, not that it did not apply.
+
+A defect has to be described before the driver can move on. N/A does not.
+
+### Upgrading an existing sheet
+
+Two columns are new: **Not applicable** and **Check type**. They are added to
+the right-hand end of the Checks sheet automatically on the next check, so
+nothing already recorded moves.
+
+## Renewal dates
+
+| | YS70 PWE | NH56 FWP |
+|---|---|---|
+| MOT | 17 Jun 2027 | 28 Apr 2027 |
+| Service | 17 Jun 2027 | 1 Jul 2027 |
+| Insurance | 26 Jun 2027 | 8 Jul 2027 |
+| Parking permit | 31 Jan 2027 | 31 Jan 2027 |
+
+Within 30 days shows amber, past shows red. Nothing shows today. The first is
+**1 January 2027**, when both parking permits go amber.
