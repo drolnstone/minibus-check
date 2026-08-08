@@ -1778,9 +1778,10 @@ function rotaSyncRegister(list){
     if(mine) next.push(mine);
   }
 
-  var before = REGISTER.map(function(d){ return d.name+"|"+d.role; }).sort().join(",");
-  var after  = next.map(function(d){ return d.name+"|"+d.role; }).sort().join(",");
-  if(before===after) return;
+  function fingerprint(list){
+    return list.map(function(d){ return d.name+"|"+d.role+"|"+(d.pin||""); }).sort().join(",");
+  }
+  if(fingerprint(REGISTER)===fingerprint(next)) return;
 
   REGISTER = next;
 
@@ -1797,6 +1798,12 @@ function rotaSyncRegister(list){
     if(chosen && entryFor(chosen)) sel.value=chosen;
   }
   if(st.driver) st.role = roleOf(st.driver);
+
+  /* The register usually lands a second or two after the screen is drawn.
+     Without these the PIN box would stay hidden until the driver changed
+     their name and changed it back. */
+  showPinField();
+  paintFoot();
 }
 /* Draw now, correct later. rotaPaint never waits for the network. */
 function rotaRender(keepPosition,anchorKey){
@@ -2120,7 +2127,7 @@ function checkPin(){
   }).catch(function(){ st.pinOk = true; paintFoot(); });
 }
 function showPinField(){
-  var need = !!CFG.requirePin && !!st.driver && !!pinFor(st.driver);
+  var need = pinNeeded();   /* same test as the gate, so they cannot diverge */
   $("pinField").style.display = need ? "" : "none";
   if(!need){ st.pin=""; st.pinOk=false; $("pin").value=""; }
 }
