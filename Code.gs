@@ -760,6 +760,129 @@ function driversHeaderWarning(ss) {
   } catch (err) { return ""; }
 }
 
+/**
+ * Fills in Route for drivers we already know about, and only where the cell
+ * is empty.
+ *
+ * Writing the heading without the values was a real fault, not a cosmetic
+ * one. Blank counts as North, so every ordered driver collapsed into one
+ * seven name North pattern and the North rota ran through the South drivers.
+ * A heading with nothing under it is worse than no heading at all, because
+ * everything downstream reads it as a deliberate answer.
+ *
+ * Anyone not in the built-in list is left blank on purpose. Guessing at a
+ * name we do not recognise would be inventing a fact about a person.
+ */
+function backfillRoutes(sh) {
+  var last = sh.getLastRow();
+  if (last < 2) return 0;
+
+  var known = {};
+  SEED_DRIVERS.forEach(function (d) { if (d.route) known[d.name] = d.route; });
+
+  var names  = sh.getRange(2, 1, last - 1, 1).getValues();
+  var routes = sh.getRange(2, 7, last - 1, 1).getValues();
+  var filled = 0;
+
+  for (var i = 0; i < names.length; i++) {
+    if (String(routes[i][0] || "").trim()) continue;      // already answered
+    var r = known[String(names[i][0] || "").trim()];
+    if (!r) continue;                                     // not ours to guess
+    routes[i][0] = r;
+    filled++;
+  }
+  if (filled) sh.getRange(2, 7, last - 1, 1).setValues(routes);
+  return filled;
+}
+
+/**
+ * Puts the scheduled names back where the pattern says they should be, for
+ * Sundays still to come.
+ *
+ * Needed once, because rows were written while the Route column was empty
+ * and the North pattern was running through all seven drivers.
+ *
+ * It will not touch a Sunday that anybody has already worked on: not the
+ * past, not a row with a cover filled in, and not a row whose Status has
+ * been moved off Confirmed. Those are decisions somebody made, and a repair
+ * that quietly overwrites decisions is worse than the fault it fixes.
+ */
+function rebuildFutureRota() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+
+  ensureDrivers(ss);                       // make sure Route is filled first
+  var pattern = bothPatterns(ss);
+
+  if (pattern.north.length !== 4 || !pattern.south.length) {
+    ui.alert("Check the Drivers tab first.\n\n" +
+             "North pattern: " + (pattern.north.join(", ") || "(empty)") + "\n" +
+             "South pattern: " + (pattern.south.join(", ") || "(empty)") + "\n\n" +
+             "If the North list is not the four North drivers, the Route column " +
+             "is not filled in and rebuilding now would just write the same " +
+             "wrong names back.");
+    return;
+  }
+
+  var sh = ss.getSheetByName(ROTA_SHEET);
+  if (!sh || sh.getLastRow() < 2) { ui.alert("No rota rows to rebuild."); return; }
+
+  var n = sh.getLastRow() - 1;
+  var vals = sh.getRange(2, 1, n, 6).getValues();
+  var today = sundayOf(new Date());
+  var changes = [], skipped = 0;
+
+  for (var i = 0; i < n; i++) {
+    var key = anyToKey(vals[i][0]);
+    if (!key) continue;
+    var d = keyToDate(key);
+    if (d < today) continue;                                  // been and gone
+
+    var status = String(vals[i][3] || "").trim();
+    var hasCover = String(vals[i][2] || "").trim() || String(vals[i][5] || "").trim();
+    if (hasCover || (status && status !== "Confirmed")) { skipped++; continue; }
+
+    var wantN = patternDriver(d, pattern.north);
+    var wantS = southDriver(d, pattern.south);
+    if (String(vals[i][1] || "").trim() === wantN &&
+        String(vals[i][4] || "").trim() === wantS) continue;   // already right
+
+    changes.push({ row: i + 2, key: key,
+                   fromN: String(vals[i][1] || "").trim(), toN: wantN,
+                   fromS: String(vals[i][4] || "").trim(), toS: wantS });
+  }
+
+  if (!changes.length) {
+    ui.alert("Nothing to rebuild. Every future Sunday already matches the pattern." +
+             (skipped ? "\n\n" + skipped + " were left alone because they have a cover " +
+                        "or a status you set by hand." : ""));
+    return;
+  }
+
+  var preview = changes.slice(0, 8).map(function (c) {
+    return "  " + c.key + "   " + (c.fromN || "(blank)") + " -> " + c.toN;
+  }).join("\n");
+
+  var answer = ui.alert(
+    "Rebuild " + changes.length + " Sunday" + (changes.length === 1 ? "" : "s") + "?",
+    preview + (changes.length > 8 ? "\n  ...and " + (changes.length - 8) + " more" : "") +
+    (skipped ? "\n\n" + skipped + " Sundays will be left alone because they have a " +
+               "cover or a status you set by hand." : "") +
+    "\n\nThis cannot be undone from the menu.",
+    ui.ButtonSet.YES_NO);
+  if (answer !== ui.Button.YES) return;
+
+  changes.forEach(function (c) {
+    sh.getRange(c.row, 2).setValue(c.toN);
+    sh.getRange(c.row, 5).setValue(c.toS);
+    stamp(sh, c.row, "Pattern rebuild");
+  });
+  bumpRotaVersion();
+
+  ui.alert(changes.length + " Sundays rebuilt." +
+           (skipped ? "\n" + skipped + " left alone." : ""));
+}
+
 function checkDriversTab() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var ui = SpreadsheetApp.getUi();
@@ -930,6 +1053,7 @@ function ensureDrivers(ss) {
     var g1 = String(sh.getRange(1, 7).getValue() || "").trim();
     if (!g1) {
       sh.getRange(1, 7).setValue("Route").setFontWeight("bold");
+      backfillRoutes(sh);
       sh.getRange(1, 7).setNote(
         "North or South. Blank counts as North, so rows written before the\n" +
         "South route started keep working without being edited.");
@@ -1746,6 +1870,7 @@ function onOpen() {
     .addItem("Check time zone", "checkTimeZoneMenu")
     .addSeparator()
     .addItem("Repair old fuel readings (run once)", "repairFuelColumn")
+    .addItem("Rebuild future Sundays from the pattern", "rebuildFutureRota")
     .addToUi();
 }
 
@@ -2163,8 +2288,17 @@ function keyToDate(key) {
 }
 
 /** Cells may hold a real Date or text. Accept both, return YYYY-MM-DD. */
+/* Duck-typed rather than "instanceof Date", to match repairFuelColumn.
+   instanceof tests against one particular Date constructor, so a real date
+   that arrived from anywhere else fails it and this returns "" instead of a
+   key. Silently returning "" from a date parser makes whatever called it
+   quietly skip the row and report success. */
+function isDateLike(v) {
+  return !!v && typeof v.getMonth === "function" && typeof v.getDate === "function";
+}
+
 function anyToKey(v) {
-  if (v instanceof Date) return dateToKey(v);
+  if (isDateLike(v)) return dateToKey(v);
   var s = String(v || "").trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {

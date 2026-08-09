@@ -303,8 +303,20 @@ order to fit somebody else's.
 
 The **Route** column on the Drivers tab says which pattern somebody belongs
 to, and **Primary order** is numbered separately per route, so both start at
-1. A blank Route counts as North, so rows written before the South route
-started keep working untouched.
+1. A blank Route counts as North.
+
+That default is worth understanding. If Route is blank for everybody, every
+ordered driver counts as North and the North rota runs through all of them in
+one long cycle, which is not obviously wrong at a glance: the names are all
+real and the Sundays all look filled. Set up / refresh rota fills Route in for
+drivers it recognises, and **Minibus → Check the Drivers tab** shows the two
+patterns so you can see at a glance that North has four names and South has
+three. If a rota ever looks subtly wrong, check that first.
+
+**Minibus → Rebuild future Sundays from the pattern** puts the scheduled names
+back where the pattern says, for Sundays still to come. It will not touch the
+past, a Sunday with a cover filled in, or one whose Status you moved off
+Confirmed.
 
 The two slots are named after the routes rather than the vehicles, because
 which bus runs which route can change on the day. The script reads this tab by
