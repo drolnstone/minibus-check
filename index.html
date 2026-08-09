@@ -288,6 +288,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:2px}
 .footer-brand{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:22px;opacity:.75}
 .footer-brand img{width:24px;height:24px}
+.version{text-align:center;margin-top:6px;font-family:"Barlow Condensed",sans-serif;
+  font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--hair)}
 .footer-brand span{font-family:"Barlow Condensed",sans-serif;font-size:12.5px;letter-spacing:.12em;
   text-transform:uppercase;color:var(--muted)}
 
@@ -431,6 +433,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     </div>
     <p class="tiny" id="modeNote"></p>
     <div class="footer-brand"><img src="logo.png" alt=""><span>RCCG Dominion Assembly Liverpool</span></div>
+    <div class="version" id="appVersion"></div>
   </section>
 
   <!-- 2. VEHICLE -->
@@ -578,6 +581,10 @@ var store = {
 };
 var QKEY = "fleet.queue.v1";
 var NKEY = "fleet.driver";
+
+/* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
+   you can tell at a glance which copy a phone is actually running. */
+var APP_VERSION = "v40";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -2094,6 +2101,34 @@ function entryFor(name){
 }
 function roleOf(name){ var e=entryFor(name); return e?e.role:""; }
 function pinFor(name){ var e=entryFor(name); return e?String(e.pin||""):""; }
+
+/* Four separate things must all be true before the PIN box appears, and any
+   one of them failing hides it without a word. Tap the version line at the
+   bottom of the first screen and this says which. */
+function pinDiagnosis(){
+  var withPin = REGISTER.filter(function(d){ return d.pin; }).length;
+  var L = [];
+  L.push("App version: " + APP_VERSION);
+  L.push("");
+  L.push("1. requirePin in config.js");
+  L.push("   " + (CFG.requirePin ? "ON" : "OFF  <-- upload the new config.js"));
+  L.push("");
+  L.push("2. Secure page, needed to check a PIN");
+  L.push("   " + (canHash() ? "yes"
+        : "NO  <-- the page must be https, not http"));
+  L.push("");
+  L.push("3. Register loaded from the spreadsheet");
+  L.push("   " + REGISTER.length + " names, " + withPin + " with a PIN" +
+         (withPin ? "" : "  <-- fill the PIN column, then redeploy Code.gs as a New version"));
+  L.push("");
+  L.push("4. The name you picked");
+  L.push("   " + (st.driver
+        ? (pinFor(st.driver) ? st.driver + " has a PIN" : st.driver + " has NO PIN in the sheet")
+        : "none chosen yet"));
+  L.push("");
+  L.push(pinNeeded() ? "PIN box SHOULD be showing." : "PIN box is hidden, for the reason marked above.");
+  return L.join("\n");
+}
 function pinNeeded(){
   return !!CFG.requirePin && !!pinFor(st.driver) && canHash();
 }
@@ -2158,6 +2193,11 @@ $("modeNote").textContent = LIVE
   ? "Works with no signal. Checks send themselves when you are back in range."
   : "Practice mode: no record address is set up yet, so nothing is being sent.";
 
+var vEl=$("appVersion");
+if(vEl){
+  vEl.textContent=APP_VERSION;
+  vEl.addEventListener("click",function(){ alert(pinDiagnosis()); });
+}
 paintBanner();
 fetchLastMiles();
 show("driver");
@@ -2170,7 +2210,22 @@ if(LIVE && navigator.onLine) setTimeout(function(){ rotaRender(true); }, 400);
 if(LIVE && loadQ().length && navigator.onLine) setTimeout(flush, 1200);
 
 if("serviceWorker" in navigator){
-  window.addEventListener("load",function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
+  window.addEventListener("load",function(){
+    navigator.serviceWorker.register("sw.js").then(function(reg){
+      /* Ask on every launch. Without this a phone only notices a new version
+         when the browser happens to re-check, which can be a day. */
+      try{ reg.update(); }catch(e){}
+    }).catch(function(){});
+  });
+
+  /* A new worker has taken control, so the page is running the old copy.
+     Reload once, guarded so it cannot loop. */
+  var swReloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", function(){
+    if(swReloaded) return;
+    swReloaded = true;
+    location.reload();
+  });
 }
 </script>
 </body>

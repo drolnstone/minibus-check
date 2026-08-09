@@ -46,9 +46,28 @@ brand new deployment instead, you must paste the new URL into `config.js`.
 
 Replace `index.html`, `config.js` and `sw.js` on your host.
 
-`sw.js` has been bumped to `minibus-check-v37`. That is what tells every
-phone to throw away its old copy. If you ever edit `index.html` or
-`config.js` again, bump that number again or phones will keep the old app.
+`sw.js` has been bumped to `minibus-check-v40`. That is what tells every phone
+to throw away its old copy. If you ever edit `index.html` or `config.js`
+again, bump that number, and bump `APP_VERSION` in `index.html` to match.
+
+**Checking which copy a phone has.** The version shows at the bottom of the
+first screen, under the church name. If it does not match what you uploaded,
+that phone has not picked it up yet.
+
+**If the PIN box does not appear, tap that version line.** It reports which of
+the four conditions is failing: requirePin in `config.js`, whether the page is
+on https, whether the register arrived from the spreadsheet with PINs, and
+whether the name you picked has one. No guessing.
+
+**If a phone is stuck on an old copy.** It should sort itself out: the app
+asks for an update every launch, and reloads itself once when a new version
+takes over. Failing that, close the app fully and reopen it. On an iPhone with
+the app on the home screen, swipe it away from the app switcher first.
+
+Adding anything to the end of the address, like `?x=1`, also forces a fresh
+copy, because the browser treats it as a different page. That is a useful
+one-off trick while testing, but it is not something to do routinely and the
+real address never needs to change.
 
 ### 4. Check it works before Sunday
 
