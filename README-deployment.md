@@ -116,7 +116,7 @@ Everything official happens in the spreadsheet.
 **You already know somebody cannot make it:**
 
 Go straight to the **Rota** tab, find the Sunday, put the covering person in
-**Bus 1 actual / cover**. No request needed.
+**North Liverpool actual / cover**. No request needed.
 
 **Never delete the scheduled name.** That is how you keep sight of whose
 Sunday it was and who actually covered it.
@@ -127,9 +127,10 @@ Sunday it was and who actually covered it.
 
 1. Drivers ask for changes in the app. You decide.
 2. You change the official rota in Google Sheets, never in the app.
-3. To cover one Sunday, fill in **Bus 1 actual / cover**. Leave **Bus 1
-   scheduled** alone.
-4. To change who is normally on that slot for good, edit **Bus 1 scheduled**.
+3. To cover one Sunday, fill in **North Liverpool actual / cover**. Leave
+   **North Liverpool scheduled** alone.
+4. To change who is normally on that slot for good, edit **North Liverpool
+   scheduled**.
 
 ---
 
@@ -283,11 +284,17 @@ If the buses ever move, do one check standing at the new spot and copy the
 
 To switch the whole thing off, set `recordLocation: false`.
 
-## Two buses
+## The second route
 
-The Rota tab already has **Bus 2 scheduled** and **Bus 2 actual / cover**
-columns, sitting empty. Start filling them in whenever you begin running both
-buses on the same Sunday, and the app will show them. Nothing needs rebuilding.
+The Rota tab already has **South Liverpool scheduled** and **South Liverpool
+actual / cover** columns, sitting empty. Start filling them in whenever you
+begin running both routes on the same Sunday, and the app will show them.
+Nothing needs rebuilding.
+
+The two slots are named after the routes rather than the vehicles, because
+which bus runs which route can change on the day. The script reads this tab by
+column position and never by heading, so the names are yours to reword whenever
+you like.
 
 ---
 

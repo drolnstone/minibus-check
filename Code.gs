@@ -33,6 +33,20 @@ var ROTA_SHEET     = "Rota";
 var REQUESTS_SHEET = "Rota Requests";
 var DRIVERS_SHEET  = "Drivers";
 
+/* Column headings on the Rota tab. The two slots are named after the routes
+   rather than the vehicles, because which bus runs which route can change on
+   the day, and the driver is rostered to a route. Defined once here: they
+   used to be written out twice, which is how a rename goes half done.
+
+   The script reads this tab by position, never by heading, so renaming these
+   is purely cosmetic and cannot break anything. */
+var ROTA_HEADERS = [
+  "Sunday",
+  "North Liverpool scheduled", "North Liverpool actual / cover", "Status",
+  "South Liverpool scheduled", "South Liverpool actual / cover",
+  "Notes", "Updated", "Updated by"
+];
+
 var STATUS_OPTIONS = ["Open", "Booked in", "Parts on order", "Fixed", "Monitoring", "Not a defect"];
 var ROTA_STATUS    = ["Confirmed", "Change requested", "Covered", "Cancelled/declined", "No driver assigned"];
 var REQ_STATUS     = ["Pending", "Approved", "Rejected"];
@@ -323,10 +337,7 @@ function rotaPayload(fromKey, weeks) {
 
 /** Makes sure the tabs exist. Cheap: no reading, no writing, no formatting. */
 function ensureRotaSheets(ss) {
-  sheet(ss, ROTA_SHEET, [
-    "Sunday", "Bus 1 scheduled", "Bus 1 actual / cover", "Status",
-    "Bus 2 scheduled", "Bus 2 actual / cover", "Notes", "Updated", "Updated by"
-  ]);
+  sheet(ss, ROTA_SHEET, ROTA_HEADERS);
   var drivers = sheet(ss, DRIVERS_SHEET,
     ["Name", "Role", "Active", "Primary order", "PIN", "Email"]);
   sheet(ss, REQUESTS_SHEET, [
@@ -843,10 +854,13 @@ function ensureDrivers(ss) {
 
 function ensureRota(ss) {
   var existing = ss.getSheetByName(ROTA_SHEET);
-  var sh = sheet(ss, ROTA_SHEET, [
-    "Sunday", "Bus 1 scheduled", "Bus 1 actual / cover", "Status",
-    "Bus 2 scheduled", "Bus 2 actual / cover", "Notes", "Updated", "Updated by"
-  ]);
+  var sh = sheet(ss, ROTA_SHEET, ROTA_HEADERS);
+
+  /* sheet() only writes headings when it creates the tab, so a tab that
+     already exists keeps whatever it was first given. Written again here so
+     a rename actually reaches a sheet already in use. Safe to repeat: it is
+     one write of one row, and nothing reads this tab by heading. */
+  sh.getRange(1, 1, 1, ROTA_HEADERS.length).setValues([ROTA_HEADERS]).setFontWeight("bold");
 
   if (!existing) {
     sh.setColumnWidth(1, 110);
@@ -860,7 +874,7 @@ function ensureRota(ss) {
       "Leave blank when the scheduled driver is driving.\n" +
       "Fill it in only when somebody else is covering. The scheduled name\n" +
       "stays put, so you never lose sight of whose Sunday it was.");
-    sh.getRange(1, 5).setNote("Second bus. Leave these two columns blank until you run two buses.");
+    sh.getRange(1, 5).setNote("South Liverpool route. Leave these two columns blank until you run both routes.");
     rotaColours(sh);
   }
 
