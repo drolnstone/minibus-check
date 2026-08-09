@@ -584,7 +584,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v42";
+var APP_VERSION = "v44";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -689,7 +689,13 @@ function buildFor(v){
   var full = st.mode === "full";
   stages = STAGES.map(function(s){
     return { title:s.title, lede:s.lede, items:s.items.filter(function(it){
-      if(it.full && !full) return false;
+      /* A full-only item is pulled into the pre-drive list when THIS bus has
+         fault history against it. Otherwise the most important thing we know
+         about a bus can be invisible to the person driving it: NH56's cab
+         mounting history sat on the corrosion item, which is full-only, so
+         no ordinary driver ever saw it. Fault history is the reason this app
+         exists, so it outranks the pre-drive/full split. */
+      if(it.full && !full && !(v.watch && v.watch[it.id])) return false;
       return !(v.skip||[]).length || (v.skip||[]).indexOf(it.id) === -1;
     }).map(function(it){
       var copy = { id:it.id, name:it.name, what:it.what, crit:!!it.crit };
@@ -1204,8 +1210,15 @@ var FUEL_COLOURS = ["#75201a","#753e1a","#755d1a","#6e751a",
                     "#50751a","#31751a","#1a7521","#1a7540"];
 
 /* How a person says it. Eighths are how the bar is built, but nobody reads a
-   gauge and thinks "four eighths", so nothing is written down that way. */
-var FUEL_WORDS = ["1/8","1/4","3/8","1/2","5/8","3/4","7/8","Full"];
+   gauge and thinks "four eighths", so nothing is written down that way.
+
+   The word "tank" is not decoration. Written on its own, "1/2" is read by
+   Google Sheets as the 2nd of January, "3/4" as the 4th of March, and so on
+   for every value except Full. The whole Fuel column would fill with dates
+   and the Sunday summary would print one. The trailing word makes each value
+   text, and reads better in the email besides. Do not take it back out. */
+var FUEL_WORDS = ["1/8 tank","1/4 tank","3/8 tank","1/2 tank",
+                  "5/8 tank","3/4 tank","7/8 tank","Full"];
 function fuelText(n){ return (n>=1 && n<=8) ? FUEL_WORDS[n-1] : ""; }
 
 /* Still used for the wording and the low-tank nudge, not for the colour. */
@@ -1460,7 +1473,17 @@ function sumHTML(rec){
          ((r.jobs&&r.jobs.length)?row("To arrange", r.jobs.join(", ")):"");
 }
 function renderReview(){
-  if(st.fuel!==null && st.fuel<=2 && st.jobs.indexOf("fuel")===-1) st.jobs.push("fuel");
+  /* Pre-tick Needs fuel on a low tank, but only while the driver has not
+     answered yet. Once they have, their answer stands.
+
+     This used to push fuel on regardless, so a driver who tapped Nothing
+     needed and then stepped back into the check came back to both chips lit
+     and the screen saying two opposite things. It also overrode a perfectly
+     good answer: Nothing needed on a low tank is what a driver says when
+     they are going to fill it themselves on the way. The tank level reaches
+     the record and the Sunday summary either way, so nothing is lost by
+     believing them. */
+  if(st.fuel!==null && st.fuel<=2 && !st.jobs.length) st.jobs.push("fuel");
   $("verdict").innerHTML = verdictHTML(level(), defectList());
   $("sumBox").innerHTML = sumHTML();
   paintJobs();
@@ -1949,7 +1972,19 @@ function rotaOpen(){ rotaViewMode="all"; rotaPastWeeks=0; rotaRender(false); sho
 function rotaOpenRequest(key){
   var d=rotaDateFromKey(key); rotaEditDate=key;
   $("rotaModalTitle").textContent="Request a change";
-  $("rotaModalBody").innerHTML='<p class="lede">'+esc(d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))+' · You are currently scheduled as primary.</p><div class="field"><label for="rotaReqType">Request type</label><select id="rotaReqType"><option>Holiday / planned leave</option><option>Unavailable</option><option>Request a swap</option><option>Other</option></select></div><div class="field" id="rotaSwapField" style="display:none"><label for="rotaSwapWith">Preferred swap driver (optional)</label><select id="rotaSwapWith"><option value="">No preference</option></select></div><div class="field"><label for="rotaReqReason">Reason</label><textarea id="rotaReqReason" placeholder="Tell the coordinator what they need to know."></textarea></div><div class="rota-modal-actions"><button class="btn btn-ghost" id="rotaCancel2" type="button">Cancel</button><button class="btn btn-main" id="rotaSubmitRequest" type="button">Send request</button></div>';
+
+  /* The button also appears when somebody is covering a Sunday that was
+     never theirs, and telling them they are scheduled as primary is simply
+     wrong: the scheduled name belongs to the person they are standing in
+     for. Say which it is, and name them. */
+  var row=rotaRowFor(key);
+  var primary=(row&&row.primary)||rotaSeedPrimary(d);
+  var actual=(row&&row.actual)||primary;
+  var me=st.driver.trim();
+  var standing=(actual===me && primary && primary!==me)
+    ? "You are covering this Sunday for "+esc(primary)+"."
+    : "You are currently scheduled as primary.";
+  $("rotaModalBody").innerHTML='<p class="lede">'+esc(d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))+' · '+standing+'</p><div class="field"><label for="rotaReqType">Request type</label><select id="rotaReqType"><option>Holiday / planned leave</option><option>Unavailable</option><option>Request a swap</option><option>Other</option></select></div><div class="field" id="rotaSwapField" style="display:none"><label for="rotaSwapWith">Preferred swap driver (optional)</label><select id="rotaSwapWith"><option value="">No preference</option></select></div><div class="field"><label for="rotaReqReason">Reason</label><textarea id="rotaReqReason" placeholder="Tell the coordinator what they need to know."></textarea></div><div class="rota-modal-actions"><button class="btn btn-ghost" id="rotaCancel2" type="button">Cancel</button><button class="btn btn-main" id="rotaSubmitRequest" type="button">Send request</button></div>';
   var sw=$("rotaSwapWith"); REGISTER.forEach(function(x){var o=document.createElement("option");o.value=x.name;o.textContent=x.name;if(x.name===st.driver)o.disabled=true;sw.appendChild(o);});
   $("rotaReqType").addEventListener("change",function(){$("rotaSwapField").style.display=this.value==="Request a swap"?"":"none";});
   $("rotaCancel2").addEventListener("click",rotaClose); $("rotaSubmitRequest").addEventListener("click",rotaSubmitRequest);
@@ -2199,18 +2234,43 @@ if(vEl){
   vEl.textContent=APP_VERSION;
   vEl.addEventListener("click",function(){ alert(pinDiagnosis()); });
 }
-paintBanner();
-fetchLastMiles();
-show("driver");
+/* Getting the first screen up is the only thing here that has to happen.
+   Everything else is enrichment: last week's mileage, the stored rota, the
+   waiting queue. All of it was running unguarded and in front of the screen,
+   so one throw took every line after it down with it and left a driver
+   looking at a page with no buttons on it at all. That is the worst failure
+   this app can have, because it is silent and it happens before they can
+   report anything. Draw the screen first, then guard each extra separately
+   so a failure costs only itself. */
+function safely(fn){ try{ fn(); }catch(e){ /* enrichment only, never fatal */ } }
 
-/* Load the stored rota straight away so opening the rota screen is instant,
-   then let it refresh itself in the background. */
-rotaLoadCache();
-paintRotaHint();
-if(LIVE && navigator.onLine) setTimeout(function(){ rotaRender(true); }, 400);
-if(LIVE && loadQ().length && navigator.onLine) setTimeout(flush, 1200);
+safely(paintBanner);
+safely(function(){ show("driver"); });
+
+/* Last recorded mileage, so the prep screen can sanity check the reading. */
+safely(fetchLastMiles);
+
+/* The stored rota, so opening the rota screen is instant. It refreshes
+   itself in the background afterwards. */
+safely(function(){ rotaLoadCache(); paintRotaHint(); });
+
+if(LIVE && navigator.onLine){
+  setTimeout(function(){ safely(function(){ rotaRender(true); }); }, 400);
+}
+if(LIVE && navigator.onLine && loadQ().length){
+  setTimeout(function(){ safely(flush); }, 1200);
+}
 
 if("serviceWorker" in navigator){
+  /* Was this page already under a worker when it loaded? On a first ever
+     visit it was not, and the worker's clients.claim() then fires
+     controllerchange within a second or two. Reloading on that is pointless:
+     the page IS the newest copy, it has only just been fetched. It meant
+     every brand new phone reloaded itself a moment after opening, which
+     looks like a fault. Only a genuine takeover, where an OLD copy is
+     running and a NEW worker has replaced it, is worth a reload. */
+  var swHadController = !!navigator.serviceWorker.controller;
+
   window.addEventListener("load",function(){
     navigator.serviceWorker.register("sw.js").then(function(reg){
       /* Ask on every launch. Without this a phone only notices a new version
@@ -2223,7 +2283,7 @@ if("serviceWorker" in navigator){
      Reload once, guarded so it cannot loop. */
   var swReloaded = false;
   navigator.serviceWorker.addEventListener("controllerchange", function(){
-    if(swReloaded) return;
+    if(!swHadController || swReloaded) return;
     swReloaded = true;
     location.reload();
   });

@@ -1,10 +1,16 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
-const CACHE = "minibus-check-v42";
+const CACHE = "minibus-check-v44";
 
+/* config.js is precached deliberately. Without it, a phone that had never
+   fetched it successfully would fall through to the index.html fallback and
+   receive a page of HTML where the settings file should be. That fails as a
+   syntax error, window.CONFIG never gets set, and the app boots with no
+   vehicles, no drivers and no endpoint: practice mode, silently. */
 const SHELL = [
   "./",
   "./index.html",
+  "./config.js",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png",
@@ -25,15 +31,23 @@ self.addEventListener("activate", (e) => {
 
 /* Try the network, fall back to whatever we cached. Used for the files that
    must not go stale. Still fully offline: the cached copy answers instantly
-   the moment the network fails. */
-function freshFirst(request) {
+   the moment the network fails.
+
+   pageFallback says whether falling back to the page itself makes sense. It
+   does for a navigation: any address in this app should land on the app. It
+   does NOT for config.js, where handing back a page of HTML gives the browser
+   something it will try to run as JavaScript. Better to fail honestly. */
+function freshFirst(request, pageFallback) {
   return fetch(request)
     .then((res) => {
       const copy = res.clone();
       caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
       return res;
     })
-    .catch(() => caches.match(request).then((hit) => hit || caches.match("./index.html")));
+    .catch(() => caches.match(request).then((hit) => {
+      if (hit) return hit;
+      return pageFallback ? caches.match("./index.html") : Response.error();
+    }));
 }
 
 self.addEventListener("fetch", (e) => {
@@ -51,7 +65,7 @@ self.addEventListener("fetch", (e) => {
   // config.js: always try the network first so endpoint and rota changes
   // land quickly.
   if (url.pathname.endsWith("/config.js")) {
-    e.respondWith(freshFirst(e.request));
+    e.respondWith(freshFirst(e.request, false));
     return;
   }
 
@@ -59,7 +73,7 @@ self.addEventListener("fetch", (e) => {
   // Sunday morning should not be reading last month's rota screen because
   // an old copy was sitting in the cache.
   if (e.request.mode === "navigate" || url.pathname.endsWith("/index.html")) {
-    e.respondWith(freshFirst(e.request));
+    e.respondWith(freshFirst(e.request, true));
     return;
   }
 
