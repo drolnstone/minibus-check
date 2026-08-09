@@ -584,7 +584,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v40";
+var APP_VERSION = "v41";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -959,6 +959,7 @@ function paintFoot(){
   }
 
   if(st.screen==="driver"){
+    showPinField();          /* same cycle as the caption, so they cannot drift */
     var named = st.driver.trim().length>1;
     var pinOk = !pinNeeded() || st.pinOk;
     btn("Continue","btn-main",function(){ renderVehicles(); show("vehicle"); }, !(named && pinOk),
@@ -1788,7 +1789,7 @@ function rotaSyncRegister(list){
   function fingerprint(list){
     return list.map(function(d){ return d.name+"|"+d.role+"|"+(d.pin||""); }).sort().join(",");
   }
-  if(fingerprint(REGISTER)===fingerprint(next)) return;
+  if(fingerprint(REGISTER)===fingerprint(next)){ showPinField(); paintFoot(); return; }
 
   REGISTER = next;
 
