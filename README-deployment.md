@@ -1,7 +1,7 @@
-# Minibus check + driving rota — deployment and handover
+# Minibus check + driving rota: deployment and handover
 
-Four files make up the app. Three live on the web host, one lives inside the
-Google Sheet.
+Four files are edited. One lives inside the Google Sheet, three on the web
+host.
 
 | File | Where it goes |
 |---|---|
@@ -9,6 +9,13 @@ Google Sheet.
 | `config.js` | web host |
 | `sw.js` | web host |
 | `Code.gs` | Google Sheet → Extensions → Apps Script |
+
+Four more files must already be sitting on the host next to those. They are
+never edited, but `sw.js` lists them as the offline shell, and if any one of
+them is missing the app stops working without signal altogether. Nothing
+announces this, because everything still works while you have a connection.
+
+`manifest.webmanifest`, `icon-192.png`, `icon-512.png`, `logo.png`
 
 ---
 
@@ -46,7 +53,7 @@ brand new deployment instead, you must paste the new URL into `config.js`.
 
 Replace `index.html`, `config.js` and `sw.js` on your host.
 
-`sw.js` has been bumped to `minibus-check-v42`. That is what tells every phone
+`sw.js` has been bumped to `minibus-check-v44`. That is what tells every phone
 to throw away its old copy. If you ever edit `index.html` or `config.js`
 again, bump that number, and bump `APP_VERSION` in `index.html` to match.
 
@@ -134,8 +141,9 @@ Sundays repeat in this order, for ever:
 
 Counted from Sunday **2 August 2026**.
 
-A one-off cover does **not** shift the pattern. If Asim is away on 11 October
-and Moses covers, the next Asim Sunday is still Asim.
+A one-off cover does **not** shift the pattern. If Asim is away on 18 October,
+which is his Sunday, and Moses covers, the Sunday after that still belongs to
+whoever the pattern says, and Asim's next turn is still Asim's.
 
 ### Changing the pattern
 
@@ -176,25 +184,33 @@ picked by an offline phone.
 
 Yes, and it is the only tab that earns its keep by being editable from your
 phone. It is the one place you can add or remove a driver without editing a
-code file and re-uploading it. Four columns:
+code file and re-uploading it. Six columns, and the order matters:
 
-- **Name** — what appears in the app.
-- **Role** — decides who is offered the full inspection.
-- **Active** — NO removes them from every dropdown and every phone.
-- **Primary order** — 1, 2, 3, 4 sets the repeating pattern. Blank means they
+- **Name**: what appears in the app.
+- **Role**: decides who is offered the full inspection.
+- **Active**: NO removes them from every dropdown and every phone.
+- **Primary order**: 1, 2, 3, 4 sets the repeating pattern. Blank means they
   are not in the normal rotation but can still cover.
-- **PIN** — four digits they key in before starting a check. Blank means they
+- **PIN**: four digits they key in before starting a check. Blank means they
   are not asked for one.
+- **Email**: where duty reminders are sent. Blank means they get none.
 
-The old **Backup pool** column has been dropped. Nothing read it. If your
-sheet still has it, delete column E by hand or leave it: it is ignored either
-way.
+The script reads these by position, not by name, so do not insert a column in
+the middle of them. If you ever need to check, **Minibus → Check the Drivers
+tab** says whether they are still where the script expects and how many
+drivers have an email address and a PIN.
+
+The old **Backup pool** column was dropped long ago. Nothing read it. If you
+are looking at a very old copy of this sheet that still has it, the columns
+will be one out from the list above, and the Drivers tab check will tell you
+so. Put them back in the order shown rather than deleting anything blindly:
+on a current sheet, column E is the PIN.
 
 ## Why there are two rota tabs
 
 **Rota Requests** is what drivers asked for. **Rota** is what is actually
 happening. You need both, because most changes will never have a request
-behind them — you find out on Friday that somebody cannot make Sunday, and you
+behind them. You find out on Friday that somebody cannot make Sunday, and you
 just change it. There is nowhere else for that to live.
 
 The Rota tab holds **16 weeks** of Sundays. Short on purpose: the rows exist so
@@ -299,7 +315,7 @@ never locks them out. Set `requirePin: false` in `config.js` to switch it off.
 
 **Emails** go to `COORDINATOR_EMAIL` at the top of `Code.gs`, currently
 `asimbassey@yahoo.com`. Both defect emails and rota emails carry a button
-that opens the spreadsheet **on the right tab** — defect emails land on
+that opens the spreadsheet **on the right tab**: defect emails land on
 **Defects**, rota emails land on **Rota Requests**. The address is read from
 the sheet itself each time, so there is no link to keep up to date. Your
 sheet URL is also written into `SHEET_URL` near the bottom of `Code.gs` as a
@@ -315,11 +331,11 @@ person. Approve or reject is the whole of it.
 
 There are two lists, built from one set of 49 items.
 
-**Pre-drive — 33 items.** What every driver does before carrying anyone. All
+**Pre-drive, 33 items.** What every driver does before carrying anyone. All
 12 critical items are in it. This is the only list most drivers ever see, and
 they are not shown a choice.
 
-**Full inspection — 49 items.** The pre-drive list plus the slower structural
+**Full inspection, 49 items.** The pre-drive list plus the slower structural
 and equipment checks: corrosion, seat and handrail condition, battery, spare
 wheel, wheelchair restraints, documents. This is coordinator work.
 
@@ -335,13 +351,13 @@ Every check records which type it was, in the **Check type** column.
 Each item has **Fine** and **Defect**. The full inspection adds a third,
 **Not on this bus**.
 
-That third one means **not applicable** — this bus genuinely does not have the
+That third one means **not applicable**: this bus genuinely does not have the
 thing. A wheelchair ramp on a bus with none. A speed limiter that was never
 fitted. It counts as answered, never as a defect, and never stops the bus.
 
 It does **not** mean "not available" or "I could not check it". If something is
-fitted but the driver could not check it — the bonnet catch is jammed, the step
-is buried under bags — that is a **Defect** with a note. The coordinator needs
+fitted but the driver could not check it, say the bonnet catch is jammed or the
+step is buried under bags, that is a **Defect** with a note. The coordinator needs
 to know, and burying it under N/A would hide a real problem behind something
 that reads like a shrug.
 
@@ -357,8 +373,15 @@ so a gap in the record means an item was missed, not that it did not apply.
 
 **Fuel** is recorded on the mileage screen: eight segments, tap what the gauge
 reads. It is written down the way a person says it, so half a tank records as
-1/2 and a full one as Full. Marked at the quarter, half, three quarters and full. Red up
-to a quarter, amber at three eighths, green from half a tank up. It is
+1/2 tank and a full one as Full. Marked at the quarter, half, three quarters
+and full. Red up to a quarter, amber at three eighths, green from half a tank
+up.
+
+The word "tank" is doing real work. Written on its own, `1/2` is not text to
+Google Sheets, it is the 1st of February, and `3/8` is the 3rd of August.
+Every reading except Full was quietly stored as a date until this was fixed.
+If your sheet has checks recorded from before then, run **Minibus → Repair old
+fuel readings** once and it will put them back. It is
 required, because a column only half filled in cannot be used to arrange
 anything.
 
@@ -379,7 +402,7 @@ real answer and is not recorded as a job; leaving it blank is not, because
 that is a driver who scrolled past rather than one who looked.
 
 These exist because the cleanliness item only fires when a bus is too dirty to
-be **safe** — by then you are not booking a wash, you are dealing with a
+be **safe**, and by then you are not booking a wash, you are dealing with a
 problem. A bus can be perfectly fine to drive and still look poor for a
 wedding, and nothing recorded that until now.
 
@@ -398,7 +421,7 @@ and **the day before**, which is the one that gets them out of bed. Change
 `REMIND_DAYS` at the top of `Code.gs` if you want different notice.
 
 **It needs the Email column on the Drivers tab.** Anyone left blank simply
-gets no reminder — nothing breaks, they are skipped. Emails are never sent to
+gets no reminder. Nothing breaks, they are skipped. Emails are never sent to
 the app; they stay in the spreadsheet.
 
 Reminders go out once each. Running them by hand will not double up.
@@ -416,12 +439,13 @@ name and there is nothing to correct.
 This runs on its own trigger, separate from the one that stamps the sheet.
 Google does not allow the ordinary sheet trigger to send email, so if that
 separate one ever fails to install you lose these alerts and nothing else.
-**Minibus → Check scheduled emails** reports on all three.
+**Minibus → Check scheduled emails** reports on all of them, and sets up any
+that are missing.
 
 - **Minibus → Send duty reminders now** to test without waiting for morning.
-- **Minibus → Check scheduled emails** confirms both the reminders and the
-  Sunday summary are actually scheduled, and reports how many drivers have an
-  address.
+- **Minibus → Check scheduled emails** confirms the reminders, the Sunday
+  summary, the change alerts and the nightly rota tidy-up are all actually
+  scheduled, and reports how many drivers have an address.
 
 Why email rather than a text or a phone notification: Apps Script cannot send
 texts without a paid third party account, and phone notifications only work if
@@ -496,3 +520,20 @@ automatically on the next check.
 
 Within 30 days shows amber, past shows red. Nothing shows today. The first is
 **1 January 2027**, when both parking permits go amber.
+
+---
+
+## The nightly tidy-up
+
+Once a week the rota needs a new Sunday added on the end, and the dropdowns
+rebuilt to match the Drivers tab. That work used to happen the first time
+somebody opened the rota after the horizon rolled forward, which meant one
+driver waited several extra seconds, and Sunday morning was exactly when it
+landed.
+
+It now runs on its own trigger at 3am. **Minibus → Set up / refresh rota**
+installs it, and **Minibus → Check scheduled emails** confirms it is there.
+
+There is still a safety net. If the trigger was never installed, or stops
+running for three days, the old behaviour comes back automatically so the
+rota never stops growing. You do not have to do anything for that to happen.

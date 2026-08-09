@@ -245,8 +245,9 @@ function rotaPayload(fromKey, weeks) {
   /* Reads used to run the full maintenance pass every time: re-reading the
      driver register, re-reading every rota row, and occasionally rewriting
      every dropdown across 3000 rows. That is what made the app feel slow.
-     Maintenance now runs at most once a day, and never in front of a
-     waiting driver. */
+     The pass now belongs to nightlyMaintenance on a 3am timer, and the call
+     below is only a safety net for when that timer is missing or has
+     stopped. On a healthy installation it returns immediately. */
   ensureRotaSheets(ss);
 
   var props = PropertiesService.getScriptProperties();
@@ -344,11 +345,31 @@ function ensureRotaSheets(ss) {
 }
 
 /**
- * Rolls the filled horizon forward, but only once a day. Anything sooner is
- * wasted work: the horizon moves by one Sunday a week.
+ * Rolls the filled horizon forward.
+ *
+ * This is the expensive pass: it re-reads the register, adds any missing
+ * Sundays, and rewrites every dropdown across 3000 rows. It used to run here,
+ * in the middle of a driver's rota request, roughly once a week when the
+ * horizon rolled forward. That put a multi-second wait on one unlucky person,
+ * and Sunday morning is exactly when it landed.
+ *
+ * It now belongs to nightlyMaintenance, on a timer at 3am. This function is
+ * only the safety net. It does nothing while the nightly job is healthy, and
+ * takes over if the job was never installed (permission refused at setup) or
+ * has stopped running for three days.
  */
 function maintainIfDue(ss, props) {
   try {
+    var nightlyOn = props.getProperty("nightlyMaintenanceOn") === "1";
+    if (nightlyOn) {
+      var ran = Number(props.getProperty("nightlyRanAt") || 0);
+      /* Three days, not one. A single missed night is normal: Google moves
+         timed triggers around and can skip one entirely. Three consecutive
+         misses means it has actually stopped, and a rota that stops growing
+         is worse than one slow read. */
+      if (Date.now() - ran < 3 * 86400000) return;
+    }
+
     var last = Number(props.getProperty("rotaFilledAt") || 0);
     if (Date.now() - last < 86400000) return;
     fillRotaAhead(ss);
@@ -357,6 +378,42 @@ function maintainIfDue(ss, props) {
        redeploy, so the Rota tab stayed empty and nothing said why. */
     props.setProperty("rotaFilledAt", String(Date.now()));
   } catch (err) { /* a slow tidy-up must never break a read */ }
+}
+
+/**
+ * The nightly tidy-up, run by a timer at 3am. Everything slow lives here so
+ * that nothing slow lives in front of a driver.
+ */
+function nightlyMaintenance() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureRotaSheets(ss);
+  fillRotaAhead(ss);
+
+  /* The heartbeat is what maintainIfDue watches. Written last, so a run that
+     failed halfway does not claim to have succeeded. */
+  try {
+    var props = PropertiesService.getScriptProperties();
+    props.setProperty("nightlyRanAt", String(Date.now()));
+    props.setProperty("rotaFilledAt", String(Date.now()));
+  } catch (err) {}
+}
+
+function installNightlyMaintenance() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "nightlyMaintenance") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("nightlyMaintenance").timeBased().everyDays(1).atHour(3).create();
+
+  /* Only set once the trigger genuinely exists. maintainIfDue stands down on
+     the strength of this flag, so a flag without a trigger would leave the
+     rota with nobody filling it at all. */
+  try {
+    var props = PropertiesService.getScriptProperties();
+    props.setProperty("nightlyMaintenanceOn", "1");
+    if (!props.getProperty("nightlyRanAt")) {
+      props.setProperty("nightlyRanAt", String(Date.now()));
+    }
+  } catch (err) {}
 }
 
 /**
@@ -577,6 +634,134 @@ function stamp(sh, row, who) {
 /* ---- rota: setup and maintenance --------------------------------------- */
 
 /** Run this once by hand after pasting the script in. Safe to run again. */
+/* The Drivers tab is read by position, not by header name: column 5 is the
+   PIN, column 6 is the email, and so on. That is fine until somebody inserts
+   a column in the middle years from now. Nothing would break loudly. Duty
+   reminders would simply stop going out, because the script would be reading
+   an empty column where the addresses used to be, and no message would say
+   so. This is the smoke alarm. It changes nothing and repairs nothing: it
+   only tells a human that the shape has drifted. */
+var DRIVERS_HEADERS = ["Name", "Role", "Active", "Primary order", "PIN", "Email"];
+
+function driversHeaderWarning(ss) {
+  try {
+    var sh = ss.getSheetByName(DRIVERS_SHEET);
+    if (!sh) return "";
+    var got = sh.getRange(1, 1, 1, DRIVERS_HEADERS.length).getValues()[0]
+                .map(function (v) { return String(v || "").trim(); });
+    var wrong = [];
+    DRIVERS_HEADERS.forEach(function (want, i) {
+      if (got[i].toLowerCase() !== want.toLowerCase()) {
+        wrong.push("column " + String.fromCharCode(65 + i) + " should be \"" + want +
+                   "\" but reads \"" + (got[i] || "(empty)") + "\"");
+      }
+    });
+    if (!wrong.length) return "";
+    return "The Drivers tab columns are not where the script expects:\n  " +
+           wrong.join("\n  ") +
+           "\n\nPut them back in this order and nothing else needs doing:\n  " +
+           DRIVERS_HEADERS.join(" | ");
+  } catch (err) { return ""; }
+}
+
+function checkDriversTab() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+  var warn = driversHeaderWarning(ss);
+  if (warn) { ui.alert(warn); return; }
+
+  var drivers = readDrivers(ss);
+  var active = drivers.filter(function (d) { return d.active; });
+  var withEmail = active.filter(function (d) { return d.email; }).length;
+  var withPin = active.filter(function (d) { return d.pin; }).length;
+
+  ui.alert(
+    "\u2713  Columns are in the right order.\n\n" +
+    active.length + " active drivers.\n" +
+    withEmail + " have an email address (needed for duty reminders).\n" +
+    withPin + " have a PIN (the rest are not asked for one)."
+  );
+}
+
+/* ---- one-off repair ---------------------------------------------------- */
+
+/**
+ * Puts right the Fuel column on checks recorded before the app started
+ * writing "1/2 tank" instead of "1/2".
+ *
+ * A bare "1/2" written into a cell is not text to Google Sheets, it is the
+ * 1st of February. "3/8" became the 3rd of August. Every fuel reading except
+ * Full was quietly stored as a date, and the Sunday summary printed one.
+ *
+ * The damage is reversible because the reading survives inside the date:
+ * Sheets took the first number as the day and the second as the month, so a
+ * cell holding 1 February came from "1/2". Only seven values were ever
+ * possible, and none of them can be read two ways, so there is no guessing.
+ *
+ * Safe to run twice. Rows already holding text are left alone.
+ */
+function repairFuelColumn() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+  var sh = ss.getSheetByName(CHECKS_SHEET);
+  if (!sh || sh.getLastRow() < 2) { ui.alert("No checks recorded yet, so nothing to repair."); return; }
+
+  var FUEL_COL = 23;
+  var n = sh.getLastRow() - 1;
+  var range = sh.getRange(2, FUEL_COL, n, 1);
+  var vals = range.getValues();
+
+  var fixed = 0, skipped = 0, unclear = [];
+
+  for (var i = 0; i < n; i++) {
+    var v = vals[i][0];
+    if (v === "" || v === null) continue;
+    /* Duck-typed rather than "instanceof Date". instanceof compares against
+       one particular Date constructor, and a value that arrived from another
+       context is a real date that fails the test. Getting this wrong here
+       would mean the repair quietly reported nothing to fix. */
+    var isDate = v && typeof v.getMonth === "function" && typeof v.getDate === "function";
+    if (!isDate) { skipped++; continue; }
+
+    var day = v.getDate();
+    var month = v.getMonth() + 1;
+    var num = 0, den = 0;
+
+    /* Day/month is how a UK sheet reads it, month/day how a US one does.
+       Both are checked, and they cannot both fit: one needs the numerator
+       first and the other the denominator first. */
+    if (month === 2 || month === 4 || month === 8) {
+      if (day < month) { num = day; den = month; }
+    }
+    if (!den && (day === 2 || day === 4 || day === 8)) {
+      if (month < day) { num = month; den = day; }
+    }
+
+    if (!den) {
+      unclear.push("row " + (i + 2) + ": " +
+                   Utilities.formatDate(v, Session.getScriptTimeZone(), "dd/MM/yyyy"));
+      continue;
+    }
+    vals[i][0] = num + "/" + den + " tank";
+    fixed++;
+  }
+
+  /* Plain text first, or the write puts the dates straight back. */
+  range.setNumberFormat("@");
+  range.setValues(vals);
+
+  var msg = fixed + " fuel readings put back to text.";
+  if (skipped) msg += "\n" + skipped + " were already fine and were left alone.";
+  if (unclear.length) {
+    msg += "\n\n" + unclear.length + " could not be worked out and were left as they are:\n  " +
+           unclear.slice(0, 10).join("\n  ");
+    if (unclear.length > 10) msg += "\n  ...and " + (unclear.length - 10) + " more";
+  }
+  ui.alert(msg);
+}
+
+/* ------------------------------------------------------------------------ */
+
 function setUpEverything() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   ensureRotaSheets(ss);
@@ -593,14 +778,18 @@ function setUpEverything() {
   try { installWeeklyDigest(); } catch (err) { /* triggers need permission; never block setup */ }
   try { installDutyReminders(); } catch (err) { /* same */ }
   try { installChangeAlerts(); } catch (err) { /* same */ }
+  try { installNightlyMaintenance(); } catch (err) { /* same. maintainIfDue covers it. */ }
 
   var n = ss.getSheetByName(ROTA_SHEET).getLastRow() - 1;
   var tz = timeZoneWarning();
-  if (tz) {
-    /* Folded into this toast, not fired as a second one: a second toast
+  var dh = driversHeaderWarning(ss);
+  if (tz || dh) {
+    /* Folded into this toast, not fired as separate ones: a second toast
        replaces the first straight away, so the warning would never be read. */
-    ss.toast(tz + " Run Minibus \u203a Check time zone for the fix, then run this again.",
-             "Ready, but check this first", 12);
+    var note = tz
+      ? tz + " Run Minibus \u203a Check time zone for the fix, then run this again."
+      : "The Drivers tab columns have moved. Run Minibus \u203a Check the Drivers tab.";
+    ss.toast(note, "Ready, but check this first", 12);
   } else {
     ss.toast("Ready. " + n + " Sundays on the rota.", "Minibus", 6);
   }
@@ -1022,7 +1211,8 @@ function checkDigestScheduled() {
   var want = [
     { fn: "weeklyDigest",   label: "Weekly summary, Sunday evenings", install: installWeeklyDigest },
     { fn: "dutyReminders",  label: "Duty reminders, every morning",   install: installDutyReminders },
-    { fn: "onRotaEditNotify", label: "Alerts when a Sunday changes",   install: installChangeAlerts }
+    { fn: "onRotaEditNotify", label: "Alerts when a Sunday changes",   install: installChangeAlerts },
+    { fn: "nightlyMaintenance", label: "Nightly rota tidy-up, 3am",     install: installNightlyMaintenance }
   ];
   var have = {};
   try {
@@ -1389,7 +1579,10 @@ function onOpen() {
     .addItem("Send weekly summary now", "sendDigestNow")
     .addItem("Send duty reminders now", "sendRemindersNow")
     .addItem("Check scheduled emails", "checkDigestScheduled")
+    .addItem("Check the Drivers tab", "checkDriversTab")
     .addItem("Check time zone", "checkTimeZoneMenu")
+    .addSeparator()
+    .addItem("Repair old fuel readings (run once)", "repairFuelColumn")
     .addToUi();
 }
 
@@ -1477,35 +1670,58 @@ function onEditRota(e, sh) {
   var firstRow = Math.max(topRow, 2);
   var lastRow = topRow + numRows - 1;
   if (lastRow < 2) return;                       // edit is entirely in the header
+  var count = lastRow - firstRow + 1;
 
   // True only when this specific edit touched the scheduled or cover column,
   // so a direct edit to Status or Notes still leaves a manually set status
   // alone, exactly as a single-cell edit always has.
   var touchesDriverCols = topCol <= 3 && lastCol >= 2;
 
-  for (var row = firstRow; row <= lastRow; row++) {
-    var scheduled = String(sh.getRange(row, 2).getValue() || "").trim();
-    var cover     = String(sh.getRange(row, 3).getValue() || "").trim();
-    var status    = String(sh.getRange(row, 4).getValue() || "");
+  /* Everything below reads once and writes twice, whatever the size of the
+     edit. Row by row, this did three reads and up to three writes each, so
+     pasting a few hundred rows meant well over a thousand separate calls and
+     the thirty second limit on a simple trigger would cut it off partway
+     through, leaving some rows stamped and some not. */
+  var block = sh.getRange(firstRow, 2, count, 3).getValues();   // B, C, D
+  var statuses = [];
+  var changed = false;
+
+  for (var i = 0; i < count; i++) {
+    var scheduled = String(block[i][0] || "").trim();
+    var cover     = String(block[i][1] || "").trim();
+    var status    = String(block[i][2] || "");
+    var next      = status;
 
     if (!scheduled && !cover) {
       // A Sunday can be legitimately driverless on purpose (cancelled) as
       // well as by oversight (nobody assigned yet). Do not clobber a
       // deliberate "Cancelled/declined" just because some other column on
       // the same row was touched.
-      if (status !== "Cancelled/declined") {
-        sh.getRange(row, 4).setValue("No driver assigned");
-      }
+      if (status !== "Cancelled/declined") next = "No driver assigned";
     } else if (touchesDriverCols) {
       if (cover && cover !== scheduled) {
-        sh.getRange(row, 4).setValue("Covered");
+        next = "Covered";
       } else if (status === "Covered" || status === "No driver assigned") {
-        sh.getRange(row, 4).setValue("Confirmed");
+        next = "Confirmed";
       }
     }
-    stamp(sh, row, "Coordinator");
+    if (next !== status) changed = true;
+    statuses.push([next]);
   }
+
+  if (changed) sh.getRange(firstRow, 4, count, 1).setValues(statuses);
+  stampRows(sh, firstRow, count, "Coordinator");
   bumpRotaVersion();
+}
+
+/* The batched form of stamp(), for when a whole block has been touched. */
+function stampRows(sh, firstRow, count, who) {
+  var now = new Date();
+  var who2 = who || "Coordinator";
+  var out = [];
+  for (var i = 0; i < count; i++) out.push([now, who2]);
+  sh.getRange(firstRow, 8, count, 2).setValues(out);
+  sh.getRange(firstRow, 8, count, 1).setNumberFormat("dd/mm/yyyy hh:mm");
 }
 
 function onEditDefects(e, sh) {
