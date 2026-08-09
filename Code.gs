@@ -327,7 +327,7 @@ function ensureRotaSheets(ss) {
     "Bus 2 scheduled", "Bus 2 actual / cover", "Notes", "Updated", "Updated by"
   ]);
   var drivers = sheet(ss, DRIVERS_SHEET,
-    ["Name", "Role", "Active", "Primary order", "PIN"]);
+    ["Name", "Role", "Active", "Primary order", "PIN", "Email"]);
   sheet(ss, REQUESTS_SHEET, [
     "Received", "Request ID", "Sunday", "Driver", "Type", "Reason",
     "Preferred swap", "Status", "Decided on", "Replacement assigned"
@@ -338,7 +338,7 @@ function ensureRotaSheets(ss) {
      means no dropdowns and no pattern to fill the rota from. */
   if (drivers.getLastRow() < 2) {
     SEED_DRIVERS.forEach(function (d) {
-      drivers.appendRow([d.name, d.role, "YES", d.order, ""]);
+      drivers.appendRow([d.name, d.role, "YES", d.order, "", ""]);
     });
   }
 }
@@ -447,7 +447,7 @@ function readLatestRequests(ss) {
 function readDrivers(ss) {
   var sh = ss.getSheetByName(DRIVERS_SHEET);
   if (!sh || sh.getLastRow() < 2) return [];
-  var values = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
+  var values = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
   var out = [];
   values.forEach(function (r) {
     var name = String(r[0] || "").trim();
@@ -457,7 +457,8 @@ function readDrivers(ss) {
       role: String(r[1] || "").trim(),
       active: yes(r[2]),
       order: Number(r[3]) || 0,
-      pin: String(r[4] || "").replace(/\D/g, "")
+      pin: String(r[4] || "").replace(/\D/g, ""),
+      email: String(r[5] || "").trim()
     });
   });
   return out;
@@ -590,6 +591,8 @@ function setUpEverything() {
   refreshDropdowns();
   bumpRotaVersion();
   try { installWeeklyDigest(); } catch (err) { /* triggers need permission; never block setup */ }
+  try { installDutyReminders(); } catch (err) { /* same */ }
+  try { installChangeAlerts(); } catch (err) { /* same */ }
 
   var n = ss.getSheetByName(ROTA_SHEET).getLastRow() - 1;
   var tz = timeZoneWarning();
@@ -630,10 +633,10 @@ function checkTimeZoneMenu() {
 
 function ensureDrivers(ss) {
   var existing = ss.getSheetByName(DRIVERS_SHEET);
-  var sh = sheet(ss, DRIVERS_SHEET, ["Name", "Role", "Active", "Primary order", "PIN"]);
+  var sh = sheet(ss, DRIVERS_SHEET, ["Name", "Role", "Active", "Primary order", "PIN", "Email"]);
   if (!existing) {
     SEED_DRIVERS.forEach(function (d) {
-      sh.appendRow([d.name, d.role, "YES", d.order, ""]);
+      sh.appendRow([d.name, d.role, "YES", d.order, "", ""]);
     });
     sh.setColumnWidth(1, 150);
     sh.setColumnWidth(2, 160);
@@ -1016,27 +1019,349 @@ function weeklyDigest() {
  */
 function checkDigestScheduled() {
   var ui = SpreadsheetApp.getUi();
-  var found = false;
+  var want = [
+    { fn: "weeklyDigest",   label: "Weekly summary, Sunday evenings", install: installWeeklyDigest },
+    { fn: "dutyReminders",  label: "Duty reminders, every morning",   install: installDutyReminders },
+    { fn: "onRotaEditNotify", label: "Alerts when a Sunday changes",   install: installChangeAlerts }
+  ];
+  var have = {};
   try {
-    ScriptApp.getProjectTriggers().forEach(function (t) {
-      if (t.getHandlerFunction() === "weeklyDigest") found = true;
-    });
+    ScriptApp.getProjectTriggers().forEach(function (t) { have[t.getHandlerFunction()] = true; });
   } catch (err) {
     ui.alert("Could not read the triggers:\n\n" + err);
     return;
   }
-  if (found) {
-    ui.alert("The weekly summary is scheduled for Sunday evenings. Nothing to do.");
+
+  var report = [];
+  want.forEach(function (w) {
+    if (have[w.fn]) { report.push("\u2713  " + w.label); return; }
+    try { w.install(); report.push("\u2713  " + w.label + "  (was missing, now set up)"); }
+    catch (err) { report.push("\u2717  " + w.label + "  COULD NOT BE SET UP"); }
+  });
+
+  var drivers = readDrivers(SpreadsheetApp.getActiveSpreadsheet());
+  var withEmail = drivers.filter(function (d) { return d.active && d.email; }).length;
+  report.push("");
+  report.push(withEmail + " of " + drivers.filter(function (d) { return d.active; }).length +
+              " drivers have an email address.");
+  if (!withEmail) report.push("Fill the Email column on the Drivers tab or no reminders go out.");
+
+  ui.alert(report.join("\n"));
+}
+
+/* ---- duty reminders ----------------------------------------------------
+   Emails whoever is down to drive, ahead of the day, with a calendar file
+   attached. The email is the delivery; the calendar file is what actually
+   does the reminding, because once it is in the driver's own calendar their
+   phone alerts them on their own terms, offline, without this script being
+   involved at all.
+
+   Text messages would land more reliably than email, but Apps Script cannot
+   send them without a paid third party account. Push notifications are worse
+   again: on an iPhone they only work if the app has been added to the Home
+   Screen and permission granted, and they fail silently otherwise. Email
+   plus a calendar file needs nothing set up on the driver's side.
+
+   How many days before to send. The week gives somebody time to ask for a
+   swap; the day before is the one that gets them out of bed. */
+var REMIND_DAYS = [7, 1];
+
+var BUS_ADDRESS = "3-5 Chester Road, Liverpool L6 4DY";
+
+function dutyReminders() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureRotaSheets(ss);
+
+  var drivers = readDrivers(ss);
+  var emails = {};
+  drivers.forEach(function (d) { if (d.active && d.email) emails[d.name] = d.email; });
+  if (!Object.keys(emails).length) return;      // nobody has given an address yet
+
+  var byDate = {};
+  readRotaRows(ss).forEach(function (r) { byDate[r.date] = r; });
+  var pattern = primaryPattern(drivers);
+
+  var props = PropertiesService.getScriptProperties();
+  var sent = {};
+  try { sent = JSON.parse(props.getProperty("remindersSent") || "{}"); } catch (err) {}
+
+  var today = new Date();
+  today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  REMIND_DAYS.forEach(function (days) {
+    var target = new Date(today);
+    target.setDate(target.getDate() + days);
+    if (target.getDay() !== 0) return;          // only Sundays carry a duty
+
+    var key = dateToKey(target);
+    var row = byDate[key];
+    var who = String((row ? (row.actual || row.primary) : patternDriver(target, pattern)) || "").trim();
+    if (!who || !emails[who]) return;           // nobody assigned, or no address
+
+    /* Sent once. The trigger runs daily, but somebody may also run it by
+       hand, and nobody wants the same reminder twice. */
+    var stamp = key + "|" + days + "|" + who;
+    if (sent[stamp]) return;
+
+    var covering = (row && row.actual && row.primary && row.actual !== row.primary)
+      ? row.primary : "";
+    sendDutyEmail(emails[who], who, target, days, covering);
+    sent[stamp] = true;
+  });
+
+  var keys = Object.keys(sent).sort();
+  while (keys.length > 300) { delete sent[keys.shift()]; }
+  props.setProperty("remindersSent", JSON.stringify(sent));
+}
+
+function sendDutyEmail(to, who, sunday, daysAhead, covering) {
+  var tz = Session.getScriptTimeZone();
+  var when = Utilities.formatDate(sunday, tz, "EEEE d MMMM yyyy");
+  var lead = daysAhead === 1 ? "tomorrow" : "in " + daysAhead + " days";
+
+  var lines = [
+    "You are down to drive the minibus <b>" + esc(lead) + "</b>.",
+    "&nbsp;",
+    "<b>" + esc(when) + "</b>"
+  ];
+  if (covering) lines.push("Covering for " + esc(covering) + ".");
+  lines.push("&nbsp;");
+  lines.push("Put it in your own phone calendar and it will remind you the " +
+             "evening before, even with no signal. Either open the attached " +
+             "file, or use the button.");
+  lines.push(bigLink(calendarLink(sunday, covering), "Add to my calendar"));
+  lines.push("If you cannot make it, open the app, find the Sunday and tap " +
+             "Request change.");
+
+  var plain = [
+    "You are down to drive the minibus " + lead + ".", "",
+    when,
+    covering ? "Covering for " + covering + "." : "",
+    "", "The attached file adds it to your phone calendar.",
+    "", "If you cannot make it, open the app, find the Sunday and tap Request change."
+  ].join("\n");
+
+  MailApp.sendEmail({
+    to: to,
+    subject: "Minibus duty " + (daysAhead === 1 ? "tomorrow" : "on " + when),
+    body: plain,
+    htmlBody: htmlShell("Your minibus duty", "#1B3A57", lines, ""),
+    attachments: [{
+      fileName: "minibus-duty.ics",
+      mimeType: "text/calendar",
+      content: dutyIcs(sunday, who, covering)
+    }]
+  });
+}
+
+/** An all day event on the Sunday, with an alert the day before. */
+function dutyIcs(sunday, who, covering) {
+  var tz = Session.getScriptTimeZone();
+  var day = Utilities.formatDate(sunday, tz, "yyyyMMdd");
+  var after = new Date(sunday); after.setDate(after.getDate() + 1);
+  var dayAfter = Utilities.formatDate(after, tz, "yyyyMMdd");
+  var stamp = Utilities.formatDate(new Date(), "UTC", "yyyyMMdd'T'HHmmss'Z'");
+
+  var desc = "You are down to drive the church minibus." +
+             (covering ? " Covering for " + covering + "." : "");
+
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Minibus//Rota//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    "UID:minibus-" + day + "-" + String(who).replace(/[^A-Za-z0-9]/g, "") + "@minibus",
+    "DTSTAMP:" + stamp,
+    "DTSTART;VALUE=DATE:" + day,
+    "DTEND;VALUE=DATE:" + dayAfter,
+    "TRANSP:TRANSPARENT",
+    "SUMMARY:" + icsEscape("Minibus driving duty"),
+    "DESCRIPTION:" + icsEscape(desc),
+    "LOCATION:" + icsEscape(BUS_ADDRESS),
+    "BEGIN:VALARM",
+    "TRIGGER:-PT12H",
+    "ACTION:DISPLAY",
+    "DESCRIPTION:" + icsEscape("Minibus duty tomorrow"),
+    "END:VALARM",
+    "END:VEVENT",
+    "END:VCALENDAR"
+  ].map(icsFold).join("\r\n");
+}
+
+/**
+ * The calendar format allows 75 characters to a line. Longer ones are
+ * continued on the next line starting with a space. Most calendars forgive
+ * an over-long line; some quietly refuse the whole file, and a file that
+ * does nothing when tapped gives the driver no clue why.
+ */
+function icsFold(line) {
+  if (line.length <= 75) return line;
+  var out = line.slice(0, 75);
+  var rest = line.slice(75);
+  while (rest.length) {
+    out += "\r\n " + rest.slice(0, 74);
+    rest = rest.slice(74);
+  }
+  return out;
+}
+
+function icsEscape(s) {
+  return String(s).replace(/\\/g, "\\\\")
+                  .replace(/;/g, "\\;")
+                  .replace(/,/g, "\\,")
+                  .replace(/\r?\n/g, "\\n");
+}
+
+function installDutyReminders() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "dutyReminders") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("dutyReminders").timeBased().everyDays(1).atHour(8).create();
+}
+
+/** Menu item, for testing without waiting for the morning. */
+function sendRemindersNow() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var withEmail = readDrivers(ss).filter(function (d) { return d.active && d.email; }).length;
+  if (!withEmail) {
+    SpreadsheetApp.getUi().alert(
+      "Nobody has an email address yet.\n\nFill the Email column on the " +
+      "Drivers tab. Anyone left blank simply gets no reminder.");
     return;
   }
+  dutyReminders();
+  ss.toast("Reminders checked for " + withEmail + " driver" +
+           (withEmail > 1 ? "s" : "") + ".", "Minibus", 6);
+}
+
+/* ---- when a Sunday changes after people have been told ----------------
+   A reminder that has already gone out is worse than none if the rota then
+   moves. This tells the person coming off and the person coming on.
+
+   It only fires for Sundays inside the reminder window. Change something a
+   month out and nobody has been told yet, so the normal reminder will carry
+   the right name and there is nothing to correct.
+
+   This cannot live in the ordinary onEdit. That is a simple trigger, it runs
+   with restricted permissions, and it is not allowed to send email. It has
+   its own installable trigger instead, so if that one fails to install only
+   these alerts are lost and every other thing onEdit does carries on. */
+
+function onRotaEditNotify(e) {
   try {
-    installWeeklyDigest();
-    ui.alert("It was not scheduled. It is now, for Sunday evenings.");
-  } catch (err) {
-    ui.alert("It is not scheduled, and it could not be set up:\n\n" + err +
-             "\n\nRun setUpEverything from the script editor and grant " +
-             "permissions when Google asks.");
+    if (!e || !e.range) return;
+    var sh = e.range.getSheet();
+    var name = sh.getName();
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    if (name === ROTA_SHEET) {
+      var row = e.range.getRow(), col = e.range.getColumn();
+      if (row < 2 || (col !== 2 && col !== 3)) return;
+      if (typeof e.oldValue === "undefined" && typeof e.value === "undefined") return;
+
+      var key = anyToKey(sh.getRange(row, 1).getValue());
+      if (!key) return;
+
+      var scheduled = String(sh.getRange(row, 2).getValue() || "").trim();
+      var cover     = String(sh.getRange(row, 3).getValue() || "").trim();
+      var was       = String(e.oldValue || "").trim();
+
+      /* Who was actually driving before this edit, and who is now. */
+      var before = col === 2 ? (cover || was) : (was || scheduled);
+      var after  = cover || scheduled;
+      notifyDutyChange(ss, key, before, after);
+      return;
+    }
+
+    if (name === REQUESTS_SHEET) {
+      var r = e.range.getRow(), c = e.range.getColumn();
+      if (r < 2 || (c !== 8 && c !== 10)) return;
+      if (String(sh.getRange(r, 8).getValue() || "") !== "Approved") return;
+      var replacement = String(sh.getRange(r, 10).getValue() || "").trim();
+      if (!replacement) return;
+      var k = anyToKey(sh.getRange(r, 3).getValue());
+      if (!k) return;
+      notifyDutyChange(ss, k, String(sh.getRange(r, 4).getValue() || "").trim(), replacement);
+    }
+  } catch (err) { /* an alert must never block somebody editing the sheet */ }
+}
+
+function notifyDutyChange(ss, key, before, after) {
+  before = String(before || "").trim();
+  after  = String(after  || "").trim();
+  if (before === after) return;
+
+  var sunday = keyToDate(key);
+  var today = new Date();
+  today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if (sunday < today) return;                                  // been and gone
+
+  var horizon = Math.max.apply(null, REMIND_DAYS);
+  if (Math.round((sunday - today) / 86400000) > horizon) return;  // nobody told yet
+
+  var emails = {};
+  readDrivers(ss).forEach(function (d) { if (d.active && d.email) emails[d.name] = d.email; });
+
+  var when = Utilities.formatDate(sunday, Session.getScriptTimeZone(), "EEEE d MMMM yyyy");
+
+  if (before && emails[before]) {
+    var offLines = [
+      "You were down to drive on <b>" + esc(when) + "</b>.",
+      "&nbsp;",
+      after ? ("That has changed. " + esc(after) + " is driving instead.")
+            : "That has changed and somebody else will be driving.",
+      "&nbsp;",
+      "Nothing is needed from you. If you put it in your calendar, you can " +
+      "delete that entry."
+    ];
+    MailApp.sendEmail({
+      to: emails[before],
+      subject: "Minibus: you are no longer driving on " + when,
+      body: "You were down to drive on " + when + ".\n\n" +
+            (after ? after + " is driving instead." : "Somebody else is driving instead.") +
+            "\n\nNothing is needed from you.",
+      htmlBody: htmlShell("Duty changed", "#5C6672", offLines, "")
+    });
   }
+
+  if (after && emails[after]) {
+    var onLines = [
+      "You are now down to drive the minibus on <b>" + esc(when) + "</b>.",
+      "&nbsp;",
+      before ? ("Covering for " + esc(before) + ".") : "",
+      "&nbsp;",
+      "Put it in your own phone calendar and it will remind you the evening " +
+      "before. Either open the attached file, or use the button.",
+      bigLink(calendarLink(sunday, before), "Add to my calendar"),
+      "If you cannot make it, open the app, find the Sunday and tap Request change."
+    ].filter(function (l) { return l !== ""; });
+
+    MailApp.sendEmail({
+      to: emails[after],
+      subject: "Minibus duty on " + when,
+      body: "You are now down to drive the minibus on " + when + ".\n\n" +
+            (before ? "Covering for " + before + ".\n\n" : "") +
+            "The attached file adds it to your phone calendar.",
+      htmlBody: htmlShell("You are now driving", "#1B3A57", onLines, ""),
+      attachments: [{
+        fileName: "minibus-duty.ics",
+        mimeType: "text/calendar",
+        content: dutyIcs(sunday, after, before)
+      }]
+    });
+  }
+}
+
+function installChangeAlerts() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "onRotaEditNotify") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("onRotaEditNotify")
+    .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
+    .onEdit()
+    .create();
 }
 
 function installWeeklyDigest() {
@@ -1062,7 +1387,8 @@ function onOpen() {
     .addSeparator()
     .addItem("Send a test email", "sendTestEmail")
     .addItem("Send weekly summary now", "sendDigestNow")
-    .addItem("Check weekly summary is scheduled", "checkDigestScheduled")
+    .addItem("Send duty reminders now", "sendRemindersNow")
+    .addItem("Check scheduled emails", "checkDigestScheduled")
     .addItem("Check time zone", "checkTimeZoneMenu")
     .addToUi();
 }
@@ -1282,20 +1608,43 @@ function tabUrl(tabName) {
   return url;
 }
 
-function openButton(label, tabName) {
-  var url = tabName ? tabUrl(tabName) : sheetUrl();
+function bigLink(url, label, colour) {
   if (!url) return "";
   return '<p style="margin:22px 0 6px"><a href="' + url + '" ' +
-    'style="background:#1B222C;color:#ffffff;text-decoration:none;' +
+    'style="background:' + (colour || "#1B222C") + ';color:#ffffff;text-decoration:none;' +
     'font-family:Helvetica,Arial,sans-serif;font-weight:bold;font-size:16px;' +
     'padding:13px 22px;border-radius:8px;display:inline-block">' + label + '</a></p>';
+}
+
+function openButton(label, tabName) {
+  return bigLink(tabName ? tabUrl(tabName) : sheetUrl(), label);
+}
+
+/**
+ * A second way into the calendar, for phones where the attached file does
+ * not open cleanly. Gmail on Android in particular is happier with a link
+ * than with a .ics attachment, and this needs no file handling at all: it
+ * opens a prefilled event in the browser.
+ */
+function calendarLink(sunday, covering) {
+  var tz = Session.getScriptTimeZone();
+  var day = Utilities.formatDate(sunday, tz, "yyyyMMdd");
+  var after = new Date(sunday); after.setDate(after.getDate() + 1);
+  var dayAfter = Utilities.formatDate(after, tz, "yyyyMMdd");
+  var details = "You are down to drive the church minibus." +
+                (covering ? " Covering for " + covering + "." : "");
+  return "https://calendar.google.com/calendar/render?action=TEMPLATE" +
+         "&text=" + encodeURIComponent("Minibus driving duty") +
+         "&dates=" + day + "/" + dayAfter +
+         "&details=" + encodeURIComponent(details) +
+         "&location=" + encodeURIComponent(BUS_ADDRESS);
 }
 
 function htmlShell(title, colour, lines, buttonLabel, tabName) {
   return '<div style="font-family:Helvetica,Arial,sans-serif;font-size:15px;color:#16191F;line-height:1.5">' +
     '<p style="font-size:19px;font-weight:bold;color:' + colour + ';margin:0 0 14px">' + title + '</p>' +
     lines.map(function (l) { return '<p style="margin:0 0 6px">' + l + '</p>'; }).join("") +
-    openButton(buttonLabel, tabName) +
+    (buttonLabel ? openButton(buttonLabel, tabName) : "") +
     '<p style="color:#5C6672;font-size:13px;margin-top:18px">Sent by the minibus app.</p></div>';
 }
 

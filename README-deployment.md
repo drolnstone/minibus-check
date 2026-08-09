@@ -46,7 +46,7 @@ brand new deployment instead, you must paste the new URL into `config.js`.
 
 Replace `index.html`, `config.js` and `sw.js` on your host.
 
-`sw.js` has been bumped to `minibus-check-v40`. That is what tells every phone
+`sw.js` has been bumped to `minibus-check-v42`. That is what tells every phone
 to throw away its old copy. If you ever edit `index.html` or `config.js`
 again, bump that number, and bump `APP_VERSION` in `index.html` to match.
 
@@ -385,6 +385,76 @@ wedding, and nothing recorded that until now.
 
 Both get their own column on the Checks sheet, and both appear in the Sunday
 evening digest, which is where you would actually act on them.
+
+## Duty reminders
+
+Drivers get an email before their Sunday, with a **calendar file attached**.
+Opening it once puts the duty in their own phone calendar, which then reminds
+them the evening before, on their own alerts, with no signal needed. After
+that the app is not involved.
+
+Two go out: **a week before**, which gives somebody time to ask for a swap,
+and **the day before**, which is the one that gets them out of bed. Change
+`REMIND_DAYS` at the top of `Code.gs` if you want different notice.
+
+**It needs the Email column on the Drivers tab.** Anyone left blank simply
+gets no reminder — nothing breaks, they are skipped. Emails are never sent to
+the app; they stay in the spreadsheet.
+
+Reminders go out once each. Running them by hand will not double up.
+
+### When you change a Sunday afterwards
+
+If you move a Sunday that people have already been reminded about, both are
+told automatically: the one coming off gets a short note saying they are no
+longer needed, and the one coming on gets the duty with its own calendar file.
+
+It only fires for Sundays inside the reminder window. Change something a month
+out and nobody has been told yet, so the normal reminder carries the right
+name and there is nothing to correct.
+
+This runs on its own trigger, separate from the one that stamps the sheet.
+Google does not allow the ordinary sheet trigger to send email, so if that
+separate one ever fails to install you lose these alerts and nothing else.
+**Minibus → Check scheduled emails** reports on all three.
+
+- **Minibus → Send duty reminders now** to test without waiting for morning.
+- **Minibus → Check scheduled emails** confirms both the reminders and the
+  Sunday summary are actually scheduled, and reports how many drivers have an
+  address.
+
+Why email rather than a text or a phone notification: Apps Script cannot send
+texts without a paid third party account, and phone notifications only work if
+the driver has added the app to their Home Screen and granted permission,
+failing silently otherwise. The calendar file needs nothing set up at their
+end and keeps working offline.
+
+### What works on which phone
+
+Every driver gets the **email** itself, whatever they use. That carries the
+date and who they are covering, so the reminder never depends on anything
+clever working.
+
+Two ways into their calendar, because no single one is reliable everywhere:
+
+- **The attached file.** Opens straight into Calendar on an iPhone. Also fine
+  in Outlook and on most Android mail apps.
+- **The Add to my calendar button.** A plain web link, so it works where an
+  attachment does not, which is mainly Gmail on Android and some Yahoo Mail
+  app versions.
+
+One honest limitation. The attached file asks for an alert twelve hours
+before. **iPhone honours that. Google Calendar usually ignores it** and applies
+whatever default notification the driver has set for all-day events, which is
+normally the evening before anyway. So the reminder still arrives, just not
+always at the minute we asked for. Nothing to fix at our end: it is Google
+Calendar's own behaviour on imported events.
+
+The duty is marked as free rather than busy, so it does not black out somebody's
+whole Sunday in their calendar.
+
+Yahoo addresses: the first email from the script often lands in spam. Mark it
+not spam once and it behaves after that.
 
 ## When emails stop arriving
 
