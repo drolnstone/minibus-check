@@ -56,6 +56,18 @@ var REQ_STATUS     = ["Pending", "Approved", "Rejected"];
    who drives on every future Sunday that has not been written down yet. */
 var PATTERN_ANCHOR = "2026-08-02";
 
+/* South Liverpool started later, so it counts from its own first Sunday.
+
+   Sharing North's anchor looked tidier and was wrong: the pattern counted
+   weeks the South route was not running, so it arrived at its first real
+   Sunday already two turns in and put the third name on it. Each route
+   counts from the day it actually began.
+
+   Before this date the South column stays blank, because there was no
+   South run to record. Do not move it once the route is going: moving it
+   changes who drives on every future Sunday not yet written down. */
+var PATTERN_ANCHOR_SOUTH = "2026-08-16";
+
 /* How far ahead the Rota tab is kept filled in. Sundays past this still show
    in the app, worked out from the pattern, and get written down here as the
    horizon rolls forward or the moment you change one by hand.
@@ -70,13 +82,25 @@ var ROTA_FILL_WEEKS = 16;
 /* The register the sheet starts from if the Drivers tab is empty. After the
    first run the Drivers tab IS the register, not this list. */
 var SEED_DRIVERS = [
-  { name: "Pst Kehinde", role: "Minister in Charge", order: "" },
-  { name: "Bro Asim",    role: "Coordinator",        order: 4 },
-  { name: "Bro Adebola", role: "Driver",             order: 1 },
-  { name: "Bro Abiodun", role: "Driver",             order: 2 },
-  { name: "Bro Moses",   role: "Driver",             order: 3 },
-  { name: "Bro Calvin",  role: "Backup",             order: "" },
-  { name: "Bro Tunde",   role: "Backup",             order: "" }
+  { name: "Pst Kehinde",     role: "Minister in Charge", route: "",      order: "" },
+
+  /* North Liverpool, the established route. Four in the pattern. */
+  { name: "Bro Adebola",     role: "Driver",      route: "North", order: 1 },
+  { name: "Bro Abiodun",     role: "Driver",      route: "North", order: 2 },
+  { name: "Bro Moses",       role: "Driver",      route: "North", order: 3 },
+  { name: "Bro Asim",        role: "Coordinator", route: "North", order: 4 },
+
+  /* South Liverpool, the new route. Three in the pattern, so it turns over
+     every three Sundays where North turns over every four. The two patterns
+     run independently and are not meant to line up.
+
+     Bro Tunde is first because he already knows the road. The other two
+     shadow him on the opening Sunday and then take their turns. */
+  { name: "Bro Tunde",       role: "Driver",      route: "South", order: 1 },
+  { name: "Pst Obamakinwa",  role: "Driver",      route: "South", order: 2 },
+  { name: "Bro Adesina",     role: "Driver",      route: "South", order: 3 },
+
+  { name: "Bro Calvin",      role: "Backup",      route: "",      order: "" }
 ];
 
 /* ---- entry points ------------------------------------------------------ */
@@ -290,7 +314,8 @@ function rotaPayload(fromKey, weeks) {
   }
 
   var drivers = readDrivers(ss);
-  var pattern = primaryPattern(drivers);
+  var pattern = { north: primaryPattern(drivers, "North"),
+                  south: primaryPattern(drivers, "South") };
   var requests = readLatestRequests(ss);
   var written = readRotaRows(ss);
 
@@ -309,8 +334,9 @@ function rotaPayload(fromKey, weeks) {
     var key = dateToKey(d);
     if (seen[key]) continue;
     rows.push(decorate({
-      date: key, primary: patternDriver(d, pattern), actual: "",
-      status: "Confirmed", primary2: "", actual2: "", notes: ""
+      date: key, primary: patternDriver(d, pattern.north), actual: "",
+      status: "Confirmed",
+      primary2: southDriver(d, pattern.south), actual2: "", notes: ""
     }, requests));
   }
 
@@ -454,20 +480,74 @@ function decorate(r, requests) {
   return out;
 }
 
-function primaryPattern(drivers) {
-  var p = drivers.filter(function (d) { return d.active && d.order; })
+/**
+ * The repeating running order for one route.
+ *
+ * route is "North" or "South". Each route keeps its own numbering, so both
+ * start at 1: North runs 1 to 4 and South runs 1 to 3. They are separate
+ * cycles from the same anchor Sunday and are not intended to line up. Trying
+ * to make a four and a three meet is what makes this look hard, and nothing
+ * anywhere needs them to.
+ */
+function primaryPattern(drivers, route) {
+  route = route || "North";
+  var p = drivers.filter(function (d) { return d.active && d.order && d.route === route; })
                  .sort(function (a, b) { return a.order - b.order; })
                  .map(function (d) { return d.name; });
   if (p.length) return p;
-  return SEED_DRIVERS.filter(function (d) { return d.order; })
+  return SEED_DRIVERS.filter(function (d) { return d.order && (d.route || "North") === route; })
                      .sort(function (a, b) { return a.order - b.order; })
                      .map(function (d) { return d.name; });
 }
 
+/**
+ * The South name for a Sunday, or blank before the route began.
+ *
+ * Blank matters. A name against a Sunday when no South bus ran would read
+ * as a missed duty to anyone looking back through the rota later.
+ */
+function southDriver(d, pattern) {
+  if (!pattern || !pattern.length) return "";
+  if (d < keyToDate(PATTERN_ANCHOR_SOUTH)) return "";
+  return patternDriver(d, pattern, PATTERN_ANCHOR_SOUTH);
+}
+
+/**
+ * Which pair of Rota columns a named driver sits in on a given row.
+ *
+ * Decided by the row first, because who is actually written against that
+ * Sunday beats any general rule about which route someone belongs to. Only
+ * if the name is nowhere on the row does it fall back to their Route column,
+ * and to North if even that is unset.
+ */
+function routeColumns(ss, rota, rRow, driver) {
+  var NORTH = { scheduled: 2, cover: 3 };
+  var SOUTH = { scheduled: 5, cover: 6 };
+  var who = String(driver || "").trim();
+  if (!who) return NORTH;
+
+  try {
+    var vals = rota.getRange(rRow, 1, 1, 6).getValues()[0];
+    if (String(vals[4] || "").trim() === who || String(vals[5] || "").trim() === who) return SOUTH;
+    if (String(vals[1] || "").trim() === who || String(vals[2] || "").trim() === who) return NORTH;
+  } catch (err) {}
+
+  var found = null;
+  readDrivers(ss).forEach(function (d) { if (d.name === who) found = d; });
+  return (found && found.route === "South") ? SOUTH : NORTH;
+}
+
+/* Both routes at once, since almost every caller wants the pair. */
+function bothPatterns(ss) {
+  var drivers = readDrivers(ss);
+  return { north: primaryPattern(drivers, "North"),
+           south: primaryPattern(drivers, "South") };
+}
+
 /** Which driver the repeating pattern puts on a given Sunday. */
-function patternDriver(d, pattern) {
+function patternDriver(d, pattern, anchorKey) {
   if (!pattern.length) return "";
-  var anchor = keyToDate(PATTERN_ANCHOR);
+  var anchor = keyToDate(anchorKey || PATTERN_ANCHOR);
   var weeks = Math.round((d.getTime() - anchor.getTime()) / 604800000);
   var n = pattern.length;
   return pattern[((weeks % n) + n) % n];
@@ -515,7 +595,7 @@ function readLatestRequests(ss) {
 function readDrivers(ss) {
   var sh = ss.getSheetByName(DRIVERS_SHEET);
   if (!sh || sh.getLastRow() < 2) return [];
-  var values = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+  var values = sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues();
   var out = [];
   values.forEach(function (r) {
     var name = String(r[0] || "").trim();
@@ -526,7 +606,11 @@ function readDrivers(ss) {
       active: yes(r[2]),
       order: Number(r[3]) || 0,
       pin: String(r[4] || "").replace(/\D/g, ""),
-      email: String(r[5] || "").trim()
+      email: String(r[5] || "").trim(),
+      /* Blank counts as North. The route column did not exist until the South
+         run started, so every row written before then is a North row, and
+         reading blank as North means nobody has to go back and fill it in. */
+      route: (String(r[6] || "").trim().toUpperCase().charAt(0) === "S") ? "South" : "North"
     });
   });
   return out;
@@ -629,8 +713,9 @@ function findRotaRow(sh, key) {
 }
 
 function appendRotaRow(ss, sh, d) {
-  var pattern = primaryPattern(readDrivers(ss));
-  sh.appendRow([d, patternDriver(d, pattern), "", "Confirmed", "", "", "", "", ""]);
+  var pattern = bothPatterns(ss);
+  sh.appendRow([d, patternDriver(d, pattern.north), "", "Confirmed",
+                southDriver(d, pattern.south), "", "", "", ""]);
   var row = sh.getLastRow();
   sh.getRange(row, 1).setNumberFormat("dd/mm/yyyy");
   applyRotaValidation(sh, row);
@@ -652,7 +737,7 @@ function stamp(sh, row, who) {
    an empty column where the addresses used to be, and no message would say
    so. This is the smoke alarm. It changes nothing and repairs nothing: it
    only tells a human that the shape has drifted. */
-var DRIVERS_HEADERS = ["Name", "Role", "Active", "Primary order", "PIN", "Email"];
+var DRIVERS_HEADERS = ["Name", "Role", "Active", "Primary order", "PIN", "Email", "Route"];
 
 function driversHeaderWarning(ss) {
   try {
@@ -833,16 +918,36 @@ function checkTimeZoneMenu() {
 
 function ensureDrivers(ss) {
   var existing = ss.getSheetByName(DRIVERS_SHEET);
-  var sh = sheet(ss, DRIVERS_SHEET, ["Name", "Role", "Active", "Primary order", "PIN", "Email"]);
+  var sh = sheet(ss, DRIVERS_SHEET, DRIVERS_HEADERS);
+
+  /* Route arrived after this tab was already in use, so a sheet in service
+     has six columns and no seventh heading. Written in here rather than by
+     hand, but ONLY when column G is genuinely empty. If somebody has put
+     something of their own there, leave it alone and let the Drivers tab
+     check report it: silently relabelling a column that already holds data
+     is how you lose data without anyone noticing. */
+  if (existing) {
+    var g1 = String(sh.getRange(1, 7).getValue() || "").trim();
+    if (!g1) {
+      sh.getRange(1, 7).setValue("Route").setFontWeight("bold");
+      sh.getRange(1, 7).setNote(
+        "North or South. Blank counts as North, so rows written before the\n" +
+        "South route started keep working without being edited.");
+      sh.getRange("G2:G200").setDataValidation(listRule(["North", "South"]));
+    }
+  }
+
   if (!existing) {
     SEED_DRIVERS.forEach(function (d) {
-      sh.appendRow([d.name, d.role, "YES", d.order, "", ""]);
+      sh.appendRow([d.name, d.role, "YES", d.order, "", "", d.route]);
     });
+    sh.getRange("G2:G200").setDataValidation(listRule(["North", "South"]));
     sh.setColumnWidth(1, 150);
     sh.setColumnWidth(2, 160);
     sh.getRange("C2:C200").setDataValidation(listRule(["YES", "NO"]));
     sh.getRange(1, 4).setNote(
       "Number the repeating pattern here: 1, 2, 3, 4...\n" +
+      "Each route is numbered separately, so both start at 1.\n" +
       "Leave blank for anyone who is not in the normal rotation.\n" +
       "Anyone marked Active can still be picked to cover a Sunday.");
     sh.getRange(1, 3).setNote(
@@ -887,7 +992,7 @@ function fillRotaAhead(ss, sh) {
   sh = sh || ss.getSheetByName(ROTA_SHEET);
   if (!sh) return;
 
-  var pattern = primaryPattern(readDrivers(ss));
+  var pattern = bothPatterns(ss);
   var have = {};
   readRotaRows(ss).forEach(function (r) { have[r.date] = true; });
 
@@ -897,7 +1002,8 @@ function fillRotaAhead(ss, sh) {
     var d = addWeeks(start, i);
     var key = dateToKey(d);
     if (have[key]) continue;
-    rows.push([d, patternDriver(d, pattern), "", "Confirmed", "", "", "", "", ""]);
+    rows.push([d, patternDriver(d, pattern.north), "", "Confirmed",
+               southDriver(d, pattern.south), "", "", "", ""]);
   }
   if (!rows.length) return;
 
@@ -933,19 +1039,31 @@ function refreshDropdowns() {
   var drivers = readDrivers(ss);
   if (!drivers.length) {
     drivers = SEED_DRIVERS.map(function (d) {
-      return { name: d.name, active: true, order: Number(d.order) || 0 };
+      return { name: d.name, active: true, order: Number(d.order) || 0,
+               route: d.route || "North" };
     });
   }
 
-  var active  = drivers.filter(function (d) { return d.active; }).map(function (d) { return d.name; });
-  var primary = primaryPattern(drivers);
+  var active = drivers.filter(function (d) { return d.active; }).map(function (d) { return d.name; });
+  var north  = primaryPattern(drivers, "North");
+  var south  = primaryPattern(drivers, "South");
 
   var rota = ss.getSheetByName(ROTA_SHEET);
   if (rota) {
-    // Scheduled columns hold the normal rotation.
-    // Cover columns hold ANYONE authorised, backups included.
-    rota.getRange("B2:B3000").setDataValidation(listRule(primary.length ? primary : active));
-    rota.getRange("E2:E3000").setDataValidation(listRule(primary.length ? primary : active));
+    /* Scheduled columns list that route's own rotation, so the usual name is
+       one tap away. Column E used to be handed the North list, which offered
+       the wrong four names for the South route.
+
+       Cover columns list EVERYONE active, both routes and backups included.
+       Anybody can cover for anybody: a driver off on holiday should never be
+       stuck because the only people offered were on their own route.
+
+       None of these lists is a restriction. Every one of them allows a value
+       typed in by hand, so you can always put a name in a scheduled column
+       that the pattern does not expect. The list is a convenience, not a
+       gate. */
+    rota.getRange("B2:B3000").setDataValidation(listRule(north.length ? north : active));
+    rota.getRange("E2:E3000").setDataValidation(listRule(south.length ? south : active));
     rota.getRange("C2:C3000").setDataValidation(listRule(active));
     rota.getRange("F2:F3000").setDataValidation(listRule(active));
     rota.getRange("D2:D3000").setDataValidation(listRule(ROTA_STATUS));
@@ -1283,7 +1401,8 @@ function dutyReminders() {
 
   var byDate = {};
   readRotaRows(ss).forEach(function (r) { byDate[r.date] = r; });
-  var pattern = primaryPattern(drivers);
+  var pattern = { north: primaryPattern(drivers, "North"),
+                  south: primaryPattern(drivers, "South") };
 
   var props = PropertiesService.getScriptProperties();
   var sent = {};
@@ -1299,18 +1418,28 @@ function dutyReminders() {
 
     var key = dateToKey(target);
     var row = byDate[key];
-    var who = String((row ? (row.actual || row.primary) : patternDriver(target, pattern)) || "").trim();
-    if (!who || !emails[who]) return;           // nobody assigned, or no address
 
-    /* Sent once. The trigger runs daily, but somebody may also run it by
-       hand, and nobody wants the same reminder twice. */
-    var stamp = key + "|" + days + "|" + who;
-    if (sent[stamp]) return;
+    /* Both routes. A South driver has exactly the same need to be reminded
+       as a North one, and reminding only one route would have been a quiet
+       way of treating the new route as second class. */
+    [
+      { route: "North Liverpool",
+        who: String((row ? (row.actual  || row.primary)  : patternDriver(target, pattern.north)) || "").trim(),
+        was: (row && row.actual  && row.primary  && row.actual  !== row.primary)  ? row.primary  : "" },
+      { route: "South Liverpool",
+        who: String((row ? (row.actual2 || row.primary2) : southDriver(target, pattern.south)) || "").trim(),
+        was: (row && row.actual2 && row.primary2 && row.actual2 !== row.primary2) ? row.primary2 : "" }
+    ].forEach(function (slot) {
+      if (!slot.who || !emails[slot.who]) return;   // nobody assigned, or no address
 
-    var covering = (row && row.actual && row.primary && row.actual !== row.primary)
-      ? row.primary : "";
-    sendDutyEmail(emails[who], who, target, days, covering);
-    sent[stamp] = true;
+      /* Sent once. The trigger runs daily, but somebody may also run it by
+         hand, and nobody wants the same reminder twice. */
+      var stamp = key + "|" + days + "|" + slot.who;
+      if (sent[stamp]) return;
+
+      sendDutyEmail(emails[slot.who], slot.who, target, days, slot.was, slot.route);
+      sent[stamp] = true;
+    });
   });
 
   var keys = Object.keys(sent).sort();
@@ -1318,13 +1447,19 @@ function dutyReminders() {
   props.setProperty("remindersSent", JSON.stringify(sent));
 }
 
-function sendDutyEmail(to, who, sunday, daysAhead, covering) {
+function sendDutyEmail(to, who, sunday, daysAhead, covering, route) {
   var tz = Session.getScriptTimeZone();
   var when = Utilities.formatDate(sunday, tz, "EEEE d MMMM yyyy");
   var lead = daysAhead === 1 ? "tomorrow" : "in " + daysAhead + " days";
 
+  /* Which route. With one route "drive the minibus" was enough. With two it
+     leaves a driver to guess, and guessing wrong means a bus at the wrong end
+     of the city with people waiting at the other. */
+  var on = route ? " on <b>" + esc(route) + "</b>" : "";
+  var onPlain = route ? " on " + route : "";
+
   var lines = [
-    "You are down to drive the minibus <b>" + esc(lead) + "</b>.",
+    "You are down to drive the minibus" + on + " <b>" + esc(lead) + "</b>.",
     "&nbsp;",
     "<b>" + esc(when) + "</b>"
   ];
@@ -1333,12 +1468,12 @@ function sendDutyEmail(to, who, sunday, daysAhead, covering) {
   lines.push("Put it in your own phone calendar and it will remind you the " +
              "evening before, even with no signal. Either open the attached " +
              "file, or use the button.");
-  lines.push(bigLink(calendarLink(sunday, covering), "Add to my calendar"));
+  lines.push(bigLink(calendarLink(sunday, covering, route), "Add to my calendar"));
   lines.push("If you cannot make it, open the app, find the Sunday and tap " +
              "Request change.");
 
   var plain = [
-    "You are down to drive the minibus " + lead + ".", "",
+    "You are down to drive the minibus" + onPlain + " " + lead + ".", "",
     when,
     covering ? "Covering for " + covering + "." : "",
     "", "The attached file adds it to your phone calendar.",
@@ -1347,26 +1482,28 @@ function sendDutyEmail(to, who, sunday, daysAhead, covering) {
 
   MailApp.sendEmail({
     to: to,
-    subject: "Minibus duty " + (daysAhead === 1 ? "tomorrow" : "on " + when),
+    subject: "Minibus duty" + (route ? ": " + route : "") + " " +
+             (daysAhead === 1 ? "tomorrow" : "on " + when),
     body: plain,
     htmlBody: htmlShell("Your minibus duty", "#1B3A57", lines, ""),
     attachments: [{
       fileName: "minibus-duty.ics",
       mimeType: "text/calendar",
-      content: dutyIcs(sunday, who, covering)
+      content: dutyIcs(sunday, who, covering, route)
     }]
   });
 }
 
 /** An all day event on the Sunday, with an alert the day before. */
-function dutyIcs(sunday, who, covering) {
+function dutyIcs(sunday, who, covering, route) {
   var tz = Session.getScriptTimeZone();
   var day = Utilities.formatDate(sunday, tz, "yyyyMMdd");
   var after = new Date(sunday); after.setDate(after.getDate() + 1);
   var dayAfter = Utilities.formatDate(after, tz, "yyyyMMdd");
   var stamp = Utilities.formatDate(new Date(), "UTC", "yyyyMMdd'T'HHmmss'Z'");
 
-  var desc = "You are down to drive the church minibus." +
+  var desc = "You are down to drive the church minibus" +
+             (route ? " on " + route : "") + "." +
              (covering ? " Covering for " + covering + "." : "");
 
   return [
@@ -1381,7 +1518,7 @@ function dutyIcs(sunday, who, covering) {
     "DTSTART;VALUE=DATE:" + day,
     "DTEND;VALUE=DATE:" + dayAfter,
     "TRANSP:TRANSPARENT",
-    "SUMMARY:" + icsEscape("Minibus driving duty"),
+    "SUMMARY:" + icsEscape(route ? "Minibus duty: " + route : "Minibus driving duty"),
     "DESCRIPTION:" + icsEscape(desc),
     "LOCATION:" + icsEscape(BUS_ADDRESS),
     "BEGIN:VALARM",
@@ -1462,20 +1599,25 @@ function onRotaEditNotify(e) {
 
     if (name === ROTA_SHEET) {
       var row = e.range.getRow(), col = e.range.getColumn();
-      if (row < 2 || (col !== 2 && col !== 3)) return;
+      /* Columns 2 and 3 are North, 5 and 6 are South. South used to be left
+         out, so a South driver could be taken off a Sunday and never told. */
+      if (row < 2 || [2, 3, 5, 6].indexOf(col) === -1) return;
       if (typeof e.oldValue === "undefined" && typeof e.value === "undefined") return;
 
       var key = anyToKey(sh.getRange(row, 1).getValue());
       if (!key) return;
 
-      var scheduled = String(sh.getRange(row, 2).getValue() || "").trim();
-      var cover     = String(sh.getRange(row, 3).getValue() || "").trim();
+      var schedCol = (col === 5 || col === 6) ? 5 : 2;
+      var coverCol = schedCol + 1;
+      var scheduled = String(sh.getRange(row, schedCol).getValue() || "").trim();
+      var cover     = String(sh.getRange(row, coverCol).getValue() || "").trim();
       var was       = String(e.oldValue || "").trim();
 
       /* Who was actually driving before this edit, and who is now. */
-      var before = col === 2 ? (cover || was) : (was || scheduled);
+      var before = (col === schedCol) ? (cover || was) : (was || scheduled);
       var after  = cover || scheduled;
-      notifyDutyChange(ss, key, before, after);
+      notifyDutyChange(ss, key, before, after,
+                       schedCol === 5 ? "South Liverpool" : "North Liverpool");
       return;
     }
 
@@ -1487,12 +1629,17 @@ function onRotaEditNotify(e) {
       if (!replacement) return;
       var k = anyToKey(sh.getRange(r, 3).getValue());
       if (!k) return;
-      notifyDutyChange(ss, k, String(sh.getRange(r, 4).getValue() || "").trim(), replacement);
+      var reqDriver = String(sh.getRange(r, 4).getValue() || "").trim();
+      var rota2 = ss.getSheetByName(ROTA_SHEET);
+      var rRow2 = rota2 ? findRotaRow(rota2, k) : 0;
+      var rt = (rota2 && rRow2 && routeColumns(ss, rota2, rRow2, reqDriver).scheduled === 5)
+        ? "South Liverpool" : "North Liverpool";
+      notifyDutyChange(ss, k, reqDriver, replacement, rt);
     }
   } catch (err) { /* an alert must never block somebody editing the sheet */ }
 }
 
-function notifyDutyChange(ss, key, before, after) {
+function notifyDutyChange(ss, key, before, after, route) {
   before = String(before || "").trim();
   after  = String(after  || "").trim();
   if (before === after) return;
@@ -1509,10 +1656,12 @@ function notifyDutyChange(ss, key, before, after) {
   readDrivers(ss).forEach(function (d) { if (d.active && d.email) emails[d.name] = d.email; });
 
   var when = Utilities.formatDate(sunday, Session.getScriptTimeZone(), "EEEE d MMMM yyyy");
+  var on = route ? " (" + esc(route) + ")" : "";
+  var onPlain = route ? " (" + route + ")" : "";
 
   if (before && emails[before]) {
     var offLines = [
-      "You were down to drive on <b>" + esc(when) + "</b>.",
+      "You were down to drive on <b>" + esc(when) + "</b>" + on + ".",
       "&nbsp;",
       after ? ("That has changed. " + esc(after) + " is driving instead.")
             : "That has changed and somebody else will be driving.",
@@ -1523,7 +1672,7 @@ function notifyDutyChange(ss, key, before, after) {
     MailApp.sendEmail({
       to: emails[before],
       subject: "Minibus: you are no longer driving on " + when,
-      body: "You were down to drive on " + when + ".\n\n" +
+      body: "You were down to drive on " + when + onPlain + ".\n\n" +
             (after ? after + " is driving instead." : "Somebody else is driving instead.") +
             "\n\nNothing is needed from you.",
       htmlBody: htmlShell("Duty changed", "#5C6672", offLines, "")
@@ -1532,27 +1681,27 @@ function notifyDutyChange(ss, key, before, after) {
 
   if (after && emails[after]) {
     var onLines = [
-      "You are now down to drive the minibus on <b>" + esc(when) + "</b>.",
+      "You are now down to drive the minibus on <b>" + esc(when) + "</b>" + on + ".",
       "&nbsp;",
       before ? ("Covering for " + esc(before) + ".") : "",
       "&nbsp;",
       "Put it in your own phone calendar and it will remind you the evening " +
       "before. Either open the attached file, or use the button.",
-      bigLink(calendarLink(sunday, before), "Add to my calendar"),
+      bigLink(calendarLink(sunday, before, route), "Add to my calendar"),
       "If you cannot make it, open the app, find the Sunday and tap Request change."
     ].filter(function (l) { return l !== ""; });
 
     MailApp.sendEmail({
       to: emails[after],
-      subject: "Minibus duty on " + when,
-      body: "You are now down to drive the minibus on " + when + ".\n\n" +
+      subject: "Minibus duty" + (route ? ": " + route : "") + " on " + when,
+      body: "You are now down to drive the minibus on " + when + onPlain + ".\n\n" +
             (before ? "Covering for " + before + ".\n\n" : "") +
             "The attached file adds it to your phone calendar.",
       htmlBody: htmlShell("You are now driving", "#1B3A57", onLines, ""),
       attachments: [{
         fileName: "minibus-duty.ics",
         mimeType: "text/calendar",
-        content: dutyIcs(sunday, after, before)
+        content: dutyIcs(sunday, after, before, route)
       }]
     });
   }
@@ -1656,8 +1805,13 @@ function onEditRequests(e, sh) {
     if (!rota) continue;
     var rRow = findRotaRow(rota, key) || appendRotaRow(ss, rota, keyToDate(key));
 
+    /* Which route the request belongs to. Approving used to write every
+       cover into the North column, so approving a South driver's holiday
+       put a stranger against the North slot and left South uncovered. */
+    var cols = routeColumns(ss, rota, rRow, String(sh.getRange(row, 4).getValue() || "").trim());
+
     if (status === "Approved" && replacement) {
-      rota.getRange(rRow, 3).setValue(replacement);
+      rota.getRange(rRow, cols.cover).setValue(replacement);
       rota.getRange(rRow, 4).setValue("Covered");
       stamp(rota, rRow, "Approved request");
     } else if (status === "Approved" && !replacement) {
@@ -1856,15 +2010,16 @@ function openButton(label, tabName) {
  * than with a .ics attachment, and this needs no file handling at all: it
  * opens a prefilled event in the browser.
  */
-function calendarLink(sunday, covering) {
+function calendarLink(sunday, covering, route) {
   var tz = Session.getScriptTimeZone();
   var day = Utilities.formatDate(sunday, tz, "yyyyMMdd");
   var after = new Date(sunday); after.setDate(after.getDate() + 1);
   var dayAfter = Utilities.formatDate(after, tz, "yyyyMMdd");
-  var details = "You are down to drive the church minibus." +
+  var details = "You are down to drive the church minibus" +
+                (route ? " on " + route : "") + "." +
                 (covering ? " Covering for " + covering + "." : "");
   return "https://calendar.google.com/calendar/render?action=TEMPLATE" +
-         "&text=" + encodeURIComponent("Minibus driving duty") +
+         "&text=" + encodeURIComponent(route ? "Minibus duty: " + route : "Minibus driving duty") +
          "&dates=" + day + "/" + dayAfter +
          "&details=" + encodeURIComponent(details) +
          "&location=" + encodeURIComponent(BUS_ADDRESS);

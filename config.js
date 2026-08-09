@@ -68,13 +68,15 @@ window.CONFIG = {
      The rota uses the Drivers tab in the spreadsheet, so add new people to
      both. Optional per driver: pin: "1234" */
   drivers: [
-    { name: "Pst Kehinde", role: "Minister in Charge" },
-    { name: "Bro Asim",    role: "Coordinator" },
-    { name: "Bro Adebola", role: "Driver" },
-    { name: "Bro Abiodun", role: "Driver" },
-    { name: "Bro Moses",   role: "Driver" },
-    { name: "Bro Calvin",  role: "Backup" },
-    { name: "Bro Tunde",   role: "Backup" }
+    { name: "Pst Kehinde",    role: "Minister in Charge" },
+    { name: "Bro Asim",       role: "Coordinator" },
+    { name: "Bro Adebola",    role: "Driver" },
+    { name: "Bro Abiodun",    role: "Driver" },
+    { name: "Bro Moses",      role: "Driver" },
+    { name: "Pst Obamakinwa", role: "Driver" },
+    { name: "Bro Tunde",      role: "Driver" },
+    { name: "Bro Adesina",    role: "Driver" },
+    { name: "Bro Calvin",     role: "Backup" }
   ],
 
   /* ---- Driving rota ----------------------------------------------------
@@ -83,12 +85,37 @@ window.CONFIG = {
      rotaAnchor must be a Sunday and must match PATTERN_ANCHOR in Code.gs. */
   rotaAnchor: "2026-08-02",
 
+  /* North Liverpool. Four names, so it turns over every four Sundays.
+     Counts from rotaAnchor above. */
   rotaPrimaryPattern: [
     "Bro Adebola",
     "Bro Abiodun",
     "Bro Moses",
     "Bro Asim"
-  ]
+  ],
+
+  /* South Liverpool. Three names, so it turns over every three Sundays.
+
+     Bro Tunde is first because he already knows the road. The other two
+     shadow him on the opening Sunday and then take their turns.
+
+     The two routes count from different Sundays and are not meant to line
+     up: four and three only meet every twelve weeks, and nothing here needs
+     them to meet at all. Each route simply takes its next turn.
+
+     Leave this out entirely and the app shows North only, which is what it
+     did before the South route started. */
+  rotaSecondaryPattern: [
+    "Bro Tunde",
+    "Pst Obamakinwa",
+    "Bro Adesina"
+  ],
+
+  /* The first Sunday the South route actually ran. It counts from here, not
+     from rotaAnchor, and the South line stays blank before this date because
+     there was no South run to record. Must match PATTERN_ANCHOR_SOUTH in
+     Code.gs. */
+  rotaSecondaryAnchor: "2026-08-16"
 
 };
 

@@ -284,17 +284,36 @@ If the buses ever move, do one check standing at the new spot and copy the
 
 To switch the whole thing off, set `recordLocation: false`.
 
-## The second route
+## Two routes, two rotas
 
-The Rota tab already has **South Liverpool scheduled** and **South Liverpool
-actual / cover** columns, sitting empty. Start filling them in whenever you
-begin running both routes on the same Sunday, and the app will show them.
-Nothing needs rebuilding.
+Each route has its own repeating pattern, and they run independently.
+
+- **North Liverpool**, four drivers, so it turns over every four Sundays.
+- **South Liverpool**, three drivers, so it turns over every three.
+
+They are not meant to line up, and nothing anywhere needs them to. Four and
+three only meet every twelve weeks. Each route simply takes its next turn.
+
+Each route counts from its own first Sunday, set by `rotaAnchor` for North and
+`rotaSecondaryAnchor` for South. South began on 16 August 2026 and its column
+stays blank before that date, because there was no South run to record and a
+name against an empty Sunday reads later as a missed duty. If a third route is
+ever added, give it its own anchor the same way rather than bending the name
+order to fit somebody else's.
+
+The **Route** column on the Drivers tab says which pattern somebody belongs
+to, and **Primary order** is numbered separately per route, so both start at
+1. A blank Route counts as North, so rows written before the South route
+started keep working untouched.
 
 The two slots are named after the routes rather than the vehicles, because
 which bus runs which route can change on the day. The script reads this tab by
 column position and never by heading, so the names are yours to reword whenever
 you like.
+
+Duty reminders go to whoever is on either route that Sunday, and both the
+email and the calendar entry name the route, so nobody has to guess which end
+of the city they are driving.
 
 ---
 

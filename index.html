@@ -584,7 +584,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v44";
+var APP_VERSION = "v48";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1679,6 +1679,10 @@ function recText(r){
 
 /* ---------------- rolling driving rota ---------------- */
 var ROTA_PRIMARY_PATTERN = (CFG.rotaPrimaryPattern || ["Bro Adebola", "Bro Abiodun", "Bro Moses", "Bro Asim"]).slice();
+
+/* South Liverpool. Empty means the second route is not running yet, and the
+   rota screen simply shows North, exactly as it did before. */
+var ROTA_SECONDARY_PATTERN = (CFG.rotaSecondaryPattern || []).slice();
 var rotaRows = [];
 var rotaViewMode = "all";
 var rotaModalMode = "";
@@ -1706,6 +1710,21 @@ function rotaAnchorDate(){
   var s=String(CFG.rotaAnchor||"2026-08-02").split("-");
   return new Date(Number(s[0]),Number(s[1])-1,Number(s[2]));
 }
+/* South counts from its own first Sunday, and shows nothing before it. A
+   name against a Sunday when no South bus ran would read as a missed duty. */
+function rotaSecondaryAnchorDate(){
+  var s=String(CFG.rotaSecondaryAnchor||"2026-08-16").split("-");
+  return new Date(+s[0],+s[1]-1,+s[2]);
+}
+function rotaSeedSecondary(d){
+  if(!ROTA_SECONDARY_PATTERN.length) return "";
+  var a=rotaSecondaryAnchorDate();
+  if(d<a) return "";
+  var weeks=Math.round((d-a)/604800000);
+  var n=ROTA_SECONDARY_PATTERN.length;
+  return ROTA_SECONDARY_PATTERN[((weeks%n)+n)%n];
+}
+
 function rotaSeedPrimary(d){
   var n=ROTA_PRIMARY_PATTERN.length;
   if(!n) return "";
@@ -1874,8 +1893,20 @@ function rotaPaint(keepPosition){
       var key=rotaKey(d), row=rotaRowFor(key)||{};
       var primary=row.primary||rotaSeedPrimary(d);
       var actual=row.actual||primary;
+
+      /* Worked out here rather than further down, because My duties and the
+         Request change button both need it. A South driver's Sunday used to
+         count for neither: filtering to My duties showed them an empty list,
+         and no request button ever appeared on the Sunday they were actually
+         driving, so the whole holiday and swap route was shut to them. */
+      var south=row.primary2||rotaSeedSecondary(d);
+      var southActual=row.actual2||south;
+      var mineNorth = my && (primary===my || actual===my);
+      var mineSouth = my && (south===my || southActual===my);
+      var mine = mineNorth || mineSouth;
+
       var current=key===rotaKey(today), past=d<today;
-      if(rotaViewMode==="mine" && primary!==my && actual!==my) continue;
+      if(rotaViewMode==="mine" && !mine) continue;
 
       /* Nobody rostered. Say so loudly rather than letting the Sunday look
          normal with a blank name. */
@@ -1901,7 +1932,6 @@ function rotaPaint(keepPosition){
          coordinator has said no, and asking the same question again through
          the app will not change that. The status chip on the card says
          which, so nothing needs explaining. */
-      var mine=my && (primary===my || actual===my);
       var alreadyAsked=req && req.driver===my;
       var action=(!past && mine && !alreadyAsked)
         ? '<button class="rota-edit" type="button" data-rota-request="'+key+'">Request change</button>' : '';
@@ -1909,9 +1939,14 @@ function rotaPaint(keepPosition){
       var cover=(actual && primary && actual!==primary)
         ? '<div class="rota-cover"><b>Covering for '+esc(primary)+'</b></div>' : '';
 
-      var bus2=row.primary2
-        ? '<div class="rota-bus2"><b>South Liverpool:</b> '+esc(row.actual2||row.primary2)+
-          (row.actual2&&row.actual2!==row.primary2?' \u00B7 covering '+esc(row.primary2):'')+'</div>' : '';
+      /* Fall back to the pattern the same way North does. Without this the
+         South line vanished on any Sunday not yet written into the sheet,
+         which is most of them, and the new route looked like it had no rota
+         at all. */
+      var south2=south;
+      var bus2=south2
+        ? '<div class="rota-bus2"><b>South Liverpool:</b> '+esc(row.actual2||south2)+
+          (row.actual2&&row.actual2!==south2?' \u00B7 covering '+esc(south2):'')+'</div>' : '';
 
       var badge=current?'<span class="rota-current">This Sunday</span>'
               : cover?'<span class="rota-label">Cover</span>'
@@ -1977,13 +2012,23 @@ function rotaOpenRequest(key){
      never theirs, and telling them they are scheduled as primary is simply
      wrong: the scheduled name belongs to the person they are standing in
      for. Say which it is, and name them. */
+  /* Describe the slot the driver is actually in. A South driver was being
+     told about the North slot, which is somebody else's name entirely. */
   var row=rotaRowFor(key);
-  var primary=(row&&row.primary)||rotaSeedPrimary(d);
-  var actual=(row&&row.actual)||primary;
   var me=st.driver.trim();
+  var nPrimary=(row&&row.primary)||rotaSeedPrimary(d);
+  var nActual=(row&&row.actual)||nPrimary;
+  var sPrimary=(row&&row.primary2)||rotaSeedSecondary(d);
+  var sActual=(row&&row.actual2)||sPrimary;
+
+  var onSouth=(sPrimary===me||sActual===me);
+  var route=onSouth?"South Liverpool":"North Liverpool";
+  var primary=onSouth?sPrimary:nPrimary;
+  var actual=onSouth?sActual:nActual;
+
   var standing=(actual===me && primary && primary!==me)
-    ? "You are covering this Sunday for "+esc(primary)+"."
-    : "You are currently scheduled as primary.";
+    ? "You are covering "+route+" this Sunday for "+esc(primary)+"."
+    : "You are scheduled on "+route+" this Sunday.";
   $("rotaModalBody").innerHTML='<p class="lede">'+esc(d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))+' · '+standing+'</p><div class="field"><label for="rotaReqType">Request type</label><select id="rotaReqType"><option>Holiday / planned leave</option><option>Unavailable</option><option>Request a swap</option><option>Other</option></select></div><div class="field" id="rotaSwapField" style="display:none"><label for="rotaSwapWith">Preferred swap driver (optional)</label><select id="rotaSwapWith"><option value="">No preference</option></select></div><div class="field"><label for="rotaReqReason">Reason</label><textarea id="rotaReqReason" placeholder="Tell the coordinator what they need to know."></textarea></div><div class="rota-modal-actions"><button class="btn btn-ghost" id="rotaCancel2" type="button">Cancel</button><button class="btn btn-main" id="rotaSubmitRequest" type="button">Send request</button></div>';
   var sw=$("rotaSwapWith"); REGISTER.forEach(function(x){var o=document.createElement("option");o.value=x.name;o.textContent=x.name;if(x.name===st.driver)o.disabled=true;sw.appendChild(o);});
   $("rotaReqType").addEventListener("change",function(){$("rotaSwapField").style.display=this.value==="Request a swap"?"":"none";});
@@ -2065,11 +2110,20 @@ function paintRotaHint(){
   el.textContent=""; el.style.display="none";
   var me=st.driver.trim();
   if(!me || !rotaRows.length) return;
-  var row=rotaRowFor(rotaKey(rotaBaseSunday(0)));
+  var d=rotaBaseSunday(0);
+  var row=rotaRowFor(rotaKey(d));
   if(!row) return;
-  var due=(row.actual||row.primary||"").trim();
-  if(!due || due===me) return;
-  el.textContent="Rota has "+due+" this Sunday.";
+
+  /* Both routes. A South driver used to be shown the North name, so on the
+     very Sunday they were driving the app told them somebody else was. */
+  var north=(row.actual||row.primary||"").trim();
+  var south=(row.actual2||row.primary2||rotaSeedSecondary(d)||"").trim();
+  if(!north && !south) return;
+  if(north===me || south===me) return;
+
+  el.textContent = (north && south)
+    ? "Rota has "+north+" on North and "+south+" on South this Sunday."
+    : "Rota has "+(north||south)+" this Sunday.";
   el.style.display="";
 }
 $("driver").addEventListener("input",function(){
