@@ -591,6 +591,14 @@ much. Forty-nine numbers never told you anything.
 
 **v1.1** follows v49. The rota card, and swaps.
 
+**v1.1.1** Four fixes to the request sheet. Messages fired while the sheet is
+open are now visible: they were rendering behind the dark overlay, so a
+submission could be refused without anything saying why. The swap picker now
+offers the same number of Sundays whoever you choose, instead of four for a
+North driver and six for a South one. A cover on one route no longer removes
+that Sunday from the other route's driver. And when the list comes back empty
+it says why, rather than leaving the driver to work it out.
+
 ---
 
 ## The rota card

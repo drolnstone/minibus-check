@@ -247,7 +247,12 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .tiny{font-size:12.5px;color:var(--muted);text-align:center;margin-top:20px;line-height:1.5}
 .toast{position:fixed;left:50%;bottom:calc(84px + var(--safe-b));transform:translateX(-50%) translateY(14px);
   background:var(--steel);color:#fff;padding:11px 17px;border-radius:8px;font-size:14.5px;opacity:0;
-  pointer-events:none;transition:.25s;z-index:90;max-width:90vw;text-align:center}
+  pointer-events:none;transition:.25s;z-index:200;max-width:90vw;text-align:center}
+/* 200, above the request sheet at 120. It used to sit at 90, which put every
+   message fired while the sheet was open BEHIND the dark overlay. The rules
+   ran correctly and the submission was blocked, but the driver was told
+   nothing and had to guess what was missing. The only message anyone ever
+   saw was the one after the sheet closed. */
 .toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* ---------- select ---------- */
@@ -382,6 +387,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-earlier:active{background:#EDEFF1}
 .rota-controls .btn.is-active{background:var(--steel);color:#fff;border-color:var(--steel)}
 .rota-empty{padding:34px 16px;text-align:center;color:var(--muted)}
+/* Explains why a list is empty. An empty dropdown tells a driver nothing
+   except that something is wrong with the app. */
+.rota-swap-note{margin-top:7px;font-size:13px;line-height:1.45;color:var(--muted);
+  background:var(--warn-bg);border:1px solid #EBD3A8;border-radius:7px;padding:8px 10px}
 .rota-modal{position:fixed;inset:0;z-index:120;background:rgba(22,25,31,.48);display:none;align-items:flex-end;justify-content:center}
 .rota-modal.is-on{display:flex}
 .rota-sheet{width:min(640px,100%);background:var(--paper);border-radius:14px 14px 0 0;padding:16px calc(14px + var(--safe-r)) calc(18px + var(--safe-b)) calc(14px + var(--safe-l));max-height:88vh;overflow:auto}
@@ -605,7 +614,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.1";
+var APP_VERSION = "v1.1.1";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1759,19 +1768,32 @@ function swapPartner(key,who){
 }
 function swapKeyFor(key,who){ return swapPartner(key,who)?key:""; }
 
-/* Which Sundays a given driver has coming up, for the swap picker. Only
-   future ones, and only where they are not already covering: a Sunday you
-   are covering is not yours to trade away. */
-function rotaSundaysFor(name,limitWeeks){
-  var out=[], base=rotaBaseSunday(0), n=limitWeeks||16;
-  for(var i=0;i<n;i++){
+/* Which Sundays a given driver has coming up, for the swap picker.
+
+   Counts THEIR Sundays, not weeks. Searching a fixed 16 week window looked
+   even handed and was not: North turns over every four Sundays and South
+   every three, so a North driver was offered four dates and a South driver
+   six. Whoever you picked, you now see the same number of their Sundays.
+
+   A Sunday they are only covering is not theirs to trade away, and a Sunday
+   already covered cannot take a third person. But that test is per route.
+   It used to look at both, so a cover on North removed that Sunday from the
+   South driver's list as well, even though the South duty was untouched.
+   One cover was quietly wiping a Sunday off everybody. */
+function rotaSundaysFor(name,wanted){
+  var out=[], base=rotaBaseSunday(0), want=wanted||6, weeks=want*5+8;
+  for(var i=0;i<weeks && out.length<want;i++){
     var d=new Date(base); d.setDate(d.getDate()+i*7);
     var key=rotaKey(d), row=rotaRowFor(key)||{};
+
     var nP=row.primary||rotaSeedPrimary(d), nA=row.actual||nP;
     var sP=row.primary2||rotaSeedSecondary(d), sA=row.actual2||sP;
-    var covered=(nA&&nP&&nA!==nP)||(sA&&sP&&sA!==sP);
-    if(covered) continue;                       // at most two people per Sunday
-    if(nP===name||sP===name) out.push({key:key,date:d,route:(sP===name?"South":"North")});
+
+    if(nP===name){
+      if(!(nA&&nP&&nA!==nP)) out.push({key:key,date:d,route:"North"});
+    } else if(sP===name){
+      if(!(sA&&sP&&sA!==sP)) out.push({key:key,date:d,route:"South"});
+    }
   }
   return out;
 }
@@ -2119,7 +2141,8 @@ function rotaOpenRequest(key){
       '<div class="field"><label for="rotaSwapWith">Swap with</label>'+
         '<select id="rotaSwapWith"><option value="">Choose a driver</option></select></div>'+
       '<div class="field"><label for="rotaSwapDate">Take their Sunday</label>'+
-        '<select id="rotaSwapDate"><option value="">Choose a driver first</option></select></div>'+
+        '<select id="rotaSwapDate"><option value="">Choose a driver first</option></select>'+
+        '<div id="rotaSwapNote" class="rota-swap-note" style="display:none"></div></div>'+
       '<label class="confirm" style="margin-bottom:14px"><input type="checkbox" id="rotaSwapAgreed">'+
         '<span id="rotaSwapAgreedText">We have already agreed this swap.</span></label>'+
     '</div>'+
@@ -2138,9 +2161,15 @@ function rotaOpenRequest(key){
      a Sunday the other person does not have, and cannot pick one that is
      already covered: that Sunday has two people on it and a swap would make
      three, which nobody could untangle later. */
+  function swapNote(msg){
+    var el=$("rotaSwapNote"); if(!el) return;
+    el.innerHTML=msg; el.style.display=msg?"":"none";
+  }
+
   function fillSwapDates(){
     var who=sw.value, sel=$("rotaSwapDate");
     sel.innerHTML="";
+    swapNote("");
     if(!who){ sel.innerHTML='<option value="">Choose a driver first</option>'; return; }
 
     /* If they are already driving the other route this Sunday, no swap with
@@ -2149,6 +2178,8 @@ function rotaOpenRequest(key){
     if(nPrimary===who||nActual===who||sPrimary===who||sActual===who){
       sel.innerHTML='<option value="">'+esc(who)+' is already driving this Sunday</option>';
       $("rotaSwapAgreedText").textContent="We have already agreed this swap.";
+      swapNote(esc(who)+" is already driving on this Sunday, so he cannot take "+
+               "yours as well. Pick somebody else, or ask for a cover instead.");
       return;
     }
     /* Never their entry on the very Sunday being asked about. Swapping into
@@ -2158,8 +2189,15 @@ function rotaOpenRequest(key){
     $("rotaSwapAgreedText").textContent=who+" and I have already agreed this swap.";
     if(!days.length){
       sel.innerHTML='<option value="">'+esc(who)+' has no free Sunday coming up</option>';
+      /* Backups sit outside both patterns, so they have no Sundays of their
+         own and nothing to trade. That is not a fault, it is what a backup
+         is, but a driver staring at an empty list cannot know that. */
+      swapNote(esc(who)+" has no Sundays of his own coming up, so there is "+
+               "nothing to swap. Ask for a cover instead and he can be put "+
+               "down for this Sunday.");
       return;
     }
+    swapNote("");
     sel.innerHTML='<option value="">Choose a Sunday</option>';
     days.forEach(function(x){
       var o=document.createElement("option"); o.value=x.key;
