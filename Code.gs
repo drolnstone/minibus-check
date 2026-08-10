@@ -497,8 +497,12 @@ function decorate(r, requests) {
     swaps: parseSwaps(r.notes)
   };
   if (!out.primary && !out.actual) out.status = "No driver assigned";
-  var req = requests[r.date];
-  if (req) out.request = req;
+  /* requests is the whole list for that Sunday. request stays as the first
+     one purely so an older copy of the app, cached on somebody's phone
+     before this went out, still shows something sensible rather than
+     nothing at all. */
+  var reqs = requests[r.date];
+  if (reqs && reqs.length) { out.requests = reqs; out.request = reqs[0]; }
   return out;
 }
 
@@ -666,6 +670,19 @@ function readRotaRows(ss) {
 }
 
 /** The newest request per Sunday, so the app can show "change requested". */
+/**
+ * The latest request per driver per Sunday.
+ *
+ * This used to keep one request per Sunday, which was right when a Sunday
+ * had one driver. With two routes a Sunday has two, and they can each ask
+ * for something independently. Keeping one meant whichever row was read
+ * last won, so a South driver's request could appear on the card under the
+ * North driver's name, and the card said "Asked by" somebody who had asked
+ * for nothing. Worse, it silently used up the other driver's one ask.
+ *
+ * Now a list per Sunday. Later rows still replace earlier ones FOR THE SAME
+ * PERSON, so a driver who asks twice still shows only their latest.
+ */
 function readLatestRequests(ss) {
   var sh = ss.getSheetByName(REQUESTS_SHEET);
   var out = {};
@@ -674,11 +691,17 @@ function readLatestRequests(ss) {
   values.forEach(function (r) {
     var key = anyToKey(r[2]);
     if (!key) return;
-    out[key] = {
+    var one = {
       driver: String(r[3] || "").trim(),
       type: String(r[4] || "").trim(),
       status: String(r[7] || "Pending").trim()
     };
+    if (!out[key]) out[key] = [];
+    var at = -1;
+    for (var i = 0; i < out[key].length; i++) {
+      if (out[key][i].driver === one.driver) { at = i; break; }
+    }
+    if (at === -1) out[key].push(one); else out[key][at] = one;
   });
   return out;
 }

@@ -599,6 +599,13 @@ North driver and six for a South one. A cover on one route no longer removes
 that Sunday from the other route's driver. And when the list comes back empty
 it says why, rather than leaving the driver to work it out.
 
+**v1.1.2** A Sunday now holds one request per driver rather than one request
+in total. With two routes a Sunday has two drivers who can each ask for
+something independently, and only one was being kept: whichever row was read
+last won, so a request could appear on the card under the other driver's
+name, and it quietly used up their one ask as well. Both requests now show,
+each under the name of whoever made it.
+
 ---
 
 ## The rota card

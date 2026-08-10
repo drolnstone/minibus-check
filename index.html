@@ -614,7 +614,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.1.1";
+var APP_VERSION = "v1.1.2";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1818,7 +1818,23 @@ function rotaPrimary(d){
   return rotaSeedPrimary(d);
 }
 function rotaRowFor(key){ for(var i=0;i<rotaRows.length;i++) if(rotaRows[i].date===key) return rotaRows[i]; return null; }
-function rotaRequestFor(date,driver){ var r=rotaRowFor(date); return r&&r.request&&(!driver||r.request.driver===driver)?r.request:null; }
+/* Every request on a Sunday. Two drivers share a Sunday now, so there can be
+   two, and they have nothing to do with each other. Falls back to the single
+   request field so a payload cached before this change still works. */
+function rotaRequestsFor(date){
+  var r=rotaRowFor(date); if(!r) return [];
+  if(r.requests&&r.requests.length) return r.requests;
+  return r.request?[r.request]:[];
+}
+
+/* One named driver's request on a Sunday, or null. This is what decides
+   whether somebody has used up their one ask, so it must never match on
+   somebody else's request. */
+function rotaRequestFor(date,driver){
+  var all=rotaRequestsFor(date);
+  for(var i=0;i<all.length;i++){ if(!driver||all[i].driver===driver) return all[i]; }
+  return null;
+}
 
 /* ---- keeping the rota on the phone --------------------------------------
    The round trip to Apps Script takes a second or three: a redirect, a cold
@@ -1995,16 +2011,19 @@ function rotaPaint(keepPosition){
          was perfectly normal. */
       var unfilled=!primary && !actual && !south && !southActual;
 
-      var req=rotaRequestFor(key,null);
+      /* Every request on this Sunday, each shown separately. One block per
+         request, so a North driver's ask and a South driver's ask sit side
+         by side under the same date instead of one hiding the other. */
+      var reqs=rotaRequestsFor(key);
       var reqHtml="";
-      if(req){
-        var cls=String(req.status||"").toLowerCase();
+      reqs.forEach(function(rq){
+        var cls=String(rq.status||"").toLowerCase();
         cls=cls.indexOf("approv")===0?"approved":cls.indexOf("reject")===0?"rejected":"pending";
-        reqHtml='<div class="rota-request"><b>'+esc(req.type||"Change requested")+'</b> '+
-                '<span class="rota-status '+cls+'">'+esc(req.status||"Pending")+'</span>'+
-                (req.driver?'<div style="font-size:13px;margin-top:3px">Asked by '+esc(req.driver)+'</div>':'')+
-                '</div>';
-      }
+        reqHtml+='<div class="rota-request"><b>'+esc(rq.type||"Change requested")+'</b> '+
+                 '<span class="rota-status '+cls+'">'+esc(rq.status||"Pending")+'</span>'+
+                 (rq.driver?'<div style="font-size:13px;margin-top:3px">Asked by '+esc(rq.driver)+'</div>':'')+
+                 '</div>';
+      });
 
       /* A driver can ask about a Sunday that is theirs and still to come,
          whether they were scheduled for it or are down to cover it.
@@ -2015,7 +2034,10 @@ function rotaPaint(keepPosition){
          coordinator has said no, and asking the same question again through
          the app will not change that. The status chip on the card says
          which, so nothing needs explaining. */
-      var alreadyAsked=req && req.driver===my;
+      /* Only YOUR request uses up YOUR ask. Matching any request on the
+         Sunday meant the other route's driver getting in first removed your
+         button entirely, on a duty that is nothing to do with them. */
+      var alreadyAsked=!!rotaRequestFor(key,my);
       var action=(!past && mine && !alreadyAsked)
         ? '<button class="rota-edit" type="button" data-rota-request="'+key+'">Request change</button>' : '';
 
