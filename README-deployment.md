@@ -606,6 +606,105 @@ last won, so a request could appear on the card under the other driver's
 name, and it quietly used up their one ask as well. Both requests now show,
 each under the name of whoever made it.
 
+**v1.2** Protected Sundays, and a load report.
+
+## Protecting a Sunday
+
+Some Sundays matter more than others: a first run on a new route, a
+convention, any Sunday where who is driving is not interchangeable. Write
+this in the **Notes** column on the Rota tab:
+
+```
+PROTECTED: first South run, Tunde leads
+```
+
+The reason after the colon is optional but worth writing, because it is shown
+to a driver who tries to swap rather than leaving them refused with no
+explanation.
+
+Protection stops **swaps**, not covers. A swap is a convenience and can wait.
+A cover is somebody telling you they cannot come, and refusing that could
+leave a bus with nobody to drive it on the very Sunday you were protecting.
+Covers go through, and the request email tells you the Sunday is protected so
+you can think about who takes it.
+
+On a protected Sunday the app says so on the card, does not offer the swap
+option at all, and never lists that Sunday when somebody else is choosing a
+date to trade for. The rule is enforced again in the sheet when a swap is
+approved, because a phone may be running an old cached copy.
+
+## Who is carrying the load
+
+**Minibus → Who is carrying the load** counts the last 26 Sundays that have
+actually happened and reports, per driver, how many they drove, how many they
+covered for somebody else, how many times they were covered, and how many
+swaps they took.
+
+This is the reason covers and swaps are kept as different things. A cover
+leaves a debt: whoever said yes drove an extra Sunday. A swap is even. A rota
+can look perfectly tidy while the same two or three people absorb every gap
+in it, and nothing else on the sheet would tell you.
+
+**v1.3** Sheet protection.
+
+## Locking the sheet
+
+Most of this spreadsheet is a record rather than a control. Checks are what
+was inspected and signed. Requests are what a driver typed on their phone.
+Defect descriptions are what somebody found on a bus. An accidental keystroke
+in any of it is silent: no error, no warning, just a changed record that
+nobody notices.
+
+**Minibus → Lock the sheet** protects everything the app writes. It also runs
+by itself every time you run Set up / refresh rota, because adding columns
+leaves old protection covering the wrong range.
+
+Worth understanding what this can and cannot do. Google Sheets **cannot lock
+the owner out of their own sheet**. Strict protection stops other people and
+is invisible to you. What works for the owner is a warning: edit a locked
+cell and Sheets asks whether you meant to. You can still go ahead. That is
+the point, because the risk is the accidental keystroke, not the considered
+decision.
+
+Left editable, because these are touched as a matter of course:
+
+| Tab | Still editable |
+|---|---|
+| Rota | both scheduled columns, both cover columns, Status, Notes |
+| Rota Requests | Status, Replacement assigned |
+| Defects | Status, Action taken, Closed on |
+| Drivers | the whole register below the header |
+| Checks | nothing |
+
+Header rows are locked on every tab. That is where the quiet damage happens:
+rename or move a heading and things break without saying so, which is exactly
+what an empty Route column did.
+
+**Minibus → Unlock the sheet** removes all of it if you ever need to work
+freely. Lock it again afterwards.
+
+**v1.4** The Sunday 10:30 alert.
+
+## When a check has not been done
+
+The duty reminder tells a driver the day before, and then nothing checks
+whether they acted on it. That left the only way of finding out as asking.
+
+At **10:30 every Sunday** you get one email listing any bus with no check
+recorded yet, and who is down to drive it. If both are done, nothing is sent.
+
+It is deliberately this way round rather than a message for every clean
+check. Two confirmations a Sunday that nothing is wrong would be skimmed
+within a month, including the one that mattered. Silence means everything is
+fine; a message means there is time to make a phone call before the bus
+pulls out.
+
+The buses it expects are the ones the app has ever recorded a check for, so
+adding a bus needs no change here: its first check puts it on the list.
+
+To change the time, edit `installMissingCheckAlert` in `Code.gs` and run
+**Minibus → Set up / refresh rota** again.
+
 ---
 
 ## The rota card

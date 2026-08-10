@@ -391,6 +391,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
    except that something is wrong with the app. */
 .rota-swap-note{margin-top:7px;font-size:13px;line-height:1.45;color:var(--muted);
   background:var(--warn-bg);border:1px solid #EBD3A8;border-radius:7px;padding:8px 10px}
+.rota-locked{margin-top:8px;padding:8px 10px;border-radius:7px;font-size:13px;line-height:1.45;
+  background:var(--warn-bg);border:1px solid #EBD3A8;color:var(--ink)}
 .rota-modal{position:fixed;inset:0;z-index:120;background:rgba(22,25,31,.48);display:none;align-items:flex-end;justify-content:center}
 .rota-modal.is-on{display:flex}
 .rota-sheet{width:min(640px,100%);background:var(--paper);border-radius:14px 14px 0 0;padding:16px calc(14px + var(--safe-r)) calc(18px + var(--safe-b)) calc(14px + var(--safe-l));max-height:88vh;overflow:auto}
@@ -614,7 +616,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.1.2";
+var APP_VERSION = "v1.4";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1789,6 +1791,10 @@ function rotaSundaysFor(name,wanted){
     var nP=row.primary||rotaSeedPrimary(d), nA=row.actual||nP;
     var sP=row.primary2||rotaSeedSecondary(d), sA=row.actual2||sP;
 
+    /* A protected Sunday is not on offer. Leaving it in the list and
+       refusing it later wastes a request and tells the driver nothing. */
+    if(row.locked) continue;
+
     if(nP===name){
       if(!(nA&&nP&&nA!==nP)) out.push({key:key,date:d,route:"North"});
     } else if(sP===name){
@@ -2061,16 +2067,28 @@ function rotaPaint(keepPosition){
                '</div>';
       }
 
+      /* Said out loud on the card, not just enforced when somebody tries.
+         A driver who can see a Sunday is protected does not waste a request
+         on it, and knows the coordinator meant it rather than the app being
+         awkward. */
+      var lockHtml=row.locked
+        ? '<div class="rota-locked"><b>Protected Sunday.</b> '+
+          (row.lockNote?esc(row.lockNote)+'. ':'')+
+          'This one cannot be swapped. If you cannot make it, ask for a cover.</div>'
+        : '';
+
       var legs=unfilled
         ? '<div class="rota-leg"><span class="rota-leg-none">No driver assigned</span></div>'
         : leg("North","north",primary,actual,mineNorth)+
           leg("South","south",south,southActual,mineSouth);
+      legs+=lockHtml;
 
       /* The current Sunday is a property of the DATE, so it is marked beside
          the date. It used to sit in the badge slot, which now belongs to the
          route chips, and it also meant the words This Sunday appeared twice
          on one screen meaning two different things. */
       var mark=current?'<span class="rota-current">This Sunday</span>':'';
+
 
       html+='<article class="rota-card'+(current?' current':'')+(past?' past':'')+(unfilled?' unfilled':'')+'" id="rota-'+key+'">'+
         '<div class="rota-row">'+
@@ -2149,6 +2167,7 @@ function rotaOpenRequest(key){
   var primary=onSouth?sPrimary:nPrimary;
   var actual=onSouth?sActual:nActual;
 
+  var lockedHere=!!(row&&row.locked);
   var standing=(actual===me && primary && primary!==me)
     ? "You are covering "+route+" this Sunday for "+esc(primary)+"."
     : "You are scheduled on "+route+" this Sunday.";
@@ -2168,6 +2187,7 @@ function rotaOpenRequest(key){
       '<label class="confirm" style="margin-bottom:14px"><input type="checkbox" id="rotaSwapAgreed">'+
         '<span id="rotaSwapAgreedText">We have already agreed this swap.</span></label>'+
     '</div>'+
+    '<div id="rotaLockNote" class="rota-swap-note" style="display:none"></div>'+
     '<div class="field"><label for="rotaReqReason">Reason</label>'+
       '<textarea id="rotaReqReason" placeholder="Tell the coordinator what they need to know."></textarea></div>'+
     '<div class="rota-modal-actions"><button class="btn btn-ghost" id="rotaCancel2" type="button">Cancel</button>'+
@@ -2228,6 +2248,23 @@ function rotaOpenRequest(key){
     });
   }
   sw.addEventListener("change",fillSwapDates);
+  /* A protected Sunday cannot be swapped away, so the option is not offered
+     at all. Leaving it selectable and refusing on send would be a wasted
+     journey. Holiday, unavailable and other all remain: protection stops
+     trading, it does not stop somebody telling you they cannot come. */
+  if(lockedHere){
+    var tsel=$("rotaReqType");
+    for(var ti=tsel.options.length-1;ti>=0;ti--){
+      if(tsel.options[ti].value==="Request a swap") tsel.remove(ti);
+    }
+    $("rotaSwapField").style.display="none";
+    $("rotaLockNote").style.display="";
+    $("rotaLockNote").innerHTML='<b>Protected Sunday.</b> '+
+      (row&&row.lockNote?esc(row.lockNote)+'. ':'')+
+      'It cannot be swapped, so that option is not offered. You can still say '+
+      'you are unavailable and the coordinator will arrange a cover.';
+  }
+
   $("rotaReqType").addEventListener("change",function(){$("rotaSwapField").style.display=this.value==="Request a swap"?"":"none";});
   $("rotaCancel2").addEventListener("click",rotaClose); $("rotaSubmitRequest").addEventListener("click",rotaSubmitRequest);
   $("rotaModal").classList.add("is-on"); $("rotaModal").setAttribute("aria-hidden","false");

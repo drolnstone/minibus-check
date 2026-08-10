@@ -472,6 +472,28 @@ function bumpRotaVersion() {
  * This reads them back so a card can say "Swapped with Bro Moses" under the
  * right name. Anything else in Notes is left alone.
  */
+/**
+ * Whether a Sunday is protected, and why.
+ *
+ * Written by the coordinator in the Notes column as
+ *   PROTECTED: first South run, Tunde leads
+ * The reason after the colon is optional but worth writing, because it is
+ * shown to a driver who tries to swap and would otherwise just be refused.
+ *
+ * Protection stops SWAPS, not covers. A swap is a convenience and can wait.
+ * A cover is somebody saying they cannot come, and refusing that could leave
+ * a bus with nobody to drive it on the very Sunday being protected. Covers
+ * go through and arrive flagged instead.
+ */
+function parseProtected(notes) {
+  var lines = String(notes || "").split("\n");
+  for (var i = 0; i < lines.length; i++) {
+    var m = /^PROTECTED\s*:?\s*(.*)$/i.exec(lines[i].trim());
+    if (m) return { on: true, reason: m[1].trim() };
+  }
+  return { on: false, reason: "" };
+}
+
 function parseSwaps(notes) {
   var out = [];
   String(notes || "").split("\n").forEach(function (line) {
@@ -494,7 +516,12 @@ function decorate(r, requests) {
        One place holds the fact, so the sheet and the app cannot disagree,
        and a coordinator editing Notes by hand sees exactly what the app
        sees. */
-    swaps: parseSwaps(r.notes)
+    swaps: parseSwaps(r.notes),
+
+    /* Sent to the app so the swap picker can leave protected Sundays out
+       and say why, rather than offering something that will be refused. */
+    locked: parseProtected(r.notes).on,
+    lockNote: parseProtected(r.notes).reason
   };
   if (!out.primary && !out.actual) out.status = "No driver assigned";
   /* requests is the whole list for that Sunday. request stays as the first
@@ -603,6 +630,14 @@ function applySwap(ss, rota, keyA, driverA, keyB, driverB) {
   if (sB.covering) return driverB + " is only covering " + keyB + ", so that Sunday is not theirs to swap.";
   if (String(a[sA.cover - 1] || "").trim()) return keyA + " already has a cover on it. Clear that first, or handle this one by hand.";
   if (String(b[sB.cover - 1] || "").trim()) return keyB + " already has a cover on it. Clear that first, or handle this one by hand.";
+
+  /* A protected Sunday is not available to trade. Checked here as well as
+     in the app, because the app can be an old cached copy and this is the
+     only place that actually moves anybody. */
+  var pA = parseProtected(String(rota.getRange(rowA, 7).getValue() || ""));
+  var pB = parseProtected(String(rota.getRange(rowB, 7).getValue() || ""));
+  if (pA.on) return keyA + " is a protected Sunday" + (pA.reason ? " (" + pA.reason + ")" : "") + ", so it cannot be swapped.";
+  if (pB.on) return keyB + " is a protected Sunday" + (pB.reason ? " (" + pB.reason + ")" : "") + ", so it cannot be swapped.";
 
   /* Nobody can drive both routes on the same morning. If the incoming driver
      is already down for the other route that Sunday, the swap would put one
@@ -999,6 +1034,188 @@ function rebuildFutureRota() {
            (skipped ? "\n" + skipped + " left alone." : ""));
 }
 
+/**
+ * Who has been carrying the load.
+ *
+ * The point of keeping covers and swaps as separate things was so this could
+ * be answered. A cover leaves a debt: whoever said yes has driven an extra
+ * Sunday and the person they covered has driven one fewer. A swap is even,
+ * both drive the same number in the end. A rota can look perfectly tidy
+ * while the same two or three people absorb every gap in it, and nothing on
+ * the sheet says so.
+ *
+ * Counted over the last 26 Sundays that have actually happened. Future
+ * Sundays are left out: nobody has driven them yet.
+ */
+function coverBalance() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+  var rows = readRotaRows(ss);
+  if (!rows.length) { ui.alert("No rota rows yet."); return; }
+
+  var today = sundayOf(new Date());
+  var past = rows.filter(function (r) { return keyToDate(r.date) < today; })
+                 .sort(function (a, b) { return a.date < b.date ? 1 : -1; })
+                 .slice(0, 26);
+  if (!past.length) {
+    ui.alert("No Sundays have been and gone yet, so there is nothing to count.");
+    return;
+  }
+
+  var t = {};
+  function row(name) {
+    if (!name) return null;
+    if (!t[name]) t[name] = { drove: 0, gave: 0, got: 0, swapped: 0 };
+    return t[name];
+  }
+
+  past.forEach(function (r) {
+    [[r.primary, r.actual], [r.primary2, r.actual2]].forEach(function (pair) {
+      var sched = String(pair[0] || "").trim();
+      var cover = String(pair[1] || "").trim();
+      if (!sched && !cover) return;
+
+      var drove = cover || sched;
+      var d = row(drove); if (d) d.drove++;
+
+      if (cover && sched && cover !== sched) {
+        var g = row(cover); if (g) g.gave++;
+        var s2 = row(sched); if (s2) s2.got++;
+      }
+    });
+    parseSwaps(r.notes).forEach(function (sw) {
+      var a = row(sw.a); if (a) a.swapped++;
+    });
+  });
+
+  var names = Object.keys(t).sort(function (a, b) { return t[b].drove - t[a].drove; });
+  var lines = names.map(function (n) {
+    var v = t[n];
+    return n + "\n     drove " + v.drove +
+           "   covered for others " + v.gave +
+           "   was covered " + v.got +
+           "   swaps " + v.swapped;
+  });
+
+  var owed = names.filter(function (n) { return t[n].gave - t[n].got >= 2; });
+  var tail = owed.length
+    ? "\n\nCarrying the most: " + owed.join(", ") +
+      ".\nEach has covered at least two more Sundays than they have been covered."
+    : "\n\nNobody is more than one cover out of step.";
+
+  ui.alert("Last " + past.length + " Sundays\n\n" + lines.join("\n\n") + tail);
+}
+
+/* ---- protecting the sheet ------------------------------------------------
+
+   Most of this spreadsheet is a record, not a control. Checks are what was
+   inspected and signed. Requests are what a driver typed on their phone.
+   Defect descriptions are what somebody found on a bus. None of it should be
+   edited afterwards, and an accidental keystroke in any of it is silent: no
+   error, no warning, just a changed record that nobody notices.
+
+   IMPORTANT, so nobody is surprised by it: Google Sheets cannot lock the
+   OWNER out of their own sheet. Strict protection stops other people and is
+   invisible to you. What does work for the owner is warning protection: edit
+   a locked cell and Sheets stops you with "you are trying to edit a
+   protected cell". You can still go ahead deliberately. That is the point.
+   The risk here is the accidental keystroke, not the considered decision.
+
+   Left live, because they are edited as a matter of course:
+     Rota            the two scheduled columns, the two cover columns,
+                     Status and Notes
+     Rota Requests   Status and Replacement assigned, which is the whole job
+     Defects         Status, Action taken, Closed on
+     Drivers         everything below the header, since the register grows
+
+   Locked everywhere: the header row. That is where the quiet damage happens.
+   Rename or shift a heading and things break without saying so, which is
+   exactly what the empty Route column did.
+*/
+var LOCK_TAG = "Minibus lock";
+
+function sheetLocks(ss) {
+  var out = [];
+  function add(name, ranges, note) {
+    var sh = ss.getSheetByName(name);
+    if (sh) out.push({ sh: sh, ranges: ranges(sh), note: note });
+  }
+  var last = function (sh) { return sh.getMaxRows(); };
+
+  add(ROTA_SHEET, function (sh) {
+    /* B to G: scheduled, cover, status, scheduled, cover, notes. The Sunday
+       itself and the two Updated columns are the script's. */
+    return [sh.getRange(2, 2, last(sh) - 1, 6)];
+  }, "Rota: dates and the Updated columns are written by the app");
+
+  add(REQUESTS_SHEET, function (sh) {
+    return [sh.getRange(2, 8, last(sh) - 1, 1),      // Status
+            sh.getRange(2, 10, last(sh) - 1, 1)];    // Replacement assigned
+  }, "Requests: everything except Status and Replacement came from a driver's phone");
+
+  add(DEFECTS_SHEET, function (sh) {
+    return [sh.getRange(2, 9, last(sh) - 1, 3)];     // Status, Action taken, Closed on
+  }, "Defects: what the driver reported is not editable");
+
+  add(CHECKS_SHEET, function () { return []; },
+      "Checks: a signed record of what was inspected");
+
+  add(DRIVERS_SHEET, function (sh) {
+    return [sh.getRange(2, 1, last(sh) - 1, 7)];     // the register itself
+  }, "Drivers: the header row is fixed, the register below it is yours");
+
+  return out;
+}
+
+function lockSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  applyLocks(ss);
+  SpreadsheetApp.getUi().alert(
+    "\u2713  The sheet is protected.\n\n" +
+    "Editing anything the app writes now asks you to confirm first. You can " +
+    "still go ahead when you mean to: this stops the accidental keystroke, " +
+    "not you.\n\n" +
+    "Still edited freely:\n" +
+    "  Rota: drivers, covers, Status, Notes\n" +
+    "  Rota Requests: Status and Replacement assigned\n" +
+    "  Defects: Status, Action taken, Closed on\n" +
+    "  Drivers: the whole register\n\n" +
+    "Header rows are locked everywhere. Minibus \u203a Unlock the sheet " +
+    "removes all of this if you ever need to work freely.");
+}
+
+function applyLocks(ss) {
+  removeLocks(ss);
+  sheetLocks(ss).forEach(function (item) {
+    var p = item.sh.protect().setDescription(LOCK_TAG + ": " + item.note);
+    if (item.ranges.length) p.setUnprotectedRanges(item.ranges);
+    /* Warning, not refusal. See the note above: strict protection would be
+       invisible to the owner and would lock out anyone you later share the
+       sheet with, which is not what is wanted. */
+    p.setWarningOnly(true);
+  });
+}
+
+function removeLocks(ss) {
+  ss.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(function (p) {
+    if (String(p.getDescription() || "").indexOf(LOCK_TAG) === 0) p.remove();
+  });
+  ss.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(function (p) {
+    if (String(p.getDescription() || "").indexOf(LOCK_TAG) === 0) p.remove();
+  });
+}
+
+function unlockSheet() {
+  var ui = SpreadsheetApp.getUi();
+  var answer = ui.alert("Unlock the sheet?",
+    "Every cell becomes editable with no warning, including the Checks tab " +
+    "and the header rows.\n\nRun Minibus \u203a Lock the sheet when you are " +
+    "finished.", ui.ButtonSet.YES_NO);
+  if (answer !== ui.Button.YES) return;
+  removeLocks(SpreadsheetApp.getActiveSpreadsheet());
+  ui.alert("Unlocked. Nothing will warn you now. Lock it again when you are done.");
+}
+
 function checkDriversTab() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var ui = SpreadsheetApp.getUi();
@@ -1114,6 +1331,10 @@ function setUpEverything() {
   try { installDutyReminders(); } catch (err) { /* same */ }
   try { installChangeAlerts(); } catch (err) { /* same */ }
   try { installNightlyMaintenance(); } catch (err) { /* same. maintainIfDue covers it. */ }
+  try { installMissingCheckAlert(); } catch (err) { /* same */ }
+  /* Re-applied every setup, because adding a tab or columns leaves the old
+     protection covering the wrong range. */
+  try { applyLocks(ss); } catch (err) { /* never block setup over this */ }
 
   var n = ss.getSheetByName(ROTA_SHEET).getLastRow() - 1;
   var tz = timeZoneWarning();
@@ -1493,6 +1714,89 @@ function openDefectsByReg(ss) {
  * it means the mail never arrived. This makes silence mean something. If the
  * digest stops turning up, the email path itself is broken.
  */
+/**
+ * Sunday morning, 10:30. Tells you what has NOT been checked.
+ *
+ * Deliberately not the other way round. Emailing every clean check would put
+ * two messages a Sunday in front of you that both say nothing is wrong, and
+ * within a month you would be skimming them, including the one that mattered.
+ * Silence here means both buses were checked. A message means one was not,
+ * and there is still time to ring the driver before he pulls out.
+ *
+ * The driver already gets a reminder the day before. This closes the loop
+ * that reminder leaves open: nothing currently checks whether they acted on
+ * it, so the only way to find out was to ask.
+ */
+function missingCheckAlert() {
+  if (!COORDINATOR_EMAIL) return;
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tz = Session.getScriptTimeZone();
+  var now = new Date();
+  if (now.getDay() !== 0) return;                  // Sundays only
+
+  var key = dateToKey(now);
+  var done = {};
+  checksOn(ss, key).forEach(function (c) { if (c.reg) done[c.reg] = c; });
+
+  /* Every bus the app has ever recorded a check for. Reading it from history
+     rather than a list here means adding a bus needs no code change: its
+     first check puts it on the list from then on. */
+  var expected = knownRegs(ss).filter(function (reg) { return !done[reg]; });
+  if (!expected.length) return;                    // all checked, say nothing
+
+  /* Who is down to drive, so you know whose phone to pick up rather than
+     working it out from the rota yourself. */
+  var row = null;
+  readRotaRows(ss).forEach(function (r) { if (r.date === key) row = r; });
+  var north = row ? String(row.actual || row.primary || "").trim() : "";
+  var south = row ? String(row.actual2 || row.primary2 || "").trim() : "";
+
+  var when = Utilities.formatDate(now, tz, "EEEE d MMMM");
+  var lines = [
+    "<b>No pre-drive check recorded yet</b> for " + esc(when) + ", as at " +
+      Utilities.formatDate(now, tz, "HH:mm") + ".",
+    "&nbsp;"
+  ];
+  expected.forEach(function (reg) { lines.push("\u2022 <b>" + esc(reg) + "</b>"); });
+
+  lines.push("&nbsp;");
+  if (north || south) {
+    lines.push("Down to drive today:");
+    if (north) lines.push("\u2022 North Liverpool: <b>" + esc(north) + "</b>");
+    if (south) lines.push("\u2022 South Liverpool: <b>" + esc(south) + "</b>");
+    lines.push("&nbsp;");
+  }
+  if (Object.keys(done).length) {
+    lines.push("Already checked today: " + Object.keys(done).join(", ") + ".");
+    lines.push("&nbsp;");
+  }
+  lines.push("A check may simply be late. This is sent once, so if it arrives " +
+             "after this you will not hear again either way.");
+
+  var plain = ["No pre-drive check recorded yet for " + when + ".", ""]
+    .concat(expected.map(function (r) { return "  " + r; }));
+  if (north) plain.push("", "North Liverpool: " + north);
+  if (south) plain.push("South Liverpool: " + south);
+
+  MailApp.sendEmail({
+    to: COORDINATOR_EMAIL,
+    subject: "Minibus: no check yet for " + expected.join(", "),
+    body: plain.join("\n"),
+    /* Amber, not red. A late check is usually a late check, not a crisis,
+       and the red shell belongs to a bus that has been stopped. */
+    htmlBody: htmlShell("Check not done yet", "#8A6116", lines, "Open the rota", ROTA_SHEET)
+  });
+}
+
+function installMissingCheckAlert() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "missingCheckAlert") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("missingCheckAlert")
+    .timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(10).nearMinute(30).create();
+}
+
 function weeklyDigest() {
   if (!COORDINATOR_EMAIL) return "COORDINATOR_EMAIL is blank, so nothing was sent.";
 
@@ -1584,7 +1888,8 @@ function checkDigestScheduled() {
     { fn: "weeklyDigest",   label: "Weekly summary, Sunday evenings", install: installWeeklyDigest },
     { fn: "dutyReminders",  label: "Duty reminders, every morning",   install: installDutyReminders },
     { fn: "onRotaEditNotify", label: "Alerts when a Sunday changes",   install: installChangeAlerts },
-    { fn: "nightlyMaintenance", label: "Nightly rota tidy-up, 3am",     install: installNightlyMaintenance }
+    { fn: "nightlyMaintenance", label: "Nightly rota tidy-up, 3am",     install: installNightlyMaintenance },
+    { fn: "missingCheckAlert",  label: "Sunday 10:30, check not done",  install: installMissingCheckAlert }
   ];
   var have = {};
   try {
@@ -1987,6 +2292,11 @@ function onOpen() {
     .addSeparator()
     .addItem("Repair old fuel readings (run once)", "repairFuelColumn")
     .addItem("Rebuild future Sundays from the pattern", "rebuildFutureRota")
+    .addSeparator()
+    .addItem("Who is carrying the load", "coverBalance")
+    .addSeparator()
+    .addItem("Lock the sheet", "lockSheet")
+    .addItem("Unlock the sheet", "unlockSheet")
     .addToUi();
 }
 
@@ -2348,6 +2658,18 @@ function notifyCheck(c, outcome, defectText) {
   });
 }
 
+/* The protection note for a Sunday, read straight off the Rota tab. */
+function protectedNoteFor(key) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var rota = ss.getSheetByName(ROTA_SHEET);
+    if (!rota) return { on: false, reason: "" };
+    var row = findRotaRow(rota, key);
+    if (!row) return { on: false, reason: "" };
+    return parseProtected(String(rota.getRange(row, 7).getValue() || ""));
+  } catch (err) { return { on: false, reason: "" }; }
+}
+
 function notifyRotaRequest(rq, sunday) {
   var when = Utilities.formatDate(sunday, Session.getScriptTimeZone(), "EEEE d MMMM yyyy");
 
@@ -2358,6 +2680,14 @@ function notifyRotaRequest(rq, sunday) {
     "<b>Request:</b> " + esc(rq.type || ""),
     "<b>Reason:</b> " + esc(rq.reason || "")
   ];
+  var prot = protectedNoteFor(rq.date);
+  if (prot.on) {
+    lines.push("&nbsp;");
+    lines.push("<b>This is a protected Sunday" +
+               (prot.reason ? ": " + esc(prot.reason) : "") + ".</b> " +
+               "Swaps are refused on it. A cover is still possible, but " +
+               "think about who takes it.");
+  }
   if (rq.swapWith) lines.push("<b>Swap with:</b> " + esc(rq.swapWith));
   if (rq.swapDate) lines.push("<b>Taking their Sunday:</b> " + esc(rq.swapDate));
   if (rq.swapWith) lines.push(rq.agreed
