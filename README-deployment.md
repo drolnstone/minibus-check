@@ -53,7 +53,7 @@ brand new deployment instead, you must paste the new URL into `config.js`.
 
 Replace `index.html`, `config.js` and `sw.js` on your host.
 
-`sw.js` has been bumped to `minibus-check-v44`. That is what tells every phone
+`sw.js` has been bumped to `minibus-check-v1.1`. That is what tells every phone
 to throw away its old copy. If you ever edit `index.html` or `config.js`
 again, bump that number, and bump `APP_VERSION` in `index.html` to match.
 
@@ -575,3 +575,78 @@ installs it, and **Minibus → Check scheduled emails** confirms it is there.
 There is still a safety net. If the trigger was never installed, or stops
 running for three days, the old behaviour comes back automatically so the
 rota never stops growing. You do not have to do anything for that to happen.
+
+
+---
+
+## Versions
+
+Numbering changed at 1.0. The forty-nine numbered versions before it were one
+number per upload, which said nothing about how much had changed: five of them
+in a row were a single problem found in five different places, one at a time.
+
+From 1.0 on, the second number carries a real change and the third carries a
+small fix. 1.0 to 1.4 tells you the app changed four times and roughly how
+much. Forty-nine numbers never told you anything.
+
+**v1.1** follows v49. The rota card, and swaps.
+
+---
+
+## The rota card
+
+One card per Sunday. The date on the left, with **This Sunday** marked beside
+it. Inside, one row per route, drawn identically: the driver's name and a
+NORTH or SOUTH chip. Neither route is a heading and neither is a footnote.
+
+Nothing marks an ordinary Sunday. The old PRIMARY badge said nothing, appeared
+on almost every row, and implied a rank that does not exist among people
+giving up their Sundays. What does appear, under a name, is a plain line when
+something has moved:
+
+- **Covering for Bro Adesina**, when somebody is standing in.
+- **Swapped with Bro Moses**, when two Sundays were exchanged.
+
+**All routes** and **My duties** sit at the top, and underneath them a line
+says **Viewing as Bro Tunde**. The app never used to say who it thought you
+were once you left the first screen, yet My duties depends on it entirely, and
+phones get handed round. My duties shows the whole card with your own row
+picked out, so you also see who you are driving alongside that morning.
+
+---
+
+## Swaps
+
+A **cover** is one Sunday moving. Whoever says yes has driven an extra Sunday,
+and if the same two people always say yes, that builds up quietly.
+
+A **swap** is an exchange. Two Sundays move and both drivers end up having
+driven the same number. Telling them apart is worth something every time a
+request lands on your desk.
+
+A swap request names the other driver, names which of their Sundays is being
+taken, and carries a tick box confirming the two have already agreed between
+themselves. All three are required. The Sunday picker only offers Sundays that
+driver actually has coming up.
+
+You still approve everything, and you can still say no. Set the Status to
+Approved and both Sundays move at once, both cards show the swap, and both
+drivers are emailed.
+
+**What a swap will refuse**, with the reason written into a note on the Status
+cell and shown as a message on screen:
+
+- A Sunday that already has a cover. That Sunday has two people attached and
+  a swap would make three, which nobody could untangle later.
+- A Sunday somebody is only covering. That is not theirs to trade.
+- Anything that would put one driver on both routes the same morning.
+- A driver who has since come off that Sunday altogether.
+
+These are checked when you approve, not when the request was sent, because a
+request can sit for days and a Sunday can pick up a cover in between. If a
+swap is refused, nothing is written at all: half a swap would leave no trace
+of being half done.
+
+Cross-route swaps are allowed, so a South driver may end up on North that
+week. The pairing is recorded in the **Notes** column on both rows, which is
+where the app reads it from, so the sheet and the app cannot disagree.

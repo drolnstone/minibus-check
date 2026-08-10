@@ -368,7 +368,8 @@ function ensureRotaSheets(ss) {
     ["Name", "Role", "Active", "Primary order", "PIN", "Email"]);
   sheet(ss, REQUESTS_SHEET, [
     "Received", "Request ID", "Sunday", "Driver", "Type", "Reason",
-    "Preferred swap", "Status", "Decided on", "Replacement assigned"
+    "Swap with", "Status", "Decided on", "Replacement assigned",
+    "Their Sunday", "Both agreed"
   ]);
 
   /* Seed the register here rather than only in setUpEverything. Whichever
@@ -464,6 +465,22 @@ function bumpRotaVersion() {
   } catch (err) {}
 }
 
+/**
+ * Pulls swap pairings out of a Notes cell.
+ *
+ * applySwap writes "Swapped: Bro Moses in for Bro Tunde (with 2026-09-06)".
+ * This reads them back so a card can say "Swapped with Bro Moses" under the
+ * right name. Anything else in Notes is left alone.
+ */
+function parseSwaps(notes) {
+  var out = [];
+  String(notes || "").split("\n").forEach(function (line) {
+    var m = /^Swapped:\s*(.+?)\s+in for\s+(.+?)\s*\(with\s+([0-9-]+)\)\s*$/.exec(line.trim());
+    if (m) out.push({ a: m[1].trim(), b: m[2].trim(), other: m[3] });
+  });
+  return out;
+}
+
 function decorate(r, requests) {
   var out = {
     date: r.date,
@@ -472,7 +489,12 @@ function decorate(r, requests) {
     status: r.status || "Confirmed",
     primary2: r.primary2 || "",
     actual2: r.actual2 || "",
-    notes: r.notes || ""
+    notes: r.notes || "",
+    /* Read back off the Notes column rather than kept in a separate list.
+       One place holds the fact, so the sheet and the app cannot disagree,
+       and a coordinator editing Notes by hand sees exactly what the app
+       sees. */
+    swaps: parseSwaps(r.notes)
   };
   if (!out.primary && !out.actual) out.status = "No driver assigned";
   var req = requests[r.date];
@@ -535,6 +557,75 @@ function routeColumns(ss, rota, rRow, driver) {
   var found = null;
   readDrivers(ss).forEach(function (d) { if (d.name === who) found = d; });
   return (found && found.route === "South") ? SOUTH : NORTH;
+}
+
+/**
+ * Exchanges two drivers between two Sundays.
+ *
+ * Returns "" on success, or a plain sentence saying why it did not happen.
+ * Nothing is written unless BOTH sides can be written, because a half
+ * applied swap leaves no trace of being half applied.
+ *
+ * The guards are checked here, at approval, and not only when the request
+ * was sent. A request can sit for days, and a Sunday can pick up a cover in
+ * between. Checking only at the point of asking would let a stale request
+ * through.
+ */
+function applySwap(ss, rota, keyA, driverA, keyB, driverB) {
+  if (keyA === keyB) return "Both halves of that swap are the same Sunday.";
+
+  var rowA = findRotaRow(rota, keyA) || appendRotaRow(ss, rota, keyToDate(keyA));
+  var rowB = findRotaRow(rota, keyB) || appendRotaRow(ss, rota, keyToDate(keyB));
+
+  var a = rota.getRange(rowA, 1, 1, 6).getValues()[0];
+  var b = rota.getRange(rowB, 1, 1, 6).getValues()[0];
+
+  function slotOf(vals, who) {
+    if (String(vals[1] || "").trim() === who) return { sched: 2, cover: 3, covering: false };
+    if (String(vals[4] || "").trim() === who) return { sched: 5, cover: 6, covering: false };
+    if (String(vals[2] || "").trim() === who) return { sched: 2, cover: 3, covering: true };
+    if (String(vals[5] || "").trim() === who) return { sched: 5, cover: 6, covering: true };
+    return null;
+  }
+
+  var sA = slotOf(a, driverA), sB = slotOf(b, driverB);
+  if (!sA) return driverA + " is not on the rota for " + keyA + " any more, so there is nothing to swap.";
+  if (!sB) return driverB + " is not on the rota for " + keyB + " any more, so there is nothing to swap.";
+
+  /* A Sunday you are only covering is not yours to trade: it already has two
+     people attached, and swapping would make three. Same reason a covered
+     Sunday cannot be swapped into. */
+  if (sA.covering) return driverA + " is only covering " + keyA + ", so that Sunday is not theirs to swap.";
+  if (sB.covering) return driverB + " is only covering " + keyB + ", so that Sunday is not theirs to swap.";
+  if (String(a[sA.cover - 1] || "").trim()) return keyA + " already has a cover on it. Clear that first, or handle this one by hand.";
+  if (String(b[sB.cover - 1] || "").trim()) return keyB + " already has a cover on it. Clear that first, or handle this one by hand.";
+
+  /* Nobody can drive both routes on the same morning. If the incoming driver
+     is already down for the other route that Sunday, the swap would put one
+     person behind two wheels at once, and the rota would look perfectly
+     normal while being impossible. */
+  if (slotOf(a, driverB)) return driverB + " is already driving on " + keyA + ", so they cannot take that Sunday as well.";
+  if (slotOf(b, driverA)) return driverA + " is already driving on " + keyB + ", so they cannot take that Sunday as well.";
+
+  rota.getRange(rowA, sA.sched).setValue(driverB);
+  rota.getRange(rowB, sB.sched).setValue(driverA);
+  rota.getRange(rowA, 4).setValue("Confirmed");
+  rota.getRange(rowB, 4).setValue("Confirmed");
+
+  appendNote(rota, rowA, "Swapped: " + driverB + " in for " + driverA + " (with " + keyB + ")");
+  appendNote(rota, rowB, "Swapped: " + driverA + " in for " + driverB + " (with " + keyA + ")");
+  stamp(rota, rowB, "Approved swap");
+
+  notifyDutyChange(ss, keyA, driverA, driverB, sA.sched === 5 ? "South Liverpool" : "North Liverpool");
+  notifyDutyChange(ss, keyB, driverB, driverA, sB.sched === 5 ? "South Liverpool" : "North Liverpool");
+  return "";
+}
+
+/* Adds a line to the Notes column without wiping what is already there. */
+function appendNote(sh, row, text) {
+  var cell = sh.getRange(row, 7);
+  var had = String(cell.getValue() || "").trim();
+  cell.setValue(had ? had + "\n" + text : text);
 }
 
 /* Both routes at once, since almost every caller wants the pair. */
@@ -652,7 +743,8 @@ function handleRotaRequest(rq) {
 
   var sh = sheet(ss, REQUESTS_SHEET, [
     "Received", "Request ID", "Sunday", "Driver", "Type", "Reason",
-    "Preferred swap", "Status", "Decided on", "Replacement assigned"
+    "Swap with", "Status", "Decided on", "Replacement assigned",
+    "Their Sunday", "Both agreed"
   ]);
 
   if (alreadyHaveRequest(sh, rq.id)) {
@@ -666,7 +758,8 @@ function handleRotaRequest(rq) {
 
   sh.appendRow([
     new Date(), rq.id || "", sunday, rq.driver || "", rq.type || "",
-    rq.reason || "", rq.swapWith || "", "Pending", "", ""
+    rq.reason || "", rq.swapWith || "", "Pending", "", "",
+    rq.swapDate ? keyToDate(rq.swapDate) : "", rq.agreed ? "YES" : ""
   ]);
   var row = sh.getLastRow();
   sh.getRange(row, 3).setNumberFormat("dd/mm/yyyy");
@@ -1933,7 +2026,34 @@ function onEditRequests(e, sh) {
     /* Which route the request belongs to. Approving used to write every
        cover into the North column, so approving a South driver's holiday
        put a stranger against the North slot and left South uncovered. */
-    var cols = routeColumns(ss, rota, rRow, String(sh.getRange(row, 4).getValue() || "").trim());
+    var requester = String(sh.getRange(row, 4).getValue() || "").trim();
+    var cols = routeColumns(ss, rota, rRow, requester);
+
+    var type     = String(sh.getRange(row, 5).getValue() || "").trim();
+    var swapWith = String(sh.getRange(row, 7).getValue() || "").trim();
+    var swapKey  = anyToKey(sh.getRange(row, 11).getValue());
+
+    /* A swap is an exchange, so approving it moves TWO Sundays. Approving it
+       as a cover would move one, leaving the other driver a Sunday up and
+       the requester a Sunday down, which is precisely the thing a swap is
+       not. */
+    if (status === "Approved" && type === "Request a swap" && swapWith && swapKey) {
+      var problem = applySwap(ss, rota, key, requester, swapKey, swapWith);
+      if (problem) {
+        /* Put the decision back rather than half doing it. A swap that
+           applied to one Sunday and not the other is worse than one that
+           did not apply at all, because nothing on the sheet would show it. */
+        sh.getRange(row, 8).setValue("Pending");
+        sh.getRange(row, 9).clearContent();
+        sh.getRange(row, 8).setNote(problem);
+        SpreadsheetApp.getActiveSpreadsheet().toast(problem, "Swap not applied", 12);
+      } else {
+        sh.getRange(row, 8).clearNote();
+        stamp(rota, rRow, "Approved swap");
+      }
+      touched = true;
+      continue;
+    }
 
     if (status === "Approved" && replacement) {
       rota.getRange(rRow, cols.cover).setValue(replacement);
@@ -2215,7 +2335,11 @@ function notifyRotaRequest(rq, sunday) {
     "<b>Request:</b> " + esc(rq.type || ""),
     "<b>Reason:</b> " + esc(rq.reason || "")
   ];
-  if (rq.swapWith) lines.push("<b>Preferred swap:</b> " + esc(rq.swapWith));
+  if (rq.swapWith) lines.push("<b>Swap with:</b> " + esc(rq.swapWith));
+  if (rq.swapDate) lines.push("<b>Taking their Sunday:</b> " + esc(rq.swapDate));
+  if (rq.swapWith) lines.push(rq.agreed
+    ? "They have already agreed this between themselves."
+    : "<b>Not marked as agreed.</b> Check with both before approving.");
   lines.push("&nbsp;");
   lines.push("The rota has <b>not</b> changed. Open the Rota Requests tab, set the status " +
              "and pick a replacement, and the Rota tab updates itself.");
@@ -2225,7 +2349,8 @@ function notifyRotaRequest(rq, sunday) {
     "Sunday:  " + when,
     "Request: " + (rq.type || ""),
     "Reason:  " + (rq.reason || ""),
-    rq.swapWith ? "Preferred swap: " + rq.swapWith : "",
+    rq.swapWith ? "Swap with: " + rq.swapWith : "",
+    rq.swapDate ? "Taking their Sunday: " + rq.swapDate : "",
     "", "The rota has not changed until you approve it.", "", tabUrl(REQUESTS_SHEET)
   ].join("\n");
 

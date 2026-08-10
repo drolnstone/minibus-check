@@ -350,9 +350,29 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-controls{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap}
 .rota-controls .btn{min-height:46px;font-size:16px}
 .rota-request{border:1.5px solid var(--warn);background:var(--warn-bg);border-radius:var(--r);padding:12px;margin-top:9px}.rota-request b{color:var(--warn)}
-.rota-status{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:4px;border:1px solid var(--hair);white-space:nowrap}.rota-status.pending{background:var(--warn-bg);color:var(--warn);border-color:#EBD3A8}.rota-status.approved{background:var(--pass-bg);color:var(--pass);border-color:#B7D8C6}.rota-status.rejected{background:var(--stop-bg);color:var(--stop);border-color:#E8BCB7}.rota-cover{font-size:13px;color:var(--muted);margin-top:5px}.rota-bus2{margin-top:8px;padding:8px;border:1px dashed var(--hair);border-radius:6px;background:#fafafa;font-size:13px;color:var(--muted)}
+.rota-status{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:4px;border:1px solid var(--hair);white-space:nowrap}.rota-status.pending{background:var(--warn-bg);color:var(--warn);border-color:#EBD3A8}.rota-status.approved{background:var(--pass-bg);color:var(--pass);border-color:#B7D8C6}.rota-status.rejected{background:var(--stop-bg);color:var(--stop);border-color:#E8BCB7}
+/* One row per route. Neither is a headline and neither is an afterthought:
+   same weight, same size, same indent. The old layout put North in a big
+   bold heading and South in a grey dashed box underneath, so a South driver
+   opening My duties saw another man's name three times. */
+.rota-leg{display:flex;align-items:flex-start;gap:8px;justify-content:space-between;padding:7px 0}
+.rota-leg+.rota-leg{border-top:1px solid var(--hair)}
+.rota-leg-name{font-family:"Barlow Condensed",sans-serif;font-size:21px;font-weight:700;line-height:1.15}
+.rota-leg.is-mine .rota-leg-name{color:var(--ink)}
+.rota-leg.is-mine{background:#F3F8FC;margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:6px}
+.rota-leg.is-mine+.rota-leg{border-top-color:transparent}
+.rota-leg-note{font-size:13px;color:var(--muted);margin-top:2px}
+.rota-leg-none{font-family:"Barlow Condensed",sans-serif;font-size:19px;font-weight:700;color:var(--stop)}
+/* Route chips sit where PRIMARY used to. Words, not arrows: an up arrow at
+   this size reads as "increase", and a compass rose reads as nothing. */
+.rota-route{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;border-radius:4px;padding:2px 6px;white-space:nowrap;margin-top:4px}
+.rota-route.north{color:#244E72;background:#EEF5FB;border:1px solid #B8D1E6}
+.rota-route.south{color:#5A3E14;background:#FBF4E8;border:1px solid #E6D2AC}
+.rota-viewing{font-size:13px;color:var(--muted);margin:-4px 0 12px}
+.rota-viewing b{color:var(--ink)}
 .rota-card.past{opacity:.55;background:#FAFBFC}
 .rota-card.past .rota-driver{font-weight:600}
+.rota-card.past .rota-leg-name{font-weight:600}
 .rota-card.unfilled{border-color:var(--stop);border-left:4px solid var(--stop)}
 .rota-hint{margin-top:6px;color:var(--steel);font-weight:600}
 .rota-earlier{display:block;width:100%;min-height:44px;margin-bottom:12px;border:1px dashed var(--hair);
@@ -534,9 +554,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       <button class="rota-back" id="rotaBack" type="button">Back</button>
     </div>
     <div class="rota-controls">
-      <button class="btn btn-main" id="rotaToday" type="button">This Sunday</button>
+      <button class="btn btn-main" id="rotaToday" type="button">All routes</button>
       <button class="btn btn-ghost" id="rotaMyDuties" type="button">My duties</button>
     </div>
+    <p class="rota-viewing" id="rotaViewing"></p>
     <div id="rotaNotice"></div>
     <div id="rotaList"></div>
   </section>
@@ -584,7 +605,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v49";
+var APP_VERSION = "v1.1";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1716,6 +1737,45 @@ function rotaSecondaryAnchorDate(){
   var s=String(CFG.rotaSecondaryAnchor||"2026-08-16").split("-");
   return new Date(+s[0],+s[1]-1,+s[2]);
 }
+/* ---- swaps ------------------------------------------------------------
+   A swap is an exchange: two Sundays move, both drivers keep the same
+   number. A cover is one Sunday moving, and it leaves whoever said yes a
+   Sunday up. The rota shows which is which because they mean different
+   things about how the load is falling.
+
+   The sheet records a swap by writing each driver into the other Sunday and
+   noting the pairing, so the app works it out from the rows rather than
+   holding a separate list. */
+function swapPartner(key,who){
+  var row=rotaRowFor(key); if(!row||!row.swaps) return "";
+  for(var i=0;i<row.swaps.length;i++){
+    /* Only the driver who came IN carries the note. The one who swapped out
+       is not on this Sunday any more, and matching their name too meant that
+       if they happened to be scheduled on the OTHER route the same day,
+       their perfectly ordinary duty was labelled as a swap. */
+    if(row.swaps[i].a===who) return row.swaps[i].b;
+  }
+  return "";
+}
+function swapKeyFor(key,who){ return swapPartner(key,who)?key:""; }
+
+/* Which Sundays a given driver has coming up, for the swap picker. Only
+   future ones, and only where they are not already covering: a Sunday you
+   are covering is not yours to trade away. */
+function rotaSundaysFor(name,limitWeeks){
+  var out=[], base=rotaBaseSunday(0), n=limitWeeks||16;
+  for(var i=0;i<n;i++){
+    var d=new Date(base); d.setDate(d.getDate()+i*7);
+    var key=rotaKey(d), row=rotaRowFor(key)||{};
+    var nP=row.primary||rotaSeedPrimary(d), nA=row.actual||nP;
+    var sP=row.primary2||rotaSeedSecondary(d), sA=row.actual2||sP;
+    var covered=(nA&&nP&&nA!==nP)||(sA&&sP&&sA!==sP);
+    if(covered) continue;                       // at most two people per Sunday
+    if(nP===name||sP===name) out.push({key:key,date:d,route:(sP===name?"South":"North")});
+  }
+  return out;
+}
+
 function rotaSeedSecondary(d){
   if(!ROTA_SECONDARY_PATTERN.length) return "";
   var a=rotaSecondaryAnchorDate();
@@ -1908,9 +1968,10 @@ function rotaPaint(keepPosition){
       var current=key===rotaKey(today), past=d<today;
       if(rotaViewMode==="mine" && !mine) continue;
 
-      /* Nobody rostered. Say so loudly rather than letting the Sunday look
-         normal with a blank name. */
-      var unfilled=!primary && !actual;
+      /* Nobody rostered on EITHER route. One empty route is not an empty
+         Sunday: before South started, every card had a blank South row and
+         was perfectly normal. */
+      var unfilled=!primary && !actual && !south && !southActual;
 
       var req=rotaRequestFor(key,null);
       var reqHtml="";
@@ -1936,33 +1997,44 @@ function rotaPaint(keepPosition){
       var action=(!past && mine && !alreadyAsked)
         ? '<button class="rota-edit" type="button" data-rota-request="'+key+'">Request change</button>' : '';
 
-      var cover=(actual && primary && actual!==primary)
-        ? '<div class="rota-cover"><b>Covering for '+esc(primary)+'</b></div>' : '';
+      /* One row per route, drawn identically. The only thing that varies is
+         the chip and, when it applies, a plain line under the name.
 
-      /* Fall back to the pattern the same way North does. Without this the
-         South line vanished on any Sunday not yet written into the sheet,
-         which is most of them, and the new route looked like it had no rota
-         at all. */
-      var south2=south;
-      var bus2=south2
-        ? '<div class="rota-bus2"><b>South Liverpool:</b> '+esc(row.actual2||south2)+
-          (row.actual2&&row.actual2!==south2?' \u00B7 covering '+esc(south2):'')+'</div>' : '';
+         Nothing marks an ordinary Sunday. A badge reading PRIMARY on every
+         normal row said nothing and implied a rank that does not exist among
+         people giving up their Sundays. A cover or a swap is a fact worth
+         seeing, so those speak up and the ordinary case stays silent. */
+      function leg(routeName, cls, sched, act, isMine){
+        if(!sched && !act) return "";
+        var who=act||sched;
+        var note="";
+        if(swapKeyFor(key,who)) note="Swapped with "+esc(swapPartner(key,who));
+        else if(act && sched && act!==sched) note="Covering for "+esc(sched);
+        return '<div class="rota-leg'+(isMine?' is-mine':'')+'">'+
+                 '<div><div class="rota-leg-name">'+esc(who)+'</div>'+
+                 (note?'<div class="rota-leg-note">'+note+'</div>':'')+'</div>'+
+                 '<span class="rota-route '+cls+'">'+routeName+'</span>'+
+               '</div>';
+      }
 
-      var badge=current?'<span class="rota-current">This Sunday</span>'
-              : cover?'<span class="rota-label">Cover</span>'
-              : '<span class="rota-label">Primary</span>';
+      var legs=unfilled
+        ? '<div class="rota-leg"><span class="rota-leg-none">No driver assigned</span></div>'
+        : leg("North","north",primary,actual,mineNorth)+
+          leg("South","south",south,southActual,mineSouth);
 
-      var nameCell=unfilled
-        ? '<span class="rota-driver" style="color:var(--stop)">No driver assigned</span>'
-        : '<span class="rota-driver">'+esc(actual)+'</span>';
+      /* The current Sunday is a property of the DATE, so it is marked beside
+         the date. It used to sit in the badge slot, which now belongs to the
+         route chips, and it also meant the words This Sunday appeared twice
+         on one screen meaning two different things. */
+      var mark=current?'<span class="rota-current">This Sunday</span>':'';
 
       html+='<article class="rota-card'+(current?' current':'')+(past?' past':'')+(unfilled?' unfilled':'')+'" id="rota-'+key+'">'+
         '<div class="rota-row">'+
           '<div class="rota-date"><b>'+esc(d.toLocaleDateString("en-GB",{weekday:"short"}))+'</b>'+
-            esc(pad2(d.getDate())+"/"+pad2(d.getMonth()+1)+"/"+String(d.getFullYear()).slice(-2))+'</div>'+
+            esc(pad2(d.getDate())+"/"+pad2(d.getMonth()+1)+"/"+String(d.getFullYear()).slice(-2))+
+            (mark?'<div style="margin-top:6px">'+mark+'</div>':'')+'</div>'+
           '<div class="rota-main">'+
-            '<div class="rota-main-head">'+nameCell+badge+'</div>'+
-            cover+bus2+
+            legs+
             reqHtml+
             (action?'<div class="rota-actions">'+action+'</div>':'')+
           '</div>'+
@@ -1972,6 +2044,13 @@ function rotaPaint(keepPosition){
     list.innerHTML=shown?html:'<div class="rota-empty">Nothing for you here.</div>';
     notice.innerHTML="";
     $("rotaMyDuties").classList.toggle("is-active",rotaViewMode==="mine");
+
+    /* Who the app thinks you are. It never said, anywhere past the first
+       screen, yet My duties depends on it entirely. Phones get handed round
+       and a name can be a fortnight stale. */
+    $("rotaViewing").innerHTML = my
+      ? 'Viewing as <b>'+esc(my)+'</b>'
+      : 'No driver chosen. Go back and pick your name to see your own duties.';
 
     list.querySelectorAll("[data-rota-request]").forEach(function(b){
       b.addEventListener("click",function(){rotaOpenRequest(this.getAttribute("data-rota-request"));});
@@ -2029,8 +2108,66 @@ function rotaOpenRequest(key){
   var standing=(actual===me && primary && primary!==me)
     ? "You are covering "+route+" this Sunday for "+esc(primary)+"."
     : "You are scheduled on "+route+" this Sunday.";
-  $("rotaModalBody").innerHTML='<p class="lede">'+esc(d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))+' · '+standing+'</p><div class="field"><label for="rotaReqType">Request type</label><select id="rotaReqType"><option>Holiday / planned leave</option><option>Unavailable</option><option>Request a swap</option><option>Other</option></select></div><div class="field" id="rotaSwapField" style="display:none"><label for="rotaSwapWith">Preferred swap driver (optional)</label><select id="rotaSwapWith"><option value="">No preference</option></select></div><div class="field"><label for="rotaReqReason">Reason</label><textarea id="rotaReqReason" placeholder="Tell the coordinator what they need to know."></textarea></div><div class="rota-modal-actions"><button class="btn btn-ghost" id="rotaCancel2" type="button">Cancel</button><button class="btn btn-main" id="rotaSubmitRequest" type="button">Send request</button></div>';
-  var sw=$("rotaSwapWith"); REGISTER.forEach(function(x){var o=document.createElement("option");o.value=x.name;o.textContent=x.name;if(x.name===st.driver)o.disabled=true;sw.appendChild(o);});
+  /* A swap is an exchange, so it needs the OTHER Sunday as well as the other
+     driver. Without it, approving could only ever move one Sunday, which is
+     a cover wearing the word swap. */
+  $("rotaModalBody").innerHTML='<p class="lede">'+esc(d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))+' · '+standing+'</p>'+
+    '<div class="field"><label for="rotaReqType">Request type</label><select id="rotaReqType">'+
+      '<option>Holiday / planned leave</option><option>Unavailable</option>'+
+      '<option>Request a swap</option><option>Other</option></select></div>'+
+    '<div id="rotaSwapField" style="display:none">'+
+      '<div class="field"><label for="rotaSwapWith">Swap with</label>'+
+        '<select id="rotaSwapWith"><option value="">Choose a driver</option></select></div>'+
+      '<div class="field"><label for="rotaSwapDate">Take their Sunday</label>'+
+        '<select id="rotaSwapDate"><option value="">Choose a driver first</option></select></div>'+
+      '<label class="confirm" style="margin-bottom:14px"><input type="checkbox" id="rotaSwapAgreed">'+
+        '<span id="rotaSwapAgreedText">We have already agreed this swap.</span></label>'+
+    '</div>'+
+    '<div class="field"><label for="rotaReqReason">Reason</label>'+
+      '<textarea id="rotaReqReason" placeholder="Tell the coordinator what they need to know."></textarea></div>'+
+    '<div class="rota-modal-actions"><button class="btn btn-ghost" id="rotaCancel2" type="button">Cancel</button>'+
+      '<button class="btn btn-main" id="rotaSubmitRequest" type="button">Send request</button></div>';
+
+  var sw=$("rotaSwapWith");
+  REGISTER.forEach(function(x){
+    if(x.name===me) return;                      // you cannot swap with yourself
+    var o=document.createElement("option"); o.value=x.name; o.textContent=x.name; sw.appendChild(o);
+  });
+
+  /* Their actual upcoming Sundays, not a free date box. A driver cannot pick
+     a Sunday the other person does not have, and cannot pick one that is
+     already covered: that Sunday has two people on it and a swap would make
+     three, which nobody could untangle later. */
+  function fillSwapDates(){
+    var who=sw.value, sel=$("rotaSwapDate");
+    sel.innerHTML="";
+    if(!who){ sel.innerHTML='<option value="">Choose a driver first</option>'; return; }
+
+    /* If they are already driving the other route this Sunday, no swap with
+       them is possible at all: they cannot take both buses. Say so here
+       rather than let it be sent and refused. */
+    if(nPrimary===who||nActual===who||sPrimary===who||sActual===who){
+      sel.innerHTML='<option value="">'+esc(who)+' is already driving this Sunday</option>';
+      $("rotaSwapAgreedText").textContent="We have already agreed this swap.";
+      return;
+    }
+    /* Never their entry on the very Sunday being asked about. Swapping into
+       the Sunday you are already on is not a swap, and offering it invites a
+       request that can only be rejected. */
+    var days=rotaSundaysFor(who).filter(function(x){ return x.key!==rotaEditDate; });
+    $("rotaSwapAgreedText").textContent=who+" and I have already agreed this swap.";
+    if(!days.length){
+      sel.innerHTML='<option value="">'+esc(who)+' has no free Sunday coming up</option>';
+      return;
+    }
+    sel.innerHTML='<option value="">Choose a Sunday</option>';
+    days.forEach(function(x){
+      var o=document.createElement("option"); o.value=x.key;
+      o.textContent=x.date.toLocaleDateString("en-GB",{day:"numeric",month:"short"})+"  ("+x.route+")";
+      sel.appendChild(o);
+    });
+  }
+  sw.addEventListener("change",fillSwapDates);
   $("rotaReqType").addEventListener("change",function(){$("rotaSwapField").style.display=this.value==="Request a swap"?"":"none";});
   $("rotaCancel2").addEventListener("click",rotaClose); $("rotaSubmitRequest").addEventListener("click",rotaSubmitRequest);
   $("rotaModal").classList.add("is-on"); $("rotaModal").setAttribute("aria-hidden","false");
@@ -2042,9 +2179,19 @@ function rotaSubmitRequest(){
   var reason=$("rotaReqReason").value.trim();
   var type=$("rotaReqType").value;
   var swap=$("rotaSwapWith")?$("rotaSwapWith").value:"";
+  var swapDate=$("rotaSwapDate")?$("rotaSwapDate").value:"";
+  var agreed=$("rotaSwapAgreed")?$("rotaSwapAgreed").checked:false;
   var btn=$("rotaSubmitRequest");
 
   if(!st.driver.trim()){ toast("Choose your name on the first screen before asking for a change."); return; }
+
+  /* A swap needs all three or it is not a swap. Sent without them, the
+     coordinator gets a request they cannot action and has to chase. */
+  if(type==="Request a swap"){
+    if(!swap){ toast("Choose who you are swapping with."); return; }
+    if(!swapDate){ toast("Choose which of their Sundays you are taking."); return; }
+    if(!agreed){ toast("Tick the box to confirm the two of you have already agreed."); return; }
+  }
   if(reason.length<3){ toast("Give the coordinator a short reason."); return; }
   if(!LIVE){ toast("Not submitted. The shared rota is not connected yet."); return; }
   if(!navigator.onLine){ toast("Not submitted. No connection. Try again when you have signal."); return; }
@@ -2052,7 +2199,8 @@ function rotaSubmitRequest(){
   var body={token:CFG.token||"",action:"rotaRequest",request:{
     id:"rq"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
     date:rotaEditDate, driver:st.driver.trim(),
-    type:type, reason:reason, swapWith:swap
+    type:type, reason:reason, swapWith:swap,
+    swapDate:swapDate, agreed:agreed
   }};
 
   btn.disabled=true; btn.textContent="Sending\u2026";
@@ -2062,7 +2210,9 @@ function rotaSubmitRequest(){
       var out=JSON.parse(t);
       if(!out.ok) throw new Error(out.error||"The record would not accept it.");
       rotaClose(); rotaRender(true);
-      toast("Request sent. The coordinator decides; the rota has not changed yet.");
+      toast(type==="Request a swap"
+        ? "Swap sent. The coordinator decides; neither Sunday has changed yet."
+        : "Request sent. The coordinator decides; the rota has not changed yet.");
     })
     .catch(function(e){
       toast("Not submitted. "+(navigator.onLine?(e.message||"The record would not accept it."):"You lost signal. Try again."));
