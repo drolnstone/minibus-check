@@ -391,6 +391,21 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
    except that something is wrong with the app. */
 .rota-swap-note{margin-top:7px;font-size:13px;line-height:1.45;color:var(--muted);
   background:var(--warn-bg);border:1px solid #EBD3A8;border-radius:7px;padding:8px 10px}
+.rota-stops-btn{display:block;width:100%;margin:0 0 12px;padding:11px;border-radius:9px;
+  border:1px solid var(--hair);background:var(--paper);color:var(--ink);
+  font-family:"Barlow Condensed",sans-serif;font-size:15px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.stop-route{font-family:"Barlow Condensed",sans-serif;font-size:13px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
+.stop-row{display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--hair);font-size:14px;line-height:1.4}
+.stop-row:first-of-type{border-top:0}
+.stop-time{flex:0 0 52px;font-weight:700;font-variant-numeric:tabular-nums}
+.stop-name{flex:1}
+.stop-pc{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.stop-arrival{color:var(--muted)}
+.stop-n{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-top:3px;
+  text-transform:uppercase;letter-spacing:.05em}
+.stop-n.has{color:var(--pass)}
 .rota-locked{margin-top:8px;padding:8px 10px;border-radius:7px;font-size:13px;line-height:1.45;
   background:var(--warn-bg);border:1px solid #EBD3A8;color:var(--ink)}
 .rota-modal{position:fixed;inset:0;z-index:120;background:rgba(22,25,31,.48);display:none;align-items:flex-end;justify-content:center}
@@ -569,6 +584,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       <button class="btn btn-ghost" id="rotaMyDuties" type="button">My duties</button>
     </div>
     <p class="rota-viewing" id="rotaViewing"></p>
+    <button class="rota-stops-btn" id="rotaStopsBtn" type="button">Stops and times</button>
     <div id="rotaNotice"></div>
     <div id="rotaList"></div>
   </section>
@@ -616,7 +632,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.4";
+var APP_VERSION = "v1.7";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1716,6 +1732,17 @@ var ROTA_PRIMARY_PATTERN = (CFG.rotaPrimaryPattern || ["Bro Adebola", "Bro Abiod
    rota screen simply shows North, exactly as it did before. */
 var ROTA_SECONDARY_PATTERN = (CFG.rotaSecondaryPattern || []).slice();
 var rotaRows = [];
+
+/* The Sunday timetable, from the Bus Stops tab. Cached with the rota so a
+   driver has it without a signal, which is the whole point on a Sunday
+   morning at the far end of a route. */
+var rotaStops = [];
+
+/* Seats booked at each stop for the coming Sunday, and which Sunday that is.
+   Counts only. The app never receives a passenger's name or number because
+   nothing ever records one. */
+var rotaStopCounts = {};
+var rotaStopCountsFor = "";
 var rotaViewMode = "all";
 var rotaModalMode = "";
 var rotaEditDate = null;
@@ -1855,7 +1882,8 @@ function rotaSaveCache(){
     store.set(RKEY, JSON.stringify({
       when: Date.now(), rows: rotaRows,
       pattern: ROTA_PRIMARY_PATTERN,
-      register: REGISTER
+      register: REGISTER,
+      stops: rotaStops, counts: rotaStopCounts, countsFor: rotaStopCountsFor
     }));
   }catch(e){}
 }
@@ -1866,6 +1894,8 @@ function rotaLoadCache(){
     rotaRows = c.rows;
     if(c.pattern && c.pattern.length) ROTA_PRIMARY_PATTERN = c.pattern.slice();
     if(c.register && c.register.length) rotaSyncRegister(c.register);
+    if(c.stops && c.stops.length) rotaStops = c.stops;
+    if(c.counts){ rotaStopCounts = c.counts; rotaStopCountsFor = c.countsFor||""; }
     return true;
   }catch(e){ return false; }
 }
@@ -1888,6 +1918,8 @@ function rotaFetch(fromDate,weeks,cb){
     if(out.pattern && out.pattern.length) ROTA_PRIMARY_PATTERN = out.pattern.slice();
     if(out.drivers && out.drivers.length) rotaSyncRegister(out.drivers);
     if(out.openDefects) OPEN_DEFECTS = out.openDefects;
+    if(out.stops && out.stops.length) rotaStops = out.stops;
+    if(out.stopCounts){ rotaStopCounts = out.stopCounts; rotaStopCountsFor = out.stopCountsFor||""; }
 
     incoming.forEach(function(row){
       var idx=rotaRows.findIndex(function(x){return x.date===row.date;});
@@ -2145,6 +2177,60 @@ function rotaTopVisibleKey(){
 }
 
 function rotaOpen(){ rotaViewMode="all"; rotaPastWeeks=0; rotaRender(false); show("rota"); }
+/* The Sunday timetable, read from the Bus Stops tab. Shown to any driver,
+   both routes, because somebody covering the other route needs it more than
+   the regular driver does, and because two new South drivers are currently
+   learning that road rather than driving it from memory. */
+function rotaOpenStops(){
+  var stops=(rotaStops||[]).slice();
+  $("rotaModalTitle").textContent="Stops and times";
+
+  if(!stops.length){
+    $("rotaModalBody").innerHTML='<p class="lede">The timetable has not reached this '+
+      'phone yet. Open the rota once with a signal and it will be here after that.</p>'+
+      '<div class="rota-modal-actions"><button class="btn ghost" id="rotaStopsClose">Close</button></div>';
+    $("rotaModal").classList.add("is-on");
+    $("rotaStopsClose").addEventListener("click",function(){$("rotaModal").classList.remove("is-on");});
+    return;
+  }
+
+  /* Counts belong to one Sunday. Showing last week's against this week's
+     stops would be worse than showing none at all. */
+  var showCounts = rotaStopCountsFor && rotaStopCountsFor===rotaKey(rotaBaseSunday(0));
+
+  var html="";
+  if(showCounts){
+    html+='<p class="lede" style="margin:0 0 4px">Bookings for '+
+          esc(rotaBaseSunday(0).toLocaleDateString("en-GB",{day:"numeric",month:"long"}))+
+          '. A stop with nobody booked may still have somebody waiting.</p>';
+  }
+  ["North","South"].forEach(function(rt){
+    var mine=stops.filter(function(s){return s.route===rt;});
+    if(!mine.length) return;
+    html+='<div class="stop-route">'+rt+' Liverpool</div>';
+    mine.forEach(function(s){
+      /* How many are booked there. Shown, never acted on: the app does not
+         tell anybody to skip a stop. Somebody who did not book still turns
+         up, with a dead phone or no phone or because nobody told them, and
+         a stop driven past leaves a person on a corner. The count is for the
+         driver to use his own judgement with. */
+      var n=(!s.arrival && showCounts) ? (rotaStopCounts[s.id]||0) : null;
+      html+='<div class="stop-row'+(s.arrival?" stop-arrival":"")+'">'+
+              '<span class="stop-time">'+esc(s.time)+'</span>'+
+              '<span class="stop-name">'+esc(s.stop)+
+                (s.arrival?' <b>(arrive)</b>':'')+
+                (s.postcode?'<span class="stop-pc">'+esc(s.postcode)+'</span>':'')+
+                (n===null?'':'<span class="stop-n'+(n?' has':'')+'">'+
+                   (n? (n+(n===1?' person':' people')+' booked') : 'Nobody booked')+'</span>')+
+              '</span></div>';
+    });
+  });
+  $("rotaModalBody").innerHTML=html+
+    '<div class="rota-modal-actions"><button class="btn ghost" id="rotaStopsClose">Close</button></div>';
+  $("rotaModal").classList.add("is-on");
+  $("rotaStopsClose").addEventListener("click",function(){$("rotaModal").classList.remove("is-on");});
+}
+
 function rotaOpenRequest(key){
   var d=rotaDateFromKey(key); rotaEditDate=key;
   $("rotaModalTitle").textContent="Request a change";
@@ -2335,6 +2421,8 @@ $("rotaBack").addEventListener("click",function(){show("driver");});
 $("rotaToday").addEventListener("click",function(){
   rotaViewMode="all"; rotaPastWeeks=0; rotaRender(); window.scrollTo(0,0);
 });
+$("rotaStopsBtn").addEventListener("click", rotaOpenStops);
+
 $("rotaMyDuties").addEventListener("click",function(){
   rotaViewMode = rotaViewMode==="mine" ? "all" : "mine";
   rotaRender(); window.scrollTo(0,0);

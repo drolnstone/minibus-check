@@ -25,13 +25,141 @@
 /* ---- settings ---------------------------------------------------------- */
 
 var TOKEN = "dominion-minibus";                   // must match config.js
-var COORDINATOR_EMAIL = "asimbassey@yahoo.com";   // blank = no email alerts
+
+/* ---- passenger bookings -------------------------------------------------
+
+   The driver app's token sits in config.js on a public web host, so anyone
+   who views source has it. For vehicle checks that is tolerable: the worst
+   case is a made up inspection record. Passenger bookings are not, because
+   the same openness would let a stranger wipe a Sunday's bookings or read
+   back where people will be standing and when.
+
+   So bookings do not use TOKEN at all. Each Sunday has its own code, worked
+   out from the date and the secret below, which never leaves this file. The
+   link you post in the group carries that week's code, and it stops working
+   when the Sunday passes. Somebody who keeps an old link has nothing.
+
+   The secret is NOT in this file. It lives in Script Properties, inside the
+   Apps Script project on Google's servers, and is never written down here.
+
+   That is deliberate. This file is likely to end up in a GitHub repository
+   next to the web files, where .gs is served as plain text and anyone can
+   read it. Worse, a secret committed once stays in the commit history for
+   good, so deleting it later does not take it back. A secret that was never
+   in the file cannot be committed by accident.
+
+   Set it with Minibus > Set the bus link secret. It generates a random one,
+   stores it, and never shows it to anybody, including you. Run it again to
+   change it, which kills every link already sent and is how you shut off one
+   that has gone somewhere you did not intend. */
+function busSecret() {
+  try {
+    return PropertiesService.getScriptProperties().getProperty("BUS_LINK_SECRET") || "";
+  } catch (err) { return ""; }
+}
+
+function setBusSecret() {
+  var ui = SpreadsheetApp.getUi();
+  var existing = busSecret();
+  if (existing) {
+    var answer = ui.alert("Replace the bus link secret?",
+      "A secret is already set. Replacing it stops EVERY link already sent " +
+      "from working, including this Sunday's if you have posted it.\n\n" +
+      "Do that only if a link has gone somewhere it should not have.",
+      ui.ButtonSet.YES_NO);
+    if (answer !== ui.Button.YES) return;
+  }
+
+  /* Generated rather than typed. A secret nobody has ever seen cannot be
+     pasted into a message, a commit, or a conversation with an AI. */
+  var raw = Utilities.getUuid() + Utilities.getUuid() + String(Date.now());
+  var sig = Utilities.computeHmacSha256Signature(raw, Utilities.getUuid());
+  var secret = sig.map(function (b) {
+    var v = (b < 0 ? b + 256 : b).toString(16);
+    return v.length === 1 ? "0" + v : v;
+  }).join("");
+
+  PropertiesService.getScriptProperties().setProperty("BUS_LINK_SECRET", secret);
+  ui.alert("\u2713  Done.\n\n" +
+    "The secret is stored in this Apps Script project, not in Code.gs, so it " +
+    "is safe to put Code.gs in a public repository.\n\n" +
+    "It is not shown here on purpose. Nothing needs it except this script, " +
+    "and a secret nobody has seen cannot be leaked.\n\n" +
+    (existing ? "Every link sent before now has stopped working. Send a new one."
+              : "You can now use Minibus \u203a Bus link for this Sunday."));
+}
+
+/* Where the passenger page is hosted. Used only to build the link the menu
+   gives you, so it just needs to match where you upload bus.html. */
+var BUS_PAGE_URL = "https://asimbassey.github.io/minibus/bus.html";
+
+/* When bookings close. Day 0 is Sunday itself, 6 is Saturday.
+
+   Sunday 09:30, because North's first pickup is 10:05 and the driver leaves
+   before that. Closing any later would have him already on the road while
+   the list was still moving. After the cut-off the page still opens and still
+   shows the times, it just will not take a change. */
+var BOOKING_CUTOFF_DAY = 0;
+var BOOKING_CUTOFF_HOUR = 9;
+var BOOKING_CUTOFF_MIN = 30;
+
+var BOOKINGS_SHEET = "Bus Bookings";
+/* Your address, so alerts reach you. Not a secret in the way the bus link
+   secret is, but it IS a personal address, and a public repository is a
+   place scrapers look. Set it in Script Properties as COORDINATOR_EMAIL and
+   the fallback below can stay blank. Minibus > Check scheduled emails tells
+   you which of the two is being used. */
+var COORDINATOR_EMAIL = (function () {
+  try {
+    var p = PropertiesService.getScriptProperties().getProperty("COORDINATOR_EMAIL");
+    if (p) return p;
+  } catch (err) {}
+  return "asimbassey@yahoo.com";                  // blank = no email alerts
+})();
 
 var CHECKS_SHEET   = "Checks";
 var DEFECTS_SHEET  = "Defects";
 var ROTA_SHEET     = "Rota";
 var REQUESTS_SHEET = "Rota Requests";
 var DRIVERS_SHEET  = "Drivers";
+var STOPS_SHEET    = "Bus Stops";
+
+/* The Sunday timetable, so it stops living only in a WhatsApp message.
+
+   Type is Pickup or Arrival. Church is where the run ends, not somewhere
+   anybody boards, and keeping that distinction here means nothing later can
+   offer it as a place to be picked up.
+
+   Family names are deliberately not in the stop labels. "Bellamy and
+   Cromwell families at Church Lane" is fine among people who know each
+   other. Written down it pairs a surname with a street and the exact minute
+   those people stand outside, and this tab is read by the app.
+
+   South is five junctions off Molyneux Road, taken Patton first, then in to
+   Tudor and back out. They used to be one line on a timetable because one
+   bus did both runs and there was no point separating them. */
+var STOPS_HEADERS = ["Route", "Stop ID", "Time", "Stop", "Postcode", "Active", "Type"];
+
+var SEED_STOPS = [
+  ["North", "N01", "10:05", "Scarisbrick Drive by Ardville Road",               "L11 7DD", "YES", "Pickup"],
+  ["North", "N02", "10:14", "Cedar Road at Walton Vale, by Grace Road bus stop","L9 2BU",  "YES", "Pickup"],
+  ["North", "N03", "10:20", "Church Lane bus stop, County Road",                "L4 5PQ",  "YES", "Pickup"],
+  ["North", "N04", "10:23", "County Road by Ireton Street",                     "L4 5TR",  "YES", "Pickup"],
+  ["North", "N05", "10:29", "Fountains Road by Stanley Close",                  "L4 1QL",  "YES", "Pickup"],
+  ["North", "N06", "10:40", "The Lutine Bell",                                  "L5 6PT",  "YES", "Pickup"],
+  ["North", "N07", "10:41", "Grasmere Street bus stop, in front of the mosque",  "L5 6PU",  "YES", "Pickup"],
+  ["North", "N08", "10:44", "Sedley Street bus stop",                           "L6 5AF",  "YES", "Pickup"],
+  ["North", "N09", "10:50", "Dewsbury Road by Lynholme Road",                   "L4 2XF",  "YES", "Pickup"],
+  ["North", "N10", "10:54", "Townsend Road by Vicar Road bus stop, in front of the GP practice", "L6 0BB", "YES", "Pickup"],
+  ["North", "N11", "11:00", "Church",                                           "L6 4DS",  "YES", "Arrival"],
+
+  ["South", "S01", "10:40", "Parton Street, at the Molyneux Road junction",     "",        "YES", "Pickup"],
+  ["South", "S02", "10:42", "Tudor Street, at the Molyneux Road junction",      "",        "YES", "Pickup"],
+  ["South", "S03", "10:44", "North Cumbria, at the Molyneux Road junction",     "",        "YES", "Pickup"],
+  ["South", "S04", "10:46", "Hannan, at the Molyneux Road junction",            "",        "YES", "Pickup"],
+  ["South", "S05", "10:48", "Halsbury, at the Molyneux Road junction",          "",        "YES", "Pickup"],
+  ["South", "S06", "11:00", "Church",                                           "L6 4DS",  "YES", "Arrival"]
+];
 
 /* Column headings on the Rota tab. The two slots are named after the routes
    rather than the vehicles, because which bus runs which route can change on
@@ -113,6 +241,13 @@ function doPost(e) {
 
     var body = JSON.parse(e.postData.contents);
 
+    /* Passenger bookings are checked against that Sunday's own code, not
+       against TOKEN, and are handled before the token test so a passenger
+       page never needs the driver token in it. */
+    if (String(body.action || "") === "booking") {
+      return handleBooking(body.booking);
+    }
+
     if (String(body.token || "") !== TOKEN) {
       return reply({ ok: false, error: "bad token" });
     }
@@ -138,6 +273,13 @@ function doGet(e) {
 
   if (p.last) {
     try { return reply(lastMileagePayload()); }
+    catch (err) { return reply({ ok: false, error: String(err) }); }
+  }
+
+  /* What the passenger page loads: the stops for that Sunday, how many are
+     booked at each, and this device's own booking if it has one. */
+  if (p.bus) {
+    try { return reply(busPayload(p.d, p.k, p.ref)); }
     catch (err) { return reply({ ok: false, error: String(err) }); }
   }
 
@@ -317,6 +459,7 @@ function rotaPayload(fromKey, weeks) {
   var pattern = { north: primaryPattern(drivers, "North"),
                   south: primaryPattern(drivers, "South") };
   var requests = readLatestRequests(ss);
+  var stops = readBusStops(ss);
   var written = readRotaRows(ss);
 
   var rows = [];
@@ -354,6 +497,14 @@ function rotaPayload(fromKey, weeks) {
                      }),
     /* So the next driver sees what the last one reported and still open. */
     openDefects: openDefectsByReg(ss),
+    /* The Sunday timetable. Sent with the rota because that is when a driver
+       looks, and because a new driver learning a route needs it in front of
+       him rather than in a WhatsApp message from three weeks ago. */
+    stops: stops,
+    /* Seats booked at each stop for the coming Sunday, so the driver sees
+       who is waiting where. Counts only: this carries no names. */
+    stopCounts: bookingCounts(ss, dateToKey(sundayOf(new Date()))),
+    stopCountsFor: dateToKey(sundayOf(new Date())),
     rows: rows
   };
 
@@ -1160,6 +1311,12 @@ function sheetLocks(ss) {
   add(CHECKS_SHEET, function () { return []; },
       "Checks: a signed record of what was inspected");
 
+  add(STOPS_SHEET, function (sh) {
+    /* Left live below the header. Times and stops do change, and this is the
+       one place they should be changed. */
+    return [sh.getRange(2, 1, last(sh) - 1, 7)];
+  }, "Bus Stops: the header row is fixed, the timetable below it is yours");
+
   add(DRIVERS_SHEET, function (sh) {
     return [sh.getRange(2, 1, last(sh) - 1, 7)];     // the register itself
   }, "Drivers: the header row is fixed, the register below it is yours");
@@ -1317,6 +1474,8 @@ function repairFuelColumn() {
 function setUpEverything() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   ensureRotaSheets(ss);
+  ensureBusStops(ss);
+  ensureBookings(ss);
   ensureDrivers(ss);
   ensureRota(ss);
 
@@ -1374,6 +1533,225 @@ function checkTimeZoneMenu() {
   } else {
     ss.toast("Time zone looks right: " + Session.getScriptTimeZone() + ".", "Minibus", 6);
   }
+}
+
+function ensureBusStops(ss) {
+  var existing = ss.getSheetByName(STOPS_SHEET);
+  var sh = sheet(ss, STOPS_SHEET, STOPS_HEADERS);
+  if (!existing) {
+    SEED_STOPS.forEach(function (r) { sh.appendRow(r); });
+    sh.setColumnWidth(4, 340);
+    sh.getRange(1, 3).setNote("Written as text, 09:50, not a time value.");
+    sh.getRange(1, 6).setNote("NO takes a stop out of the app without deleting it.");
+    sh.getRange(1, 7).setNote("Pickup or Arrival. Arrival is where the run ends, " +
+                              "not somewhere anybody boards.");
+    sh.getRange("F2:F400").setDataValidation(listRule(["YES", "NO"]));
+    sh.getRange("G2:G400").setDataValidation(listRule(["Pickup", "Arrival"]));
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function readBusStops(ss) {
+  var sh = ss.getSheetByName(STOPS_SHEET);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues();
+  var out = [];
+  vals.forEach(function (r) {
+    var stop = String(r[3] || "").trim();
+    if (!stop) return;
+    if (String(r[5] || "YES").trim().toUpperCase() === "NO") return;
+    out.push({
+      route: (String(r[0] || "").trim().toUpperCase().charAt(0) === "S") ? "South" : "North",
+      id: String(r[1] || "").trim(),
+      /* Read as text. A cell holding 09:50 as a real time comes back as a
+         Date, and the fuel column already taught us what that does. */
+      time: (r[2] && typeof r[2].getHours === "function")
+        ? Utilities.formatDate(r[2], Session.getScriptTimeZone(), "HH:mm")
+        : String(r[2] || "").trim(),
+      stop: stop,
+      postcode: String(r[4] || "").trim(),
+      arrival: String(r[6] || "").trim().toLowerCase().indexOf("arriv") === 0
+    });
+  });
+  return out;
+}
+
+/* ---- passenger bookings ------------------------------------------------ */
+
+/**
+ * The code that makes a link work for one Sunday only.
+ *
+ * A signature over the date using the secret, cut to ten characters. Nobody
+ * can work out next week's from this week's without the secret, and the
+ * secret is only ever in this file.
+ */
+function busCode(key) {
+  var secret = busSecret();
+  if (!secret) return "";                 // no secret set: no link can be valid
+  var raw = Utilities.computeHmacSha256Signature(String(key), secret);
+  var hex = raw.map(function (b) {
+    var v = (b < 0 ? b + 256 : b).toString(16);
+    return v.length === 1 ? "0" + v : v;
+  }).join("");
+  return hex.substring(0, 10);
+}
+
+/* The Sunday a link is for has to be this Sunday or the next one. An old
+   link is dead, and nobody can book six months out by editing a date. */
+function busDateAllowed(key) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(key || ""))) return false;
+  var d = keyToDate(key);
+  if (d.getDay() !== 0) return false;
+  var thisSunday = sundayOf(new Date());
+  var next = addWeeks(thisSunday, 1);
+  return dateToKey(d) === dateToKey(thisSunday) || dateToKey(d) === dateToKey(next);
+}
+
+function bookingsClosed(key) {
+  var sunday = keyToDate(key);
+  var cutoff = new Date(sunday);
+  /* Day 0 is the Sunday itself. Anything else counts back to the weekday
+     before it, so Saturday is 6 and lands one day earlier. */
+  if (BOOKING_CUTOFF_DAY !== 0) cutoff.setDate(cutoff.getDate() - (7 - BOOKING_CUTOFF_DAY));
+  cutoff.setHours(BOOKING_CUTOFF_HOUR, BOOKING_CUTOFF_MIN || 0, 0, 0);
+  return new Date() > cutoff;
+}
+
+/* For telling somebody when to book by, in words. */
+function cutoffWords() {
+  var day = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][BOOKING_CUTOFF_DAY];
+  return day + " " + p2(BOOKING_CUTOFF_HOUR) + ":" + p2(BOOKING_CUTOFF_MIN || 0);
+}
+
+function ensureBookings(ss) {
+  var existing = ss.getSheetByName(BOOKINGS_SHEET);
+  var sh = sheet(ss, BOOKINGS_SHEET,
+    ["Received", "Sunday", "Route", "Stop ID", "Stop", "Seats", "Device", "Status"]);
+  if (!existing) {
+    sh.getRange(1, 6).setNote("How many people are boarding there, not who.");
+    sh.getRange(1, 7).setNote(
+      "A random handle the passenger's own phone made up, so somebody can " +
+      "change their own booking later.\n\n" +
+      "It is NOT a name, a number or anything that identifies a person. " +
+      "Nothing on this tab does, and nothing should be added that does.");
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(5, 300);
+  }
+  return sh;
+}
+
+function readBookings(ss, key) {
+  var sh = ss.getSheetByName(BOOKINGS_SHEET);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues();
+  var out = [];
+  vals.forEach(function (r, i) {
+    if (anyToKey(r[1]) !== key) return;
+    if (String(r[7] || "").trim().toLowerCase() === "cancelled") return;
+    out.push({ row: i + 2, stopId: String(r[3] || "").trim(),
+               seats: Number(r[5]) || 0, device: String(r[6] || "").trim() });
+  });
+  return out;
+}
+
+/* Seats booked per stop for one Sunday. What the driver actually needs. */
+function bookingCounts(ss, key) {
+  var out = {};
+  readBookings(ss, key).forEach(function (b) {
+    out[b.stopId] = (out[b.stopId] || 0) + b.seats;
+  });
+  return out;
+}
+
+function busPayload(key, code, ref) {
+  if (!busDateAllowed(key)) return { ok: false, error: "That link is out of date. Ask for this week's." };
+  var want = busCode(key);
+  if (!want) return { ok: false, error: "Bus bookings are not set up yet." };
+  if (String(code || "") !== want) return { ok: false, error: "That link is not valid." };
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var counts = bookingCounts(ss, key);
+  var mine = null;
+  if (ref) {
+    readBookings(ss, key).forEach(function (b) { if (b.device === ref) mine = b; });
+  }
+  return {
+    ok: true,
+    date: key,
+    closed: bookingsClosed(key),
+    stops: readBusStops(ss).filter(function (s) { return !s.arrival; }),
+    arrivals: readBusStops(ss).filter(function (s) { return s.arrival; }),
+    counts: counts,
+    mine: mine ? { stopId: mine.stopId, seats: mine.seats } : null
+  };
+}
+
+/**
+ * One booking per device per Sunday. Sending again replaces it, so changing
+ * your mind or cancelling is the same action rather than a second row.
+ */
+function handleBooking(b) {
+  if (!b) return reply({ ok: false, error: "empty booking" });
+
+  var key = String(b.date || "");
+  if (!busDateAllowed(key)) return reply({ ok: false, error: "That link is out of date. Ask for this week's." });
+  var want = busCode(key);
+  if (!want) return reply({ ok: false, error: "Bus bookings are not set up yet." });
+  if (String(b.code || "") !== want) return reply({ ok: false, error: "That link is not valid." });
+  if (bookingsClosed(key)) return reply({ ok: false, error: "Bookings for this Sunday have closed." });
+
+  var ref = String(b.ref || "").replace(/[^A-Za-z0-9]/g, "").substring(0, 32);
+  if (!ref) return reply({ ok: false, error: "no device handle" });
+
+  var seats = Math.max(0, Math.min(12, Number(b.seats) || 0));
+  var stopId = String(b.stopId || "").trim();
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var stop = null;
+  readBusStops(ss).forEach(function (s) { if (s.id === stopId && !s.arrival) stop = s; });
+  if (seats > 0 && !stop) return reply({ ok: false, error: "unknown stop" });
+
+  var sh = ensureBookings(ss);
+  var existing = null;
+  readBookings(ss, key).forEach(function (x) { if (x.device === ref) existing = x; });
+
+  /* Nothing booked, or cancelling. Both end the same way: no live row. */
+  if (!seats) {
+    if (existing) sh.getRange(existing.row, 8).setValue("Cancelled");
+    return reply({ ok: true, cancelled: true });
+  }
+
+  if (existing) {
+    sh.getRange(existing.row, 3, 1, 4)
+      .setValues([[stop.route, stop.id, stop.stop, seats]]);
+    sh.getRange(existing.row, 8).setValue("Booked");
+    sh.getRange(existing.row, 1).setValue(new Date());
+  } else {
+    sh.appendRow([new Date(), key, stop.route, stop.id, stop.stop, seats, ref, "Booked"]);
+  }
+  return reply({ ok: true, stopId: stop.id, seats: seats });
+}
+
+function busLinkForSunday() {
+  var ui = SpreadsheetApp.getUi();
+  if (!busSecret()) {
+    ui.alert("Set the secret first.\n\n" +
+      "Run Minibus \u203a Set the bus link secret. It takes a moment and only " +
+      "needs doing once.");
+    return;
+  }
+  var sunday = sundayOf(new Date());
+  var key = dateToKey(sunday);
+  var link = BUS_PAGE_URL + "?d=" + key + "&k=" + busCode(key);
+  var when = Utilities.formatDate(sunday, Session.getScriptTimeZone(), "EEEE d MMMM");
+
+  ui.alert("Bus link for " + when,
+    link + "\n\n" +
+    "Paste this into the group. It works for this Sunday only and stops " +
+    "working afterwards.\n\n" +
+    "Bookings close " + cutoffWords() + ".",
+    ui.ButtonSet.OK);
 }
 
 function ensureDrivers(ss) {
@@ -1715,17 +2093,21 @@ function openDefectsByReg(ss) {
  * digest stops turning up, the email path itself is broken.
  */
 /**
- * Sunday morning, 10:30. Tells you what has NOT been checked.
+ * Sunday 10:45. Tells you which bus went out without an inspection.
  *
- * Deliberately not the other way round. Emailing every clean check would put
- * two messages a Sunday in front of you that both say nothing is wrong, and
- * within a month you would be skimming them, including the one that mattered.
- * Silence here means both buses were checked. A message means one was not,
- * and there is still time to ring the driver before he pulls out.
+ * Note what this is NOT. At 10:45 North left around 09:50 and South around
+ * 10:35, so both are already carrying people. Nobody is going to be caught
+ * before they pull out, and an email pretending otherwise would send you
+ * chasing a bus that has gone.
  *
- * The driver already gets a reminder the day before. This closes the loop
- * that reminder leaves open: nothing currently checks whether they acted on
- * it, so the only way to find out was to ask.
+ * It is a record that a vehicle went out unchecked, and a prompt to inspect
+ * it on return, while whatever it did that morning is still findable. That
+ * is worth having even though it is late, and it is worth reading as what it
+ * is rather than as a warning.
+ *
+ * Deliberately silent when both are checked. Emailing every clean check would
+ * put two messages a Sunday in front of you that both say nothing is wrong,
+ * and within a month you would skim them, including the one that mattered.
  */
 function missingCheckAlert() {
   if (!COORDINATOR_EMAIL) return;
@@ -1753,9 +2135,10 @@ function missingCheckAlert() {
   var south = row ? String(row.actual2 || row.primary2 || "").trim() : "";
 
   var when = Utilities.formatDate(now, tz, "EEEE d MMMM");
+  var many = expected.length > 1;
   var lines = [
-    "<b>No pre-drive check recorded yet</b> for " + esc(when) + ", as at " +
-      Utilities.formatDate(now, tz, "HH:mm") + ".",
+    "<b>" + (many ? "These buses went out" : "This bus went out") +
+      " with no pre-drive check</b> this morning, " + esc(when) + ".",
     "&nbsp;"
   ];
   expected.forEach(function (reg) { lines.push("\u2022 <b>" + esc(reg) + "</b>"); });
@@ -1768,24 +2151,31 @@ function missingCheckAlert() {
     lines.push("&nbsp;");
   }
   if (Object.keys(done).length) {
-    lines.push("Already checked today: " + Object.keys(done).join(", ") + ".");
+    lines.push("Checked this morning: " + Object.keys(done).join(", ") + ".");
     lines.push("&nbsp;");
   }
-  lines.push("A check may simply be late. This is sent once, so if it arrives " +
-             "after this you will not hear again either way.");
+  lines.push("<b>Please have " + (many ? "them" : "it") + " inspected on return</b>, " +
+             "while anything that happened this morning can still be found. " +
+             "Both routes are already out by now, so this is not a bus to catch " +
+             "before it leaves.");
+  lines.push("&nbsp;");
+  lines.push("Sent once. If a check is recorded later you will not hear again " +
+             "either way.");
 
-  var plain = ["No pre-drive check recorded yet for " + when + ".", ""]
+  var plain = [(many ? "These buses" : "This bus") +
+               " went out with no pre-drive check on " + when + ".", ""]
     .concat(expected.map(function (r) { return "  " + r; }));
   if (north) plain.push("", "North Liverpool: " + north);
   if (south) plain.push("South Liverpool: " + south);
+  plain.push("", "Please have " + (many ? "them" : "it") + " inspected on return.");
 
   MailApp.sendEmail({
     to: COORDINATOR_EMAIL,
-    subject: "Minibus: no check yet for " + expected.join(", "),
+    subject: "Minibus: " + expected.join(", ") + " went out unchecked",
     body: plain.join("\n"),
     /* Amber, not red. A late check is usually a late check, not a crisis,
        and the red shell belongs to a bus that has been stopped. */
-    htmlBody: htmlShell("Check not done yet", "#8A6116", lines, "Open the rota", ROTA_SHEET)
+    htmlBody: htmlShell("Went out unchecked", "#8A6116", lines, "Open the checks", CHECKS_SHEET)
   });
 }
 
@@ -1793,8 +2183,9 @@ function installMissingCheckAlert() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === "missingCheckAlert") ScriptApp.deleteTrigger(t);
   });
+  /* 10:45. Both buses are out by then, so this reports rather than warns. */
   ScriptApp.newTrigger("missingCheckAlert")
-    .timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(10).nearMinute(30).create();
+    .timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(10).nearMinute(45).create();
 }
 
 function weeklyDigest() {
@@ -1889,7 +2280,7 @@ function checkDigestScheduled() {
     { fn: "dutyReminders",  label: "Duty reminders, every morning",   install: installDutyReminders },
     { fn: "onRotaEditNotify", label: "Alerts when a Sunday changes",   install: installChangeAlerts },
     { fn: "nightlyMaintenance", label: "Nightly rota tidy-up, 3am",     install: installNightlyMaintenance },
-    { fn: "missingCheckAlert",  label: "Sunday 10:30, check not done",  install: installMissingCheckAlert }
+    { fn: "missingCheckAlert",  label: "Sunday 10:45, went out unchecked", install: installMissingCheckAlert }
   ];
   var have = {};
   try {
@@ -2294,6 +2685,8 @@ function onOpen() {
     .addItem("Rebuild future Sundays from the pattern", "rebuildFutureRota")
     .addSeparator()
     .addItem("Who is carrying the load", "coverBalance")
+    .addItem("Bus link for this Sunday", "busLinkForSunday")
+    .addItem("Set the bus link secret", "setBusSecret")
     .addSeparator()
     .addItem("Lock the sheet", "lockSheet")
     .addItem("Unlock the sheet", "unlockSheet")

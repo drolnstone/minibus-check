@@ -690,20 +690,131 @@ freely. Lock it again afterwards.
 The duty reminder tells a driver the day before, and then nothing checks
 whether they acted on it. That left the only way of finding out as asking.
 
-At **10:30 every Sunday** you get one email listing any bus with no check
-recorded yet, and who is down to drive it. If both are done, nothing is sent.
+At **10:45 every Sunday** you get one email naming any bus that went out with
+no check recorded, and who is driving it. If both were checked, nothing is
+sent.
+
+By 10:45 both buses have already left, so this is not a warning to catch
+somebody before they pull out. It is a record that a vehicle went out
+unchecked, and a prompt to inspect it on return while anything that happened
+that morning can still be found.
 
 It is deliberately this way round rather than a message for every clean
 check. Two confirmations a Sunday that nothing is wrong would be skimmed
-within a month, including the one that mattered. Silence means everything is
-fine; a message means there is time to make a phone call before the bus
-pulls out.
+within a month, including the one that mattered.
 
 The buses it expects are the ones the app has ever recorded a check for, so
 adding a bus needs no change here: its first check puts it on the list.
 
 To change the time, edit `installMissingCheckAlert` in `Code.gs` and run
 **Minibus → Set up / refresh rota** again.
+
+**v1.5** The Sunday timetable.
+
+## Bus Stops
+
+A new tab holds the pickup points and times, so the timetable stops living
+only in a WhatsApp message. **Stops and times** on the rota screen shows it to
+any driver, both routes, and it is cached like the rota so it works without a
+signal at the far end of a run.
+
+| Column | What it is |
+|---|---|
+| Route | North or South |
+| Stop ID | N01, S03, and so on |
+| Time | written as text, `09:50`, not a time value |
+| Stop | as a passenger would recognise it |
+| Postcode | optional |
+| Active | NO hides a stop without deleting it |
+| Type | Pickup, or Arrival for where the run ends |
+
+Both routes run every Sunday, in two buses at opposite ends of the city. What
+rotates is which driver takes each route, not which route operates.
+
+South is five junctions off Molyneux Road, taken Patton Street first, then in
+to Tudor Street and back out. They were one line on the old timetable because
+a single bus did both runs and there was no reason to separate them.
+
+Family names are deliberately not in the stop labels. Among people who know
+each other that is fine. Written into a tab the app reads, it pairs a surname
+with a street and the exact minute those people stand outside.
+
+Nothing on that tab records passengers. It is the timetable only.
+
+**v1.6** Passenger bookings.
+
+## The Sunday bus link
+
+**Minibus → Bus link for this Sunday** gives you a link to paste into the
+WhatsApp group. Passengers tap it, tap their stop, say how many are boarding,
+and confirm. They can change or cancel until **09:30 on Sunday morning**, set
+by `BOOKING_CUTOFF_DAY`, `_HOUR` and `_MIN` in `Code.gs`. North's first pickup
+is 10:05, so the list settles shortly before the driver sets off. The driver
+sees the numbers per stop under **Stops and times**.
+
+`bus.html` goes on the web host next to `index.html`.
+
+### Before you send the first link
+
+Run **Minibus → Set the bus link secret**, once. It generates a random secret
+and stores it in Script Properties, inside the Apps Script project. Nothing
+needs doing again unless you want to kill every link already sent, in which
+case run it a second time.
+
+It never shows you the secret, on purpose. Nothing needs it except the script,
+and a secret nobody has seen cannot be pasted into a message or a commit.
+
+Then set **`BUS_PAGE_URL`** in `Code.gs` to wherever you uploaded `bus.html`.
+
+### Why the secret is not in Code.gs
+
+`.gs` files are served as plain text by GitHub, so anything written in this
+file is readable by anyone who finds the repository. Worse, a secret committed
+once stays in the commit history for good: deleting it later does not take it
+back, and the only real fix is to change the secret.
+
+A secret that was never in the file cannot be committed by accident, which is
+why it lives in Script Properties instead. `COORDINATOR_EMAIL` can go there
+too, under that name, and the value in the file will be ignored.
+
+A `.gitignore` is included that keeps `Code.gs` and this file out of the
+repository. Read the comments in it before changing anything: `config.js` is
+committed on purpose, because GitHub Pages cannot serve what is not there, and
+that means the endpoint, the token and the coordinator's mobile number are
+public. The number is worth a thought. It is there so a driver with a stopped
+bus can ring somebody, which is a good reason, but a separate number for the
+purpose would be better than a personal mobile on a public page.
+
+### Why the link has a code on the end
+
+The driver app's token sits in `config.js` on a public host, so anyone who
+views source has it. For vehicle checks that is tolerable: the worst case is
+a made up inspection record. Bookings are not, because the same openness would
+let a stranger wipe a Sunday's bookings.
+
+So bookings ignore that token entirely. Each Sunday has its own code worked
+out from the date and `BUS_LINK_SECRET`, which never leaves `Code.gs`. Last
+week's link is dead. Nobody can work out next week's. Changing the secret
+kills every link already sent, which is how you shut off one that has gone
+somewhere you did not intend.
+
+### What is recorded, and what is not
+
+The Bus Bookings tab holds the Sunday, the stop, and how many people are
+boarding there. Nothing else.
+
+No names. No phone numbers. The Device column is a random handle the
+passenger's own phone made up so they can come back and change their booking,
+and it identifies nobody. **Do not add a name column.** The driver needs to
+know five people are waiting on Church Lane, not who they are, and everything
+about this design assumes that.
+
+### The app does not tell a driver to skip a stop
+
+It shows the count, including "Nobody booked", and stops there. Somebody who
+did not book still turns up: a dead phone, no phone, a visitor, or nobody
+thought to tell them. A stop driven past leaves a person standing on a corner.
+The count is there for the driver's judgement, not instead of it.
 
 ---
 
