@@ -673,6 +673,8 @@ Left editable, because these are touched as a matter of course:
 | Rota | both scheduled columns, both cover columns, Status, Notes |
 | Rota Requests | Status, Replacement assigned |
 | Defects | Status, Action taken, Closed on |
+| Bus Bookings | Status only |
+| Bus Stops | the whole timetable below the header |
 | Drivers | the whole register below the header |
 | Checks | nothing |
 
@@ -797,6 +799,18 @@ out from the date and `BUS_LINK_SECRET`, which never leaves `Code.gs`. Last
 week's link is dead. Nobody can work out next week's. Changing the secret
 kills every link already sent, which is how you shut off one that has gone
 somewhere you did not intend.
+
+### Nothing fills this tab in by hand
+
+There is no command that populates **Bus Bookings**. Rows appear only when a
+passenger uses the link and taps Confirm. To see it working: set the secret,
+get the link, open it on your own phone, pick a stop, confirm. A row appears,
+and the count shows against that stop under **Stops and times** in the app.
+
+Only **Status** is editable there, so you can strike out a booking if somebody
+rings you after the cut-off. Everything else came from a passenger's phone.
+The Device column especially: it is how their phone finds their own booking to
+change it, so altering one silently detaches a person from the row they made.
 
 ### What is recorded, and what is not
 

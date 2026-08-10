@@ -1311,6 +1311,18 @@ function sheetLocks(ss) {
   add(CHECKS_SHEET, function () { return []; },
       "Checks: a signed record of what was inspected");
 
+  add(BOOKINGS_SHEET, function (sh) {
+    /* Status only, so a booking can be struck out by hand if somebody rings
+       you after the cut-off. Everything else came from a passenger's phone
+       and editing it would put words in their mouth, the same reasoning as
+       the Requests tab.
+
+       The Device column matters most here. It is how somebody's own phone
+       finds their booking to change it, so altering one silently detaches a
+       person from the row they made. */
+    return [sh.getRange(2, 8, last(sh) - 1, 1)];
+  }, "Bus Bookings: written by passengers, only Status is yours");
+
   add(STOPS_SHEET, function (sh) {
     /* Left live below the header. Times and stops do change, and this is the
        one place they should be changed. */
