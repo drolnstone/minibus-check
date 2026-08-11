@@ -195,7 +195,11 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 <body>
 <div class="wrap">
   <div class="brand">
-    <img src="../logo.png" alt="">
+    <!-- Two candidates, then nothing. Which one is right depends on how deep
+         this page sits, and a broken image icon on a church page looks worse
+         than no logo at all. -->
+    <img src="../logo.png" alt="" id="brandLogo"
+         onerror="if(this.dataset.tried){this.style.display='none';}else{this.dataset.tried=1;this.src='logo.png';}">
     <span class="brand-txt">
       <b>RCCG Dominion Assembly</b>
       <span>Liverpool · Transport</span>
@@ -276,11 +280,11 @@ function prettyDate(key){
   return d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"});
 }
 
-function load(){
+function load(again){
   fetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
     .then(function(r){ return r.text(); })
     .then(function(t){
-      var out=JSON.parse(t);
+      var out=readJson(t);
       if(!out || out.ok!==true) throw new Error(out && out.error ? out.error : "unavailable");
       STOPS=out.stops||[]; ARRIVALS=out.arrivals||[]; COUNTS=out.counts||{};
       CLOSED=!!out.closed; ROLLED=!!out.rolled; DATE=out.date||""; CUTOFF=out.cutoff||"";
@@ -311,10 +315,29 @@ function load(){
       else { liveStop(); live=null; paintLive(); }
     })
     .catch(function(err){
+      /* One retry before saying anything. These fail transiently more often
+         than they fail properly, and a page that gives up on the first blip
+         sends somebody to the group over something that would have worked a
+         second later. */
+      if(!again){ setTimeout(function(){ load(true); }, 1200); return; }
       $("body").innerHTML='<div class="note note-warn"><b>The stops could not be loaded.</b><br>'+
-        esc(String(err.message||err))+'<br><br>Check your signal and pull down to refresh. '+
+        esc(String(err.message||err))+'<br><br>Pull down to refresh. '+
         'If it keeps happening, tell the transport group.</div>';
     });
+}
+
+/* An answer that is not JSON is nearly always an HTML page from Google:
+   a sign-in screen, or an error page, meaning the request never reached the
+   script. Saying "Unrecognized token" to somebody trying to book a seat helps
+   nobody, and it hides the one fact that would help whoever has to fix it. */
+function readJson(t){
+  var txt=String(t||"").trim();
+  if(txt.charAt(0)==="<"){
+    throw new Error("The booking record is not answering. This usually means "+
+                    "the transport group needs to check its settings.");
+  }
+  try{ return JSON.parse(txt); }
+  catch(e){ throw new Error("The record sent back something unreadable."); }
 }
 
 
@@ -565,10 +588,10 @@ function send(payload, done){
     headers:{"Content-Type":"text/plain;charset=utf-8"},
     body: JSON.stringify({ action:"booking", booking: payload })
   }).then(function(r){ return r.text(); }).then(function(t){
-    var out=JSON.parse(t);
+    var out=readJson(t);
     if(!out || out.ok!==true) throw new Error(out && out.error ? out.error : "not saved");
     saving=false;
-    done();
+    done(out);
   }).catch(function(err){
     /* A failure here does NOT mean nothing was written.
 
@@ -592,7 +615,7 @@ function verifySend(payload, done){
   fetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
     .then(function(r){ return r.text(); })
     .then(function(t){
-      var out=JSON.parse(t);
+      var out=readJson(t);
       if(!out || out.ok!==true) throw new Error("no answer");
 
       var wantStop=String(payload.stopId||""), wantSeats=Number(payload.seats)||0;
@@ -603,7 +626,7 @@ function verifySend(payload, done){
 
       if(!landed) throw new Error("not saved");
       saving=false;
-      done();
+      done(out);
     })
     .catch(function(){
       saving=false;
@@ -613,20 +636,34 @@ function verifySend(payload, done){
     });
 }
 
+/* Repaint from the answer we already have.
+
+   Both of these used to call load() and wait for the whole payload a second
+   time. The reply to the save already says what was saved and what every stop
+   now holds, so there is nothing left to ask for. */
+function applySaved(out){
+  if(out && out.counts) COUNTS=out.counts;
+  booked = (out && out.mine && out.mine.stopId)
+    ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
+  chosen = booked ? booked.stopId : null;
+  seats  = booked ? booked.seats  : 1;
+  paint();
+}
+
 $("save").addEventListener("click",function(){
   if(!chosen) return;
   $("save").innerHTML='<span class="spin"></span>';
-  send({ date:DATE, ref:REF, stopId:chosen, seats:seats }, function(){
+  send({ date:DATE, ref:REF, stopId:chosen, seats:seats }, function(out){
     $("save").textContent="Confirm";
+    applySaved(out);
     toast("Booked. You can change this until "+(CUTOFF||"Sunday 09:30")+".");
-    load();
   });
 });
 
 $("cancel").addEventListener("click",function(){
-  send({ date:DATE, ref:REF, stopId:"", seats:0 }, function(){
+  send({ date:DATE, ref:REF, stopId:"", seats:0 }, function(out){
+    applySaved(out);
     toast("Cancelled. The bus will not wait for you.");
-    load();
   });
 });
 

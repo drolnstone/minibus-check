@@ -339,6 +339,16 @@ function doGet(e) {
     catch (err) { return reply({ ok: false, error: String(err) }); }
   }
 
+  /* Everything the driver's Stops and bookings screen needs, in one answer.
+
+     It used to ask twice, every thirty seconds, for two things it always
+     wanted together and always for the same screen. Each ask carries its own
+     redirect and cold start, so the second one was pure waiting. */
+  if (p.board) {
+    try { return reply(boardPayload(p.route)); }
+    catch (err) { return reply({ ok: false, error: String(err) }); }
+  }
+
   /* Where the bus has got to. With a ref it answers for one passenger and
      applies the gate; with a route it answers for a driver's own screen. */
   if (p.trip) {
@@ -2431,6 +2441,19 @@ function whoIsTapping() {
     ui.ButtonSet.OK);
 }
 
+/* Counts and trip state together, for the driver's screen. Both halves keep
+   their own cache and their own life, so merging the request does not merge
+   how fresh they are: counts still last twenty seconds and trip state ten. */
+function boardPayload(route) {
+  var counts = countsPayload();
+  return {
+    ok: true,
+    date: counts.date,
+    counts: counts.counts,
+    trip: tripDriverPayload(String(route || "").trim() || "North")
+  };
+}
+
 /* Which Sunday a bare link is for. This Sunday until bookings close on the
    morning, then next Sunday. Somebody opening the link at ten past ten on a
    Sunday is not booking the bus that has already left. */
@@ -2518,7 +2541,8 @@ function handleBooking(b) {
   if (!seats) {
     if (existing) sh.getRange(existing.row, 8).setValue("Cancelled");
     dropCountsCache(key);
-    return reply({ ok: true, cancelled: true });
+    return reply({ ok: true, cancelled: true, mine: null,
+                   counts: bookingCounts(ss, key) });
   }
 
   if (existing) {
@@ -2533,7 +2557,17 @@ function handleBooking(b) {
   /* The driver's screen is polling this. Clear it now rather than leaving a
      booking invisible until the cache lapses. */
   dropCountsCache(key);
-  return reply({ ok: true, stopId: stop.id, seats: seats });
+
+  /* The counts go back with the answer.
+
+     The page used to take this reply, throw it away, and fetch the whole
+     payload again to find out what it already knew: every stop, every count,
+     the arrival list, a second redirect and a second cold start. Two calls to
+     move one booking. Reading the counts here costs one more read inside a
+     call that is already open, which is nothing beside a whole round trip. */
+  return reply({ ok: true, stopId: stop.id, seats: seats,
+                 mine: { stopId: stop.id, seats: seats },
+                 counts: bookingCounts(ss, key) });
 }
 
 /* There is nothing to generate any more, but the menu item stays: it is where

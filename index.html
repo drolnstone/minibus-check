@@ -472,7 +472,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   background:var(--pass-bg);border:1px solid #B7D8C6;border-radius:5px;padding:1px 6px;margin-left:6px}
 /* Back to top. The rota runs two years deep, so scrolling out of it by hand
    was a real journey. */
-.totop{position:fixed;right:calc(14px + var(--safe-r));bottom:calc(20px + var(--safe-b));z-index:65;
+/* Clear of the bottom bar. It sat at 20px, which put it behind the bar on
+   any screen that has one, so half the arrow was unreachable. */
+.totop{position:fixed;right:calc(14px + var(--safe-r));bottom:calc(88px + var(--safe-b));z-index:65;
   width:48px;height:48px;border-radius:50%;background:var(--steel);color:#fff;
   font-size:21px;line-height:1;box-shadow:0 3px 12px rgba(22,25,31,.32);
   display:none;align-items:center;justify-content:center}
@@ -709,7 +711,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.11.4";
+var APP_VERSION = "v1.12.0";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -2192,32 +2194,10 @@ function tripSeesAll(){
 }
 
 /* ---- fetching the route's own state ------------------------------------ */
-function tripFetch(route,cb){
-  if(!LIVE || !navigator.onLine){ if(cb) cb(false); return; }
-  fetch(CFG.endpoint+"?trip=1&route="+encodeURIComponent(route),{method:"GET",redirect:"follow"})
-    .then(function(r){ return r.text(); })
-    .then(function(t){
-      var out=JSON.parse(t);
-      if(!out || out.ok!==true) throw new Error("unavailable");
-      tripNoteSkew(out.now);
-      /* The sheet is the record. A phone that has been reinstalled, or a
-         second phone, picks the run up from here. */
-      if(out.trip) trip.id=out.trip;
-      trip.route=route;
-      trip.started=out.started||0;
-      trip.ended=out.ended||0;
-      trip.served=out.served||{};
-      trip.lastAt=out.lastAt||0;
-      trip.lastStop=out.lastStop||"";
-      trip.offset=(out.offset===null||out.offset===undefined)?null:Number(out.offset);
-      tripClosed=!!out.closed;
-      tripCutoff=out.cutoff||"";
-      tripRehearsal=!!out.rehearsal;
-      tripSaveState();
-      if(cb) cb(true);
-    })
-    .catch(function(){ if(cb) cb(false); });
-}
+/* Kept as a name because several places ask for one route in particular, but
+   it is the same single request underneath. Nothing asks twice any more. */
+function tripFetch(route,cb){ rotaCountsFetch(route,cb); }
+
 
 /* ---- the actions ------------------------------------------------------- */
 function tripStart(route){
@@ -2274,21 +2254,56 @@ function tripEnd(){
 
    This asks for the counts alone. It is a fraction of the rota payload, so
    it is cheap enough to fire on every open and every thirty seconds after. */
-function rotaCountsFetch(cb){
+/* One request for the whole screen.
+
+   This used to be two, fired together, thirty seconds apart, for ever: the
+   booking counts and the trip state. They are always wanted at the same
+   moment and always for the same route, and each carried its own redirect and
+   its own cold start, so the second was almost entirely waiting. Merged, the
+   screen updates in about half the time and asks Apps Script half as often.
+
+   The two halves still cache separately at the far end, so combining the
+   request has not combined how fresh they are. */
+function rotaCountsFetch(route,cb){
+  if(typeof route==="function"){ cb=route; route=null; }
+  route = route || rotaStopsRoute || rotaMyRoute() || "North";
   if(!LIVE || !navigator.onLine || rotaCountsBusy){ if(cb) cb(false); return; }
   rotaCountsBusy=true;
-  fetch(CFG.endpoint+"?counts=1",{method:"GET",redirect:"follow"})
+  fetch(CFG.endpoint+"?board=1&route="+encodeURIComponent(route),{method:"GET",redirect:"follow"})
     .then(function(r){return r.text();})
     .then(function(t){
       var out=JSON.parse(t);
       rotaCountsBusy=false;
-      if(!out||out.ok!==true) throw new Error("counts unavailable");
-      var before=JSON.stringify(rotaStopCounts)+"|"+rotaStopCountsFor;
+      if(!out||out.ok!==true) throw new Error("board unavailable");
+
+      var before=JSON.stringify(rotaStopCounts)+"|"+rotaStopCountsFor+"|"+
+                 JSON.stringify(trip.served)+"|"+trip.started+"|"+trip.ended;
+
       rotaStopCounts   = out.counts||{};
       rotaStopCountsFor= out.date||"";
       rotaCountsAt     = Date.now();
+
+      var tp=out.trip;
+      if(tp && tp.ok!==false){
+        tripNoteSkew(tp.now);
+        if(tp.trip) trip.id=tp.trip;
+        trip.route  = route;
+        trip.started= tp.started||0;
+        trip.ended  = tp.ended||0;
+        trip.served = tp.served||{};
+        trip.lastAt = tp.lastAt||0;
+        trip.lastStop=tp.lastStop||"";
+        trip.offset =(tp.offset===null||tp.offset===undefined)?null:Number(tp.offset);
+        tripClosed  = !!tp.closed;
+        tripCutoff  = tp.cutoff||"";
+        tripRehearsal=!!tp.rehearsal;
+        tripSaveState();
+      }
       rotaSaveCache();
-      if(cb) cb(JSON.stringify(rotaStopCounts)+"|"+rotaStopCountsFor !== before);
+
+      var after=JSON.stringify(rotaStopCounts)+"|"+rotaStopCountsFor+"|"+
+                JSON.stringify(trip.served)+"|"+trip.started+"|"+trip.ended;
+      if(cb) cb(after!==before);
     })
     .catch(function(){
       rotaCountsBusy=false;
@@ -2324,15 +2339,14 @@ function rotaCountsStart(){
   if(document.hidden) return;
   rotaCountsTimer=setInterval(function(){
     if(!rotaStopsOpen || document.hidden){ rotaCountsStop(); return; }
-    rotaCountsFetch(function(changed){
+    /* Also the retry for anything a blackspot left in the queue, so a driver
+       never has to think about sending. */
+    tripFlush();
+    rotaCountsFetch(rotaStopsRoute||"North",function(changed){
       if(!rotaStopsOpen) return;
       if(changed) rotaPaintStops();
       else if($("countsAge")) $("countsAge").textContent=rotaCountsWords();
     });
-    /* Same beat as the counts. Also the retry for anything a blackspot left
-       in the queue, so a driver never has to think about sending. */
-    tripFlush();
-    tripFetch(rotaStopsRoute||"North",function(){ if(rotaStopsOpen) rotaPaintStops(); });
   },30000);
 }
 
@@ -2639,15 +2653,14 @@ function rotaOpenStops(){
   /* Draw what we have straight away, then correct it. Same bargain the rota
      screen already makes: nothing waits on Apps Script before something
      appears. */
-  rotaPaintStops();
-  rotaCountsFetch(function(){ if(rotaStopsOpen) rotaPaintStops(); });
-
   /* A run in progress belongs to the sheet, not to this phone. Restoring
      from local first means the screen is right instantly even with no
-     signal; the fetch then corrects it, so a reinstalled phone or a second
-     one picks the run up where it actually is. */
+     signal; the one fetch then corrects both the counts and the run, so a
+     reinstalled phone or a second one picks it up where it actually is. */
   tripLoadState();
-  tripFetch(rotaStopsRoute||rotaMyRoute()||"North",function(){ if(rotaStopsOpen) rotaPaintStops(); });
+  rotaPaintStops();
+  rotaCountsFetch(rotaStopsRoute||rotaMyRoute()||"North",
+                  function(){ if(rotaStopsOpen) rotaPaintStops(); });
   tripFlush();
   if(trip.started && !trip.ended) tripWatchStart();
 

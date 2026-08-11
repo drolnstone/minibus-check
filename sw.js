@@ -1,6 +1,6 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
-const CACHE = "minibus-check-v1.11.4";
+const CACHE = "minibus-check-v1.12.0";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -47,8 +47,16 @@ self.addEventListener("activate", (e) => {
 function freshFirst(request, fallback) {
   return fetch(request)
     .then((res) => {
-      const copy = res.clone();
-      caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
+      /* Only keep an answer worth keeping. This used to store whatever came
+         back, so a 404 during an upload, or a Pages error page served for a
+         second while a deploy settled, was written into the cache and handed
+         out from then on. One transient miss became a permanent one, and no
+         amount of reloading fixed it because the reload was answered from the
+         cache. */
+      if (res && res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
+      }
       return res;
     })
     .catch(() => caches.match(request).then((hit) => {
@@ -101,8 +109,10 @@ self.addEventListener("fetch", (e) => {
       if (hit) return hit;
       return fetch(e.request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+          if (res && res.ok) {                 /* see freshFirst above */
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+          }
           return res;
         })
         .catch(() => Response.error());

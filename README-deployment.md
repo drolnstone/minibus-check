@@ -1096,6 +1096,44 @@ the answer was not read, not that nothing was written. Anything that sends
 needs a stable id the server can recognise, and should look before it tells
 somebody it failed.
 
+**v1.12** Fewer round trips, and a service worker that no longer remembers
+failures.
+
+**Changing a stop took two calls where one would do.** Confirm sent the
+booking, waited for the answer, threw it away, and then fetched the whole
+payload again to learn what it had just been told: every stop, every count,
+the arrival list. Each call to Apps Script carries a redirect and a cold start
+and takes one to three seconds, so the second one was almost entirely waiting.
+The reply to a booking now carries the updated counts, and the page repaints
+from it. Same for Not coming.
+
+**The driver's Stops and bookings screen asked twice, every thirty seconds.**
+Counts and trip state are always wanted together and always for the same
+route, so they are now one request. Over a forty minute run that is eighty
+calls instead of a hundred and sixty. The two halves still cache separately at
+the far end, so merging the request has not merged how fresh they are: counts
+still last twenty seconds and trip state ten.
+
+**The service worker was caching failures.** Both branches stored whatever
+came back, including a 404 or an error page. So a file that was missing for a
+moment, during an upload or while a deployment settled, was written into the
+cache and served from then on. One transient miss became permanent, and
+reloading could not fix it because the reload was answered from the cache.
+Only successful answers are kept now. This is the likeliest explanation for
+the passenger page showing a broken logo while the driver app showed it fine.
+The logo also falls back to a second path and then to nothing, because a
+broken image icon on a church page is worse than no logo.
+
+**The passenger page had no retry.** One blip on load and it gave up, showing
+a JSON parser message to somebody trying to book a seat. It now tries once
+more before saying anything, and an answer that is not JSON is reported as
+what it actually is. An answer beginning with a less-than sign is an HTML page
+from Google, which means the request never reached the script at all: check
+that the web app's access is set to Anyone.
+
+**Back to top** sat twenty pixels from the bottom, behind the bar. It now
+clears it.
+
 ## The Minibus menu
 
 Grouped by what a thing does to you, not by what it is about. It used to be
