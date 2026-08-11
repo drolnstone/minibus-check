@@ -1134,6 +1134,35 @@ that the web app's access is set to Anyone.
 **Back to top** sat twenty pixels from the bottom, behind the bar. It now
 clears it.
 
+**v1.12.1** A colour took down the whole setup.
+
+`Set up / refresh rota` stopped with "This operation is not allowed on cells in
+typed columns", thrown while applying the status colours to the Rota tab. That
+message means a column there has become a typed column, which happens when a
+sheet is turned into a Table, or a dropdown is added through Insert rather than
+by this app. Conditional formatting is not allowed on those.
+
+The colours are cosmetic. The problem was that `refreshDropdowns` was called
+without a guard, and it is called early, so everything below it was skipped:
+the rota version, all five scheduled jobs, and the sheet protection. That is
+why the Trip Events lock added in v1.11.2 never took effect. A step worth
+nothing was taking down the steps that matter.
+
+Every dropdown and colour step is now guarded on its own and reports what it
+could not do. Setup finishes, and says at the end which steps were skipped and
+how to undo a typed column. **Refresh dropdowns from Drivers tab** does the
+same when run by itself, and **Is everything working?** carries the count until
+it is fixed.
+
+The fix on the sheet, if you want the colours back: click a cell on the Rota
+tab and use Format then Convert to range if it is offered, or select the column
+and remove the rule under Data then Data validation. Then run Set up / refresh
+rota again. Nothing is broken meanwhile. These are lists and colours, not data.
+
+Worth running Set up / refresh rota once after this deploy whatever you decide
+about the colours, because the sheet protection has not been applied since the
+error started.
+
 ## The Minibus menu
 
 Grouped by what a thing does to you, not by what it is about. It used to be

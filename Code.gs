@@ -1592,7 +1592,14 @@ function setUpEverything() {
   catch (err) {}
   fillRotaAhead(ss);
 
-  refreshDropdowns();
+  /* Guarded, and guarded for a reason. This used to be a bare call, so a
+     failure inside it skipped everything below: the rota version, all five
+     scheduled jobs, and the sheet protection. A cosmetic step was taking down
+     the parts that actually matter. */
+  var dropSkips = [];
+  try { dropSkips = refreshDropdowns() || []; }
+  catch (err) { dropSkips = ["dropdowns and colours (" + String(err.message || err) + ")"]; }
+
   bumpRotaVersion();
   try { installWeeklyDigest(); } catch (err) { /* triggers need permission; never block setup */ }
   try { installDutyReminders(); } catch (err) { /* same */ }
@@ -1606,6 +1613,20 @@ function setUpEverything() {
   var n = ss.getSheetByName(ROTA_SHEET).getLastRow() - 1;
   var tz = timeZoneWarning();
   var dh = driversHeaderWarning(ss);
+
+  /* Said in a dialog rather than a toast. A toast is gone in six seconds and
+     this one needs reading, because the fix is on the sheet and not in here. */
+  if (dropSkips.length) {
+    var ui2 = SpreadsheetApp.getUi();
+    ui2.alert("Set up, with " + dropSkips.length + " step" +
+      (dropSkips.length > 1 ? "s" : "") + " skipped",
+      "Everything else is done: the rota, the tabs, the scheduled emails and " +
+      "the sheet protection.\n\nThese could not be applied:\n\n  \u2022  " +
+      dropSkips.join("\n\n  \u2022  ") + "\n\n" + typedColumnAdvice(),
+      ui2.ButtonSet.OK);
+    return;
+  }
+
   if (tz || dh) {
     /* Folded into this toast, not fired as separate ones: a second toast
        replaces the first straight away, so the warning would never be read. */
@@ -2723,7 +2744,29 @@ function rotaColours(sh) {
  * Rebuilds every dropdown from the Drivers tab. Run it after adding someone
  * to the register, or use the Minibus menu.
  */
+/**
+ * Dropdown lists and the status colours.
+ *
+ * Every step here is guarded separately and returns what it could not do,
+ * rather than throwing. None of it is load bearing: a missing dropdown costs
+ * you a tap and a missing colour costs you nothing, while the things that run
+ * AFTER this in setUpEverything are the scheduled emails, the rota version
+ * and the sheet protection. Letting a colour take those down was the wrong
+ * trade by a wide margin.
+ *
+ * The failure that prompted this: "This operation is not allowed on cells in
+ * typed columns". A column on the Rota tab had become a typed column, which
+ * happens when a sheet is converted to a Table or a dropdown is added through
+ * the Insert menu rather than by this script. Conditional formatting is not
+ * allowed on those, so the colours failed and took the whole setup with them.
+ */
 function refreshDropdowns() {
+  var skipped = [];
+  function step(what, fn) {
+    try { fn(); }
+    catch (err) { skipped.push(what + " (" + String(err.message || err) + ")"); }
+  }
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var drivers = readDrivers(ss);
   if (!drivers.length) {
@@ -2751,22 +2794,61 @@ function refreshDropdowns() {
        typed in by hand, so you can always put a name in a scheduled column
        that the pattern does not expect. The list is a convenience, not a
        gate. */
-    rota.getRange("B2:B3000").setDataValidation(listRule(north.length ? north : active));
-    rota.getRange("E2:E3000").setDataValidation(listRule(south.length ? south : active));
-    rota.getRange("C2:C3000").setDataValidation(listRule(active));
-    rota.getRange("F2:F3000").setDataValidation(listRule(active));
-    rota.getRange("D2:D3000").setDataValidation(listRule(ROTA_STATUS));
-    rotaColours(rota);
+    step("Rota scheduled North list", function () {
+      rota.getRange("B2:B3000").setDataValidation(listRule(north.length ? north : active)); });
+    step("Rota scheduled South list", function () {
+      rota.getRange("E2:E3000").setDataValidation(listRule(south.length ? south : active)); });
+    step("Rota cover lists", function () {
+      rota.getRange("C2:C3000").setDataValidation(listRule(active));
+      rota.getRange("F2:F3000").setDataValidation(listRule(active)); });
+    step("Rota status list", function () {
+      rota.getRange("D2:D3000").setDataValidation(listRule(ROTA_STATUS)); });
+    step("Rota status colours", function () { rotaColours(rota); });
   }
 
   var reqs = ss.getSheetByName(REQUESTS_SHEET);
   if (reqs) {
-    reqs.getRange("H2:H2000").setDataValidation(listRule(REQ_STATUS));
-    reqs.getRange("J2:J2000").setDataValidation(listRule(active));
-    reqs.setColumnWidth(6, 300);
-    reqs.setColumnWidth(8, 120);
-    reqs.setColumnWidth(10, 180);
+    step("Requests lists", function () {
+      reqs.getRange("H2:H2000").setDataValidation(listRule(REQ_STATUS));
+      reqs.getRange("J2:J2000").setDataValidation(listRule(active)); });
+    step("Requests column widths", function () {
+      reqs.setColumnWidth(6, 300);
+      reqs.setColumnWidth(8, 120);
+      reqs.setColumnWidth(10, 180); });
   }
+
+  try { PropertiesService.getScriptProperties()
+          .setProperty("dropdownsSkipped", JSON.stringify(skipped)); }
+  catch (err) {}
+  return skipped;
+}
+
+/* What to tell somebody who has hit the typed column problem. The colours and
+   the lists are conveniences; the sheet works without them. What matters is
+   that they know why, and that it is undoable. */
+function typedColumnAdvice() {
+  return "This usually means a column on that tab has become a typed column, " +
+         "which happens when a sheet is turned into a Table, or a dropdown is " +
+         "added through Insert rather than by this app.\n\n" +
+         "To undo it: click any cell in the tab, then Format > Convert to range " +
+         "if it offers it, or select the column, Data > Data validation, and " +
+         "remove the rule. Then run Set up / refresh rota again.\n\n" +
+         "Nothing is broken meanwhile. These are lists and colours, not data.";
+}
+
+/* The menu version, which says what happened. refreshDropdowns itself stays
+   silent because it is also called from setUpEverything and from ensureRota,
+   and neither wants a dialog. */
+function refreshDropdownsMenu() {
+  var ui = SpreadsheetApp.getUi();
+  var skipped = refreshDropdowns();
+  if (!skipped.length) {
+    SpreadsheetApp.getActiveSpreadsheet().toast("Dropdowns and colours refreshed.", "Minibus", 5);
+    return;
+  }
+  ui.alert("Refreshed, with " + skipped.length + " skipped",
+    "These could not be applied:\n\n  \u2022  " + skipped.join("\n\n  \u2022  ") +
+    "\n\n" + typedColumnAdvice(), ui.ButtonSet.OK);
 }
 
 function listRule(values) {
@@ -3682,6 +3764,17 @@ function healthCheck() {
   /* Not an error, but the single most useful thing to be told, because a
      rehearsal left running is the one state that makes everything else on
      this screen mean something different. */
+  try {
+    var skips = JSON.parse(PropertiesService.getScriptProperties()
+                  .getProperty("dropdownsSkipped") || "[]");
+    if (skips.length) {
+      bad.push(skips.length + " dropdown or colour step" + (skips.length > 1 ? "s" : "") +
+               " could not be applied to the sheet, most likely a typed column. " +
+               "Run Refresh dropdowns from Drivers tab for the detail and the fix. " +
+               "Nothing is broken by it.");
+    }
+  } catch (err) {}
+
   var reh = rehearsalOn();
   if (reh) {
     bad.push("A REHEARSAL is running, until " +
@@ -3782,7 +3875,7 @@ function onOpen() {
 
     .addSubMenu(ui.createMenu("Rota and setup (safe to re-run)")
       .addItem("Set up / refresh rota", "setUpEverything")
-      .addItem("Refresh dropdowns from Drivers tab", "refreshDropdowns")
+      .addItem("Refresh dropdowns from Drivers tab", "refreshDropdownsMenu")
       .addItem("Add a Sunday to the rota", "addSunday")
       .addItem("Extend rota further ahead", "extendRota")
       .addItem("Check scheduled emails, set up any missing", "checkDigestScheduled")
