@@ -1616,6 +1616,14 @@ function setUpEverything() {
 
   /* Said in a dialog rather than a toast. A toast is gone in six seconds and
      this one needs reading, because the fix is on the sheet and not in here. */
+  var coloursOnly = dropSkips.length === 1 &&
+                    String(dropSkips[0]).indexOf("Rota status colours") === 0;
+  if (coloursOnly) {
+    ss.toast("Set up. The status colours are left to the dropdown's own chips, " +
+             "which is fine and needs nothing from you.", "Ready", 8);
+    return;
+  }
+
   if (dropSkips.length) {
     var ui2 = SpreadsheetApp.getUi();
     ui2.alert("Set up, with " + dropSkips.length + " step" +
@@ -2724,20 +2732,47 @@ function fillRotaAhead(ss, sh) {
   refreshDropdowns();
 }
 
+/**
+ * Status colours on column D.
+ *
+ * It used to read the existing rules, append five more, and write the lot
+ * back, without ever removing the five it added last time. Every run of
+ * Set up / refresh rota therefore left five more rules on the tab, all
+ * identical, all on the same range, for ever. Nobody would notice until the
+ * sheet started behaving oddly, which is roughly where this ended up.
+ *
+ * Its own rules are stripped first now, matched by the range and by the five
+ * words it writes. Rules somebody added by hand are left alone.
+ */
 function rotaColours(sh) {
   var range = sh.getRange("D2:D3000");
-  var rules = sh.getConditionalFormatRules();
+  var a1 = range.getA1Notation();
+
+  var mine = {};
+  ROTA_STATUS.forEach(function (v) { mine[v] = true; });
+
+  var kept = sh.getConditionalFormatRules().filter(function (r) {
+    var ranges = r.getRanges() || [];
+    var here = ranges.length === 1 && ranges[0].getA1Notation() === a1;
+    if (!here) return true;                      // not ours: leave it
+
+    var cond = r.getBooleanCondition && r.getBooleanCondition();
+    if (!cond) return true;
+    var vals = cond.getCriteriaValues() || [];
+    return !(vals.length && mine[String(vals[0])]);
+  });
+
   function rule(value, bg, fg) {
     return SpreadsheetApp.newConditionalFormatRule()
       .whenTextEqualTo(value).setBackground(bg).setFontColor(fg)
       .setRanges([range]).build();
   }
-  rules.push(rule("Confirmed", "#E6F2EB", "#146B41"));
-  rules.push(rule("Change requested", "#FDF3E2", "#8A5300"));
-  rules.push(rule("Covered", "#EEF3F8", "#1B3A57"));
-  rules.push(rule("Cancelled/declined", "#F1F1F1", "#666666"));
-  rules.push(rule("No driver assigned", "#FBE9E7", "#A8231B"));
-  sh.setConditionalFormatRules(rules);
+  kept.push(rule("Confirmed", "#E6F2EB", "#146B41"));
+  kept.push(rule("Change requested", "#FDF3E2", "#8A5300"));
+  kept.push(rule("Covered", "#EEF3F8", "#1B3A57"));
+  kept.push(rule("Cancelled/declined", "#F1F1F1", "#666666"));
+  kept.push(rule("No driver assigned", "#FBE9E7", "#A8231B"));
+  sh.setConditionalFormatRules(kept);
 }
 
 /**
@@ -2801,9 +2836,16 @@ function refreshDropdowns() {
     step("Rota cover lists", function () {
       rota.getRange("C2:C3000").setDataValidation(listRule(active));
       rota.getRange("F2:F3000").setDataValidation(listRule(active)); });
+    /* Colours BEFORE the dropdown, deliberately.
+
+       The dropdown is what makes column D a typed column, and conditional
+       formatting is refused on one of those. Applying the colours while the
+       column is still plain is the only order that has a chance of working.
+       If it still fails, nothing is lost: a modern dropdown draws its own
+       coloured chips, so the status stays perfectly readable. */
+    step("Rota status colours", function () { rotaColours(rota); });
     step("Rota status list", function () {
       rota.getRange("D2:D3000").setDataValidation(listRule(ROTA_STATUS)); });
-    step("Rota status colours", function () { rotaColours(rota); });
   }
 
   var reqs = ss.getSheetByName(REQUESTS_SHEET);
@@ -2827,13 +2869,17 @@ function refreshDropdowns() {
    the lists are conveniences; the sheet works without them. What matters is
    that they know why, and that it is undoable. */
 function typedColumnAdvice() {
-  return "This usually means a column on that tab has become a typed column, " +
-         "which happens when a sheet is turned into a Table, or a dropdown is " +
-         "added through Insert rather than by this app.\n\n" +
-         "To undo it: click any cell in the tab, then Format > Convert to range " +
-         "if it offers it, or select the column, Data > Data validation, and " +
-         "remove the rule. Then run Set up / refresh rota again.\n\n" +
-         "Nothing is broken meanwhile. These are lists and colours, not data.";
+  return "A typed column is one Google has given a type of its own, which a " +
+         "dropdown does. Conditional formatting is refused on those.\n\n" +
+         "If the skipped step is the Rota status colours, there is nothing to " +
+         "do and nothing to fix. The dropdown on that column draws its own " +
+         "coloured chips, so the status reads perfectly well without them. " +
+         "Converting the column back to a range would not help, because this " +
+         "app puts the dropdown back the next time you run Set up.\n\n" +
+         "If a step other than the colours was skipped, that is worth looking " +
+         "at: check whether the tab has been turned into a Table, under " +
+         "Format > Convert to range.\n\n" +
+         "Nothing here is data. These are lists and colours.";
 }
 
 /* The menu version, which says what happened. refreshDropdowns itself stays
@@ -3491,9 +3537,17 @@ function sendRemindersNow() {
            (next.today ? " (today)" : "") + ", for Sunday " +
            Utilities.formatDate(next.sunday, tz, "d MMMM") + ".\n\n";
   }
+  var noAddress = readDrivers(ss).filter(function (d) {
+    return d.active && !d.email && (d.route || d.order);
+  }).map(function (d) { return d.name; });
+
   msg += withEmail + " driver" + (withEmail > 1 ? "s have" : " has") +
-         " an email address. To see the email itself, use Send me a sample " +
-         "duty reminder.";
+         " an email address.";
+  if (noAddress.length) {
+    msg += "\n\nNo address, so never reminded: " + noAddress.join(", ") +
+           ".\nFill the Email column on the Drivers tab.";
+  }
+  msg += "\n\nTo see the email itself, use Send me a sample duty reminder.";
 
   SpreadsheetApp.getUi().alert("Duty reminders", msg, SpreadsheetApp.getUi().ButtonSet.OK);
 }
@@ -3717,8 +3771,6 @@ function healthCheck() {
     var drivers = readDrivers(ss);
     var active = drivers.filter(function (d) { return d.active; });
     var withEmail = active.filter(function (d) { return d.email; }).length;
-    good.push(active.length + " active drivers, " + withEmail + " with an email address.");
-    if (!withEmail) bad.push("Nobody has an email address, so no duty reminder can ever be sent.");
 
     var north = primaryPattern(drivers, "North");
     var south = primaryPattern(drivers, "South");
@@ -3726,6 +3778,48 @@ function healthCheck() {
     if (!south.length) bad.push("No South rotation. The Route column on the Drivers tab is not filled in.");
     if (north.length && south.length) {
       good.push("Rotations: North " + north.length + ", South " + south.length + ".");
+    }
+
+    /* Who is actually on a rotation, and can they be reached.
+       
+       This used to read "9 active drivers, 2 with an email address" and sit
+       under Fine, which is how it went unnoticed for weeks. A count is not
+       the question. The question is whether the person driving next Sunday
+       will be reminded, and that is answered by names, not by a total.
+       Somebody on the Backup list with no address costs nothing. The man
+       rostered for North a fortnight on Sunday costs a bus. */
+    var byName = {};
+    drivers.forEach(function (d) { byName[d.name] = d; });
+
+    var rostered = {};
+    north.concat(south).forEach(function (n) { if (n) rostered[n] = true; });
+
+    var silent = Object.keys(rostered).filter(function (n) {
+      var d = byName[n];
+      return !d || !d.email;
+    }).sort();
+
+    if (!withEmail) {
+      bad.push("Nobody has an email address, so no duty reminder can ever be sent. " +
+               "Fill the Email column on the Drivers tab.");
+    } else if (silent.length) {
+      bad.push(silent.length + " of the " + Object.keys(rostered).length +
+               " drivers on a rotation have no email address, so they are never " +
+               "reminded of their Sunday: " + silent.join(", ") + ".\n     " +
+               "Fill the Email column on the Drivers tab. Nothing else needs changing.");
+    } else {
+      good.push("All " + Object.keys(rostered).length +
+                " rostered drivers have an email address.");
+    }
+
+    /* The rest of the register, said separately and quietly. Somebody on
+       Backup without an address is not a problem to solve today. */
+    var others = active.length - Object.keys(rostered).length;
+    if (others > 0) {
+      good.push(active.length + " active drivers, " + withEmail +
+                " with an email address (" + others + " not on a rotation).");
+    } else {
+      good.push(active.length + " active drivers, " + withEmail + " with an email address.");
     }
   }
 
@@ -3767,10 +3861,16 @@ function healthCheck() {
   try {
     var skips = JSON.parse(PropertiesService.getScriptProperties()
                   .getProperty("dropdownsSkipped") || "[]");
-    if (skips.length) {
+    var onlyColours = skips.length === 1 &&
+                      String(skips[0]).indexOf("Rota status colours") === 0;
+    if (onlyColours) {
+      /* Not a fault, and it should stop reading like one. The dropdown on
+         that column colours itself. */
+      good.push("Rota status colours are left to the dropdown's own chips.");
+    } else if (skips.length) {
       bad.push(skips.length + " dropdown or colour step" + (skips.length > 1 ? "s" : "") +
                " could not be applied to the sheet, most likely a typed column. " +
-               "Run Refresh dropdowns from Drivers tab for the detail and the fix. " +
+               "Run Refresh dropdowns from Drivers tab for the detail. " +
                "Nothing is broken by it.");
     }
   } catch (err) {}

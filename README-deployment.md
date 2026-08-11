@@ -1163,6 +1163,52 @@ Worth running Set up / refresh rota once after this deploy whatever you decide
 about the colours, because the sheet protection has not been applied since the
 error started.
 
+**v1.12.2** The advice in v1.12.1 was wrong, and there was a real bug under it.
+
+The skipped step reported only the Rota status colours. The dropdown on that
+same column went on without complaint. So the column accepts a dropdown and
+refuses conditional formatting, which is what a typed column does, and the
+dropdown is what makes it one. Converting the column back to a range would
+have lasted until the next Set up, which puts the dropdown straight back. That
+instruction has been removed.
+
+**`rotaColours` was accumulating rules.** It read the existing rules, appended
+its five, and wrote them back, without ever removing the five it added last
+time. Every run of Set up left five more identical rules on the tab. Twelve
+runs meant sixty rules where there should be five. Its own are now stripped
+first, matched by range and by the five words it writes, so anything added by
+hand on that tab survives untouched.
+
+The colours are also applied before the dropdown now rather than after, since
+that is the only order with a chance of working on a column that is about to
+become typed.
+
+If it still skips, nothing needs doing. A modern dropdown draws its own
+coloured chips, so the status reads perfectly well. Setup now says so in a
+passing toast instead of a dialog, and **Is everything working?** lists it
+under what is fine rather than under what needs attention. A cosmetic step
+that cannot run should not look like a fault every time you open the sheet.
+
+**v1.12.3** Is everything working now names the drivers who cannot be reached.
+
+It used to report "9 active drivers, 2 with an email address" under Fine. That
+is a true sentence and a useless one. It was read several times without
+registering, because a count does not answer the question anybody actually
+has, which is whether the man driving next Sunday will be reminded.
+
+It now works from the rotations rather than the register. Anybody on a North
+or South rotation with no email address is named, under Needs attention,
+because that driver is the one who will turn up unreminded. On the register as
+it stands that reads: six of the seven drivers on a rotation have no email
+address, and it lists them. Somebody on Backup with no address is not counted,
+since nobody is waiting on them.
+
+Duty reminders now names them too, since that dialog is where you would go
+after a reminder failed to arrive.
+
+Nothing in the sending changed. Fill the Email column on the Drivers tab and
+the reminders that already exist start working.
+
 ## The Minibus menu
 
 Grouped by what a thing does to you, not by what it is about. It used to be
