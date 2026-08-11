@@ -364,7 +364,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-leg+.rota-leg{border-top:1px solid var(--hair)}
 .rota-leg-name{font-family:"Barlow Condensed",sans-serif;font-size:21px;font-weight:700;line-height:1.15}
 .rota-leg.is-mine .rota-leg-name{color:var(--ink)}
-.rota-leg.is-mine{background:#F3F8FC;margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:6px}
+.rota-leg.is-mine{background:#F3F8FC;margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:6px;box-shadow:inset 3px 0 0 #2C6FA8}
+.rota-you{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:#2C6FA8;border:1px solid #BBD4E8;
+  background:#fff;border-radius:4px;padding:1px 5px;margin-left:7px;vertical-align:2px}
 .rota-leg.is-mine+.rota-leg{border-top-color:transparent}
 .rota-leg-note{font-size:13px;color:var(--muted);margin-top:2px}
 .rota-leg-none{font-family:"Barlow Condensed",sans-serif;font-size:19px;font-weight:700;color:var(--stop)}
@@ -427,6 +430,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .trip-waiting b{color:var(--ink);font-size:16px}
 /* One target, full width, impossible to mis-hit from a cab. */
 .btn-tap{min-height:64px;font-size:18px}
+.trip-rehearsal{background:var(--stop-bg);border:1px solid #E8BCB7;color:var(--stop);
+  border-radius:9px;padding:10px 12px;margin:0 0 12px;font-size:13px;line-height:1.5}
+.trip-rehearsal b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:15px;
+  letter-spacing:.12em}
 .trip-row-btns{display:flex;gap:6px;padding:0 0 8px 62px}
 .trip-mini{flex:1;min-height:40px;font-size:13px;font-weight:600;border:1px solid var(--hair);
   border-radius:7px;background:var(--card);color:var(--muted)}
@@ -692,7 +699,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.10.0";
+var APP_VERSION = "v1.11.1";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -2044,7 +2051,7 @@ var TSKEY = "fleet.trip.state.v1";
 var TRIP_MOVING_MS = 2.2;
 
 var trip = { id:"", route:"", started:0, ended:0, served:{}, lastAt:0, lastStop:"", offset:null };
-var tripClosed = false, tripCutoff = "";
+var tripClosed = false, tripCutoff = "", tripRehearsal = false;
 var tripSpeed = null;      /* metres per second, null when unknown */
 var tripSpeedAt = 0;
 var tripWatch = null;
@@ -2152,6 +2159,11 @@ function tripMoving(){
 function tripMayTap(route){
   var me=(st.driver||"").trim();
   if(!me) return false;
+  /* The one exception, and it is the intersection of two things: a rehearsal
+     IS running AND you are a coordinator. A rehearsal on its own loosens
+     nothing for anybody else, so a driver who opens his phone in the middle
+     of one still only has his own route. */
+  if(tripRehearsal && tripSeesAll()) return true;
   var d=rotaBaseSunday(0), row=rotaRowFor(rotaKey(d));
   if(route==="South"){
     var sP=(row&&row.primary2)||rotaSeedSecondary(d), sA=(row&&row.actual2)||sP;
@@ -2190,6 +2202,7 @@ function tripFetch(route,cb){
       trip.offset=(out.offset===null||out.offset===undefined)?null:Number(out.offset);
       tripClosed=!!out.closed;
       tripCutoff=out.cutoff||"";
+      tripRehearsal=!!out.rehearsal;
       tripSaveState();
       if(cb) cb(true);
     })
@@ -2476,7 +2489,13 @@ function rotaPaint(keepPosition){
         if(swapKeyFor(key,who)) note="Swapped with "+esc(swapPartner(key,who));
         else if(act && sched && act!==sched) note="Covering for "+esc(sched);
         return '<div class="rota-leg'+(isMine?' is-mine':'')+'">'+
-                 '<div><div class="rota-leg-name">'+esc(who)+'</div>'+
+                 '<div><div class="rota-leg-name">'+esc(who)+
+                   /* Both routes stay on the card: Sunday is one operation
+                      with two buses, and who has the other one matters when
+                      you are deciding whether to swap or who to ring. The
+                      fix for "which of these is me" is to mark yours, not to
+                      hide theirs. */
+                   (isMine?'<span class="rota-you">You</span>':'')+'</div>'+
                  (note?'<div class="rota-leg-note">'+note+'</div>':'')+'</div>'+
                  '<span class="rota-route '+cls+'">'+routeName+'</span>'+
                '</div>';
@@ -2578,6 +2597,12 @@ function rotaMyRoute(){
 }
 
 var rotaStopsRoute=null;   /* the open tab; null means work it out again */
+
+/* Whether the DRIVER chose that tab, as opposed to the app guessing for him.
+   Without this the two are indistinguishable, and the app cannot tell a
+   deliberate look at the other bus from its own earlier guess. It could
+   therefore never correct itself, which is exactly what went wrong. */
+var rotaRouteChosen=false;
 var rotaStopsAsked=false;  /* stops fetch already attempted this session */
 
 /* The Sunday timetable, read from the Bus Stops tab.
@@ -2589,6 +2614,12 @@ var rotaStopsAsked=false;  /* stops fetch already attempted this session */
    that route rather than driving it from memory. */
 function rotaOpenStops(){
   rotaStopsOpen=true;
+
+  /* Opening the sheet always starts on your own bus. Looking at the other
+     route is a thing you do, not a setting you leave behind for the next
+     person to open it. */
+  rotaStopsRoute=null;
+  rotaRouteChosen=false;
   $("rotaModalEyebrow").textContent="Sunday bus";
   $("rotaModalTitle").textContent="Stops and bookings";
   $("rotaModal").classList.add("is-on");
@@ -2644,14 +2675,24 @@ function rotaPaintStops(){
      stops would be worse than showing none at all. */
   var showCounts = rotaStopCountsFor && rotaStopCountsFor===rotaKey(rotaBaseSunday(0));
 
+  var mine=rotaMyRoute();
+
   var routes=[];
   stops.forEach(function(s){ if(!s.arrival && routes.indexOf(s.route)<0) routes.push(s.route); });
-  if(!routes.length) routes=["North"];
+  /* The fallback when the timetable has not arrived yet. It used to be North
+     for everybody, which pinned a South driver to the wrong bus before his
+     own route was even known to exist. */
+  if(!routes.length) routes=[mine||"North"];
 
-  var mine=rotaMyRoute();
-  if(rotaStopsRoute===null || routes.indexOf(rotaStopsRoute)<0){
-    rotaStopsRoute = (mine && routes.indexOf(mine)>=0) ? mine : routes[0];
-  }
+  /* Your own route wins on every repaint until you tap a tab yourself.
+     This used to be settled once and then kept, and that was the bug. A
+     driver who opened the sheet before the timetable had loaded saw the
+     one-route fallback, got pinned to it, and stayed there: the old guard
+     only re-derived when the current route was INVALID, and North is always
+     valid. So the wrong answer was permanent, and tapping a tab made it
+     permanent for everybody, because nothing was ever reset on close. */
+  if(!rotaRouteChosen && mine && routes.indexOf(mine)>=0) rotaStopsRoute=mine;
+  if(rotaStopsRoute===null || routes.indexOf(rotaStopsRoute)<0) rotaStopsRoute=routes[0];
   var route=rotaStopsRoute;
 
   function seatsOn(rt){
@@ -2711,6 +2752,12 @@ function rotaPaintStops(){
   var watching = !mayTap && tripSeesAll();
   var queued   = tripLoadQ().length;
 
+  if(tripRehearsal){
+    /* Unmissable on purpose. A driver who opens the app during a rehearsal
+       must not spend even a moment believing any of it is real. */
+    html='<div class="trip-rehearsal"><b>REHEARSAL</b> Nothing here is real. '+
+         'Bookings shown are test data and no bus is running.</div>'+html;
+  }
   if(mayTap || watching){
     html+=tripHeaderHtml(route,mayTap,onThis,queued);
   }
@@ -2799,6 +2846,7 @@ function rotaPaintStops(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-stoproute]"),function(b){
     b.addEventListener("click",function(){
       rotaStopsRoute=this.getAttribute("data-stoproute");
+      rotaRouteChosen=true;
       rotaPaintStops();
       /* The other bus has its own run. Ask for it, or a coordinator would be
          reading North's progress under South's heading. */
@@ -2825,6 +2873,21 @@ function rotaPaintStops(){
 }
 
 /* ---- the movement strip at the top of the list ------------------------- */
+
+/* Who is rostered on a route this Sunday, cover included. The read-only strip
+   used to say only "This bus has not started yet", which told a coordinator
+   nothing about why he had no button and left every driver guessing whether
+   something was broken. */
+function tripWhoDrives(route){
+  var d=rotaBaseSunday(0), row=rotaRowFor(rotaKey(d));
+  if(route==="South"){
+    var sP=(row&&row.primary2)||rotaSeedSecondary(d);
+    return (row&&row.actual2)||sP||"";
+  }
+  var nP=(row&&row.primary)||rotaSeedPrimary(d);
+  return (row&&row.actual)||nP||"";
+}
+
 function tripClock(ms){
   var d=new Date(ms);
   return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
@@ -2841,7 +2904,18 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
         : '<p class="trip-note"><b>Bookings are still open.</b> The run can be started '+
           'after '+esc(tripCutoff||"09:30")+', once the list is settled.</p>';
     } else {
-      h+='<p class="trip-note">This bus has not started yet.</p>';
+      /* Name the driver and the moment. Somebody looking for a button that is
+         not theirs should be told whose it is, not left wondering whether the
+         app is broken. */
+      var who=tripWhoDrives(route);
+      h+='<p class="trip-note">'+
+         (who? '<b>'+esc(who)+'</b> drives '+esc(route)+' this Sunday. ' : '')+
+         'The Start trip button appears on '+esc(who?'his':'the driver\u2019s')+
+         ' phone at '+esc(tripCutoff||"09:30")+', when bookings close.'+
+         '</p>'+
+         '<p class="trip-note">You are watching. To try all of this before '+
+         'Sunday, use Rehearse this Sunday in the Minibus menu of the '+
+         'spreadsheet.</p>';
     }
     return h+'</div>';
   }

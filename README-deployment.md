@@ -51,7 +51,8 @@ brand new deployment instead, you must paste the new URL into `config.js`.
 
 ### 3. Upload the web files
 
-Replace `index.html`, `config.js`, `sw.js` and `bus/index.html` on your host.
+Replace `index.html`, `config.js`, `sw.js` and `sunday/index.html` on your
+host.
 
 `sw.js` has been bumped to `minibus-check-v1.9.0`. That is what tells every
 phone to throw away its old copy. If you ever edit `index.html` or `config.js`
@@ -750,7 +751,7 @@ Nothing on that tab records passengers. It is the timetable only.
 **v1.8** One permanent booking link. The date and per-Sunday code came out of
 the passenger link, so there is a single address to pin in the group instead of
 a fresh one every Saturday. The script works out which Sunday it is: this one
-until bookings close, then the next. The page moved to `bus/index.html`.
+until bookings close, then the next. The page lives at `sunday/index.html`.
 
 Also: the passenger page now takes its styling from the checks app, and its
 stop name, postcode and count stack instead of running together in one line.
@@ -814,6 +815,22 @@ zoom while leaving pinch to zoom alone, the closing time is bold, and the line
 about what the page does and does not record has been taken off. That
 statement still sits as a column note on the Bus Bookings tab, which is where
 anybody asking the question would look.
+
+**v1.10.1** Stops and bookings opened on whatever route was looked at last,
+rather than on the driver's own.
+
+Three things compounding. The chosen route was worked out once and then kept,
+and the guard only reconsidered it when the current route had become invalid,
+which North never is. Nothing reset it when the sheet closed, so one person
+looking at the other bus left it that way for everybody afterwards. And the
+fallback used while the timetable was still loading was North for everybody,
+so a South driver who opened the sheet quickly was pinned to the wrong bus
+before his own route was known to exist, and pinned there permanently by the
+first two.
+
+It now re-derives on every repaint, so the late-arriving timetable corrects
+it. A tab tap is recorded as a deliberate choice and holds while the sheet is
+open. Opening the sheet resets to your own bus.
 
 **v1.10** Where the bus is.
 
@@ -923,6 +940,67 @@ a status would be gone by the following Sunday. Undo marks a row Undone rather
 than deleting it, because a driver who taps and untaps four times should leave
 a trace.
 
+**v1.11** Rehearsal, and two things that were not bugs.
+
+**Rehearse this Sunday**, at the bottom of the Minibus menu. For two hours, or
+until bookings next close, whichever comes first, the tracking behaves as
+though bookings had shut, test bookings appear on both routes, and a
+coordinator can tap either route whether rostered or not. Both apps carry a
+banner. Nothing a rehearsal writes touches the real record: seeded bookings
+are tagged Rehearsal and are ignored unless a rehearsal is actually running,
+Trip Events rows are tagged the same way, and a real run and a rehearsal never
+see each other's events in either direction. Who is tapping ignores rehearsal
+rows always.
+
+The expiry is deliberately not a flat number of hours. Rehearse at eight on a
+Sunday morning, forget, and three hours later it would still be running during
+the real thing. Ending at the booking cutoff means a rehearsal can never
+survive into a live morning. It also clears itself on the nightly job, and
+**Is everything working?** reports it in the needs-attention list, because a
+rehearsal left running is the one state that makes everything else on that
+screen mean something different.
+
+One thing it deliberately does not do is force `bookingsClosed` to return
+true. That function decides which Sunday a bare link is for and whether a real
+passenger may still book. Forcing it would roll the booking page forward a
+week and turn away anybody trying to book. The tracking gate is separate.
+
+**Duty reminders were never broken.** Reminders go out a week before a Sunday
+and again the day before, so the only two days that send anything are the
+Sunday before and the Saturday. On the other five days there is nothing to
+send. Running it by hand on a Tuesday correctly sent nothing and then toasted
+"Reminders checked", which read as though mail had gone out. It now says what
+went, what was skipped as already sent, and when the next batch is due. There
+is also **Send me a sample duty reminder**, which sends you the real duty
+email for the next Sunday, ignores the sent-once record, and never goes to a
+driver. That is the test that was being reached for.
+
+**Why the Start trip button was nowhere to be found.** Two gates, both
+correct. It belongs to the rostered driver for that route, and it does not
+appear until bookings close. Anybody else got "This bus has not started yet",
+which explained none of that. The read-only strip now names the driver and the
+time the button appears, and points at the rehearsal.
+
+**The rota card still shows both routes.** Sunday is one operation with two
+buses, and who has the other one matters when you are deciding whether to swap
+or who to ring. The answer to "which of these is me" is to mark yours, not to
+hide theirs, so your own leg now carries a You marker and a stronger left
+edge.
+
+**v1.11.1** The booking page moved from `/bus/` to `/sunday/`.
+
+It is a Sunday bookings page, and bus never said that. The old address had
+only ever been used for testing and was never given out, so it was deleted
+rather than redirected. Nothing points at `/bus/` any more.
+
+WhatsApp caches previews per address, so the new one needs its own scrape
+through the Facebook Sharing Debugger before it is pinned. Otherwise the first
+paste comes up bare and that empty result is what gets cached.
+
+Internal names were left alone. `BUS_PAGE_URL`, `busPayload`, `busCurrentSunday`
+and the Bus Stops and Bus Bookings tabs all still say bus, which is accurate:
+they are about the vehicle. Only the address the congregation sees changed.
+
 ## The Minibus menu
 
 Grouped by what a thing does to you, not by what it is about. It used to be
@@ -952,6 +1030,14 @@ labels say so.
 
 **Sheet protection** holds Lock the sheet and Unlock the sheet. Unlocking asks
 first.
+
+Below all of it sits the rehearsal item, which states which way it will act:
+**Rehearse this Sunday** when none is running, or **STOP REHEARSING** with the
+minutes left when one is. The menu itself is therefore the answer to "is a
+rehearsal on".
+
+**Send an email now** also holds Send me a sample duty reminder, which goes to
+you and ignores the sent-once record, so it can be run as often as you like.
 
 
 Three items can change something you would miss, and all three say so before
@@ -989,7 +1075,7 @@ with date-shaped fuel readings in it.
 **One address, forever.** Pin it in the WhatsApp group and never post another:
 
 ```
-https://drolnstone.github.io/minibus-check/bus/
+https://drolnstone.github.io/minibus-check/sunday/
 ```
 
 Passengers tap it, tap their stop, say how many are boarding, and confirm.
@@ -1013,10 +1099,10 @@ the page is currently taking bookings for.
 
 ### Where the file goes
 
-`bus/index.html`, a folder called `bus` next to `index.html`, with the page
+`sunday/index.html`, a folder called `sunday` next to `index.html`, with the page
 inside it named `index.html`. That is what makes the trailing-slash address
 above work. A file called `bus.html` at the top level would answer to
-`/minibus-check/bus.html` instead.
+`/minibus-check/sunday.html` instead.
 
 **`BUS_PAGE_URL`** in `Code.gs` must match wherever it actually sits. If the
 site ever moves, change this too, or the menu will hand you a link to nowhere.

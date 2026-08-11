@@ -91,8 +91,8 @@ function setBusSecret() {
 
 /* Where the passenger page is hosted. Used only to build the link the menu
    gives you, so it just needs to match where the bus folder actually sits.
-   The trailing slash matters: the page is bus/index.html. */
-var BUS_PAGE_URL = "https://drolnstone.github.io/minibus-check/bus/";
+   The trailing slash matters: the page is sunday/index.html. */
+var BUS_PAGE_URL = "https://drolnstone.github.io/minibus-check/sunday/";
 
 /* The passenger link used to carry a per-Sunday code, so a new link had to
    go into the group every week. It now carries nothing at all: one address,
@@ -641,6 +641,11 @@ function nightlyMaintenance() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   ensureRotaSheets(ss);
   fillRotaAhead(ss);
+
+  /* Reading it is what expires it. Belt and braces: the apps call it often
+     enough on any normal day, but a week with nobody opening anything should
+     not leave a rehearsal standing. */
+  try { rehearsalOn(); } catch (err) {}
 
   /* The heartbeat is what maintainIfDue watches. Written last, so a run that
      failed halfway does not claim to have succeeded. */
@@ -1727,13 +1732,18 @@ function ensureBookings(ss) {
 }
 
 function readBookings(ss, key) {
+  var rehearsing = !!rehearsalOn();
   var sh = ss.getSheetByName(BOOKINGS_SHEET);
   if (!sh || sh.getLastRow() < 2) return [];
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues();
   var out = [];
   vals.forEach(function (r, i) {
     if (anyToKey(r[1]) !== key) return;
-    if (String(r[7] || "").trim().toLowerCase() === "cancelled") return;
+    var status = String(r[7] || "").trim().toLowerCase();
+    if (status === "cancelled") return;
+    /* Seeded test bookings. Inert unless a rehearsal is actually running, so
+       a row left behind by a crash cannot quietly inflate a real Sunday. */
+    if (status === "rehearsal" && !rehearsing) return;
     out.push({ row: i + 2, stopId: String(r[3] || "").trim(),
                seats: Number(r[5]) || 0, device: String(r[6] || "").trim() });
   });
@@ -1793,6 +1803,208 @@ function countsPayload() {
 }
 
 
+
+/* ==========================================================================
+   REHEARSAL
+
+   Sunday is the only time the tracking can be exercised, and it is the worst
+   possible time to find out something is wrong. This turns the gates off for
+   a couple of hours so the whole thing can be walked through on a Tuesday.
+
+   It deliberately does NOT make bookingsClosed() return true. That function
+   decides which Sunday a bare link is for and whether a real passenger may
+   still book, so forcing it would roll the booking page to next Sunday and
+   turn away anybody trying to book for this one. The gate below is separate
+   and touches only the tracking.
+
+   Everything a rehearsal writes is tagged Rehearsal and is invisible to the
+   real thing, in both directions: a real run never counts rehearsal rows, and
+   a rehearsal never counts real ones.
+   ========================================================================== */
+
+/* Two hours, or the next booking cutoff, whichever comes first. A flat number
+   has a hole in it: rehearse at eight on a Sunday morning, forget, and three
+   hours later it is still on during the real run. Expiring at the cutoff
+   means a rehearsal can never survive into a live morning. */
+var REHEARSAL_HOURS = 2;
+
+function rehearsalState() {
+  try {
+    var raw = PropertiesService.getScriptProperties().getProperty("rehearsal");
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) { return null; }
+}
+
+/**
+ * On, or null. Clears itself when it has run out, so the expiry is real
+ * rather than merely calculated: the seeded bookings go with it.
+ */
+function rehearsalOn() {
+  var st = rehearsalState();
+  if (!st || !st.at) return null;
+
+  var ends = st.at + REHEARSAL_HOURS * 3600000;
+  var cutoff = nextCutoffMs();
+  if (cutoff && cutoff < ends) ends = cutoff;
+
+  if (Date.now() >= ends) { rehearsalClear(); return null; }
+  st.ends = ends;
+  return st;
+}
+
+/* When bookings next close, in ms. */
+function nextCutoffMs() {
+  var sunday = sundayOf(new Date());
+  var c = new Date(sunday);
+  if (BOOKING_CUTOFF_DAY !== 0) c.setDate(c.getDate() - (7 - BOOKING_CUTOFF_DAY));
+  c.setHours(BOOKING_CUTOFF_HOUR, BOOKING_CUTOFF_MIN || 0, 0, 0);
+  return c.getTime() > Date.now() ? c.getTime() : 0;
+}
+
+/* The gate the tracking uses. Never bookingsClosed() on its own again. */
+function trackingOpen(key) {
+  return rehearsalOn() ? true : bookingsClosed(key);
+}
+
+function rehearsalClear() {
+  try { PropertiesService.getScriptProperties().deleteProperty("rehearsal"); }
+  catch (err) {}
+  try { rehearsalDropSeeds(SpreadsheetApp.getActiveSpreadsheet()); }
+  catch (err) { /* tagged rows are inert anyway: readBookings ignores them */ }
+}
+
+/* Test bookings, on both routes, so either can be walked through. Two stops
+   per route rather than every stop: enough to exercise the sequence, the
+   empty-stop case and the gone-past case, without a wall of green. */
+function rehearsalSeed(ss, key) {
+  var sh = ensureBookings(ss);
+  var stops = readBusStops(ss).filter(function (s) { return !s.arrival; });
+  var byRoute = {};
+  stops.forEach(function (s) {
+    if (!byRoute[s.route]) byRoute[s.route] = [];
+    byRoute[s.route].push(s);
+  });
+
+  var rows = [];
+  Object.keys(byRoute).forEach(function (route) {
+    var list = byRoute[route];
+    /* First and last-but-one, so there is an untouched stop between them and
+       one after: the shape a real morning has. */
+    var picks = [];
+    if (list.length) picks.push({ s: list[0], n: 2 });
+    if (list.length > 2) picks.push({ s: list[list.length - 2], n: 1 });
+    picks.forEach(function (p, i) {
+      rows.push([new Date(), key, route, p.s.id, p.s.stop, p.n,
+                 "rehearsal-" + route.toLowerCase() + "-" + i, "Rehearsal"]);
+    });
+  });
+
+  if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, 8).setValues(rows);
+  return rows.length;
+}
+
+function rehearsalDropSeeds(ss) {
+  var sh = ss.getSheetByName(BOOKINGS_SHEET);
+  if (!sh || sh.getLastRow() < 2) return 0;
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues();
+  var gone = 0;
+  for (var i = vals.length - 1; i >= 0; i--) {
+    if (String(vals[i][7] || "").trim().toLowerCase() === "rehearsal") {
+      sh.deleteRow(i + 2); gone++;
+    }
+  }
+  return gone;
+}
+
+function startRehearsal() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  if (rehearsalOn()) { ui.alert("A rehearsal is already running."); return; }
+
+  var ok = ui.alert("Rehearse this Sunday",
+    "For the next " + REHEARSAL_HOURS + " hours, or until bookings next " +
+    "close, whichever comes first:\n\n" +
+    "  \u2022  the tracking behaves as though bookings had closed\n" +
+    "  \u2022  test bookings appear on both routes\n" +
+    "  \u2022  you can tap either route, rostered or not\n" +
+    "  \u2022  both apps carry a rehearsal banner\n\n" +
+    "Nothing a rehearsal writes touches the real record. Drivers who open " +
+    "the app will see the banner and know not to rely on it.\n\nStart?",
+    ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+
+  var key = busCurrentSunday();
+  rehearsalDropSeeds(ss);
+  var n = rehearsalSeed(ss, key);
+
+  try {
+    PropertiesService.getScriptProperties().setProperty("rehearsal",
+      JSON.stringify({ at: Date.now(), key: key }));
+  } catch (err) {
+    ui.alert("Could not start: " + err);
+    return;
+  }
+  dropCountsCache(key);
+
+  ui.alert("Rehearsal running",
+    n + " test bookings added for " +
+    Utilities.formatDate(keyToDate(key), Session.getScriptTimeZone(), "EEEE d MMMM") +
+    ".\n\nOpen the app, go to Stops and bookings, and Start trip. " +
+    "Use a second phone on the booking link to watch the passenger side.\n\n" +
+    "It switches itself off, so forgetting is not a problem. " +
+    "Reopen this menu to stop it sooner.",
+    ui.ButtonSet.OK);
+}
+
+function stopRehearsal() {
+  var ui = SpreadsheetApp.getUi();
+  if (!rehearsalOn()) { ui.alert("No rehearsal is running."); return; }
+  var key = busCurrentSunday();
+  rehearsalClear();
+  dropCountsCache(key);
+  dropTripCache(key, "North");
+  dropTripCache(key, "South");
+  ui.alert("Rehearsal stopped",
+    "Test bookings removed. The Trip Events rows are kept and tagged " +
+    "Rehearsal, so you can see it happened, and they are ignored by " +
+    "Who is tapping and by the real run.",
+    ui.ButtonSet.OK);
+}
+
+/**
+ * Sends you the real duty email for the next Sunday that has a driver,
+ * ignoring the sent-once stamps. This is the test that was being reached for
+ * when "Send duty reminders now" appeared to do nothing.
+ */
+function sampleDutyReminder() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+  if (!COORDINATOR_EMAIL) { ui.alert("COORDINATOR_EMAIL is blank in Code.gs."); return; }
+
+  var drivers = readDrivers(ss);
+  var byDate = {};
+  readRotaRows(ss).forEach(function (r) { byDate[r.date] = r; });
+  var north = primaryPattern(drivers, "North");
+
+  var sunday = sundayOf(new Date());
+  var row = byDate[dateToKey(sunday)];
+  var who = String((row ? (row.actual || row.primary) : patternDriver(sunday, north)) || "").trim() ||
+            "Bro Sample";
+
+  var days = Math.round((sunday - new Date()) / 86400000) || 1;
+  sendDutyEmail(COORDINATOR_EMAIL, who, sunday, days, "", "North Liverpool");
+
+  ui.alert("Sample sent",
+    "The duty email for " +
+    Utilities.formatDate(sunday, Session.getScriptTimeZone(), "EEEE d MMMM") +
+    " has gone to " + COORDINATOR_EMAIL + ", made out to " + who + ".\n\n" +
+    "This is the same email a driver receives. It ignores the sent-once " +
+    "record, so it can be run as often as you like, and it never goes to a " +
+    "driver.",
+    ui.ButtonSet.OK);
+}
+
 /* ==========================================================================
    MOVEMENT TRACKING
 
@@ -1839,7 +2051,10 @@ function stopMomentOn(key, hhmm) {
 }
 
 function tripCacheKey(key, route) {
-  return "trip_" + key + "_" + route;
+  /* Rehearsal state is cached apart from the real thing. Sharing one key
+     would hand a real driver the rehearsal's progress for ten seconds after
+     it was switched off. */
+  return "trip_" + key + "_" + route + (rehearsalOn() ? "_r" : "");
 }
 
 function dropTripCache(key, route) {
@@ -1854,6 +2069,7 @@ function dropTripCache(key, route) {
  * same sheet read as one. Cleared whenever a tap is written.
  */
 function tripState(ss, key, route) {
+  var rehearsing = !!rehearsalOn();
   var cache = CacheService.getScriptCache();
   var hit = null;
   try { hit = cache.get(tripCacheKey(key, route)); } catch (err) { hit = null; }
@@ -1868,7 +2084,11 @@ function tripState(ss, key, route) {
     vals.forEach(function (r) {
       if (anyToKey(r[2]) !== key) return;
       if (String(r[3] || "").trim() !== route) return;
-      if (String(r[11] || "").trim().toLowerCase() === "undone") return;
+      var status = String(r[11] || "").trim().toLowerCase();
+      if (status === "undone") return;
+      /* Both ways round: a real run never counts rehearsal rows, and a
+         rehearsal never counts real ones. */
+      if ((status === "rehearsal") !== rehearsing) return;
 
       var ev  = String(r[5] || "").trim().toLowerCase();
       var at  = r[9] instanceof Date ? r[9].getTime() : 0;
@@ -1928,7 +2148,7 @@ function tripPayload(ref) {
   var ss  = SpreadsheetApp.getActiveSpreadsheet();
   var key = busCurrentSunday();
 
-  if (!bookingsClosed(key)) {
+  if (!trackingOpen(key)) {
     return { ok: true, live: false, why: "open", date: key, cutoff: cutoffWords() };
   }
 
@@ -1949,6 +2169,7 @@ function tripPayload(ref) {
   var state = tripState(ss, key, myStop.route);
   var out = {
     ok: true, live: true, date: key, now: Date.now(), route: myStop.route,
+    rehearsal: !!rehearsalOn(),
     stop: myStop.stop, stopId: myStop.id, scheduled: myStop.time,
     started: !!state.started, ended: !!state.ended,
     lastStop: state.lastStop,
@@ -1995,7 +2216,8 @@ function tripDriverPayload(route) {
   var state = tripState(ss, key, String(route || "").trim() || "North");
   return {
     ok: true, date: key, route: route, now: Date.now(),
-    closed: bookingsClosed(key), cutoff: cutoffWords(),
+    closed: trackingOpen(key), cutoff: cutoffWords(),
+    rehearsal: !!rehearsalOn(),
     trip: state.trip, driver: state.driver,
     started: state.started || 0, ended: state.ended || 0,
     lastAt: state.lastAt || 0, lastStop: state.lastStop,
@@ -2021,6 +2243,7 @@ function tripDriverPayload(route) {
 function handleTrip(payload) {
   if (!payload) return reply({ ok: false, error: "no trip data" });
 
+  var rehearsing = !!rehearsalOn();
   var ss    = SpreadsheetApp.getActiveSpreadsheet();
   var sh    = ensureTripEvents(ss);
   var key   = anyToKey(payload.sunday) || busCurrentSunday();
@@ -2079,7 +2302,8 @@ function handleTrip(payload) {
 
     rows.push([
       new Date(), trip, key, route, who, kind,
-      stopId, stop ? stop.stop : "", sched || "", new Date(at), off, "Logged"
+      stopId, stop ? stop.stop : "", sched || "", new Date(at), off,
+      rehearsing ? "Rehearsal" : "Logged"
     ]);
     seen[k] = true;
   });
@@ -2112,7 +2336,8 @@ function whoIsTapping() {
   var runs = {};
 
   vals.forEach(function (r) {
-    if (String(r[11] || "").trim().toLowerCase() === "undone") return;
+    var status = String(r[11] || "").trim().toLowerCase();
+    if (status === "undone" || status === "rehearsal") return;
     var key = anyToKey(r[2]); if (!key) return;
     var id  = key + "|" + String(r[3] || "").trim();
     if (!runs[id]) {
@@ -2870,7 +3095,7 @@ function dutyReminders() {
   var drivers = readDrivers(ss);
   var emails = {};
   drivers.forEach(function (d) { if (d.active && d.email) emails[d.name] = d.email; });
-  if (!Object.keys(emails).length) return;      // nobody has given an address yet
+  if (!Object.keys(emails).length) return { sent: [], already: [] };
 
   var byDate = {};
   readRotaRows(ss).forEach(function (r) { byDate[r.date] = r; });
@@ -2880,6 +3105,7 @@ function dutyReminders() {
   var props = PropertiesService.getScriptProperties();
   var sent = {};
   try { sent = JSON.parse(props.getProperty("remindersSent") || "{}"); } catch (err) {}
+  var report = { sent: [], already: [] };
 
   var today = new Date();
   today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -2908,16 +3134,41 @@ function dutyReminders() {
       /* Sent once. The trigger runs daily, but somebody may also run it by
          hand, and nobody wants the same reminder twice. */
       var stamp = key + "|" + days + "|" + slot.who;
-      if (sent[stamp]) return;
+      if (sent[stamp]) { report.already.push(slot.who + ", " + slot.route); return; }
 
       sendDutyEmail(emails[slot.who], slot.who, target, days, slot.was, slot.route);
       sent[stamp] = true;
+      report.sent.push(slot.who + ", " + slot.route);
     });
   });
 
   var keys = Object.keys(sent).sort();
   while (keys.length > 300) { delete sent[keys.shift()]; }
   props.setProperty("remindersSent", JSON.stringify(sent));
+  return report;
+}
+
+/**
+ * When the next reminders are actually due.
+ *
+ * REMIND_DAYS is [7, 1], and a reminder only goes when today plus one of
+ * those lands on a Sunday. So the two days that ever send anything are the
+ * Sunday a week before, and the Saturday. Every other day of the week sends
+ * nothing and is supposed to.
+ */
+function nextReminderDay() {
+  var today = new Date();
+  today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  for (var i = 0; i <= 14; i++) {
+    var d = new Date(today); d.setDate(d.getDate() + i);
+    for (var j = 0; j < REMIND_DAYS.length; j++) {
+      var t = new Date(d); t.setDate(t.getDate() + REMIND_DAYS[j]);
+      if (t.getDay() === 0) {
+        return { when: d, days: REMIND_DAYS[j], sunday: t, today: i === 0 };
+      }
+    }
+  }
+  return null;
 }
 
 function sendDutyEmail(to, who, sunday, daysAhead, covering, route) {
@@ -3045,9 +3296,36 @@ function sendRemindersNow() {
       "Drivers tab. Anyone left blank simply gets no reminder.");
     return;
   }
-  dutyReminders();
-  ss.toast("Reminders checked for " + withEmail + " driver" +
-           (withEmail > 1 ? "s" : "") + ".", "Minibus", 6);
+  /* This used to run and then toast "Reminders checked", which read as "mail
+     has gone out" on the six days a week when nothing is due. Nothing was
+     wrong; the reporting was. */
+  var out = dutyReminders() || { sent: [], already: [] };
+  var next = nextReminderDay();
+  var tz = Session.getScriptTimeZone();
+
+  var msg = "";
+  if (out.sent.length) {
+    msg += "Sent now:\n  \u2022  " + out.sent.join("\n  \u2022  ") + "\n\n";
+  }
+  if (out.already.length) {
+    msg += "Already sent earlier, so not sent again:\n  \u2022  " +
+           out.already.join("\n  \u2022  ") + "\n\n";
+  }
+  if (!out.sent.length && !out.already.length) {
+    msg += "Nothing was due today.\n\nReminders go out a week before a " +
+           "Sunday and again the day before. On any other day there is " +
+           "nothing to send, which is what has just happened.\n\n";
+  }
+  if (next) {
+    msg += "Next: " + Utilities.formatDate(next.when, tz, "EEEE d MMMM") +
+           (next.today ? " (today)" : "") + ", for Sunday " +
+           Utilities.formatDate(next.sunday, tz, "d MMMM") + ".\n\n";
+  }
+  msg += withEmail + " driver" + (withEmail > 1 ? "s have" : " has") +
+         " an email address. To see the email itself, use Send me a sample " +
+         "duty reminder.";
+
+  SpreadsheetApp.getUi().alert("Duty reminders", msg, SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /* ---- when a Sunday changes after people have been told ----------------
@@ -3313,6 +3591,17 @@ function healthCheck() {
 
   if (!COORDINATOR_EMAIL) bad.push("COORDINATOR_EMAIL is blank in Code.gs, so nothing is ever sent to you.");
 
+  /* Not an error, but the single most useful thing to be told, because a
+     rehearsal left running is the one state that makes everything else on
+     this screen mean something different. */
+  var reh = rehearsalOn();
+  if (reh) {
+    bad.push("A REHEARSAL is running, until " +
+             Utilities.formatDate(new Date(reh.ends), Session.getScriptTimeZone(), "HH:mm") +
+             ". Tracking is behaving as though bookings had closed, and test " +
+             "bookings are on the tab. Stop it from the Minibus menu.");
+  }
+
   /* The passenger side. */
   var stops = readBusStops(ss);
   var pickups = stops.filter(function (s) { return !s.arrival; }).length;
@@ -3381,7 +3670,14 @@ function bookingsThisSunday() {
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
 
-  ui.createMenu("Minibus")
+  /* The rehearsal item states which way it will act, so the menu itself says
+     whether one is running. A simple onOpen trigger may not be allowed to
+     read script properties, so a failure here quietly shows the normal item
+     rather than blocking the whole menu. */
+  var reh = null;
+  try { reh = rehearsalOn(); } catch (err) { reh = null; }
+
+  var menu = ui.createMenu("Minibus")
 
     /* The two you actually want most weeks. */
     .addItem("Bus link for this Sunday", "busLinkForSunday")
@@ -3407,6 +3703,7 @@ function onOpen() {
     .addSubMenu(ui.createMenu("Send an email now")
       .addItem("Test email, to you only", "sendTestEmail")
       .addItem("Weekly summary, to you only", "sendDigestNow")
+      .addItem("Send me a sample duty reminder", "sampleDutyReminder")
       .addSeparator()
       .addItem("Duty reminders, to the drivers", "sendRemindersNow"))
 
@@ -3414,9 +3711,18 @@ function onOpen() {
 
     .addSubMenu(ui.createMenu("Sheet protection")
       .addItem("Lock the sheet", "lockSheet")
-      .addItem("Unlock the sheet (asks first)", "unlockSheet"))
+      .addItem("Unlock the sheet (asks first)", "unlockSheet"));
 
-    .addToUi();
+  if (reh) {
+    var mins = Math.max(1, Math.round((reh.ends - Date.now()) / 60000));
+    menu.addSeparator()
+        .addItem("STOP REHEARSING (" + mins + " min left)", "stopRehearsal");
+  } else {
+    menu.addSeparator()
+        .addItem("Rehearse this Sunday", "startRehearsal");
+  }
+
+  menu.addToUi();
 }
 
 /* ---- sheet edits ------------------------------------------------------- */

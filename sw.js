@@ -1,6 +1,6 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
-const CACHE = "minibus-check-v1.10.0";
+const CACHE = "minibus-check-v1.11.1";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -15,8 +15,8 @@ const SHELL = [
   "./icon-192.png",
   "./icon-512.png",
   "./logo.png",
-  "./bus/",
-  "./bus/index.html"
+  "./sunday/",
+  "./sunday/index.html"
 ];
 
 self.addEventListener("install", (e) => {
@@ -74,8 +74,8 @@ self.addEventListener("fetch", (e) => {
   // app. Its fallback must never be the driver app: somebody tapping the
   // booking link with no signal should not be handed a vehicle inspection
   // screen, which is both baffling and none of their business.
-  if (url.pathname.indexOf("/bus/") !== -1) {
-    e.respondWith(freshFirst(e.request, "./bus/index.html"));
+  if (url.pathname.indexOf("/sunday/") !== -1) {
+    e.respondWith(freshFirst(e.request, "./sunday/index.html"));
     return;
   }
 
