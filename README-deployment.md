@@ -766,7 +766,19 @@ case run it a second time.
 It never shows you the secret, on purpose. Nothing needs it except the script,
 and a secret nobody has seen cannot be pasted into a message or a commit.
 
-Then set **`BUS_PAGE_URL`** in `Code.gs` to wherever you uploaded `bus.html`.
+**`BUS_PAGE_URL`** in `Code.gs` must match where `bus.html` actually sits. It
+is currently:
+
+```
+https://drolnstone.github.io/minibus-check/bus.html
+```
+
+That is the driver app's own address with `bus.html` on the end. If the site
+ever moves, change this too, or the menu will hand you a link to nowhere.
+
+A 404 saying **"There isn't a GitHub Pages site here"** means the address is
+wrong or `bus.html` was never pushed. Pages serves only what is committed, so
+having the file locally is not enough.
 
 ### Why the secret is not in Code.gs
 

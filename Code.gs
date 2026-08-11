@@ -91,7 +91,7 @@ function setBusSecret() {
 
 /* Where the passenger page is hosted. Used only to build the link the menu
    gives you, so it just needs to match where you upload bus.html. */
-var BUS_PAGE_URL = "https://asimbassey.github.io/minibus/bus.html";
+var BUS_PAGE_URL = "https://drolnstone.github.io/minibus-check/bus.html";
 
 /* When bookings close. Day 0 is Sunday itself, 6 is Saturday.
 
