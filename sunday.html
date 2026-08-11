@@ -260,6 +260,7 @@ var REF = deviceRef();
    somebody could tap, read that, close the page and never press Confirm.
    Nothing had been sent. The driver had no idea they were coming. */
 var STOPS=[], ARRIVALS=[], COUNTS={}, CLOSED=false, ROLLED=false, DATE="", CUTOFF="";
+var REHEARSAL=false;
 var booked=null, chosen=null, seats=1, saving=false, route="North", ROUTES=[];
 
 function dirty(){
@@ -283,6 +284,7 @@ function load(){
       if(!out || out.ok!==true) throw new Error(out && out.error ? out.error : "unavailable");
       STOPS=out.stops||[]; ARRIVALS=out.arrivals||[]; COUNTS=out.counts||{};
       CLOSED=!!out.closed; ROLLED=!!out.rolled; DATE=out.date||""; CUTOFF=out.cutoff||"";
+      REHEARSAL=!!out.rehearsal;
 
       booked = out.mine ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
       chosen = booked ? booked.stopId : null;
@@ -300,10 +302,13 @@ function load(){
       $("when").textContent = prettyDate(DATE);
       paint();
 
-      /* Only after the cutoff, and only for a phone with a booking. The
-         endpoint decides both; this just stops us asking before there is
-         anything to ask about. */
-      if(CLOSED) liveStart(); else { liveStop(); live=null; paintLive(); }
+      /* After the cutoff, or during a rehearsal. The rehearsal case is why
+         the passenger side sat out the first test: bookings are open on a
+         Tuesday, so CLOSED was false and this never started watching. The
+         two are kept apart deliberately, because a rehearsal must not tell
+         anybody that bookings have shut. */
+      if(CLOSED || REHEARSAL) liveStart();
+      else { liveStop(); live=null; paintLive(); }
     })
     .catch(function(err){
       $("body").innerHTML='<div class="note note-warn"><b>The stops could not be loaded.</b><br>'+
@@ -561,13 +566,51 @@ function send(payload, done){
     body: JSON.stringify({ action:"booking", booking: payload })
   }).then(function(r){ return r.text(); }).then(function(t){
     var out=JSON.parse(t);
-    saving=false;
     if(!out || out.ok!==true) throw new Error(out && out.error ? out.error : "not saved");
+    saving=false;
     done();
   }).catch(function(err){
-    saving=false; $("save").textContent="Confirm"; paintBar();
-    toast(String(err.message||err));
+    /* A failure here does NOT mean nothing was written.
+
+       Apps Script answers a POST with a redirect to a second address, and the
+       booking is already saved by the time that redirect is issued. If the
+       phone then fails to follow it, which happens on a weak signal or when a
+       handset swaps between wifi and mobile mid-request, the fetch rejects
+       even though the row is on the sheet. The page used to announce that
+       nothing had been saved, and somebody reopening it later would find
+       their booking sitting there after all. Worse the other way round: they
+       might tap Confirm again, or give up and not travel.
+
+       So it does not guess. It asks. */
+    verifySend(payload, done);
   });
+}
+
+/* Did it land after all? One read, and the answer is not in doubt: the
+   spreadsheet either holds this booking or it does not. */
+function verifySend(payload, done){
+  fetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      var out=JSON.parse(t);
+      if(!out || out.ok!==true) throw new Error("no answer");
+
+      var wantStop=String(payload.stopId||""), wantSeats=Number(payload.seats)||0;
+      var got=out.mine;
+      var landed = wantSeats
+        ? !!(got && got.stopId===wantStop && Number(got.seats)===wantSeats)
+        : !got;                                  /* a cancellation leaves none */
+
+      if(!landed) throw new Error("not saved");
+      saving=false;
+      done();
+    })
+    .catch(function(){
+      saving=false;
+      $("save").textContent="Confirm";
+      paintBar();
+      toast("That did not save. Check your signal and tap Confirm again.");
+    });
 }
 
 $("save").addEventListener("click",function(){

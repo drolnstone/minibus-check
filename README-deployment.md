@@ -1001,6 +1001,101 @@ Internal names were left alone. `BUS_PAGE_URL`, `busPayload`, `busCurrentSunday`
 and the Bus Stops and Bus Bookings tabs all still say bus, which is accurate:
 they are about the vehicle. Only the address the congregation sees changed.
 
+**v1.11.2** Three things found in the first rehearsal.
+
+**The tap buttons were not buttons.** They were written with class names,
+`btn go` and `btn ghost`, that do not exist in this stylesheet. It has always
+been `btn-main` and `btn-ghost` with a hyphen. Seven buttons therefore
+rendered as plain unstyled text, which is exactly how a driver would have read
+them: as a caption, not as something to press. Picked up is now a full width
+green button, End trip is outlined rather than a pale ghost under it, and the
+small per-stop pair and the Undo chip carry a border and the same condensed
+uppercase face as every other button in the app.
+
+**The passenger page sat out the rehearsal.** It starts watching only when
+bookings have closed, and a rehearsal deliberately does not claim they have,
+because that would turn away a church member booking on a Tuesday. So the
+condition was false and the page never began polling. It now watches when
+bookings have closed OR a rehearsal is running, kept as two separate facts.
+
+A phone with no booking of its own is also lent the first seeded booking while
+rehearsing. Otherwise the person running the rehearsal saw nothing unless they
+first made a real booking and then remembered to cancel it before Sunday.
+
+**Trip Events was not covered by sheet protection.** It is now, fully, with no
+editable range, the same as Checks. Both are machine records of what somebody
+did and when, and neither is anybody's to tidy up afterwards.
+
+Also fixed, though nobody hit it: an expiring rehearsal used to delete the
+seeded rows from inside `rehearsalOn`, which is called by `readBookings`,
+which is called by `handleBooking` while it is working out which row to
+update. An expiry landing at that moment would have shifted every row index
+under the write about to happen and overwritten a real booking. Expiry now
+only clears the flag. The rows are already inert without it, and the nightly
+job sweeps them.
+
+**v1.11.3** Two more from the same rehearsal.
+
+**There was no way to stop a rehearsal.** The menu had one item that changed
+according to whether one was running, which cannot work: a menu is built once
+when the spreadsheet is opened and is never rebuilt. Start a rehearsal and the
+menu still said Rehearse this Sunday, so the only ways out were waiting two
+hours or closing and reopening the whole sheet. Both items are now always
+present, Rehearse this Sunday and Stop rehearsing, and each says plainly what
+state it found. Stop rehearsing also sweeps leftover test bookings when it
+finds nothing running, since a rehearsal that timed out leaves them on the tab.
+
+**A booking that reported failure had actually saved.** This was the "it
+would not submit, and later I found it had taken effect" problem, and it is a
+real fault rather than a slow network.
+
+Apps Script answers a POST with a redirect to a second address, and the row is
+written before that redirect is issued. If the phone then fails to follow it,
+which happens on a weak signal or when a handset swaps between wifi and mobile
+mid-request, the fetch rejects even though the booking is on the sheet. The
+page believed the rejection and said nothing had been saved.
+
+It no longer guesses. On any failure it reads the booking back and compares it
+with what was being sent. If it landed, the passenger is told it worked. If it
+truly did not, they are told to try again. The read is cheap and the answer is
+not in doubt, because the spreadsheet either holds the booking or it does not.
+
+This matters more than a wrong message. Somebody told their booking failed
+either taps Confirm again, or gives up and does not travel, and the driver has
+a seat reserved for a person who is not coming.
+
+**v1.11.4** The same fault, closed everywhere it could occur.
+
+The booking fix in v1.11.3 dealt with one symptom on one page. Four things in
+these apps send data, so all four were checked rather than waiting for each to
+be reported.
+
+**Checks** were already safe. Every check carries an id, the server refuses one
+it has seen before, and a failed send goes back into the queue with the same id
+and is retried. A false failure costs nothing.
+
+**Trip taps** were already safe, for the same reason: one live row per trip,
+stop and event, so a retry has nothing to duplicate.
+
+**Rota requests** were not safe, and were worse than the booking page. A false
+failure told the driver it had not sent. The id was generated fresh on every
+tap of Send, so pressing it again did not repeat the request, it filed a second
+one, and the server's duplicate check never saw a match. The coordinator would
+have received two requests for one Sunday with no way to tell which was
+intended.
+
+The id is now made once, when the request sheet is opened for a Sunday, so a
+retry is genuinely a retry. And a failure no longer speaks first: the app reads
+the rota back and looks for the request before deciding what to tell the
+driver. Both parts are needed. Verification alone would still leave a stale id
+regenerating on a manual retry.
+
+The general shape is worth remembering for anything added later. Apps Script
+writes first and answers with a redirect afterwards, so a rejected send means
+the answer was not read, not that nothing was written. Anything that sends
+needs a stable id the server can recognise, and should look before it tells
+somebody it failed.
+
 ## The Minibus menu
 
 Grouped by what a thing does to you, not by what it is about. It used to be

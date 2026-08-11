@@ -645,7 +645,12 @@ function nightlyMaintenance() {
   /* Reading it is what expires it. Belt and braces: the apps call it often
      enough on any normal day, but a week with nobody opening anything should
      not leave a rehearsal standing. */
-  try { rehearsalOn(); } catch (err) {}
+  try {
+    var wasOn = !!rehearsalOn();
+    /* Nothing running, so any seeded booking still on the tab is a leftover
+       from one that timed out. Safe here: no booking is being written. */
+    if (!wasOn) rehearsalDropSeeds(ss);
+  } catch (err) {}
 
   /* The heartbeat is what maintainIfDue watches. Written last, so a run that
      failed halfway does not claim to have succeeded. */
@@ -1400,6 +1405,9 @@ function sheetLocks(ss) {
     return [sh.getRange(2, 8, last(sh) - 1, 1)];
   }, "Bus Bookings: written by passengers, only Status is yours");
 
+  add(TRIP_SHEET, function () { return []; },
+      "Trip Events: what a driver tapped, and when. Nothing here is yours to edit");
+
   add(STOPS_SHEET, function (sh) {
     /* Left live below the header. Times and stops do change, and this is the
        one place they should be changed. */
@@ -1866,11 +1874,19 @@ function trackingOpen(key) {
   return rehearsalOn() ? true : bookingsClosed(key);
 }
 
+/* Only the flag. Deliberately does not touch the sheet.
+
+   rehearsalOn() is called from inside readBookings, and readBookings is called
+   by handleBooking while it is working out which row to update. Deleting rows
+   from in there meant an expiry landing mid-booking could shift every row
+   index under the write that was about to happen, and overwrite somebody
+   else's booking. The seeded rows are already inert once the flag is gone,
+   because readBookings skips them unless a rehearsal is running, so there is
+   nothing to gain by deleting them in a hurry. Stop rehearsing tidies them,
+   and so does the next rehearsal. */
 function rehearsalClear() {
   try { PropertiesService.getScriptProperties().deleteProperty("rehearsal"); }
   catch (err) {}
-  try { rehearsalDropSeeds(SpreadsheetApp.getActiveSpreadsheet()); }
-  catch (err) { /* tagged rows are inert anyway: readBookings ignores them */ }
 }
 
 /* Test bookings, on both routes, so either can be walked through. Two stops
@@ -1920,7 +1936,15 @@ function startRehearsal() {
   var ui = SpreadsheetApp.getUi();
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  if (rehearsalOn()) { ui.alert("A rehearsal is already running."); return; }
+  var running = rehearsalOn();
+  if (running) {
+    ui.alert("Already rehearsing",
+      "A rehearsal is running until " +
+      Utilities.formatDate(new Date(running.ends), Session.getScriptTimeZone(), "HH:mm") +
+      ".\n\nUse Stop rehearsing, just below this item, to end it now.",
+      ui.ButtonSet.OK);
+    return;
+  }
 
   var ok = ui.alert("Rehearse this Sunday",
     "For the next " + REHEARSAL_HOURS + " hours, or until bookings next " +
@@ -1952,16 +1976,30 @@ function startRehearsal() {
     Utilities.formatDate(keyToDate(key), Session.getScriptTimeZone(), "EEEE d MMMM") +
     ".\n\nOpen the app, go to Stops and bookings, and Start trip. " +
     "Use a second phone on the booking link to watch the passenger side.\n\n" +
-    "It switches itself off, so forgetting is not a problem. " +
-    "Reopen this menu to stop it sooner.",
+    "It switches itself off at " +
+    Utilities.formatDate(new Date(Date.now() + REHEARSAL_HOURS * 3600000),
+                         Session.getScriptTimeZone(), "HH:mm") +
+    " at the latest, so forgetting is not a problem. To end it now, " +
+    "use Stop rehearsing directly below this item in the menu.",
     ui.ButtonSet.OK);
 }
 
 function stopRehearsal() {
   var ui = SpreadsheetApp.getUi();
-  if (!rehearsalOn()) { ui.alert("No rehearsal is running."); return; }
+  if (!rehearsalOn()) {
+    /* Sweep anyway. If one timed out rather than being stopped, the seeded
+       rows are still on the tab, inert but visible, and somebody pressing
+       this is entitled to have them gone. */
+    var swept = 0;
+    try { swept = rehearsalDropSeeds(SpreadsheetApp.getActiveSpreadsheet()); } catch (err) {}
+    ui.alert("No rehearsal is running." +
+             (swept ? "\n\n" + swept + " leftover test booking" + (swept > 1 ? "s" : "") +
+                      " from an earlier one has been cleared." : ""));
+    return;
+  }
   var key = busCurrentSunday();
   rehearsalClear();
+  try { rehearsalDropSeeds(SpreadsheetApp.getActiveSpreadsheet()); } catch (err) {}
   dropCountsCache(key);
   dropTripCache(key, "North");
   dropTripCache(key, "South");
@@ -2153,12 +2191,24 @@ function tripPayload(ref) {
   }
 
   ref = String(ref || "").trim();
+  var rows = readBookings(ss, key);
   var mine = null;
   if (ref) {
-    readBookings(ss, key).forEach(function (b) {
-      if (b.device === ref && b.stopId) mine = b;
+    rows.forEach(function (b) { if (b.device === ref && b.stopId) mine = b; });
+  }
+
+  /* Rehearsing. The live view is only ever shown to a phone with a booking,
+     which meant the person running the rehearsal saw nothing at all unless
+     they first made a real booking and then remembered to cancel it. So a
+     phone with no booking of its own is lent the first seeded one and can
+     walk the passenger side straight from the link. The banner says what it
+     is. */
+  if (!mine && rehearsalOn()) {
+    rows.forEach(function (b) {
+      if (!mine && b.stopId && String(b.device || "").indexOf("rehearsal-") === 0) mine = b;
     });
   }
+
   if (!mine) return { ok: true, live: false, why: "nobooking", date: key };
 
   var stops = readBusStops(ss);
@@ -2416,6 +2466,10 @@ function busPayload(key, code, ref) {
     ok: true,
     date: key,
     closed: bookingsClosed(key),
+    /* Separate from closed on purpose. A rehearsal must not tell the page
+       that bookings have shut, or a church member booking on a Tuesday would
+       be turned away by a test. It only tells the page to start watching. */
+    rehearsal: !!rehearsalOn(),
     rolled: rolled,
     cutoff: cutoffWords(),
     stops: readBusStops(ss).filter(function (s) { return !s.arrival; }),
@@ -3670,13 +3724,14 @@ function bookingsThisSunday() {
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
 
-  /* The rehearsal item states which way it will act, so the menu itself says
-     whether one is running. A simple onOpen trigger may not be allowed to
-     read script properties, so a failure here quietly shows the normal item
-     rather than blocking the whole menu. */
-  var reh = null;
-  try { reh = rehearsalOn(); } catch (err) { reh = null; }
+  /* Both rehearsal items are always here.
 
+     They used to be one item that changed according to whether a rehearsal
+     was running, which does not work: a menu is built once when the
+     spreadsheet is opened and never rebuilt. Start a rehearsal and the menu
+     still said "Rehearse this Sunday", so there was no way to stop one
+     without closing and reopening the whole sheet. Two plain items that are
+     always present cannot get out of step with anything. */
   var menu = ui.createMenu("Minibus")
 
     /* The two you actually want most weeks. */
@@ -3713,14 +3768,9 @@ function onOpen() {
       .addItem("Lock the sheet", "lockSheet")
       .addItem("Unlock the sheet (asks first)", "unlockSheet"));
 
-  if (reh) {
-    var mins = Math.max(1, Math.round((reh.ends - Date.now()) / 60000));
-    menu.addSeparator()
-        .addItem("STOP REHEARSING (" + mins + " min left)", "stopRehearsal");
-  } else {
-    menu.addSeparator()
-        .addItem("Rehearse this Sunday", "startRehearsal");
-  }
+  menu.addSeparator()
+      .addItem("Rehearse this Sunday", "startRehearsal")
+      .addItem("Stop rehearsing", "stopRehearsal");
 
   menu.addToUi();
 }

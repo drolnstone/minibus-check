@@ -193,6 +193,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .btn-ghost{background:#fff;border-color:var(--hair);color:var(--ink)}
 .btn-stop{background:var(--stop);color:#fff;flex:1}
 .btn-wide{width:100%}
+.btn-end{background:#fff;border-color:var(--steel);color:var(--steel);width:100%}
 .count{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted);text-align:center;margin-bottom:7px}
 
 /* ---------- review / result ---------- */
@@ -413,8 +414,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .trip-clear{background:var(--pass-bg);opacity:.72}
 .trip-at{display:block;font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;
   letter-spacing:.06em;text-transform:uppercase;color:var(--pass);margin-top:3px}
-.trip-undo{flex:0 0 auto;align-self:center;font-size:12px;font-weight:600;color:var(--muted);
-  border:1px solid var(--hair);border-radius:6px;padding:5px 9px;background:var(--card)}
+.trip-undo{flex:0 0 auto;align-self:center;font-family:"Barlow Condensed",sans-serif;
+  font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--steel);
+  border:1.5px solid var(--hair);border-radius:7px;padding:7px 11px;background:#fff}
 .trip-strip{border:1px solid var(--hair);border-radius:9px;padding:11px 12px;margin:0 0 12px;background:var(--card)}
 .trip-note{margin:0;font-size:13px;line-height:1.5;color:var(--muted)}
 .trip-note b{color:var(--ink)}
@@ -428,15 +430,23 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   padding:11px 0 4px;margin-top:14px;display:flex;flex-direction:column;gap:8px}
 .trip-waiting{margin:0;font-size:14px;color:var(--muted);text-align:center}
 .trip-waiting b{color:var(--ink);font-size:16px}
-/* One target, full width, impossible to mis-hit from a cab. */
-.btn-tap{min-height:64px;font-size:18px}
+/* One target, full width, impossible to mis-hit from a cab. Green fill, so
+   it reads as the thing to press from arm's length in daylight. */
+.btn-tap{min-height:66px;font-size:19px;width:100%;background:var(--pass);color:#fff;
+  border-color:var(--pass);box-shadow:0 1px 0 rgba(0,0,0,.08)}
+.trip-actions .btn{width:100%}
 .trip-rehearsal{background:var(--stop-bg);border:1px solid #E8BCB7;color:var(--stop);
   border-radius:9px;padding:10px 12px;margin:0 0 12px;font-size:13px;line-height:1.5}
 .trip-rehearsal b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:15px;
   letter-spacing:.12em}
 .trip-row-btns{display:flex;gap:6px;padding:0 0 8px 62px}
-.trip-mini{flex:1;min-height:40px;font-size:13px;font-weight:600;border:1px solid var(--hair);
-  border-radius:7px;background:var(--card);color:var(--muted)}
+/* Small, but unmistakably a button: a border, a fill, and the same condensed
+   uppercase face every other button in the app uses. They were grey text on
+   white before, which nobody reads as tappable. */
+.trip-mini{flex:1;min-height:44px;border:1.5px solid var(--steel);border-radius:8px;
+  background:#fff;color:var(--steel);font-family:"Barlow Condensed",sans-serif;
+  font-size:15px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.trip-mini:active{transform:scale(.98)}
 .is-dead{opacity:.4}
 .stop-time{flex:0 0 52px;font-weight:700;font-variant-numeric:tabular-nums}
 .stop-name{flex:1}
@@ -699,7 +709,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.11.1";
+var APP_VERSION = "v1.11.4";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -2596,6 +2606,7 @@ function rotaMyRoute(){
   return null;
 }
 
+var rotaReqId="";          /* the id of the request being composed */
 var rotaStopsRoute=null;   /* the open tab; null means work it out again */
 
 /* Whether the DRIVER chose that tab, as opposed to the app guessing for him.
@@ -2666,7 +2677,7 @@ function rotaPaintStops(){
     }
     $("rotaModalBody").innerHTML='<p class="lede">The timetable has not reached this '+
       'phone yet. Open this once with a signal and it will be here after that.</p>'+
-      '<div class="rota-modal-actions"><button class="btn ghost" id="rotaStopsClose">Close</button></div>';
+      '<div class="rota-modal-actions"><button class="btn btn-ghost" id="rotaStopsClose">Close</button></div>';
     closeBtn();
     return;
   }
@@ -2784,8 +2795,8 @@ function rotaPaintStops(){
   missed.forEach(function(m){
     html+='<div class="trip-missed"><b>'+esc(m.stop)+' was not marked.</b>'+
           '<div class="trip-missed-btns">'+
-            '<button class="btn ghost" data-triptap="'+esc(m.id)+'" data-tripkind="empty">Nobody there</button>'+
-            '<button class="btn ghost" data-triptap="'+esc(m.id)+'" data-tripkind="pickup">Picked up</button>'+
+            '<button class="btn btn-ghost" data-triptap="'+esc(m.id)+'" data-tripkind="empty">Nobody there</button>'+
+            '<button class="btn btn-ghost" data-triptap="'+esc(m.id)+'" data-tripkind="pickup">Picked up</button>'+
           '</div></div>';
   });
 
@@ -2840,7 +2851,7 @@ function rotaPaintStops(){
   }
 
   $("rotaModalBody").innerHTML=html+
-    '<div class="rota-modal-actions"><button class="btn ghost" id="rotaStopsClose">Close</button></div>';
+    '<div class="rota-modal-actions"><button class="btn btn-ghost" id="rotaStopsClose">Close</button></div>';
   closeBtn();
 
   Array.prototype.forEach.call(document.querySelectorAll("[data-stoproute]"),function(b){
@@ -2899,7 +2910,7 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
   if(!trip.started || trip.route!==route){
     if(mayTap){
       h+= tripClosed
-        ? '<button class="btn go" id="tripStart">Start trip</button>'+
+        ? '<button class="btn btn-main" id="tripStart">Start trip</button>'+
           '<p class="trip-note">Tap each stop as you pull away. Empty stops need nothing.</p>'
         : '<p class="trip-note"><b>Bookings are still open.</b> The run can be started '+
           'after '+esc(tripCutoff||"09:30")+', once the list is settled.</p>';
@@ -2945,12 +2956,12 @@ function tripActionHtml(nextStop){
        '</b> waiting at '+esc(nextStop.stop)+'</p>'+
        '<button class="btn go btn-tap" data-triptap="'+esc(nextStop.id)+'" data-tripkind="pickup">'+
        'Picked up: '+esc(nextStop.stop)+'</button>'+
-       '<button class="btn ghost" data-triptap="'+esc(nextStop.id)+'" data-tripkind="empty">'+
+       '<button class="btn btn-ghost" data-triptap="'+esc(nextStop.id)+'" data-tripkind="empty">'+
        'Nobody there</button>';
   } else {
     h+='<p class="trip-waiting">Every booked stop is done.</p>';
   }
-  h+='<button class="btn ghost" id="tripEnd">End trip, arrived at church</button></div>';
+  h+='<button class="btn btn-end" id="tripEnd">End trip, arrived at church</button></div>';
   return h+'';
 }
 
@@ -2971,6 +2982,14 @@ function tripPaint(){ if(rotaStopsOpen) rotaPaintStops(); }
 
 function rotaOpenRequest(key){
   var d=rotaDateFromKey(key); rotaEditDate=key;
+
+  /* A fresh id for this Sunday, made once when the sheet opens rather than
+     once per tap of Send. The server refuses a request id it has already
+     seen, which is what makes a retry safe, and generating a new id on every
+     tap threw that protection away: a driver who was wrongly told it failed
+     and pressed Send again would file a second request rather than repeat
+     the first. */
+  rotaReqId = "rq" + Date.now() + "-" + Math.random().toString(36).slice(2,7);
   rotaStopsOpen=false; rotaCountsStop();
   $("rotaModalEyebrow").textContent="Rota request";
   $("rotaModalTitle").textContent="Request a change";
@@ -3120,7 +3139,7 @@ function rotaSubmitRequest(){
   if(!navigator.onLine){ toast("Not submitted. No connection. Try again when you have signal."); return; }
 
   var body={token:CFG.token||"",action:"rotaRequest",request:{
-    id:"rq"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
+    id:rotaReqId || ("rq"+Date.now()+"-"+Math.random().toString(36).slice(2,7)),
     date:rotaEditDate, driver:st.driver.trim(),
     type:type, reason:reason, swapWith:swap,
     swapDate:swapDate, agreed:agreed
@@ -3138,8 +3157,34 @@ function rotaSubmitRequest(){
         : "Request sent. The coordinator decides; the rota has not changed yet.");
     })
     .catch(function(e){
-      toast("Not submitted. "+(navigator.onLine?(e.message||"The record would not accept it."):"You lost signal. Try again."));
-      btn.disabled=false; btn.textContent="Send request";
+      /* The same fault the booking page had. Apps Script writes the row and
+         then answers with a redirect to a second address; a phone that
+         cannot follow that redirect rejects a request that is already on the
+         sheet. Telling a driver it failed is how you end up with two
+         requests for one Sunday, or with somebody assuming the coordinator
+         was never told.
+
+         So look before saying anything. The request either reached the sheet
+         or it did not. */
+      if(!navigator.onLine){
+        toast("Not submitted. You lost signal. Try again when you are back in range.");
+        btn.disabled=false; btn.textContent="Send request";
+        return;
+      }
+      btn.textContent="Checking\u2026";
+      var askedFor=rotaEditDate, me=st.driver.trim();
+      rotaFetch(rotaBaseSunday(-rotaFetchedPast), rotaFetchedPast+rotaFetchedWeeks, function(){
+        if(rotaRequestFor(askedFor, me)){
+          rotaClose(); rotaRender(true);
+          toast(type==="Request a swap"
+            ? "Swap sent. The coordinator decides; neither Sunday has changed yet."
+            : "Request sent. The coordinator decides; the rota has not changed yet.");
+          return;
+        }
+        toast("Not submitted. "+(e.message||"The record would not accept it.")+
+              " Tap Send request again.");
+        btn.disabled=false; btn.textContent="Send request";
+      });
     });
 }
 /* Every way out of the sheet comes through here: the Close button, the
