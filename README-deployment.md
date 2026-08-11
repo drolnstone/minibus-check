@@ -745,40 +745,76 @@ Nothing on that tab records passengers. It is the timetable only.
 
 **v1.6** Passenger bookings.
 
+**v1.8** One permanent booking link. The date and per-Sunday code came out of
+the passenger link, so there is a single address to pin in the group instead of
+a fresh one every Saturday. The script works out which Sunday it is: this one
+until bookings close, then the next. The page moved to `bus/index.html`.
+
+Also: the passenger page now takes its styling from the checks app, and its
+stop name, postcode and count stack instead of running together in one line.
+"You are booked" no longer appears until Confirm has actually been pressed —
+before this, tapping a stop was enough to say it, and somebody could close the
+page believing they were on a list they had never joined.
+
+North and South are tabs on both pages, each with its own summary, opening on
+the driver's own route for that Sunday, covers included. **Stops and bookings**
+is on the home screen as well as in the rota. The rota has a back to top
+button. The service worker no longer hands the driver app to somebody who
+opens the booking page with no signal.
+
 ## The Sunday bus link
 
-**Minibus → Bus link for this Sunday** gives you a link to paste into the
-WhatsApp group. Passengers tap it, tap their stop, say how many are boarding,
-and confirm. They can change or cancel until **09:30 on Sunday morning**, set
-by `BOOKING_CUTOFF_DAY`, `_HOUR` and `_MIN` in `Code.gs`. North's first pickup
-is 10:05, so the list settles shortly before the driver sets off. The driver
-sees the numbers per stop under **Stops and times**.
-
-`bus.html` goes on the web host next to `index.html`.
-
-### Before you send the first link
-
-Run **Minibus → Set the bus link secret**, once. It generates a random secret
-and stores it in Script Properties, inside the Apps Script project. Nothing
-needs doing again unless you want to kill every link already sent, in which
-case run it a second time.
-
-It never shows you the secret, on purpose. Nothing needs it except the script,
-and a secret nobody has seen cannot be pasted into a message or a commit.
-
-**`BUS_PAGE_URL`** in `Code.gs` must match where `bus.html` actually sits. It
-is currently:
+**One address, forever.** Pin it in the WhatsApp group and never post another:
 
 ```
-https://drolnstone.github.io/minibus-check/bus.html
+https://drolnstone.github.io/minibus-check/bus/
 ```
 
-That is the driver app's own address with `bus.html` on the end. If the site
-ever moves, change this too, or the menu will hand you a link to nowhere.
+Passengers tap it, tap their stop, say how many are boarding, and confirm.
+They can change or cancel until **09:30 on Sunday morning**, set by
+`BOOKING_CUTOFF_DAY`, `_HOUR` and `_MIN` in `Code.gs`. North's first pickup is
+10:05, so the list settles shortly before the driver sets off. The driver sees
+the numbers per stop under **Stops and bookings**, on the home screen or in
+the rota.
+
+The link used to carry a date and a per-Sunday code, so a fresh one had to go
+into the group every week and last week's died quietly in somebody's chat
+history. It now carries nothing. The page asks the script which Sunday it is
+and the script answers: this Sunday until bookings close on the morning, then
+the next one. Somebody opening it at ten past ten on a Sunday is told that
+today's bus has gone and that they are now booking for next week, rather than
+being shown an empty list they might mistake for a lost booking.
+
+**Minibus → Bus link for this Sunday** still exists. There is nothing left to
+generate, but it is where you go for the address and it tells you which Sunday
+the page is currently taking bookings for.
+
+### Where the file goes
+
+`bus/index.html` — a folder called `bus` next to `index.html`, with the page
+inside it named `index.html`. That is what makes the trailing-slash address
+above work. A file called `bus.html` at the top level would answer to
+`/minibus-check/bus.html` instead.
+
+**`BUS_PAGE_URL`** in `Code.gs` must match wherever it actually sits. If the
+site ever moves, change this too, or the menu will hand you a link to nowhere.
 
 A 404 saying **"There isn't a GitHub Pages site here"** means the address is
-wrong or `bus.html` was never pushed. Pages serves only what is committed, so
+wrong or the folder was never pushed. Pages serves only what is committed, so
 having the file locally is not enough.
+
+### If the link is ever abused
+
+The address is not secret. Anyone who has it can see the stop times and add a
+booking. They cannot read or change anybody else's, because a booking is tied
+to the handle the phone that made it invented, and there are no names or
+numbers on the page to read. The realistic worst case is somebody padding the
+seat counts, which you would notice.
+
+If it happens, set **`BUS_REQUIRE_CODE = true`** in `Code.gs`. The old gate
+comes straight back: run **Minibus → Set the bus link secret** once, then
+**Bus link for this Sunday** for the new address. You are back to posting a
+link every week, so it is worth doing only if you need it.
 
 ### Why the secret is not in Code.gs
 

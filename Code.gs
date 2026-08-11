@@ -90,8 +90,19 @@ function setBusSecret() {
 }
 
 /* Where the passenger page is hosted. Used only to build the link the menu
-   gives you, so it just needs to match where you upload bus.html. */
-var BUS_PAGE_URL = "https://drolnstone.github.io/minibus-check/bus.html";
+   gives you, so it just needs to match where the bus folder actually sits.
+   The trailing slash matters: the page is bus/index.html. */
+var BUS_PAGE_URL = "https://drolnstone.github.io/minibus-check/bus/";
+
+/* The passenger link used to carry a per-Sunday code, so a new link had to
+   go into the group every week. It now carries nothing at all: one address,
+   pinned in the group, good forever. The page asks the script which Sunday
+   it is and the script answers.
+
+   Set this true and the old gate comes back, with ONE code that does not
+   rotate. It is here as an escape hatch: if the link is ever abused, turn
+   it on, post the new address once and carry on. Nothing else changes. */
+var BUS_REQUIRE_CODE = false;
 
 /* When bookings close. Day 0 is Sunday itself, 6 is Saturday.
 
@@ -1676,11 +1687,30 @@ function bookingCounts(ss, key) {
   return out;
 }
 
+/* Which Sunday a bare link is for. This Sunday until bookings close on the
+   morning, then next Sunday. Somebody opening the link at ten past ten on a
+   Sunday is not booking the bus that has already left. */
+function busCurrentSunday() {
+  var sunday = sundayOf(new Date());
+  if (bookingsClosed(dateToKey(sunday))) sunday = addWeeks(sunday, 1);
+  return dateToKey(sunday);
+}
+
 function busPayload(key, code, ref) {
-  if (!busDateAllowed(key)) return { ok: false, error: "That link is out of date. Ask for this week's." };
-  var want = busCode(key);
-  if (!want) return { ok: false, error: "Bus bookings are not set up yet." };
-  if (String(code || "") !== want) return { ok: false, error: "That link is not valid." };
+  /* No date in the link is the normal case now. Work it out here. */
+  var rolled = false;
+  if (!key) {
+    var todaySunday = dateToKey(sundayOf(new Date()));
+    key = busCurrentSunday();
+    rolled = (key !== todaySunday);
+  }
+  if (!busDateAllowed(key)) return { ok: false, error: "That link is out of date. Ask for the current one." };
+
+  if (BUS_REQUIRE_CODE) {
+    var want = busCode(key);
+    if (!want) return { ok: false, error: "Bus bookings are not set up yet." };
+    if (String(code || "") !== want) return { ok: false, error: "That link is not valid." };
+  }
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var counts = bookingCounts(ss, key);
@@ -1692,6 +1722,8 @@ function busPayload(key, code, ref) {
     ok: true,
     date: key,
     closed: bookingsClosed(key),
+    rolled: rolled,
+    cutoff: cutoffWords(),
     stops: readBusStops(ss).filter(function (s) { return !s.arrival; }),
     arrivals: readBusStops(ss).filter(function (s) { return s.arrival; }),
     counts: counts,
@@ -1706,12 +1738,18 @@ function busPayload(key, code, ref) {
 function handleBooking(b) {
   if (!b) return reply({ ok: false, error: "empty booking" });
 
-  var key = String(b.date || "");
-  if (!busDateAllowed(key)) return reply({ ok: false, error: "That link is out of date. Ask for this week's." });
-  var want = busCode(key);
-  if (!want) return reply({ ok: false, error: "Bus bookings are not set up yet." });
-  if (String(b.code || "") !== want) return reply({ ok: false, error: "That link is not valid." });
-  if (bookingsClosed(key)) return reply({ ok: false, error: "Bookings for this Sunday have closed." });
+  var key = String(b.date || "") || busCurrentSunday();
+  if (!busDateAllowed(key)) return reply({ ok: false, error: "That link is out of date. Ask for the current one." });
+
+  if (BUS_REQUIRE_CODE) {
+    var want = busCode(key);
+    if (!want) return reply({ ok: false, error: "Bus bookings are not set up yet." });
+    if (String(b.code || "") !== want) return reply({ ok: false, error: "That link is not valid." });
+  }
+
+  /* The page may have been open in a pocket since before the cutoff. Say
+     which Sunday closed, so a stale tab cannot silently book nothing. */
+  if (bookingsClosed(key)) return reply({ ok: false, error: "Bookings for that Sunday have closed. Reopen the page for the next one." });
 
   var ref = String(b.ref || "").replace(/[^A-Za-z0-9]/g, "").substring(0, 32);
   if (!ref) return reply({ ok: false, error: "no device handle" });
@@ -1745,23 +1783,36 @@ function handleBooking(b) {
   return reply({ ok: true, stopId: stop.id, seats: seats });
 }
 
+/* There is nothing to generate any more, but the menu item stays: it is where
+   somebody goes when they want the address, and it is the only place that
+   says out loud which Sunday the page is currently offering. */
 function busLinkForSunday() {
   var ui = SpreadsheetApp.getUi();
-  if (!busSecret()) {
-    ui.alert("Set the secret first.\n\n" +
-      "Run Minibus \u203a Set the bus link secret. It takes a moment and only " +
-      "needs doing once.");
-    return;
-  }
-  var sunday = sundayOf(new Date());
-  var key = dateToKey(sunday);
-  var link = BUS_PAGE_URL + "?d=" + key + "&k=" + busCode(key);
-  var when = Utilities.formatDate(sunday, Session.getScriptTimeZone(), "EEEE d MMMM");
+  var key = busCurrentSunday();
+  var when = Utilities.formatDate(keyToDate(key), Session.getScriptTimeZone(), "EEEE d MMMM");
+  var link = BUS_PAGE_URL;
+  var note = "";
 
-  ui.alert("Bus link for " + when,
+  if (BUS_REQUIRE_CODE) {
+    if (!busSecret()) {
+      ui.alert("Set the secret first.\n\n" +
+        "Run Minibus \u203a Set the bus link secret. It takes a moment and only " +
+        "needs doing once.");
+      return;
+    }
+    link += "?k=" + busCode(key);
+    note = "The link gate is ON, so this address changes each Sunday and an " +
+           "old one stops working. Turn BUS_REQUIRE_CODE off in the script " +
+           "to go back to one permanent link.\n\n";
+  } else {
+    note = "This address never changes. Pin it in the group once and it stays " +
+           "right: the page works out which Sunday it is by itself.\n\n";
+  }
+
+  ui.alert("The bus booking page",
     link + "\n\n" +
-    "Paste this into the group. It works for this Sunday only and stops " +
-    "working afterwards.\n\n" +
+    note +
+    "It is currently taking bookings for " + when + ".\n" +
     "Bookings close " + cutoffWords() + ".",
     ui.ButtonSet.OK);
 }

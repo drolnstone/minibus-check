@@ -406,6 +406,28 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .stop-n{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-top:3px;
   text-transform:uppercase;letter-spacing:.05em}
 .stop-n.has{color:var(--pass)}
+/* Route tabs inside the stops sheet. Same two-state look as All routes /
+   My duties, so it is one gesture the driver already knows. */
+.stop-tabs{display:flex;gap:8px;margin:2px 0 10px}
+.stop-tab{flex:1;min-height:46px;padding:8px 6px;border-radius:9px;border:1px solid var(--hair);
+  background:var(--card);color:var(--ink);font-family:"Barlow Condensed",sans-serif;
+  font-size:15px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;line-height:1.15}
+.stop-tab small{display:block;font-family:"IBM Plex Sans",sans-serif;font-size:11px;font-weight:500;
+  letter-spacing:.01em;text-transform:none;color:var(--muted);margin-top:2px}
+.stop-tab.is-active{background:var(--steel);border-color:var(--steel);color:#fff}
+.stop-tab.is-active small{color:#AEB8C4}
+.stop-sum{font-size:13px;line-height:1.45;color:var(--muted);margin:0 0 6px}
+.stop-sum b{color:var(--ink);font-weight:600}
+.stop-yours{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-size:11px;
+  font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--pass);
+  background:var(--pass-bg);border:1px solid #B7D8C6;border-radius:5px;padding:1px 6px;margin-left:6px}
+/* Back to top. The rota runs two years deep, so scrolling out of it by hand
+   was a real journey. */
+.totop{position:fixed;right:calc(14px + var(--safe-r));bottom:calc(20px + var(--safe-b));z-index:65;
+  width:48px;height:48px;border-radius:50%;background:var(--steel);color:#fff;
+  font-size:21px;line-height:1;box-shadow:0 3px 12px rgba(22,25,31,.32);
+  display:none;align-items:center;justify-content:center}
+.totop.is-on{display:flex}
 .rota-locked{margin-top:8px;padding:8px 10px;border-radius:7px;font-size:13px;line-height:1.45;
   background:var(--warn-bg);border:1px solid #EBD3A8;color:var(--ink)}
 .rota-modal{position:fixed;inset:0;z-index:120;background:rgba(22,25,31,.48);display:none;align-items:flex-end;justify-content:center}
@@ -476,6 +498,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     <div class="linkrow">
       <button class="btn btn-ghost btn-wide" id="toPending" type="button">Waiting to send</button>
       <button class="btn btn-ghost btn-wide" id="toRota" type="button">Driving rota</button>
+      <button class="btn btn-ghost btn-wide" id="toStops" type="button">Stops and bookings</button>
     </div>
     <p class="tiny" id="modeNote"></p>
     <div class="footer-brand"><img src="logo.png" alt=""><span>RCCG Dominion Assembly Liverpool</span></div>
@@ -609,6 +632,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   </div>
 </div>
 
+<button class="totop" id="toTop" type="button" aria-label="Back to top">&#8593;</button>
+
 <div class="footbar" id="footbar">
   <div class="count" id="count"></div>
   <div class="footbar-in" id="footIn"></div>
@@ -632,7 +657,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.7.1";
+var APP_VERSION = "v1.8.0";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -964,10 +989,12 @@ function paintDash(){
 
 /* ---------------- screens ---------------- */
 var SCREENS = ["driver","vehicle","prep","stage","review","sent","rota","pending"];
+var syncToTop=function(){};
 function show(n){
   st.screen=n;
   SCREENS.forEach(function(x){ $("s-"+x).classList.toggle("is-on", x===n); });
   window.scrollTo(0,0);
+  syncToTop();
   paintDash(); paintFoot();
   if(n==="sent"){ refreshSendState(); armBackGuard(); }
 }
@@ -2177,20 +2204,60 @@ function rotaTopVisibleKey(){
 }
 
 function rotaOpen(){ rotaViewMode="all"; rotaPastWeeks=0; rotaRender(false); show("rota"); }
-/* The Sunday timetable, read from the Bus Stops tab. Shown to any driver,
-   both routes, because somebody covering the other route needs it more than
-   the regular driver does, and because two new South drivers are currently
-   learning that road rather than driving it from memory. */
+/* Which route this driver is on for the coming Sunday. Taken from the rota
+   row rather than the Drivers tab, because the rota is what knows about
+   covers: a man standing in on South this week is a South driver today
+   whatever his usual route says. */
+function rotaMyRoute(){
+  var me=(st.driver||"").trim();
+  if(!me) return null;
+  var d=rotaBaseSunday(0), row=rotaRowFor(rotaKey(d));
+  var nPrimary=(row&&row.primary)||rotaSeedPrimary(d);
+  var nActual=(row&&row.actual)||nPrimary;
+  var sPrimary=(row&&row.primary2)||rotaSeedSecondary(d);
+  var sActual=(row&&row.actual2)||sPrimary;
+  if(sPrimary===me||sActual===me) return "South";
+  if(nPrimary===me||nActual===me) return "North";
+  return null;
+}
+
+var rotaStopsRoute=null;   /* the open tab; null means work it out again */
+var rotaStopsAsked=false;  /* stops fetch already attempted this session */
+
+/* The Sunday timetable, read from the Bus Stops tab.
+
+   Split by route into tabs, opening on the driver's own route, because that
+   is the list he is working from. The other route is one tap away and is
+   deliberately never hidden: somebody covering the other road needs it more
+   than the regular driver does, and two South drivers are still learning
+   that route rather than driving it from memory. */
 function rotaOpenStops(){
   var stops=(rotaStops||[]).slice();
-  $("rotaModalTitle").textContent="Stops and times";
+  $("rotaModalTitle").textContent="Stops and bookings";
+  $("rotaModal").classList.add("is-on");
+
+  function closeBtn(){
+    $("rotaStopsClose").addEventListener("click",function(){
+      $("rotaModal").classList.remove("is-on");
+    });
+  }
 
   if(!stops.length){
+    /* Reached straight from the home screen, the rota may never have been
+       opened, so nothing has been fetched yet. Go and get it rather than
+       telling a driver on full signal that his phone has no timetable. */
+    if(!rotaStopsAsked){
+      rotaStopsAsked=true;
+      $("rotaModalBody").innerHTML='<p class="lede">Fetching the timetable\u2026</p>';
+      rotaFetch(rotaBaseSunday(0), 4, function(){
+        if($("rotaModal").classList.contains("is-on")) rotaOpenStops();
+      });
+      return;
+    }
     $("rotaModalBody").innerHTML='<p class="lede">The timetable has not reached this '+
-      'phone yet. Open the rota once with a signal and it will be here after that.</p>'+
+      'phone yet. Open this once with a signal and it will be here after that.</p>'+
       '<div class="rota-modal-actions"><button class="btn ghost" id="rotaStopsClose">Close</button></div>';
-    $("rotaModal").classList.add("is-on");
-    $("rotaStopsClose").addEventListener("click",function(){$("rotaModal").classList.remove("is-on");});
+    closeBtn();
     return;
   }
 
@@ -2198,37 +2265,85 @@ function rotaOpenStops(){
      stops would be worse than showing none at all. */
   var showCounts = rotaStopCountsFor && rotaStopCountsFor===rotaKey(rotaBaseSunday(0));
 
+  var routes=[];
+  stops.forEach(function(s){ if(!s.arrival && routes.indexOf(s.route)<0) routes.push(s.route); });
+  if(!routes.length) routes=["North"];
+
+  var mine=rotaMyRoute();
+  if(rotaStopsRoute===null || routes.indexOf(rotaStopsRoute)<0){
+    rotaStopsRoute = (mine && routes.indexOf(mine)>=0) ? mine : routes[0];
+  }
+  var route=rotaStopsRoute;
+
+  function seatsOn(rt){
+    var n=0;
+    stops.forEach(function(s){ if(s.route===rt && !s.arrival) n+=(rotaStopCounts[s.id]||0); });
+    return n;
+  }
+  function activeOn(rt){
+    var n=0;
+    stops.forEach(function(s){ if(s.route===rt && !s.arrival && (rotaStopCounts[s.id]||0)>0) n++; });
+    return n;
+  }
+
   var html="";
   if(showCounts){
-    html+='<p class="lede" style="margin:0 0 4px">Bookings for '+
+    html+='<p class="lede" style="margin:0 0 8px">Bookings for '+
           esc(rotaBaseSunday(0).toLocaleDateString("en-GB",{day:"numeric",month:"long"}))+
           '. A stop with nobody booked may still have somebody waiting.</p>';
   }
-  ["North","South"].forEach(function(rt){
-    var mine=stops.filter(function(s){return s.route===rt;});
-    if(!mine.length) return;
-    html+='<div class="stop-route">'+rt+' Liverpool</div>';
-    mine.forEach(function(s){
-      /* How many are booked there. Shown, never acted on: the app does not
-         tell anybody to skip a stop. Somebody who did not book still turns
-         up, with a dead phone or no phone or because nobody told them, and
-         a stop driven past leaves a person on a corner. The count is for the
-         driver to use his own judgement with. */
-      var n=(!s.arrival && showCounts) ? (rotaStopCounts[s.id]||0) : null;
-      html+='<div class="stop-row'+(s.arrival?" stop-arrival":"")+'">'+
-              '<span class="stop-time">'+esc(s.time)+'</span>'+
-              '<span class="stop-name">'+esc(s.stop)+
-                (s.arrival?' <b>(arrive)</b>':'')+
-                (s.postcode?'<span class="stop-pc">'+esc(s.postcode)+'</span>':'')+
-                (n===null?'':'<span class="stop-n'+(n?' has':'')+'">'+
-                   (n? (n+(n===1?' person':' people')+' booked') : 'Nobody booked')+'</span>')+
-              '</span></div>';
+
+  if(routes.length>1){
+    html+='<div class="stop-tabs">';
+    routes.forEach(function(rt){
+      var n=showCounts?seatsOn(rt):null;
+      html+='<button class="stop-tab'+(rt===route?' is-active':'')+'" type="button" '+
+            'data-stoproute="'+esc(rt)+'">'+esc(rt)+
+            '<small>'+(n===null?'Times only':(n? n+(n===1?' person':' people'):'Nobody booked'))+
+            '</small></button>';
     });
+    html+='</div>';
+  }
+
+  var list=stops.filter(function(s){ return s.route===route && !s.arrival; });
+  var arr =stops.filter(function(s){ return s.route===route && s.arrival; });
+  if(!arr.length) arr=stops.filter(function(s){ return s.arrival; });
+
+  html+='<p class="stop-sum"><b>'+esc(route)+' Liverpool</b> \u00B7 '+list.length+' stops'+
+        (showCounts
+          ? ' \u00B7 '+(seatsOn(route)
+              ? '<b>'+activeOn(route)+'</b> with people, <b>'+seatsOn(route)+'</b> booked'
+              : 'nobody booked yet')
+          : '')+
+        (mine===route?'<span class="stop-yours">Yours today</span>':'')+'</p>';
+
+  list.concat(arr).forEach(function(s){
+    /* How many are booked there. Shown, never acted on: the app does not
+       tell anybody to skip a stop. Somebody who did not book still turns
+       up, with a dead phone or no phone or because nobody told them, and
+       a stop driven past leaves a person on a corner. The count is for the
+       driver to use his own judgement with. */
+    var n=(!s.arrival && showCounts) ? (rotaStopCounts[s.id]||0) : null;
+    html+='<div class="stop-row'+(s.arrival?" stop-arrival":"")+'">'+
+            '<span class="stop-time">'+esc(s.time)+'</span>'+
+            '<span class="stop-name">'+esc(s.stop)+
+              (s.arrival?' <b>(arrive)</b>':'')+
+              (s.postcode?'<span class="stop-pc">'+esc(s.postcode)+'</span>':'')+
+              (n===null?'':'<span class="stop-n'+(n?' has':'')+'">'+
+                 (n? (n+(n===1?' person':' people')+' booked') : 'Nobody booked')+'</span>')+
+            '</span></div>';
   });
+
   $("rotaModalBody").innerHTML=html+
     '<div class="rota-modal-actions"><button class="btn ghost" id="rotaStopsClose">Close</button></div>';
-  $("rotaModal").classList.add("is-on");
-  $("rotaStopsClose").addEventListener("click",function(){$("rotaModal").classList.remove("is-on");});
+  closeBtn();
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-stoproute]"),function(b){
+    b.addEventListener("click",function(){
+      rotaStopsRoute=this.getAttribute("data-stoproute");
+      rotaOpenStops();
+    });
+  });
 }
 
 function rotaOpenRequest(key){
@@ -2483,6 +2598,25 @@ $("mileConfirm").addEventListener("click",function(){
 $("sign").addEventListener("input",function(){ st.sign=this.value; paintFoot(); });
 $("toPending").addEventListener("click",function(){ renderPending(); show("pending"); });
 $("toRota").addEventListener("click",rotaOpen);
+
+/* Straight from the home screen to the list a driver actually works from.
+   It used to be two levels down, behind the rota, which is a poor place for
+   the thing he wants at ten past nine on a Sunday. */
+$("toStops").addEventListener("click",rotaOpenStops);
+
+/* Back to top. The rota carries two years of Sundays, so scrolling out of it
+   by thumb was a journey of its own. */
+(function(){
+  var b=$("toTop");
+  function sync(){ b.classList.toggle("is-on", st.screen==="rota" && window.scrollY>460); }
+  window.addEventListener("scroll",sync,{passive:true});
+  b.addEventListener("click",function(){
+    var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if(still) window.scrollTo(0,0); else window.scrollTo({top:0,behavior:"smooth"});
+    b.classList.remove("is-on");
+  });
+  syncToTop = sync;
+})();
 /* The screen class is "is-on", not "on". With the wrong name this test was
    always false, so scrolling never loaded another chunk and the rota quietly
    stopped two years out. */

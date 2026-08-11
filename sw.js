@@ -1,6 +1,6 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
-const CACHE = "minibus-check-v1.7.1";
+const CACHE = "minibus-check-v1.8.0";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -14,11 +14,20 @@ const SHELL = [
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png",
-  "./logo.png"
+  "./logo.png",
+  "./bus/",
+  "./bus/index.html"
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  /* One missing file used to fail addAll outright, which left the whole app
+     uncached rather than nearly cached. Add them one at a time so a stray
+     404 costs one file instead of everything. */
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => Promise.all(SHELL.map((u) => c.add(u).catch(() => {}))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", (e) => {
@@ -33,11 +42,9 @@ self.addEventListener("activate", (e) => {
    must not go stale. Still fully offline: the cached copy answers instantly
    the moment the network fails.
 
-   pageFallback says whether falling back to the page itself makes sense. It
-   does for a navigation: any address in this app should land on the app. It
-   does NOT for config.js, where handing back a page of HTML gives the browser
-   something it will try to run as JavaScript. Better to fail honestly. */
-function freshFirst(request, pageFallback) {
+   fallback is the page to hand back when there is nothing cached for this
+   exact request. It must be the right app: see the bus branch below. */
+function freshFirst(request, fallback) {
   return fetch(request)
     .then((res) => {
       const copy = res.clone();
@@ -46,26 +53,36 @@ function freshFirst(request, pageFallback) {
     })
     .catch(() => caches.match(request).then((hit) => {
       if (hit) return hit;
-      return pageFallback ? caches.match("./index.html") : Response.error();
+      return fallback ? caches.match(fallback).then((f) => f || Response.error())
+                      : Response.error();
     }));
 }
 
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
 
-  // Never cache submissions to Apps Script. Checks and rota requests must
-  // always go to the real network, or a driver could believe a holiday
-  // request was sent when it never left the phone.
+  // Never cache submissions to Apps Script. Checks, rota requests and
+  // bookings must always go to the real network, or somebody could believe
+  // a booking was sent when it never left the phone.
   if (url.hostname.indexOf("script.google") !== -1 ||
       url.hostname.indexOf("googleusercontent") !== -1) {
     return;
   }
   if (e.request.method !== "GET") return;
 
+  // The passenger booking page sits inside this scope but is a different
+  // app. Its fallback must never be the driver app: somebody tapping the
+  // booking link with no signal should not be handed a vehicle inspection
+  // screen, which is both baffling and none of their business.
+  if (url.pathname.indexOf("/bus/") !== -1) {
+    e.respondWith(freshFirst(e.request, "./bus/index.html"));
+    return;
+  }
+
   // config.js: always try the network first so endpoint and rota changes
   // land quickly.
   if (url.pathname.endsWith("/config.js")) {
-    e.respondWith(freshFirst(e.request, false));
+    e.respondWith(freshFirst(e.request, null));
     return;
   }
 
@@ -73,7 +90,7 @@ self.addEventListener("fetch", (e) => {
   // Sunday morning should not be reading last month's rota screen because
   // an old copy was sitting in the cache.
   if (e.request.mode === "navigate" || url.pathname.endsWith("/index.html")) {
-    e.respondWith(freshFirst(e.request, true));
+    e.respondWith(freshFirst(e.request, "./index.html"));
     return;
   }
 
@@ -88,7 +105,7 @@ self.addEventListener("fetch", (e) => {
           caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
           return res;
         })
-        .catch(() => caches.match("./index.html"));
+        .catch(() => Response.error());
     })
   );
 });

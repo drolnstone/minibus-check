@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1B222C">
 <meta name="robots" content="noindex,nofollow">
-<title>Sunday Bus</title>
+<title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
 
 <!--
   The passenger page. Deliberately separate from the driver app.
@@ -18,102 +19,167 @@
   can come back and change their own booking. That handle means nothing to
   anybody else and identifies no one.
 
-  The link carries a code for one Sunday. Next week's link is a different
-  code, and an old one stops working, so a link that ends up somewhere it
-  should not have gone is dead within the week.
+  THE LINK NEVER CHANGES. It used to carry a date and a per-Sunday code,
+  which meant a new link every week and an old one dying quietly in
+  somebody's chat history. Now it carries nothing: the script is asked which
+  Sunday it is and answers. Pin the address in the group once.
+
+  Which Sunday that is: this one, until bookings close on the morning, then
+  the next one. Somebody opening this at ten past ten on a Sunday is not
+  booking the bus that has already left, so the page says so plainly rather
+  than showing them an empty list they might mistake for a lost booking.
 -->
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 <style>
+/* Tokens lifted from the checks app so the two pages read as one product. */
 :root{
-  --ink:#16191F; --muted:#5C6672; --paper:#FFFFFF; --wash:#F4F5F6;
-  --hair:#DFE3E7; --steel:#1B3A57; --go:#2E7D5B; --go-bg:#E8F3ED;
-  --warn:#8A6116; --warn-bg:#FBF3E2;
-  --safe-t:env(safe-area-inset-top); --safe-b:env(safe-area-inset-bottom);
-  --safe-l:env(safe-area-inset-left); --safe-r:env(safe-area-inset-right);
+  --ink:#16191F;--paper:#F4F5F6;--card:#FFFFFF;
+  --steel:#1B222C;--hair:#D3D7DC;--muted:#5C6672;
+  --pass:#146B41;--pass-bg:#E6F2EB;
+  --warn:#B26B00;--warn-bg:#FDF3E2;
+  --r:10px;--tap:56px;
+  --safe-t:env(safe-area-inset-top,0px);--safe-b:env(safe-area-inset-bottom,0px);
+  --safe-l:env(safe-area-inset-left,0px);--safe-r:env(safe-area-inset-right,0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:var(--wash);color:var(--ink);
-  font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  font-size:16px;line-height:1.5;
-  padding:calc(16px + var(--safe-t)) calc(14px + var(--safe-r)) calc(120px + var(--safe-b)) calc(14px + var(--safe-l))}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  padding:calc(16px + var(--safe-t)) calc(14px + var(--safe-r)) calc(132px + var(--safe-b)) calc(14px + var(--safe-l))}
+button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
 .wrap{max-width:640px;margin:0 auto}
-.eyebrow{font-family:"Barlow Condensed",sans-serif;font-size:13px;font-weight:700;
-  letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
-h1{font-family:"Barlow Condensed",sans-serif;font-size:34px;font-weight:700;
-  line-height:1.05;margin:0 0 4px}
-.when{font-size:17px;font-weight:600;color:var(--steel);margin:0 0 18px}
-.lede{color:var(--muted);margin:0 0 16px}
 
-.route{font-family:"Barlow Condensed",sans-serif;font-size:14px;font-weight:700;
-  letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.brand img{width:34px;height:34px;flex:none}
+.brand-txt b{display:block;font-size:15px;font-weight:600;line-height:1.2}
+.brand-txt span{display:block;font-family:"Barlow Condensed",sans-serif;font-size:12px;
+  font-weight:600;letter-spacing:.11em;text-transform:uppercase;color:var(--muted)}
 
-.stop{display:flex;align-items:flex-start;gap:12px;width:100%;text-align:left;
-  background:var(--paper);border:1px solid var(--hair);border-radius:11px;
-  padding:13px;margin-bottom:9px;cursor:pointer;font:inherit;color:inherit}
-.stop.is-on{border-color:var(--go);background:var(--go-bg);box-shadow:0 0 0 1px var(--go) inset}
-.stop-time{flex:0 0 54px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--steel)}
+.eyebrow{font-family:"Barlow Condensed",sans-serif;font-size:13px;font-weight:600;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin:0 0 3px}
+h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
+  line-height:1.03;margin:0 0 3px;letter-spacing:.005em}
+.when{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:600;
+  letter-spacing:.03em;color:var(--steel);margin:0 0 16px}
+.lede{color:var(--muted);margin:0 0 14px}
+
+/* ---------- route tabs ---------- */
+.tabs{display:flex;gap:8px;margin:0 0 10px}
+.tab{flex:1;min-height:48px;padding:9px 8px;border-radius:var(--r);
+  border:1px solid var(--hair);background:var(--card);color:var(--ink);
+  font-family:"Barlow Condensed",sans-serif;font-size:16px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;line-height:1.15}
+.tab small{display:block;font-family:"IBM Plex Sans",sans-serif;font-size:11px;
+  font-weight:500;letter-spacing:.02em;text-transform:none;color:var(--muted);margin-top:2px}
+.tab.is-active{background:var(--steel);border-color:var(--steel);color:#fff}
+.tab.is-active small{color:#AEB8C4}
+.tab:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
+
+.summary{font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.45}
+.summary b{color:var(--ink);font-weight:600}
+
+/* ---------- stops ---------- */
+.stop{display:flex;align-items:flex-start;gap:11px;width:100%;text-align:left;
+  background:var(--card);border:1px solid var(--hair);border-radius:var(--r);
+  padding:13px;margin-bottom:8px;min-height:var(--tap)}
+.stop.is-on{border-color:var(--pass);background:var(--pass-bg);box-shadow:0 0 0 1px var(--pass) inset}
+.stop:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
+.stop-time{flex:0 0 52px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--steel)}
 .stop-body{flex:1;min-width:0}
-.stop-name{font-weight:600}
-.stop-pc{font-size:13px;color:var(--muted);margin-top:2px}
-.stop-count{font-size:13px;color:var(--muted);margin-top:4px}
-.tick{flex:0 0 22px;font-weight:700;color:var(--go);font-size:19px;line-height:1.2}
+/* These three stack. As inline spans they ran together into one unreadable
+   line, which is what the postcode was doing welded to the stop name. */
+.stop-name{display:block;font-weight:600;line-height:1.3}
+.stop-pc{display:block;font-size:12px;color:var(--muted);margin-top:3px;
+  font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.stop-n{display:block;font-family:"Barlow Condensed",sans-serif;font-size:13px;font-weight:600;
+  letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-top:5px}
+.stop-n.has{color:var(--pass)}
+.tick{flex:0 0 20px;font-weight:700;color:var(--pass);font-size:19px;line-height:1.25}
+.stop-arrival{opacity:.85}
 
-.seats{background:var(--paper);border:1px solid var(--hair);border-radius:11px;
-  padding:14px;margin:16px 0}
-.seats h2{font-family:"Barlow Condensed",sans-serif;font-size:19px;margin:0 0 4px}
-.seats p{margin:0 0 12px;color:var(--muted);font-size:14px}
+.group-label{font-family:"Barlow Condensed",sans-serif;font-size:13px;font-weight:700;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:20px 0 7px}
+
+/* ---------- seats ---------- */
+.seats{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);
+  padding:14px;margin:14px 0}
+.seats h2{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:700;
+  letter-spacing:.02em;margin:0 0 3px}
+.seats p{margin:0 0 12px;color:var(--muted);font-size:13px}
 .counter{display:flex;align-items:center;gap:14px}
-.counter button{width:52px;height:52px;border-radius:11px;border:1px solid var(--hair);
-  background:var(--wash);font-size:26px;font-weight:700;color:var(--ink);cursor:pointer;line-height:1}
-.counter button:disabled{opacity:.35;cursor:default}
-.counter .n{font-size:30px;font-weight:700;min-width:48px;text-align:center;font-variant-numeric:tabular-nums}
+.counter button{width:var(--tap);height:var(--tap);border-radius:var(--r);
+  border:1px solid var(--hair);background:var(--paper);font-size:26px;font-weight:600;line-height:1}
+.counter button:disabled{opacity:.3}
+.counter button:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
+.counter .n{font-size:30px;font-weight:700;min-width:46px;text-align:center;font-variant-numeric:tabular-nums}
 
-.bar{position:fixed;left:0;right:0;bottom:0;background:rgba(244,245,246,.97);
+/* ---------- notices ---------- */
+.note{border-radius:9px;padding:12px 13px;font-size:14px;line-height:1.5;margin:0 0 14px}
+.note b{font-weight:600}
+.note-warn{background:var(--warn-bg);border:1px solid #EBD3A8}
+.note-go{background:var(--pass-bg);border:1px solid #B7D8C6}
+
+/* ---------- bottom bar ---------- */
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(244,245,246,.97);
   border-top:1px solid var(--hair);backdrop-filter:blur(8px);
-  padding:12px calc(14px + var(--safe-r)) calc(12px + var(--safe-b)) calc(14px + var(--safe-l))}
-.bar-in{max-width:640px;margin:0 auto;display:flex;gap:10px}
-.btn{flex:1;padding:15px;border-radius:11px;border:0;cursor:pointer;
+  padding:11px calc(14px + var(--safe-r)) calc(11px + var(--safe-b)) calc(14px + var(--safe-l))}
+.bar-in{max-width:640px;margin:0 auto}
+.bar-say{font-size:12px;color:var(--muted);text-align:center;margin:0 0 8px;min-height:16px}
+.bar-say.is-dirty{color:var(--warn);font-weight:600}
+.bar-btns{display:flex;gap:8px}
+.btn{flex:1;min-height:var(--tap);padding:14px 12px;border-radius:var(--r);
   font-family:"Barlow Condensed",sans-serif;font-size:17px;font-weight:700;
-  letter-spacing:.05em;text-transform:uppercase}
+  letter-spacing:.06em;text-transform:uppercase}
+.btn:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
 .btn-main{background:var(--steel);color:#fff}
 .btn-main:disabled{background:#AEB6BE;cursor:default}
-.btn-ghost{flex:0 0 auto;background:var(--paper);color:var(--ink);border:1px solid var(--hair)}
+.btn-ghost{flex:0 0 auto;padding-left:18px;padding-right:18px;
+  background:var(--card);border:1px solid var(--hair)}
 
-.note{border-radius:10px;padding:12px 13px;font-size:14px;line-height:1.45;margin:0 0 16px}
-.note-warn{background:var(--warn-bg);border:1px solid #EBD3A8;color:var(--ink)}
-.note-go{background:var(--go-bg);border:1px solid #B7D8C6;color:var(--ink)}
-.toast{position:fixed;left:50%;bottom:calc(96px + var(--safe-b));transform:translateX(-50%) translateY(14px);
+.toast{position:fixed;left:50%;bottom:calc(112px + var(--safe-b));transform:translateX(-50%) translateY(14px);
   background:var(--ink);color:#fff;padding:11px 16px;border-radius:9px;font-size:14px;
   opacity:0;pointer-events:none;transition:.25s;z-index:90;max-width:90vw;text-align:center}
 .toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
-.foot{margin-top:26px;color:var(--muted);font-size:13px;line-height:1.5}
+.foot{margin-top:24px;color:var(--muted);font-size:12px;line-height:1.55}
 .spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.4);
   border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
 @keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <p class="eyebrow">Dominion Assembly</p>
+  <div class="brand">
+    <img src="../logo.png" alt="">
+    <span class="brand-txt">
+      <b>RCCG Dominion Assembly</b>
+      <span>Liverpool · Transport</span>
+    </span>
+  </div>
+
+  <p class="eyebrow">Getting you to church</p>
   <h1>Sunday Bus</h1>
   <p class="when" id="when"></p>
-  <div id="notice"></div>
-  <div id="body"><p class="lede">Loading the stops...</p></div>
+  <div id="body"><p class="lede">Loading the stops…</p></div>
   <p class="foot" id="foot"></p>
 </div>
 
 <div class="bar" id="bar" style="display:none">
   <div class="bar-in">
-    <button class="btn btn-ghost" id="cancel" type="button">Not coming</button>
-    <button class="btn btn-main" id="save" type="button">Confirm</button>
+    <p class="bar-say" id="barSay"></p>
+    <div class="bar-btns">
+      <button class="btn btn-ghost" id="cancel" type="button">Not coming</button>
+      <button class="btn btn-main" id="save" type="button">Confirm</button>
+    </div>
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 "use strict";
@@ -127,13 +193,8 @@ function esc(x){ return String(x==null?"":x).replace(/[&<>"']/g,function(c){
 var toastTimer;
 function toast(msg){
   var t=$("toast"); t.textContent=msg; t.classList.add("is-on");
-  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ t.classList.remove("is-on"); },3200);
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ t.classList.remove("is-on"); },3600);
 }
-
-/* The link tells us which Sunday and carries that Sunday's code. */
-var qs = new URLSearchParams(location.search);
-var DATE = qs.get("d") || "";
-var CODE = qs.get("k") || "";
 
 /* A handle this phone makes up for itself, so somebody can come back and
    change their booking. It is random, it is not sent anywhere except with
@@ -149,7 +210,22 @@ function deviceRef(){
 }
 var REF = deviceRef();
 
-var STOPS=[], COUNTS={}, CLOSED=false, chosen=null, seats=1, saving=false;
+/* ---- state ------------------------------------------------------------
+   booked is what the spreadsheet actually holds for this phone.
+   chosen and seats are what the passenger is looking at right now.
+
+   Keeping them apart is the whole point. When they were one thing, tapping
+   a stop was enough to make the page announce "You are booked", and
+   somebody could tap, read that, close the page and never press Confirm.
+   Nothing had been sent. The driver had no idea they were coming. */
+var STOPS=[], ARRIVALS=[], COUNTS={}, CLOSED=false, ROLLED=false, DATE="", CUTOFF="";
+var booked=null, chosen=null, seats=1, saving=false, route="North", ROUTES=[];
+
+function dirty(){
+  if(!chosen) return !!booked;                       /* deselected a real booking */
+  if(!booked) return true;                           /* new booking, nothing saved */
+  return chosen!==booked.stopId || seats!==booked.seats;
+}
 
 function prettyDate(key){
   var p=String(key).split("-");
@@ -159,77 +235,123 @@ function prettyDate(key){
 }
 
 function load(){
-  if(!DATE || !CODE){
-    $("body").innerHTML='<div class="note note-warn">This link is incomplete. '+
-      'Please use the link exactly as it was posted in the group.</div>';
-    return;
-  }
-  var url = ENDPOINT+"?bus=1&d="+encodeURIComponent(DATE)+"&k="+encodeURIComponent(CODE)+
-            "&ref="+encodeURIComponent(REF);
-  fetch(url,{method:"GET",redirect:"follow"})
+  fetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out=JSON.parse(t);
       if(!out || out.ok!==true) throw new Error(out && out.error ? out.error : "unavailable");
-      STOPS=out.stops||[]; COUNTS=out.counts||{}; CLOSED=!!out.closed;
-      if(out.mine){ chosen=out.mine.stopId; seats=out.mine.seats||1; }
-      $("when").textContent = prettyDate(out.date);
-      paint(out.arrivals||[]);
+      STOPS=out.stops||[]; ARRIVALS=out.arrivals||[]; COUNTS=out.counts||{};
+      CLOSED=!!out.closed; ROLLED=!!out.rolled; DATE=out.date||""; CUTOFF=out.cutoff||"";
+
+      booked = out.mine ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
+      chosen = booked ? booked.stopId : null;
+      seats  = booked ? booked.seats : 1;
+
+      /* Which routes actually exist, in the order the timetable lists them. */
+      ROUTES=[];
+      STOPS.forEach(function(s){ if(ROUTES.indexOf(s.route)<0) ROUTES.push(s.route); });
+      if(!ROUTES.length) ROUTES=["North"];
+
+      /* Open on the route you are already booked on. */
+      var mine = booked && stopById(booked.stopId);
+      route = (mine && ROUTES.indexOf(mine.route)>=0) ? mine.route : ROUTES[0];
+
+      $("when").textContent = prettyDate(DATE);
+      paint();
     })
     .catch(function(err){
-      $("body").innerHTML='<div class="note note-warn">'+esc(String(err.message||err))+
-        '<br><br>If this link came from an earlier week, ask for the current one.</div>';
+      $("body").innerHTML='<div class="note note-warn"><b>The stops could not be loaded.</b><br>'+
+        esc(String(err.message||err))+'<br><br>Check your signal and pull down to refresh. '+
+        'If it keeps happening, tell the transport group.</div>';
     });
 }
 
-function paint(arrivals){
+function stopById(id){
+  for(var i=0;i<STOPS.length;i++) if(STOPS[i].id===id) return STOPS[i];
+  return null;
+}
+function seatsOn(rt){
+  var n=0;
+  STOPS.forEach(function(s){ if(s.route===rt) n+=(COUNTS[s.id]||0); });
+  return n;
+}
+function activeOn(rt){
+  var n=0;
+  STOPS.forEach(function(s){ if(s.route===rt && (COUNTS[s.id]||0)>0) n++; });
+  return n;
+}
+
+function paint(){
   var html="";
 
   if(CLOSED){
     html+='<div class="note note-warn"><b>Bookings have closed for this Sunday.</b> '+
-          'You can still see the times below. If your plans have changed, '+
-          'please tell the group, because the driver already has this list.</div>';
-  } else if(chosen){
-    html+='<div class="note note-go"><b>You are booked.</b> '+
-          'Tap a different stop to move, or use Not coming below.</div>';
-  } else {
-    html+='<p class="lede">Tap the stop where you will be boarding.</p>';
+          'The times are below. If your plans have changed, tell the group directly, '+
+          'because the driver already has this list.</div>';
+  } else if(ROLLED){
+    html+='<div class="note note-warn"><b>Today\u2019s bus is closed and on its way.</b> '+
+          'You are now booking for '+esc(prettyDate(DATE))+'.</div>';
   }
 
-  ["North","South"].forEach(function(route){
-    var mine=STOPS.filter(function(s){ return s.route===route; });
-    if(!mine.length) return;
-    html+='<div class="route">'+esc(route)+' Liverpool</div>';
-    mine.forEach(function(s){
-      var n=COUNTS[s.id]||0;
-      var on=(chosen===s.id);
-      html+='<button class="stop'+(on?' is-on':'')+'" type="button" data-stop="'+esc(s.id)+'"'+
-              (CLOSED?' disabled':'')+'>'+
-              '<span class="stop-time">'+esc(s.time)+'</span>'+
-              '<span class="stop-body">'+
-                '<span class="stop-name">'+esc(s.stop)+'</span>'+
-                (s.postcode?'<span class="stop-pc">'+esc(s.postcode)+'</span>':'')+
-                '<span class="stop-count">'+(n?(n+(n===1?" person":" people")+" booked so far"):"Nobody booked yet")+'</span>'+
-              '</span>'+
-              '<span class="tick">'+(on?"\u2713":"")+'</span>'+
-            '</button>';
+  if(!CLOSED){
+    if(booked && !dirty()){
+      html+='<div class="note note-go"><b>You are booked.</b> '+
+            'Tap a different stop to move, or use Not coming below.</div>';
+    } else if(!booked && !chosen){
+      html+='<p class="lede">Tap the stop where you will be boarding.</p>';
+    }
+  }
+
+  /* Route tabs, each carrying its own summary so you can see where the bus
+     is busy without opening the other one. */
+  if(ROUTES.length>1){
+    html+='<div class="tabs" role="tablist">';
+    ROUTES.forEach(function(rt){
+      var n=seatsOn(rt);
+      html+='<button class="tab'+(rt===route?' is-active':'')+'" type="button" role="tab" '+
+            'aria-selected="'+(rt===route)+'" data-route="'+esc(rt)+'">'+esc(rt)+
+            '<small>'+(n? n+(n===1?' person':' people') : 'Nobody yet')+'</small></button>';
     });
+    html+='</div>';
+  }
+
+  var mine=STOPS.filter(function(s){ return s.route===route; });
+  var active=activeOn(route), total=seatsOn(route);
+  html+='<p class="summary"><b>'+esc(route)+' Liverpool</b> · '+mine.length+' stops · '+
+        (total? '<b>'+active+'</b> with people, <b>'+total+'</b> booked'
+              : 'nobody booked yet')+'</p>';
+
+  mine.forEach(function(s){
+    var n=COUNTS[s.id]||0, on=(chosen===s.id);
+    html+='<button class="stop'+(on?' is-on':'')+'" type="button" data-stop="'+esc(s.id)+'"'+
+            (CLOSED?' disabled':'')+' aria-pressed="'+on+'">'+
+            '<span class="stop-time">'+esc(s.time)+'</span>'+
+            '<span class="stop-body">'+
+              '<span class="stop-name">'+esc(s.stop)+'</span>'+
+              (s.postcode?'<span class="stop-pc">'+esc(s.postcode)+'</span>':'')+
+              '<span class="stop-n'+(n?' has':'')+'">'+
+                (n? n+(n===1?' person':' people')+' booked' : 'Nobody booked yet')+'</span>'+
+            '</span>'+
+            '<span class="tick">'+(on?"\u2713":"")+'</span>'+
+          '</button>';
   });
 
   if(chosen && !CLOSED){
     html+='<div class="seats"><h2>How many of you?</h2>'+
           '<p>Count everyone boarding with you at that stop, including yourself.</p>'+
           '<div class="counter">'+
-            '<button type="button" id="less" aria-label="fewer">&minus;</button>'+
-            '<span class="n" id="n">'+seats+'</span>'+
-            '<button type="button" id="more" aria-label="more">+</button>'+
+            '<button type="button" id="less" aria-label="One fewer">&minus;</button>'+
+            '<span class="n" id="n" aria-live="polite">'+seats+'</span>'+
+            '<button type="button" id="more" aria-label="One more">+</button>'+
           '</div></div>';
   }
 
-  if(arrivals.length){
-    html+='<div class="route">Arriving</div>';
-    arrivals.forEach(function(s){
-      html+='<div class="stop" style="cursor:default">'+
+  var arr=ARRIVALS.filter(function(s){ return !s.route || s.route===route; });
+  if(!arr.length) arr=ARRIVALS;
+  if(arr.length){
+    html+='<div class="group-label">Arriving at church</div>';
+    arr.forEach(function(s){
+      html+='<div class="stop stop-arrival">'+
               '<span class="stop-time">'+esc(s.time)+'</span>'+
               '<span class="stop-body"><span class="stop-name">'+esc(s.stop)+'</span>'+
               (s.postcode?'<span class="stop-pc">'+esc(s.postcode)+'</span>':'')+'</span>'+
@@ -239,27 +361,46 @@ function paint(arrivals){
 
   $("body").innerHTML=html;
   $("foot").textContent = CLOSED
-    ? "This page shows the Sunday bus times for Dominion Assembly."
-    : "Bookings close at 9:30 on Sunday morning, before the buses set off. Nothing here records your name or number, only how many are boarding at each stop.";
+    ? "The Sunday bus for RCCG Dominion Assembly Liverpool."
+    : "Bookings close "+(CUTOFF||"Sunday 09:30")+", before the buses set off. "+
+      "This page records how many are boarding at each stop, and nothing else. No names, no numbers.";
 
+  Array.prototype.forEach.call(document.querySelectorAll("[data-route]"),function(b){
+    b.addEventListener("click",function(){ route=this.getAttribute("data-route"); paint(); });
+  });
   Array.prototype.forEach.call(document.querySelectorAll("[data-stop]"),function(b){
     b.addEventListener("click",function(){
       var id=this.getAttribute("data-stop");
       chosen = (chosen===id) ? null : id;
       if(chosen && !seats) seats=1;
-      paint(arrivals);
+      paint();
     });
   });
-  if($("less")) $("less").addEventListener("click",function(){ if(seats>1){seats--; $("n").textContent=seats;} });
-  if($("more")) $("more").addEventListener("click",function(){ if(seats<12){seats++; $("n").textContent=seats;} });
+  if($("less")) $("less").addEventListener("click",function(){ if(seats>1){seats--; paint();} });
+  if($("more")) $("more").addEventListener("click",function(){ if(seats<12){seats++; paint();} });
 
+  paintBar();
+}
+
+/* The bar is the only thing that says whether the spreadsheet knows. */
+function paintBar(){
   $("bar").style.display = CLOSED ? "none" : "";
-  $("save").disabled = !chosen || saving;
-  $("cancel").style.display = chosen ? "" : "none";
+  if(CLOSED) return;
+
+  var d=dirty(), say=$("barSay");
+  $("save").disabled = !chosen || !d || saving;
+  $("cancel").style.display = booked ? "" : "none";
+
+  say.classList.toggle("is-dirty", d && !!chosen);
+  if(d && chosen)      say.textContent = booked ? "Changed. Tap Confirm to save it."
+                                                : "Not saved yet. Tap Confirm.";
+  else if(d && booked) say.textContent = "Tap Not coming to cancel your booking.";
+  else if(booked)      say.textContent = "Saved. You can change this until "+(CUTOFF||"Sunday 09:30")+".";
+  else                 say.textContent = "";
 }
 
 function send(payload, done){
-  saving=true; $("save").disabled=true;
+  saving=true; paintBar();
   fetch(ENDPOINT,{
     method:"POST", redirect:"follow",
     headers:{"Content-Type":"text/plain;charset=utf-8"},
@@ -270,7 +411,7 @@ function send(payload, done){
     if(!out || out.ok!==true) throw new Error(out && out.error ? out.error : "not saved");
     done();
   }).catch(function(err){
-    saving=false; $("save").disabled=false;
+    saving=false; $("save").textContent="Confirm"; paintBar();
     toast(String(err.message||err));
   });
 }
@@ -278,16 +419,15 @@ function send(payload, done){
 $("save").addEventListener("click",function(){
   if(!chosen) return;
   $("save").innerHTML='<span class="spin"></span>';
-  send({ date:DATE, code:CODE, ref:REF, stopId:chosen, seats:seats }, function(){
+  send({ date:DATE, ref:REF, stopId:chosen, seats:seats }, function(){
     $("save").textContent="Confirm";
-    toast("Booked. You can change this until 9:30 on Sunday morning.");
+    toast("Booked. You can change this until "+(CUTOFF||"Sunday 09:30")+".");
     load();
   });
 });
 
 $("cancel").addEventListener("click",function(){
-  send({ date:DATE, code:CODE, ref:REF, stopId:"", seats:0 }, function(){
-    chosen=null; seats=1;
+  send({ date:DATE, ref:REF, stopId:"", seats:0 }, function(){
     toast("Cancelled. The bus will not wait for you.");
     load();
   });
