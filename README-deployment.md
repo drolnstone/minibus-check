@@ -49,13 +49,15 @@ publish a new version.
 Keep the same deployment so the `/exec` URL does not change. If you create a
 brand new deployment instead, you must paste the new URL into `config.js`.
 
-### 3. Upload the three web files
+### 3. Upload the web files
 
-Replace `index.html`, `config.js` and `sw.js` on your host.
+Replace `index.html`, `config.js`, `sw.js` and `bus/index.html` on your host.
 
-`sw.js` has been bumped to `minibus-check-v1.1`. That is what tells every phone
-to throw away its old copy. If you ever edit `index.html` or `config.js`
-again, bump that number, and bump `APP_VERSION` in `index.html` to match.
+`sw.js` has been bumped to `minibus-check-v1.9.0`. That is what tells every
+phone to throw away its old copy. If you ever edit `index.html` or `config.js`
+again, bump that number, and bump `APP_VERSION` in `index.html` to match. Both
+currently read `v1.9.0` and they are meant to stay in step, so that a version
+shown on a phone tells you exactly which copy it is running.
 
 **Checking which copy a phone has.** The version shows at the bottom of the
 first screen, under the church name. If it does not match what you uploaded,
@@ -752,8 +754,8 @@ until bookings close, then the next. The page moved to `bus/index.html`.
 
 Also: the passenger page now takes its styling from the checks app, and its
 stop name, postcode and count stack instead of running together in one line.
-"You are booked" no longer appears until Confirm has actually been pressed —
-before this, tapping a stop was enough to say it, and somebody could close the
+"You are booked" no longer appears until Confirm has actually been pressed.
+Before this, tapping a stop was enough to say it, and somebody could close the
 page believing they were on a list they had never joined.
 
 North and South are tabs on both pages, each with its own summary, opening on
@@ -761,6 +763,123 @@ the driver's own route for that Sunday, covers included. **Stops and bookings**
 is on the home screen as well as in the rota. The rota has a back to top
 button. The service worker no longer hands the driver app to somebody who
 opens the booking page with no signal.
+
+**v1.9** Bookings that actually reach the driver.
+
+**Stops and bookings** was reading whatever counts happened to be in the
+phone's cache and never asking again. The only fetch on that path fired when
+the timetable itself was missing, so a phone that already had the timetable
+showed numbers from whenever the rota screen was last opened. Worse, when
+those numbers belonged to a Sunday that had passed the screen withheld them
+entirely and showed times only, with nothing on screen to say why. A booking
+made on Tuesday could be invisible on Thursday.
+
+The screen now asks. There is a new `?counts=1` endpoint returning the Sunday
+and the counts and nothing else, instead of pulling the whole rota payload
+with the driver register, PIN hashes, open defects and a year of rota rows to
+answer a question about two numbers. It is fetched when the sheet opens and
+every thirty seconds while it stays open, because bookings arrive until 09:30
+and a driver reading the list at 09:10 should not be looking at a frozen copy
+at 09:25. The poll stops when the sheet closes and when the phone sleeps, and
+refetches on waking.
+
+The counts are cached in the script for twenty seconds, so several drivers
+polling at once cost one sheet read. Writing a booking clears that cache, so a
+passenger tap shows up on the next poll rather than whenever the cache lapses.
+Striking a booking out by hand on the Bus Bookings tab clears it too, through
+`onEditBookings`. That one runs in a simple trigger with restricted
+permissions and may not be allowed to touch the cache, so it is wrapped: the
+worst case is a hand cancellation taking twenty seconds instead of none.
+`rotaVersion` is deliberately not bumped by a booking, because that would
+rebuild the entire rota cache on every passenger tap.
+
+The screen now says how old its numbers are, and says why when it has none.
+
+Also in v1.9: the modal eyebrow is set by whichever function opens it. It was
+fixed text, so **Stops and bookings** was headed "Rota request", left over
+from when that sheet only did one job. `aria-hidden` is handled on both
+openers, and the stops Close button goes through `rotaClose` like everything
+else.
+
+On the passenger page: Open Graph tags, so pasting the booking link into
+WhatsApp produces a card instead of a bare address. `og:image` has to be an
+absolute https URL and at least 300px wide, hence `icon-512.png` rather than
+`icon-192.png`. If WhatsApp has already cached an empty preview for the
+address, the Facebook Sharing Debugger at `developers.facebook.com/tools/debug/`
+will clear it: Scrape Again. That is a one-time fix, not a per-release one,
+because ordinary edits to the page do not touch those four tags.
+
+Also on the passenger page: `touch-action:manipulation` stops double tap to
+zoom while leaving pinch to zoom alone, the closing time is bold, and the line
+about what the page does and does not record has been taken off. That
+statement still sits as a column note on the Bus Bookings tab, which is where
+anybody asking the question would look.
+
+## The Minibus menu
+
+Grouped by what a thing does to you, not by what it is about. It used to be
+seventeen items in one flat list, which put "Rebuild future Sundays" three
+rows below "Check time zone" with nothing to say that one rewrites the rota
+and the other only looks.
+
+```
+Minibus
+  Bus link for this Sunday
+  Bookings for this Sunday
+  ----
+  Have a look (nothing changes)
+      Is everything working?
+      Who is carrying the load
+      Check the Drivers tab
+      Check time zone
+  Rota and setup (safe to re-run)
+      Set up / refresh rota
+      Refresh dropdowns from Drivers tab
+      Add a Sunday to the rota
+      Extend rota further ahead
+      Check scheduled emails, set up any missing
+      ----
+      Rebuild future Sundays from the pattern (asks first)
+  Send an email now
+      Test email, to you only
+      Weekly summary, to you only
+      ----
+      Duty reminders, to the drivers
+  ----
+  Sheet protection
+      Lock the sheet
+      Unlock the sheet (asks first)
+```
+
+Three items can change something you would miss, and all three say so before
+they do it: **Rebuild future Sundays**, **Unlock the sheet**, and **Duty
+reminders**, which is the only item in the menu that reaches anybody else's
+inbox.
+
+**Is everything working?** is new. It checks the time zone, the Drivers tab
+columns, both route rotations, all five scheduled jobs, the day's remaining
+email allowance, `COORDINATOR_EMAIL`, and that the timetable has pickup stops,
+then reports it in one alert. It repairs nothing on purpose: **Check scheduled
+emails** already reinstalls missing triggers, and a look-only item that quietly
+changed the project would be the sort of surprise this menu now exists to
+avoid. It names what is missing and points at the item that fixes it.
+
+**Bookings for this Sunday** is new. The Bus Bookings tab holds one row per
+phone, which is the right shape for storing bookings and the wrong shape for
+reading them. This is the same summing the driver's app does, per stop and
+per route, for whoever is at the spreadsheet instead. It is what you want in
+front of you when somebody rings to cancel.
+
+Two items were taken out. **Repair old fuel readings** was a migration that
+ran once and has nothing left to do. **Set the bus link secret** stopped
+meaning anything in v1.8, when `BUS_REQUIRE_CODE` went false and the code came
+out of the link: nothing checks the secret now, but the item still warned that
+replacing it would stop every link already sent from working. A frightening
+warning attached to an action with no effect is worse than no item at all.
+
+Both functions are still in `Code.gs` and can be run from the Apps Script
+editor if `BUS_REQUIRE_CODE` ever goes back to true, or an old sheet turns up
+with date-shaped fuel readings in it.
 
 ## The Sunday bus link
 
@@ -791,7 +910,7 @@ the page is currently taking bookings for.
 
 ### Where the file goes
 
-`bus/index.html` — a folder called `bus` next to `index.html`, with the page
+`bus/index.html`, a folder called `bus` next to `index.html`, with the page
 inside it named `index.html`. That is what makes the trailing-slash address
 above work. A file called `bus.html` at the top level would answer to
 `/minibus-check/bus.html` instead.

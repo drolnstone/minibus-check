@@ -2784,30 +2784,218 @@ function sendDigestNow() {
   try { SpreadsheetApp.getUi().alert(msg); } catch (err) { Logger.log(msg); }
 }
 
+/**
+ * The menu, grouped by what a thing does to you rather than by what it is
+ * about.
+ *
+ * It used to be seventeen items in one flat list, which put "Rebuild future
+ * Sundays" three rows below "Check time zone" with nothing to say that one
+ * of them rewrites the rota and the other only looks. Coordinators are not
+ * supposed to have to remember which is which.
+ *
+ * So: the two things reached most often sit at the top. Everything else is
+ * behind a submenu whose name says what happens if you press something in
+ * it. Fewer things visible means fewer things to press by mistake.
+ *
+ * Two items are gone from here and the functions are left in the file:
+ *
+ *   Repair old fuel readings   a migration that ran once, long ago. Harmless
+ *                              to run again, since repaired readings are text
+ *                              and get skipped, but it has nothing left to do.
+ *
+ *   Set the bus link secret    BUS_REQUIRE_CODE went false in v1.8 when the
+ *                              code came out of the link, so nothing checks
+ *                              the secret any more. The item still warned
+ *                              that replacing it would kill every link
+ *                              already sent, which can no longer happen. A
+ *                              frightening warning attached to an action with
+ *                              no effect is worse than no item at all.
+ *
+ * Both are still callable from the Apps Script editor if BUS_REQUIRE_CODE
+ * ever goes back to true or an old sheet turns up with date-shaped fuel
+ * readings in it.
+ */
+/* ---- have a look ------------------------------------------------------- */
+
+/**
+ * One button that answers "is anything wrong", instead of four separate
+ * checks a coordinator has to remember to run and then interpret.
+ *
+ * Reads only. It reports what it finds and repairs nothing, so it can be
+ * pressed at any time by anybody, including on a Sunday morning by somebody
+ * who is only trying to find out why an email did not arrive.
+ *
+ * The one thing it deliberately does not do is install missing triggers.
+ * "Check scheduled emails" already does that, and a look-only item that
+ * quietly changes the project would be exactly the sort of surprise this
+ * menu is now arranged to avoid. It names what is missing and sends you
+ * there.
+ */
+function healthCheck() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+  var good = [], bad = [];
+
+  /* Time zone. Everything dated depends on this and it is invisible until
+     something lands on the wrong Sunday. */
+  var tz = timeZoneWarning();
+  if (tz) bad.push(tz + "\n     File > Settings > Time zone, set United Kingdom.");
+  else good.push("Time zone is " + Session.getScriptTimeZone() + ".");
+
+  /* Drivers tab. */
+  var warn = driversHeaderWarning(ss);
+  if (warn) {
+    bad.push("The Drivers tab columns are out of order. Run Check the Drivers tab for the detail.");
+  } else {
+    var drivers = readDrivers(ss);
+    var active = drivers.filter(function (d) { return d.active; });
+    var withEmail = active.filter(function (d) { return d.email; }).length;
+    good.push(active.length + " active drivers, " + withEmail + " with an email address.");
+    if (!withEmail) bad.push("Nobody has an email address, so no duty reminder can ever be sent.");
+
+    var north = primaryPattern(drivers, "North");
+    var south = primaryPattern(drivers, "South");
+    if (!north.length) bad.push("No North rotation. The Route column on the Drivers tab is not filled in.");
+    if (!south.length) bad.push("No South rotation. The Route column on the Drivers tab is not filled in.");
+    if (north.length && south.length) {
+      good.push("Rotations: North " + north.length + ", South " + south.length + ".");
+    }
+  }
+
+  /* Triggers. Named, not installed: see the note above. */
+  var want = [
+    { fn: "weeklyDigest",       label: "Weekly summary" },
+    { fn: "dutyReminders",      label: "Duty reminders" },
+    { fn: "onRotaEditNotify",   label: "Alerts when a Sunday changes" },
+    { fn: "nightlyMaintenance", label: "Nightly rota tidy-up" },
+    { fn: "missingCheckAlert",  label: "Sunday 10:45, went out unchecked" }
+  ];
+  try {
+    var have = {};
+    ScriptApp.getProjectTriggers().forEach(function (t) { have[t.getHandlerFunction()] = true; });
+    var missing = want.filter(function (w) { return !have[w.fn]; })
+                      .map(function (w) { return w.label; });
+    if (missing.length) {
+      bad.push("Not scheduled: " + missing.join(", ") +
+               ".\n     Run Rota and setup > Check scheduled emails to put them back.");
+    } else {
+      good.push("All five scheduled jobs are installed.");
+    }
+  } catch (err) {
+    bad.push("Could not read the scheduled jobs: " + err);
+  }
+
+  /* Email allowance. A silent day of no reminders is usually this. */
+  try {
+    var left = MailApp.getRemainingDailyQuota();
+    if (left === 0) bad.push("This account's daily email allowance is used up. It frees up about 24 hours after the first one went out.");
+    else good.push(left + " emails can still go out today.");
+  } catch (err) { /* not worth reporting */ }
+
+  if (!COORDINATOR_EMAIL) bad.push("COORDINATOR_EMAIL is blank in Code.gs, so nothing is ever sent to you.");
+
+  /* The passenger side. */
+  var stops = readBusStops(ss);
+  var pickups = stops.filter(function (s) { return !s.arrival; }).length;
+  if (!pickups) bad.push("No pickup stops on the Bus Stops tab, so the booking page has nothing to show.");
+  else good.push(pickups + " pickup stops on the timetable.");
+
+  var msg = bad.length
+    ? "Needs attention:\n\n  \u2717  " + bad.join("\n\n  \u2717  ") +
+      (good.length ? "\n\n\nFine:\n\n  \u2713  " + good.join("\n  \u2713  ") : "")
+    : "\u2713  Everything looks right.\n\n  " + good.join("\n  ");
+
+  ui.alert(bad.length ? "Minibus: " + bad.length + " thing" + (bad.length === 1 ? "" : "s") + " to look at"
+                      : "Minibus: all well", msg, ui.ButtonSet.OK);
+}
+
+/**
+ * Who is booked where this Sunday, as a total per stop.
+ *
+ * The Bus Bookings tab holds one row per phone, which is the right shape for
+ * storing it and the wrong shape for reading it. This is the same summing the
+ * driver's app does, for whoever is sitting at the spreadsheet instead, and
+ * it is what you want in front of you when somebody rings to cancel.
+ *
+ * Counts only, like everywhere else. Nothing here knows a name.
+ */
+function bookingsThisSunday() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+
+  var key = busCurrentSunday();
+  var when = Utilities.formatDate(keyToDate(key), Session.getScriptTimeZone(), "EEEE d MMMM");
+  var counts = bookingCounts(ss, key);
+  var stops = readBusStops(ss).filter(function (s) { return !s.arrival; });
+
+  if (!stops.length) { ui.alert("No pickup stops on the Bus Stops tab yet."); return; }
+
+  var lines = [], totals = {}, grand = 0;
+  var lastRoute = "";
+
+  stops.forEach(function (s) {
+    var n = counts[s.id] || 0;
+    grand += n;
+    totals[s.route] = (totals[s.route] || 0) + n;
+    if (s.route !== lastRoute) {
+      lines.push((lastRoute ? "\n" : "") + s.route + " Liverpool");
+      lastRoute = s.route;
+    }
+    lines.push("  " + s.time + "  " + s.stop + "   " +
+               (n ? n + (n === 1 ? " person" : " people") : "nobody"));
+  });
+
+  var head = grand
+    ? grand + (grand === 1 ? " person" : " people") + " booked for " + when + "."
+    : "Nobody booked yet for " + when + ".";
+
+  var byRoute = Object.keys(totals).map(function (r) { return r + " " + totals[r]; }).join(", ");
+
+  ui.alert("Bookings for this Sunday",
+    head + (grand ? "\n" + byRoute + "." : "") +
+    "\n\nBookings close " + cutoffWords() + ".\n\n" + lines.join("\n") +
+    "\n\nA count is what somebody said they would do, not a promise. " +
+    "Nobody is ever driven past on the strength of it.",
+    ui.ButtonSet.OK);
+}
+
 function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu("Minibus")
-    .addItem("Set up / refresh rota", "setUpEverything")
-    .addItem("Refresh dropdowns from Drivers tab", "refreshDropdowns")
-    .addItem("Add a Sunday to the rota", "addSunday")
-    .addItem("Extend rota further ahead", "extendRota")
-    .addSeparator()
-    .addItem("Send a test email", "sendTestEmail")
-    .addItem("Send weekly summary now", "sendDigestNow")
-    .addItem("Send duty reminders now", "sendRemindersNow")
-    .addItem("Check scheduled emails", "checkDigestScheduled")
-    .addItem("Check the Drivers tab", "checkDriversTab")
-    .addItem("Check time zone", "checkTimeZoneMenu")
-    .addSeparator()
-    .addItem("Repair old fuel readings (run once)", "repairFuelColumn")
-    .addItem("Rebuild future Sundays from the pattern", "rebuildFutureRota")
-    .addSeparator()
-    .addItem("Who is carrying the load", "coverBalance")
+  var ui = SpreadsheetApp.getUi();
+
+  ui.createMenu("Minibus")
+
+    /* The two you actually want most weeks. */
     .addItem("Bus link for this Sunday", "busLinkForSunday")
-    .addItem("Set the bus link secret", "setBusSecret")
+    .addItem("Bookings for this Sunday", "bookingsThisSunday")
     .addSeparator()
-    .addItem("Lock the sheet", "lockSheet")
-    .addItem("Unlock the sheet", "unlockSheet")
+
+    .addSubMenu(ui.createMenu("Have a look (nothing changes)")
+      .addItem("Is everything working?", "healthCheck")
+      .addItem("Who is carrying the load", "coverBalance")
+      .addItem("Check the Drivers tab", "checkDriversTab")
+      .addItem("Check time zone", "checkTimeZoneMenu"))
+
+    .addSubMenu(ui.createMenu("Rota and setup (safe to re-run)")
+      .addItem("Set up / refresh rota", "setUpEverything")
+      .addItem("Refresh dropdowns from Drivers tab", "refreshDropdowns")
+      .addItem("Add a Sunday to the rota", "addSunday")
+      .addItem("Extend rota further ahead", "extendRota")
+      .addItem("Check scheduled emails, set up any missing", "checkDigestScheduled")
+      .addSeparator()
+      .addItem("Rebuild future Sundays from the pattern (asks first)", "rebuildFutureRota"))
+
+    .addSubMenu(ui.createMenu("Send an email now")
+      .addItem("Test email, to you only", "sendTestEmail")
+      .addItem("Weekly summary, to you only", "sendDigestNow")
+      .addSeparator()
+      .addItem("Duty reminders, to the drivers", "sendRemindersNow"))
+
+    .addSeparator()
+
+    .addSubMenu(ui.createMenu("Sheet protection")
+      .addItem("Lock the sheet", "lockSheet")
+      .addItem("Unlock the sheet (asks first)", "unlockSheet"))
+
     .addToUi();
 }
 
