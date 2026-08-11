@@ -626,7 +626,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 
 <div class="rota-modal" id="rotaModal" aria-hidden="true">
   <div class="rota-sheet">
-    <p class="eyebrow">Rota request</p>
+    <!-- Both of these are set by whichever function opens the sheet. The
+         eyebrow used to be fixed text, so the Stops and bookings screen was
+         headed "Rota request" no matter what the title underneath said. -->
+    <p class="eyebrow" id="rotaModalEyebrow">Rota request</p>
     <h2 id="rotaModalTitle">Request a change</h2>
     <div id="rotaModalBody"></div>
   </div>
@@ -657,7 +660,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.8.0";
+var APP_VERSION = "v1.9.0";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1770,6 +1773,18 @@ var rotaStops = [];
    nothing ever records one. */
 var rotaStopCounts = {};
 var rotaStopCountsFor = "";
+
+/* When the counts last came back from the sheet, in ms, and the machinery
+   for keeping them current while the Stops and bookings sheet is open.
+
+   A driver can open that screen at ten past nine and still be reading it at
+   half past, and bookings arrive until 09:30. Without the poll the list is
+   frozen from the moment he opened it, with nothing on screen to say so. */
+var rotaCountsAt = 0;
+var rotaCountsBusy = false;
+var rotaCountsTimer = null;
+var rotaStopsOpen = false;
+
 var rotaViewMode = "all";
 var rotaModalMode = "";
 var rotaEditDate = null;
@@ -1910,7 +1925,8 @@ function rotaSaveCache(){
       when: Date.now(), rows: rotaRows,
       pattern: ROTA_PRIMARY_PATTERN,
       register: REGISTER,
-      stops: rotaStops, counts: rotaStopCounts, countsFor: rotaStopCountsFor
+      stops: rotaStops, counts: rotaStopCounts, countsFor: rotaStopCountsFor,
+      countsAt: rotaCountsAt
     }));
   }catch(e){}
 }
@@ -1923,6 +1939,7 @@ function rotaLoadCache(){
     if(c.register && c.register.length) rotaSyncRegister(c.register);
     if(c.stops && c.stops.length) rotaStops = c.stops;
     if(c.counts){ rotaStopCounts = c.counts; rotaStopCountsFor = c.countsFor||""; }
+    rotaCountsAt = Number(c.countsAt)||0;
     return true;
   }catch(e){ return false; }
 }
@@ -1946,7 +1963,11 @@ function rotaFetch(fromDate,weeks,cb){
     if(out.drivers && out.drivers.length) rotaSyncRegister(out.drivers);
     if(out.openDefects) OPEN_DEFECTS = out.openDefects;
     if(out.stops && out.stops.length) rotaStops = out.stops;
-    if(out.stopCounts){ rotaStopCounts = out.stopCounts; rotaStopCountsFor = out.stopCountsFor||""; }
+    if(out.stopCounts){
+      rotaStopCounts = out.stopCounts;
+      rotaStopCountsFor = out.stopCountsFor||"";
+      rotaCountsAt = Date.now();
+    }
 
     incoming.forEach(function(row){
       var idx=rotaRows.findIndex(function(x){return x.date===row.date;});
@@ -1965,6 +1986,80 @@ function rotaFetch(fromDate,weeks,cb){
     if(st.screen==="rota") toast("Could not reach the shared rota. Showing the last copy.");
   });
 }
+
+/* ---- booking counts on their own ----------------------------------------
+   The Stops and bookings screen used to take whatever counts happened to be
+   in the phone's cache and never ask again, because the only fetch on that
+   path fired when the timetable itself was missing. A phone that already had
+   the timetable therefore showed numbers from whenever the rota screen was
+   last opened, and if those belonged to a Sunday that had passed, showCounts
+   turned false and every number vanished with no explanation.
+
+   This asks for the counts alone. It is a fraction of the rota payload, so
+   it is cheap enough to fire on every open and every thirty seconds after. */
+function rotaCountsFetch(cb){
+  if(!LIVE || !navigator.onLine || rotaCountsBusy){ if(cb) cb(false); return; }
+  rotaCountsBusy=true;
+  fetch(CFG.endpoint+"?counts=1",{method:"GET",redirect:"follow"})
+    .then(function(r){return r.text();})
+    .then(function(t){
+      var out=JSON.parse(t);
+      rotaCountsBusy=false;
+      if(!out||out.ok!==true) throw new Error("counts unavailable");
+      var before=JSON.stringify(rotaStopCounts)+"|"+rotaStopCountsFor;
+      rotaStopCounts   = out.counts||{};
+      rotaStopCountsFor= out.date||"";
+      rotaCountsAt     = Date.now();
+      rotaSaveCache();
+      if(cb) cb(JSON.stringify(rotaStopCounts)+"|"+rotaStopCountsFor !== before);
+    })
+    .catch(function(){
+      rotaCountsBusy=false;
+      /* Silent. The screen already says how old the numbers are, which is
+         more use than a toast telling him something failed. */
+      if(cb) cb(false);
+    });
+}
+
+/* How old the numbers on screen are. A driver setting off needs to know
+   whether he is looking at the list or at a memory of the list. */
+function rotaCountsWords(){
+  if(!rotaCountsAt) return "Numbers as last received.";
+  var s=Math.round((Date.now()-rotaCountsAt)/1000);
+  if(s<45) return "Updated just now.";
+  var m=Math.round(s/60);
+  if(m<60) return "Updated "+m+" minute"+(m===1?"":"s")+" ago.";
+  var h=Math.round(m/60);
+  return "Updated "+h+" hour"+(h===1?"":"s")+" ago.";
+}
+
+function rotaCountsStop(){
+  if(rotaCountsTimer){ clearInterval(rotaCountsTimer); rotaCountsTimer=null; }
+}
+
+/* Only ever runs while the sheet is open and the phone is awake. Nothing
+   polls from a driver's pocket. */
+function rotaCountsStart(){
+  rotaCountsStop();
+  if(document.hidden) return;
+  rotaCountsTimer=setInterval(function(){
+    if(!rotaStopsOpen || document.hidden){ rotaCountsStop(); return; }
+    rotaCountsFetch(function(changed){
+      if(!rotaStopsOpen) return;
+      if(changed) rotaPaintStops();
+      else if($("countsAge")) $("countsAge").textContent=rotaCountsWords();
+    });
+  },30000);
+}
+
+document.addEventListener("visibilitychange",function(){
+  if(document.hidden){ rotaCountsStop(); return; }
+  if(!rotaStopsOpen) return;
+  /* Back from the lock screen. Whatever is on there is at least as old as
+     the time it spent in his pocket, so ask before he reads it. */
+  rotaCountsFetch(function(){ if(rotaStopsOpen) rotaPaintStops(); });
+  rotaCountsStart();
+});
 
 /* Full sync with the Drivers tab, not just an add: a name taken off Active
    there disappears here too, and roles come across so a promotion reaches the
@@ -2232,14 +2327,27 @@ var rotaStopsAsked=false;  /* stops fetch already attempted this session */
    than the regular driver does, and two South drivers are still learning
    that route rather than driving it from memory. */
 function rotaOpenStops(){
-  var stops=(rotaStops||[]).slice();
+  rotaStopsOpen=true;
+  $("rotaModalEyebrow").textContent="Sunday bus";
   $("rotaModalTitle").textContent="Stops and bookings";
   $("rotaModal").classList.add("is-on");
+  $("rotaModal").setAttribute("aria-hidden","false");
+
+  /* Draw what we have straight away, then correct it. Same bargain the rota
+     screen already makes: nothing waits on Apps Script before something
+     appears. */
+  rotaPaintStops();
+  rotaCountsFetch(function(){ if(rotaStopsOpen) rotaPaintStops(); });
+  rotaCountsStart();
+}
+
+/* Redrawing only. Switching route tabs and the poll both come back through
+   here, and neither should reopen anything or start a second timer. */
+function rotaPaintStops(){
+  var stops=(rotaStops||[]).slice();
 
   function closeBtn(){
-    $("rotaStopsClose").addEventListener("click",function(){
-      $("rotaModal").classList.remove("is-on");
-    });
+    $("rotaStopsClose").addEventListener("click",rotaClose);
   }
 
   if(!stops.length){
@@ -2250,7 +2358,7 @@ function rotaOpenStops(){
       rotaStopsAsked=true;
       $("rotaModalBody").innerHTML='<p class="lede">Fetching the timetable\u2026</p>';
       rotaFetch(rotaBaseSunday(0), 4, function(){
-        if($("rotaModal").classList.contains("is-on")) rotaOpenStops();
+        if(rotaStopsOpen) rotaPaintStops();
       });
       return;
     }
@@ -2290,7 +2398,14 @@ function rotaOpenStops(){
   if(showCounts){
     html+='<p class="lede" style="margin:0 0 8px">Bookings for '+
           esc(rotaBaseSunday(0).toLocaleDateString("en-GB",{day:"numeric",month:"long"}))+
-          '. A stop with nobody booked may still have somebody waiting.</p>';
+          '. <span id="countsAge">'+esc(rotaCountsWords())+'</span></p>';
+  } else {
+    /* Counts belonging to a Sunday that has gone are worse than none, so
+       they are withheld. Say why, rather than showing a bare timetable and
+       leaving him to wonder where the numbers went. */
+    html+='<p class="lede" style="margin:0 0 8px">Times only. The booking '+
+          'numbers on this phone are for an earlier Sunday and could not be '+
+          'refreshed. Open this once with a signal and they come back.</p>';
   }
 
   if(routes.length>1){
@@ -2341,13 +2456,15 @@ function rotaOpenStops(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-stoproute]"),function(b){
     b.addEventListener("click",function(){
       rotaStopsRoute=this.getAttribute("data-stoproute");
-      rotaOpenStops();
+      rotaPaintStops();
     });
   });
 }
 
 function rotaOpenRequest(key){
   var d=rotaDateFromKey(key); rotaEditDate=key;
+  rotaStopsOpen=false; rotaCountsStop();
+  $("rotaModalEyebrow").textContent="Rota request";
   $("rotaModalTitle").textContent="Request a change";
 
   /* The button also appears when somebody is covering a Sunday that was
@@ -2517,7 +2634,14 @@ function rotaSubmitRequest(){
       btn.disabled=false; btn.textContent="Send request";
     });
 }
-function rotaClose(){ $("rotaModal").classList.remove("is-on"); $("rotaModal").setAttribute("aria-hidden","true"); }
+/* Every way out of the sheet comes through here: the Close button, the
+   backdrop, and submitting a request. The poll stops with it, so nothing is
+   left calling Apps Script after the screen has gone. */
+function rotaClose(){
+  rotaStopsOpen=false; rotaCountsStop();
+  $("rotaModal").classList.remove("is-on");
+  $("rotaModal").setAttribute("aria-hidden","true");
+}
 
 /* ---------------- reset ---------------- */
 function reset(){

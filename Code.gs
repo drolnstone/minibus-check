@@ -294,6 +294,13 @@ function doGet(e) {
     catch (err) { return reply({ ok: false, error: String(err) }); }
   }
 
+  /* Booking counts on their own, for the driver app's Stops and bookings
+     screen. Small enough to poll while that screen is open. */
+  if (p.counts) {
+    try { return reply(countsPayload()); }
+    catch (err) { return reply({ ok: false, error: String(err) }); }
+  }
+
   return reply({ ok: true, service: "minibus check recorder" });
 }
 
@@ -1687,6 +1694,49 @@ function bookingCounts(ss, key) {
   return out;
 }
 
+/* ---- booking counts on their own ---------------------------------------
+   The driver app's Stops and bookings screen needs one thing: how many are
+   booked at each stop this Sunday. It used to get that by asking for the
+   whole rota payload, which drags down the driver register, PIN hashes, open
+   defects and up to fifty-two weeks of rota rows to answer a question about
+   two numbers. This is the small version, and it is cheap enough that the
+   screen can poll it while a driver has it open on a Sunday morning.
+
+   Cached, because several drivers polling at once on a Sunday morning is
+   exactly the case worth absorbing. Cleared the moment a booking is written,
+   so a passenger tap shows up on the next poll rather than whenever the
+   cache happens to lapse. The short life is only there for edits made by
+   hand in the sheet that the trigger below might miss. */
+function countsCacheKey(key) {
+  return "counts_" + key;
+}
+
+function dropCountsCache(key) {
+  try { CacheService.getScriptCache().remove(countsCacheKey(key)); }
+  catch (err) { /* a stale count for twenty seconds is not worth an error */ }
+}
+
+function countsPayload() {
+  var key = dateToKey(sundayOf(new Date()));
+  var cache = CacheService.getScriptCache();
+
+  var hit = null;
+  try { hit = cache.get(countsCacheKey(key)); } catch (err) { hit = null; }
+  if (hit) {
+    try { return JSON.parse(hit); } catch (err) { /* rebuild below */ }
+  }
+
+  var payload = {
+    ok: true,
+    date: key,
+    counts: bookingCounts(SpreadsheetApp.getActiveSpreadsheet(), key)
+  };
+
+  try { cache.put(countsCacheKey(key), JSON.stringify(payload), 20); }
+  catch (err) { /* no matter: it just gets built again */ }
+  return payload;
+}
+
 /* Which Sunday a bare link is for. This Sunday until bookings close on the
    morning, then next Sunday. Somebody opening the link at ten past ten on a
    Sunday is not booking the bus that has already left. */
@@ -1769,6 +1819,7 @@ function handleBooking(b) {
   /* Nothing booked, or cancelling. Both end the same way: no live row. */
   if (!seats) {
     if (existing) sh.getRange(existing.row, 8).setValue("Cancelled");
+    dropCountsCache(key);
     return reply({ ok: true, cancelled: true });
   }
 
@@ -1780,6 +1831,10 @@ function handleBooking(b) {
   } else {
     sh.appendRow([new Date(), key, stop.route, stop.id, stop.stop, seats, ref, "Booked"]);
   }
+
+  /* The driver's screen is polling this. Clear it now rather than leaving a
+     booking invisible until the cache lapses. */
+  dropCountsCache(key);
   return reply({ ok: true, stopId: stop.id, seats: seats });
 }
 
@@ -2766,8 +2821,27 @@ function onEdit(e) {
     if (name === DEFECTS_SHEET)  return onEditDefects(e, sh);
     if (name === ROTA_SHEET)     return onEditRota(e, sh);
     if (name === REQUESTS_SHEET) return onEditRequests(e, sh);
+    if (name === BOOKINGS_SHEET) return onEditBookings(e, sh);
   } catch (err) {
     // Never let a trigger error block someone editing the sheet.
+  }
+}
+
+/**
+ * Striking a booking out by hand, when somebody rings to say they are not
+ * coming, has to reach the driver's screen the same way a passenger
+ * cancelling on the page does. Nothing is written here: this only clears the
+ * cached counts so the next poll rebuilds them.
+ */
+function onEditBookings(e, sh) {
+  var topRow = Math.max(e.range.getRow(), 2);
+  var lastRow = e.range.getRow() + e.range.getNumRows() - 1;
+  if (lastRow < 2) return;
+
+  var seen = {};
+  for (var row = topRow; row <= lastRow; row++) {
+    var key = anyToKey(sh.getRange(row, 2).getValue());
+    if (key && !seen[key]) { seen[key] = true; dropCountsCache(key); }
   }
 }
 
