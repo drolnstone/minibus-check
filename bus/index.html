@@ -8,6 +8,30 @@
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
 
 <!--
+  What WhatsApp reads when somebody pastes this link into the group.
+
+  Without these there was nothing to show. The driver app gets a small icon
+  because it has an apple-touch-icon; this page had neither that nor any
+  Open Graph tag, so WhatsApp had nothing to fall back to and rendered a
+  bare link.
+
+  og:image has to be an absolute https address, not a relative path, and the
+  image has to be at least 300px wide, so icon-512.png rather than
+  icon-192.png. If the site ever moves, these two addresses move with it.
+
+  noindex above stays. It keeps the booking page out of search results and
+  WhatsApp is not a search indexer.
+-->
+<link rel="apple-touch-icon" href="../icon-192.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Sunday Bus · RCCG Dominion Assembly Liverpool">
+<meta property="og:description" content="Book your seat on the church minibus. Tap your stop, say how many are boarding.">
+<meta property="og:url" content="https://drolnstone.github.io/minibus-check/bus/">
+<meta property="og:image" content="https://drolnstone.github.io/minibus-check/icon-512.png">
+<meta property="og:image:width" content="512">
+<meta property="og:image:height" content="512">
+
+<!--
   The passenger page. Deliberately separate from the driver app.
 
   A passenger never sees inspections, defects, the rota, PINs or anything
@@ -45,7 +69,11 @@
   --safe-t:env(safe-area-inset-top,0px);--safe-b:env(safe-area-inset-bottom,0px);
   --safe-l:env(safe-area-inset-left,0px);--safe-r:env(safe-area-inset-right,0px);
 }
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* touch-action:manipulation kills double tap to zoom, which was firing
+   whenever somebody tapped a stop twice in a row. Pinch to zoom still works:
+   user-scalable=no would have stopped that too, and taking zoom away from
+   somebody who needs it to read a stop name is not a trade worth making. */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html,body{margin:0;padding:0}
 body{background:var(--paper);color:var(--ink);
   font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -146,6 +174,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   opacity:0;pointer-events:none;transition:.25s;z-index:90;max-width:90vw;text-align:center}
 .toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
 .foot{margin-top:24px;color:var(--muted);font-size:12px;line-height:1.55}
+.foot b{color:var(--ink);font-weight:600}
 .spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.4);
   border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -360,10 +389,14 @@ function paint(){
   }
 
   $("body").innerHTML=html;
-  $("foot").textContent = CLOSED
+
+  /* innerHTML rather than textContent, because the closing time is the one
+     thing down here somebody actually has to read. CUTOFF comes from the
+     script rather than from anybody typing, but it is escaped anyway: this
+     is the only place on the page that writes a server value as markup. */
+  $("foot").innerHTML = CLOSED
     ? "The Sunday bus for RCCG Dominion Assembly Liverpool."
-    : "Bookings close "+(CUTOFF||"Sunday 09:30")+", before the buses set off. "+
-      "This page records how many are boarding at each stop, and nothing else. No names, no numbers.";
+    : "<b>Bookings close "+esc(CUTOFF||"Sunday 09:30")+", before the buses set off.</b>";
 
   Array.prototype.forEach.call(document.querySelectorAll("[data-route]"),function(b){
     b.addEventListener("click",function(){ route=this.getAttribute("data-route"); paint(); });
