@@ -399,6 +399,38 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
 .stop-row{display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--hair);font-size:14px;line-height:1.4}
 .stop-row:first-of-type{border-top:0}
+/* ---- movement tracking ------------------------------------------------
+   Deliberately the SAME three colours the rest of the app already uses:
+   green is done, amber wants your attention, plain is untouched. Green does
+   not get a second meaning here, and no fourth colour is invented for a
+   state green already covers. Counts stay numbers, because a number tells a
+   driver four and a colour never can. */
+.trip-done{background:var(--pass-bg);box-shadow:inset 3px 0 0 var(--pass)}
+.trip-next{background:var(--warn-bg);box-shadow:inset 3px 0 0 var(--warn)}
+.trip-clear{background:var(--pass-bg);opacity:.72}
+.trip-at{display:block;font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--pass);margin-top:3px}
+.trip-undo{flex:0 0 auto;align-self:center;font-size:12px;font-weight:600;color:var(--muted);
+  border:1px solid var(--hair);border-radius:6px;padding:5px 9px;background:var(--card)}
+.trip-strip{border:1px solid var(--hair);border-radius:9px;padding:11px 12px;margin:0 0 12px;background:var(--card)}
+.trip-note{margin:0;font-size:13px;line-height:1.5;color:var(--muted)}
+.trip-note b{color:var(--ink)}
+.trip-note+.trip-note{margin-top:6px}
+.trip-wait{color:var(--warn);font-weight:600}
+.trip-stopme{color:var(--stop)}
+.trip-missed{background:var(--warn-bg);border:1px solid #EBD3A8;border-radius:9px;padding:11px 12px;margin:0 0 10px;font-size:14px}
+.trip-missed-btns{display:flex;gap:8px;margin-top:9px}
+.trip-missed-btns .btn{flex:1;min-height:46px}
+.trip-actions{position:sticky;bottom:0;background:var(--card);border-top:1px solid var(--hair);
+  padding:11px 0 4px;margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.trip-waiting{margin:0;font-size:14px;color:var(--muted);text-align:center}
+.trip-waiting b{color:var(--ink);font-size:16px}
+/* One target, full width, impossible to mis-hit from a cab. */
+.btn-tap{min-height:64px;font-size:18px}
+.trip-row-btns{display:flex;gap:6px;padding:0 0 8px 62px}
+.trip-mini{flex:1;min-height:40px;font-size:13px;font-weight:600;border:1px solid var(--hair);
+  border-radius:7px;background:var(--card);color:var(--muted)}
+.is-dead{opacity:.4}
 .stop-time{flex:0 0 52px;font-weight:700;font-variant-numeric:tabular-nums}
 .stop-name{flex:1}
 .stop-pc{display:block;font-size:12px;color:var(--muted);margin-top:2px}
@@ -660,7 +692,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.9.0";
+var APP_VERSION = "v1.10.0";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1987,6 +2019,228 @@ function rotaFetch(fromDate,weeks,cb){
   });
 }
 
+
+/* ==========================================================================
+   MOVEMENT TRACKING, DRIVER SIDE
+
+   One tap as he leaves a stop. Only stops with somebody booked need one: an
+   empty stop is shown green and asks for nothing, because a single tap sets
+   the offset for every stop after it and nobody is watching a stop nobody
+   booked. He drives the road he always drove. The app says where a tap is
+   required, never where to stop.
+
+   Nothing here is tappable while the wheels are turning. Holding a phone at
+   the wheel has been an offence in its own right since March 2022, moving or
+   stopped in traffic, and an app the church built should not be the thing
+   asking for it. The buttons go dead above walking pace and say why.
+   ========================================================================== */
+
+var TQKEY = "fleet.trip.queue.v1";
+var TSKEY = "fleet.trip.state.v1";
+
+/* Above this, in metres per second, the bus is moving and nothing is
+   tappable. 2.2 is about 5mph: fast enough to ignore GPS jitter at a
+   standstill, slow enough that nobody is tapping at a roll. */
+var TRIP_MOVING_MS = 2.2;
+
+var trip = { id:"", route:"", started:0, ended:0, served:{}, lastAt:0, lastStop:"", offset:null };
+var tripClosed = false, tripCutoff = "";
+var tripSpeed = null;      /* metres per second, null when unknown */
+var tripSpeedAt = 0;
+var tripWatch = null;
+var tripTimer = null;
+var tripBusy = false;
+var tripSkew = 0;          /* server time minus phone time, in ms */
+
+/* ---- the phone's clock -------------------------------------------------
+   A phone an hour out would poison every offset it ever sent, and nobody
+   would find it from the sheet. Every successful call carries the server's
+   own clock, and the difference is applied to anything queued. */
+function tripNow(){ return Date.now() + tripSkew; }
+
+function tripNoteSkew(serverMs){
+  var n = Number(serverMs) || 0;
+  if (!n) return;
+  var d = n - Date.now();
+  /* Under a minute is ordinary latency and not worth correcting. */
+  tripSkew = Math.abs(d) > 60000 ? d : 0;
+}
+
+/* ---- queue -------------------------------------------------------------
+   Taps carry the time they were MADE. A blackspot delays the sending, never
+   the timestamp, or every projection downstream drifts by however long the
+   phone was out of touch. */
+function tripLoadQ(){ try{ return JSON.parse(store.get(TQKEY)||"[]"); }catch(e){ return []; } }
+function tripSaveQ(a){ store.set(TQKEY, JSON.stringify(a)); }
+
+function tripSaveState(){
+  store.set(TSKEY, JSON.stringify({ id:trip.id, route:trip.route, started:trip.started,
+                                    ended:trip.ended, served:trip.served }));
+}
+function tripLoadState(){
+  try{
+    var s=JSON.parse(store.get(TSKEY)||"null");
+    if(s && s.id){ trip.id=s.id; trip.route=s.route||""; trip.started=s.started||0;
+                   trip.ended=s.ended||0; trip.served=s.served||{}; }
+  }catch(e){}
+}
+
+function tripQueue(ev){
+  var q=tripLoadQ(); q.push(ev); tripSaveQ(q);
+  tripFlush();
+}
+
+function tripFlush(){
+  var q=tripLoadQ();
+  if(!q.length || !LIVE || !navigator.onLine || tripBusy) return;
+  tripBusy=true;
+  fetch(CFG.endpoint,{
+    method:"POST", redirect:"follow",
+    headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body: JSON.stringify({ token: CFG.token||"", action:"trip", trip:{
+      trip: trip.id, sunday: rotaKey(rotaBaseSunday(0)), route: trip.route,
+      driver: st.driver||"", events: q
+    }})
+  }).then(function(r){ return r.text(); }).then(function(t){
+    var out=JSON.parse(t);
+    tripBusy=false;
+    if(!out || out.ok!==true) throw new Error(out&&out.error?out.error:"not sent");
+    tripSaveQ([]);                 /* accepted, including any it ignored as repeats */
+    tripPaint();
+  }).catch(function(){
+    tripBusy=false;
+    /* Left in the queue. The screen already says how many are waiting, which
+       is more use than a toast that scrolls away. */
+    tripPaint();
+  });
+}
+
+/* ---- is the bus moving ------------------------------------------------- */
+function tripWatchStart(){
+  if(tripWatch!==null || !navigator.geolocation) return;
+  tripWatch = navigator.geolocation.watchPosition(function(p){
+    tripSpeed = (p.coords && typeof p.coords.speed==="number" && p.coords.speed>=0)
+                ? p.coords.speed : null;
+    tripSpeedAt = Date.now();
+    tripPaintMoving();
+  }, function(){
+    tripSpeed=null; tripPaintMoving();
+  }, { enableHighAccuracy:true, maximumAge:2000, timeout:15000 });
+}
+function tripWatchStop(){
+  if(tripWatch!==null && navigator.geolocation){
+    try{ navigator.geolocation.clearWatch(tripWatch); }catch(e){}
+  }
+  tripWatch=null; tripSpeed=null;
+}
+
+/* Unknown speed is treated as stopped. A phone that will not report speed,
+   which is most of them indoors and some of them always, must not lock a
+   driver out of the whole feature. The law is the driver's; this is a guard,
+   not a gate. */
+function tripMoving(){
+  if(tripSpeed===null) return false;
+  if(Date.now()-tripSpeedAt > 12000) return false;
+  return tripSpeed > TRIP_MOVING_MS;
+}
+
+/* ---- who may tap -------------------------------------------------------
+   The rostered driver for that route this Sunday, or his named cover.
+   Everyone else reads. It keeps a second driver from tapping a route he is
+   not on, and it makes every tap attributable to a name, which is the whole
+   enforcement value. */
+function tripMayTap(route){
+  var me=(st.driver||"").trim();
+  if(!me) return false;
+  var d=rotaBaseSunday(0), row=rotaRowFor(rotaKey(d));
+  if(route==="South"){
+    var sP=(row&&row.primary2)||rotaSeedSecondary(d), sA=(row&&row.actual2)||sP;
+    return me===sP || me===sA;
+  }
+  var nP=(row&&row.primary)||rotaSeedPrimary(d), nA=(row&&row.actual)||nP;
+  return me===nP || me===nA;
+}
+
+/* Coordinator and Minister in Charge see both routes live. They are the ones
+   rung when a bus is late, and watching one route with no idea what the other
+   is doing helps nobody. Read only unless they are also rostered. */
+function tripSeesAll(){
+  var roles=CFG.fullInspectionRoles||["Coordinator"];
+  return roles.indexOf(st.role)>=0;
+}
+
+/* ---- fetching the route's own state ------------------------------------ */
+function tripFetch(route,cb){
+  if(!LIVE || !navigator.onLine){ if(cb) cb(false); return; }
+  fetch(CFG.endpoint+"?trip=1&route="+encodeURIComponent(route),{method:"GET",redirect:"follow"})
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      var out=JSON.parse(t);
+      if(!out || out.ok!==true) throw new Error("unavailable");
+      tripNoteSkew(out.now);
+      /* The sheet is the record. A phone that has been reinstalled, or a
+         second phone, picks the run up from here. */
+      if(out.trip) trip.id=out.trip;
+      trip.route=route;
+      trip.started=out.started||0;
+      trip.ended=out.ended||0;
+      trip.served=out.served||{};
+      trip.lastAt=out.lastAt||0;
+      trip.lastStop=out.lastStop||"";
+      trip.offset=(out.offset===null||out.offset===undefined)?null:Number(out.offset);
+      tripClosed=!!out.closed;
+      tripCutoff=out.cutoff||"";
+      tripSaveState();
+      if(cb) cb(true);
+    })
+    .catch(function(){ if(cb) cb(false); });
+}
+
+/* ---- the actions ------------------------------------------------------- */
+function tripStart(route){
+  if(!tripClosed){ toast("Bookings are still open. The run starts after "+(tripCutoff||"09:30")+"."); return; }
+  if(tripMoving()){ toast("Not while the bus is moving."); return; }
+  trip.id = "t"+Math.random().toString(36).slice(2,10)+Date.now().toString(36);
+  trip.route = route;
+  trip.started = tripNow();
+  trip.ended = 0;
+  trip.served = {};
+  tripSaveState();
+  tripQueue({ event:"start", stopId:"", at:trip.started });
+  tripWatchStart();
+  tripPaint();
+}
+
+function tripTap(stop,kind){
+  if(!trip.started || trip.ended) return;
+  if(tripMoving()){ toast("Not while the bus is moving. Tap it when you pull up."); return; }
+  var at=tripNow();
+  trip.served[stop.id]={ at:at, event:kind };
+  trip.lastAt=at; trip.lastStop=stop.stop;
+  tripSaveState();
+  tripQueue({ event:kind, stopId:stop.id, at:at });
+  tripPaint();
+}
+
+function tripUndo(stop){
+  var was=trip.served[stop.id];
+  if(!was) return;
+  delete trip.served[stop.id];
+  tripSaveState();
+  tripQueue({ event:"undo", undoes:was.event, stopId:stop.id, at:tripNow() });
+  tripPaint();
+}
+
+function tripEnd(){
+  if(!trip.started || trip.ended) return;
+  if(tripMoving()){ toast("Not while the bus is moving."); return; }
+  trip.ended=tripNow();
+  tripSaveState();
+  tripQueue({ event:"end", stopId:"", at:trip.ended });
+  tripWatchStop();
+  tripPaint();
+}
+
 /* ---- booking counts on their own ----------------------------------------
    The Stops and bookings screen used to take whatever counts happened to be
    in the phone's cache and never ask again, because the only fetch on that
@@ -2035,6 +2289,9 @@ function rotaCountsWords(){
 
 function rotaCountsStop(){
   if(rotaCountsTimer){ clearInterval(rotaCountsTimer); rotaCountsTimer=null; }
+  /* The speed watch is the expensive one. A GPS left running because a
+     driver closed the sheet would flatten a phone by lunchtime. */
+  tripWatchStop();
 }
 
 /* Only ever runs while the sheet is open and the phone is awake. Nothing
@@ -2049,6 +2306,10 @@ function rotaCountsStart(){
       if(changed) rotaPaintStops();
       else if($("countsAge")) $("countsAge").textContent=rotaCountsWords();
     });
+    /* Same beat as the counts. Also the retry for anything a blackspot left
+       in the queue, so a driver never has to think about sending. */
+    tripFlush();
+    tripFetch(rotaStopsRoute||"North",function(){ if(rotaStopsOpen) rotaPaintStops(); });
   },30000);
 }
 
@@ -2338,6 +2599,16 @@ function rotaOpenStops(){
      appears. */
   rotaPaintStops();
   rotaCountsFetch(function(){ if(rotaStopsOpen) rotaPaintStops(); });
+
+  /* A run in progress belongs to the sheet, not to this phone. Restoring
+     from local first means the screen is right instantly even with no
+     signal; the fetch then corrects it, so a reinstalled phone or a second
+     one picks the run up where it actually is. */
+  tripLoadState();
+  tripFetch(rotaStopsRoute||rotaMyRoute()||"North",function(){ if(rotaStopsOpen) rotaPaintStops(); });
+  tripFlush();
+  if(trip.started && !trip.ended) tripWatchStart();
+
   rotaCountsStart();
 }
 
@@ -2432,22 +2703,94 @@ function rotaPaintStops(){
           : '')+
         (mine===route?'<span class="stop-yours">Yours today</span>':'')+'</p>';
 
+  /* ---- movement -------------------------------------------------------
+     Live only on the route this phone is driving. A coordinator watching the
+     other bus sees the same list without the buttons. */
+  var onThis   = (trip.route===route) && !!trip.started && !trip.ended;
+  var mayTap   = tripMayTap(route);
+  var watching = !mayTap && tripSeesAll();
+  var queued   = tripLoadQ().length;
+
+  if(mayTap || watching){
+    html+=tripHeaderHtml(route,mayTap,onThis,queued);
+  }
+
+  /* How far along the route he actually is: the LAST stop he marked, not the
+     first he has not. Taking the first unserved stop looked right until a
+     driver forgot one, at which point the big button sat pointing back at a
+     stop two miles behind him while he stood at the one in front of him.
+
+     So: next is the first booked stop after the furthest he has reached, and
+     anything booked and unmarked behind that is a stop he has gone past. */
+  var lastIdx=-1;
+  list.forEach(function(s,i){ if(trip.served[s.id] && i>lastIdx) lastIdx=i; });
+
+  var nextStop=null, missed=[];
+  if(onThis && mayTap){
+    list.forEach(function(s,i){
+      if(trip.served[s.id]) return;
+      if((rotaStopCounts[s.id]||0)===0) return;    /* empty: no tap wanted */
+      if(i>lastIdx){ if(!nextStop) nextStop=s; }
+      else missed.push(s);                          /* gone past, unmarked */
+    });
+  }
+  missed.forEach(function(m){
+    html+='<div class="trip-missed"><b>'+esc(m.stop)+' was not marked.</b>'+
+          '<div class="trip-missed-btns">'+
+            '<button class="btn ghost" data-triptap="'+esc(m.id)+'" data-tripkind="empty">Nobody there</button>'+
+            '<button class="btn ghost" data-triptap="'+esc(m.id)+'" data-tripkind="pickup">Picked up</button>'+
+          '</div></div>';
+  });
+
   list.concat(arr).forEach(function(s){
     /* How many are booked there. Shown, never acted on: the app does not
        tell anybody to skip a stop. Somebody who did not book still turns
        up, with a dead phone or no phone or because nobody told them, and
        a stop driven past leaves a person on a corner. The count is for the
-       driver to use his own judgement with. */
+       driver to use his own judgement with.
+
+       Which is also why an empty stop is green and asks for no tap. Green
+       here says "no tap required", not "drive past": his eyes decide that,
+       as they always did. */
     var n=(!s.arrival && showCounts) ? (rotaStopCounts[s.id]||0) : null;
-    html+='<div class="stop-row'+(s.arrival?" stop-arrival":"")+'">'+
+    var done=(!s.arrival && (mayTap||watching)) ? trip.served[s.id] : null;
+    var cls="stop-row"+(s.arrival?" stop-arrival":"");
+    if(!s.arrival && (onThis||watching)){
+      if(done) cls+=" trip-done";
+      else if(n===0) cls+=" trip-clear";
+      else if(nextStop && s.id===nextStop.id) cls+=" trip-next";
+    }
+    html+='<div class="'+cls+'">'+
             '<span class="stop-time">'+esc(s.time)+'</span>'+
             '<span class="stop-name">'+esc(s.stop)+
               (s.arrival?' <b>(arrive)</b>':'')+
               (s.postcode?'<span class="stop-pc">'+esc(s.postcode)+'</span>':'')+
               (n===null?'':'<span class="stop-n'+(n?' has':'')+'">'+
                  (n? (n+(n===1?' person':' people')+' booked') : 'Nobody booked')+'</span>')+
-            '</span></div>';
+              (done?'<span class="trip-at">'+
+                 (done.event==="empty"?'Nobody there ':'Picked up ')+
+                 tripClock(done.at)+'</span>':'')+
+            '</span>'+
+            (done&&mayTap&&onThis
+              ? '<button class="trip-undo" data-tripundo="'+esc(s.id)+'" '+
+                'aria-label="Undo '+esc(s.stop)+'">Undo</button>'
+              : '')+
+          '</div>'+
+          /* The escape hatch. The big button below is the fast path for the
+             stop he is expected at; this is how he marks any other one
+             without the app arguing about sequence. */
+          ((onThis&&mayTap&&!done&&!s.arrival&&n>0&&(!nextStop||s.id!==nextStop.id))
+            ? '<div class="trip-row-btns">'+
+                '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="empty">Nobody there</button>'+
+                '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="pickup">Picked up</button>'+
+              '</div>'
+            : '');
   });
+
+  /* The one big target, pinned under the list where his thumb already is. */
+  if(onThis && mayTap){
+    html+=tripActionHtml(nextStop);
+  }
 
   $("rotaModalBody").innerHTML=html+
     '<div class="rota-modal-actions"><button class="btn ghost" id="rotaStopsClose">Close</button></div>';
@@ -2457,9 +2800,100 @@ function rotaPaintStops(){
     b.addEventListener("click",function(){
       rotaStopsRoute=this.getAttribute("data-stoproute");
       rotaPaintStops();
+      /* The other bus has its own run. Ask for it, or a coordinator would be
+         reading North's progress under South's heading. */
+      tripFetch(rotaStopsRoute,function(){ if(rotaStopsOpen) rotaPaintStops(); });
     });
   });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-triptap]"),function(b){
+    b.addEventListener("click",function(){
+      var id=this.getAttribute("data-triptap"), kind=this.getAttribute("data-tripkind");
+      var s=null; stops.forEach(function(x){ if(x.id===id) s=x; });
+      if(s) tripTap(s,kind);
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-tripundo]"),function(b){
+    b.addEventListener("click",function(){
+      var id=this.getAttribute("data-tripundo");
+      var s=null; stops.forEach(function(x){ if(x.id===id) s=x; });
+      if(s) tripUndo(s);
+    });
+  });
+  if($("tripStart")) $("tripStart").addEventListener("click",function(){ tripStart(route); });
+  if($("tripEnd"))   $("tripEnd").addEventListener("click",tripEnd);
+  tripPaintMoving();
 }
+
+/* ---- the movement strip at the top of the list ------------------------- */
+function tripClock(ms){
+  var d=new Date(ms);
+  return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
+}
+
+function tripHeaderHtml(route,mayTap,onThis,queued){
+  var h='<div class="trip-strip">';
+
+  if(!trip.started || trip.route!==route){
+    if(mayTap){
+      h+= tripClosed
+        ? '<button class="btn go" id="tripStart">Start trip</button>'+
+          '<p class="trip-note">Tap each stop as you pull away. Empty stops need nothing.</p>'
+        : '<p class="trip-note"><b>Bookings are still open.</b> The run can be started '+
+          'after '+esc(tripCutoff||"09:30")+', once the list is settled.</p>';
+    } else {
+      h+='<p class="trip-note">This bus has not started yet.</p>';
+    }
+    return h+'</div>';
+  }
+
+  if(trip.ended){
+    var mins=Math.round((trip.ended-trip.started)/60000);
+    h+='<p class="trip-note"><b>Trip finished.</b> '+tripClock(trip.started)+' to '+
+       tripClock(trip.ended)+', '+mins+' minutes.</p>';
+    return h+'</div>';
+  }
+
+  var off=trip.offset;
+  h+='<p class="trip-note"><b>Running</b> since '+tripClock(trip.started)+'.'+
+     (off===null?'':' '+(off>0? off+' min behind' : off<0? (-off)+' min ahead' : 'On time'))+
+     (trip.lastStop?' Last: '+esc(trip.lastStop)+' at '+tripClock(trip.lastAt)+'.':'')+
+     '</p>';
+  if(queued) h+='<p class="trip-note trip-wait">'+queued+' tap'+(queued>1?'s':'')+' waiting to send.</p>';
+  h+='<p class="trip-note" id="tripMoving"></p>';
+  return h+'</div>';
+}
+
+function tripActionHtml(nextStop){
+  var waiting=nextStop?(rotaStopCounts[nextStop.id]||0):0;
+  var h='<div class="trip-actions">';
+  if(nextStop){
+    h+='<p class="trip-waiting"><b>'+waiting+(waiting===1?' person':' people')+
+       '</b> waiting at '+esc(nextStop.stop)+'</p>'+
+       '<button class="btn go btn-tap" data-triptap="'+esc(nextStop.id)+'" data-tripkind="pickup">'+
+       'Picked up: '+esc(nextStop.stop)+'</button>'+
+       '<button class="btn ghost" data-triptap="'+esc(nextStop.id)+'" data-tripkind="empty">'+
+       'Nobody there</button>';
+  } else {
+    h+='<p class="trip-waiting">Every booked stop is done.</p>';
+  }
+  h+='<button class="btn ghost" id="tripEnd">End trip, arrived at church</button></div>';
+  return h+'';
+}
+
+/* Greys out every tap while the wheels are turning, and says why rather than
+   leaving a driver poking at a dead button. */
+function tripPaintMoving(){
+  var moving=tripMoving();
+  var note=$("tripMoving");
+  if(note) note.innerHTML = moving
+    ? '<b class="trip-stopme">The bus is moving.</b> Taps come back when you pull up.'
+    : '';
+  Array.prototype.forEach.call(
+    document.querySelectorAll("[data-triptap],[data-tripundo],#tripEnd,#tripStart"),
+    function(b){ b.disabled=moving; b.classList.toggle("is-dead",moving); });
+}
+
+function tripPaint(){ if(rotaStopsOpen) rotaPaintStops(); }
 
 function rotaOpenRequest(key){
   var d=rotaDateFromKey(key); rotaEditDate=key;

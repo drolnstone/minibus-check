@@ -173,6 +173,15 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   background:var(--ink);color:#fff;padding:11px 16px;border-radius:9px;font-size:14px;
   opacity:0;pointer-events:none;transition:.25s;z-index:90;max-width:90vw;text-align:center}
 .toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
+.live{border-radius:9px;padding:13px 14px;margin:0 0 14px;border:1px solid var(--hair);background:var(--card)}
+.live-eyebrow{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+.live-big{font-family:"Barlow Condensed",sans-serif;font-size:30px;font-weight:700;
+  line-height:1.05;margin:0 0 3px;color:var(--steel)}
+.live-sub{margin:0;font-size:13px;color:var(--muted);line-height:1.5}
+.live-go{background:var(--pass-bg);border-color:#B7D8C6}
+.live-go .live-big{color:var(--pass)}
+.live-warn{background:var(--warn-bg);border-color:#EBD3A8}
 .foot{margin-top:24px;color:var(--muted);font-size:12px;line-height:1.55}
 .foot b{color:var(--ink);font-weight:600}
 .spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.4);
@@ -194,6 +203,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   <p class="eyebrow">Getting you to church</p>
   <h1>Sunday Bus</h1>
   <p class="when" id="when"></p>
+  <div id="live"></div>
   <div id="body"><p class="lede">Loading the stops…</p></div>
   <p class="foot" id="foot"></p>
 </div>
@@ -287,12 +297,112 @@ function load(){
 
       $("when").textContent = prettyDate(DATE);
       paint();
+
+      /* Only after the cutoff, and only for a phone with a booking. The
+         endpoint decides both; this just stops us asking before there is
+         anything to ask about. */
+      if(CLOSED) liveStart(); else { liveStop(); live=null; paintLive(); }
     })
     .catch(function(err){
       $("body").innerHTML='<div class="note note-warn"><b>The stops could not be loaded.</b><br>'+
         esc(String(err.message||err))+'<br><br>Check your signal and pull down to refresh. '+
         'If it keeps happening, tell the transport group.</div>';
     });
+}
+
+
+/* ==========================================================================
+   WHERE THE BUS IS
+
+   The floor is the timetable. A driver who never taps leaves this page saying
+   exactly what it said before the feature existed, which is no worse than
+   today. Every tap is an improvement on that floor, never a replacement for
+   it. Built that way round on purpose: a page that promises live times and
+   then goes quiet is worse than one that never promised, because the message
+   in the group at least stopped honestly.
+
+   Visible only once bookings have closed, and only to a phone with a booking.
+   ========================================================================== */
+
+var LIVE_POLL = 30000;
+var liveTimer = null, liveBusy = false, live = null;
+
+function liveFetch(){
+  if(liveBusy || !navigator.onLine) return;
+  liveBusy=true;
+  fetch(ENDPOINT+"?trip=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      var out=JSON.parse(t);
+      liveBusy=false;
+      if(!out || out.ok!==true) return;
+      live=out;
+      paintLive();
+      /* Once your own stop has been served there is nothing left to watch,
+         so the polling sheds itself as the run goes on rather than peaking
+         at the end when the most phones are open. */
+      if(out.live===false || out.mine==="served" || out.ended) liveStop();
+    })
+    .catch(function(){ liveBusy=false; });
+}
+
+function liveStart(){
+  liveStop();
+  if(document.hidden) return;
+  liveFetch();
+  liveTimer=setInterval(function(){
+    if(document.hidden){ liveStop(); return; }
+    liveFetch();
+  },LIVE_POLL);
+}
+function liveStop(){ if(liveTimer){ clearInterval(liveTimer); liveTimer=null; } }
+
+document.addEventListener("visibilitychange",function(){
+  if(document.hidden){ liveStop(); return; }
+  if(CLOSED) liveStart();
+});
+
+function paintLive(){
+  var box=$("live");
+  if(!live || live.live===false){ box.innerHTML=""; return; }
+
+  var head="", sub="", cls="";
+
+  if(live.mine==="served"){
+    cls="live-go";
+    head="Picked up at "+esc(live.servedAt);
+    sub="The bus has been to "+esc(live.stop)+". If you are still standing there, ring the transport group.";
+  } else if(!live.started){
+    head="Not set off yet";
+    sub="Your stop is timetabled for "+esc(live.scheduled)+". This will update once the bus starts.";
+  } else if(live.mine==="eta"){
+    cls=live.imminent?"live-go":"";
+    head=live.imminent ? "Any moment now"
+       : (live.minutes<=0 ? "Due now" : live.minutes+" min");
+    sub="About "+esc(live.etaWords)+" at "+esc(live.stop)+
+        ", timetabled "+esc(live.scheduled)+". "+
+        (live.offset>0 ? "The bus is running "+live.offset+" minutes behind."
+         : live.offset<0 ? "The bus is running "+(-live.offset)+" minutes early."
+         : "The bus is on time.");
+  } else if(live.mine==="ended"){
+    head="The bus has finished its run";
+    sub="It reached church without your stop being marked. Ring the transport group.";
+  } else {
+    /* quiet, wild, noevents: state the last known fact and stop. A number
+       invented from a stale offset is worse than a blank. */
+    cls="live-warn";
+    head="No update yet";
+    sub=live.lastStop
+      ? "The bus has not reported since "+esc(live.lastAtWords)+", at "+esc(live.lastStop)+
+        ". Your stop is timetabled for "+esc(live.scheduled)+"."
+      : "The bus has started but has not reported a stop yet. Yours is timetabled for "+
+        esc(live.scheduled)+".";
+  }
+
+  box.innerHTML='<div class="live '+cls+'">'+
+    '<p class="live-eyebrow">Your stop</p>'+
+    '<p class="live-big">'+head+'</p>'+
+    '<p class="live-sub">'+sub+'</p></div>';
 }
 
 function stopById(id){

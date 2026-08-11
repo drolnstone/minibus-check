@@ -815,6 +815,114 @@ about what the page does and does not record has been taken off. That
 statement still sits as a column note on the Bus Bookings tab, which is where
 anybody asking the question would look.
 
+**v1.10** Where the bus is.
+
+The driver taps a stop as he pulls away from it. That one tap says two things:
+the people there have been collected, and the bus is running so many minutes
+off the timetable. The first is what a passenger sees. The second is what
+makes it worth building, because "the bus has done Molyneux Road" is a fact,
+and "your 10:20 is about 10:26" is an answer. Standing in the rain knowing you
+have nine minutes is a different morning from watching a row turn green.
+
+Only stops with somebody booked need a tap. An empty stop is shown green and
+asks for nothing, because one tap sets the offset for every stop after it, and
+nobody is watching a stop nobody booked. Green here means no tap is required.
+It does not mean drive past, and the wording on screen never says it does: the
+driver drives the road he always drove and his own eyes decide who is standing
+on it. Somebody who never booked but is at the kerb gets carried as always,
+and simply does not appear in the numbers.
+
+The one big button. The screen shows a single full-width target reading Picked
+up, followed by the name of the stop he is expected at next, because a man who
+has just pulled up in traffic should not be hunting among fifteen small
+targets. Progress is measured from the last stop he marked, not the first he
+has not: taking the first unmarked stop looked right until a driver forgot
+one, at which point the button sat pointing back at a stop two miles behind
+him. Anything booked and unmarked behind his furthest point is shown as a
+stop he has gone past, with two buttons, Nobody there and Picked up, to settle
+it in one tap. It warns and never blocks. A driver at the kerb with the engine
+running must not be fighting a modal to get on with his morning. Every booked
+stop also carries its own small pair of buttons, so being out of sequence is
+never an argument with the app.
+
+Nothing is tappable while the bus is moving. Holding a phone at the wheel has
+been an offence in its own right since March 2022, moving or stopped in
+traffic, and an app the church built should not be the thing asking for it.
+The speed comes from the same location API the walkaround already uses.
+Anything above about five miles an hour greys the buttons out and says why. A
+phone that will not report speed at all is treated as stopped, because the law
+is the driver's to keep and this is a guard, not a gate.
+
+Start trip and End trip. Start is unavailable until bookings close, and no tap
+is live until Start has been pressed, so there is no state where the buttons
+work but the run has not begun. End writes the total, which is the journey
+time you have never had a record of.
+
+Taps carry the time they were MADE. A phone in a blackspot queues them and
+sends the lot on reconnect, and the server writes its own Logged column but
+never touches Happened. Get that the wrong way round and every projection
+downstream of a bad patch of road drifts by however long the phone was out of
+touch, silently, and you would never find it from the sheet. Queued taps are
+sorted by when they happened, not by when they arrived. A repeat after a
+timeout is ignored, because one live row per trip, stop and event is already
+unique. And every successful call carries the server's own clock, so a phone
+set an hour wrong is corrected rather than allowed to poison every offset it
+sends.
+
+The passenger side has a floor, and the floor is the timetable. A driver who
+never taps leaves that page saying exactly what it said before any of this
+existed, which is no worse than before. Every tap is an improvement on the
+floor and never a replacement for it. Built the other way round, a forgetful
+Sunday would leave people staring at a screen that promised something and went
+quiet, which is worse than the message in the group, because the message at
+least stopped honestly.
+
+So the page refuses to project in four cases: the run has not started, nothing
+has been tapped yet, nothing has come in for fifteen minutes, or the offset is
+beyond forty-five minutes, which is no longer a late bus but something else.
+In all four it states the last thing it actually knows and stops. The bus has
+not reported since 10:12. Under a minute it says any moment now rather than
+counting down at somebody who is already looking up the road.
+
+Both those numbers are guesses. Nothing derives them. Fifteen minutes is about
+three missed stops at your spacing; forty-five is set long on purpose, because
+a diversion on a match morning eats thirty without anything being wrong, and
+the two mistakes cost differently. Cutting off early leaves somebody with
+nothing at the moment they most want something. Projecting a little too long
+leaves them with a soft number, which still beats a blank screen. Trip Events
+records the gap between every tap on both routes, so after four or five
+Sundays the real spread can be read off the tab and both constants set from
+data instead of from judgement. That is worth doing.
+
+Who may tap: the rostered driver for that route that Sunday, or his named
+cover. Everyone else reads. It stops a second driver idly tapping a route he
+is not on and corrupting the timeline, and it makes every tap attributable to
+a name, which is the whole enforcement value. Nobody tapped Utting Avenue
+invites a shrug. You did not tap Utting Avenue does not. Coordinator and
+Minister in Charge see both routes live, through the existing
+`fullInspectionRoles` setting, because they are the ones rung when a bus is
+late.
+
+Waiting passengers are shown on the driver's screen at the moment of the tap,
+not just as a booking count. The pressure to keep tapping belongs in the cab,
+aimed at the man who decides, rather than arriving on Monday through a
+complaint.
+
+Who is tapping, under Have a look, is the record: per driver, per Sunday,
+stops tapped against stops that had somebody booked, and the journey time.
+Show it to the drivers once at the start. Being told it is recorded does more
+work than any nudge inside the app.
+
+Visibility is gated. The live view is for a phone with a booking for that
+Sunday, and only after bookings close. Everybody else sees the timetable
+exactly as before.
+
+A new **Trip Events** tab holds all of it, append-only. Events rather than a
+status column on the timetable, because the timetable is reused every week and
+a status would be gone by the following Sunday. Undo marks a row Undone rather
+than deleting it, because a driver who taps and untaps four times should leave
+a trace.
+
 ## The Minibus menu
 
 Grouped by what a thing does to you, not by what it is about. It used to be
@@ -822,34 +930,29 @@ seventeen items in one flat list, which put "Rebuild future Sundays" three
 rows below "Check time zone" with nothing to say that one rewrites the rota
 and the other only looks.
 
-```
-Minibus
-  Bus link for this Sunday
-  Bookings for this Sunday
-  ----
-  Have a look (nothing changes)
-      Is everything working?
-      Who is carrying the load
-      Check the Drivers tab
-      Check time zone
-  Rota and setup (safe to re-run)
-      Set up / refresh rota
-      Refresh dropdowns from Drivers tab
-      Add a Sunday to the rota
-      Extend rota further ahead
-      Check scheduled emails, set up any missing
-      ----
-      Rebuild future Sundays from the pattern (asks first)
-  Send an email now
-      Test email, to you only
-      Weekly summary, to you only
-      ----
-      Duty reminders, to the drivers
-  ----
-  Sheet protection
-      Lock the sheet
-      Unlock the sheet (asks first)
-```
+Two items sit at the top level, the two wanted most weeks: **Bus link for
+this Sunday** and **Bookings for this Sunday**. Everything else is behind one
+of four submenus.
+
+**Have a look (nothing changes)** holds Is everything working, Who is carrying
+the load, Who is tapping, Check the Drivers tab, and Check time zone. Nothing
+in there writes anything.
+
+**Rota and setup (safe to re-run)** holds Set up / refresh rota, Refresh
+dropdowns from Drivers tab, Add a Sunday to the rota, Extend rota further
+ahead, and Check scheduled emails. These add and repair; they do not
+overwrite, and running any of them twice costs nothing but time. Below a
+separator, on its own, sits Rebuild future Sundays from the pattern, which
+asks first.
+
+**Send an email now** holds the test email and the weekly summary, both of
+which go to you alone, then below a separator the duty reminders, which are
+the only thing in the whole menu that reaches anybody else's inbox. The
+labels say so.
+
+**Sheet protection** holds Lock the sheet and Unlock the sheet. Unlocking asks
+first.
+
 
 Three items can change something you would miss, and all three say so before
 they do it: **Rebuild future Sundays**, **Unlock the sheet**, and **Duty

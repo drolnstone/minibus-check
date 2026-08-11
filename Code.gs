@@ -115,6 +115,40 @@ var BOOKING_CUTOFF_HOUR = 9;
 var BOOKING_CUTOFF_MIN = 30;
 
 var BOOKINGS_SHEET = "Bus Bookings";
+
+/* ---- movement tracking -------------------------------------------------
+   Append-only. Every event of every run, kept rather than a status column on
+   the timetable, because the timetable is reused each week and a status would
+   be gone by the following Sunday. Events give journey time, tapping record
+   and offset history for nothing. */
+var TRIP_SHEET = "Trip Events";
+
+/* How long a run may go without a tap before the passenger page stops giving
+   times and says only what it last knew. Stops are four to six minutes apart,
+   so this is roughly three missed ones: long enough to absorb a wheelchair, a
+   slow family and a bad set of lights, short enough that somebody standing in
+   the rain is not reading a stale promise.
+
+   This is a GUESS. Nothing derives it. Trip Events records the gap between
+   every tap on both routes, so after four or five Sundays the real spread can
+   be read off the tab and this set from data instead. */
+var TRIP_QUIET_MINUTES = 15;
+
+/* Beyond this many minutes behind or ahead, the app stops projecting. That is
+   no longer a late bus, it is something else, and a confident wrong number is
+   worse than silence.
+
+   Also a guess, and set long on purpose. A diversion on a match morning eats
+   thirty minutes without anything being wrong, and the two mistakes cost
+   differently: cutting off early leaves people with nothing at the moment
+   they most want something, while projecting a little too long leaves them
+   with a soft number, which still beats a blank screen. */
+var TRIP_MAX_OFFSET = 45;
+
+/* Under this, the page says "any moment now" rather than a number. Counting
+   down the last thirty seconds to somebody who is already looking up the road
+   is false precision. */
+var TRIP_IMMINENT_MINUTES = 1;
 /* Your address, so alerts reach you. Not a secret in the way the bus link
    secret is, but it IS a personal address, and a public repository is a
    place scrapers look. Set it in Script Properties as COORDINATOR_EMAIL and
@@ -267,6 +301,10 @@ function doPost(e) {
       return handleRotaRequest(body.request);
     }
 
+    if (String(body.action || "") === "trip") {
+      return handleTrip(body.trip);
+    }
+
     return handleCheck(body.check);
 
   } catch (err) {
@@ -299,6 +337,14 @@ function doGet(e) {
   if (p.counts) {
     try { return reply(countsPayload()); }
     catch (err) { return reply({ ok: false, error: String(err) }); }
+  }
+
+  /* Where the bus has got to. With a ref it answers for one passenger and
+     applies the gate; with a route it answers for a driver's own screen. */
+  if (p.trip) {
+    try {
+      return reply(p.route ? tripDriverPayload(p.route) : tripPayload(p.ref));
+    } catch (err) { return reply({ ok: false, error: String(err) }); }
   }
 
   return reply({ ok: true, service: "minibus check recorder" });
@@ -1059,6 +1105,14 @@ function stamp(sh, row, who) {
    only tells a human that the shape has drifted. */
 var DRIVERS_HEADERS = ["Name", "Role", "Active", "Primary order", "PIN", "Email", "Route"];
 
+/* Two time columns on purpose. Logged is when the sheet received it, Happened
+   is when the driver's phone recorded the tap. They differ whenever there was
+   no signal, and keeping both is the only way to tell a late tap from a late
+   bus. There is no event id column: one live row per trip, stop and event is
+   already unique, so a retry has nothing to duplicate. */
+var TRIP_HEADERS = ["Logged", "Trip", "Sunday", "Route", "Driver", "Event",
+                    "Stop ID", "Stop", "Scheduled", "Happened", "Offset", "Status"];
+
 function driversHeaderWarning(ss) {
   try {
     var sh = ss.getSheetByName(DRIVERS_SHEET);
@@ -1506,6 +1560,7 @@ function setUpEverything() {
   ensureRotaSheets(ss);
   ensureBusStops(ss);
   ensureBookings(ss);
+  ensureTripEvents(ss);
   ensureDrivers(ss);
   ensureRota(ss);
 
@@ -1735,6 +1790,370 @@ function countsPayload() {
   try { cache.put(countsCacheKey(key), JSON.stringify(payload), 20); }
   catch (err) { /* no matter: it just gets built again */ }
   return payload;
+}
+
+
+/* ==========================================================================
+   MOVEMENT TRACKING
+
+   The driver taps a stop as he leaves it. That one tap says two things: the
+   people there have been collected, and the bus is running n minutes off the
+   timetable. The first is what the passenger sees. The second is what makes
+   it worth anything, because "the bus has done Molyneux Road" is a fact and
+   "your 10:20 is about 10:26" is an answer.
+
+   Only stops with somebody booked need a tap. An empty stop needs nothing,
+   because one tap sets the offset for every stop after it and nobody is
+   watching a stop nobody booked. The driver still drives the road he always
+   drove: the app is saying where a tap is required, never where to stop.
+   ========================================================================== */
+
+function ensureTripEvents(ss) {
+  var existing = ss.getSheetByName(TRIP_SHEET);
+  var sh = sheet(ss, TRIP_SHEET, TRIP_HEADERS);
+  if (!existing) {
+    sh.getRange(1, 1).setNote(
+      "When the sheet received it. Compare with Happened: a gap means the " +
+      "phone had no signal, not that the bus was late.");
+    sh.getRange(1, 10).setNote(
+      "When the driver's own phone recorded the tap. This is the one the " +
+      "times are worked out from. Never overwritten by the server.");
+    sh.getRange(1, 11).setNote(
+      "Minutes off the timetable at that stop. Positive is behind.");
+    sh.getRange(1, 12).setNote(
+      "Undone means the driver tapped and took it back. The row is kept " +
+      "rather than deleted, because the record is the point.");
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(8, 260);
+  }
+  return sh;
+}
+
+/* The timetable time of a stop, as a real moment on that Sunday. */
+function stopMomentOn(key, hhmm) {
+  var d = keyToDate(key);
+  var p = String(hhmm || "").split(":");
+  if (p.length < 2) return null;
+  d.setHours(Number(p[0]) || 0, Number(p[1]) || 0, 0, 0);
+  return d;
+}
+
+function tripCacheKey(key, route) {
+  return "trip_" + key + "_" + route;
+}
+
+function dropTripCache(key, route) {
+  try { CacheService.getScriptCache().remove(tripCacheKey(key, route)); }
+  catch (err) { /* ten seconds of stale is not worth an error */ }
+}
+
+/**
+ * Where one route has got to, this Sunday.
+ *
+ * Cached for ten seconds per route, so fifteen people watching North cost the
+ * same sheet read as one. Cleared whenever a tap is written.
+ */
+function tripState(ss, key, route) {
+  var cache = CacheService.getScriptCache();
+  var hit = null;
+  try { hit = cache.get(tripCacheKey(key, route)); } catch (err) { hit = null; }
+  if (hit) { try { return JSON.parse(hit); } catch (err) { /* rebuild */ } }
+
+  var state = { trip: "", driver: "", started: 0, ended: 0,
+                lastAt: 0, lastStop: "", offset: null, served: {} };
+
+  var sh = ss.getSheetByName(TRIP_SHEET);
+  if (sh && sh.getLastRow() > 1) {
+    var vals = sh.getRange(2, 1, sh.getLastRow() - 1, TRIP_HEADERS.length).getValues();
+    vals.forEach(function (r) {
+      if (anyToKey(r[2]) !== key) return;
+      if (String(r[3] || "").trim() !== route) return;
+      if (String(r[11] || "").trim().toLowerCase() === "undone") return;
+
+      var ev  = String(r[5] || "").trim().toLowerCase();
+      var at  = r[9] instanceof Date ? r[9].getTime() : 0;
+      if (!at) return;
+
+      state.trip   = String(r[1] || "").trim() || state.trip;
+      state.driver = String(r[4] || "").trim() || state.driver;
+
+      if (ev === "start") { state.started = at; return; }
+      if (ev === "end")   { state.ended   = at; return; }
+
+      var id = String(r[6] || "").trim();
+      if (id) state.served[id] = { at: at, event: ev };
+
+      /* The freshest stop event is what the offset comes from. Not an
+         average: traffic is local, and smoothing would lag at exactly the
+         moment it matters. */
+      if (at >= state.lastAt) {
+        state.lastAt   = at;
+        state.lastStop = String(r[7] || "").trim();
+        var off = Number(r[10]);
+        state.offset = isNaN(off) ? null : off;
+      }
+    });
+  }
+
+  try { cache.put(tripCacheKey(key, route), JSON.stringify(state), 10); }
+  catch (err) { /* it just gets built again */ }
+  return state;
+}
+
+/**
+ * Whether the offset may be used to project a time, and why not when it
+ * cannot. Four refusals, and all four end with the page saying the last thing
+ * it actually knows instead of a number it has invented.
+ */
+function tripProjectable(state) {
+  if (!state.started)      return { ok: false, why: "notstarted" };
+  if (state.ended)         return { ok: false, why: "ended" };
+  if (!state.lastAt)       return { ok: false, why: "noevents" };
+  if (state.offset === null) return { ok: false, why: "noevents" };
+
+  var quiet = (Date.now() - state.lastAt) / 60000;
+  if (quiet > TRIP_QUIET_MINUTES) return { ok: false, why: "quiet" };
+  if (Math.abs(state.offset) > TRIP_MAX_OFFSET) return { ok: false, why: "wild" };
+  return { ok: true };
+}
+
+/**
+ * What one passenger's phone is told.
+ *
+ * The gate: tracking is visible only to a device with a booking for this
+ * Sunday, and only once bookings have closed. Both halves are one lookup the
+ * endpoint has to do anyway to know which stop to give a time for.
+ */
+function tripPayload(ref) {
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var key = busCurrentSunday();
+
+  if (!bookingsClosed(key)) {
+    return { ok: true, live: false, why: "open", date: key, cutoff: cutoffWords() };
+  }
+
+  ref = String(ref || "").trim();
+  var mine = null;
+  if (ref) {
+    readBookings(ss, key).forEach(function (b) {
+      if (b.device === ref && b.stopId) mine = b;
+    });
+  }
+  if (!mine) return { ok: true, live: false, why: "nobooking", date: key };
+
+  var stops = readBusStops(ss);
+  var myStop = null;
+  stops.forEach(function (s) { if (s.id === mine.stopId) myStop = s; });
+  if (!myStop) return { ok: true, live: false, why: "nobooking", date: key };
+
+  var state = tripState(ss, key, myStop.route);
+  var out = {
+    ok: true, live: true, date: key, now: Date.now(), route: myStop.route,
+    stop: myStop.stop, stopId: myStop.id, scheduled: myStop.time,
+    started: !!state.started, ended: !!state.ended,
+    lastStop: state.lastStop,
+    lastAgo: state.lastAt ? Math.round((Date.now() - state.lastAt) / 60000) : null,
+    lastAtWords: state.lastAt
+      ? Utilities.formatDate(new Date(state.lastAt), Session.getScriptTimeZone(), "HH:mm")
+      : ""
+  };
+
+  /* Already collected. Said plainly and before anything else, because a
+     projected time for a stop the bus has left is nonsense. */
+  if (state.served[myStop.id]) {
+    out.mine = "served";
+    out.servedAt = Utilities.formatDate(new Date(state.served[myStop.id].at),
+                                        Session.getScriptTimeZone(), "HH:mm");
+    return out;
+  }
+
+  var can = tripProjectable(state);
+  if (!can.ok) { out.mine = can.why; return out; }
+
+  var sched = stopMomentOn(key, myStop.time);
+  if (!sched) { out.mine = "noevents"; return out; }
+
+  var eta  = new Date(sched.getTime() + state.offset * 60000);
+  var mins = Math.round((eta.getTime() - Date.now()) / 60000);
+
+  out.mine    = "eta";
+  out.offset  = state.offset;
+  out.etaWords = Utilities.formatDate(eta, Session.getScriptTimeZone(), "HH:mm");
+  out.minutes = mins;
+  out.imminent = mins <= TRIP_IMMINENT_MINUTES;
+  return out;
+}
+
+/**
+ * What a driver's phone is told: the whole route, so it can draw the list.
+ * No gate, because a driver who can already see the rota and the bookings is
+ * not being protected from knowing where his own bus is.
+ */
+function tripDriverPayload(route) {
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var key = busCurrentSunday();
+  var state = tripState(ss, key, String(route || "").trim() || "North");
+  return {
+    ok: true, date: key, route: route, now: Date.now(),
+    closed: bookingsClosed(key), cutoff: cutoffWords(),
+    trip: state.trip, driver: state.driver,
+    started: state.started || 0, ended: state.ended || 0,
+    lastAt: state.lastAt || 0, lastStop: state.lastStop,
+    offset: state.offset, served: state.served
+  };
+}
+
+/**
+ * Taps arriving from a driver's phone, one or many.
+ *
+ * Many, because a phone in a blackspot queues them and sends the lot on
+ * reconnect. Each carries the time it was MADE, and that is what goes in
+ * Happened. The server writes Logged itself and never touches Happened, or
+ * every time downstream of a signal blackspot would drift by however long the
+ * phone was out of touch.
+ *
+ * Sorted by Happened before writing, because arrival order is not the order
+ * things occurred.
+ *
+ * Ignoring a repeat: one live row per trip, stop and event. A send that timed
+ * out and was retried therefore costs nothing.
+ */
+function handleTrip(payload) {
+  if (!payload) return reply({ ok: false, error: "no trip data" });
+
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sh    = ensureTripEvents(ss);
+  var key   = anyToKey(payload.sunday) || busCurrentSunday();
+  var route = String(payload.route || "").trim() || "North";
+  var trip  = String(payload.trip || "").trim();
+  var who   = String(payload.driver || "").trim();
+
+  if (!trip) return reply({ ok: false, error: "no trip id" });
+
+  var events = (payload.events || []).slice().sort(function (a, b) {
+    return (Number(a.at) || 0) - (Number(b.at) || 0);
+  });
+  if (!events.length) return reply({ ok: true, written: 0 });
+
+  /* What is already down for this trip, so a retry is quietly ignored. */
+  var seen = {}, undone = {};
+  if (sh.getLastRow() > 1) {
+    var vals = sh.getRange(2, 1, sh.getLastRow() - 1, TRIP_HEADERS.length).getValues();
+    vals.forEach(function (r, i) {
+      if (String(r[1] || "").trim() !== trip) return;
+      var k = String(r[5] || "").trim().toLowerCase() + "|" + String(r[6] || "").trim();
+      if (String(r[11] || "").trim().toLowerCase() === "undone") { undone[k] = true; return; }
+      seen[k] = i + 2;
+    });
+  }
+
+  var stops = {}, order = readBusStops(ss);
+  order.forEach(function (s) { stops[s.id] = s; });
+
+  var rows = [], undoneNow = 0;
+  events.forEach(function (ev) {
+    var kind   = String(ev.event || "").trim().toLowerCase();
+    var stopId = String(ev.stopId || "").trim();
+    var at     = Number(ev.at) || 0;
+    var k      = kind + "|" + stopId;
+
+    if (!at) return;
+
+    /* An undo names the event it takes back. The row stays and is marked,
+       because a driver who taps and untaps four times should leave a trace. */
+    if (kind === "undo") {
+      var target = String(ev.undoes || "").trim().toLowerCase() + "|" + stopId;
+      if (seen[target]) {
+        sh.getRange(seen[target], 12).setValue("Undone");
+        delete seen[target];
+        undoneNow++;
+      }
+      return;
+    }
+
+    if (seen[k]) return;                       /* already down: a retry */
+
+    var stop  = stops[stopId] || null;
+    var sched = stop ? stopMomentOn(key, stop.time) : null;
+    var off   = sched ? Math.round((at - sched.getTime()) / 60000) : "";
+
+    rows.push([
+      new Date(), trip, key, route, who, kind,
+      stopId, stop ? stop.stop : "", sched || "", new Date(at), off, "Logged"
+    ]);
+    seen[k] = true;
+  });
+
+  if (rows.length) {
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, TRIP_HEADERS.length).setValues(rows);
+  }
+  if (rows.length || undoneNow) dropTripCache(key, route);
+
+  return reply({ ok: true, written: rows.length, undone: undoneNow });
+}
+
+/**
+ * Who is tapping. The evidence, per driver, per Sunday.
+ *
+ * Shown to the drivers once, at the start, because being told it is recorded
+ * does more work than any nudge inside the app.
+ */
+function whoIsTapping() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+  var sh = ss.getSheetByName(TRIP_SHEET);
+
+  if (!sh || sh.getLastRow() < 2) {
+    ui.alert("Nothing recorded yet. Trip Events fills up as drivers tap.");
+    return;
+  }
+
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, TRIP_HEADERS.length).getValues();
+  var runs = {};
+
+  vals.forEach(function (r) {
+    if (String(r[11] || "").trim().toLowerCase() === "undone") return;
+    var key = anyToKey(r[2]); if (!key) return;
+    var id  = key + "|" + String(r[3] || "").trim();
+    if (!runs[id]) {
+      runs[id] = { key: key, route: String(r[3] || "").trim(),
+                   driver: String(r[4] || "").trim(),
+                   taps: 0, started: 0, ended: 0 };
+    }
+    var ev = String(r[5] || "").trim().toLowerCase();
+    var at = r[9] instanceof Date ? r[9].getTime() : 0;
+    if (ev === "start") runs[id].started = at;
+    else if (ev === "end") runs[id].ended = at;
+    else runs[id].taps++;
+    if (String(r[4] || "").trim()) runs[id].driver = String(r[4] || "").trim();
+  });
+
+  /* How many taps that run SHOULD have had: stops on the route with somebody
+     booked. That is the whole comparison. */
+  var stops = readBusStops(ss).filter(function (s) { return !s.arrival; });
+
+  var lines = Object.keys(runs).sort().reverse().slice(0, 12).map(function (id) {
+    var r = runs[id];
+    var counts = bookingCounts(ss, r.key);
+    var due = stops.filter(function (s) {
+      return s.route === r.route && (counts[s.id] || 0) > 0;
+    }).length;
+
+    var mins = (r.started && r.ended) ? Math.round((r.ended - r.started) / 60000) : null;
+    return Utilities.formatDate(keyToDate(r.key), Session.getScriptTimeZone(), "d MMM") +
+           "  " + r.route +
+           "\n    " + (r.driver || "unnamed") +
+           "\n    " + r.taps + " of " + due + " stops tapped" +
+           (due && r.taps >= due ? "  \u2713" : "") +
+           (mins !== null ? "\n    " + mins + " minutes end to end" :
+            r.started ? "\n    started, never ended" : "\n    never started");
+  });
+
+  ui.alert("Who is tapping",
+    "Most recent runs first.\n\n" + lines.join("\n\n") +
+    "\n\nStops tapped counts only stops that had somebody booked. " +
+    "Empty stops need no tap.",
+    ui.ButtonSet.OK);
 }
 
 /* Which Sunday a bare link is for. This Sunday until bookings close on the
@@ -2972,6 +3391,7 @@ function onOpen() {
     .addSubMenu(ui.createMenu("Have a look (nothing changes)")
       .addItem("Is everything working?", "healthCheck")
       .addItem("Who is carrying the load", "coverBalance")
+      .addItem("Who is tapping", "whoIsTapping")
       .addItem("Check the Drivers tab", "checkDriversTab")
       .addItem("Check time zone", "checkTimeZoneMenu"))
 
