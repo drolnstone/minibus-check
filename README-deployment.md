@@ -1239,6 +1239,34 @@ The number is on a page that is not indexed by search engines but is reachable
 by anybody holding the link, which is the same footing it already had in
 `config.js`.
 
+**v1.13.2** Less writing on the screen.
+
+Standing guidance across the app went from about 110 words to 63, and the
+landing screen from 46 to 18. What went, and why:
+
+*Your check goes straight to the coordinator's record when you finish* was
+reassurance about something nobody was worried about, and the Finished screen
+says it anyway. *Only drivers approved by the leadership appear here* explained
+that a list is a list. *Each bus has its own checks and its own fault history*
+was proved by the next screen a second later. *Not faults* sat above buttons
+that already say what they are.
+
+*Four digits. Ask the coordinator if you have forgotten it* became *Forgotten
+it? Ask the coordinator.* The box shows four dots and accepts four digits, so
+saying so was describing what was already visible.
+
+*If your name is missing, you are not on the register. Ring the coordinator
+before taking a bus out* became *Name missing? Ring the coordinator before
+taking a bus out.* The first sentence only restated the second.
+
+The queue screen's twenty-one words of explanation became *They send themselves
+once you have signal*, since the screen is already titled Waiting to send.
+
+One line was deliberately left alone: *This records that you did the check
+yourself, today*, above the signature. It is the only sentence in the app that
+states a consequence rather than describing the interface, and the signature is
+the one place a driver should pause.
+
 **v1.13.1** The home screen tightened.
 
 Driver name and PIN now sit on one row, roughly two thirds to one third. Not an
@@ -1324,6 +1352,86 @@ crowding the same corner.
 One thing found while checking: the big Picked up button still carried a class
 name that does not exist in this stylesheet, left over from the same mistake
 fixed in v1.11.2. Now corrected. Nothing emits a class without a style.
+
+**v1.14.1** Two of my own mistakes, one old and one a day old.
+
+**The contact block should never have shipped.** It was asked for, built,
+objected to, and agreed for removal, and then it was carried through three
+releases because it was only ever offered for removal rather than removed. It
+is gone: the markup, the styles, and the two messages that pointed at it. The
+stops-failed and bookings-closed notices read as they did before.
+
+**The timeout added in v1.14 broke the passenger page.** It used an
+AbortController and passed the signal in the request options, which threw
+"The object can not be cloned" and stopped the stops loading at all.
+
+The cause is specific and worth recording. A page inside a service worker's
+scope has its request options structured-cloned so they can be handed to the
+worker, and an AbortSignal is not structured-cloneable. It therefore only
+breaks on pages a service worker controls, which is why it appeared here and
+not in testing elsewhere.
+
+The timeout is now a promise race. The request is not cancelled, only stopped
+from being waited on, which is all the page needed: the point was that a
+driver or passenger stops staring at a page that will never answer, not that
+the socket closes.
+
+**v1.14** The checks reworded, and two reasons the passenger page was slow.
+
+**The vehicle history has left the app.** Every `watch` note now says what to do
+instead of what happened. A driver reads "report scoring, a deep lip, or one
+side cleaner than the other, even if the brakes feel fine" rather than "pads
+were dangerously thin in 2024 and worn again within 1,360 miles". The
+instruction inherits the weight the history earned; the dates and mileages do
+not appear at all, on any screen or behind any tap.
+
+They are in a new file, `FLEET-HISTORY.md`, which pairs each instruction with
+the history that produced it. That file exists so nobody tidies a hard-won
+instruction away in two years for looking over-cautious. It is also what you
+hand a garage.
+
+**Seven items lost an explanatory tail.** Keys no longer diagnoses the fob
+battery, engine oil no longer explains that above max is a warning sign, wheel
+nuts no longer says what weeping rust means. The instruction survives, the
+lecture does not.
+
+**Five items were merged and the headers follow what is now inside them.**
+Reflectors and number plates into **Lights, plates and reflectors**. Safety
+signage into **Emergency exits and signage**. Handrails into **Gangway,
+handrails and hammers**. Seat condition into **Seats and anchorages**. Underneath
+became **Leaks underneath**, which says what is being looked for rather than
+where. Brakes became **Brakes and pedals**, because the footwell check has
+nothing to do with brakes and would be skipped under a header that said Brakes.
+
+**The DVSA daily list is now fully covered.** Eight items were being asked for
+only in the full inspection when the guidance treats them as daily. Merging
+rather than adding meant the pre-drive went from 33 items to 35 rather than 41.
+Battery and interior lighting became pre-drive in their own right. Three points
+had no home at all and were added: footwell and pedal condition, hatches and
+ventilators being secure, and the 1mm minimum tread depth, which is the PSV
+figure and differs from the 1.6mm most drivers know from cars.
+
+Neither bus has wheelchair equipment, so that check is skipped on both.
+
+**NH56 FWP said two different things about its own capacity**, 17 in the name
+and 15 in the detail line, on the same screen. Two seats were removed to leave a
+level floor for folded prams and crates. The name no longer claims 17. The
+figure to quote is 15 including the driver, and that now appears once.
+
+**Why the passenger page took a minute to open.** Partly a cold start at Google's
+end, which nothing here can fix. Two parts were ours.
+
+No call to Apps Script had a timeout. `fetch` has none of its own, so a request
+that never answered was held until the browser gave up, which on a phone can be
+a minute or more, and the retry added in v1.12 then waited again. Every call in
+both apps now gives up after twelve seconds, which is well past a cold start and
+well short of somebody deciding the app is broken.
+
+The Google Fonts stylesheet was blocking first paint. A first-time visitor, who
+has no service worker and nothing cached, saw a blank white screen until Google
+answered, before even the word Loading appeared. It is now fetched without
+blocking. Both apps already fall back to system fonts, so text renders at once
+and swaps when the real face arrives.
 
 ## The Minibus menu
 

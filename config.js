@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CONFIG — the only file you should normally need to edit.
+   CONFIG. The only file you should normally need to edit.
    After changing it, bump CACHE in sw.js so phones pick it up.
    ========================================================================== */
 
@@ -158,34 +158,37 @@ window.VEHICLES = [
       },
       reverse_aid: {
         name: "Reversing camera and sensors",
-        what: "Select reverse with the engine running. Factory camera picture clear on the screen, not fogged, frozen or black. Parking sensors bleeping. Lens on the tailgate wiped clean."
+        what: "Select reverse with the engine running. Camera picture clear, not fogged, frozen or black. Parking sensors bleeping. Lens on the tailgate wiped clean."
       },
       mirrors: {
         name: "Mirrors, wipers and washers",
-        what: "Both mirrors folded OUT before you move: they are electric on this bus and fold at the button. Glass clean, adjusted, secure. Blades not torn. Washers reaching the screen."
+        what: "Both mirrors folded out before you move: electric on this bus, at the button. Glass clean, adjusted and secure. Blades not torn. Washers reaching the screen."
       },
       infotainment: {
         name: "Radio, screen and head up display",
-        what: "Radio and speakers working front and rear so you can be heard. Screen not stuck on a warning. Head up display showing and not obscuring your view."
+        what: "Radio and speakers working front and rear. Screen not stuck on a warning. Head up display showing and not obscuring your view."
       }
     },
 
+    /* What to do, not what happened. The reasons behind each of these are in
+       FLEET-HISTORY.md, which is for whoever books the bus in. A driver at
+       eight on a Sunday morning needs the instruction, not the file. */
     watch: {
-      tyres:  "Worn on the edge front and rear at past tests. Edge wear means something is out of line, so report it even if there is plenty of tread.",
-      fbrake: "Front pads were dangerously thin in 2024 and were worn again within 1,360 miles. Something here wears faster than it should.",
-      bfluid: "A dropping level means pad wear or a leak. The front brakes on this bus already have history.",
-      step:   "Flagged at three separate tests since 2023 and never repaired before we bought it. Assume it is the weakest thing on the bus.",
-      abs:    "Failed its MOT on this exact lamp in June 2026 and passed the same day. We have no proof anything was replaced.",
-      brakes: "The front brake wear rate on this bus does not add up. Grinding or pulling is a stop, not a note."
+      tyres:  "Report edge wear even when there is plenty of tread left.",
+      fbrake: "Report scoring, a deep lip, or one side cleaner than the other, even if the brakes feel fine.",
+      bfluid: "Any drop since last week is a report, not a top up.",
+      step:   "Work it three times, out and back. Report anything slow, notchy or noisy.",
+      abs:    "The lamp must go out once you move off. If it stays on, report before loading.",
+      brakes: "Grinding or pulling to one side is a stop, not a note."
     },
-    skip: []
+    skip: ["wheelchair"]
   },
 
   /* ---------------------------------------------------------------------- */
   {
     reg: "NH56 FWP",
     id: "nh56fwp",
-    name: "Ford Transit 100 17-seat RWD",
+    name: "Ford Transit 100 RWD",
     detail: "2007 \u00B7 2,402cc diesel \u00B7 manual \u00B7 15 seats including driver",
     colour: "White",
 
@@ -196,19 +199,20 @@ window.VEHICLES = [
       permit:    "2027-01-31"
     },
 
+    /* As above: instructions only. The history is in FLEET-HISTORY.md. */
     watch: {
       corrosion:
-        "The cab mountings on all four corners were repaired and independently inspected in April 2026, which is why it passed. Repaired areas are still the ones worth watching, because the metal around them is the same age. Report flaking, bubbling or soft metal at the sills, underbody or where the body meets the chassis.",
+        "Report flaking, bubbling or soft metal at the sills, underbody, and where the body meets the chassis. Look hardest at the cab mountings on all four corners.",
       pipes:
-        "A brake pipe was replaced after a leak in January 2025. Pipes of this age tend to go one at a time, so keep looking. Any damp or wet patch along the chassis rails or behind a wheel is a stop.",
+        "Any damp or wet patch along the chassis rails or behind a wheel is a stop.",
       bfluid:
-        "Because of the pipe history, a level that has dropped since last week means a leak until proven otherwise. Do not top it up and drive.",
+        "Any drop since last week is a leak until proven otherwise. Do not top it up and drive.",
       brakes:
-        "The parking brake and a brake cable were put right in early 2025. Test the handbrake on a slope every single time so you would notice if it ever slipped again.",
+        "Test the handbrake on a slope every time, so you would know at once if it ever slipped.",
       suspension:
-        "An anti-roll bar ball joint was replaced in 2025 and a leaf spring bush was flagged in 2015. Knocking over bumps is worth reporting on a vehicle this age.",
+        "Report knocking over bumps.",
       lights:
-        "A cracked rear stop lamp lens failed it in 2025. Check the lenses themselves, not just that the bulbs light up."
+        "Check the lenses themselves for cracks, not only that the bulbs light up."
     },
 
     /* No retractable step and no side step: you step straight in through the
@@ -216,24 +220,24 @@ window.VEHICLES = [
     override: {
       reverse_aid: {
         name: "Reversing camera and sounder",
-        what: "Aftermarket kit on this bus, so check it properly. Select reverse: picture appears and is not fogged or rolling, and the sounder is audible from outside. Check the camera and its cable at the rear are still secure. If either has failed, do not reverse without someone guiding you."
+        what: "Select reverse: picture appears and is not fogged or rolling, and the sounder is audible from outside. Camera and its cable at the rear still secure. If either has failed, do not reverse without someone guiding you."
       },
       mirrors: {
         name: "Mirrors, wipers and washers",
-        what: "Both mirrors folded OUT and firm: they fold by hand on this bus, so check they have not been knocked in or left loose. Glass clean and adjusted. Blades not torn. Washers reaching the screen."
+        what: "Both mirrors folded out and firm: they fold by hand on this bus, so check they have not been knocked in. Glass clean and adjusted. Blades not torn. Washers reaching the screen."
       },
       infotainment: {
         name: "Radio and speakers",
-        what: "Radio and speakers working front and rear so you can be heard down the bus."
+        what: "Radio and speakers working front and rear."
       },
       step: {
         name: "Rear step and door thresholds",
-        what: "Fixed rear step secure, not loose or lifting at the edge, and not slippery. Side door threshold free of a trip lip. This bus has no retractable step, so passengers step straight in: check the drop is clear and lit."
+        what: "Fixed rear step secure, not loose or lifting at the edge, and not slippery. Side door threshold free of a trip lip. No retractable step on this bus, so check the drop at the side door is clear and lit."
       }
     },
 
-    /* No AdBlue on a 2007 diesel. */
-    skip: ["adblue"]
+    /* No AdBlue on a 2007 diesel. No wheelchair equipment on either bus. */
+    skip: ["adblue", "wheelchair"]
   }
 
 ];

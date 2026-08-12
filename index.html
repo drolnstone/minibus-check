@@ -11,7 +11,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<!-- Loaded without blocking first paint. As a plain stylesheet link this
+     held the page blank until Google answered. media="print" makes the
+     browser fetch it without waiting; onload switches it back. The body
+     falls back to system fonts, so text appears at once and swaps. -->
+<link rel="stylesheet" media="print" onload="this.media='all';this.onload=null"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap"></noscript>
 <style>
 :root{
   --ink:#16191F;--paper:#F4F5F6;--card:#FFFFFF;
@@ -570,7 +576,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     </div>
     <p class="eyebrow">Before the first pick up</p>
     <h1>Who is driving?</h1>
-    <p class="lede">Your check goes straight to the coordinator's record when you finish.</p>
     <div class="card">
       <!-- Name and PIN side by side, roughly two thirds to one third.
 
@@ -595,7 +600,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
                  class="mono pinbox" placeholder="&bull;&bull;&bull;&bull;" autocomplete="off">
         </div>
       </div>
-      <div class="hint" id="idHint">Only drivers approved by the leadership appear here.</div>
+      <!-- Empty until a PIN is being asked for. It used to explain that the
+           list of approved drivers is a list of approved drivers. -->
+      <div class="hint" id="idHint" style="display:none"></div>
       <div class="hint rota-hint" id="rotaHint" style="display:none"></div>
       <div class="field" id="typeField" style="display:none">
         <label for="driver">Driver name</label>
@@ -603,7 +610,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
         <div class="hint">No driver register has been set up yet.</div>
       </div>
     </div>
-    <p class="tiny" style="margin-top:14px">If your name is missing, you are not on the register. Ring the coordinator before taking a bus out.</p>
+    <p class="tiny" style="margin-top:14px">Name missing? Ring the coordinator before taking a bus out.</p>
     <div class="linkrow">
       <!-- These were three identical grey buttons given equal weight, which
            they do not have. One is a queue that is usually empty, one is
@@ -622,7 +629,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   <section class="screen" id="s-vehicle">
     <p class="eyebrow" id="hello">Vehicle</p>
     <h1>Which one today?</h1>
-    <p class="lede">Each bus has its own checks and its own fault history.</p>
     <div id="vehList"></div>
   </section>
 
@@ -680,7 +686,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     <div id="verdict"></div>
     <div class="card" id="jobsCard">
       <div class="lbl" style="margin-bottom:4px">Anything to arrange?</div>
-      <div class="hint" style="margin:0 0 10px">Not faults. Tap what applies, or Nothing needed.</div>
+      <div class="hint" style="margin:0 0 10px">Tap what applies, or Nothing needed.</div>
       <div class="chips" id="jobChips"></div>
     </div>
     <div class="sum" id="sumBox"></div>
@@ -754,7 +760,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   <section class="screen" id="s-pending">
     <p class="eyebrow">Held on this phone</p>
     <h1>Waiting to send</h1>
-    <p class="lede">Checks that could not reach the record, usually because there was no signal. They send themselves as soon as there is.</p>
+    <p class="lede">They send themselves once you have signal.</p>
     <div id="pendList"></div>
     <div class="linkrow">
       <button class="btn btn-ghost btn-wide" id="flush" type="button">Send them all now</button>
@@ -793,12 +799,36 @@ var store = {
   set:function(k,v){ mem[k]=v; try{ localStorage.setItem(k,v); }catch(e){} },
   del:function(k){ delete mem[k]; try{ localStorage.removeItem(k); }catch(e){} }
 };
+/* Every call to Apps Script, with a limit on how long it may hang.
+
+   fetch has no timeout of its own. A request that never answers was held until
+   the browser gave up, which on a phone can be a minute or more, and the page
+   simply sat there. Twelve seconds is well past a cold start and well short of
+   somebody deciding the app is broken.
+
+   Done with a race rather than an AbortController on purpose. Passing a signal
+   in the request options threw "The object can not be cloned" on this page,
+   because a page inside a service worker's scope has its request options
+   structured-cloned to hand to the worker, and an AbortSignal cannot be
+   cloned. The request itself therefore is not cancelled here, it is only
+   stopped from being waited on, which is all the page actually needed. */
+var CALL_TIMEOUT = 12000;
+
+function callFetch(url, opts){
+  return Promise.race([
+    fetch(url, opts || {}),
+    new Promise(function(_, reject){
+      setTimeout(function(){ reject(new Error("took too long to answer")); }, CALL_TIMEOUT);
+    })
+  ]);
+}
+
 var QKEY = "fleet.queue.v1";
 var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.13.1";
+var APP_VERSION = "v1.14.1";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -807,44 +837,39 @@ var LIVE = !!(CFG.endpoint && CFG.endpoint.indexOf("http") === 0);
 /* ---------------- the shared checklist ---------------- */
 var STAGES = [
   { title:"Outside the bus", lede:"Walk clockwise from the driver's door.", items:[
-    { id:"keys", name:"Keys and remote", what:"Key turns in the door and the ignition. Remote locks and unlocks every door from a normal distance. If you have to stand right up against the bus for it to work, the fob battery is going: report it before it strands somebody." },
-    { id:"tyres", name:"Tyres", crit:true, what:"Tread across the full width, edge wear, cuts or bulges in the sidewall, pressures. Look for flat spots from standing." },
-    { id:"nuts", name:"Wheel nuts", crit:true, what:"All present. Position marker arrows still lined up. Rust weeping from a nut means it has moved." },
+    { id:"keys", name:"Keys and remote", what:"Key turns in the door and the ignition. Remote locks and unlocks every door from a normal distance. If you have to stand right up against the bus, report it." },
+    { id:"tyres", name:"Tyres", crit:true, what:"At least 1mm of tread across the full width. Edge wear, deep cuts or bulges in the sidewall, any cord showing, pressures. Look for flat spots from standing." },
+    { id:"nuts", name:"Wheel nuts", crit:true, what:"All present and tight. Position marker arrows still lined up. Report rust weeping from a nut." },
     { id:"spare", full:true, name:"Spare wheel, jack and brace", what:"Spare secure in its carrier, not hanging loose, and with air in it. A flat spare is no spare. Jack and wheelbrace stowed with it." },
-    { id:"lights", name:"Lights", what:"Sidelights, dipped, main beam, indicators, hazards, brake lights, reverse, fogs, number plate lamp." },
-    { id:"reflectors", full:true, name:"Reflectors and markings", what:"Rear reflectors and any reflective markings present, clean and not cracked. These are what make the bus visible when your lights are off." },
+    { id:"lights", name:"Lights, plates and reflectors", what:"Sidelights, dipped, main beam, indicators, hazards, brake lights, reverse, fogs, number plate lamp. Lenses fitted, clean and the right colour. Reflectors present and not cracked. Both plates clean, readable and secure." },
     { id:"fbrake", name:"Front brakes", crit:true, what:"Look through the front wheels at the disc face. Heavy scoring, a deep lip, or one side much cleaner than the other." },
     { id:"doors", name:"Passenger and cab doors", crit:true, what:"Every door opens, closes and latches from outside and in. Sliding door runs its track without forcing. Seals not hanging off. A door that will not stay shut is a stop." },
     { id:"body", name:"Body and glass", what:"Chips or cracks in the wiper area. Windows sound. Panels secure with nothing hanging or sharp." },
-    { id:"clean", name:"Clean enough to be safe", what:"Lights, mirrors, windows and both number plates clean enough to work. Inside free of rubbish. If the bus is too dirty to see out of or be seen, that is a defect, not an inconvenience." },
+    { id:"clean", name:"Clean enough to be safe", what:"Lights, mirrors, windows and both number plates clean enough to work. Inside clear of rubbish. Too dirty to see out of or be seen is a defect." },
     { id:"corrosion", full:true, name:"Rust and structure", what:"Sills, wheel arches, step mounts and anywhere the body meets the chassis. Flaking or soft metal, not surface staining." },
-    { id:"under", name:"Underneath", what:"Look under the bus for fresh oil, coolant or fuel on the road after standing all week." },
+    { id:"under", name:"Leaks underneath", what:"Look under the bus for fresh oil, coolant or fuel on the road after standing all week." },
     { id:"pipes", name:"Brake pipes and lines", crit:true, what:"Look along the chassis rails and behind each wheel for damp or wet patches, or a pipe that is flaking rather than just dusty." },
     { id:"suspension", name:"Suspension and ride height", what:"Bus sitting level, not down at one corner. Listen for knocking over the first bumps." },
     { id:"exhaust", name:"Exhaust", what:"Present and secure. Nothing cut away underneath. Listen for a change in note at start up." },
     { id:"fuel", name:"Fuel and filler cap", what:"Enough for the run and back. Cap present and tight. No smell of diesel or wetness around the filler." },
-    { id:"plates", full:true, name:"Number plates", what:"Clean, readable and secure front and rear." }
   ]},
   { title:"Under the bonnet", lede:"Engine cold, before the first start.", items:[
-    { id:"oil", name:"Engine oil", what:"Dipstick between min and max. If the level is ABOVE max, report it. That is a warning sign, not a good thing." },
+    { id:"oil", name:"Engine oil", what:"Dipstick between min and max. Report it if the level is above max." },
     { id:"coolant", name:"Coolant", what:"Between min and max on the tank, engine cold." },
     { id:"bfluid", name:"Brake fluid", crit:true, what:"At or near max. If it has dropped, report it. Do not just top it up." },
     { id:"pas", full:true, name:"Power steering fluid", what:"Between the marks. Look for weeping at the pipes and where the rack sits behind the front wheel." },
     { id:"wash", name:"Screenwash", what:"Full. Winter mix from October onwards." },
-    { id:"adblue", name:"AdBlue", what:"Check the gauge or dash message. Never let it run empty or the engine will not restart." },
-    { id:"battery", full:true, name:"Battery", what:"Clamped down and not moving. Terminals tight and free of white powder. No cracks, no swelling, nothing weeping underneath." },
+    { id:"adblue", name:"AdBlue", what:"Gauge or dash message shows enough for the run. Top up rather than let it run low." },
+    { id:"battery", name:"Battery", what:"Clamped down and not moving. Terminals tight and free of white powder. No cracks, no swelling, nothing weeping underneath." },
     { id:"belts", full:true, name:"Belts and hoses", what:"Look only. Cracking, fraying, or a hose that looks swollen at the clip." }
   ]},
   { title:"Inside the saloon", lede:"Where the passengers sit. Take your time here.", items:[
     { id:"belts_seat", name:"Seat belts", crit:true, what:"Pull each belt fully out, look for fraying, click it into the buckle, check it locks and releases. Every seat." },
-    { id:"anchor", name:"Seat anchorages", crit:true, what:"Push and pull each seat frame. Any movement where it meets the floor is a defect. Do not carry passengers in it." },
-    { id:"seats", full:true, name:"Seat condition", what:"Frames sound, cushions not torn through to metal or springs. Headrests where they should be. Nothing sharp at head height." },
-    { id:"handrails", full:true, name:"Handrails and grab handles", what:"Every one. Pull on it. A handle that turns in its mounting is worse than none, because somebody will trust it." },
+    { id:"anchor", name:"Seats and anchorages", crit:true, what:"Push and pull each seat frame. Any movement where it meets the floor is a defect. Do not carry passengers in it. Frames sound, cushions not torn through to metal or springs, nothing sharp at head height." },
     { id:"step", name:"Step", what:"Whatever step this bus has: smooth and complete if it deploys, secure and not slippery if it is fixed. No trip edge where passengers put their feet." },
-    { id:"exits", name:"Emergency exits", crit:true, what:"Rear door and side exit open from the inside. Roof hatch works. Nothing stored in front of an exit." },
-    { id:"signage", full:true, name:"Safety signage", what:"Emergency exit instructions readable at each exit. Hammer positions marked. Nothing painted over or peeled away." },
-    { id:"gangway", name:"Gangway and hammers", what:"Gangway clear of bags and equipment, floor dry and sound underfoot. Break glass hammers clipped into their brackets, not loose." },
-    { id:"intlights", full:true, name:"Interior and step lights", what:"Saloon lights and the light over the step. A dark step on a winter evening is how people fall." },
+    { id:"exits", name:"Emergency exits and signage", crit:true, what:"Rear door and side exit open from the inside. Roof hatch works and closes secure. Windows and ventilators secure. Nothing stored in front of an exit. Exit instructions and hammer positions readable at each exit." },
+    { id:"gangway", name:"Gangway, handrails and hammers", what:"Gangway clear of bags and equipment, floor dry and sound underfoot. Pull each handrail and grab handle: report any that turns or moves in its mounting. Break glass hammers clipped into their brackets, not loose." },
+    { id:"intlights", name:"Interior and step lighting", what:"Saloon lights and the light over the step both working." },
     { id:"wheelchair", full:true, name:"Wheelchair ramp and restraints", what:"Ramp or lift deploys and stows. Tie-down webbing not frayed, buckles latch, floor anchorages clear of grit and not damaged. Occupant belt works. If this bus has none, mark it not on this bus." },
     { id:"extinguisher", name:"Fire extinguisher", what:"Present, in date, gauge in the green, seal unbroken, bracket tight." },
     { id:"firstaid", name:"First aid kit", what:"Present, sealed, contents in date." },
@@ -852,14 +877,14 @@ var STAGES = [
   ]},
   { title:"In the cab", lede:"Engine running, before anyone gets on.", items:[
     { id:"abs", name:"ABS warning lamp", crit:true, what:"Must come on at ignition then go out. If it stays on, the bus does not run." },
-    { id:"lamps", name:"Other warning lights", what:"All lamps come on then go out. An amber engine or DPF light means report before loading passengers." },
-    { id:"brakes", name:"Brakes", crit:true, what:"Firm pedal, no sinking to the floor. Handbrake holds on a slope. Controlled stop at low speed before the first pick up. Listen for grinding or pulling to one side." },
+    { id:"lamps", name:"Other warning lights", what:"All lamps come on then go out. Report an amber engine or DPF light before loading passengers." },
+    { id:"brakes", name:"Brakes and pedals", crit:true, what:"Firm pedal, no sinking to the floor. Handbrake holds on a slope. Controlled stop at low speed before the first pick up. Listen for grinding or pulling to one side. Footwell clear, nothing able to slide under a pedal, tread on the pedals not worn smooth or missing." },
     { id:"steering", name:"Steering", crit:true, what:"No excess free play. No knocking on full lock. Power assistance working, not heavy at low speed." },
     { id:"clutch", name:"Clutch and gears", what:"Bite point where you expect it, not right at the top of the pedal. All gears select cleanly, including reverse. No slipping when you pull away." },
     { id:"reverse_aid", name:"Reversing camera and sensors", what:"Select reverse with the engine running. Picture clear and not fogged or frozen. Sensors and reversing sounder audible. Never rely on them alone: they are an aid, not a substitute for looking." },
     { id:"mirrors", name:"Mirrors, wipers and washers", what:"All mirrors clean, adjusted, secure and folded out. Blades not torn or smearing. Washers reaching the screen." },
     { id:"limiter", full:true, name:"Speed limiter", what:"If this bus has one: no warning lamp, and it is not cutting in below its set speed. If none is fitted, mark it not on this bus." },
-    { id:"infotainment", full:true, name:"Radio and dash display", what:"Radio and speakers work at the back as well as the front, so you can be heard. Dash display readable and not stuck on a warning screen." },
+    { id:"infotainment", full:true, name:"Radio and dash display", what:"Radio and speakers working front and rear. Dash display readable and not stuck on a warning screen." },
     { id:"cab", name:"Horn, heater, demist", what:"All working. Demist clears the whole screen, not just a patch in front of you." },
     { id:"docs", full:true, name:"Documents on board", what:"Insurance in date. Any permit or paperwork this bus must carry. Breakdown number somewhere you could find it in the dark." }
   ]}
@@ -944,7 +969,7 @@ var LASTMILES = {};
 
 function fetchLastMiles(){
   if(!LIVE || !navigator.onLine) return;
-  fetch(CFG.endpoint + "?last=1", { method:"GET", redirect:"follow" })
+  callFetch(CFG.endpoint + "?last=1", { method:"GET", redirect:"follow" })
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out = JSON.parse(t);
@@ -1768,7 +1793,7 @@ function paintBanner(){
 /* ---------------- send ---------------- */
 function sendRec(rec){
   if(!LIVE) return Promise.reject(new Error("no endpoint"));
-  return fetch(CFG.endpoint, {
+  return callFetch(CFG.endpoint, {
     method:"POST",
     redirect:"follow",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
@@ -2135,7 +2160,7 @@ function rotaFetch(fromDate,weeks,cb){
   if(!LIVE || !navigator.onLine){ cb(false); return; }
   var qs="?rota=1&from="+encodeURIComponent(rotaKey(fromDate))+"&weeks="+weeks;
   rotaLoading=true;
-  fetch(CFG.endpoint+qs,{method:"GET",redirect:"follow"}).then(function(r){return r.text();}).then(function(t){
+  callFetch(CFG.endpoint+qs,{method:"GET",redirect:"follow"}).then(function(r){return r.text();}).then(function(t){
     var out=JSON.parse(t); if(!out||out.ok!==true) throw new Error("rota unavailable");
     var incoming=out.rows||[];
     var before=JSON.stringify(rotaRows);
@@ -2244,7 +2269,7 @@ function tripFlush(){
   var q=tripLoadQ();
   if(!q.length || !LIVE || !navigator.onLine || tripBusy) return;
   tripBusy=true;
-  fetch(CFG.endpoint,{
+  callFetch(CFG.endpoint,{
     method:"POST", redirect:"follow",
     headers:{"Content-Type":"text/plain;charset=utf-8"},
     body: JSON.stringify({ token: CFG.token||"", action:"trip", trip:{
@@ -2400,7 +2425,7 @@ function rotaCountsFetch(route,cb){
   route = route || rotaStopsRoute || rotaMyRoute() || "North";
   if(!LIVE || !navigator.onLine || rotaCountsBusy){ if(cb) cb(false); return; }
   rotaCountsBusy=true;
-  fetch(CFG.endpoint+"?board=1&route="+encodeURIComponent(route),{method:"GET",redirect:"follow"})
+  callFetch(CFG.endpoint+"?board=1&route="+encodeURIComponent(route),{method:"GET",redirect:"follow"})
     .then(function(r){return r.text();})
     .then(function(t){
       var out=JSON.parse(t);
@@ -3304,7 +3329,7 @@ function rotaSubmitRequest(){
   }};
 
   btn.disabled=true; btn.textContent="Sending\u2026";
-  fetch(CFG.endpoint,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)})
+  callFetch(CFG.endpoint,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)})
     .then(function(r){return r.text();})
     .then(function(t){
       var out=JSON.parse(t);
@@ -3576,9 +3601,10 @@ function showPinField(){
      it has been forgotten. */
   var h=$("idHint");
   if(h){
+    h.style.display = need ? "" : "none";
     h.textContent = need
-      ? "Four digits. Ask the coordinator if you have forgotten it."
-      : "Only drivers approved by the leadership appear here.";
+      ? "Forgotten it? Ask the coordinator."
+      : "";
   }
 }
 
