@@ -463,6 +463,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
    was the newest layer and looked it: its own radii, its own spacing, and a
    sticky block nothing else in the app used. */
 .trip-strip{border:1px solid var(--hair);border-radius:var(--r);padding:13px;margin:0 0 12px;background:var(--card)}
+/* The confirm-it-is-you panel, in the trip strip and in the request form. */
+.pingate{margin-top:11px;padding-top:11px;border-top:1px solid var(--hair)}
+.pingate .pinbox{width:120px;margin-top:6px}
+.pingate.is-ok .pinbox{border-color:var(--pass)}
 .trip-strip .btn{width:100%;margin-top:9px}
 .trip-note{margin:0;font-size:13px;line-height:1.5;color:var(--muted)}
 .trip-note b{color:var(--ink)}
@@ -842,7 +846,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.17.0";
+var APP_VERSION = "v1.18.0";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1281,6 +1285,10 @@ function goHome(){
 }
 
 function paintFoot(){
+  /* Also the moment the PIN gate learns its answer: checkPin ends here on
+     every path it can take. */
+  pinGateSync();
+
   var f=$("footIn"), c=$("count");
   f.innerHTML=""; c.textContent="";
   function btn(label,cls,fn,dis,why){
@@ -3271,6 +3279,7 @@ function rotaPaintStops(){
       if(s) tripUndo(s);
     });
   });
+  pinGateWire();
   if($("tripStart")) $("tripStart").addEventListener("click",function(){ tripStart(route); });
   if($("tripStartAnyway")) $("tripStartAnyway").addEventListener("click",function(){
     tripStart(route,true);
@@ -3322,15 +3331,21 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
          'you can set off, and that is recorded.</p>'+
          '<div class="trip-two">'+
            '<button class="btn btn-main" id="tripDoCheck">Do the check</button>'+
-           '<button class="btn btn-ghost" id="tripStartAnyway">Set off anyway</button>'+
-         '</div>';
+           '<button class="btn btn-ghost" id="tripStartAnyway"'+(pinGateNeeded()?' disabled':'')+
+             '>Set off anyway</button>'+
+         '</div>'+
+         /* Setting off without a check is the one worth being surest about
+            who did it. */
+         (pinGateNeeded()? pinGateHtml("Setting off without a check is recorded in your name.") : "");
       return h+'</div>';
     }
 
     if(mayTap){
       h+= tripClosed
-        ? '<button class="btn btn-main" id="tripStart">Start trip</button>'+
-          '<p class="trip-note">Tap each stop as you pull away. Empty stops need nothing.</p>'
+        ? '<button class="btn btn-main" id="tripStart"'+(pinGateNeeded()?' disabled':'')+
+          '>Start trip</button>'+
+          '<p class="trip-note">Tap each stop as you pull away. Empty stops need nothing.</p>'+
+          (pinGateNeeded()? pinGateHtml("This run is recorded in your name.") : "")
         : '<p class="trip-note"><b>Bookings are still open.</b> The run can be started '+
           'after '+esc(tripCutoff||"09:30")+', once the list is settled.</p>';
     } else {
@@ -3458,8 +3473,12 @@ function rotaOpenRequest(key){
     '<div id="rotaLockNote" class="rota-swap-note" style="display:none"></div>'+
     '<div class="field"><label for="rotaReqReason">Reason</label>'+
       '<textarea id="rotaReqReason" placeholder="Tell the coordinator what they need to know."></textarea></div>'+
+    (pinGateNeeded()? pinGateHtml("This request is sent in your name.") : "")+
     '<div class="rota-modal-actions"><button class="btn btn-ghost" id="rotaCancel2" type="button">Cancel</button>'+
-      '<button class="btn btn-main" id="rotaSubmitRequest" type="button">Send request</button></div>';
+      '<button class="btn btn-main" id="rotaSubmitRequest" type="button"'+
+        (pinGateNeeded()?' disabled':'')+'>Send request</button></div>';
+
+  pinGateWire();
 
   var sw=$("rotaSwapWith");
   REGISTER.forEach(function(x){
@@ -3888,6 +3907,69 @@ function pinPaintHint(){
   var need=pinNeeded();
   h.style.display = (pinMsg || need) ? "" : "none";
   h.textContent = pinMsg || (need ? "Forgotten it? Ask the coordinator." : "");
+}
+
+/* ---- confirming your name at the point of writing -----------------------
+
+   The PIN was built when the check was the only thing this app did, and
+   nothing added since was held to the same standard. Starting a run and
+   sending a rota request both file a record under a driver's name, and
+   neither asked.
+
+   That is not a theory. The app remembers the last driver's name and
+   pre-selects it, and the PIN clears on the way home, so a shared phone opens
+   with somebody else's name already in the box. Whoever picks it up could
+   start and tap a run that is then filed as his. The Monday question, you did
+   not tap Utting Avenue, rests on attribution that was not being enforced on
+   the one screen where it matters.
+
+   The rule, written down this time so the next thing added is held to it:
+   THE PIN CONFIRMS YOUR NAME ON A RECORD. It does not protect information.
+   Reading the rota and looking at stops write nothing and stay open. Anything
+   that files a record under a name asks first.
+
+   Asked at the point of writing rather than at the door, so it costs nothing
+   on a normal Sunday: the driver keys it before his check and it is still
+   good when he presses Start trip a few minutes later. */
+
+function pinGateNeeded(){ return pinNeeded() && !st.pinOk; }
+
+/* The markup. Same field in both places, one id, so there is never a second
+   implementation to drift from this one. */
+function pinGateHtml(why){
+  return '<div class="pingate" id="pinGate">'+
+           '<p class="trip-note"><b>Confirm it is you.</b> '+esc(why)+'</p>'+
+           '<input id="pinGateInput" type="password" inputmode="numeric" maxlength="8" '+
+             'class="mono pinbox" placeholder="&bull;&bull;&bull;&bull;" autocomplete="off">'+
+           '<p class="trip-note" id="pinGateSay"></p>'+
+         '</div>';
+}
+
+function pinGateWire(){
+  var i=$("pinGateInput");
+  if(!i) return;
+  i.addEventListener("input",function(){
+    st.pin=this.value.replace(/\D/g,"").slice(0,8);
+    if(this.value!==st.pin) this.value=st.pin;
+    checkPin();                       /* resolves, then calls paintFoot */
+  });
+}
+
+/* checkPin finishes by calling paintFoot on every path it can take, online,
+   offline and cached, so hooking there catches all of them without touching
+   any of them. */
+function pinGateSync(){
+  var g=$("pinGate");
+  if(!g) return;
+  var say=$("pinGateSay");
+  if(say) say.textContent = st.pinOk
+    ? (st.pinState==="offline" ? "Taken on trust: no signal to check against." : "Thank you.")
+    : (String(st.pin||"").length>=4 ? "That PIN is not right." : "");
+  ["tripStart","tripStartAnyway","rotaSubmitRequest"].forEach(function(id){
+    var b=$(id);
+    if(b) b.disabled = !st.pinOk;
+  });
+  if(st.pinOk) g.classList.add("is-ok");
 }
 
 function checkPin(){

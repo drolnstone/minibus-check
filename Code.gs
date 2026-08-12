@@ -474,6 +474,52 @@ function ensureChecksColumns(sh) {
   });
 }
 
+/**
+ * When a check row actually happened, in ms, for sorting.
+ *
+ * Received is stamped by the server the instant a check arrives, so it is the
+ * right answer whenever it is present and sane. Two cases where it is not.
+ *
+ * A Received in the FUTURE is always wrong, because the server cannot have
+ * received something that has not been sent. One row on the Checks tab was
+ * carrying 8/9/2026 where the script had written 09/08/2026, almost certainly
+ * typed or pasted by hand: in a UK sheet that reads as 8 September, four weeks
+ * ahead, so that row won every comparison and went on winning. The mileage
+ * shown to drivers stayed frozen on it while newer checks were ignored.
+ *
+ * A Received that is MISSING scored zero, which lost to everything, so a row
+ * added by hand sank to the bottom regardless of when the check was really
+ * done.
+ *
+ * Both fall back to the row's own Date and Time, which is the driver's record
+ * of when he did it and is what a human would read the row by anyway.
+ *
+ * The tolerance is a couple of minutes rather than nothing, so ordinary clock
+ * drift between the sheet and the script never trips it.
+ */
+function checkMoment(received, dateCell, timeCell) {
+  var now = Date.now();
+  if (isDateLike(received)) {
+    var t = received.getTime();
+    if (t <= now + 120000) return t;      /* sane: use it */
+  }
+
+  /* Fall back to the day and time the check itself records. */
+  var key = anyToKey(dateCell);
+  if (!key) return 0;
+  var d = keyToDate(key);
+
+  var hh = 0, mm = 0;
+  if (isDateLike(timeCell)) {
+    hh = timeCell.getHours(); mm = timeCell.getMinutes();
+  } else {
+    var m = String(timeCell || "").match(/^(\d{1,2}):(\d{2})/);
+    if (m) { hh = Number(m[1]); mm = Number(m[2]); }
+  }
+  d.setHours(hh, mm, 0, 0);
+  return d.getTime();
+}
+
 function lastMileagePayload() {
   var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHECKS_SHEET);
   if (!sh || sh.getLastRow() < 2) return { ok: true, last: {} };
@@ -487,11 +533,9 @@ function lastMileagePayload() {
     var reg = String(r[5] || "").trim();
     var miles = Number(r[8]);
     if (!reg || !miles) return;
-    /* isDateLike rather than instanceof, for the reason set out on that
-       function: a real date that came from anywhere else fails instanceof and
-       would score 0 here, which makes every row equal and leaves whichever
-       happens to sit lowest in the sheet winning. */
-    var when = isDateLike(r[0]) ? r[0].getTime() : 0;
+    /* See checkMoment: Received is used when it is present and not in the
+       future, and the row's own Date and Time carry it otherwise. */
+    var when = checkMoment(r[0], r[2], r[3]);
     if (!last[reg] || when >= last[reg]._t) {
       last[reg] = { miles: miles, date: dayWords(r[2]), time: timeWords(r[3]),
                     driver: String(r[6] || ""), _t: when };
