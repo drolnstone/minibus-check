@@ -110,6 +110,28 @@ var BUS_REQUIRE_CODE = false;
    before that. Closing any later would have him already on the road while
    the list was still moving. After the cut-off the page still opens and still
    shows the times, it just will not take a change. */
+/* The backstop for rolling the booking page on to next Sunday.
+
+   Next week opens when this Sunday's runs have ENDED, not at the booking
+   cutoff, because between 09:30 and the bus getting back the list a driver is
+   working from is today's and so is the one a passenger is watching. Rolling
+   at the cutoff put two different Sundays on one screen for the whole morning.
+
+   The backstop exists because the roll would otherwise depend on a driver
+   remembering End trip, which is the last tap of the morning, made after the
+   bus is parked and everybody is getting off. Forget it and nobody could book
+   for next Sunday at all until somebody noticed. Two routes make that worse:
+   one forgotten tap would hold up the other route's passengers too.
+
+   Two in the afternoon. Church finishes around one, both buses are long back,
+   and nobody is booking before then anyway.
+
+   It deliberately does not invent an end time for a trip nobody ended. A
+   three and a half hour journey on the record is worse than a blank, so Who
+   is tapping goes on saying started, never ended. */
+var RUN_BACKSTOP_HOUR = 14;
+var RUN_BACKSTOP_MIN  = 0;
+
 var BOOKING_CUTOFF_DAY = 0;
 var BOOKING_CUTOFF_HOUR = 9;
 var BOOKING_CUTOFF_MIN = 30;
@@ -418,7 +440,15 @@ function handleCheck(c) {
     });
   }
 
-  if (COORDINATOR_EMAIL && c.level !== "ok") {
+  /* Also when the bus is fine but wants something doing.
+
+     This used to send only when there was a defect, and the arrange list was
+     not in the email at all, so "needs fuel" and "tyres need air" on an
+     otherwise clean check reached nobody until the weekly summary, days
+     later. Those are the two things most worth knowing before the next run,
+     and they are the ordinary jobs a driver will not ring anybody about. */
+  var wantsSomething = (c.jobs || []).length > 0;
+  if (COORDINATOR_EMAIL && (c.level !== "ok" || wantsSomething)) {
     notifyCheck(c, outcome, defectText);
   }
 
@@ -1997,7 +2027,7 @@ function startRehearsal() {
     ui.ButtonSet.YES_NO);
   if (ok !== ui.Button.YES) return;
 
-  var key = busCurrentSunday();
+  var key = runSunday();
   rehearsalDropSeeds(ss);
   var n = rehearsalSeed(ss, key);
 
@@ -2036,7 +2066,7 @@ function stopRehearsal() {
                       " from an earlier one has been cleared." : ""));
     return;
   }
-  var key = busCurrentSunday();
+  var key = runSunday();
   rehearsalClear();
   try { rehearsalDropSeeds(SpreadsheetApp.getActiveSpreadsheet()); } catch (err) {}
   dropCountsCache(key);
@@ -2223,7 +2253,7 @@ function tripProjectable(state) {
  */
 function tripPayload(ref) {
   var ss  = SpreadsheetApp.getActiveSpreadsheet();
-  var key = busCurrentSunday();
+  var key = runSunday();
 
   if (!trackingOpen(key)) {
     return { ok: true, live: false, why: "open", date: key, cutoff: cutoffWords() };
@@ -2301,7 +2331,7 @@ function tripPayload(ref) {
  */
 function tripDriverPayload(route) {
   var ss  = SpreadsheetApp.getActiveSpreadsheet();
-  var key = busCurrentSunday();
+  var key = runSunday();
   var state = tripState(ss, key, String(route || "").trim() || "North");
   return {
     ok: true, date: key, route: route, now: Date.now(),
@@ -2335,7 +2365,7 @@ function handleTrip(payload) {
   var rehearsing = !!rehearsalOn();
   var ss    = SpreadsheetApp.getActiveSpreadsheet();
   var sh    = ensureTripEvents(ss);
-  var key   = anyToKey(payload.sunday) || busCurrentSunday();
+  var key   = anyToKey(payload.sunday) || runSunday();
   var route = String(payload.route || "").trim() || "North";
   var trip  = String(payload.trip || "").trim();
   var who   = String(payload.driver || "").trim();
@@ -2389,10 +2419,17 @@ function handleTrip(payload) {
     var sched = stop ? stopMomentOn(key, stop.time) : null;
     var off   = sched ? Math.round((at - sched.getTime()) / 60000) : "";
 
+    /* A run started with no check on record is marked here rather than
+       refused there. Status carries it, so no new column and nothing to break
+       on a sheet already in use, and the value still fails every filter that
+       matters: it is not Undone and it is not Rehearsal. */
+    var status = rehearsing ? "Rehearsal"
+               : (kind === "start" && ev.unchecked) ? "Unchecked"
+               : "Logged";
+
     rows.push([
       new Date(), trip, key, route, who, kind,
-      stopId, stop ? stop.stop : "", sched || "", new Date(at), off,
-      rehearsing ? "Rehearsal" : "Logged"
+      stopId, stop ? stop.stop : "", sched || "", new Date(at), off, status
     ]);
     seen[k] = true;
   });
@@ -2436,7 +2473,10 @@ function whoIsTapping() {
     }
     var ev = String(r[5] || "").trim().toLowerCase();
     var at = r[9] instanceof Date ? r[9].getTime() : 0;
-    if (ev === "start") runs[id].started = at;
+    if (ev === "start") {
+      runs[id].started = at;
+      if (status === "unchecked") runs[id].unchecked = true;
+    }
     else if (ev === "end") runs[id].ended = at;
     else runs[id].taps++;
     if (String(r[4] || "").trim()) runs[id].driver = String(r[4] || "").trim();
@@ -2460,13 +2500,22 @@ function whoIsTapping() {
            "\n    " + r.taps + " of " + due + " stops tapped" +
            (due && r.taps >= due ? "  \u2713" : "") +
            (mins !== null ? "\n    " + mins + " minutes end to end" :
-            r.started ? "\n    started, never ended" : "\n    never started");
+            r.started ? "\n    started, never ended" : "\n    never started") +
+           (r.unchecked ? "\n    STARTED WITH NO CHECK RECORDED" : "");
   });
+
+  var unchecked = Object.keys(runs).filter(function (k) { return runs[k].unchecked; }).length;
 
   ui.alert("Who is tapping",
     "Most recent runs first.\n\n" + lines.join("\n\n") +
     "\n\nStops tapped counts only stops that had somebody booked. " +
-    "Empty stops need no tap.",
+    "Empty stops need no tap." +
+    (unchecked
+      ? "\n\n" + unchecked + " run" + (unchecked > 1 ? "s were" : " was") +
+        " started with no walkaround recorded on that phone. Worth asking " +
+        "about: if that number climbs, the check is being skipped rather " +
+        "than the record being lost."
+      : "\n\nEvery run had a check recorded first."),
     ui.ButtonSet.OK);
 }
 
@@ -2486,9 +2535,72 @@ function boardPayload(route) {
 /* Which Sunday a bare link is for. This Sunday until bookings close on the
    morning, then next Sunday. Somebody opening the link at ten past ten on a
    Sunday is not booking the bus that has already left. */
+/**
+ * The Sunday being DRIVEN. Today if today is Sunday, otherwise the next one.
+ *
+ * Not the same question as busCurrentSunday below, and confusing the two was a
+ * real fault. That one rolls forward the moment bookings close, which is right
+ * for the booking form: somebody opening the link at ten past ten on a Sunday
+ * is booking for next week, not for the bus that has already left.
+ *
+ * It is wrong for everything else. The run, the counts, the taps and the
+ * passenger's live view are all about the bus that is out NOW. Keying those to
+ * busCurrentSunday meant that at 09:30 on a Sunday, at the exact minute the
+ * run begins, the whole of the tracking jumped a week: the driver's board
+ * showed no run in progress, every passenger was told bookings were still
+ * open and shown nothing, and any tap he made was filed against the following
+ * Sunday. The rehearsal never caught it because a rehearsal forces that gate
+ * open and hides the roll.
+ *
+ * The client has always used this definition. It was only the server that
+ * disagreed.
+ */
+function runSunday() {
+  return dateToKey(sundayOf(new Date()));
+}
+
+/**
+ * Has this Sunday's service finished, so that next week may be booked?
+ *
+ * Three answers, in order.
+ *   Before the cutoff, no. Today is still being booked.
+ *   After the backstop, yes, whatever the driver did or did not tap.
+ *   Between the two, yes only once every run that started has ended.
+ *
+ * A Sunday where nobody starts a run at all therefore waits for the backstop,
+ * which is correct: the bus may still be out with an app that was never
+ * opened, and nobody is booking at that hour regardless.
+ */
+function runComplete() {
+  var key = runSunday();
+  if (!bookingsClosed(key)) return false;
+
+  var backstop = keyToDate(key);
+  backstop.setHours(RUN_BACKSTOP_HOUR, RUN_BACKSTOP_MIN || 0, 0, 0);
+  if (new Date() >= backstop) return true;
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var routes = [];
+  readBusStops(ss).forEach(function (st) {
+    if (!st.arrival && routes.indexOf(st.route) < 0) routes.push(st.route);
+  });
+  if (!routes.length) return true;
+
+  var started = 0, ended = 0;
+  routes.forEach(function (r) {
+    var t = tripState(ss, key, r);
+    if (t.started) { started++; if (t.ended) ended++; }
+  });
+  return started > 0 && started === ended;
+}
+
+/**
+ * Which Sunday the booking page is offering. Today's until the service is
+ * over, then next week's.
+ */
 function busCurrentSunday() {
   var sunday = sundayOf(new Date());
-  if (bookingsClosed(dateToKey(sunday))) sunday = addWeeks(sunday, 1);
+  if (runComplete()) sunday = addWeeks(sunday, 1);
   return dateToKey(sunday);
 }
 
@@ -3912,7 +4024,10 @@ function bookingsThisSunday() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var ui = SpreadsheetApp.getUi();
 
-  var key = busCurrentSunday();
+  /* The Sunday being driven, not the one now open for booking. On a Sunday
+     morning during the run this is the list you actually want in front of
+     you, and busCurrentSunday would have handed you next week's. */
+  var key = runSunday();
   var when = Utilities.formatDate(keyToDate(key), Session.getScriptTimeZone(), "EEEE d MMMM");
   var counts = bookingCounts(ss, key);
   var stops = readBusStops(ss).filter(function (s) { return !s.arrival; });
@@ -4334,12 +4449,22 @@ function htmlShell(title, colour, lines, buttonLabel, tabName) {
 
 function notifyCheck(c, outcome, defectText) {
   var stopped = c.level === "stop";
-  var subject = (stopped ? "BUS STOPPED: " : "Defect reported: ") + c.reg + " \u2014 " + c.date;
   var defects = defectText ? defectText.split(" | ") : [];
+  var jobs = (c.jobs || []).slice();
+  var clean = !stopped && !defects.length;
+
+  /* Three things this email can be about, and the subject should say which
+     rather than always claiming a defect. A clean bus that wants fuel is not
+     a defect report and should not read like one. */
+  var subject = stopped ? "BUS STOPPED: " + c.reg + ", " + c.date
+              : clean   ? "To arrange: " + c.reg + ", " + c.date
+              :           "Defect reported: " + c.reg + ", " + c.date;
 
   var lines = [
     stopped
       ? "<b>A driver has stopped this vehicle after a safety critical defect.</b>"
+      : clean
+      ? "No defects. The driver has asked for something to be arranged."
       : "A driver has reported a defect. The vehicle was safe to drive.",
     "&nbsp;",
     "<b>Vehicle:</b> " + esc(c.reg) + " (" + esc(c.vehicle || "") + ")",
@@ -4347,9 +4472,15 @@ function notifyCheck(c, outcome, defectText) {
     "<b>When:</b> " + esc(c.date) + " at " + esc(c.time),
     "<b>Mileage:</b> " + esc(c.miles) + (c.milesFlag ? " [" + esc(c.milesFlag) + "]" : ""),
     "<b>Outcome:</b> " + esc(outcome),
-    "&nbsp;",
-    "<b>Defects</b>"
-  ].concat(defects.map(function (d) { return "&bull; " + esc(d); }))
+    "&nbsp;"
+  ].concat(defects.length
+      ? ["<b>Defects</b>"].concat(defects.map(function (d) { return "&bull; " + esc(d); }))
+      : [])
+   .concat(jobs.length
+      ? (defects.length ? ["&nbsp;"] : [])
+        .concat(["<b>To arrange</b>"])
+        .concat(jobs.map(function (j) { return "&bull; " + esc(j); }))
+      : [])
    .concat(c.loc ? ["&nbsp;", "<b>Checked at:</b> " +
        '<a href="https://maps.google.com/?q=' + esc(c.loc.replace(/\s/g, "")) + '">' +
        esc(c.loc) + "</a> (to within " + esc(c.locAcc) + " yd)" +
@@ -4364,17 +4495,24 @@ function notifyCheck(c, outcome, defectText) {
     "Driver:   " + c.driver + (c.role ? " (" + c.role + ")" : ""),
     "When:     " + c.date + " at " + c.time,
     "Mileage:  " + c.miles + (c.milesFlag ? "   [" + c.milesFlag + "]" : ""),
-    "Outcome:  " + outcome, "", "Defects:",
-    defects.map(function (d) { return "  - " + d; }).join("\n"),
-    "", "Signed: " + c.sign, "", tabUrl(DEFECTS_SHEET)
-  ].join("\n");
+    "Outcome:  " + outcome, ""
+  ].concat(defects.length
+      ? ["Defects:"].concat(defects.map(function (d) { return "  - " + d; }))
+      : [])
+   .concat(jobs.length
+      ? ["", "To arrange:"].concat(jobs.map(function (j) { return "  - " + j; }))
+      : [])
+   .concat(["", "Signed: " + c.sign, "", tabUrl(DEFECTS_SHEET)])
+   .join("\n");
 
   MailApp.sendEmail({
     to: COORDINATOR_EMAIL,
     subject: subject,
     body: plain,
-    htmlBody: htmlShell(stopped ? "Bus stopped \u2014 critical defect" : "Defect reported",
-                        stopped ? "#A8231B" : "#B26B00",
+    htmlBody: htmlShell(stopped ? "Bus stopped, critical defect"
+                        : clean ? "Nothing wrong, something to arrange"
+                        : "Defect reported",
+                        stopped ? "#A8231B" : clean ? "#146B41" : "#B26B00",
                         lines, "Open the defect record", DEFECTS_SHEET)
   });
 }

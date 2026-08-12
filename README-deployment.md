@@ -447,8 +447,15 @@ be **safe**, and by then you are not booking a wash, you are dealing with a
 problem. A bus can be perfectly fine to drive and still look poor for a
 wedding, and nothing recorded that until now.
 
-Both get their own column on the Checks sheet, and both appear in the Sunday
-evening digest, which is where you would actually act on them.
+Both get their own column on the Checks sheet. They also go out in the check
+email at the time, under **To arrange**, and again in the Sunday evening
+digest. The email matters more than it looks: needs fuel and tyres need air on
+an otherwise clean bus are the two things most worth knowing before the next
+run, and they are exactly what a driver will not ring anybody about.
+
+An email is sent when there is a defect OR when there is something to arrange,
+so a clean bus that wants a wash still reaches you. The subject says which:
+**To arrange** rather than **Defect reported**.
 
 ## Duty reminders
 
@@ -1503,6 +1510,114 @@ has no service worker and nothing cached, saw a blank white screen until Google
 answered, before even the word Loading appeared. It is now fetched without
 blocking. Both apps already fall back to system fonts, so text renders at once
 and swaps when the real face arrives.
+
+**v1.16** The run button where the thumb is, and unchecked runs on the record.
+
+**Start your run moved into the fixed bar.** It sat under the summary, below
+the fold, while Done sat in the bar in front of the driver. So the button he
+was meant to press was the one he had to go looking for, and the one that ends
+the morning was the one under his thumb. It is now the primary button in the
+bar and Done drops beside it. Not a popup: that is the thing a driver dismisses
+without reading, and then the action is hidden and he has been taught to tap it
+away.
+
+**Unchecked runs now reach the record.** The app already refused to start a run
+with no check signed on that phone today, offering **Do the check** or **Set off
+anyway**, and refusing outright when a check had stopped the bus. What it did
+not do was tell anybody afterwards. A run started the second way is now written
+into Trip Events as `Unchecked`, and **Who is tapping** counts them and says
+what a rising number would mean: the check is being skipped rather than the
+record being lost. That count is what tells you whether the gate is doing
+anything at all.
+
+The gate reads the phone, not the spreadsheet, and that is deliberate. The
+check is stored at the moment of signing. A driver who did the walkaround in a
+car park with no signal has done the work, and whether Apps Script has heard
+about it yet must not decide whether he can drive.
+
+**v1.16.3** The booking page is slower to complain.
+
+A passenger opening the link during a deployment saw "the stops could not be
+loaded". Nothing was wrong with the code and it cured itself within seconds:
+Apps Script serves an error page for a short while when a script is saved, and
+the page tried once more after 1.2 seconds and then gave up.
+
+That is thin for the page the whole congregation opens on a Sunday morning. It
+now makes three attempts across five and a half seconds before saying anything.
+The wording no longer suggests the settings are wrong either, because after
+three attempts it may still be nothing more than a bad moment.
+
+Worth knowing what that message means when it does appear: an answer beginning
+with a less-than sign is an HTML page from Google, so the request never reached
+the script at all. The script itself was checked and carries nothing that could
+stop it parsing, no arrow functions, no template literals and nothing executing
+at load.
+
+**v1.16.2** Next week opens when this week's buses are back, not at 09:30.
+
+The booking page used to roll forward at the cutoff. So from 09:31 a passenger
+was looking at next Sunday's list while the panel above it tracked today's bus,
+and a driver's morning ran against a page that had already moved on. v1.16.1
+patched that with labelling. This removes it instead: the page stays on today
+until every run that started has ended.
+
+The whole morning therefore reads as one thing. Bookings are closed, the list
+shown is the one the driver is working from, and the live panel above it is
+about the same buses.
+
+**A backstop at 14:00**, because the roll would otherwise depend on somebody
+remembering End trip. That is the last tap of the morning, made after the bus
+is parked and everybody is getting off, and forgetting it would mean nobody
+could book for next Sunday until it was noticed. With two routes it is worse
+still: one forgotten tap would hold up the other route's passengers. Church
+finishes around one, both buses are long back, and nobody books at that hour
+anyway.
+
+A Sunday where nobody starts a run waits for the backstop too, which is right:
+the bus may well be out with an app that was never opened.
+
+**It does not invent an end time.** A trip nobody ended is not closed at 14:00
+and given a three and a half hour journey, because a wrong number on the record
+is worse than a blank. Who is tapping goes on saying started, never ended,
+which is the thing worth chasing.
+
+**v1.16.1** The tracking would have jumped a week at 09:30 on Sunday.
+
+Found by rehearsing, though not the thing the rehearsal was showing.
+
+Two questions had been sharing one answer. **Which Sunday is open for booking**
+rolls forward the moment bookings close, and should: somebody opening the link
+at ten past ten on a Sunday is booking for next week, not for the bus that has
+already left. **Which Sunday is being driven** does not roll, because the bus is
+out now.
+
+The trip payloads asked the first question and used it for the second. So at
+09:30 on a Sunday, at the exact minute the run begins, everything about the run
+moved to the following week: the driver's board would show no run in progress,
+every passenger would be told bookings were still open and shown nothing, and
+any tap would be filed against the wrong date. The booking counts were keyed
+correctly, so the two halves of the same screen would have disagreed.
+
+The rehearsal could never have caught it, because a rehearsal forces that gate
+open and hides the roll entirely. It only came out by reasoning about what the
+clock would do on the day.
+
+There is now `runSunday()`, and the run, the counts, the taps, the passenger's
+live view and the coordinator's Bookings for this Sunday all use it. The
+booking form, the link and `handleBooking` keep the rolling one, which is what
+they always wanted. The driver's app had the correct definition all along; only
+the server disagreed.
+
+**And the thing the rehearsal did show.** A passenger could watch the bus
+running and change their stop underneath it. On a real Sunday that stop belongs
+to NEXT week, because the page has rolled, but nothing said so loudly enough.
+The notice now reads that today's bus has left and cannot be changed, and that
+everything below is for the following Sunday, which is named. The live panel is
+headed **Today's bus** rather than **Your stop** whenever the two differ.
+
+During a rehearsal the same screen is genuinely confusing in the other
+direction, because bookings really are still open and really do save. The
+rehearsal banner now says so: the position is pretend, the booking is not.
 
 ## The Minibus menu
 

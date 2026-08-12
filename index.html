@@ -463,6 +463,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
    was the newest layer and looked it: its own radii, its own spacing, and a
    sticky block nothing else in the app used. */
 .trip-strip{border:1px solid var(--hair);border-radius:var(--r);padding:13px;margin:0 0 12px;background:var(--card)}
+.trip-strip .btn{width:100%;margin-top:9px}
 .trip-note{margin:0;font-size:13px;line-height:1.5;color:var(--muted)}
 .trip-note b{color:var(--ink)}
 .trip-note+.trip-note{margin-top:6px}
@@ -485,6 +486,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .btn-tap{min-height:66px;font-size:20px;width:100%;background:var(--pass);color:#fff;
   border-color:var(--pass);box-shadow:0 1px 0 rgba(0,0,0,.08)}
 .trip-actions .btn{width:100%}
+.trip-two{display:flex;gap:8px;margin-top:10px}
+.trip-two .btn{flex:1}
 .trip-rehearsal{background:var(--stop-bg);border:1px solid var(--stop-line);color:var(--stop);
   border-radius:var(--r);padding:13px;margin:0 0 12px;font-size:13px;line-height:1.5}
 .trip-rehearsal b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:15px;
@@ -710,12 +713,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       <button class="btn btn-ghost" id="share" type="button">Share a copy</button>
       <button class="btn btn-ghost" id="retry" type="button">Try sending again</button>
     </div>
-    <!-- The check and the run are twenty minutes apart on a real Sunday, and
-         until now nothing on this screen said so. A driver had to know to go
-         back and find a grey button. Shown only when it is true: his route,
-         his Sunday, bookings closed. -->
-    <button class="btn btn-main btn-wide" id="sentToStops" type="button"
-            style="display:none;margin-top:12px">Start your run</button>
+    <!-- Start your run lives in the fixed bar at the bottom, put there by
+         paintFoot. This line only says whose Sunday it is. -->
     <p class="tiny" id="sentToStopsWhy" style="display:none;margin-top:8px"></p>
   </section>
 
@@ -837,11 +836,13 @@ function callFetch(url, opts, ms){
 }
 
 var QKEY = "fleet.queue.v1";
+
+
 var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.15.1";
+var APP_VERSION = "v1.16.3";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1140,8 +1141,8 @@ function critNames(){
  */
 /* What comes after a finished check, when there is something. */
 function paintSentNext(){
-  var btn=$("sentToStops"), why=$("sentToStopsWhy");
-  if(!btn) return;
+  var why=$("sentToStopsWhy");
+  if(!why) return;
 
   /* Shown to the driver on duty, whatever the clock says.
 
@@ -1153,11 +1154,8 @@ function paintSentNext(){
      which is the right place for that rule to live. */
   var route=rotaMyRoute();
   var ready = !!route && !trip.ended;
-  btn.style.display = ready ? "" : "none";
-  if(why){
-    why.style.display = ready ? "" : "none";
-    why.textContent = ready ? "You are on "+route+" today." : "";
-  }
+  why.style.display = ready ? "" : "none";
+  why.textContent = ready ? "You are on "+route+" today." : "";
 }
 
 function paintLinks(){
@@ -1353,7 +1351,17 @@ function paintFoot(){
        front of him invites a second check nobody wants and suggests he has
        something left to do. It stays for a coordinator, who does the full
        inspections and genuinely does move between vehicles. */
-    btn("Done","btn-main",goHome);
+    /* The run goes in the bar, not down the page.
+
+       It sat under the summary, below the fold, while Done sat in the fixed
+       bar in front of him. So the button he was meant to press was the one he
+       had to go looking for, and the one that ends the morning was the one
+       under his thumb. A popup would be worse again: it is the thing a driver
+       dismisses without reading, and then the action is hidden AND he has been
+       taught to tap it away. */
+    var onDuty = !!rotaMyRoute() && !trip.ended;
+    if(onDuty) btn("Start your run","btn-main",rotaOpenStops);
+    btn("Done", onDuty ? "btn-ghost" : "btn-main", goHome);
     if(loadQ().length) btn("Waiting to send","btn-ghost",function(){ renderPending(); show("pending"); });
     else if(!rotaMyRoute() || tripSeesAll()) btn("Check another bus","btn-ghost",reset);
     return;
@@ -1929,6 +1937,8 @@ function submit(){
     renewals: dueItems(st.veh).map(function(x){ return x.label+": "+x.words+" ("+prettyDate(x.date)+")"; }).join(" | ")
   };
   lastRec = rec;
+
+  noteCheckDone(rec);   /* before any sending: a queued check still counts */
   sendingNow = true;   /* set before the screen paints, or the fresh state
                           check would call it sent before it has gone */
 
@@ -2270,6 +2280,43 @@ function rotaFetch(fromDate,weeks,cb){
    asking for it. The buttons go dead above walking pace and say why.
    ========================================================================== */
 
+/* Proof that a check happened, kept apart from the check itself.
+
+   A driver may not start a run without one. It has to be local rather than
+   read off the sheet, because a check waiting in the queue with no signal
+   still counts: he did the work, and the network is not his doing.
+
+   Held by driver and day rather than by vehicle. The most likely reason
+   somebody has no record is that a coordinator inspected the bus on his own
+   phone and somebody else is driving it, and tying this to the vehicle would
+   turn that into a lockout at the kerb for no gain. */
+var CHKKEY = "fleet.lastcheck.v1";
+
+function noteCheckDone(rec){
+  try{
+    store.set(CHKKEY, JSON.stringify({
+      day: new Date().toDateString(),
+      driver: (rec.driver||"").trim(),
+      reg: rec.reg||"",
+      kind: rec.kind||"",
+      level: rec.level||"ok"
+    }));
+  }catch(e){}
+}
+
+/* What today's check says about whether this driver may set off.
+   ok      a check was signed today and the bus was not stopped
+   stopped a check was signed today and it stopped the bus
+   none    nothing signed on this phone today */
+function checkStanding(){
+  var c=null;
+  try{ c=JSON.parse(store.get(CHKKEY)||"null"); }catch(e){ c=null; }
+  if(!c || c.day!==new Date().toDateString()) return { state:"none" };
+  if((c.driver||"")!==(st.driver||"").trim()) return { state:"none" };
+  if(c.level==="stop") return { state:"stopped", reg:c.reg };
+  return { state:"ok", reg:c.reg, kind:c.kind };
+}
+
 var TQKEY = "fleet.trip.queue.v1";
 var TSKEY = "fleet.trip.state.v1";
 
@@ -2280,6 +2327,8 @@ var TRIP_MOVING_MS = 2.2;
 
 var trip = { id:"", route:"", started:0, ended:0, served:{}, lastAt:0, lastStop:"", offset:null };
 var tripClosed = false, tripCutoff = "", tripRehearsal = false;
+var tripUnchecked = false;       /* this run began with no check on this phone */
+var tripUncheckedAsked = false;  /* the warning is on screen, awaiting a choice */
 var tripSpeed = null;      /* metres per second, null when unknown */
 var tripSpeedAt = 0;
 var tripWatch = null;
@@ -2416,16 +2465,37 @@ function tripFetch(route,cb){ rotaCountsFetch(route,cb); }
 
 
 /* ---- the actions ------------------------------------------------------- */
-function tripStart(route){
+function tripStart(route, anyway){
   if(!tripClosed){ toast("Bookings are still open. The run starts after "+(tripCutoff||"09:30")+"."); return; }
   if(tripMoving()){ toast("Not while the bus is moving."); return; }
+
+  var chk=checkStanding();
+
+  /* The one hard refusal in the whole app.
+
+     A check that ends in a critical defect stops the bus. Letting a run start
+     after that would mean the app recorded the vehicle as unfit and then
+     helped somebody drive it. Swap buses, check that one, start again. */
+  if(chk.state==="stopped"){
+    toast("Your check stopped "+(chk.reg||"that bus")+". Check the other bus before setting off.");
+    return;
+  }
+
+  /* No check today. Not blocked, because a hard block strands a full bus when
+     a phone has been reinstalled or somebody else did the inspection, and a
+     driver who cannot start simply drives with nothing recorded at all. It is
+     warned, it takes a second deliberate tap, and it is written down. */
+  if(chk.state==="none" && !anyway){ tripUncheckedAsked=true; tripPaint(); return; }
+  tripUnchecked = (chk.state==="none");
   trip.id = "t"+Math.random().toString(36).slice(2,10)+Date.now().toString(36);
   trip.route = route;
   trip.started = tripNow();
   trip.ended = 0;
   trip.served = {};
+  tripUncheckedAsked=false;
   tripSaveState();
-  tripQueue({ event:"start", stopId:"", at:trip.started });
+  tripQueue({ event:"start", stopId:"", at:trip.started,
+              unchecked: tripUnchecked ? 1 : 0 });
   tripWatchStart();
   tripPaint();
 }
@@ -3154,6 +3224,12 @@ function rotaPaintStops(){
     });
   });
   if($("tripStart")) $("tripStart").addEventListener("click",function(){ tripStart(route); });
+  if($("tripStartAnyway")) $("tripStartAnyway").addEventListener("click",function(){
+    tripStart(route,true);
+  });
+  if($("tripDoCheck")) $("tripDoCheck").addEventListener("click",function(){
+    tripUncheckedAsked=false; stopsClose(); reset();
+  });
   if($("tripEnd"))   $("tripEnd").addEventListener("click",tripEnd);
   tripPaintMoving();
 }
@@ -3183,6 +3259,26 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
   var h='<div class="trip-strip">';
 
   if(!trip.started || trip.route!==route){
+    var chk=mayTap ? checkStanding() : null;
+
+    if(mayTap && chk.state==="stopped"){
+      h+='<p class="trip-note"><b class="trip-stopme">Your check stopped '+
+         esc(chk.reg||"the bus")+'.</b> No run can be started on it. Check the '+
+         'other bus, then come back.</p>';
+      return h+'</div>';
+    }
+
+    if(mayTap && tripUncheckedAsked){
+      h+='<p class="trip-note"><b>No check signed on this phone today.</b> '+
+         'Do the check first. If somebody else has already checked this bus, '+
+         'you can set off, and that is recorded.</p>'+
+         '<div class="trip-two">'+
+           '<button class="btn btn-main" id="tripDoCheck">Do the check</button>'+
+           '<button class="btn btn-ghost" id="tripStartAnyway">Set off anyway</button>'+
+         '</div>';
+      return h+'</div>';
+    }
+
     if(mayTap){
       h+= tripClosed
         ? '<button class="btn btn-main" id="tripStart">Start trip</button>'+
@@ -3562,7 +3658,7 @@ $("toRota").addEventListener("click",rotaOpen);
    the thing he wants at ten past nine on a Sunday. */
 $("toStops").addEventListener("click",rotaOpenStops);
 $("stopsBack").addEventListener("click",stopsClose);
-$("sentToStops").addEventListener("click",rotaOpenStops);
+
 
 /* Back to top. The rota carries two years of Sundays, so scrolling out of it
    by thumb was a journey of its own. */
