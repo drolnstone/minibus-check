@@ -56,7 +56,18 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Loaded without blocking first paint.
+
+     As a plain stylesheet link this held the page blank until Google
+     answered, which on a cold mobile connection is most of what "it took a
+     minute to load" actually was. media="print" makes the browser fetch it at
+     low priority and not wait for it; the onload switches it back once it
+     arrives. The body already falls back to system fonts, so text appears at
+     once and swaps when the real face lands. -->
+<link rel="stylesheet" media="print" onload="this.media='all';this.onload=null"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<noscript><link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"></noscript>
 
 <style>
 /* Tokens lifted from the checks app so the two pages read as one product. */
@@ -211,6 +222,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   <p class="when" id="when"></p>
   <div id="live"></div>
   <div id="body"><p class="lede">Loading the stops…</p></div>
+
   <p class="foot" id="foot"></p>
 </div>
 
@@ -234,6 +246,30 @@ var ENDPOINT = "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-
 var $ = function(id){ return document.getElementById(id); };
 function esc(x){ return String(x==null?"":x).replace(/[&<>"']/g,function(c){
   return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+
+/* Every call to Apps Script, with a limit on how long it may hang.
+
+   fetch has no timeout of its own. A request that never answers was held until
+   the browser gave up, which on a phone can be a minute or more, and the page
+   simply sat there. Twelve seconds is well past a cold start and well short of
+   somebody deciding the app is broken.
+
+   Done with a race rather than an AbortController on purpose. Passing a signal
+   in the request options threw "The object can not be cloned" on this page,
+   because a page inside a service worker's scope has its request options
+   structured-cloned to hand to the worker, and an AbortSignal cannot be
+   cloned. The request itself therefore is not cancelled here, it is only
+   stopped from being waited on, which is all the page actually needed. */
+var CALL_TIMEOUT = 12000;
+
+function callFetch(url, opts){
+  return Promise.race([
+    fetch(url, opts || {}),
+    new Promise(function(_, reject){
+      setTimeout(function(){ reject(new Error("took too long to answer")); }, CALL_TIMEOUT);
+    })
+  ]);
+}
 
 var toastTimer;
 function toast(msg){
@@ -281,7 +317,7 @@ function prettyDate(key){
 }
 
 function load(again){
-  fetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
+  callFetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out=readJson(t);
@@ -360,7 +396,7 @@ var liveTimer = null, liveBusy = false, live = null;
 function liveFetch(){
   if(liveBusy || !navigator.onLine) return;
   liveBusy=true;
-  fetch(ENDPOINT+"?trip=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
+  callFetch(ENDPOINT+"?trip=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out=JSON.parse(t);
@@ -464,8 +500,8 @@ function paint(){
 
   if(CLOSED){
     html+='<div class="note note-warn"><b>Bookings have closed for this Sunday.</b> '+
-          'The times are below. If your plans have changed, tell the group directly, '+
-          'because the driver already has this list.</div>';
+          'The times are below. If your plans have changed, tell the group '+
+          'directly, because the driver already has this list.</div>';
   } else if(ROLLED){
     html+='<div class="note note-warn"><b>Today\u2019s bus is closed and on its way.</b> '+
           'You are now booking for '+esc(prettyDate(DATE))+'.</div>';
@@ -583,7 +619,7 @@ function paintBar(){
 
 function send(payload, done){
   saving=true; paintBar();
-  fetch(ENDPOINT,{
+  callFetch(ENDPOINT,{
     method:"POST", redirect:"follow",
     headers:{"Content-Type":"text/plain;charset=utf-8"},
     body: JSON.stringify({ action:"booking", booking: payload })
@@ -612,7 +648,7 @@ function send(payload, done){
 /* Did it land after all? One read, and the answer is not in doubt: the
    spreadsheet either holds this booking or it does not. */
 function verifySend(payload, done){
-  fetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
+  callFetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out=readJson(t);
