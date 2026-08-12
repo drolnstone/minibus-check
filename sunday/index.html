@@ -254,13 +254,17 @@ function esc(x){ return String(x==null?"":x).replace(/[&<>"']/g,function(c){
    simply sat there. Twelve seconds is well past a cold start and well short of
    somebody deciding the app is broken.
 
+   Twenty five seconds rather than twelve. A cold Apps Script container can
+   honestly take that long, and a timeout that cuts off a working call is
+   worse than no timeout at all: it turns a slow answer into a failure.
+
    Done with a race rather than an AbortController on purpose. Passing a signal
    in the request options threw "The object can not be cloned" on this page,
    because a page inside a service worker's scope has its request options
    structured-cloned to hand to the worker, and an AbortSignal cannot be
    cloned. The request itself therefore is not cancelled here, it is only
    stopped from being waited on, which is all the page actually needed. */
-var CALL_TIMEOUT = 12000;
+var CALL_TIMEOUT = 25000;
 
 function callFetch(url, opts){
   return Promise.race([
