@@ -29,80 +29,27 @@ var TOKEN = "dominion-minibus";                   // must match config.js
 /* ---- passenger bookings -------------------------------------------------
 
    The driver app's token sits in config.js on a public web host, so anyone
-   who views source has it. For vehicle checks that is tolerable: the worst
-   case is a made up inspection record. Passenger bookings are not, because
-   the same openness would let a stranger wipe a Sunday's bookings or read
-   back where people will be standing and when.
+   who views source has it. Bookings do not use TOKEN at all, and do not need
+   to: there is nothing on the Bus Bookings tab that names anybody. A stop, a
+   headcount, and a random handle the passenger's own phone made up.
 
-   So bookings do not use TOKEN at all. Each Sunday has its own code, worked
-   out from the date and the secret below, which never leaves this file. The
-   link you post in the group carries that week's code, and it stops working
-   when the Sunday passes. Somebody who keeps an old link has nothing.
+   There used to be a per-Sunday code on the link, worked out from a secret
+   held in Script Properties, plus a menu item to set that secret and a
+   BUS_REQUIRE_CODE switch to bring the whole thing back. All of it has gone.
 
-   The secret is NOT in this file. It lives in Script Properties, inside the
-   Apps Script project on Google's servers, and is never written down here.
-
-   That is deliberate. This file is likely to end up in a GitHub repository
-   next to the web files, where .gs is served as plain text and anyone can
-   read it. Worse, a secret committed once stays in the commit history for
-   good, so deleting it later does not take it back. A secret that was never
-   in the file cannot be committed by accident.
-
-   Set it with Minibus > Set the bus link secret. It generates a random one,
-   stores it, and never shows it to anybody, including you. Run it again to
-   change it, which kills every link already sent and is how you shut off one
-   that has gone somewhere you did not intend. */
-function busSecret() {
-  try {
-    return PropertiesService.getScriptProperties().getProperty("BUS_LINK_SECRET") || "";
-  } catch (err) { return ""; }
-}
-
-function setBusSecret() {
-  var ui = SpreadsheetApp.getUi();
-  var existing = busSecret();
-  if (existing) {
-    var answer = ui.alert("Replace the bus link secret?",
-      "A secret is already set. Replacing it stops EVERY link already sent " +
-      "from working, including this Sunday's if you have posted it.\n\n" +
-      "Do that only if a link has gone somewhere it should not have.",
-      ui.ButtonSet.YES_NO);
-    if (answer !== ui.Button.YES) return;
-  }
-
-  /* Generated rather than typed. A secret nobody has ever seen cannot be
-     pasted into a message, a commit, or a conversation with an AI. */
-  var raw = Utilities.getUuid() + Utilities.getUuid() + String(Date.now());
-  var sig = Utilities.computeHmacSha256Signature(raw, Utilities.getUuid());
-  var secret = sig.map(function (b) {
-    var v = (b < 0 ? b + 256 : b).toString(16);
-    return v.length === 1 ? "0" + v : v;
-  }).join("");
-
-  PropertiesService.getScriptProperties().setProperty("BUS_LINK_SECRET", secret);
-  ui.alert("\u2713  Done.\n\n" +
-    "The secret is stored in this Apps Script project, not in Code.gs, so it " +
-    "is safe to put Code.gs in a public repository.\n\n" +
-    "It is not shown here on purpose. Nothing needs it except this script, " +
-    "and a secret nobody has seen cannot be leaked.\n\n" +
-    (existing ? "Every link sent before now has stopped working. Send a new one."
-              : "You can now use Minibus \u203a Bus link for this Sunday."));
-}
+   The code came out of the link in v1.8 so that a family did not have to
+   chase a new address every week. What was left behind only looked like a
+   safety valve: the passenger page never read a code and never sent one, so
+   turning the switch on would not have restored a gate, it would have
+   answered every passenger with "That link is not valid" and left somebody
+   reading the script on a Sunday morning to find out why. A switch that
+   cannot be thrown safely is worse than no switch. */
 
 /* Where the passenger page is hosted. Used only to build the link the menu
    gives you, so it just needs to match where the bus folder actually sits.
    The trailing slash matters: the page is sunday/index.html. */
 var BUS_PAGE_URL = "https://drolnstone.github.io/minibus-check/sunday/";
 
-/* The passenger link used to carry a per-Sunday code, so a new link had to
-   go into the group every week. It now carries nothing at all: one address,
-   pinned in the group, good forever. The page asks the script which Sunday
-   it is and the script answers.
-
-   Set this true and the old gate comes back, with ONE code that does not
-   rotate. It is here as an escape hatch: if the link is ever abused, turn
-   it on, post the new address once and carry on. Nothing else changes. */
-var BUS_REQUIRE_CODE = false;
 
 /* When bookings close. Day 0 is Sunday itself, 6 is Saturday.
 
@@ -319,6 +266,13 @@ function doPost(e) {
       return reply({ ok: false, error: "bad token" });
     }
 
+    /* Answers yes or no about one PIN and nothing else. Before the token
+       test on purpose: it is its own gate, it reveals nothing on a wrong
+       answer, and it counts its own failures. */
+    if (String(body.action || "") === "pin") {
+      return handlePinCheck(body.pin);
+    }
+
     if (String(body.action || "") === "rotaRequest") {
       return handleRotaRequest(body.request);
     }
@@ -350,7 +304,7 @@ function doGet(e) {
   /* What the passenger page loads: the stops for that Sunday, how many are
      booked at each, and this device's own booking if it has one. */
   if (p.bus) {
-    try { return reply(busPayload(p.d, p.k, p.ref)); }
+    try { return reply(busPayload(p.d, p.ref)); }
     catch (err) { return reply({ ok: false, error: String(err) }); }
   }
 
@@ -395,7 +349,7 @@ function handleCheck(c) {
     "Driver", "Role", "Mileage", "Mileage flag", "Outcome",
     "Items checked", "Defect count", "Defects", "Renewals due", "Signed",
     "Not applicable", "Check type", "Where checked", "Accuracy (yd)",
-    "Distance from base (yd)", "Location note", "Fuel", "To arrange"
+    "Distance from base (yd)", "Location note", "Fuel", "To arrange", "PIN check"
   ]);
   ensureChecksColumns(checks);
 
@@ -412,17 +366,31 @@ function handleCheck(c) {
     return d.name + (d.crit ? " (critical)" : "") + (d.note ? ": " + d.note : "");
   }).join(" | ");
 
+  /* Only a genuine pair of coordinates may become a link. Anything else goes
+     in as plain text: this is built by the app, but the endpoint is open, and
+     a hand-made post could otherwise choose the formula that lands in the
+     coordinator's spreadsheet. */
+  var locCell = "";
+  if (c.loc) {
+    var coords = String(c.loc).replace(/\s/g, "");
+    locCell = /^-?\d{1,3}\.\d+,-?\d{1,3}\.\d+$/.test(coords)
+      ? '=HYPERLINK("https://maps.google.com/?q=' + coords + '","' + coords + '")'
+      : safeText(c.loc);
+  }
+
   checks.appendRow([
-    new Date(), c.id, c.date || "", c.time || "", c.vehicle || "", c.reg || "",
-    c.driver || "", c.role || "", c.miles || "", c.milesFlag || "", outcome,
+    new Date(), c.id, safeText(c.date), safeText(c.time), safeText(c.vehicle),
+    safeText(c.reg), safeText(c.driver), safeText(c.role),
+    c.miles || "", safeText(c.milesFlag), outcome,
     (c.checked || "") + "/" + (c.total || ""),
-    (c.defects || []).length, defectText, c.renewals || "", c.sign || "",
-    (c.na || []).join(", "), c.kind || "Pre-drive",
-    c.loc ? '=HYPERLINK("https://maps.google.com/?q=' + c.loc.replace(/\s/g, "") +
-            '","' + c.loc + '")' : "",
+    (c.defects || []).length, safeText(defectText), safeText(c.renewals),
+    safeText(c.sign), safeText((c.na || []).join(", ")),
+    safeText(c.kind || "Pre-drive"),
+    locCell,
     c.locAcc === 0 || c.locAcc ? c.locAcc : "",
     c.locDist === 0 || c.locDist ? c.locDist : "",
-    c.locNote || "", c.fuel || "", (c.jobs || []).join(", ")
+    safeText(c.locNote), safeText(c.fuel), safeText((c.jobs || []).join(", ")),
+    pinWords(c)
   ]);
 
   // One row per defect as well, so the coordinator can filter and chase them.
@@ -433,8 +401,8 @@ function handleCheck(c) {
     ]);
     c.defects.forEach(function (d) {
       defs.appendRow([
-        new Date(), c.id, c.date || "", c.reg || "", c.driver || "",
-        d.name, d.crit ? "YES" : "", d.note || "", "Open", "", ""
+        new Date(), c.id, safeText(c.date), safeText(c.reg), safeText(c.driver),
+        safeText(d.name), d.crit ? "YES" : "", safeText(d.note), "Open", "", ""
       ]);
       applyStatusDropdown(defs, defs.getLastRow());
     });
@@ -456,6 +424,23 @@ function handleCheck(c) {
 }
 
 /**
+ * What the record says about the PIN, and only when it says anything.
+ *
+ * Blank when no PIN was asked for, which is most rows and always was.
+ * Verified when the sheet itself checked it. The third case is the one worth
+ * having: the phone had never seen that driver and had no signal to ask, so
+ * it let him through on purpose. A driver locked out at the kerb does not go
+ * and do the check another way, he drives with nothing recorded at all.
+ * Written down beats blocked, and this is where it is written down.
+ */
+function pinWords(c) {
+  var s = String((c && c.pinState) || "");
+  return s === "ok" ? "Verified"
+       : s === "offline" ? "Not verified (no signal)"
+       : "";
+}
+
+/**
  * Adds any column this version writes that an older sheet does not have yet.
  * Only ever appends on the right, so every existing row keeps its meaning and
  * nothing already recorded moves.
@@ -469,7 +454,7 @@ function ensureChecksColumns(sh) {
 
   var want = ["Not applicable", "Check type", "Where checked",
               "Accuracy (yd)", "Distance from base (yd)", "Location note",
-              "Fuel", "To arrange"];
+              "Fuel", "To arrange", "PIN check"];
   var lastCol = sh.getLastColumn();
   if (lastCol < 1) return;
   var head = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
@@ -502,9 +487,14 @@ function lastMileagePayload() {
     var reg = String(r[5] || "").trim();
     var miles = Number(r[8]);
     if (!reg || !miles) return;
-    var when = r[0] instanceof Date ? r[0].getTime() : 0;
+    /* isDateLike rather than instanceof, for the reason set out on that
+       function: a real date that came from anywhere else fails instanceof and
+       would score 0 here, which makes every row equal and leaves whichever
+       happens to sit lowest in the sheet winning. */
+    var when = isDateLike(r[0]) ? r[0].getTime() : 0;
     if (!last[reg] || when >= last[reg]._t) {
-      last[reg] = { miles: miles, date: String(r[2] || ""), driver: String(r[6] || ""), _t: when };
+      last[reg] = { miles: miles, date: dayWords(r[2]), time: timeWords(r[3]),
+                    driver: String(r[6] || ""), _t: when };
     }
   });
 
@@ -594,10 +584,20 @@ function rotaPayload(fromKey, weeks) {
     from: dateToKey(from),
     weeks: weeks,
     pattern: pattern,
+    /* hasPin, never the fingerprint.
+
+       This used to send pinHash(name, pin) for every driver. doGet takes no
+       token, and the /exec address is in config.js on a public web host, so
+       the whole set could be read by anybody who looked. Four digits salted
+       with a name that is sitting in the same payload is seconds of work for
+       a computer, which made the gate open to anyone who thought to try.
+
+       The app only ever needed to know WHETHER to ask a man for a PIN.
+       Whether the one he typed is right is answered by the POST below, and
+       the fingerprint never leaves this project. */
     drivers: drivers.filter(function (d) { return d.active; })
                      .map(function (d) {
-                       return { name: d.name, role: d.role,
-                                pin: pinHash(d.name, d.pin) };
+                       return { name: d.name, role: d.role, hasPin: !!d.pin };
                      }),
     /* So the next driver sees what the last one reported and still open. */
     openDefects: openDefectsByReg(ss),
@@ -619,8 +619,7 @@ function rotaPayload(fromKey, weeks) {
 /** Makes sure the tabs exist. Cheap: no reading, no writing, no formatting. */
 function ensureRotaSheets(ss) {
   sheet(ss, ROTA_SHEET, ROTA_HEADERS);
-  var drivers = sheet(ss, DRIVERS_SHEET,
-    ["Name", "Role", "Active", "Primary order", "PIN", "Email"]);
+  var drivers = sheet(ss, DRIVERS_SHEET, DRIVERS_HEADERS);
   sheet(ss, REQUESTS_SHEET, [
     "Received", "Request ID", "Sunday", "Driver", "Type", "Reason",
     "Swap with", "Status", "Decided on", "Replacement assigned",
@@ -630,9 +629,14 @@ function ensureRotaSheets(ss) {
   /* Seed the register here rather than only in setUpEverything. Whichever
      path reaches the sheet first must leave it usable: an empty Drivers tab
      means no dropdowns and no pattern to fill the rota from. */
+  /* Route included. This used to seed six columns and leave Route empty, and
+     blank counts as North, so every ordered driver collapsed into a single
+     seven-name North pattern and the North rota ran through the South
+     drivers. ensureDrivers had it right and this did not, and either of them
+     can be the first to reach an empty tab. */
   if (drivers.getLastRow() < 2) {
     SEED_DRIVERS.forEach(function (d) {
-      drivers.appendRow([d.name, d.role, "YES", d.order, "", ""]);
+      drivers.appendRow([d.name, d.role, "YES", d.order, "", "", d.route]);
     });
   }
 }
@@ -1031,19 +1035,75 @@ function readDrivers(ss) {
 }
 
 /**
- * A one-way fingerprint of a PIN, so the phone can check one without the
- * PIN ever leaving this sheet. Salted with the name, so two people who
+ * A one-way fingerprint of a PIN. Salted with the name, so two people who
  * happen to pick the same four digits do not produce the same fingerprint.
  *
- * Be clear about what this is. Four digits can be worked through by anyone
- * who sets out to, fingerprint or not. It stops a driver reading the numbers
- * straight off the endpoint. It is a lock on the door, not a safe.
+ * Both sides of the comparison in handlePinCheck are made here, so the two
+ * are never compared as plain digits and nothing that resembles a PIN is
+ * held in a variable any longer than it takes to hash it.
  */
 function pinHash(name, pin) {
   if (!pin) return "";
   var raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
                                     name + ":" + pin, Utilities.Charset.UTF_8);
   return raw.map(function (b) { return ("0" + (b & 0xFF).toString(16)).slice(-2); }).join("");
+}
+
+/* ---- checking a PIN -----------------------------------------------------
+
+   The phone sends a name and four digits and is told yes or no. Nothing
+   about the PIN goes back, and no fingerprint is published with the rota any
+   more, which is what lets the endpoint stay open and the PIN still mean
+   something.
+
+   Ten wrong tries in ten minutes and that name pauses for ten minutes.
+   Guessing here is the only attack left once the fingerprints stop being
+   handed out, and ten thousand combinations at one round trip each is slow
+   rather than impossible. Held per NAME, because the device is whatever the
+   guesser says it is.
+
+   Counted in the cache rather than in a script property, deliberately. It
+   expires by itself and costs nothing to write, and if the cache is ever
+   dropped the worst case is that a guesser gets their ten tries back. A
+   lockout that outlived a real driver's fumble would be the worse failure:
+   he is standing at a bus with people waiting to get on it. */
+var PIN_MAX_TRIES = 10;
+var PIN_LOCK_MINUTES = 10;
+
+function pinTriesKey(name) {
+  return "pinfail_" + String(name || "").replace(/[^A-Za-z0-9]/g, "").substring(0, 40);
+}
+
+function handlePinCheck(p) {
+  var name = String((p && p.driver) || "").trim();
+  var pin  = String((p && p.pin) || "").replace(/\D/g, "");
+  if (!name) return reply({ ok: false, error: "no driver" });
+
+  var cache = CacheService.getScriptCache();
+  var key = pinTriesKey(name);
+  var tries = 0;
+  try { tries = Number(cache.get(key)) || 0; } catch (err) { tries = 0; }
+
+  if (tries >= PIN_MAX_TRIES) {
+    return reply({ ok: true, valid: false, locked: true, minutes: PIN_LOCK_MINUTES });
+  }
+
+  var found = null;
+  readDrivers(SpreadsheetApp.getActiveSpreadsheet()).forEach(function (d) {
+    if (d.name === name) found = d;
+  });
+
+  /* No PIN against that name is not a failure. It is how somebody without
+     one gets in, exactly as before. */
+  if (!found || !found.pin) return reply({ ok: true, valid: true, noPin: true });
+
+  if (pin && pinHash(name, pin) === pinHash(name, found.pin)) {
+    try { cache.remove(key); } catch (err) {}
+    return reply({ ok: true, valid: true });
+  }
+
+  try { cache.put(key, String(tries + 1), PIN_LOCK_MINUTES * 60); } catch (err) {}
+  return reply({ ok: true, valid: false, left: Math.max(0, PIN_MAX_TRIES - tries - 1) });
 }
 
 function yes(v) {
@@ -1079,9 +1139,12 @@ function handleRotaRequest(rq) {
     return reply({ ok: false, error: "that Sunday has already passed" });
   }
 
+  /* safeText for the same reason as on a check: the reason box is free text
+     from a phone, and the token that guards this endpoint is in config.js on
+     a public host. Nothing here should be able to arrive as a formula. */
   sh.appendRow([
-    new Date(), rq.id || "", sunday, rq.driver || "", rq.type || "",
-    rq.reason || "", rq.swapWith || "", "Pending", "", "",
+    new Date(), safeText(rq.id), sunday, safeText(rq.driver), safeText(rq.type),
+    safeText(rq.reason), safeText(rq.swapWith), "Pending", "", "",
     rq.swapDate ? keyToDate(rq.swapDate) : "", rq.agreed ? "YES" : ""
   ]);
   var row = sh.getLastRow();
@@ -1746,24 +1809,6 @@ function readBusStops(ss) {
 
 /* ---- passenger bookings ------------------------------------------------ */
 
-/**
- * The code that makes a link work for one Sunday only.
- *
- * A signature over the date using the secret, cut to ten characters. Nobody
- * can work out next week's from this week's without the secret, and the
- * secret is only ever in this file.
- */
-function busCode(key) {
-  var secret = busSecret();
-  if (!secret) return "";                 // no secret set: no link can be valid
-  var raw = Utilities.computeHmacSha256Signature(String(key), secret);
-  var hex = raw.map(function (b) {
-    var v = (b < 0 ? b + 256 : b).toString(16);
-    return v.length === 1 ? "0" + v : v;
-  }).join("");
-  return hex.substring(0, 10);
-}
-
 /* The Sunday a link is for has to be this Sunday or the next one. An old
    link is dead, and nobody can book six months out by editing a date. */
 function busDateAllowed(key) {
@@ -2362,6 +2407,21 @@ function tripDriverPayload(route) {
 function handleTrip(payload) {
   if (!payload) return reply({ ok: false, error: "no trip data" });
 
+  /* One writer at a time. This walks the sheet by row number, and two phones
+     on the same route, or one phone retrying while another is mid-write,
+     would otherwise stamp each other's rows. Ten seconds is longer than this
+     has ever taken and shorter than a driver notices. */
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); }
+  catch (err) { return reply({ ok: false, error: "busy, try again" }); }
+  try {
+    return handleTripLocked(payload);
+  } finally {
+    try { lock.releaseLock(); } catch (err) {}
+  }
+}
+
+function handleTripLocked(payload) {
   var rehearsing = !!rehearsalOn();
   var ss    = SpreadsheetApp.getActiveSpreadsheet();
   var sh    = ensureTripEvents(ss);
@@ -2392,7 +2452,7 @@ function handleTrip(payload) {
   var stops = {}, order = readBusStops(ss);
   order.forEach(function (s) { stops[s.id] = s; });
 
-  var rows = [], undoneNow = 0;
+  var rows = [], pending = {}, undoneNow = 0;
   events.forEach(function (ev) {
     var kind   = String(ev.event || "").trim().toLowerCase();
     var stopId = String(ev.stopId || "").trim();
@@ -2402,11 +2462,25 @@ function handleTrip(payload) {
     if (!at) return;
 
     /* An undo names the event it takes back. The row stays and is marked,
-       because a driver who taps and untaps four times should leave a trace. */
+       because a driver who taps and untaps four times should leave a trace.
+
+       Two places to look, and missing the second one was a real fault. A row
+       already on the sheet is marked where it sits. A row queued in THIS
+       batch has no sheet row yet: a phone in a blackspot holds the tap and
+       the undo and sends the pair together, and seen[target] is then the
+       value true rather than a row number. getRange(true, 12) throws, the
+       whole batch is refused, and the queue retries the same failure for
+       ever. One undo with no signal therefore lost every tap of the morning,
+       the start included, and nothing on the phone said so. */
     if (kind === "undo") {
       var target = String(ev.undoes || "").trim().toLowerCase() + "|" + stopId;
-      if (seen[target]) {
+      if (typeof seen[target] === "number") {
         sh.getRange(seen[target], 12).setValue("Undone");
+        delete seen[target];
+        undoneNow++;
+      } else if (pending[target] !== undefined) {
+        rows[pending[target]][11] = "Undone";
+        delete pending[target];
         delete seen[target];
         undoneNow++;
       }
@@ -2427,10 +2501,14 @@ function handleTrip(payload) {
                : (kind === "start" && ev.unchecked) ? "Unchecked"
                : "Logged";
 
-    rows.push([
-      new Date(), trip, key, route, who, kind,
-      stopId, stop ? stop.stop : "", sched || "", new Date(at), off, status
-    ]);
+    /* The stop name comes off the Bus Stops tab and is already ours. The
+       trip id, route, driver name and event all came up from a phone, so
+       they go through safeText like everything else a phone sends. */
+    pending[k] = rows.push([
+      new Date(), safeText(trip), key, safeText(route), safeText(who),
+      safeText(kind), safeText(stopId), stop ? stop.stop : "",
+      sched || "", new Date(at), off, status
+    ]) - 1;
     seen[k] = true;
   });
 
@@ -2604,7 +2682,7 @@ function busCurrentSunday() {
   return dateToKey(sunday);
 }
 
-function busPayload(key, code, ref) {
+function busPayload(key, ref) {
   /* No date in the link is the normal case now. Work it out here. */
   var rolled = false;
   if (!key) {
@@ -2613,12 +2691,6 @@ function busPayload(key, code, ref) {
     rolled = (key !== todaySunday);
   }
   if (!busDateAllowed(key)) return { ok: false, error: "That link is out of date. Ask for the current one." };
-
-  if (BUS_REQUIRE_CODE) {
-    var want = busCode(key);
-    if (!want) return { ok: false, error: "Bus bookings are not set up yet." };
-    if (String(code || "") !== want) return { ok: false, error: "That link is not valid." };
-  }
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var counts = bookingCounts(ss, key);
@@ -2650,14 +2722,23 @@ function busPayload(key, code, ref) {
 function handleBooking(b) {
   if (!b) return reply({ ok: false, error: "empty booking" });
 
+  /* One at a time. This reads the tab to find the row belonging to a device
+     and then writes to that row by number, so two people confirming in the
+     same second could each be writing where the other has just looked. Rare,
+     and silent when it happens, which is the sort of thing worth six lines. */
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); }
+  catch (err) { return reply({ ok: false, error: "The record is busy. Tap Confirm again." }); }
+  try {
+    return handleBookingLocked(b);
+  } finally {
+    try { lock.releaseLock(); } catch (err) {}
+  }
+}
+
+function handleBookingLocked(b) {
   var key = String(b.date || "") || busCurrentSunday();
   if (!busDateAllowed(key)) return reply({ ok: false, error: "That link is out of date. Ask for the current one." });
-
-  if (BUS_REQUIRE_CODE) {
-    var want = busCode(key);
-    if (!want) return reply({ ok: false, error: "Bus bookings are not set up yet." });
-    if (String(b.code || "") !== want) return reply({ ok: false, error: "That link is not valid." });
-  }
 
   /* The page may have been open in a pocket since before the cutoff. Say
      which Sunday closed, so a stale tab cannot silently book nothing. */
@@ -2719,23 +2800,8 @@ function busLinkForSunday() {
   var key = busCurrentSunday();
   var when = Utilities.formatDate(keyToDate(key), Session.getScriptTimeZone(), "EEEE d MMMM");
   var link = BUS_PAGE_URL;
-  var note = "";
-
-  if (BUS_REQUIRE_CODE) {
-    if (!busSecret()) {
-      ui.alert("Set the secret first.\n\n" +
-        "Run Minibus \u203a Set the bus link secret. It takes a moment and only " +
-        "needs doing once.");
-      return;
-    }
-    link += "?k=" + busCode(key);
-    note = "The link gate is ON, so this address changes each Sunday and an " +
-           "old one stops working. Turn BUS_REQUIRE_CODE off in the script " +
-           "to go back to one permanent link.\n\n";
-  } else {
-    note = "This address never changes. Pin it in the group once and it stays " +
-           "right: the page works out which Sunday it is by itself.\n\n";
-  }
+  var note = "This address never changes. Pin it in the group once and it stays " +
+             "right: the page works out which Sunday it is by itself.\n\n";
 
   ui.alert("The bus booking page",
     link + "\n\n" +
@@ -3830,23 +3896,17 @@ function sendDigestNow() {
  * behind a submenu whose name says what happens if you press something in
  * it. Fewer things visible means fewer things to press by mistake.
  *
- * Two items are gone from here and the functions are left in the file:
+ * One item is gone from here and the function is left in the file:
  *
  *   Repair old fuel readings   a migration that ran once, long ago. Harmless
  *                              to run again, since repaired readings are text
  *                              and get skipped, but it has nothing left to do.
  *
- *   Set the bus link secret    BUS_REQUIRE_CODE went false in v1.8 when the
- *                              code came out of the link, so nothing checks
- *                              the secret any more. The item still warned
- *                              that replacing it would kill every link
- *                              already sent, which can no longer happen. A
- *                              frightening warning attached to an action with
- *                              no effect is worse than no item at all.
+ * Still callable from the Apps Script editor if an old sheet ever turns up
+ * with date-shaped fuel readings in it.
  *
- * Both are still callable from the Apps Script editor if BUS_REQUIRE_CODE
- * ever goes back to true or an old sheet turns up with date-shaped fuel
- * readings in it.
+ * "Set the bus link secret" was listed here too. That function has now gone
+ * from the file altogether, along with the per-Sunday code it existed for.
  */
 /* ---- have a look ------------------------------------------------------- */
 
@@ -4583,6 +4643,20 @@ function reply(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+/**
+ * Anything a phone typed, made safe to put in a cell.
+ *
+ * A leading =, +, - or @ makes Google Sheets treat a value as a formula, and
+ * the driver app's token is public, so text arriving here did not
+ * necessarily come from a driver. A defect note beginning =IMPORTRANGE would
+ * be evaluated by the spreadsheet the moment the coordinator opened it. The
+ * leading quote makes it text and does not show in the cell.
+ */
+function safeText(s) {
+  var t = String(s == null ? "" : s);
+  return /^[=+\-@]/.test(t) ? "'" + t : t;
+}
+
 function esc(s) {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -4646,6 +4720,31 @@ function anyToKey(v) {
 }
 
 function p2(n) { return (n < 10 ? "0" : "") + n; }
+
+/**
+ * The Date column of a check, as a person writes it.
+ *
+ * The app posts the date as text, 09/08/2026, and Sheets converts it to a
+ * real date on the way in. String() on that gives the whole JavaScript
+ * rendering, "Sun Aug 09 2026 00:00:00 GMT+0100 (British Summer Time)", which
+ * is exactly what a driver was reading under the mileage box. The midnight in
+ * it was never wrong data: this column holds a date and nothing else. The
+ * time of the check sits in the column beside it, and was never sent.
+ */
+function dayWords(v) {
+  var key = anyToKey(v);
+  if (key) { var p = key.split("-"); return p[2] + "/" + p[1] + "/" + p[0]; }
+  return String(v || "").trim();
+}
+
+/* The Time column. Text on the way in, but Sheets will make 09:42 a real time
+   just as readily, and that renders as a date in 1899 if you let it. */
+function timeWords(v) {
+  if (isDateLike(v)) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), "HH:mm");
+  }
+  return String(v || "").trim();
+}
 
 /* ---- defects sheet formatting (unchanged) ------------------------------ */
 

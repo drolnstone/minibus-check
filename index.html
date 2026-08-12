@@ -842,7 +842,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.16.3";
+var APP_VERSION = "v1.17.0";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -905,7 +905,10 @@ var STAGES = [
 ];
 
 /* ---------------- state ---------------- */
-var st = { screen:"driver", veh:null, mode:"pre", stage:0, driver:"", role:"", pin:"", miles:"", mileOk:false, fuel:null, jobs:[], sign:"", pinOk:false, res:{} };
+/* pinState is what the RECORD will say about the PIN: "" when none was
+   asked for, "ok" when the sheet confirmed it, "offline" when this phone had
+   nothing to check against and let the driver through on purpose. */
+var st = { screen:"driver", veh:null, mode:"pre", stage:0, driver:"", role:"", pin:"", miles:"", mileOk:false, fuel:null, jobs:[], sign:"", pinOk:false, pinState:"", res:{} };
 var stages = [];   /* the stage list for the chosen vehicle */
 var ALL = [];
 var TOTAL = 0;
@@ -981,19 +984,33 @@ var LASTMILES = {};
   try { LASTMILES = JSON.parse(store.get(MKEY) || "{}"); } catch(e){ LASTMILES = {}; }
 })();
 
-function fetchLastMiles(){
-  if(!LIVE || !navigator.onLine) return;
-  callFetch(CFG.endpoint + "?last=1", { method:"GET", redirect:"follow" })
+/* When these figures last came from the sheet, in ms. Zero means what is on
+   screen is whatever this phone happened to keep, which can be weeks old.
+
+   This used to fire once at launch, swallow any failure without a word, and
+   never be asked again. So a phone that was out of range when it opened, or
+   that has simply been open since before somebody else's inspection, showed
+   a stale reading with nothing to say so, and the driver checked his
+   dashboard against a number from a fortnight ago. */
+var lastMilesAt = 0;
+
+function fetchLastMiles(cb){
+  if(!LIVE || !navigator.onLine){ if(cb) cb(false); return; }
+  callFetch(CFG.endpoint + "?last=1", { method:"GET", redirect:"follow" }, POLL_TIMEOUT)
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out = JSON.parse(t);
       if(out && out.ok && out.last){
         LASTMILES = out.last;
+        lastMilesAt = Date.now();
         store.set(MKEY, JSON.stringify(LASTMILES));
         if(st.screen === "prep") paintMilesHint();
+        if(cb) cb(true);
+        return;
       }
+      if(cb) cb(false);
     })
-    .catch(function(){});
+    .catch(function(){ if(cb) cb(false); });
 }
 function lastFor(reg){
   var r = LASTMILES[reg];
@@ -1046,9 +1063,16 @@ function paintMilesHint(){
 
   if(prev){
     var added = now !== "" ? Number(now) - Number(prev.miles) : null;
+    /* The time is new here. The date used to arrive as the whole JavaScript
+       rendering of a date cell, midnight and time zone and all, which read
+       as though the check had been done at midnight. The sheet now sends the
+       day and the time of day separately, and older phones that have a
+       cached payload without a time simply do not show one. */
     hint.textContent = "Last recorded: " + Number(prev.miles).toLocaleString("en-GB") +
-      " on " + prev.date + (prev.driver ? " by " + prev.driver : "") +
-      (added !== null && added >= 0 ? "  \u00B7  " + added.toLocaleString("en-GB") + " since" : "");
+      " on " + prev.date + (prev.time ? " at " + prev.time : "") +
+      (prev.driver ? " by " + prev.driver : "") +
+      (added !== null && added >= 0 ? "  \u00B7  " + added.toLocaleString("en-GB") + " since" : "") +
+      (lastMilesAt ? "" : "  \u00B7  this phone\u2019s last copy, not just checked");
     hint.style.color = "";
     return;
   }
@@ -1248,7 +1272,7 @@ function goHome(){
   /* The PIN goes with the check it belonged to. It used to survive all the
      way back to the home screen still filled in, so the next person to pick
      up the phone was already past the gate. */
-  st.pin=""; st.pinOk=false;
+  st.pin=""; st.pinOk=false; st.pinState="";
   if($("pin")) $("pin").value="";
   geo={status:"off"};
   stages=[]; ALL=[]; TOTAL=0; lastRec=null;
@@ -1649,6 +1673,10 @@ function renderPrep(){
   $("openBox").innerHTML = openDefectsHTML(v.reg);
   $("miles").value = st.miles;
   paintMilesHint();
+  /* Asked for again here, at the one moment it matters: he is standing at
+     the bus about to read the odometer, and this is the figure he will be
+     told he disagrees with. */
+  fetchLastMiles(function(){ if(st.screen==="prep") paintMilesHint(); });
   paintFuel();
   paintMode();
   if(geo.status==="off" || geo.status==="refused" || geo.status==="timeout" ||
@@ -1927,6 +1955,9 @@ function submit(){
     miles: st.miles,
     milesFlag: (function(){ var pr=mileProblem(); return pr ? (pr.kind==="low"?"LOWER THAN LAST":"Large jump") : ""; })(),
     sign: st.sign.trim(),
+    /* What the sheet writes in the PIN check column. Blank when none was
+       asked for. */
+    pinState: st.pinState || "",
     level: level(), checked: t.done, total: TOTAL,
     kind: st.mode==="full" ? "Full inspection" : "Pre-drive",
     loc:g.loc, locAcc:g.locAcc, locDist:g.locDist, locNote:g.locNote,
@@ -2201,6 +2232,7 @@ function rotaSaveCache(){
     store.set(RKEY, JSON.stringify({
       when: Date.now(), rows: rotaRows,
       pattern: ROTA_PRIMARY_PATTERN,
+      pattern2: ROTA_SECONDARY_PATTERN,
       register: REGISTER,
       stops: rotaStops, counts: rotaStopCounts, countsFor: rotaStopCountsFor,
       countsAt: rotaCountsAt
@@ -2213,6 +2245,7 @@ function rotaLoadCache(){
     if(!c || !c.rows) return false;
     rotaRows = c.rows;
     if(c.pattern && c.pattern.length) ROTA_PRIMARY_PATTERN = c.pattern.slice();
+    if(c.pattern2 && c.pattern2.length) ROTA_SECONDARY_PATTERN = c.pattern2.slice();
     if(c.register && c.register.length) rotaSyncRegister(c.register);
     if(c.stops && c.stops.length) rotaStops = c.stops;
     if(c.counts){ rotaStopCounts = c.counts; rotaStopCountsFor = c.countsFor||""; }
@@ -2236,7 +2269,20 @@ function rotaFetch(fromDate,weeks,cb){
     var before=JSON.stringify(rotaRows);
 
     /* The spreadsheet is the authority on all three of these. */
-    if(out.pattern && out.pattern.length) ROTA_PRIMARY_PATTERN = out.pattern.slice();
+    /* The sheet sends both routes now, as { north, south }. This used to
+       test out.pattern.length, which an object has not got, so the answer was
+       dropped without a word and config.js quietly stayed the only source of
+       the running order. Add somebody to the Drivers tab and the app could
+       not see them: not for the Sundays it works out for itself, and not for
+       rotaHomeRoute, which then put a new South man on the North bus. The
+       old array shape is still accepted, so a payload cached before this
+       change still works. */
+    if(out.pattern){
+      var pNorth = out.pattern.length ? out.pattern : out.pattern.north;
+      var pSouth = out.pattern.south;
+      if(pNorth && pNorth.length) ROTA_PRIMARY_PATTERN = pNorth.slice();
+      if(pSouth && pSouth.length) ROTA_SECONDARY_PATTERN = pSouth.slice();
+    }
     if(out.drivers && out.drivers.length) rotaSyncRegister(out.drivers);
     if(out.openDefects) OPEN_DEFECTS = out.openDefects;
     if(out.stops && out.stops.length) rotaStops = out.stops;
@@ -2667,12 +2713,14 @@ function rotaSyncRegister(list){
 
   var incoming = list.map(function(d){
     return (typeof d === "string")
-      ? { name:d, role:"", pin:"" }
-      : { name:(d&&d.name)||"", role:(d&&d.role)||"", pin:(d&&d.pin)||"" };
+      ? { name:d, role:"", hasPin:false }
+      /* d.pin is only there in a payload cached before the fingerprints
+         stopped being sent. Read as a yes or no and never used as one. */
+      : { name:(d&&d.name)||"", role:(d&&d.role)||"", hasPin:!!(d&&(d.hasPin||d.pin)) };
   }).filter(function(d){ return d.name; });
 
   var next = incoming.map(function(d){
-    return { name:d.name, role:d.role, pin:d.pin };
+    return { name:d.name, role:d.role, hasPin:d.hasPin };
   });
   var have={}; next.forEach(function(d){ have[d.name]=true; });
 
@@ -2682,7 +2730,7 @@ function rotaSyncRegister(list){
   }
 
   function fingerprint(list){
-    return list.map(function(d){ return d.name+"|"+d.role+"|"+(d.pin||""); }).sort().join(",");
+    return list.map(function(d){ return d.name+"|"+d.role+"|"+(d.hasPin?"1":"0"); }).sort().join(",");
   }
   if(fingerprint(REGISTER)===fingerprint(next)){ showPinField(); paintFoot(); return; }
 
@@ -3575,7 +3623,7 @@ function rotaClose(){
 function reset(){
   st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign=""; st.mode="pre";
   st.fuel=null; st.jobs=[];
-  st.pin=""; st.pinOk=false;
+  st.pin=""; st.pinOk=false; st.pinState="";
   if($("pin")) $("pin").value="";
   geo={status:"off"};
   stages=[]; ALL=[]; TOTAL=0; lastRec=null;
@@ -3599,7 +3647,8 @@ $("rotaMyDuties").addEventListener("click",function(){
 $("rotaModal").addEventListener("click",function(e){if(e.target===this)rotaClose();});
 /* ---------------- wiring ---------------- */
 $("driverPick").addEventListener("change",function(){
-  st.driver=this.value; st.role=roleOf(this.value); st.pin=""; st.pinOk=false; $("pin").value="";
+  st.driver=this.value; st.role=roleOf(this.value); st.pin=""; st.pinOk=false; st.pinState="";
+  pinLast=""; $("pin").value="";
   if(this.value) store.set(NKEY,this.value);
   showPinField(); paintFoot(); paintRotaHint();
 });
@@ -3711,11 +3760,16 @@ $("share").addEventListener("click",function(){
 
 window.addEventListener("online",function(){ fetchLastMiles(); if(loadQ().length) flush(); });
 
-/* driver register: entries may be "Name" or { name, role, pin } */
+/* driver register: entries may be "Name" or { name, role, hasPin }.
+
+   hasPin is a yes or no, never a fingerprint. The sheet used to send the
+   hash of everybody's PIN with the rota, on an endpoint that asks for no
+   token, which made the whole set readable by anyone holding the address out
+   of config.js. All this app ever needed to know was whether to ask. */
 var REGISTER = (CFG.drivers||[]).map(function(d){
   return (typeof d === "string")
-    ? { name:d, role:"", pin:"" }
-    : { name:d.name||"", role:d.role||"", pin:d.pin||"" };
+    ? { name:d, role:"", hasPin:false }
+    : { name:d.name||"", role:d.role||"", hasPin:!!(d.hasPin || d.pin) };
 }).filter(function(d){ return d.name; });
 
 function entryFor(name){
@@ -3723,37 +3777,45 @@ function entryFor(name){
   return null;
 }
 function roleOf(name){ var e=entryFor(name); return e?e.role:""; }
-function pinFor(name){ var e=entryFor(name); return e?String(e.pin||""):""; }
+function hasPin(name){ var e=entryFor(name); return !!(e && e.hasPin); }
 
 /* Four separate things must all be true before the PIN box appears, and any
    one of them failing hides it without a word. Tap the version line at the
    bottom of the first screen and this says which. */
 function pinDiagnosis(){
-  var withPin = REGISTER.filter(function(d){ return d.pin; }).length;
+  var withPin = REGISTER.filter(function(d){ return d.hasPin; }).length;
   var L = [];
   L.push("App version: " + APP_VERSION);
   L.push("");
   L.push("1. requirePin in config.js");
   L.push("   " + (CFG.requirePin ? "ON" : "OFF  <-- upload the new config.js"));
   L.push("");
-  L.push("2. Secure page, needed to check a PIN");
-  L.push("   " + (canHash() ? "yes"
-        : "NO  <-- the page must be https, not http"));
+  L.push("2. Offline copy, only needed with no signal");
+  L.push("   " + (canHash() ? "available"
+        : "not available  <-- the page must be https, not http"));
   L.push("");
   L.push("3. Register loaded from the spreadsheet");
-  L.push("   " + REGISTER.length + " names, " + withPin + " with a PIN" +
+  L.push("   " + REGISTER.length + " names, " + withPin + " with a PIN set" +
          (withPin ? "" : "  <-- fill the PIN column, then redeploy Code.gs as a New version"));
   L.push("");
   L.push("4. The name you picked");
   L.push("   " + (st.driver
-        ? (pinFor(st.driver) ? st.driver + " has a PIN" : st.driver + " has NO PIN in the sheet")
+        ? (hasPin(st.driver) ? st.driver + " has a PIN" : st.driver + " has NO PIN in the sheet")
         : "none chosen yet"));
+  L.push("");
+  L.push("5. This visit");
+  L.push("   " + (st.pinState === "ok" ? "PIN checked"
+        : st.pinState === "offline" ? "let through, no signal to check"
+        : "not checked yet"));
   L.push("");
   L.push(pinNeeded() ? "PIN box SHOULD be showing." : "PIN box is hidden, for the reason marked above.");
   return L.join("\n");
 }
 function pinNeeded(){
-  return !!CFG.requirePin && !!pinFor(st.driver) && canHash();
+  /* canHash is no longer part of this. The sheet does the checking, so the
+     browser's crypto is only wanted for the offline copy below, and a phone
+     without it should still be asked for a PIN rather than waved past. */
+  return !!CFG.requirePin && hasPin(st.driver);
 }
 
 /* Checking a fingerprint needs the browser's crypto, which only exists on a
@@ -3770,36 +3832,153 @@ function sha256Hex(str){
     });
 }
 
-/* The typed PIN is fingerprinted the same way the sheet did it and the two
-   are compared. The PIN itself is never stored on the phone or sent back. */
+/* ---- the PIN gate ------------------------------------------------------
+
+   The sheet does the checking now. The phone sends a name and four digits
+   and is told yes or no; no fingerprint of anybody's PIN comes down with the
+   rota any more. That is what lets the endpoint stay open and the PIN still
+   mean something.
+
+   What moving it costs is signal, and this gate sits on the FIRST screen,
+   before the check. So the phone keeps its own copy of the fingerprint for
+   whoever has passed on it before, computed here and never sent anywhere. A
+   driver's own phone therefore works in a blackspot, and one hash sitting on
+   the phone of the man who knows the PIN is a different thing altogether
+   from every hash being fetchable by anybody.
+
+   The sheet is still asked first whenever there is signal, so a PIN the
+   coordinator has just changed takes effect at once and the local copy is
+   only ever the fallback.
+
+   A phone that has never seen that driver, with no signal, lets him in and
+   says so on the record. That is deliberate, and it is the same bargain as
+   Set off anyway: a driver locked out at the kerb does not go and do the
+   check some other way, he drives with nothing recorded at all. Written down
+   beats blocked. */
+var PKEY = "fleet.pinseen.v1";
+var PIN_TIMEOUT = 10000;   /* he is standing there. Fall back rather than wait */
+
+/* The last four digits actually put to the sheet, and what it said.
+
+   Every keystroke calls checkPin, so a driver who backspaces one digit and
+   types it again would send the same PIN twice and burn two of his ten
+   tries on one mistake. The answer to a set of digits does not change while
+   he stands there, so it is given back from here instead. Forgotten when he
+   changes name, which is also the way out if a PIN is corrected in the
+   sheet while the app is open. */
+var pinLast = "", pinLastOk = false;
+
+function pinSeen(){ try{ return JSON.parse(store.get(PKEY)||"{}")||{}; }catch(e){ return {}; } }
+function pinRemember(name,hash){
+  var m=pinSeen(); m[name]=hash;
+  try{ store.set(PKEY, JSON.stringify(m)); }catch(e){}
+}
+
+/* One line under the name row. Says the thing that is true at that moment
+   rather than a fixed sentence.
+
+   Held in a variable rather than written straight to the element, because
+   paintFoot repaints this row on every cycle and would otherwise wipe
+   "That PIN is not right" a few milliseconds after it appeared. */
+var pinMsg = "";
+function pinSay(msg){ pinMsg = msg || ""; pinPaintHint(); }
+function pinPaintHint(){
+  var h=$("idHint");
+  if(!h) return;
+  var need=pinNeeded();
+  h.style.display = (pinMsg || need) ? "" : "none";
+  h.textContent = pinMsg || (need ? "Forgotten it? Ask the coordinator." : "");
+}
+
 function checkPin(){
-  var want = pinFor(st.driver);
-  if(!pinNeeded() || !want){ st.pinOk = true; paintFoot(); return; }
-  if(String(st.pin).length < 4){ st.pinOk = false; paintFoot(); return; }
+  if(!pinNeeded()){ st.pinOk = true; st.pinState=""; paintFoot(); return; }
+  if(String(st.pin).length < 4){ st.pinOk = false; st.pinState=""; pinSay(""); paintFoot(); return; }
+
   var tried = st.driver + ":" + st.pin;
-  sha256Hex(tried).then(function(h){
-    /* the driver may have changed name while this was running */
-    if(st.driver + ":" + st.pin !== tried) return;
-    st.pinOk = (h === want);
-    paintFoot();
-  }).catch(function(){ st.pinOk = true; paintFoot(); });
+  function stillTyping(){ return st.driver + ":" + st.pin === tried; }
+
+  if(tried === pinLast){
+    st.pinOk = pinLastOk;
+    st.pinState = pinLastOk ? "ok" : "";
+    pinSay(pinLastOk ? "" : "That PIN is not right.");
+    paintFoot(); return;
+  }
+
+  function answered(ok){ pinLast = tried; pinLastOk = ok; }
+
+  if(LIVE && navigator.onLine){
+    pinSay("Checking\u2026");
+    callFetch(CFG.endpoint, {
+      method:"POST", redirect:"follow",
+      headers:{ "Content-Type":"text/plain;charset=utf-8" },
+      body: JSON.stringify({ token: CFG.token||"", action:"pin",
+                             pin:{ driver: st.driver, pin: st.pin } })
+    }, PIN_TIMEOUT)
+      .then(function(r){ return r.text(); })
+      .then(function(t){
+        var out = JSON.parse(t);
+        if(!stillTyping()) return;
+        if(!out || out.ok !== true) throw new Error("no answer");
+
+        if(out.locked){
+          st.pinOk=false; st.pinState="";
+          pinSay("Too many wrong tries. Wait "+(out.minutes||10)+" minutes, or ring the coordinator.");
+          paintFoot(); return;
+        }
+
+        st.pinOk = (out.valid === true);
+        st.pinState = st.pinOk ? "ok" : "";
+        answered(st.pinOk);
+        if(st.pinOk){
+          pinSay("");
+          /* Kept so this phone works without signal next time. Made here,
+             never received and never sent. */
+          if(canHash()) sha256Hex(tried).then(function(h){ pinRemember(st.driver, h); },
+                                              function(){});
+        } else {
+          pinSay("That PIN is not right." +
+                 (out.left > 0 ? " " + out.left + " more tries before it pauses." : ""));
+        }
+        paintFoot();
+      })
+      .catch(function(){ if(stillTyping()) pinOffline(tried); });
+    return;
+  }
+  pinOffline(tried);
+}
+
+/* No signal, or the record did not answer in time. */
+function pinOffline(tried){
+  var known = pinSeen()[st.driver] || "";
+  if(known && canHash()){
+    sha256Hex(tried).then(function(h){
+      if(st.driver + ":" + st.pin !== tried) return;
+      st.pinOk = (h === known);
+      st.pinState = st.pinOk ? "ok" : "";
+      pinLast = tried; pinLastOk = st.pinOk;
+      pinSay(st.pinOk ? "Checked against this phone\u2019s own copy." : "That PIN is not right.");
+      paintFoot();
+    }).catch(function(){ pinLetThrough(); });
+    return;
+  }
+  pinLetThrough();
+}
+
+/* Never seen on this phone, and nothing to check against. */
+function pinLetThrough(){
+  st.pinOk = true;
+  st.pinState = "offline";
+  pinSay("No signal to check the PIN. Carry on: the record will show it was not checked.");
+  paintFoot();
 }
 function showPinField(){
   var need = pinNeeded();   /* same test as the gate, so they cannot diverge */
   $("pinField").style.display = need ? "" : "none";
-  if(!need){ st.pin=""; st.pinOk=false; $("pin").value=""; }
+  if(!need){ st.pin=""; st.pinOk=false; st.pinState=""; pinMsg=""; $("pin").value=""; }
 
-  /* One line under the row rather than one under each field. It says the
-     thing that is actually true at that moment: before a name is chosen,
-     who appears in the list; once a PIN is being asked for, what to do if
-     it has been forgotten. */
-  var h=$("idHint");
-  if(h){
-    h.style.display = need ? "" : "none";
-    h.textContent = need
-      ? "Forgotten your PIN? Ask the coordinator."
-      : "";
-  }
+  /* One line under the row rather than one under each field, and one
+     function writes it, so the gate and the caption cannot drift apart. */
+  pinPaintHint();
 }
 
 (function(){
