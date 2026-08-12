@@ -355,11 +355,19 @@ function load(again){
       else { liveStop(); live=null; paintLive(); }
     })
     .catch(function(err){
-      /* One retry before saying anything. These fail transiently more often
-         than they fail properly, and a page that gives up on the first blip
-         sends somebody to the group over something that would have worked a
-         second later. */
-      if(!again){ setTimeout(function(){ load(true); }, 1200); return; }
+      /* Three attempts before saying anything, spaced out.
+
+         These fail transiently more often than they fail properly. One retry
+         a second later was not enough: Apps Script serves an error page for
+         several seconds while a deployment updates, and a passenger caught in
+         that window was shown a fault that had already cured itself. This is
+         the page the whole congregation opens on a Sunday morning, so it
+         should be slow to complain. */
+      var tries = (typeof again === "number") ? again : 0;
+      if(tries < 2){
+        setTimeout(function(){ load(tries + 1); }, tries === 0 ? 1500 : 4000);
+        return;
+      }
       $("body").innerHTML='<div class="note note-warn"><b>The stops could not be loaded.</b><br>'+
         esc(String(err.message||err))+'<br><br>Pull down to refresh. '+
         'If it keeps happening, tell the transport group.</div>';
@@ -373,8 +381,7 @@ function load(again){
 function readJson(t){
   var txt=String(t||"").trim();
   if(txt.charAt(0)==="<"){
-    throw new Error("The booking record is not answering. This usually means "+
-                    "the transport group needs to check its settings.");
+    throw new Error("The booking record is not answering just now.");
   }
   try{ return JSON.parse(txt); }
   catch(e){ throw new Error("The record sent back something unreadable."); }
@@ -441,8 +448,9 @@ function paintLive(){
      is not. Said first and said plainly. */
   var banner = live.rehearsal
     ? '<div class="live live-test"><p class="live-eyebrow">Rehearsal</p>'+
-      '<p class="live-sub">The transport team are testing the app. '+
-      'No bus is running and nothing below is real.</p></div>'
+      '<p class="live-sub">The transport team are testing the app. No bus is '+
+      'running and the position above is pretend. Your booking is not: it '+
+      'saves normally and counts for Sunday.</p></div>'
     : "";
 
   var head="", sub="", cls="";
@@ -479,7 +487,7 @@ function paintLive(){
   }
 
   box.innerHTML=banner+'<div class="live '+cls+'">'+
-    '<p class="live-eyebrow">Your stop</p>'+
+    '<p class="live-eyebrow">'+(ROLLED?"Today\u2019s bus":"Your stop")+'</p>'+
     '<p class="live-big">'+head+'</p>'+
     '<p class="live-sub">'+sub+'</p></div>';
 }
@@ -503,12 +511,20 @@ function paint(){
   var html="";
 
   if(CLOSED){
+    /* The whole of Sunday morning now sits here: bookings shut at 09:30 and
+       the page stays on today until the buses are back. It is the list the
+       driver is working from, which is the one worth showing somebody who is
+       waiting. */
     html+='<div class="note note-warn"><b>Bookings have closed for this Sunday.</b> '+
-          'The times are below. If your plans have changed, tell the group '+
-          'directly, because the driver already has this list.</div>';
+          'This is the list the driver has. If your plans have changed, tell '+
+          'the group directly.</div>';
   } else if(ROLLED){
-    html+='<div class="note note-warn"><b>Today\u2019s bus is closed and on its way.</b> '+
-          'You are now booking for '+esc(prettyDate(DATE))+'.</div>';
+    /* Two different Sundays are on this screen at once: the bus running now,
+       up in the live panel, and the one below that is open for booking. Said
+       plainly, because a passenger watching today's bus and then tapping a
+       stop underneath it would reasonably think they were changing today. */
+    html+='<div class="note note-warn"><b>Today\u2019s buses are back.</b> '+
+          'Everything below is for <b>'+esc(prettyDate(DATE))+'</b>.</div>';
   }
 
   if(!CLOSED){
