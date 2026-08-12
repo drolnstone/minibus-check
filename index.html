@@ -812,13 +812,26 @@ var store = {
    structured-cloned to hand to the worker, and an AbortSignal cannot be
    cloned. The request itself therefore is not cancelled here, it is only
    stopped from being waited on, which is all the page actually needed. */
-var CALL_TIMEOUT = 12000;
+/* Twelve seconds was too short for the one call that matters most.
 
-function callFetch(url, opts){
+   The rota payload is the heaviest thing this app asks for: the driver
+   register, PIN hashes, open defects, the timetable and four weeks of rota
+   rows, and on a cold Apps Script container it can pass twelve seconds
+   honestly. So the timeout added in v1.14 was not protecting a driver from a
+   hung request, it was cutting off a working one, and Stops and bookings then
+   told him his phone had no timetable while he stood there on full 5G.
+
+   Long by default. Short only where the call repeats anyway, so a slow poll
+   is skipped rather than left overlapping the next one. */
+var CALL_TIMEOUT = 25000;
+var POLL_TIMEOUT = 12000;
+
+function callFetch(url, opts, ms){
   return Promise.race([
     fetch(url, opts || {}),
     new Promise(function(_, reject){
-      setTimeout(function(){ reject(new Error("took too long to answer")); }, CALL_TIMEOUT);
+      setTimeout(function(){ reject(new Error("took too long to answer")); },
+                 ms || CALL_TIMEOUT);
     })
   ]);
 }
@@ -828,7 +841,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.15.0";
+var APP_VERSION = "v1.15.1";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1347,6 +1360,19 @@ function paintFoot(){
   }
   if(st.screen==="pending"){
     btn("Back","btn-main",function(){ goHome(); });
+    return;
+  }
+  /* Stops and bookings, and the rota, had no case here at all, so the bar sat
+     at the bottom of the screen empty: a strip of nothing that reads as a
+     control that has failed to load. Both have their own Back in the header,
+     so what belongs down here is the way out of the app's reading screens
+     rather than a second Back. */
+  if(st.screen==="stops"){
+    btn("Done","btn-main",stopsClose);
+    return;
+  }
+  if(st.screen==="rota"){
+    btn("Done","btn-main",function(){ show("driver"); });
     return;
   }
 }
@@ -2459,7 +2485,8 @@ function rotaCountsFetch(route,cb){
   route = route || rotaStopsRoute || rotaHomeRoute() || "North";
   if(!LIVE || !navigator.onLine || rotaCountsBusy){ if(cb) cb(false); return; }
   rotaCountsBusy=true;
-  callFetch(CFG.endpoint+"?board=1&route="+encodeURIComponent(route),{method:"GET",redirect:"follow"})
+  callFetch(CFG.endpoint+"?board=1&route="+encodeURIComponent(route),
+            {method:"GET",redirect:"follow"}, POLL_TIMEOUT)
     .then(function(r){return r.text();})
     .then(function(t){
       var out=JSON.parse(t);
@@ -2908,13 +2935,25 @@ function rotaPaintStops(){
       rotaStopsAsked=true;
       $("stopsBody").innerHTML='<p class="lede">Fetching the timetable\u2026</p>';
       rotaFetch(rotaBaseSunday(0), 4, function(){
+        /* Let it be asked again. It used to latch true for the whole session,
+           so one failed attempt meant every later open went straight to the
+           message without trying, and on a phone that keeps the app alive for
+           days that is a long time to be wrong. */
+        if(!(rotaStops||[]).length) rotaStopsAsked=false;
         if(rotaStopsOpen) rotaPaintStops();
       });
       return;
     }
-    $("stopsBody").innerHTML='<p class="lede">The timetable has not reached this '+
-      'phone yet. Open this once with a signal and it will be here after that.</p>'+
-      '';
+    /* Say what happened, not what is wrong with his phone. The old wording
+       told a driver standing on full signal that he had no signal. */
+    $("stopsBody").innerHTML=
+      '<p class="lede">The timetable did not come through. This is usually the '+
+      'record taking too long to answer rather than anything on your phone.</p>'+
+      '<button class="btn btn-main btn-wide" id="stopsRetry" type="button">Try again</button>';
+    $("stopsRetry").addEventListener("click",function(){
+      rotaStopsAsked=false;
+      rotaPaintStops();
+    });
     return;
   }
 
@@ -2963,8 +3002,8 @@ function rotaPaintStops(){
        they are withheld. Say why, rather than showing a bare timetable and
        leaving him to wonder where the numbers went. */
     html+='<p class="lede" style="margin:0 0 8px">Times only. The booking '+
-          'numbers on this phone are for an earlier Sunday and could not be '+
-          'refreshed. Open this once with a signal and they come back.</p>';
+          'numbers on this phone are for an earlier Sunday and have not been '+
+          'refreshed yet. They come back on their own once the record answers.</p>';
   }
 
   if(routes.length>1){

@@ -1353,6 +1353,39 @@ One thing found while checking: the big Picked up button still carried a class
 name that does not exist in this stylesheet, left over from the same mistake
 fixed in v1.11.2. Now corrected. Nothing emits a class without a style.
 
+**v1.15.1** The timeout I added was cutting off working calls.
+
+Stops and bookings told a driver on full 5G that the timetable had not reached
+his phone. The message was wrong twice over: nothing was wrong with the phone,
+and the cause was a change made two versions earlier.
+
+Twelve seconds is not long enough for the heaviest call in the app. The rota
+payload carries the driver register, PIN hashes, open defects, the timetable
+and four weeks of rota rows, and on a cold Apps Script container it can pass
+twelve seconds honestly. The timeout was not protecting anybody from a hung
+request, it was failing a working one. It is now twenty five seconds, with the
+short twelve kept only for the thirty second poll, where a slow answer is
+better skipped than left to overlap the next one.
+
+Two things turned that into a dead end rather than a bad minute.
+
+**The failure latched for the whole session.** The flag saying the timetable
+had been asked for was set before the answer came back and never cleared, so
+one failed attempt meant every later open went straight to the message without
+trying again. On a phone that keeps the app alive for days, that is a long time
+to be wrong. It now clears when the fetch comes back empty.
+
+**And there was no way to try again.** The message now says what actually
+happened, that the record took too long rather than that the phone is at fault,
+and carries a Try again button.
+
+**The empty bar at the bottom.** Stops and bookings and the rota had no case in
+the footer at all, so the bar sat there empty on both: a strip of nothing that
+reads as a control that has failed to load. Both now carry Done.
+
+The passenger page timeout was raised to twenty five seconds for the same
+reason.
+
 **v1.15** Five things from testing the check on a phone.
 
 **A South driver off duty landed on North.** The app asked only "are you
