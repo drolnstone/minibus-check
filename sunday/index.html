@@ -436,7 +436,12 @@ function liveStop(){ if(liveTimer){ clearInterval(liveTimer); liveTimer=null; } 
 
 document.addEventListener("visibilitychange",function(){
   if(document.hidden){ liveStop(); return; }
-  if(CLOSED) liveStart();
+  /* REHEARSAL as well as CLOSED, and for the same reason liveStart is
+     started on both. Testing this on a Tuesday, the tester locks the phone,
+     comes back, and the watching never resumes: bookings are open, so CLOSED
+     is false, and the one case the rehearsal exists to exercise is the one
+     it silently stopped doing. */
+  if(CLOSED || REHEARSAL) liveStart();
 });
 
 function paintLive(){
@@ -628,6 +633,10 @@ function paintBar(){
   var d=dirty(), say=$("barSay");
   $("save").disabled = !chosen || !d || saving;
   $("cancel").style.display = booked ? "" : "none";
+  /* Dead while a Confirm is in the air. Both buttons write the same row, so
+     tapping Not coming on top of a Confirm sent two changes for one booking
+     and whichever answered last decided what the driver saw. */
+  $("cancel").disabled = saving;
 
   say.classList.toggle("is-dirty", d && !!chosen);
   if(d && chosen)      say.textContent = booked ? "Changed. Tap Confirm to save it."
