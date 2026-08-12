@@ -1353,6 +1353,44 @@ One thing found while checking: the big Picked up button still carried a class
 name that does not exist in this stylesheet, left over from the same mistake
 fixed in v1.11.2. Now corrected. Nothing emits a class without a style.
 
+**v1.15** Five things from testing the check on a phone.
+
+**A South driver off duty landed on North.** The app asked only "are you
+driving today", and for a driver not rostered that Sunday the answer was no, so
+it fell to the first route on the timetable. But Bro Tunde is a South driver
+every week of the year, not only on the three Sundays in four his name is
+against it. There are now two questions. Which route are you on TODAY decides
+who may tap and what the Finished screen offers. Which route do you BELONG to
+decides what opens. Duty still wins, so a cover on the other route sees the bus
+he is actually driving.
+
+**The PIN survived the check.** It stayed filled in all the way back to the home
+screen, so the next person to pick up the phone was already past the gate. It
+now clears on the way home and on starting another check.
+
+**Fine carries you to the next item.** Marking something fine ends it, so the
+page moves on rather than leaving a driver to scroll. Defect deliberately does
+not: it opens a box he has to type in, and moving the page under somebody about
+to write is worse than making him scroll. The last item on a stage stays put,
+because the next thing is the Next button already in view.
+
+**Check another bus is no longer offered to a driver on duty.** He has one bus
+and is about to drive it, so the button invited a second check nobody wanted and
+implied he had something left to do. It stays for a coordinator, who does the
+full inspections and genuinely does move between vehicles.
+
+**Start your run, and it now actually appears.** The continuation added in v1.13
+required bookings to have closed, and that fact is only ever learned by opening
+Stops and bookings. So on the one screen where a driver had not yet been there,
+it was false and the button never showed. It is now offered to the driver on
+duty whatever the clock says. The stops screen already refuses to start a run
+early and explains why, which is the right place for that rule to live rather
+than silently hiding the way to it.
+
+On the wording: **Fine** was kept over Okay. Okay is what you say about
+something adequate, and it invites a shrug. Fine is a verdict, it pairs against
+Defect as its opposite, and it is the word a driver would use out loud.
+
 **v1.14.1** Two of my own mistakes, one old and one a day old.
 
 **The contact block should never have shipped.** It was asked for, built,

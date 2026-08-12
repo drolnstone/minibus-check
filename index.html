@@ -715,7 +715,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
          back and find a grey button. Shown only when it is true: his route,
          his Sunday, bookings closed. -->
     <button class="btn btn-main btn-wide" id="sentToStops" type="button"
-            style="display:none;margin-top:12px">Go to stops and bookings</button>
+            style="display:none;margin-top:12px">Start your run</button>
     <p class="tiny" id="sentToStopsWhy" style="display:none;margin-top:8px"></p>
   </section>
 
@@ -828,7 +828,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.14.1";
+var APP_VERSION = "v1.15.0";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1129,14 +1129,21 @@ function critNames(){
 function paintSentNext(){
   var btn=$("sentToStops"), why=$("sentToStopsWhy");
   if(!btn) return;
+
+  /* Shown to the driver on duty, whatever the clock says.
+
+     It used to require tripClosed as well, which is only ever true once
+     bookings have shut, and is only ever LEARNED by opening Stops and
+     bookings. So on the one screen where a driver had not yet been there, it
+     was false, and the button he was meant to be offered never appeared. The
+     stops screen itself already refuses to start a run early and says why,
+     which is the right place for that rule to live. */
   var route=rotaMyRoute();
-  var ready = !!route && tripClosed && !trip.ended;
+  var ready = !!route && !trip.ended;
   btn.style.display = ready ? "" : "none";
   if(why){
     why.style.display = ready ? "" : "none";
-    why.textContent = ready
-      ? "You are on "+route+" today. Start the trip when you are ready to pull away."
-      : "";
+    why.textContent = ready ? "You are on "+route+" today." : "";
   }
 }
 
@@ -1227,6 +1234,11 @@ window.addEventListener("popstate", function(){
 function goHome(){
   st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign=""; st.mode="pre";
   st.fuel=null; st.jobs=[];
+  /* The PIN goes with the check it belonged to. It used to survive all the
+     way back to the home screen still filled in, so the next person to pick
+     up the phone was already past the gate. */
+  st.pin=""; st.pinOk=false;
+  if($("pin")) $("pin").value="";
   geo={status:"off"};
   stages=[]; ALL=[]; TOTAL=0; lastRec=null;
   paintBanner();
@@ -1321,10 +1333,16 @@ function paintFoot(){
   }
   if(st.screen==="sent"){
     /* Finished means finished. The way on is home, not back into a check
-       that has already been signed and sent. */
+       that has already been signed and sent.
+
+       Check another bus is offered to whoever might actually check one. A
+       driver on duty has one bus and is about to drive it; putting that in
+       front of him invites a second check nobody wants and suggests he has
+       something left to do. It stays for a coordinator, who does the full
+       inspections and genuinely does move between vehicles. */
     btn("Done","btn-main",goHome);
     if(loadQ().length) btn("Waiting to send","btn-ghost",function(){ renderPending(); show("pending"); });
-    else btn("Check another bus","btn-ghost",reset);
+    else if(!rotaMyRoute() || tripSeesAll()) btn("Check another bus","btn-ghost",reset);
     return;
   }
   if(st.screen==="pending"){
@@ -1684,8 +1702,24 @@ function renderStage(){
       paintDash(); paintFoot();
     }
 
-    bOk.addEventListener("click",function(){ pick("ok"); });
-    if(bNa) bNa.addEventListener("click",function(){ pick("na"); });
+    /* Fine means done with this one, so carry him to the next.
+
+       Defect deliberately does not: it opens a box he has to type in, and
+       moving the page under somebody who is about to write would be worse
+       than making him scroll. So only the answers that END an item advance,
+       and the last item on a stage stays put because the next thing is the
+       Next button at the bottom, already in view. */
+    function advance(){
+      var next=el.nextElementSibling;
+      while(next && !next.classList.contains("item")) next=next.nextElementSibling;
+      if(!next) return;
+      var top=next.getBoundingClientRect().top+window.scrollY-72;
+      try{ window.scrollTo({top:top,behavior:"smooth"}); }
+      catch(e){ window.scrollTo(0,top); }
+    }
+
+    bOk.addEventListener("click",function(){ pick("ok"); advance(); });
+    if(bNa) bNa.addEventListener("click",function(){ pick("na"); advance(); });
     bDef.addEventListener("click",function(){
       pick("def");
       if(it.crit) toast("Critical defect. The bus does not run. Tap Call at the top.");
@@ -2422,7 +2456,7 @@ function tripEnd(){
    request has not combined how fresh they are. */
 function rotaCountsFetch(route,cb){
   if(typeof route==="function"){ cb=route; route=null; }
-  route = route || rotaStopsRoute || rotaMyRoute() || "North";
+  route = route || rotaStopsRoute || rotaHomeRoute() || "North";
   if(!LIVE || !navigator.onLine || rotaCountsBusy){ if(cb) cb(false); return; }
   rotaCountsBusy=true;
   callFetch(CFG.endpoint+"?board=1&route="+encodeURIComponent(route),{method:"GET",redirect:"follow"})
@@ -2773,6 +2807,9 @@ function rotaOpen(){ rotaViewMode="all"; rotaPastWeeks=0; rotaRender(false); sho
    row rather than the Drivers tab, because the rota is what knows about
    covers: a man standing in on South this week is a South driver today
    whatever his usual route says. */
+/* The route a driver is on THIS Sunday, or null if he is not driving. Used
+   wherever the answer has to be about duty: who may tap, what the Finished
+   screen offers. */
 function rotaMyRoute(){
   var me=(st.driver||"").trim();
   if(!me) return null;
@@ -2783,6 +2820,26 @@ function rotaMyRoute(){
   var sActual=(row&&row.actual2)||sPrimary;
   if(sPrimary===me||sActual===me) return "South";
   if(nPrimary===me||nActual===me) return "North";
+  return null;
+}
+
+/* The route a driver BELONGS to, on duty or not.
+
+   Bro Tunde is a South driver every week of the year, not only on the three
+   Sundays in four when his name is against it. Opening Stops and bookings on
+   an off Sunday used to put him on North, because the only question being
+   asked was "are you driving today", and the answer was no.
+
+   Duty first, since a cover on the other route really is on that route today.
+   Then the rotation he is named in. Then nothing, and the caller falls back
+   to the first route on the timetable. */
+function rotaHomeRoute(){
+  var duty=rotaMyRoute();
+  if(duty) return duty;
+  var me=(st.driver||"").trim();
+  if(!me) return null;
+  if(ROTA_SECONDARY_PATTERN.indexOf(me)>=0) return "South";
+  if(ROTA_PRIMARY_PATTERN.indexOf(me)>=0) return "North";
   return null;
 }
 
@@ -2822,7 +2879,7 @@ function rotaOpenStops(){
      reinstalled phone or a second one picks it up where it actually is. */
   tripLoadState();
   rotaPaintStops();
-  rotaCountsFetch(rotaStopsRoute||rotaMyRoute()||"North",
+  rotaCountsFetch(rotaStopsRoute||rotaHomeRoute()||"North",
                   function(){ if(rotaStopsOpen) rotaPaintStops(); });
   tripFlush();
   if(trip.started && !trip.ended) tripWatchStart();
@@ -2865,7 +2922,7 @@ function rotaPaintStops(){
      stops would be worse than showing none at all. */
   var showCounts = rotaStopCountsFor && rotaStopCountsFor===rotaKey(rotaBaseSunday(0));
 
-  var mine=rotaMyRoute();
+  var mine=rotaHomeRoute();
 
   var routes=[];
   stops.forEach(function(s){ if(!s.arrival && routes.indexOf(s.route)<0) routes.push(s.route); });
@@ -3383,6 +3440,8 @@ function rotaClose(){
 function reset(){
   st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign=""; st.mode="pre";
   st.fuel=null; st.jobs=[];
+  st.pin=""; st.pinOk=false;
+  if($("pin")) $("pin").value="";
   geo={status:"off"};
   stages=[]; ALL=[]; TOTAL=0; lastRec=null;
   renderVehicles(); show("vehicle");
