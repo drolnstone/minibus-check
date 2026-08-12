@@ -1209,6 +1209,122 @@ after a reminder failed to arrive.
 Nothing in the sending changed. Fill the Email column on the Drivers tab and
 the reminders that already exist start working.
 
+**v1.12.4** A way through for anybody who would rather speak to a person.
+
+The booking page now carries a Call and a WhatsApp button at the bottom, with
+the number written out underneath in large type so it can be read aloud or
+copied onto paper. Anybody who rings gives their name, their stop and how many
+are coming, and their seat is booked for them.
+
+Three decisions in it worth keeping.
+
+It is written into the page rather than fetched from the spreadsheet, and it
+sits outside the part of the page that gets redrawn. The people most likely to
+need it are the people looking at this page when something has gone wrong: no
+signal, stops that will not load, a booking that will not save. A help line
+that vanishes in exactly those moments is not a help line. **The consequence
+is that the number lives in `sunday/index.html`. If it ever changes, change it
+there.** It is the one thing on that page not driven by config.
+
+It is set in larger type than everything around it. This is the one block
+aimed at somebody who is struggling to read or work the rest of the page, so
+the usual restraint about type size works against the point.
+
+The two notices that mark a dead end now point at it rather than apologising.
+The stops-failed message and the bookings-have-closed message both say to ring
+or message, instead of "tell the transport group", which is not an instruction
+anybody can act on while standing at a bus stop.
+
+The number is on a page that is not indexed by search engines but is reachable
+by anybody holding the link, which is the same footing it already had in
+`config.js`.
+
+**v1.13.1** The home screen tightened.
+
+Driver name and PIN now sit on one row, roughly two thirds to one third. Not an
+even split: the longest name on the register needs the room and would truncate
+at half width, while four digits need very little. The two boxes are the same
+height and their labels sit on one baseline, so it reads as a single row rather
+than two things pushed together. The PIN box is centred and letter spaced so
+four characters look deliberate.
+
+The hints moved. Each field used to carry its own, and side by side in narrow
+columns they would have wrapped to three or four lines each and cost more than
+the split saved. There is now one line under the row, saying whichever thing is
+true: who appears in the list before a name is chosen, and what to do about a
+forgotten PIN once one is being asked for.
+
+Below 340 pixels the two columns stack rather than squeeze a name, which is
+simply the layout as it was. Checked against the register: the longest name
+fits from 360 upwards, which covers every phone in normal use.
+
+**v1.13** A review of the driver app, rather than another feature.
+
+Nothing new was added. This is a pass over what four releases of bolting things
+on had done to the interface.
+
+**Stops and bookings has its own screen.** It had grown into the busiest thing
+in the app, tabs and a summary and a trip strip and fifteen stops and a sticky
+action block, all inside a sheet built for a short request form with three
+fields. It is also the only screen used in a moving vehicle, so it should not
+be something layered over another screen with a backdrop to tap past. It is now
+a screen like the rota, with a Back button that returns wherever you came from.
+The request sheet goes back to doing the one job it was built for.
+
+**A missed stop no longer appears twice.** It used to get a warning card at the
+top AND its own pair of buttons down in the list: the same stop asking to be
+dealt with in two places. It now turns amber where it sits in the list, says
+"gone past, not marked", and carries its buttons there, which is better context
+and one block less to read.
+
+**Per-stop buttons only appear on stops already passed.** They used to sit on
+every booked stop including ones miles ahead, which a driver never needs and
+which put a pair of buttons on most rows. On a normal morning there is now
+exactly one thing on screen to press.
+
+**The trip strip is one line when nothing is wrong.** It was up to four:
+running time, offset, last stop, queue count, plus the moving warning, each on
+its own row and most saying nothing on a good day. The exceptions still show,
+but only when they apply.
+
+**"Waiting to send" only appears when something is.** It was a permanent grey
+button carrying a label that describes a state rather than a place, and it
+means nothing to anybody who does not already know about the queue. It is now
+hidden when the queue is empty and reads "2 waiting to send" when it is not.
+
+**Stops and bookings becomes the primary button once bookings close.** The
+three buttons under the name picker were identical and equally weighted, which
+they are not: one is a queue, one is reference, and one is the live screen on a
+Sunday morning. Emphasis now follows a real condition.
+
+**A finished check offers the run.** The inspection and the trip are twenty
+minutes apart on a real Sunday and nothing joined them, so a driver had to know
+to go back and find a grey button. The Finished screen now offers Stops and
+bookings, and only when it is true: his route, his Sunday, bookings closed.
+
+**"Yours today" said today on a Tuesday.** The rota badge is about the coming
+Sunday, so it now reads "Yours this Sunday" unless it really is today.
+
+**The type scale went from seventeen sizes to ten.** Half-pixel sizes were
+never a decision, only accumulation, and 11.5, 12.5, 13.5 and 14.5 were spread
+across thirty rules.
+
+**The fourth colour is finally declared.** Green, amber and red were tokens
+from the start. A blue had grown up beside them in raw hex, ten variants across
+rota labels, route badges, focus rings and the sending state, and it does mean
+something distinct: this is information, or this is yours. Undeclared is why it
+spread, so it is now `--info` and its family, along with the edge colours the
+status families were already repeating.
+
+**The trip styling matches everything around it**, same radii and padding.
+Sticky positioning is kept for the one control a driver reaches for without
+looking, and back to top now stands down while a run is going rather than
+crowding the same corner.
+
+One thing found while checking: the big Picked up button still carried a class
+name that does not exist in this stylesheet, left over from the same mistake
+fixed in v1.11.2. Now corrected. Nothing emits a class without a style.
+
 ## The Minibus menu
 
 Grouped by what a thing does to you, not by what it is about. It used to be

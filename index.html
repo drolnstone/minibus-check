@@ -20,6 +20,20 @@
   --warn:#B26B00;--warn-bg:#FDF3E2;
   --stop:#A8231B;--stop-bg:#FBE9E7;
   --plate:#F4C11E;
+
+  /* The fourth colour, finally named.
+
+     Green, amber and red were declared from the start and mean pass, attend
+     and stop. A blue family had grown up alongside them in raw hex, ten
+     variants across rota labels, route badges, focus rings and the sending
+     state, and it does mean something distinct: this is information, or this
+     is yours. It is not a status. Leaving it undeclared is why it spread. */
+  --info:#2C6FA8;--info-deep:#244E72;--info-bg:#EEF5FB;--info-line:#B8D1E6;
+  --info-soft:#4A7FB5;--info-ring:#9CC4EC;
+
+  /* Edge colours the status families already used in several places, named so
+     the newer work shares them instead of inventing its own. */
+  --warn-line:#EBD3A8;--pass-line:#B7D8C6;--stop-line:#E8BCB7;
   --r:10px;--tap:56px;
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-t:env(safe-area-inset-top,0px);
@@ -51,7 +65,7 @@ input,textarea{font:inherit;color:inherit}
 .dash-top{display:flex;align-items:center;gap:10px;
   padding:9px calc(14px + var(--safe-r)) 9px calc(14px + var(--safe-l))}
 .plate{display:inline-flex;align-items:center;background:var(--plate);color:#101010;
-  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;letter-spacing:.055em;
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;letter-spacing:.055em;
   padding:3px 9px 2px;border-radius:4px;border:1.5px solid #101010;flex:none}
 .plate.blank{background:#39424E;color:#9BA7B4;border-color:#556170;letter-spacing:.14em;font-size:14px}
 .dash-id{flex:1;min-width:0}
@@ -86,7 +100,7 @@ input,textarea{font:inherit;color:inherit}
 .eyebrow{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.16em;
   text-transform:uppercase;color:var(--muted);margin:0 0 5px}
 h1{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:32px;line-height:1.06;margin:0 0 10px}
-h2{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:26px;line-height:1.1;margin:0 0 4px}
+h2{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:28px;line-height:1.1;margin:0 0 4px}
 p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .card{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);padding:14px}
 .card+.card{margin-top:12px}
@@ -98,8 +112,27 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
 .field input,.field textarea{width:100%;padding:13px 12px;border:1.5px solid var(--hair);border-radius:8px;
   background:#fff;font-size:17px}
-.field input:focus,.field textarea:focus{outline:3px solid #9CC4EC;outline-offset:1px;border-color:var(--steel-2)}
+.field input:focus,.field textarea:focus{outline:3px solid var(--info-ring);outline-offset:1px;border-color:var(--steel-2)}
 .field .hint{font-size:13px;color:var(--muted);margin-top:5px}
+
+/* The identity row. align-items:end keeps the two boxes bottom aligned even
+   if one label ever wraps, which is what stops a split like this looking
+   accidental. */
+.idrow{display:flex;gap:10px;align-items:end}
+.idrow .field{margin-bottom:0}
+.idrow-name{flex:1 1 auto;min-width:0}
+/* Wide enough that four characters sit comfortably with air around them,
+   fixed so it never grows into the name's room. */
+.idrow-pin{flex:0 0 108px}
+.pinbox{text-align:center;letter-spacing:.32em;padding-left:6px;padding-right:6px}
+.pinbox::placeholder{letter-spacing:.24em;opacity:.5}
+/* Below this the two columns start to crowd, so they stack rather than
+   truncate a name. Nothing is lost: it is the layout we had before. */
+@media (max-width:340px){
+  .idrow{display:block}
+  .idrow-name{margin-bottom:14px}
+  .idrow-pin{width:100%}
+}
 .hint{font-size:13px;color:var(--muted);margin-top:5px}
 .lbl{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:17px;
   letter-spacing:.05em;text-transform:uppercase;color:var(--ink)}
@@ -116,13 +149,13 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   font-size:20px;letter-spacing:.05em;padding:5px 10px 4px;border-radius:5px;border:2px solid #101010;flex:none}
 .veh-txt{flex:1;min-width:0}
 .veh-txt b{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;line-height:1.15}
-.veh-txt span{display:block;font-size:13.5px;color:var(--muted)}
+.veh-txt span{display:block;font-size:13px;color:var(--muted)}
 
 /* ---------- gate ---------- */
 .gatebox{border:1.5px solid var(--stop);background:var(--stop-bg);border-radius:var(--r);padding:14px;margin-bottom:14px}
-.gatebox h3{margin:0 0 6px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;
+.gatebox h3{margin:0 0 6px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;
   letter-spacing:.03em;text-transform:uppercase;color:var(--stop)}
-.gatebox p{margin:0 0 12px;font-size:14.5px}
+.gatebox p{margin:0 0 12px;font-size:14px}
 .confirm{display:flex;align-items:center;gap:12px;width:100%;min-height:var(--tap);padding:10px 12px;
   background:#fff;border:1.5px solid var(--hair);border-radius:8px;text-align:left;font-size:15px;font-weight:500}
 .confirm .box{width:26px;height:26px;border:2px solid var(--muted);border-radius:5px;flex:none;
@@ -134,26 +167,26 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .steps{display:flex;gap:6px;margin-bottom:14px}
 .steps div{flex:1;height:5px;border-radius:3px;background:var(--hair)}
 .steps div.done{background:var(--steel-2)}
-.steps div.now{background:#4A7FB5}
+.steps div.now{background:var(--info-soft)}
 .item{background:var(--card);border:1px solid var(--hair);border-left:5px solid var(--hair);
   border-radius:var(--r);padding:13px 13px 11px;margin-bottom:11px}
 .item.crit{border-left-color:var(--stop)}
 .item.is-pass{border-left-color:var(--pass);background:#FBFDFC}
 .item.is-def{border-left-color:var(--warn);background:#FFFDF8}
 .item.is-def.crit{border-left-color:var(--stop);background:#FFF9F8}
-.item h3{margin:0 0 3px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:21px;line-height:1.15}
+.item h3{margin:0 0 3px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;line-height:1.15}
 .tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px}
-.tag{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.11em;
+.tag{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11px;letter-spacing:.11em;
   text-transform:uppercase;padding:2px 7px;border-radius:4px}
-.tag.t-crit{background:var(--stop-bg);color:var(--stop);border:1px solid #E8BCB7}
-.tag.t-watch{background:var(--warn-bg);color:var(--warn);border:1px solid #EBD3A8}
+.tag.t-crit{background:var(--stop-bg);color:var(--stop);border:1px solid var(--stop-line)}
+.tag.t-watch{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
 .item p.what{margin:0 0 9px;font-size:15px;color:#2E353D}
-.history{font-size:13.5px;background:var(--warn-bg);border-left:3px solid var(--warn);padding:7px 9px;
+.history{font-size:13px;background:var(--warn-bg);border-left:3px solid var(--warn);padding:7px 9px;
   border-radius:0 6px 6px 0;margin:0 0 10px;color:#5A4008}
 .history b{font-weight:600}
 .choose{display:grid;grid-template-columns:1fr 1fr;gap:9px}
 .choose button{min-height:var(--tap);border:1.5px solid var(--hair);border-radius:8px;background:#fff;
-  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;letter-spacing:.06em;
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;letter-spacing:.06em;
   text-transform:uppercase;display:flex;align-items:center;justify-content:center;transition:transform .08s}
 .choose button:active{transform:scale(.97)}
 .choose .ok.on{background:var(--pass);border-color:var(--pass);color:#fff}
@@ -194,6 +227,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .btn-stop{background:var(--stop);color:#fff;flex:1}
 .btn-wide{width:100%}
 .btn-end{background:#fff;border-color:var(--steel);color:var(--steel);width:100%}
+/* Only ever seen when something is genuinely waiting, so it is allowed to
+   carry the amber. */
+.btn-warn{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn)}
 .count{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted);text-align:center;margin-bottom:7px}
 
 /* ---------- review / result ---------- */
@@ -203,7 +239,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .sum-row b{font-weight:600}
 .sum-row .v{font-family:"IBM Plex Mono",monospace;font-size:14px;text-align:right}
 .verdict{border-radius:var(--r);padding:15px;margin-bottom:16px;border:1.5px solid}
-.verdict p{margin:0;font-size:14.5px}
+.verdict p{margin:0;font-size:14px}
 .v-go{background:var(--pass-bg);border-color:var(--pass);color:#0E4A2D}
 .v-go h2{color:var(--pass)}
 .v-warn{background:var(--warn-bg);border-color:var(--warn);color:#5A4008}
@@ -211,7 +247,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .v-stop{background:var(--stop-bg);border-color:var(--stop);color:#6B1710}
 .v-stop h2{color:var(--stop)}
 .deflist{list-style:none;margin:10px 0 0;padding:0}
-.deflist li{padding:8px 0;border-top:1px dashed rgba(0,0,0,.18);font-size:14.5px}
+.deflist li{padding:8px 0;border-top:1px dashed rgba(0,0,0,.18);font-size:14px}
 .deflist li:first-child{border-top:none}
 .deflist b{font-weight:600}
 
@@ -221,8 +257,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   font-size:17px;color:#fff;font-weight:700}
 .sendbox b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:700;letter-spacing:.03em}
 .sendbox p{margin:2px 0 0;font-size:14px}
-.s-sending{background:#EEF3F8;border-color:#9CC4EC;color:#1B3A57}
-.s-sending .ico{background:#4A7FB5}
+.s-sending{background:var(--info-bg);border-color:var(--info-ring);color:var(--info-deep)}
+.s-sending .ico{background:var(--info-soft)}
 .s-ok{background:var(--pass-bg);border-color:var(--pass);color:#0E4A2D}
 .s-ok .ico{background:var(--pass)}
 .s-hold{background:var(--warn-bg);border-color:var(--warn);color:#5A4008}
@@ -238,16 +274,16 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .pend-h .d{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted)}
 .pend p{margin:5px 0 0;font-size:14px;color:#39414B}
 .empty{text-align:center;padding:34px 16px;color:var(--muted)}
-.empty b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:22px;color:var(--ink);margin-bottom:5px}
+.empty b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:20px;color:var(--ink);margin-bottom:5px}
 .banner{display:none;background:var(--warn-bg);border-bottom:1px solid var(--warn);color:#5A4008;
   padding:9px calc(14px + var(--safe-r)) 9px calc(14px + var(--safe-l));font-size:14px;text-align:center}
 .banner.is-on{display:block}
 .banner button{text-decoration:underline;font-weight:600;color:#5A4008}
 .linkrow{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap}
 .linkrow .btn{flex:1;min-width:140px;font-size:17px}
-.tiny{font-size:12.5px;color:var(--muted);text-align:center;margin-top:20px;line-height:1.5}
+.tiny{font-size:12px;color:var(--muted);text-align:center;margin-top:20px;line-height:1.5}
 .toast{position:fixed;left:50%;bottom:calc(84px + var(--safe-b));transform:translateX(-50%) translateY(14px);
-  background:var(--steel);color:#fff;padding:11px 17px;border-radius:8px;font-size:14.5px;opacity:0;
+  background:var(--steel);color:#fff;padding:11px 17px;border-radius:8px;font-size:14px;opacity:0;
   pointer-events:none;transition:.25s;z-index:200;max-width:90vw;text-align:center}
 /* 200, above the request sheet at 120. It used to sit at 90, which put every
    message fired while the sheet was open BEHIND the dark overlay. The rules
@@ -260,27 +296,27 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .field select{width:100%;padding:13px 40px 13px 12px;border:1.5px solid var(--hair);border-radius:8px;
   background:#fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9'><path d='M1 1l6 6 6-6' stroke='%235C6672' stroke-width='2' fill='none' stroke-linecap='round'/></svg>") no-repeat right 14px center;
   font-size:17px;appearance:none;-webkit-appearance:none}
-.field select:focus{outline:3px solid #9CC4EC;outline-offset:1px;border-color:var(--steel-2)}
+.field select:focus{outline:3px solid var(--info-ring);outline-offset:1px;border-color:var(--steel-2)}
 .linkbtn{background:none;text-decoration:underline;font-size:14px;color:var(--muted);padding:6px 0}
 
 /* ---------- due dates ---------- */
 .due{border-radius:var(--r);padding:13px;margin-bottom:14px;border:1.5px solid}
 .due.soon{background:var(--warn-bg);border-color:var(--warn);color:#5A4008;animation:pulseWarn 1.9s ease-in-out infinite}
 .due.over{background:var(--stop-bg);border-color:var(--stop);color:#6B1710;animation:pulseStop 1.4s ease-in-out infinite}
-.due h4{margin:0 0 7px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;
+.due h4{margin:0 0 7px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;
   letter-spacing:.05em;text-transform:uppercase}
 .due ul{list-style:none;margin:0;padding:0}
-.due li{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:14.5px;
+.due li{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:14px;
   border-top:1px dashed rgba(0,0,0,.16)}
 .due li:first-child{border-top:none}
 .due li b{font-weight:600}
-.due li .w{font-family:"IBM Plex Mono",monospace;font-size:13.5px;white-space:nowrap}
+.due li .w{font-family:"IBM Plex Mono",monospace;font-size:13px;white-space:nowrap}
 @keyframes pulseWarn{0%,100%{box-shadow:0 0 0 0 rgba(178,107,0,0)}50%{box-shadow:0 0 0 5px rgba(178,107,0,.18)}}
 @keyframes pulseStop{0%,100%{box-shadow:0 0 0 0 rgba(168,35,27,0)}50%{box-shadow:0 0 0 6px rgba(168,35,27,.24)}}
-.chip{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11.5px;
+.chip{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11px;
   letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:4px;margin-top:5px}
-.chip.soon{background:var(--warn-bg);color:var(--warn);border:1px solid #EBD3A8}
-.chip.over{background:var(--stop-bg);color:var(--stop);border:1px solid #E8BCB7}
+.chip.soon{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
+.chip.over{background:var(--stop-bg);color:var(--stop);border:1px solid var(--stop-line)}
 .callbtn{display:flex;align-items:center;justify-content:center;min-height:52px;margin-top:12px;
   background:var(--stop);color:#fff;border-radius:9px;font-family:"Barlow Condensed",sans-serif;
   font-weight:700;font-size:20px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none}
@@ -296,7 +332,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .footer-brand img{width:24px;height:24px}
 .version{text-align:center;margin-top:6px;font-family:"Barlow Condensed",sans-serif;
   font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--hair)}
-.footer-brand span{font-family:"Barlow Condensed",sans-serif;font-size:12.5px;letter-spacing:.12em;
+.footer-brand span{font-family:"Barlow Condensed",sans-serif;font-size:12px;letter-spacing:.12em;
   text-transform:uppercase;color:var(--muted)}
 
 /* ---------- dash call button ---------- */
@@ -319,16 +355,16 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 #sign{font-style:italic}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chips button{min-height:44px;padding:0 15px;border:1.5px solid var(--hair);border-radius:22px;
-  background:#fff;color:var(--ink);font-size:14.5px;font-weight:500}
+  background:#fff;color:var(--ink);font-size:14px;font-weight:500}
 .chips button.on{background:var(--steel);border-color:var(--steel);color:#fff}
 .chips button:active{transform:scale(.97)}
 
 .openbox{border:1.5px solid var(--warn);background:var(--warn-bg);border-radius:var(--r);
   padding:13px;margin-bottom:14px;color:#5A4008}
-.openbox h4{margin:0 0 7px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;
+.openbox h4{margin:0 0 7px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;
   letter-spacing:.05em;text-transform:uppercase}
 .openbox ul{list-style:none;margin:0;padding:0}
-.openbox li{padding:5px 0;font-size:14.5px;border-top:1px dashed rgba(0,0,0,.16)}
+.openbox li{padding:5px 0;font-size:14px;border-top:1px dashed rgba(0,0,0,.16)}
 .openbox li:first-child{border-top:none}
 .openbox li b{font-weight:600}
 .openbox .crit{color:var(--stop);font-weight:600}
@@ -348,34 +384,34 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-date b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);margin-bottom:2px}
 .rota-main{min-width:0}
 .rota-main-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.rota-driver{font-family:"Barlow Condensed",sans-serif;font-size:21px;font-weight:700;line-height:1.1}
-.rota-label{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#244E72;background:#EEF5FB;border:1px solid #B8D1E6;border-radius:4px;padding:2px 6px;white-space:nowrap}
+.rota-driver{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:700;line-height:1.1}
+.rota-label{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--info-deep);background:var(--info-bg);border:1px solid var(--info-line);border-radius:4px;padding:2px 6px;white-space:nowrap}
 .rota-actions{display:flex;gap:7px;margin-top:9px}
 .rota-edit{min-height:40px;padding:0 11px;border:1.5px solid var(--hair);border-radius:7px;background:#fff;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:14px;letter-spacing:.04em;text-transform:uppercase}
 .rota-current{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#fff;background:var(--steel);border-radius:4px;padding:3px 7px;white-space:nowrap}
 .rota-controls{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap}
 .rota-controls .btn{min-height:46px;font-size:16px}
 .rota-request{border:1.5px solid var(--warn);background:var(--warn-bg);border-radius:var(--r);padding:12px;margin-top:9px}.rota-request b{color:var(--warn)}
-.rota-status{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:4px;border:1px solid var(--hair);white-space:nowrap}.rota-status.pending{background:var(--warn-bg);color:var(--warn);border-color:#EBD3A8}.rota-status.approved{background:var(--pass-bg);color:var(--pass);border-color:#B7D8C6}.rota-status.rejected{background:var(--stop-bg);color:var(--stop);border-color:#E8BCB7}
+.rota-status{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:4px;border:1px solid var(--hair);white-space:nowrap}.rota-status.pending{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-line)}.rota-status.approved{background:var(--pass-bg);color:var(--pass);border-color:var(--pass-line)}.rota-status.rejected{background:var(--stop-bg);color:var(--stop);border-color:var(--stop-line)}
 /* One row per route. Neither is a headline and neither is an afterthought:
    same weight, same size, same indent. The old layout put North in a big
    bold heading and South in a grey dashed box underneath, so a South driver
    opening My duties saw another man's name three times. */
 .rota-leg{display:flex;align-items:flex-start;gap:8px;justify-content:space-between;padding:7px 0}
 .rota-leg+.rota-leg{border-top:1px solid var(--hair)}
-.rota-leg-name{font-family:"Barlow Condensed",sans-serif;font-size:21px;font-weight:700;line-height:1.15}
+.rota-leg-name{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:700;line-height:1.15}
 .rota-leg.is-mine .rota-leg-name{color:var(--ink)}
-.rota-leg.is-mine{background:#F3F8FC;margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:6px;box-shadow:inset 3px 0 0 #2C6FA8}
+.rota-leg.is-mine{background:var(--info-bg);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:6px;box-shadow:inset 3px 0 0 var(--info)}
 .rota-you{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;
-  letter-spacing:.1em;text-transform:uppercase;color:#2C6FA8;border:1px solid #BBD4E8;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--info);border:1px solid var(--info-line);
   background:#fff;border-radius:4px;padding:1px 5px;margin-left:7px;vertical-align:2px}
 .rota-leg.is-mine+.rota-leg{border-top-color:transparent}
 .rota-leg-note{font-size:13px;color:var(--muted);margin-top:2px}
-.rota-leg-none{font-family:"Barlow Condensed",sans-serif;font-size:19px;font-weight:700;color:var(--stop)}
+.rota-leg-none{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:700;color:var(--stop)}
 /* Route chips sit where PRIMARY used to. Words, not arrows: an up arrow at
    this size reads as "increase", and a compass rose reads as nothing. */
 .rota-route{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;border-radius:4px;padding:2px 6px;white-space:nowrap;margin-top:4px}
-.rota-route.north{color:#244E72;background:#EEF5FB;border:1px solid #B8D1E6}
+.rota-route.north{color:var(--info-deep);background:var(--info-bg);border:1px solid var(--info-line)}
 .rota-route.south{color:#5A3E14;background:#FBF4E8;border:1px solid #E6D2AC}
 .rota-viewing{font-size:13px;color:var(--muted);margin:-4px 0 12px}
 .rota-viewing b{color:var(--ink)}
@@ -394,7 +430,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 /* Explains why a list is empty. An empty dropdown tells a driver nothing
    except that something is wrong with the app. */
 .rota-swap-note{margin-top:7px;font-size:13px;line-height:1.45;color:var(--muted);
-  background:var(--warn-bg);border:1px solid #EBD3A8;border-radius:7px;padding:8px 10px}
+  background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:7px;padding:8px 10px}
 .rota-stops-btn{display:block;width:100%;margin:0 0 12px;padding:11px;border-radius:9px;
   border:1px solid var(--hair);background:var(--paper);color:var(--ink);
   font-family:"Barlow Condensed",sans-serif;font-size:15px;font-weight:700;
@@ -417,26 +453,34 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .trip-undo{flex:0 0 auto;align-self:center;font-family:"Barlow Condensed",sans-serif;
   font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--steel);
   border:1.5px solid var(--hair);border-radius:7px;padding:7px 11px;background:#fff}
-.trip-strip{border:1px solid var(--hair);border-radius:9px;padding:11px 12px;margin:0 0 12px;background:var(--card)}
+/* Same radius and padding as every other card on this screen. The trip work
+   was the newest layer and looked it: its own radii, its own spacing, and a
+   sticky block nothing else in the app used. */
+.trip-strip{border:1px solid var(--hair);border-radius:var(--r);padding:13px;margin:0 0 12px;background:var(--card)}
 .trip-note{margin:0;font-size:13px;line-height:1.5;color:var(--muted)}
 .trip-note b{color:var(--ink)}
 .trip-note+.trip-note{margin-top:6px}
 .trip-wait{color:var(--warn);font-weight:600}
 .trip-stopme{color:var(--stop)}
-.trip-missed{background:var(--warn-bg);border:1px solid #EBD3A8;border-radius:9px;padding:11px 12px;margin:0 0 10px;font-size:14px}
-.trip-missed-btns{display:flex;gap:8px;margin-top:9px}
-.trip-missed-btns .btn{flex:1;min-height:46px}
-.trip-actions{position:sticky;bottom:0;background:var(--card);border-top:1px solid var(--hair);
-  padding:11px 0 4px;margin-top:14px;display:flex;flex-direction:column;gap:8px}
+/* A stop gone past without being marked. Amber where it sits in the list,
+   rather than a card above repeating what the row already says. */
+.trip-missed-row{background:var(--warn-bg);box-shadow:inset 3px 0 0 var(--warn)}
+.trip-past{display:block;font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--warn);margin-top:3px}
+/* Sticky is right here and only here: it is the one control a driver reaches
+   for without looking, and it must not scroll away behind fifteen stops. */
+.trip-actions{position:sticky;bottom:0;background:var(--paper);border-top:1px solid var(--hair);
+  padding:12px 0 calc(10px + var(--safe-b));margin-top:14px;
+  display:flex;flex-direction:column;gap:8px}
 .trip-waiting{margin:0;font-size:14px;color:var(--muted);text-align:center}
 .trip-waiting b{color:var(--ink);font-size:16px}
 /* One target, full width, impossible to mis-hit from a cab. Green fill, so
    it reads as the thing to press from arm's length in daylight. */
-.btn-tap{min-height:66px;font-size:19px;width:100%;background:var(--pass);color:#fff;
+.btn-tap{min-height:66px;font-size:20px;width:100%;background:var(--pass);color:#fff;
   border-color:var(--pass);box-shadow:0 1px 0 rgba(0,0,0,.08)}
 .trip-actions .btn{width:100%}
-.trip-rehearsal{background:var(--stop-bg);border:1px solid #E8BCB7;color:var(--stop);
-  border-radius:9px;padding:10px 12px;margin:0 0 12px;font-size:13px;line-height:1.5}
+.trip-rehearsal{background:var(--stop-bg);border:1px solid var(--stop-line);color:var(--stop);
+  border-radius:var(--r);padding:13px;margin:0 0 12px;font-size:13px;line-height:1.5}
 .trip-rehearsal b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:15px;
   letter-spacing:.12em}
 .trip-row-btns{display:flex;gap:6px;padding:0 0 8px 62px}
@@ -469,18 +513,18 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .stop-sum b{color:var(--ink);font-weight:600}
 .stop-yours{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-size:11px;
   font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--pass);
-  background:var(--pass-bg);border:1px solid #B7D8C6;border-radius:5px;padding:1px 6px;margin-left:6px}
+  background:var(--pass-bg);border:1px solid var(--pass-line);border-radius:5px;padding:1px 6px;margin-left:6px}
 /* Back to top. The rota runs two years deep, so scrolling out of it by hand
    was a real journey. */
 /* Clear of the bottom bar. It sat at 20px, which put it behind the bar on
    any screen that has one, so half the arrow was unreachable. */
 .totop{position:fixed;right:calc(14px + var(--safe-r));bottom:calc(88px + var(--safe-b));z-index:65;
   width:48px;height:48px;border-radius:50%;background:var(--steel);color:#fff;
-  font-size:21px;line-height:1;box-shadow:0 3px 12px rgba(22,25,31,.32);
+  font-size:20px;line-height:1;box-shadow:0 3px 12px rgba(22,25,31,.32);
   display:none;align-items:center;justify-content:center}
 .totop.is-on{display:flex}
 .rota-locked{margin-top:8px;padding:8px 10px;border-radius:7px;font-size:13px;line-height:1.45;
-  background:var(--warn-bg);border:1px solid #EBD3A8;color:var(--ink)}
+  background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--ink)}
 .rota-modal{position:fixed;inset:0;z-index:120;background:rgba(22,25,31,.48);display:none;align-items:flex-end;justify-content:center}
 .rota-modal.is-on{display:flex}
 .rota-sheet{width:min(640px,100%);background:var(--paper);border-radius:14px 14px 0 0;padding:16px calc(14px + var(--safe-r)) calc(18px + var(--safe-b)) calc(14px + var(--safe-l));max-height:88vh;overflow:auto}
@@ -528,17 +572,31 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     <h1>Who is driving?</h1>
     <p class="lede">Your check goes straight to the coordinator's record when you finish.</p>
     <div class="card">
-      <div class="field" id="pickField">
-        <label for="driverPick">Driver name</label>
-        <select id="driverPick"><option value="">Choose your name</option></select>
-        <div class="hint">Only drivers approved by the leadership appear here.</div>
-        <div class="hint rota-hint" id="rotaHint" style="display:none"></div>
+      <!-- Name and PIN side by side, roughly two thirds to one third.
+
+           Not an even split: "Pst Obamakinwa" needs the room and would
+           truncate at half width, while a four digit PIN needs very little.
+           The two boxes are the same height and their labels sit on one
+           baseline, so it reads as one row rather than two things pushed
+           together.
+
+           The hints used to sit under each field. Side by side in narrow
+           columns they wrapped to three or four lines each and cost more
+           than the split saved, so there is one line under the row instead,
+           saying whichever thing is true at the time. -->
+      <div class="idrow" id="idRow">
+        <div class="field idrow-name" id="pickField">
+          <label for="driverPick">Driver name</label>
+          <select id="driverPick"><option value="">Choose your name</option></select>
+        </div>
+        <div class="field idrow-pin" id="pinField" style="display:none">
+          <label for="pin">PIN</label>
+          <input id="pin" type="password" inputmode="numeric" maxlength="8"
+                 class="mono pinbox" placeholder="&bull;&bull;&bull;&bull;" autocomplete="off">
+        </div>
       </div>
-      <div class="field" id="pinField" style="display:none">
-        <label for="pin">Your PIN</label>
-        <input id="pin" type="password" inputmode="numeric" maxlength="8" class="mono" placeholder="****" autocomplete="off">
-        <div class="hint" id="pinHint">Four digits. Ask the coordinator if you have forgotten it.</div>
-      </div>
+      <div class="hint" id="idHint">Only drivers approved by the leadership appear here.</div>
+      <div class="hint rota-hint" id="rotaHint" style="display:none"></div>
       <div class="field" id="typeField" style="display:none">
         <label for="driver">Driver name</label>
         <input id="driver" type="text" autocomplete="name" placeholder="Your full name">
@@ -547,7 +605,11 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     </div>
     <p class="tiny" style="margin-top:14px">If your name is missing, you are not on the register. Ring the coordinator before taking a bus out.</p>
     <div class="linkrow">
-      <button class="btn btn-ghost btn-wide" id="toPending" type="button">Waiting to send</button>
+      <!-- These were three identical grey buttons given equal weight, which
+           they do not have. One is a queue that is usually empty, one is
+           reference, and one is the live screen on a Sunday morning. Painted
+           by paintLinks() below. -->
+      <button class="btn btn-ghost btn-wide" id="toPending" type="button" style="display:none">Waiting to send</button>
       <button class="btn btn-ghost btn-wide" id="toRota" type="button">Driving rota</button>
       <button class="btn btn-ghost btn-wide" id="toStops" type="button">Stops and bookings</button>
     </div>
@@ -642,6 +704,13 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       <button class="btn btn-ghost" id="share" type="button">Share a copy</button>
       <button class="btn btn-ghost" id="retry" type="button">Try sending again</button>
     </div>
+    <!-- The check and the run are twenty minutes apart on a real Sunday, and
+         until now nothing on this screen said so. A driver had to know to go
+         back and find a grey button. Shown only when it is true: his route,
+         his Sunday, bookings closed. -->
+    <button class="btn btn-main btn-wide" id="sentToStops" type="button"
+            style="display:none;margin-top:12px">Go to stops and bookings</button>
+    <p class="tiny" id="sentToStopsWhy" style="display:none;margin-top:8px"></p>
   </section>
 
   <!-- 7. DRIVING ROTA -->
@@ -663,7 +732,25 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     <div id="rotaList"></div>
   </section>
 
-  <!-- 8. PENDING -->
+  <!-- 8. STOPS AND BOOKINGS
+       Its own screen since v1.13. It lived in the request sheet, which was
+       built for a short form and had grown into the busiest thing in the app:
+       tabs, a summary, a trip strip, fifteen stops and a sticky action block,
+       inside a panel meant for three fields and a Send button. It is also the
+       one screen used in a vehicle, so it should not be something layered on
+       top of another screen with a backdrop to tap past. -->
+  <section class="screen" id="s-stops">
+    <div class="rota-top">
+      <div>
+        <p class="eyebrow">Sunday bus</p>
+        <h1>Stops and bookings</h1>
+      </div>
+      <button class="rota-back" id="stopsBack" type="button">Back</button>
+    </div>
+    <div id="stopsBody"></div>
+  </section>
+
+  <!-- 9. PENDING -->
   <section class="screen" id="s-pending">
     <p class="eyebrow">Held on this phone</p>
     <h1>Waiting to send</h1>
@@ -711,7 +798,7 @@ var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.12.2";
+var APP_VERSION = "v1.13.1";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1001,6 +1088,50 @@ function critNames(){
 }
 
 /* ---------------- dashboard ---------------- */
+/**
+ * The three buttons under the name picker.
+ *
+ * Waiting to send is a state, not a place, and it only means anything to
+ * somebody who already knows about the queue. So it is not shown at all when
+ * the queue is empty, which is nearly always, and when it is not it counts
+ * itself and needs no explaining.
+ *
+ * Stops and bookings becomes the filled button once bookings have closed for
+ * the coming Sunday, because from that moment it is the screen a driver
+ * actually wants. The rest of the week it sits level with the rota.
+ */
+/* What comes after a finished check, when there is something. */
+function paintSentNext(){
+  var btn=$("sentToStops"), why=$("sentToStopsWhy");
+  if(!btn) return;
+  var route=rotaMyRoute();
+  var ready = !!route && tripClosed && !trip.ended;
+  btn.style.display = ready ? "" : "none";
+  if(why){
+    why.style.display = ready ? "" : "none";
+    why.textContent = ready
+      ? "You are on "+route+" today. Start the trip when you are ready to pull away."
+      : "";
+  }
+}
+
+function paintLinks(){
+  var q=0;
+  try{ q=(JSON.parse(store.get(QKEY)||"[]")||[]).length; }catch(e){ q=0; }
+
+  var pend=$("toPending");
+  if(pend){
+    pend.style.display = q ? "" : "none";
+    pend.textContent = q+" waiting to send";
+    pend.className = "btn btn-wide "+(q?"btn-warn":"btn-ghost");
+  }
+
+  var live = tripClosed && !!rotaStops.length;
+  var stops=$("toStops"), rota=$("toRota");
+  if(stops) stops.className = "btn btn-wide "+(live?"btn-main":"btn-ghost");
+  if(rota)  rota.className  = "btn btn-ghost btn-wide";
+}
+
 function paintDash(){
   var t=tally(), lv=level(), d=$("dash");
   d.className = "dash" + (lv==="stop"?" is-stop":lv==="warn"?" is-warn":"");
@@ -1042,15 +1173,15 @@ function paintDash(){
 }
 
 /* ---------------- screens ---------------- */
-var SCREENS = ["driver","vehicle","prep","stage","review","sent","rota","pending"];
+var SCREENS = ["driver","vehicle","prep","stage","review","sent","rota","stops","pending"];
 var syncToTop=function(){};
 function show(n){
   st.screen=n;
   SCREENS.forEach(function(x){ $("s-"+x).classList.toggle("is-on", x===n); });
   window.scrollTo(0,0);
   syncToTop();
-  paintDash(); paintFoot();
-  if(n==="sent"){ refreshSendState(); armBackGuard(); }
+  paintDash(); paintFoot(); paintLinks();
+  if(n==="sent"){ refreshSendState(); armBackGuard(); paintSentNext(); }
 }
 
 /**
@@ -2315,6 +2446,16 @@ function rotaCountsFetch(route,cb){
 
 /* How old the numbers on screen are. A driver setting off needs to know
    whether he is looking at the list or at a memory of the list. */
+/* "Yours today" is only true on a Sunday. rotaBaseSunday(0) is the COMING
+   Sunday, so on a Tuesday the badge was claiming a duty four days away was
+   happening now. */
+function yoursWhen(){
+  var d=rotaBaseSunday(0), now=new Date();
+  var sameDay = d.getFullYear()===now.getFullYear() &&
+                d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
+  return sameDay ? "Yours today" : "Yours this Sunday";
+}
+
 function rotaCountsWords(){
   if(!rotaCountsAt) return "Numbers as last received.";
   var s=Math.round((Date.now()-rotaCountsAt)/1000);
@@ -2639,16 +2780,13 @@ var rotaStopsAsked=false;  /* stops fetch already attempted this session */
    that route rather than driving it from memory. */
 function rotaOpenStops(){
   rotaStopsOpen=true;
+  stopsFrom = (st.screen==="stops") ? stopsFrom : st.screen;
 
-  /* Opening the sheet always starts on your own bus. Looking at the other
-     route is a thing you do, not a setting you leave behind for the next
-     person to open it. */
+  /* Opening always starts on your own bus. Looking at the other route is a
+     thing you do, not a setting you leave behind for the next person. */
   rotaStopsRoute=null;
   rotaRouteChosen=false;
-  $("rotaModalEyebrow").textContent="Sunday bus";
-  $("rotaModalTitle").textContent="Stops and bookings";
-  $("rotaModal").classList.add("is-on");
-  $("rotaModal").setAttribute("aria-hidden","false");
+  show("stops");
 
   /* Draw what we have straight away, then correct it. Same bargain the rota
      screen already makes: nothing waits on Apps Script before something
@@ -2669,12 +2807,16 @@ function rotaOpenStops(){
 
 /* Redrawing only. Switching route tabs and the poll both come back through
    here, and neither should reopen anything or start a second timer. */
+var stopsFrom="driver";     /* where Back should return to */
+
+function stopsClose(){
+  rotaStopsOpen=false;
+  rotaCountsStop();
+  show(stopsFrom||"driver");
+}
+
 function rotaPaintStops(){
   var stops=(rotaStops||[]).slice();
-
-  function closeBtn(){
-    $("rotaStopsClose").addEventListener("click",rotaClose);
-  }
 
   if(!stops.length){
     /* Reached straight from the home screen, the rota may never have been
@@ -2682,16 +2824,15 @@ function rotaPaintStops(){
        telling a driver on full signal that his phone has no timetable. */
     if(!rotaStopsAsked){
       rotaStopsAsked=true;
-      $("rotaModalBody").innerHTML='<p class="lede">Fetching the timetable\u2026</p>';
+      $("stopsBody").innerHTML='<p class="lede">Fetching the timetable\u2026</p>';
       rotaFetch(rotaBaseSunday(0), 4, function(){
         if(rotaStopsOpen) rotaPaintStops();
       });
       return;
     }
-    $("rotaModalBody").innerHTML='<p class="lede">The timetable has not reached this '+
+    $("stopsBody").innerHTML='<p class="lede">The timetable has not reached this '+
       'phone yet. Open this once with a signal and it will be here after that.</p>'+
-      '<div class="rota-modal-actions"><button class="btn btn-ghost" id="rotaStopsClose">Close</button></div>';
-    closeBtn();
+      '';
     return;
   }
 
@@ -2766,7 +2907,7 @@ function rotaPaintStops(){
               ? '<b>'+activeOn(route)+'</b> with people, <b>'+seatsOn(route)+'</b> booked'
               : 'nobody booked yet')
           : '')+
-        (mine===route?'<span class="stop-yours">Yours today</span>':'')+'</p>';
+        (mine===route?'<span class="stop-yours">'+esc(yoursWhen())+'</span>':'')+'</p>';
 
   /* ---- movement -------------------------------------------------------
      Live only on the route this phone is driving. A coordinator watching the
@@ -2805,13 +2946,12 @@ function rotaPaintStops(){
       else missed.push(s);                          /* gone past, unmarked */
     });
   }
-  missed.forEach(function(m){
-    html+='<div class="trip-missed"><b>'+esc(m.stop)+' was not marked.</b>'+
-          '<div class="trip-missed-btns">'+
-            '<button class="btn btn-ghost" data-triptap="'+esc(m.id)+'" data-tripkind="empty">Nobody there</button>'+
-            '<button class="btn btn-ghost" data-triptap="'+esc(m.id)+'" data-tripkind="pickup">Picked up</button>'+
-          '</div></div>';
-  });
+  /* No cards. A missed stop used to get a warning card up here AND its own
+     buttons down in the list: the same stop asking to be dealt with in two
+     places. It now turns amber in the list where it actually sits, which is
+     better context than a card floating above, and one block less to read. */
+  var missedIds={};
+  missed.forEach(function(m){ missedIds[m.id]=true; });
 
   list.concat(arr).forEach(function(s){
     /* How many are booked there. Shown, never acted on: the app does not
@@ -2828,6 +2968,7 @@ function rotaPaintStops(){
     var cls="stop-row"+(s.arrival?" stop-arrival":"");
     if(!s.arrival && (onThis||watching)){
       if(done) cls+=" trip-done";
+      else if(missedIds[s.id]) cls+=" trip-missed-row";
       else if(n===0) cls+=" trip-clear";
       else if(nextStop && s.id===nextStop.id) cls+=" trip-next";
     }
@@ -2841,16 +2982,18 @@ function rotaPaintStops(){
               (done?'<span class="trip-at">'+
                  (done.event==="empty"?'Nobody there ':'Picked up ')+
                  tripClock(done.at)+'</span>':'')+
+              ((!done&&missedIds[s.id])?'<span class="trip-past">Gone past, not marked</span>':'')+
             '</span>'+
             (done&&mayTap&&onThis
               ? '<button class="trip-undo" data-tripundo="'+esc(s.id)+'" '+
                 'aria-label="Undo '+esc(s.stop)+'">Undo</button>'
               : '')+
           '</div>'+
-          /* The escape hatch. The big button below is the fast path for the
-             stop he is expected at; this is how he marks any other one
-             without the app arguing about sequence. */
-          ((onThis&&mayTap&&!done&&!s.arrival&&n>0&&(!nextStop||s.id!==nextStop.id))
+          /* Only on a stop he has gone PAST without marking. It used to
+             appear on every booked stop including ones miles ahead, which a
+             driver never needs and which put a pair of buttons on most rows.
+             The big button covers the stop in front of him. */
+          ((onThis&&mayTap&&!done&&!s.arrival&&missedIds[s.id])
             ? '<div class="trip-row-btns">'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="empty">Nobody there</button>'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="pickup">Picked up</button>'+
@@ -2863,9 +3006,7 @@ function rotaPaintStops(){
     html+=tripActionHtml(nextStop);
   }
 
-  $("rotaModalBody").innerHTML=html+
-    '<div class="rota-modal-actions"><button class="btn btn-ghost" id="rotaStopsClose">Close</button></div>';
-  closeBtn();
+  $("stopsBody").innerHTML=html;
 
   Array.prototype.forEach.call(document.querySelectorAll("[data-stoproute]"),function(b){
     b.addEventListener("click",function(){
@@ -2951,11 +3092,16 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
     return h+'</div>';
   }
 
+  /* One line while everything is normal. It used to be up to four: running
+     time, offset, last stop, queue count, plus the moving warning, each on
+     its own row, most of them saying nothing on a good morning. The
+     exceptions still appear, but only when they apply. */
   var off=trip.offset;
-  h+='<p class="trip-note"><b>Running</b> since '+tripClock(trip.started)+'.'+
-     (off===null?'':' '+(off>0? off+' min behind' : off<0? (-off)+' min ahead' : 'On time'))+
-     (trip.lastStop?' Last: '+esc(trip.lastStop)+' at '+tripClock(trip.lastAt)+'.':'')+
-     '</p>';
+  var bits=['<b>Running</b> since '+tripClock(trip.started)];
+  if(off!==null && off!==0) bits.push(off>0? off+' min behind' : (-off)+' min ahead');
+  if(trip.lastStop) bits.push('last '+esc(trip.lastStop)+' at '+tripClock(trip.lastAt));
+  h+='<p class="trip-note">'+bits.join(' \u00B7 ')+'</p>';
+
   if(queued) h+='<p class="trip-note trip-wait">'+queued+' tap'+(queued>1?'s':'')+' waiting to send.</p>';
   h+='<p class="trip-note" id="tripMoving"></p>';
   return h+'</div>';
@@ -2967,7 +3113,7 @@ function tripActionHtml(nextStop){
   if(nextStop){
     h+='<p class="trip-waiting"><b>'+waiting+(waiting===1?' person':' people')+
        '</b> waiting at '+esc(nextStop.stop)+'</p>'+
-       '<button class="btn go btn-tap" data-triptap="'+esc(nextStop.id)+'" data-tripkind="pickup">'+
+       '<button class="btn btn-tap" data-triptap="'+esc(nextStop.id)+'" data-tripkind="pickup">'+
        'Picked up: '+esc(nextStop.stop)+'</button>'+
        '<button class="btn btn-ghost" data-triptap="'+esc(nextStop.id)+'" data-tripkind="empty">'+
        'Nobody there</button>';
@@ -3003,7 +3149,6 @@ function rotaOpenRequest(key){
      and pressed Send again would file a second request rather than repeat
      the first. */
   rotaReqId = "rq" + Date.now() + "-" + Math.random().toString(36).slice(2,7);
-  rotaStopsOpen=false; rotaCountsStop();
   $("rotaModalEyebrow").textContent="Rota request";
   $("rotaModalTitle").textContent="Request a change";
 
@@ -3200,11 +3345,11 @@ function rotaSubmitRequest(){
       });
     });
 }
-/* Every way out of the sheet comes through here: the Close button, the
-   backdrop, and submitting a request. The poll stops with it, so nothing is
-   left calling Apps Script after the screen has gone. */
+/* Every way out of the request sheet: Cancel, the backdrop, and submitting.
+
+   Since v1.13 this sheet does one job again. Stops and bookings outgrew it
+   and has a screen of its own, which closes through stopsClose. */
 function rotaClose(){
-  rotaStopsOpen=false; rotaCountsStop();
   $("rotaModal").classList.remove("is-on");
   $("rotaModal").setAttribute("aria-hidden","true");
 }
@@ -3293,12 +3438,22 @@ $("toRota").addEventListener("click",rotaOpen);
    It used to be two levels down, behind the rota, which is a poor place for
    the thing he wants at ten past nine on a Sunday. */
 $("toStops").addEventListener("click",rotaOpenStops);
+$("stopsBack").addEventListener("click",stopsClose);
+$("sentToStops").addEventListener("click",rotaOpenStops);
 
 /* Back to top. The rota carries two years of Sundays, so scrolling out of it
    by thumb was a journey of its own. */
 (function(){
   var b=$("toTop");
-  function sync(){ b.classList.toggle("is-on", st.screen==="rota" && window.scrollY>460); }
+  /* The stops screen is a long scroll too now, so it wants the same button.
+     But not while a run is going: the sticky action block already sits in
+     that corner, and two floating controls in one place is exactly the
+     crowding this pass exists to remove. */
+  function sync(){
+    var wants = st.screen==="rota" ||
+                (st.screen==="stops" && !(trip.started && !trip.ended));
+    b.classList.toggle("is-on", wants && window.scrollY>460);
+  }
   window.addEventListener("scroll",sync,{passive:true});
   b.addEventListener("click",function(){
     var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -3414,12 +3569,24 @@ function showPinField(){
   var need = pinNeeded();   /* same test as the gate, so they cannot diverge */
   $("pinField").style.display = need ? "" : "none";
   if(!need){ st.pin=""; st.pinOk=false; $("pin").value=""; }
+
+  /* One line under the row rather than one under each field. It says the
+     thing that is actually true at that moment: before a name is chosen,
+     who appears in the list; once a PIN is being asked for, what to do if
+     it has been forgotten. */
+  var h=$("idHint");
+  if(h){
+    h.textContent = need
+      ? "Four digits. Ask the coordinator if you have forgotten it."
+      : "Only drivers approved by the leadership appear here.";
+  }
 }
 
 (function(){
   var sel=$("driverPick");
   if(!REGISTER.length){
-    $("pickField").style.display="none";
+    $("idRow").style.display="none";
+    $("idHint").style.display="none";
     $("typeField").style.display="";
     return;
   }
