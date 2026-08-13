@@ -216,6 +216,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .live-big{font-family:"Barlow Condensed",sans-serif;font-size:30px;font-weight:700;
   line-height:1.05;margin:0 0 3px;color:var(--steel)}
 .live-sub{margin:0;font-size:13px;color:var(--muted);line-height:1.5}
+.live-sub .ring,.note .ring{color:inherit;font-weight:600;text-decoration:underline}
 .live-go{background:var(--pass-bg);border-color:#B7D8C6}
 .live-go .live-big{color:var(--pass)}
 .live-warn{background:var(--warn-bg);border-color:#EBD3A8}
@@ -295,6 +296,34 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 "use strict";
 
 var ENDPOINT = "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec";
+
+/* Who a passenger rings when something has gone wrong at their stop: the bus
+   has been and gone while they were still standing there, or it reached
+   church without their stop ever being marked.
+
+   The coordinator, and deliberately not the driver. The driver is driving.
+   The app already refuses his own taps while the wheels are turning, and
+   putting his number in the hand of somebody waiting at a kerb would undo
+   that from the other end. The coordinator can answer, and can ring the
+   driver himself if it is worth stopping the bus for.
+
+   Held here rather than fetched, because the message that needs it most is
+   the one shown when the server cannot be reached at all. Keep it in step
+   with coordinator in config.js, which is the same person for the drivers. */
+var COORDINATOR = { name: "Asim Bassey", phone: "07377634214" };
+
+/* A number that can actually be pressed. The written form keeps its spacing
+   for reading; the tel: link gets digits only, because a space in an href is
+   the difference between a call and nothing happening. */
+function ringCoordinator(){
+  var name = String(COORDINATOR.name||"").trim();
+  var show = String(COORDINATOR.phone||"").trim();
+  var dial = show.replace(/[^0-9+]/g,"");
+  if(!name) return "ring the transport group";
+  if(!dial) return "ring "+esc(name);
+  return 'ring <a class="ring" href="tel:'+esc(dial)+'">'+esc(name)+
+         '</a> on <a class="ring" href="tel:'+esc(dial)+'">'+esc(show)+'</a>';
+}
 
 var $ = function(id){ return document.getElementById(id); };
 function esc(x){ return String(x==null?"":x).replace(/[&<>"']/g,function(c){
@@ -419,7 +448,7 @@ function load(again){
          two are kept apart deliberately, because a rehearsal must not tell
          anybody that bookings have shut. */
       if(CLOSED || REHEARSAL) liveStart();
-      else { liveStop(); live=null; paintLive(); }
+      else { liveStop(); live=null; paintLive(); gateStart(); }
     })
     .catch(function(err){
       /* Three attempts before saying anything, spaced out.
@@ -437,7 +466,7 @@ function load(again){
       }
       $("body").innerHTML='<div class="note note-warn"><b>The stops could not be loaded.</b><br>'+
         esc(String(err.message||err))+'<br><br>Pull down to refresh. '+
-        'If it keeps happening, tell the transport group.</div>';
+        'If it keeps happening, '+ringCoordinator()+'.</div>';
     });
 }
 
@@ -492,6 +521,7 @@ function liveFetch(){
 
 function liveStart(){
   liveStop();
+  gateStop();                       /* watching answers the gate question */
   if(document.hidden) return;
   liveFetch();
   liveTimer=setInterval(function(){
@@ -501,14 +531,60 @@ function liveStart(){
 }
 function liveStop(){ if(liveTimer){ clearInterval(liveTimer); liveTimer=null; } }
 
+/* ---- asking again whether it is time to watch --------------------------
+   CLOSED and REHEARSAL are the server's answer, and they were learned once,
+   at page load, and never revisited. That is the whole of the fault the
+   rehearsal exposed, and it is not only a rehearsal fault.
+
+   A passenger who opens this page at nine on a Sunday morning is told
+   bookings are open, because they are. The cutoff passes at half past, the
+   buses run, and this page sits there showing nothing for the whole morning,
+   because the one moment it asked was half an hour before there was anything
+   to see. Locking the phone and coming back did not help either: that
+   handler tested the same two stale flags.
+
+   So it asks again, slowly, and only from a phone that is actually on screen
+   and not already watching. It stops the moment watching starts, which is
+   also the moment the passenger most wants the calls spent on the bus. */
+var GATE_POLL = 60000;
+var gateTimer = null, gateBusy = false;
+
+function gateCheck(){
+  if(gateBusy || liveTimer || document.hidden || !navigator.onLine) return;
+  gateBusy=true;
+  callFetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      var out=readJson(t);
+      gateBusy=false;
+      if(!out || out.ok!==true) return;
+      if(!out.closed && !out.rehearsal) return;      /* still not time */
+      /* It has just opened. Reload in full rather than patching flags: the
+         booking form is closing anyway, the banner above it changes, and the
+         stop list becomes the list the driver is working from. Nothing a
+         passenger had half-chosen was going to be saved past the cutoff. */
+      gateStop();
+      load();
+    })
+    .catch(function(){ gateBusy=false; });
+}
+
+function gateStart(){
+  gateStop();
+  if(document.hidden) return;
+  gateTimer=setInterval(function(){
+    if(document.hidden){ gateStop(); return; }
+    gateCheck();
+  },GATE_POLL);
+}
+function gateStop(){ if(gateTimer){ clearInterval(gateTimer); gateTimer=null; } }
+
 document.addEventListener("visibilitychange",function(){
-  if(document.hidden){ liveStop(); return; }
-  /* REHEARSAL as well as CLOSED, and for the same reason liveStart is
-     started on both. Testing this on a Tuesday, the tester locks the phone,
-     comes back, and the watching never resumes: bookings are open, so CLOSED
-     is false, and the one case the rehearsal exists to exercise is the one
-     it silently stopped doing. */
+  if(document.hidden){ liveStop(); gateStop(); return; }
+  /* Coming back to the page is the cheapest moment to find out we were
+     wrong, so the gate is asked at once rather than waiting out a minute. */
   if(CLOSED || REHEARSAL) liveStart();
+  else { gateStart(); gateCheck(); }
 });
 
 function paintLive(){
@@ -530,7 +606,8 @@ function paintLive(){
   if(live.mine==="served"){
     cls="live-go";
     head="Picked up at "+esc(live.servedAt);
-    sub="The bus has been to "+esc(live.stop)+". If you are still standing there, ring the transport group.";
+    sub="The bus has been to "+esc(live.stop)+". If you are still standing there, "+
+        ringCoordinator()+".";
   } else if(!live.started){
     head="Not set off yet";
     sub="Your stop is timetabled for "+esc(live.scheduled)+". This will update once the bus starts.";
@@ -545,7 +622,7 @@ function paintLive(){
          : "The bus is on time.");
   } else if(live.mine==="ended"){
     head="The bus has finished its run";
-    sub="It reached church without your stop being marked. Ring the transport group.";
+    sub="It reached church without your stop being marked. Please "+ringCoordinator()+".";
   } else {
     /* quiet, wild, noevents: state the last known fact and stop. A number
        invented from a stale offset is worse than a blank. */
