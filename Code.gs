@@ -440,12 +440,55 @@ function pinWords(c) {
        : "";
 }
 
+/* ---- structure checks, at most once an hour ----------------------------
+
+   ensureRotaSheets and ensureChecksColumns exist for a handful of moments in
+   this app's life: the day a tab is missing, or the day a new version adds a
+   column. They were running on live requests, so every driver opening the
+   rota waited while the spreadsheet was inspected first, and every check that
+   landed paid for a column audit before it was written.
+
+   One flag in the cache now. The first request in an hour does the work and
+   the rest walk past it. Three things make that safe. If the cache is ever
+   dropped, the only cost is the work happening once more than it needed to.
+   If the work throws, the flag is never set, so a genuinely broken sheet is
+   repaired on the next request rather than left for an hour. And the flag
+   carries STRUCT_VERSION, so the day you add a column here you bump that and
+   every script instance rechecks at once instead of waiting the hour out. */
+var STRUCT_VERSION = "1";
+
+function structKey(tag) { return "struct_" + STRUCT_VERSION + "_" + tag; }
+
+function structFresh(tag) {
+  try { return !!CacheService.getScriptCache().get(structKey(tag)); }
+  catch (err) { return false; }
+}
+
+function structDone(tag) {
+  try { CacheService.getScriptCache().put(structKey(tag), "1", 3600); }
+  catch (err) { /* it will simply be checked again */ }
+}
+
+/* Forget the flags, so the next call checks for real.
+
+   A menu item is the moment somebody has decided the sheet needs looking at,
+   and it must never be answered with "checked that within the hour". A
+   coordinator running Set up everything because a tab has gone missing should
+   not be quietly skipped because a driver's phone set a flag at nine o'clock. */
+function structReset() {
+  try {
+    CacheService.getScriptCache().removeAll([structKey("rota"), structKey("checks")]);
+  } catch (err) { /* nothing to do: the flags expire by themselves */ }
+}
+
 /**
  * Adds any column this version writes that an older sheet does not have yet.
  * Only ever appends on the right, so every existing row keeps its meaning and
  * nothing already recorded moves.
  */
 function ensureChecksColumns(sh) {
+  if (structFresh("checks")) return;
+
   /* Older sheets carry these in metres. Rename in place rather than adding a
      second column for the same measurement. Anything recorded before the
      change is still in metres, so treat early rows with that in mind. */
@@ -472,6 +515,8 @@ function ensureChecksColumns(sh) {
     sh.getRange(1, lastCol).setValue(name).setFontWeight("bold");
     head.push(name);
   });
+
+  structDone("checks");
 }
 
 /**
@@ -520,13 +565,30 @@ function checkMoment(received, dateCell, timeCell) {
   return d.getTime();
 }
 
+/* How far back the mileage reader looks. Rows, not weeks, because rows are
+   what cost time to fetch. */
+var MILEAGE_SCAN_ROWS = 400;
+
 function lastMileagePayload() {
   var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHECKS_SHEET);
   if (!sh || sh.getLastRow() < 2) return { ok: true, last: {} };
 
+  /* Only the recent end of the tab.
+
+     This wants one number per bus, the newest, and it used to fetch every row
+     ever written to find it. A few hundred rows today and nobody notices; a
+     thousand by Christmas, more every week after that, and the app quietly
+     gets heavier for the rest of its life with nothing on screen to say why.
+
+     Two buses at roughly two checks a week is a hundred rows a year, so the
+     window below holds about four years. A bus would have to go unchecked for
+     longer than that before its last reading fell off the end, and a bus
+     unchecked for four years has a bigger problem than a stale odometer. */
   // Columns: 1 Received, 2 Check ID, 3 Date, 4 Time, 5 Vehicle,
   //          6 Registration, 7 Driver, 8 Role, 9 Mileage ...
-  var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues();
+  var lastRow  = sh.getLastRow();
+  var firstRow = Math.max(2, lastRow - MILEAGE_SCAN_ROWS + 1);
+  var rows = sh.getRange(firstRow, 1, lastRow - firstRow + 1, 9).getValues();
   var last = {};
 
   rows.forEach(function (r) {
@@ -662,6 +724,8 @@ function rotaPayload(fromKey, weeks) {
 
 /** Makes sure the tabs exist. Cheap: no reading, no writing, no formatting. */
 function ensureRotaSheets(ss) {
+  if (structFresh("rota")) return;
+
   sheet(ss, ROTA_SHEET, ROTA_HEADERS);
   var drivers = sheet(ss, DRIVERS_SHEET, DRIVERS_HEADERS);
   sheet(ss, REQUESTS_SHEET, [
@@ -683,6 +747,8 @@ function ensureRotaSheets(ss) {
       drivers.appendRow([d.name, d.role, "YES", d.order, "", "", d.route]);
     });
   }
+
+  structDone("rota");
 }
 
 /**
@@ -727,6 +793,9 @@ function maintainIfDue(ss, props) {
  */
 function nightlyMaintenance() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  /* The nightly pass is the one that is supposed to find a broken sheet, so
+     it does the real check rather than trusting the hour's flag. */
+  structReset();
   ensureRotaSheets(ss);
   fillRotaAhead(ss);
 
@@ -1716,6 +1785,7 @@ function repairFuelColumn() {
 /* ------------------------------------------------------------------------ */
 
 function setUpEverything() {
+  structReset();
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   ensureRotaSheets(ss);
   ensureBusStops(ss);
