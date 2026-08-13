@@ -455,7 +455,10 @@ function pinWords(c) {
    repaired on the next request rather than left for an hour. And the flag
    carries STRUCT_VERSION, so the day you add a column here you bump that and
    every script instance rechecks at once instead of waiting the hour out. */
-var STRUCT_VERSION = "1";
+/* Bumped when a column is added anywhere below, so every running instance
+   rechecks its sheet at once instead of waiting the hour out.
+   2: Reg on Trip Events. */
+var STRUCT_VERSION = "2";
 
 function structKey(tag) { return "struct_" + STRUCT_VERSION + "_" + tag; }
 
@@ -477,7 +480,8 @@ function structDone(tag) {
    not be quietly skipped because a driver's phone set a flag at nine o'clock. */
 function structReset() {
   try {
-    CacheService.getScriptCache().removeAll([structKey("rota"), structKey("checks")]);
+    CacheService.getScriptCache().removeAll([structKey("rota"), structKey("checks"),
+                                            structKey("trip")]);
   } catch (err) { /* nothing to do: the flags expire by themselves */ }
 }
 
@@ -1336,8 +1340,13 @@ var DRIVERS_HEADERS = ["Name", "Role", "Active", "Primary order", "PIN", "Email"
    no signal, and keeping both is the only way to tell a late tap from a late
    bus. There is no event id column: one live row per trip, stop and event is
    already unique, so a retry has nothing to duplicate. */
+/* Reg is on the END, not next to Route where it reads better, because this
+   sheet is read by column position in three places and every row already
+   written would change meaning if anything moved. Appending on the right is
+   the same rule ensureChecksColumns follows, and for the same reason. */
 var TRIP_HEADERS = ["Logged", "Trip", "Sunday", "Route", "Driver", "Event",
-                    "Stop ID", "Stop", "Scheduled", "Happened", "Offset", "Status"];
+                    "Stop ID", "Stop", "Scheduled", "Happened", "Offset", "Status",
+                    "Reg"];
 
 function driversHeaderWarning(ss) {
   try {
@@ -2286,10 +2295,45 @@ function sampleDutyReminder() {
    drove: the app is saying where a tap is required, never where to stop.
    ========================================================================== */
 
+/**
+ * Adds any Trip Events column this version writes that an older sheet has
+ * not got. Appends on the right only, so every row already recorded keeps
+ * its meaning.
+ *
+ * It widens the grid as well as writing the heading. A sheet trimmed down to
+ * exactly twelve columns would otherwise throw on the first read of thirteen,
+ * and it would throw inside the Sunday morning path, which is the one place
+ * nothing may fail.
+ */
+function ensureTripColumns(sh) {
+  if (structFresh("trip")) return;
+
+  if (sh.getMaxColumns() < TRIP_HEADERS.length) {
+    sh.insertColumnsAfter(sh.getMaxColumns(),
+                          TRIP_HEADERS.length - sh.getMaxColumns());
+  }
+  var lastCol = sh.getLastColumn();
+  var head = lastCol
+    ? sh.getRange(1, 1, 1, lastCol).getValues()[0]
+        .map(function (h) { return String(h || "").trim(); })
+    : [];
+  TRIP_HEADERS.forEach(function (name, i) {
+    if (head.indexOf(name) !== -1) return;
+    sh.getRange(1, i + 1).setValue(name).setFontWeight("bold");
+  });
+
+  structDone("trip");
+}
+
 function ensureTripEvents(ss) {
   var existing = ss.getSheetByName(TRIP_SHEET);
   var sh = sheet(ss, TRIP_SHEET, TRIP_HEADERS);
+  ensureTripColumns(sh);
   if (!existing) {
+    sh.getRange(1, 13).setNote(
+      "Which bus ran it. Recorded from the driver's own start tap, because " +
+      "which bus takes which route is decided on the day and nothing else " +
+      "on this spreadsheet knows it.");
     sh.getRange(1, 1).setNote(
       "When the sheet received it. Compare with Happened: a gap means the " +
       "phone had no signal, not that the bus was late.");
@@ -2341,12 +2385,17 @@ function tripState(ss, key, route) {
   try { hit = cache.get(tripCacheKey(key, route)); } catch (err) { hit = null; }
   if (hit) { try { return JSON.parse(hit); } catch (err) { /* rebuild */ } }
 
-  var state = { trip: "", driver: "", started: 0, ended: 0,
+  var state = { trip: "", driver: "", reg: "", started: 0, ended: 0,
                 lastAt: 0, lastStop: "", offset: null, served: {} };
 
   var sh = ss.getSheetByName(TRIP_SHEET);
   if (sh && sh.getLastRow() > 1) {
-    var vals = sh.getRange(2, 1, sh.getLastRow() - 1, TRIP_HEADERS.length).getValues();
+    /* Clamped to the grid. This one reads the tab directly rather than
+       through ensureTripEvents, so on a sheet that predates the Reg column it
+       would be asking for a column that is not there. A short row leaves reg
+       undefined, which reads as blank, which is the truth. */
+    var vals = sh.getRange(2, 1, sh.getLastRow() - 1,
+                           Math.min(TRIP_HEADERS.length, sh.getMaxColumns())).getValues();
     vals.forEach(function (r) {
       if (anyToKey(r[2]) !== key) return;
       if (String(r[3] || "").trim() !== route) return;
@@ -2362,6 +2411,7 @@ function tripState(ss, key, route) {
 
       state.trip   = String(r[1] || "").trim() || state.trip;
       state.driver = String(r[4] || "").trim() || state.driver;
+      state.reg    = String(r[12] || "").trim() || state.reg;
 
       if (ev === "start") { state.started = at; return; }
       if (ev === "end")   { state.ended   = at; return; }
@@ -2496,7 +2546,7 @@ function tripDriverPayload(route) {
     ok: true, date: key, route: route, now: Date.now(),
     closed: trackingOpen(key), cutoff: cutoffWords(),
     rehearsal: !!rehearsalOn(),
-    trip: state.trip, driver: state.driver,
+    trip: state.trip, driver: state.driver, reg: state.reg,
     started: state.started || 0, ended: state.ended || 0,
     lastAt: state.lastAt || 0, lastStop: state.lastStop,
     offset: state.offset, served: state.served
@@ -2551,12 +2601,29 @@ function handleTripLocked(payload) {
   });
   if (!events.length) return reply({ ok: true, written: 0 });
 
+  /* Which bus. Sent on the envelope, and carried on the start event too, so a
+     phone that lost its trip state between the start and a later flush still
+     puts the registration on the row it belongs to. */
+  var reg = String(payload.reg || "").trim();
+  if (!reg) {
+    events.forEach(function (ev) {
+      if (!reg && String(ev.event || "").trim().toLowerCase() === "start") {
+        reg = String(ev.reg || "").trim();
+      }
+    });
+  }
+  /* Last resort is the sheet: a row already written for this trip knows the
+     bus, so a phone that lost everything still lands its later taps on the
+     right registration rather than blank. Picked up in the scan below, which
+     walks these rows anyway. */
+
   /* What is already down for this trip, so a retry is quietly ignored. */
   var seen = {}, undone = {};
   if (sh.getLastRow() > 1) {
     var vals = sh.getRange(2, 1, sh.getLastRow() - 1, TRIP_HEADERS.length).getValues();
     vals.forEach(function (r, i) {
       if (String(r[1] || "").trim() !== trip) return;
+      if (!reg) reg = String(r[12] || "").trim();
       var k = String(r[5] || "").trim().toLowerCase() + "|" + String(r[6] || "").trim();
       if (String(r[11] || "").trim().toLowerCase() === "undone") { undone[k] = true; return; }
       seen[k] = i + 2;
@@ -2608,20 +2675,32 @@ function handleTripLocked(payload) {
     var off   = sched ? Math.round((at - sched.getTime()) / 60000) : "";
 
     /* A run started with no check on record is marked here rather than
-       refused there. Status carries it, so no new column and nothing to break
-       on a sheet already in use, and the value still fails every filter that
-       matters: it is not Undone and it is not Rehearsal. */
+       refused there. Status carries it, and the value still fails every
+       filter that matters: it is not Undone and it is not Rehearsal.
+
+       Two flavours of it now. The driver saw identical words either way, on
+       purpose, because the instruction is identical either way. The
+       difference is a question for whoever reads this tab on Monday:
+         Unchecked            the sheet was asked and had no check for that bus
+         Unchecked (offline)  the phone could not reach the sheet to ask
+       The second is often not the driver's fault at all, and treating the two
+       the same would have somebody answering for a blackspot. */
     var status = rehearsing ? "Rehearsal"
+               : (kind === "start" && Number(ev.unchecked) === 2) ? "Unchecked (offline)"
                : (kind === "start" && ev.unchecked) ? "Unchecked"
                : "Logged";
 
     /* The stop name comes off the Bus Stops tab and is already ours. The
-       trip id, route, driver name and event all came up from a phone, so
-       they go through safeText like everything else a phone sends. */
+       trip id, route, driver name, registration and event all came up from a
+       phone, so they go through safeText like everything else a phone sends.
+
+       The reg goes on every row of the trip rather than the start row alone.
+       Filtering this tab to one bus is the whole point of having it, and a
+       filter that returns one row per morning is not a filter. */
     pending[k] = rows.push([
       new Date(), safeText(trip), key, safeText(route), safeText(who),
       safeText(kind), safeText(stopId), stop ? stop.stop : "",
-      sched || "", new Date(at), off, status
+      sched || "", new Date(at), off, status, safeText(reg)
     ]) - 1;
     seen[k] = true;
   });
@@ -2650,7 +2729,8 @@ function whoIsTapping() {
     return;
   }
 
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, TRIP_HEADERS.length).getValues();
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1,
+                         Math.min(TRIP_HEADERS.length, sh.getMaxColumns())).getValues();
   var runs = {};
 
   vals.forEach(function (r) {
@@ -2720,8 +2800,73 @@ function boardPayload(route) {
     ok: true,
     date: counts.date,
     counts: counts.counts,
+    checks: checksToday(),
     trip: tripDriverPayload(String(route || "").trim() || "North")
   };
+}
+
+/**
+ * Has anyone checked this bus today, and did the check stop it.
+ *
+ * The question the app could never ask. A driver's phone knows only what that
+ * driver signed on that phone, so a walkaround done by the coordinator, done
+ * on the tablet, or done before a reinstall all read as no check at all. The
+ * warning fired at honest men often enough that it stopped meaning anything.
+ *
+ * Answered per registration, because "was there a check today" is the wrong
+ * question the moment two buses go out: on a two-route Sunday it would tell
+ * the South driver his unchecked bus was fine on the strength of somebody
+ * else's walkaround on the North one.
+ *
+ *   { "NH56 FWP": { state: "ok"|"stopped", at: ms, driver: "" }, ... }
+ *
+ * The newest check for each bus wins, so a stop that has since been fixed and
+ * re-checked clears, and a clear check followed by a stop does not.
+ *
+ * Cached for thirty seconds. Every phone on the trip screen asks every thirty
+ * seconds, and this is a tail read of the Checks tab, not a full one.
+ */
+function checksToday() {
+  var cache = CacheService.getScriptCache();
+  var hit = null;
+  try { hit = cache.get("checkstoday"); } catch (err) { hit = null; }
+  if (hit) { try { return JSON.parse(hit); } catch (err) { /* rebuild */ } }
+
+  var out = {};
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CHECKS_SHEET);
+  if (sh && sh.getLastRow() > 1) {
+    var now  = new Date();
+    var from = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    var to   = from + 86400000;
+
+    /* Same tail window as the mileage read, and for the same reason: this
+       wants today, and walking four years of rows to find it would make the
+       app heavier every week with nothing on screen to say why. */
+    // Columns: 1 Received, 2 Check ID, 3 Date, 4 Time, 5 Vehicle,
+    //          6 Registration, 7 Driver ... 11 Outcome
+    var lastRow  = sh.getLastRow();
+    var firstRow = Math.max(2, lastRow - MILEAGE_SCAN_ROWS + 1);
+    var rows = sh.getRange(firstRow, 1, lastRow - firstRow + 1, 11).getValues();
+
+    rows.forEach(function (r) {
+      var reg = String(r[5] || "").trim();
+      if (!reg) return;
+      /* See checkMoment: Received when it is present and not in the future,
+         and the row's own Date and Time otherwise. */
+      var when = checkMoment(r[0], r[2], r[3]);
+      if (!when || when < from || when >= to) return;
+      if (out[reg] && out[reg].at >= when) return;
+      out[reg] = {
+        state: String(r[10] || "").trim().toUpperCase() === "STOPPED" ? "stopped" : "ok",
+        at: when,
+        driver: String(r[6] || "").trim()
+      };
+    });
+  }
+
+  try { cache.put("checkstoday", JSON.stringify(out), 30); }
+  catch (err) { /* it just gets built again */ }
+  return out;
 }
 
 /* Which Sunday a bare link is for. This Sunday until bookings close on the

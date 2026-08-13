@@ -507,6 +507,11 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .trip-actions .btn{width:100%}
 .trip-two{display:flex;gap:8px;margin-top:10px}
 .trip-two .btn{flex:1}
+/* Start buttons stack rather than sit side by side: a registration is too
+   long to read at half width on a phone, and a driver picking the wrong bus
+   here would put the wrong one on the record for the whole morning. */
+.trip-buses{display:grid;gap:8px;margin-top:2px}
+.trip-buses .btn{width:100%}
 .trip-rehearsal{background:var(--stop-bg);border:1px solid var(--stop-line);color:var(--stop);
   border-radius:var(--r);padding:13px;margin:0 0 12px;font-size:13px;line-height:1.5}
 .trip-rehearsal b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:15px;
@@ -2395,16 +2400,22 @@ function rotaFetch(fromDate,weeks,cb){
    read off the sheet, because a check waiting in the queue with no signal
    still counts: he did the work, and the network is not his doing.
 
-   Held by driver and day rather than by vehicle. The most likely reason
-   somebody has no record is that a coordinator inspected the bus on his own
-   phone and somebody else is driving it, and tying this to the vehicle would
-   turn that into a lockout at the kerb for no gain. */
+   It was held by driver and day rather than by vehicle, on the reasoning that
+   the likeliest reason to have no record is a coordinator inspecting on his
+   own phone while somebody else drives. That reasoning was sound while one
+   bus went out. It stopped being sound the day two did: a driver who checked
+   YS70 was then cleared to take NH56, because the question being asked was
+   "did you check something" rather than "was this bus checked".
+
+   So the reg is compared now, and the coordinator case is answered properly
+   instead, by asking the sheet as well. See checkVerdict below. */
 var CHKKEY = "fleet.lastcheck.v1";
 
 function noteCheckDone(rec){
   try{
     store.set(CHKKEY, JSON.stringify({
       day: new Date().toDateString(),
+      at: Date.now(),
       driver: (rec.driver||"").trim(),
       reg: rec.reg||"",
       kind: rec.kind||"",
@@ -2413,17 +2424,93 @@ function noteCheckDone(rec){
   }catch(e){}
 }
 
-/* What today's check says about whether this driver may set off.
-   ok      a check was signed today and the bus was not stopped
-   stopped a check was signed today and it stopped the bus
-   none    nothing signed on this phone today */
-function checkStanding(){
+/* What this phone's own record says about one bus.
+   ok      a check was signed today on this bus and it was not stopped
+   stopped a check was signed today on this bus and it stopped the bus
+   none    nothing on this phone today for this bus
+
+   Called with a reg. Called without one it answers for whatever this phone
+   last checked, which is what the screen wants before a bus has been picked. */
+function checkStanding(reg){
   var c=null;
   try{ c=JSON.parse(store.get(CHKKEY)||"null"); }catch(e){ c=null; }
   if(!c || c.day!==new Date().toDateString()) return { state:"none" };
   if((c.driver||"")!==(st.driver||"").trim()) return { state:"none" };
-  if(c.level==="stop") return { state:"stopped", reg:c.reg };
-  return { state:"ok", reg:c.reg, kind:c.kind };
+  if(reg && (c.reg||"")!==reg) return { state:"none" };
+  /* Records written before this version have no at. One millisecond past the
+     epoch still beats nothing at all, and loses to any dated row off the
+     sheet, which is the safe way round for a record we cannot place in time. */
+  var at=Number(c.at)||1;
+  if(c.level==="stop") return { state:"stopped", reg:c.reg, at:at };
+  return { state:"ok", reg:c.reg, kind:c.kind, at:at };
+}
+
+/* ---- what the sheet says about today's checks ---------------------------
+   Filled by the same board request the trip screen already makes every
+   thirty seconds, so it costs no extra call. Keyed by registration:
+     { "NH56 FWP": { state:"ok"|"stopped", at:ms, driver:"" }, ... }
+
+   tripChecksDay is the day the answer was fetched on. An answer fetched this
+   morning is still good evidence a check HAPPENED, however long ago it came
+   down: a walkaround at eight does not un-happen at nine. It is weaker
+   evidence that one did NOT happen, and that is the direction we can afford
+   to be wrong in, because being wrong there means a warning that could have
+   been left off rather than a bus going out unchecked. */
+var tripChecks={}, tripChecksDay="";
+var TCKEY="fleet.checks.today.v1";
+
+/* Kept on the phone, not only in memory.
+
+   Without this there is a gap every Sunday morning: the screen paints from
+   what it already has, the board request is still in flight, and a driver
+   who taps Start in that second or two is warned about a bus the sheet was
+   about to say had been checked. He would learn to tap past the warning,
+   which is the habit this whole change exists to break.
+
+   It also carries the answer through a screen close, a reload, and the walk
+   out to the yard where the signal goes. An answer fetched at twenty past
+   nine is still evidence at half past. */
+function tripChecksLoad(){
+  try{
+    var c=JSON.parse(store.get(TCKEY)||"null");
+    if(c && c.day===new Date().toDateString()){
+      tripChecks=c.checks||{}; tripChecksDay=c.day;
+    }
+  }catch(e){}
+}
+
+function tripChecksSave(){
+  try{ store.set(TCKEY, JSON.stringify({ day:tripChecksDay, checks:tripChecks })); }
+  catch(e){}
+}
+
+function tripChecksFresh(){ return tripChecksDay===new Date().toDateString(); }
+
+/* Both records answer the same question, and neither is authority over the
+   other: the phone knows about a check still sitting in the queue with no
+   signal, and the sheet knows about a check done on somebody else's phone.
+   Each is evidence a check HAPPENED. Neither is evidence one did not.
+
+   So the newer of the two wins where both have something to say, and where
+   only one does, it is the one that counts.
+
+   ok       a check stands for this bus today, wherever it was signed
+   stopped  the standing check stopped this bus
+   none     asked both, and there is no check for this bus today
+   unasked  nothing on this phone, and the sheet has not been reached today */
+function checkVerdict(reg){
+  var loc=checkStanding(reg);
+  var rem=(tripChecksFresh() && reg && tripChecks[reg]) ? tripChecks[reg] : null;
+
+  var lOk=loc.state!=="none", rOk=!!rem;
+  if(lOk && rOk){
+    return (Number(rem.at)||0) > (Number(loc.at)||0)
+      ? { state:rem.state, reg:reg, at:rem.at, driver:rem.driver||"" }
+      : { state:loc.state, reg:reg, at:loc.at, kind:loc.kind };
+  }
+  if(lOk) return { state:loc.state, reg:reg, at:loc.at, kind:loc.kind };
+  if(rOk) return { state:rem.state, reg:reg, at:rem.at, driver:rem.driver||"" };
+  return { state: tripChecksFresh() ? "none" : "unasked", reg:reg };
 }
 
 var TQKEY = "fleet.trip.queue.v1";
@@ -2434,10 +2521,13 @@ var TSKEY = "fleet.trip.state.v1";
    standstill, slow enough that nobody is tapping at a roll. */
 var TRIP_MOVING_MS = 2.2;
 
-var trip = { id:"", route:"", started:0, ended:0, served:{}, lastAt:0, lastStop:"", offset:null };
+var trip = { id:"", route:"", reg:"", started:0, ended:0, served:{}, lastAt:0, lastStop:"", offset:null };
 var tripClosed = false, tripCutoff = "", tripRehearsal = false;
-var tripUnchecked = false;       /* this run began with no check on this phone */
-var tripUncheckedAsked = false;  /* the warning is on screen, awaiting a choice */
+/* 0 checked, 1 no check on record, 2 no check on record and the sheet could
+   not be reached to ask. The difference is for the coordinator on Monday and
+   is deliberately invisible to the driver: see tripHeaderHtml. */
+var tripUnchecked = 0;
+var tripUncheckedAsked = "";     /* the reg the warning is on screen about */
 var tripSpeed = null;      /* metres per second, null when unknown */
 var tripSpeedAt = 0;
 var tripWatch = null;
@@ -2467,13 +2557,15 @@ function tripLoadQ(){ try{ return JSON.parse(store.get(TQKEY)||"[]"); }catch(e){
 function tripSaveQ(a){ store.set(TQKEY, JSON.stringify(a)); }
 
 function tripSaveState(){
-  store.set(TSKEY, JSON.stringify({ id:trip.id, route:trip.route, started:trip.started,
+  store.set(TSKEY, JSON.stringify({ id:trip.id, route:trip.route, reg:trip.reg,
+                                    started:trip.started,
                                     ended:trip.ended, served:trip.served }));
 }
 function tripLoadState(){
   try{
     var s=JSON.parse(store.get(TSKEY)||"null");
-    if(s && s.id){ trip.id=s.id; trip.route=s.route||""; trip.started=s.started||0;
+    if(s && s.id){ trip.id=s.id; trip.route=s.route||""; trip.reg=s.reg||"";
+                   trip.started=s.started||0;
                    trip.ended=s.ended||0; trip.served=s.served||{}; }
   }catch(e){}
 }
@@ -2492,7 +2584,7 @@ function tripFlush(){
     headers:{"Content-Type":"text/plain;charset=utf-8"},
     body: JSON.stringify({ token: CFG.token||"", action:"trip", trip:{
       trip: trip.id, sunday: rotaKey(rotaBaseSunday(0)), route: trip.route,
-      driver: st.driver||"", events: q
+      reg: trip.reg||"", driver: st.driver||"", events: q
     }})
   }).then(function(r){ return r.text(); }).then(function(t){
     var out=JSON.parse(t);
@@ -2574,48 +2666,66 @@ function tripFetch(route,cb){ rotaCountsFetch(route,cb); }
 
 
 /* ---- the actions ------------------------------------------------------- */
-function tripStart(route, anyway){
+/* Starting a run names the bus, because every other question about the
+   morning turns out to need it. Which bus was checked, which bus went out on
+   which route, which bus a defect belongs to on a Sunday two buses ran: none
+   of those were answerable before, and the Rota tab cannot answer them
+   either, by design, because which bus takes which route is decided on the
+   day. The driver is the only one who knows, and he knows it as he gets in.
+
+   So it is his start button. One tap, the one he was going to make anyway. */
+function tripStart(route, reg, anyway){
   if(!tripClosed){ toast("Bookings are still open. The run starts after "+(tripCutoff||"09:30")+"."); return; }
   if(tripMoving()){ toast("Not while the bus is moving."); return; }
+  if(!reg){ toast("Tap the bus you are taking."); return; }
 
-  var chk=checkStanding();
+  var chk=checkVerdict(reg);
 
   /* The one hard refusal in the whole app.
 
      A check that ends in a critical defect stops the bus. Letting a run start
      after that would mean the app recorded the vehicle as unfit and then
-     helped somebody drive it. Swap buses, check that one, start again. */
+     helped somebody drive it. Take the other bus, check it, start again.
+
+     It now catches a stop signed by anyone, not only by the driver holding
+     the phone, which is the case it was always meant to catch: a coordinator
+     who finds a critical defect at eight is exactly the person whose finding
+     must reach the man getting in at half past nine. */
   if(chk.state==="stopped"){
-    toast("Your check stopped "+(chk.reg||"that bus")+". Check the other bus before setting off.");
+    /* No esc: toast sets textContent, which escapes nothing and needs
+       nothing escaped. Passing esc() here would print the entities. */
+    toast(reg+" was stopped by today\u2019s check. Take the other bus.");
     return;
   }
 
-  /* No check on this phone today. Warned, and never blocked.
+  /* No check on record for this bus. Warned, and never blocked.
 
      A block does not produce a check. The app cannot stop a bus: the man
      drives regardless and the morning goes unrecorded, no stops, no arrival
      times, no trace the run happened at all.
 
-     It also cannot tell "nobody checked this bus" from "you did not check it
-     on this phone". A walkaround done by the coordinator, or on the church
-     tablet, or before a reinstall, all read as none here, so a block would
-     mostly catch honest men and let the same buses out anyway.
-
      What makes a check get done is that the alternative is a second
      deliberate tap, behind his PIN, landing on the sheet as an Unchecked run
      in his name, which somebody can ask him about on Monday. A locked button
-     leaves nothing to ask about. */
-  if(chk.state==="none" && !anyway){ tripUncheckedAsked=true; tripPaint(); return; }
-  tripUnchecked = (chk.state==="none");
+     leaves nothing to ask about.
+
+     What HAS changed is that the warning is now honest. It used to fire at
+     any driver whose own phone had no record, which included every walkaround
+     done by the coordinator, done on the tablet, or done before a reinstall,
+     so drivers learned it meant nothing and tapped past it. It now fires when
+     no check for this bus exists anywhere we can see. */
+  if(chk.state!=="ok" && !anyway){ tripUncheckedAsked=reg; tripPaint(); return; }
+  tripUnchecked = chk.state==="ok" ? 0 : (chk.state==="unasked" ? 2 : 1);
   trip.id = "t"+Math.random().toString(36).slice(2,10)+Date.now().toString(36);
   trip.route = route;
+  trip.reg = reg;
   trip.started = tripNow();
   trip.ended = 0;
   trip.served = {};
-  tripUncheckedAsked=false;
+  tripUncheckedAsked="";
   tripSaveState();
   tripQueue({ event:"start", stopId:"", at:trip.started,
-              unchecked: tripUnchecked ? 1 : 0 });
+              reg: reg, unchecked: tripUnchecked });
   tripWatchStart();
   tripPaint();
 }
@@ -2690,11 +2800,22 @@ function rotaCountsFetch(route,cb){
       rotaStopCountsFor= out.date||"";
       rotaCountsAt     = Date.now();
 
+      /* Who has checked what today, keyed by reg. The answer to "has anyone
+         checked this bus", which no phone could answer on its own. */
+      if(out.checks){
+        tripChecks    = out.checks;
+        tripChecksDay = new Date().toDateString();
+        tripChecksSave();
+      }
+
       var tp=out.trip;
       if(tp && tp.ok!==false){
         tripNoteSkew(tp.now);
         if(tp.trip) trip.id=tp.trip;
         trip.route  = route;
+        /* A phone that reinstalled mid-morning gets the bus back with the
+           run, rather than reappearing as a trip attached to no vehicle. */
+        if(tp.reg) trip.reg = tp.reg;
         trip.started= tp.started||0;
         trip.ended  = tp.ended||0;
         trip.served = tp.served||{};
@@ -3097,6 +3218,7 @@ function rotaOpenStops(){
      signal; the one fetch then corrects both the counts and the run, so a
      reinstalled phone or a second one picks it up where it actually is. */
   tripLoadState();
+  tripChecksLoad();
   rotaPaintStops();
   rotaCountsFetch(rotaStopsRoute||rotaHomeRoute()||"North",
                   function(){ if(rotaStopsOpen) rotaPaintStops(); });
@@ -3346,12 +3468,17 @@ function rotaPaintStops(){
     });
   });
   pinGateWire();
-  if($("tripStart")) $("tripStart").addEventListener("click",function(){ tripStart(route); });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-tripstart]"),function(b){
+    b.addEventListener("click",function(){
+      var reg=this.getAttribute("data-tripstart");
+      tripStart(route, reg==="-" ? "" : reg);
+    });
+  });
   if($("tripStartAnyway")) $("tripStartAnyway").addEventListener("click",function(){
-    tripStart(route,true);
+    tripStart(route, this.getAttribute("data-tripanyway")||"", true);
   });
   if($("tripDoCheck")) $("tripDoCheck").addEventListener("click",function(){
-    tripUncheckedAsked=false; stopsClose(); reset();
+    tripUncheckedAsked=""; stopsClose(); reset();
   });
   if($("tripEnd"))   $("tripEnd").addEventListener("click",tripEnd);
   tripPaintMoving();
@@ -3382,26 +3509,25 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
   var h='<div class="trip-strip">';
 
   if(!trip.started || trip.route!==route){
-    var chk=mayTap ? checkStanding() : null;
-
-    if(mayTap && chk.state==="stopped"){
-      h+='<p class="trip-note"><b class="trip-stopme">Your check stopped '+
-         esc(chk.reg||"the bus")+'.</b> No run can be started on it. Check the '+
-         'other bus, then come back.</p>';
-      return h+'</div>';
-    }
 
     /* The instruction, then the two buttons, and nothing in between putting
        a case. What used to sit here told the driver he could set off if
        somebody else had checked the bus, which is an explanation of a
        decision and reads as permission. The door stays; the invitation to
-       walk through it does not. */
+       walk through it does not.
+
+       It names the bus now, because it can. And it says the same words
+       whether the sheet answered "nobody has checked it" or could not be
+       reached to be asked: the instruction is identical either way, and a
+       line explaining that we could not ask is the permission sentence
+       wearing a hat. The difference goes on the Trip Events row instead. */
     if(mayTap && tripUncheckedAsked){
-      h+='<p class="trip-note"><b>No check signed on this phone today.</b> '+
-         'Do the check first.</p>'+
+      h+='<p class="trip-note"><b>No check signed for '+esc(tripUncheckedAsked)+
+         ' today.</b> Do the check first.</p>'+
          '<div class="trip-two">'+
            '<button class="btn btn-main" id="tripDoCheck">Do the check</button>'+
-           '<button class="btn btn-ghost" id="tripStartAnyway"'+(pinGateNeeded()?' disabled':'')+
+           '<button class="btn btn-ghost" id="tripStartAnyway" '+
+             'data-tripanyway="'+esc(tripUncheckedAsked)+'"'+(pinGateNeeded()?' disabled':'')+
              '>Set off anyway</button>'+
          '</div>'+
          (pinGateNeeded()? pinGateHtml("Setting off with no check is recorded in your name.") : "");
@@ -3410,9 +3536,7 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
 
     if(mayTap){
       h+= tripClosed
-        ? '<button class="btn btn-main" id="tripStart"'+(pinGateNeeded()?' disabled':'')+
-          '>Start trip</button>'+
-          '<p class="trip-note">Tap each stop as you pull away. Empty stops need nothing.</p>'+
+        ? tripBusButtonsHtml()+
           (pinGateNeeded()? pinGateHtml("This run is recorded in your name.") : "")
         : '<p class="trip-note"><b>Bookings are still open.</b> Start the run '+
           'after '+esc(tripCutoff||"09:30")+'.</p>';
@@ -3452,6 +3576,52 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
   return h+'</div>';
 }
 
+/* One button per bus, because choosing the bus and starting the run are the
+   same decision and he should not have to make it twice. The label carries
+   the registration, so the tap that begins the morning is also the tap that
+   records which bus ran which route: a fact the sheet could not show at all
+   before, and which the Rota tab cannot supply, by design, because which bus
+   takes which route is settled on the day.
+
+   A bus stopped by today's check gets no button. That is the same refusal
+   tripStart already makes; making it here means he never taps something that
+   was only ever going to say no, and the other bus is sitting right beside
+   it. Named, so he knows which one has gone and does not go looking. */
+function tripBusButtonsHtml(){
+  var live=(VEHICLES||[]).filter(function(v){ return v && v.reg; });
+  var one=live.length<2;
+  var h='<div class="trip-buses">', shown=0, stopped=[];
+
+  live.forEach(function(v){
+    if(checkVerdict(v.reg).state==="stopped"){ stopped.push(v.reg); return; }
+    shown++;
+    h+='<button class="btn '+(shown===1?'btn-main':'btn-ghost')+'" '+
+       'data-tripstart="'+esc(v.reg)+'"'+(pinGateNeeded()?' disabled':'')+'>'+
+       (one? 'Start trip' : 'Start trip \u00B7 '+esc(v.reg))+'</button>';
+  });
+
+  /* No register at all: keep a way to start, with no reg on the row. Better
+     an unattributed run than a driver stranded by a config file. */
+  if(!live.length){
+    shown++;
+    h+='<button class="btn btn-main" data-tripstart="-"'+(pinGateNeeded()?' disabled':'')+
+       '>Start trip</button>';
+  }
+  h+='</div>';
+
+  stopped.forEach(function(reg){
+    h+='<p class="trip-note"><b class="trip-stopme">'+esc(reg)+
+       ' was stopped by today\u2019s check.</b> Take the other bus.</p>';
+  });
+
+  h+= shown
+    ? '<p class="trip-note">'+(one?'':'Tap the bus you are taking. ')+
+      'Then tap each stop as you pull away. Empty stops need nothing.</p>'
+    : '<p class="trip-note"><b>No bus can be started.</b> Ring '+
+      esc((CFG.coordinator&&CFG.coordinator.name)||'the coordinator')+'.</p>';
+  return h;
+}
+
 function tripActionHtml(nextStop){
   var waiting=nextStop?(rotaStopCounts[nextStop.id]||0):0;
   var h='<div class="trip-actions">';
@@ -3478,7 +3648,7 @@ function tripPaintMoving(){
     ? '<b class="trip-stopme">The bus is moving.</b> Taps come back when you pull up.'
     : '';
   Array.prototype.forEach.call(
-    document.querySelectorAll("[data-triptap],[data-tripundo],#tripEnd,#tripStart"),
+    document.querySelectorAll("[data-triptap],[data-tripundo],#tripEnd,[data-tripstart]"),
     function(b){ b.disabled=moving; b.classList.toggle("is-dead",moving); });
 }
 
@@ -4033,10 +4203,15 @@ function pinGateSync(){
   if(say) say.textContent = st.pinOk
     ? (st.pinState==="offline" ? "Taken on trust: no signal to check against." : "Thank you.")
     : (String(st.pin||"").length>=4 ? "That PIN is not right." : "");
-  ["tripStart","tripStartAnyway","rotaSubmitRequest"].forEach(function(id){
+  /* [data-tripstart] rather than one id: there is a start button per bus
+     now, and leaving the PIN gate looking for a single id would have left
+     every bus button live behind an unanswered PIN. */
+  ["tripStartAnyway","rotaSubmitRequest"].forEach(function(id){
     var b=$(id);
     if(b) b.disabled = !st.pinOk;
   });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-tripstart]"),
+    function(b){ b.disabled = !st.pinOk; });
   if(st.pinOk) g.classList.add("is-ok");
 }
 
