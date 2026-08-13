@@ -43,6 +43,12 @@
 -->
 <link rel="apple-touch-icon" sizes="180x180"
       href="https://drolnstone.github.io/minibus-check/icon-sunday-180.png">
+<!-- The tab icon. Without this the tab list shows a grey globe whatever the
+     home screen is doing: the two are read from different tags. Green here
+     as well, so the passenger tab is not mistaken for the driver one.
+     Absolute for the same reason as the line above it. -->
+<link rel="icon" type="image/png" sizes="180x180"
+      href="https://drolnstone.github.io/minibus-check/icon-sunday-180.png">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Sunday Bus · RCCG Dominion Assembly Liverpool">
 <meta property="og:description" content="Book your seat on the church minibus. Tap your stop, say how many are boarding.">
@@ -221,6 +227,31 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---- turn it upright ---------------------------------------------------
+
+   iOS cannot be told to stay in portrait. The manifest carries
+   orientation: portrait and Safari ignores it; screen.orientation.lock is
+   not implemented there either. The only real lock on an iPhone is the one
+   in Control Centre, and that holds the whole phone, not one app.
+
+   So the rotation happens and this answers it. Every screen here is built
+   for a tall phone: in landscape the header, the list and the footer bar
+   fight over about three hundred pixels and the buttons end up under the
+   thumb rest. Better to say the one thing that fixes it.
+
+   max-height rather than a width test, so this is phones only. An iPad in
+   landscape is a perfectly good way to read this and must not be nagged. */
+.upright{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  .upright{
+    display:flex;position:fixed;inset:0;z-index:9999;
+    align-items:center;justify-content:center;text-align:center;
+    background:var(--paper);color:var(--ink);
+    padding:24px calc(24px + var(--safe-r)) 24px calc(24px + var(--safe-l));
+  }
+  .upright b{font-size:20px;line-height:1.3;letter-spacing:.01em}
+}
 </style>
 </head>
 <body>
@@ -255,6 +286,8 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
     </div>
   </div>
 </div>
+
+<div class="upright" aria-hidden="true"><b>Turn your phone upright.</b></div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
