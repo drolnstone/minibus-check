@@ -22,12 +22,32 @@
   noindex above stays. It keeps the booking page out of search results and
   WhatsApp is not a search indexer.
 -->
-<link rel="apple-touch-icon" href="../icon-192.png">
+<!--
+  The home screen icon, on its own address and its own background.
+
+  Two things went wrong with the line that used to be here. It pointed at
+  ../icon-192.png, which resolves correctly from /sunday/ but climbs a level
+  too far from /sunday with no trailing slash, and it shared a file with the
+  driver app, so both apps installed under the same tile and neither could be
+  told from the other on a home screen.
+
+  Absolute, so no address the page is reached by can break it. A new filename,
+  because iOS decides this icon once, when the page is added, and never looks
+  again: a single missed fetch during a deploy leaves a letter tile that no
+  amount of reloading will replace. A name it has never seen sidesteps that
+  whole argument.
+
+  Green rather than the driver app's navy. Same logo, different field: the
+  passenger app is the one the congregation installs, and it should not be
+  mistaken for the inspection app at a glance.
+-->
+<link rel="apple-touch-icon" sizes="180x180"
+      href="https://drolnstone.github.io/minibus-check/icon-sunday-180.png">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Sunday Bus · RCCG Dominion Assembly Liverpool">
 <meta property="og:description" content="Book your seat on the church minibus. Tap your stop, say how many are boarding.">
 <meta property="og:url" content="https://drolnstone.github.io/minibus-check/sunday/">
-<meta property="og:image" content="https://drolnstone.github.io/minibus-check/icon-512.png">
+<meta property="og:image" content="https://drolnstone.github.io/minibus-check/icon-sunday-512.png">
 <meta property="og:image:width" content="512">
 <meta property="og:image:height" content="512">
 
