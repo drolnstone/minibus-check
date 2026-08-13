@@ -307,6 +307,20 @@ var STOPS=[], ARRIVALS=[], COUNTS={}, CLOSED=false, ROLLED=false, DATE="", CUTOF
 var REHEARSAL=false;
 var booked=null, chosen=null, seats=1, saving=false, route="North", ROUTES=[];
 
+/* The stop a booked passenger is being asked to confirm a move to.
+
+   Almost nobody ever changes stop. A family uses the same kerb for years and
+   only moves if they move house, so a change is nearly always a mis-tap on a
+   phone held in one hand. Saving already took a second tap, but that tap was
+   on a button marked Confirm, the same button and the same word used to make
+   the booking in the first place, so it could be given out of habit without
+   anything being read.
+
+   A move now asks in its own words and the button says what it does. A first
+   booking is not asked twice: there is nothing lost by making one, and a
+   great deal lost by quietly moving somebody who was not moving. */
+var moveAsk=null;
+
 function dirty(){
   if(!chosen) return !!booked;                       /* deselected a real booking */
   if(!booked) return true;                           /* new booking, nothing saved */
@@ -609,13 +623,16 @@ function paint(){
     : "<b>Bookings close "+esc(CUTOFF||"Sunday 09:30")+", before the buses set off.</b>";
 
   Array.prototype.forEach.call(document.querySelectorAll("[data-route]"),function(b){
-    b.addEventListener("click",function(){ route=this.getAttribute("data-route"); paint(); });
+    b.addEventListener("click",function(){
+      route=this.getAttribute("data-route"); moveAsk=null; paint();
+    });
   });
   Array.prototype.forEach.call(document.querySelectorAll("[data-stop]"),function(b){
     b.addEventListener("click",function(){
       var id=this.getAttribute("data-stop");
       chosen = (chosen===id) ? null : id;
       if(chosen && !seats) seats=1;
+      moveAsk=null;
       paint();
     });
   });
@@ -631,15 +648,35 @@ function paintBar(){
   if(CLOSED) return;
 
   var d=dirty(), say=$("barSay");
+  /* A move: booked already, and the stop picked is a different one. Changing
+     only the number of seats is not a move and is not asked about. */
+  var moving = !!(booked && chosen && chosen!==booked.stopId);
+  var asking = !!(moveAsk && moveAsk===chosen);
+  var to = moving ? stopById(chosen) : null;
+  var from = moving ? stopById(booked.stopId) : null;
+
   $("save").disabled = !chosen || !d || saving;
-  $("cancel").style.display = booked ? "" : "none";
+  /* Not while it is spinning. The click handler puts the spinner in before
+     send repaints the bar, and writing a label here would rub it straight
+     out again, leaving a dead-looking button through the whole round trip. */
+  if(!saving){
+    $("save").textContent = asking ? "Yes, move" : (moving ? "Move here" : "Confirm");
+  }
+  /* While the question is up, the ghost button is the way out of the
+     question, not the way out of the booking. */
+  $("cancel").textContent = asking ? "Keep my stop" : "Not coming";
+  $("cancel").style.display = (booked || asking) ? "" : "none";
   /* Dead while a Confirm is in the air. Both buttons write the same row, so
      tapping Not coming on top of a Confirm sent two changes for one booking
      and whichever answered last decided what the driver saw. */
   $("cancel").disabled = saving;
 
-  say.classList.toggle("is-dirty", d && !!chosen);
-  if(d && chosen)      say.textContent = booked ? "Changed. Tap Confirm to save it."
+  say.classList.toggle("is-dirty", (d && !!chosen) || asking);
+  if(asking)           say.textContent = "Move from " + (from ? from.stop : "your stop") +
+                                         " to " + (to ? to.stop : "this stop") + "?";
+  else if(moving)      say.textContent = "Booked at " + (from ? from.stop : "another stop") +
+                                         ". Tap Move here to change it.";
+  else if(d && chosen) say.textContent = booked ? "Changed. Tap Confirm to save it."
                                                 : "Not saved yet. Tap Confirm.";
   else if(d && booked) say.textContent = "Tap Not coming to cancel your booking.";
   else if(booked)      say.textContent = "Saved. You can change this until "+(CUTOFF||"Sunday 09:30")+".";
@@ -712,20 +749,39 @@ function applySaved(out){
     ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
   chosen = booked ? booked.stopId : null;
   seats  = booked ? booked.seats  : 1;
+  moveAsk=null;
   paint();
 }
 
 $("save").addEventListener("click",function(){
   if(!chosen) return;
+
+  /* First press on a move puts the question up. Nothing is sent. */
+  if(booked && chosen!==booked.stopId && moveAsk!==chosen){
+    moveAsk=chosen; paintBar(); return;
+  }
+
+  var wasMove=!!moveAsk;
+  moveAsk=null;
   $("save").innerHTML='<span class="spin"></span>';
   send({ date:DATE, ref:REF, stopId:chosen, seats:seats }, function(out){
     $("save").textContent="Confirm";
     applySaved(out);
-    toast("Booked. You can change this until "+(CUTOFF||"Sunday 09:30")+".");
+    toast((wasMove ? "Moved. " : "Booked. ") +
+          "You can change this until "+(CUTOFF||"Sunday 09:30")+".");
   });
 });
 
 $("cancel").addEventListener("click",function(){
+  /* Answering the move question, not cancelling the booking. The selection
+     goes back where it was, so the list stops showing a stop they have just
+     said they do not want. */
+  if(moveAsk){
+    moveAsk=null;
+    chosen = booked ? booked.stopId : null;
+    paint();
+    return;
+  }
   send({ date:DATE, ref:REF, stopId:"", seats:0 }, function(out){
     applySaved(out);
     toast("Cancelled. The bus will not wait for you.");
