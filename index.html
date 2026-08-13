@@ -13,8 +13,15 @@
      tile you wanted and a grey globe in the tab list. Pointed at the icon
      already in the repo rather than a cut-down favicon, because at the size
      a tab renders it, what tells the two apps apart is the colour behind the
-     crest, not the crest. -->
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+     crest, not the crest.
+
+     Absolute, and a filename Safari has never fetched. The first attempt at
+     this pointed at icon-192.png, which was correct and did nothing: Safari
+     had already recorded a result for that page earlier the same day and did
+     not ask again, so the tab kept its grey globe while the passenger page,
+     which happened to be given a new name, came up straight away. -->
+<link rel="icon" type="image/png" sizes="180x180"
+      href="https://drolnstone.github.io/minibus-check/icon-driver-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -880,7 +887,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.18.7";
+var APP_VERSION = "v1.18.8";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
