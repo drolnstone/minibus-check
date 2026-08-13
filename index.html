@@ -7,6 +7,14 @@
 <title>Minibus Check · RCCG Dominion Assembly Liverpool</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
+<!-- The little icon beside the title in a browser tab, and in Safari's tab
+     switcher. A separate thing from apple-touch-icon, which is only ever the
+     home screen: declare one and not the other and you get the home screen
+     tile you wanted and a grey globe in the tab list. Pointed at the icon
+     already in the repo rather than a cut-down favicon, because at the size
+     a tab renders it, what tells the two apps apart is the colour behind the
+     crest, not the crest. -->
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -547,6 +555,31 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-modal-actions .btn{flex:1}
 @media (min-width:641px){.rota-modal{align-items:center}.rota-sheet{border-radius:14px;max-height:80vh}}
 
+
+/* ---- turn it upright ---------------------------------------------------
+
+   iOS cannot be told to stay in portrait. The manifest carries
+   orientation: portrait and Safari ignores it; screen.orientation.lock is
+   not implemented there either. The only real lock on an iPhone is the one
+   in Control Centre, and that holds the whole phone, not one app.
+
+   So the rotation happens and this answers it. Every screen here is built
+   for a tall phone: in landscape the header, the list and the footer bar
+   fight over about three hundred pixels and the buttons end up under the
+   thumb rest. Better to say the one thing that fixes it.
+
+   max-height rather than a width test, so this is phones only. An iPad in
+   landscape is a perfectly good way to read this and must not be nagged. */
+.upright{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  .upright{
+    display:flex;position:fixed;inset:0;z-index:9999;
+    align-items:center;justify-content:center;text-align:center;
+    background:var(--paper);color:var(--ink);
+    padding:24px calc(24px + var(--safe-r)) 24px calc(24px + var(--safe-l));
+  }
+  .upright b{font-size:20px;line-height:1.3;letter-spacing:.01em}
+}
 </style>
 </head>
 <body>
@@ -789,6 +822,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   <div class="footbar-in" id="footIn"></div>
 </div>
 
+<div class="upright" aria-hidden="true"><b>Turn your phone upright.</b></div>
+
 <div class="toast" id="toast"></div>
 
 <script src="config.js"></script>
@@ -845,7 +880,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.18.5";
+var APP_VERSION = "v1.18.7";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
