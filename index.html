@@ -842,11 +842,10 @@ function callFetch(url, opts, ms){
 var QKEY = "fleet.queue.v1";
 
 
-var NKEY = "fleet.driver";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.18.0";
+var APP_VERSION = "v1.18.1";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1783,7 +1782,21 @@ function renderStage(){
       var next=el.nextElementSibling;
       while(next && !next.classList.contains("item")) next=next.nextElementSibling;
       if(!next) return;
-      var top=next.getBoundingClientRect().top+window.scrollY-72;
+      /* Measure the header rather than guessing at it.
+
+         This was a flat 72px, but the sticky dash is taller than that once
+         the safe area, the plate and the progress bar are counted, and taller
+         again on a phone installed to the home screen. So the next card
+         landed UNDERNEATH the header: its name and its instruction were
+         hidden and the driver arrived looking straight at Fine and Defect
+         with nothing telling him what he was answering. Exactly the wrong
+         thing to hurry somebody past.
+
+         Measured, plus room to breathe, so the title is the first thing in
+         view and the instruction sits under it. */
+      var dash=$("dash");
+      var clear=(dash? dash.getBoundingClientRect().height : 72) + 16;
+      var top=next.getBoundingClientRect().top+window.scrollY-clear;
       try{ window.scrollTo({top:top,behavior:"smooth"}); }
       catch(e){ window.scrollTo(0,top); }
     }
@@ -3668,7 +3681,6 @@ $("rotaModal").addEventListener("click",function(e){if(e.target===this)rotaClose
 $("driverPick").addEventListener("change",function(){
   st.driver=this.value; st.role=roleOf(this.value); st.pin=""; st.pinOk=false; st.pinState="";
   pinLast=""; $("pin").value="";
-  if(this.value) store.set(NKEY,this.value);
   showPinField(); paintFoot(); paintRotaHint();
 });
 
@@ -4081,8 +4093,16 @@ function showPinField(){
     o.textContent=d.name;
     sel.appendChild(o);
   });
-  var saved=store.get(NKEY);
-  if(saved && entryFor(saved)){ sel.value=saved; st.driver=saved; st.role=roleOf(saved); }
+  /* Nobody is chosen when the app opens. Choose your name is always the
+     first thing.
+
+     It used to restore whoever used this phone last. On a phone that only one
+     person ever touches that saved a tap; on a shared one it put somebody
+     else's name in the box before the new user had looked at the screen, and
+     a name already filled in is exactly the casual mis-selection the PIN was
+     built to prevent. Since v1.18 nothing can be written under that name
+     without the PIN, so the pre-selection was buying a tap at the cost of the
+     one habit worth keeping: read the name, then key your own PIN. */
   showPinField();
 })();
 
