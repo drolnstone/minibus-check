@@ -845,7 +845,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.18.1";
+var APP_VERSION = "v1.18.3";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -2548,10 +2548,21 @@ function tripStart(route, anyway){
     return;
   }
 
-  /* No check today. Not blocked, because a hard block strands a full bus when
-     a phone has been reinstalled or somebody else did the inspection, and a
-     driver who cannot start simply drives with nothing recorded at all. It is
-     warned, it takes a second deliberate tap, and it is written down. */
+  /* No check on this phone today. Warned, and never blocked.
+
+     A block does not produce a check. The app cannot stop a bus: the man
+     drives regardless and the morning goes unrecorded, no stops, no arrival
+     times, no trace the run happened at all.
+
+     It also cannot tell "nobody checked this bus" from "you did not check it
+     on this phone". A walkaround done by the coordinator, or on the church
+     tablet, or before a reinstall, all read as none here, so a block would
+     mostly catch honest men and let the same buses out anyway.
+
+     What makes a check get done is that the alternative is a second
+     deliberate tap, behind his PIN, landing on the sheet as an Unchecked run
+     in his name, which somebody can ask him about on Monday. A locked button
+     leaves nothing to ask about. */
   if(chk.state==="none" && !anyway){ tripUncheckedAsked=true; tripPaint(); return; }
   tripUnchecked = (chk.state==="none");
   trip.id = "t"+Math.random().toString(36).slice(2,10)+Date.now().toString(36);
@@ -3338,18 +3349,20 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
       return h+'</div>';
     }
 
+    /* The instruction, then the two buttons, and nothing in between putting
+       a case. What used to sit here told the driver he could set off if
+       somebody else had checked the bus, which is an explanation of a
+       decision and reads as permission. The door stays; the invitation to
+       walk through it does not. */
     if(mayTap && tripUncheckedAsked){
       h+='<p class="trip-note"><b>No check signed on this phone today.</b> '+
-         'Do the check first. If somebody else has already checked this bus, '+
-         'you can set off, and that is recorded.</p>'+
+         'Do the check first.</p>'+
          '<div class="trip-two">'+
            '<button class="btn btn-main" id="tripDoCheck">Do the check</button>'+
            '<button class="btn btn-ghost" id="tripStartAnyway"'+(pinGateNeeded()?' disabled':'')+
              '>Set off anyway</button>'+
          '</div>'+
-         /* Setting off without a check is the one worth being surest about
-            who did it. */
-         (pinGateNeeded()? pinGateHtml("Setting off without a check is recorded in your name.") : "");
+         (pinGateNeeded()? pinGateHtml("Setting off with no check is recorded in your name.") : "");
       return h+'</div>';
     }
 
@@ -3359,21 +3372,18 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
           '>Start trip</button>'+
           '<p class="trip-note">Tap each stop as you pull away. Empty stops need nothing.</p>'+
           (pinGateNeeded()? pinGateHtml("This run is recorded in your name.") : "")
-        : '<p class="trip-note"><b>Bookings are still open.</b> The run can be started '+
-          'after '+esc(tripCutoff||"09:30")+', once the list is settled.</p>';
+        : '<p class="trip-note"><b>Bookings are still open.</b> Start the run '+
+          'after '+esc(tripCutoff||"09:30")+'.</p>';
     } else {
       /* Name the driver and the moment. Somebody looking for a button that is
          not theirs should be told whose it is, not left wondering whether the
-         app is broken. */
+         app is broken. Stated, not explained: whose phone, and what time. */
       var who=tripWhoDrives(route);
       h+='<p class="trip-note">'+
          (who? '<b>'+esc(who)+'</b> drives '+esc(route)+' this Sunday. ' : '')+
-         'The Start trip button appears on '+esc(who?'his':'the driver\u2019s')+
-         ' phone at '+esc(tripCutoff||"09:30")+', when bookings close.'+
-         '</p>'+
-         '<p class="trip-note">You are watching. To try all of this before '+
-         'Sunday, use Rehearse this Sunday in the Minibus menu of the '+
-         'spreadsheet.</p>';
+         'Start trip appears on '+esc(who?'his':'the driver\u2019s')+
+         ' phone at '+esc(tripCutoff||"09:30")+'.'+
+         '</p>';
     }
     return h+'</div>';
   }
@@ -3559,10 +3569,10 @@ function rotaOpenRequest(key){
     }
     $("rotaSwapField").style.display="none";
     $("rotaLockNote").style.display="";
+    /* What he can do, not why he cannot do the other thing. */
     $("rotaLockNote").innerHTML='<b>Protected Sunday.</b> '+
       (row&&row.lockNote?esc(row.lockNote)+'. ':'')+
-      'It cannot be swapped, so that option is not offered. You can still say '+
-      'you are unavailable and the coordinator will arrange a cover.';
+      'Say you are unavailable and the coordinator will arrange cover.';
   }
 
   $("rotaReqType").addEventListener("change",function(){$("rotaSwapField").style.display=this.value==="Request a swap"?"":"none";});
@@ -3882,10 +3892,14 @@ function sha256Hex(str){
    only ever the fallback.
 
    A phone that has never seen that driver, with no signal, lets him in and
-   says so on the record. That is deliberate, and it is the same bargain as
-   Set off anyway: a driver locked out at the kerb does not go and do the
-   check some other way, he drives with nothing recorded at all. Written down
-   beats blocked. */
+   says so on the record. That is deliberate: a driver locked out at the kerb
+   does not go and do the check some other way, he drives with nothing
+   recorded at all, so written down beats blocked here.
+
+   Same bargain as Set off anyway on the trip screen, and for the same
+   reason: what an app can do at the kerb is write down what happened, not
+   prevent it. Blocking either one loses the record and changes nothing
+   about the bus. */
 var PKEY = "fleet.pinseen.v1";
 var PIN_TIMEOUT = 10000;   /* he is standing there. Fall back rather than wait */
 
