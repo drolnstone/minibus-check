@@ -480,8 +480,9 @@ function structDone(tag) {
    not be quietly skipped because a driver's phone set a flag at nine o'clock. */
 function structReset() {
   try {
+    stopsMemo = null;
     CacheService.getScriptCache().removeAll([structKey("rota"), structKey("checks"),
-                                            structKey("trip")]);
+                                            structKey("trip"), STOPS_CACHE_KEY]);
   } catch (err) { /* nothing to do: the flags expire by themselves */ }
 }
 
@@ -1905,7 +1906,34 @@ function ensureBusStops(ss) {
   return sh;
 }
 
+/* Held for a minute, and for this execution.
+
+   The timetable is the least changeable thing on the spreadsheet and it was
+   being read in full on every request that touched it. runningRegs made that
+   worse by adding one more read to a call every driver's phone makes twice a
+   minute, which is exactly the sort of weight that turns into "the screen
+   feels slow" and is never traced back.
+
+   A minute of staleness on a stop list costs nothing. Set up everything
+   clears it, so a coordinator who has just edited the tab is not told to
+   wait. */
+var STOPS_CACHE_KEY = "busstops_v1";
+var stopsMemo = null;
+
 function readBusStops(ss) {
+  if (stopsMemo) return stopsMemo;
+  try {
+    var hit = CacheService.getScriptCache().get(STOPS_CACHE_KEY);
+    if (hit) { stopsMemo = JSON.parse(hit); return stopsMemo; }
+  } catch (err) { /* read it properly below */ }
+  stopsMemo = readBusStopsFresh(ss);
+  try {
+    CacheService.getScriptCache().put(STOPS_CACHE_KEY, JSON.stringify(stopsMemo), 60);
+  } catch (err) { /* it just gets read again */ }
+  return stopsMemo;
+}
+
+function readBusStopsFresh(ss) {
   var sh = ss.getSheetByName(STOPS_SHEET);
   if (!sh || sh.getLastRow() < 2) return [];
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues();
@@ -2827,17 +2855,47 @@ function whoIsTapping() {
 /* Counts and trip state together, for the driver's screen. Both halves keep
    their own cache and their own life, so merging the request does not merge
    how fresh they are: counts still last twenty seconds and trip state ten. */
+/**
+ * Everything the driver's Stops and bookings screen needs, in one answer.
+ *
+ * Each part is fenced off from the others. This request is the whole of that
+ * screen: the counts, the run, and whether the bus was checked. It used to be
+ * one expression, so a fault anywhere in it failed the lot, and the phone
+ * swallows a failed board silently by design — the screen simply stops
+ * updating with nothing on it to say why. Two of these parts were new and
+ * had never run against a real sheet when they were put in that position,
+ * which was the wrong thing to do with the one call Sunday morning rests on.
+ *
+ * A part that fails now costs its own feature and nothing else: no check
+ * state means the warning falls back to what the phone itself knows, and no
+ * others means the driver picks his bus from an unordered pair, which is
+ * where he was a week ago.
+ */
 function boardPayload(route) {
-  var counts = countsPayload();
   var r = String(route || "").trim() || "North";
-  return {
-    ok: true,
-    date: counts.date,
-    counts: counts.counts,
-    checks: checksToday(),
-    others: runningRegs(r),
-    trip: tripDriverPayload(r)
-  };
+  /* Nothing is pre-filled. An empty object here would be indistinguishable
+     from a real answer of "nobody booked anywhere", and the phone would
+     dutifully wipe good numbers off the screen because a part it could not
+     see had failed. A part that fails is ABSENT, and absent is the one thing
+     the phone can safely tell from a fact. */
+  var out = { ok: true };
+
+  try {
+    var counts = countsPayload();
+    out.date = counts.date;
+    out.counts = counts.counts;
+  } catch (err) { out.countsError = String(err); }
+
+  try { out.checks = checksToday(); }
+  catch (err) { out.checksError = String(err); }
+
+  try { out.others = runningRegs(r); }
+  catch (err) { out.othersError = String(err); }
+
+  try { out.trip = tripDriverPayload(r); }
+  catch (err) { out.tripError = String(err); }
+
+  return out;
 }
 
 /* The route names in the order the timetable lists them, without repeats. */

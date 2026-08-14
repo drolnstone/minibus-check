@@ -547,6 +547,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .stop-yours{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-size:11px;
   font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--pass);
   background:var(--pass-bg);border:1px solid var(--pass-line);border-radius:5px;padding:1px 6px;margin-left:6px}
+.stop-tab.is-mine{border-color:var(--steel)}
+.stop-tabmine{display:block;font-family:"Barlow Condensed",sans-serif;font-size:10px;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--steel);margin-top:2px}
 /* Back to top. The rota runs two years deep, so scrolling out of it by hand
    was a real journey. */
 /* Clear of the bottom bar. It sat at 20px, which put it behind the bar on
@@ -892,7 +895,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.19.2";
+var APP_VERSION = "v1.19.3";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -2805,8 +2808,11 @@ function rotaCountsFetch(route,cb){
       var before=JSON.stringify(rotaStopCounts)+"|"+rotaStopCountsFor+"|"+
                  JSON.stringify(trip.served)+"|"+trip.started+"|"+trip.ended;
 
-      rotaStopCounts   = out.counts||{};
-      rotaStopCountsFor= out.date||"";
+      /* A part of the answer may be missing now: the server fences each one
+         off so a fault in one does not cost the screen. Keep what arrived
+         and leave the rest as it was, rather than blanking good numbers
+         because a different part failed. */
+      if(out.counts){ rotaStopCounts = out.counts; rotaStopCountsFor = out.date||""; }
       rotaCountsAt     = Date.now();
 
       /* Who has checked what today, keyed by reg. The answer to "has anyone
@@ -2818,7 +2824,7 @@ function rotaCountsFetch(route,cb){
       }
       /* Which bus every other route already has out. North starts first, so
          by the time South is getting in this is usually filled. */
-      tripOthers = out.others || {};
+      if(out.others) tripOthers = out.others;
 
       var tp=out.trip;
       if(tp && tp.ok!==false){
@@ -3162,6 +3168,16 @@ function rotaOpen(){ rotaViewMode="all"; rotaPastWeeks=0; rotaRender(false); sho
 /* The route a driver is on THIS Sunday, or null if he is not driving. Used
    wherever the answer has to be about duty: who may tap, what the Finished
    screen offers. */
+/* Names come from three places that must agree: config.js, the Drivers tab,
+   and the Rota tab. They mostly do. A trailing space in a spreadsheet cell,
+   or Bro against BRO, is invisible to whoever typed it and used to be enough
+   to lose a driver his own route: no Yours badge, the wrong tab open, and
+   nothing on screen suggesting a name was one character out. Compared
+   loosely for that reason. Attribution still uses the name as written. */
+function sameName(a,b){
+  return String(a||"").trim().toLowerCase() === String(b||"").trim().toLowerCase();
+}
+
 function rotaMyRoute(){
   var me=(st.driver||"").trim();
   if(!me) return null;
@@ -3170,9 +3186,15 @@ function rotaMyRoute(){
   var nActual=(row&&row.actual)||nPrimary;
   var sPrimary=(row&&row.primary2)||rotaSeedSecondary(d);
   var sActual=(row&&row.actual2)||sPrimary;
-  if(sPrimary===me||sActual===me) return "South";
-  if(nPrimary===me||nActual===me) return "North";
+  if(sameName(sPrimary,me)||sameName(sActual,me)) return "South";
+  if(sameName(nPrimary,me)||sameName(nActual,me)) return "North";
   return null;
+}
+
+function inPattern(list,me){
+  var hit=false;
+  (list||[]).forEach(function(n){ if(sameName(n,me)) hit=true; });
+  return hit;
 }
 
 /* The route a driver BELONGS to, on duty or not.
@@ -3190,8 +3212,8 @@ function rotaHomeRoute(){
   if(duty) return duty;
   var me=(st.driver||"").trim();
   if(!me) return null;
-  if(ROTA_SECONDARY_PATTERN.indexOf(me)>=0) return "South";
-  if(ROTA_PRIMARY_PATTERN.indexOf(me)>=0) return "North";
+  if(inPattern(ROTA_SECONDARY_PATTERN,me)) return "South";
+  if(inPattern(ROTA_PRIMARY_PATTERN,me)) return "North";
   return null;
 }
 
@@ -3287,6 +3309,8 @@ function rotaPaintStops(){
      stops would be worse than showing none at all. */
   var showCounts = rotaStopCountsFor && rotaStopCountsFor===rotaKey(rotaBaseSunday(0));
 
+  /* Which route is his. Wanted before the tabs are built, because the tab
+     itself now carries the badge. */
   var mine=rotaHomeRoute();
 
   var routes=[];
@@ -3336,8 +3360,13 @@ function rotaPaintStops(){
     html+='<div class="stop-tabs">';
     routes.forEach(function(rt){
       var n=showCounts?seatsOn(rt):null;
-      html+='<button class="stop-tab'+(rt===route?' is-active':'')+'" type="button" '+
+      /* Marked on the tab as well as inside it. A driver landing on the
+         other route saw no badge anywhere and had nothing telling him which
+         one was his; now he can see it without tapping. */
+      html+='<button class="stop-tab'+(rt===route?' is-active':'')+
+            (rt===mine?' is-mine':'')+'" type="button" '+
             'data-stoproute="'+esc(rt)+'">'+esc(rt)+
+            (rt===mine?'<span class="stop-tabmine">'+esc(yoursWhen())+'</span>':'')+
             '<small>'+(n===null?'Times only':(n? n+(n===1?' person':' people'):'Nobody booked'))+
             '</small></button>';
     });
