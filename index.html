@@ -550,6 +550,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .stop-tab.is-mine{border-color:var(--steel)}
 .stop-tabmine{display:block;font-family:"Barlow Condensed",sans-serif;font-size:10px;
   letter-spacing:.06em;text-transform:uppercase;color:var(--steel);margin-top:2px}
+.stop-whose{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-size:11px;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border:1px solid var(--hair);
+  border-radius:5px;padding:1px 7px;margin-left:8px;vertical-align:2px}
 /* Back to top. The rota runs two years deep, so scrolling out of it by hand
    was a real journey. */
 /* Clear of the bottom bar. It sat at 20px, which put it behind the bar on
@@ -895,7 +898,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.19.3";
+var APP_VERSION = "v1.19.4";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -3191,6 +3194,18 @@ function rotaMyRoute(){
   return null;
 }
 
+/* Who is down to drive a route on the Sunday being shown. Cover wins over
+   the scheduled name, because cover is what will actually happen. */
+function rotaDriverFor(route){
+  var d=rotaBaseSunday(0), row=rotaRowFor(rotaKey(d));
+  if(route==="South"){
+    var sP=(row&&row.primary2)||rotaSeedSecondary(d);
+    return ((row&&row.actual2)||sP)||"";
+  }
+  var nP=(row&&row.primary)||rotaSeedPrimary(d);
+  return ((row&&row.actual)||nP)||"";
+}
+
 function inPattern(list,me){
   var hit=false;
   (list||[]).forEach(function(n){ if(sameName(n,me)) hit=true; });
@@ -3311,7 +3326,20 @@ function rotaPaintStops(){
 
   /* Which route is his. Wanted before the tabs are built, because the tab
      itself now carries the badge. */
+  /* Two different questions, and they were being answered by one variable.
+
+     rotaHomeRoute is "which route is this man's", and it is the right answer
+     for choosing the tab he lands on: a South driver should open on South
+     whether or not it is his turn.
+
+     It is the wrong answer for the badge. Yours this Sunday was being shown
+     to every driver in a route's pattern, so on the 16th, when it is Moses on
+     North and Tunde on South, Abiodun and Adesina and everybody else were
+     each told the run was theirs. A badge that says Yours to five men who are
+     not driving is worse than no badge: the one man it is aimed at has no
+     reason to believe it. */
   var mine=rotaHomeRoute();
+  var onDuty=rotaMyRoute();
 
   var routes=[];
   stops.forEach(function(s){ if(!s.arrival && routes.indexOf(s.route)<0) routes.push(s.route); });
@@ -3364,9 +3392,9 @@ function rotaPaintStops(){
          other route saw no badge anywhere and had nothing telling him which
          one was his; now he can see it without tapping. */
       html+='<button class="stop-tab'+(rt===route?' is-active':'')+
-            (rt===mine?' is-mine':'')+'" type="button" '+
+            (rt===onDuty?' is-mine':'')+'" type="button" '+
             'data-stoproute="'+esc(rt)+'">'+esc(rt)+
-            (rt===mine?'<span class="stop-tabmine">'+esc(yoursWhen())+'</span>':'')+
+            (rt===onDuty?'<span class="stop-tabmine">'+esc(yoursWhen())+'</span>':'')+
             '<small>'+(n===null?'Times only':(n? n+(n===1?' person':' people'):'Nobody booked'))+
             '</small></button>';
     });
@@ -3383,7 +3411,14 @@ function rotaPaintStops(){
               ? '<b>'+activeOn(route)+'</b> with people, <b>'+seatsOn(route)+'</b> booked'
               : 'nobody booked yet')
           : '')+
-        (mine===route?'<span class="stop-yours">'+esc(yoursWhen())+'</span>':'')+'</p>';
+        (onDuty===route
+          ? '<span class="stop-yours">'+esc(yoursWhen())+'</span>'
+          /* Not his. Say whose, rather than nothing: a driver checking
+             whether it is his turn gets an answer either way, and the badge
+             above means something because it is not on every screen. */
+          : (rotaDriverFor(route)
+              ? '<span class="stop-whose">'+esc(rotaDriverFor(route))+'</span>'
+              : ''))+'</p>';
 
   /* ---- movement -------------------------------------------------------
      Live only on the route this phone is driving. A coordinator watching the
