@@ -217,6 +217,10 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   line-height:1.05;margin:0 0 3px;color:var(--steel)}
 .live-sub{margin:0;font-size:13px;color:var(--muted);line-height:1.5}
 .live-sub .ring,.note .ring{color:inherit;font-weight:600;text-decoration:underline}
+.live-pick{display:flex;gap:6px;margin-top:10px}
+.live-pickbtn{flex:1;padding:7px 10px;border:1px solid currentColor;background:transparent;
+  border-radius:8px;font:inherit;font-size:13px;color:inherit;opacity:.6}
+.live-pickbtn.is-on{opacity:1;font-weight:600}
 .live-go{background:var(--pass-bg);border-color:#B7D8C6}
 .live-go .live-big{color:var(--pass)}
 .live-warn{background:var(--warn-bg);border-color:#EBD3A8}
@@ -500,10 +504,18 @@ function readJson(t){
 var LIVE_POLL = 30000;
 var liveTimer = null, liveBusy = false, live = null;
 
+/* Rehearsal only. A phone with no booking of its own is lent a seeded one,
+   and this says which route to be lent. Blank means "whichever bus is out",
+   which is what a tester wants nine times in ten. A real passenger never
+   sets this: they are watching their own stop. */
+var liveWant = "";
+
 function liveFetch(){
   if(liveBusy || !navigator.onLine) return;
   liveBusy=true;
-  callFetch(ENDPOINT+"?trip=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
+  callFetch(ENDPOINT+"?trip=1&ref="+encodeURIComponent(REF)+
+            (liveWant? "&r="+encodeURIComponent(liveWant) : ""),
+            {method:"GET",redirect:"follow"})
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out=JSON.parse(t);
@@ -594,11 +606,27 @@ function paintLive(){
   /* A rehearsal forces the tracking gate open on a weekday, so somebody who
      booked on Thursday would otherwise open this and see a bus running that
      is not. Said first and said plainly. */
+  /* The switch exists because a rehearsal used to be lent whichever seeded
+     booking came first, which was always North, so the South bus could run
+     the whole morning with this page showing nothing. It is on the rehearsal
+     banner and nowhere else: a real passenger watches their own stop and is
+     never shown anybody else's route. */
+  var pick = "";
+  if(live.rehearsal && (live.routes||[]).length>1){
+    pick='<div class="live-pick">';
+    live.routes.forEach(function(rt){
+      pick+='<button type="button" class="live-pickbtn'+
+            (rt===live.route?' is-on':'')+'" data-liveroute="'+esc(rt)+'">'+
+            esc(rt)+'</button>';
+    });
+    pick+='</div>';
+  }
+
   var banner = live.rehearsal
     ? '<div class="live live-test"><p class="live-eyebrow">Rehearsal</p>'+
       '<p class="live-sub">The transport team are testing the app. No bus is '+
       'running and the position above is pretend. Your booking is not: it '+
-      'saves normally and counts for Sunday.</p></div>'
+      'saves normally and counts for Sunday.</p>'+pick+'</div>'
     : "";
 
   var head="", sub="", cls="";
@@ -639,6 +667,13 @@ function paintLive(){
     '<p class="live-eyebrow">'+(ROLLED?"Today\u2019s bus":"Your stop")+'</p>'+
     '<p class="live-big">'+head+'</p>'+
     '<p class="live-sub">'+sub+'</p></div>';
+
+  Array.prototype.forEach.call(box.querySelectorAll("[data-liveroute]"),function(b){
+    b.addEventListener("click",function(){
+      liveWant=this.getAttribute("data-liveroute");
+      liveFetch();
+    });
+  });
 }
 
 function stopById(id){

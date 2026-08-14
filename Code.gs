@@ -329,7 +329,7 @@ function doGet(e) {
      applies the gate; with a route it answers for a driver's own screen. */
   if (p.trip) {
     try {
-      return reply(p.route ? tripDriverPayload(p.route) : tripPayload(p.ref));
+      return reply(p.route ? tripDriverPayload(p.route) : tripPayload(p.ref, p.r));
     } catch (err) { return reply({ ok: false, error: String(err) }); }
   }
 
@@ -2460,7 +2460,7 @@ function tripProjectable(state) {
  * Sunday, and only once bookings have closed. Both halves are one lookup the
  * endpoint has to do anyway to know which stop to give a time for.
  */
-function tripPayload(ref) {
+function tripPayload(ref, want) {
   var ss  = SpreadsheetApp.getActiveSpreadsheet();
   var key = runSunday();
 
@@ -2475,29 +2475,62 @@ function tripPayload(ref) {
     rows.forEach(function (b) { if (b.device === ref && b.stopId) mine = b; });
   }
 
+  var stops = readBusStops(ss);
+  var stopById = {};
+  stops.forEach(function (s) { stopById[s.id] = s; });
+
   /* Rehearsing. The live view is only ever shown to a phone with a booking,
      which meant the person running the rehearsal saw nothing at all unless
      they first made a real booking and then remembered to cancel it. So a
-     phone with no booking of its own is lent the first seeded one and can
-     walk the passenger side straight from the link. The banner says what it
-     is. */
+     phone with no booking of its own is lent a seeded one and can walk the
+     passenger side straight from the link. The banner says what it is.
+
+     WHICH seed matters, and taking the first one was wrong. The seeds are
+     built by walking the stops, the stops are listed North first, so the
+     first seed is always a North one. A rehearsal therefore always watched
+     North: the South bus could run the whole morning and this page would
+     never move, which is exactly what happened on the 13th and looked like a
+     South fault when nothing about South was broken.
+
+     So: the route asked for, if the page asked for one. Failing that, a
+     route with a bus actually out, because that is the one worth watching.
+     Failing that, the first, as before. */
   if (!mine && rehearsalOn()) {
-    rows.forEach(function (b) {
-      if (!mine && b.stopId && String(b.device || "").indexOf("rehearsal-") === 0) mine = b;
+    var seeds = rows.filter(function (b) {
+      return b.stopId && String(b.device || "").indexOf("rehearsal-") === 0;
     });
+    var wantRoute = String(want || "").trim();
+    if (wantRoute) {
+      seeds.forEach(function (b) {
+        var s = stopById[b.stopId];
+        if (!mine && s && s.route === wantRoute) mine = b;
+      });
+    }
+    if (!mine) {
+      seeds.forEach(function (b) {
+        if (mine) return;
+        var s = stopById[b.stopId];
+        if (!s) return;
+        var t = tripState(ss, key, s.route);
+        if (t.started && !t.ended) mine = b;
+      });
+    }
+    if (!mine && seeds.length) mine = seeds[0];
   }
 
   if (!mine) return { ok: true, live: false, why: "nobooking", date: key };
 
-  var stops = readBusStops(ss);
-  var myStop = null;
-  stops.forEach(function (s) { if (s.id === mine.stopId) myStop = s; });
+  var myStop = stopById[mine.stopId] || null;
   if (!myStop) return { ok: true, live: false, why: "nobooking", date: key };
 
   var state = tripState(ss, key, myStop.route);
   var out = {
     ok: true, live: true, date: key, now: Date.now(), route: myStop.route,
     rehearsal: !!rehearsalOn(),
+    /* Only during a rehearsal, and only so the tester can switch to the bus
+       he is actually driving. A real passenger watches their own stop and is
+       never offered somebody else's route. */
+    routes: rehearsalOn() ? routeNames(stops) : [],
     stop: myStop.stop, stopId: myStop.id, scheduled: myStop.time,
     started: !!state.started, ended: !!state.ended,
     lastStop: state.lastStop,
@@ -2796,13 +2829,51 @@ function whoIsTapping() {
    how fresh they are: counts still last twenty seconds and trip state ten. */
 function boardPayload(route) {
   var counts = countsPayload();
+  var r = String(route || "").trim() || "North";
   return {
     ok: true,
     date: counts.date,
     counts: counts.counts,
     checks: checksToday(),
-    trip: tripDriverPayload(String(route || "").trim() || "North")
+    others: runningRegs(r),
+    trip: tripDriverPayload(r)
   };
+}
+
+/* The route names in the order the timetable lists them, without repeats. */
+function routeNames(stops) {
+  var seen = {}, out = [];
+  (stops || []).forEach(function (s) {
+    if (s.route && !seen[s.route]) { seen[s.route] = true; out.push(s.route); }
+  });
+  return out;
+}
+
+/**
+ * Which bus every OTHER route currently has out.
+ *
+ *   { "North": "YS70 PWE" }
+ *
+ * With two buses this settles the second driver's choice by arithmetic: if
+ * North has taken one, South is on the other. It is offered to him as the
+ * obvious button and never as a decision already made on his behalf. He may
+ * have swapped at the gate, and a registration the app assumed rather than
+ * one he tapped would put a bus on the record that never ran that route,
+ * which is the very hole the registration was added to close.
+ *
+ * Runs in progress only. A route that has finished tells you nothing about
+ * which bus is standing free now.
+ */
+function runningRegs(exceptRoute) {
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var key = runSunday();
+  var out = {};
+  routeNames(readBusStops(ss)).forEach(function (rt) {
+    if (rt === exceptRoute) return;
+    var t = tripState(ss, key, rt);
+    if (t.started && !t.ended && t.reg) out[rt] = t.reg;
+  });
+  return out;
 }
 
 /**

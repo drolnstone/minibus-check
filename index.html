@@ -892,7 +892,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.19.1";
+var APP_VERSION = "v1.19.2";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -2459,6 +2459,11 @@ function checkStanding(reg){
 var tripChecks={}, tripChecksDay="";
 var TCKEY="fleet.checks.today.v1";
 
+/* { "North": "YS70 PWE" } — a bus already out on another route. With two
+   buses that settles which one is left, and the second driver is offered it
+   as the obvious button rather than having it decided for him. */
+var tripOthers={};
+
 /* Kept on the phone, not only in memory.
 
    Without this there is a gap every Sunday morning: the screen paints from
@@ -2677,6 +2682,10 @@ function tripFetch(route,cb){ rotaCountsFetch(route,cb); }
 function tripStart(route, reg, anyway){
   if(!tripClosed){ toast("Bookings are still open. The run starts after "+(tripCutoff||"09:30")+"."); return; }
   if(tripMoving()){ toast("Not while the bus is moving."); return; }
+  /* The buttons are off rather than disabled now, so they can say why. That
+     puts the only real guard here: a run is recorded in a driver's name, and
+     the PIN is what makes the name mean anything. */
+  if(pinGateNeeded()){ pinGateFocus(); return; }
   if(!reg){ toast("Tap the bus you are taking."); return; }
 
   var chk=checkVerdict(reg);
@@ -2807,6 +2816,9 @@ function rotaCountsFetch(route,cb){
         tripChecksDay = new Date().toDateString();
         tripChecksSave();
       }
+      /* Which bus every other route already has out. North starts first, so
+         by the time South is getting in this is usually filled. */
+      tripOthers = out.others || {};
 
       var tp=out.trip;
       if(tp && tp.ok!==false){
@@ -3470,11 +3482,13 @@ function rotaPaintStops(){
   pinGateWire();
   Array.prototype.forEach.call(document.querySelectorAll("[data-tripstart]"),function(b){
     b.addEventListener("click",function(){
+      if(pinGateNeeded()){ pinGateFocus(); return; }
       var reg=this.getAttribute("data-tripstart");
       tripStart(route, reg==="-" ? "" : reg);
     });
   });
   if($("tripStartAnyway")) $("tripStartAnyway").addEventListener("click",function(){
+    if(pinGateNeeded()){ pinGateFocus(); return; }
     tripStart(route, this.getAttribute("data-tripanyway")||"", true);
   });
   if($("tripDoCheck")) $("tripDoCheck").addEventListener("click",function(){
@@ -3524,20 +3538,24 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
     if(mayTap && tripUncheckedAsked){
       h+='<p class="trip-note"><b>No check signed for '+esc(tripUncheckedAsked)+
          ' today.</b> Do the check first.</p>'+
+         (pinGateNeeded()? pinGateHtml("Setting off with no check is recorded in your name.") : "")+
          '<div class="trip-two">'+
            '<button class="btn btn-main" id="tripDoCheck">Do the check</button>'+
-           '<button class="btn btn-ghost" id="tripStartAnyway" '+
-             'data-tripanyway="'+esc(tripUncheckedAsked)+'"'+(pinGateNeeded()?' disabled':'')+
+           '<button class="btn btn-ghost'+(pinGateNeeded()?' is-off':'')+'" id="tripStartAnyway" '+
+             'data-tripanyway="'+esc(tripUncheckedAsked)+'"'+
              '>Set off anyway</button>'+
-         '</div>'+
-         (pinGateNeeded()? pinGateHtml("Setting off with no check is recorded in your name.") : "");
+         '</div>';
       return h+'</div>';
     }
 
     if(mayTap){
+      /* PIN first, then the buttons. It used to sit underneath them, which
+         meant a driver coming straight from the rota to the run met a dead
+         button with no idea why, and the thing that would have freed it was
+         below the fold saying nothing. One prompt, then the next. */
       h+= tripClosed
-        ? tripBusButtonsHtml()+
-          (pinGateNeeded()? pinGateHtml("This run is recorded in your name.") : "")
+        ? (pinGateNeeded()? pinGateHtml("This run is recorded in your name.") : "")+
+          tripBusButtonsHtml()
         : '<p class="trip-note"><b>Bookings are still open.</b> Start the run '+
           'after '+esc(tripCutoff||"09:30")+'.</p>';
     } else {
@@ -3590,36 +3608,81 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
 function tripBusButtonsHtml(){
   var live=(VEHICLES||[]).filter(function(v){ return v && v.reg; });
   var one=live.length<2;
-  var h='<div class="trip-buses">', shown=0, stopped=[];
 
+  /* Which bus somebody else already has out. North sets off first, so by the
+     time South is getting in this is usually known, and with two buses it
+     settles which one is left.
+
+     It orders the buttons and nothing more. The bus he is taking is still
+     the bus he taps: he may have swapped at the gate, and a registration the
+     app assumed rather than one he pressed would put a bus on the record
+     that never ran that route, which is the hole the registration was added
+     to close in the first place. */
+  var taken="", takenOn="";
+  Object.keys(tripOthers||{}).forEach(function(rt){
+    if(!taken && tripOthers[rt]){ taken=tripOthers[rt]; takenOn=rt; }
+  });
+
+  var mine=[], theirs=[], stopped=[];
   live.forEach(function(v){
     if(checkVerdict(v.reg).state==="stopped"){ stopped.push(v.reg); return; }
+    if(taken && v.reg===taken) theirs.push(v); else mine.push(v);
+  });
+  var order=mine.concat(theirs);
+
+  var off=pinGateNeeded();
+  var h='<div class="trip-buses">', shown=0;
+  order.forEach(function(v){
     shown++;
-    h+='<button class="btn '+(shown===1?'btn-main':'btn-ghost')+'" '+
-       'data-tripstart="'+esc(v.reg)+'"'+(pinGateNeeded()?' disabled':'')+'>'+
-       (one? 'Start trip' : 'Start trip \u00B7 '+esc(v.reg))+'</button>';
+    h+='<button class="btn '+(shown===1?"btn-main":"btn-ghost")+(off?" is-off":"")+'" '+
+       'data-tripstart="'+esc(v.reg)+'">'+
+       (one? "Start trip" : "Start trip \u00B7 "+esc(v.reg))+'</button>';
   });
 
   /* No register at all: keep a way to start, with no reg on the row. Better
      an unattributed run than a driver stranded by a config file. */
   if(!live.length){
     shown++;
-    h+='<button class="btn btn-main" data-tripstart="-"'+(pinGateNeeded()?' disabled':'')+
-       '>Start trip</button>';
+    h+='<button class="btn btn-main'+(off?" is-off":"")+'" data-tripstart="-">'+
+       'Start trip</button>';
   }
   h+='</div>';
 
+  /* A bus stopped by today's check gets no button. Same refusal tripStart
+     already makes; making it here means he never taps something that was
+     only ever going to say no, and the other bus is beside it. */
   stopped.forEach(function(reg){
     h+='<p class="trip-note"><b class="trip-stopme">'+esc(reg)+
        ' was stopped by today\u2019s check.</b> Take the other bus.</p>';
   });
 
-  h+= shown
-    ? '<p class="trip-note">'+(one?'':'Tap the bus you are taking. ')+
-      'Then tap each stop as you pull away. Empty stops need nothing.</p>'
-    : '<p class="trip-note"><b>No bus can be started.</b> Ring '+
-      esc((CFG.coordinator&&CFG.coordinator.name)||'the coordinator')+'.</p>';
+  if(!shown) return h+'<p class="trip-note"><b>No bus can be started.</b> Ring '+
+    esc((CFG.coordinator&&CFG.coordinator.name)||"the coordinator")+'.</p>';
+
+  /* Stated, not reasoned at him: where the other bus is. It is the fact that
+     makes the order of the buttons obvious, and he can check it against what
+     he can see in the yard. */
+  if(taken && theirs.length && mine.length){
+    h+='<p class="trip-note">'+esc(taken)+' is out on '+esc(takenOn)+'.</p>';
+  }
+
+  h+='<p class="trip-note">'+(one?"":"Tap the bus you are taking. ")+
+     'Then tap each stop as you pull away. Empty stops need nothing.</p>';
   return h;
+}
+
+/* Take him to the PIN box and say what it wants.
+
+   A disabled button swallows the tap, so the old arrangement could not tell
+   him anything: he pressed Start, nothing happened, and the only clue was a
+   box further down that had never asked him for anything. The button is off
+   rather than disabled now, so the tap is the prompt. */
+function pinGateFocus(){
+  var i=$("pinGateInput");
+  toast("Enter your four digit PIN to confirm it is you.");
+  if(!i) return;
+  try{ i.scrollIntoView({block:"center",behavior:"smooth"}); }catch(e){}
+  try{ i.focus(); }catch(e){}
 }
 
 function tripActionHtml(nextStop){
@@ -4206,12 +4269,13 @@ function pinGateSync(){
   /* [data-tripstart] rather than one id: there is a start button per bus
      now, and leaving the PIN gate looking for a single id would have left
      every bus button live behind an unanswered PIN. */
-  ["tripStartAnyway","rotaSubmitRequest"].forEach(function(id){
-    var b=$(id);
-    if(b) b.disabled = !st.pinOk;
-  });
-  Array.prototype.forEach.call(document.querySelectorAll("[data-tripstart]"),
-    function(b){ b.disabled = !st.pinOk; });
+  var b=$("rotaSubmitRequest");
+  if(b) b.disabled = !st.pinOk;
+  /* Off, not disabled. A disabled button cannot tell anybody why it will not
+     work, and that silence was the whole complaint. */
+  Array.prototype.forEach.call(
+    document.querySelectorAll("[data-tripstart],#tripStartAnyway"),
+    function(x){ x.classList.toggle("is-off", !st.pinOk); });
   if(st.pinOk) g.classList.add("is-ok");
 }
 
