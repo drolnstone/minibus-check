@@ -207,6 +207,14 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .btn-main:disabled{background:#AEB6BE;cursor:default}
 .btn-ghost{flex:0 0 auto;padding-left:18px;padding-right:18px;
   background:var(--card);border:1px solid var(--hair)}
+/* The withdraw question. Two equal buttons, because neither is a trap: one
+   keeps the seat and one gives it up, and the person has already said which
+   way they were heading by tapping Not coming. The giving-up one carries the
+   warning colour so it cannot be hit by momentum alone. */
+.cancel-row{display:flex;gap:8px}
+.cancel-row .btn{flex:1}
+.btn-keep{background:var(--steel);color:#fff}
+.btn-drop{background:var(--card);border:1px solid var(--warn);color:var(--warn);font-weight:600}
 
 .toast{position:fixed;left:50%;bottom:calc(112px + var(--safe-b));transform:translateX(-50%) translateY(14px);
   background:var(--ink);color:#fff;padding:11px 16px;border-radius:9px;font-size:14px;
@@ -399,6 +407,9 @@ var REHEARSAL=false;
    to somebody else. Nothing carries over now: a new stop is a new question. */
 var booked=null, chosen=null, seats=null, saving=false, route="North", ROUTES=[];
 var seatsAsk=false;   /* the question has just appeared and wants looking at */
+/* The withdraw question is open. Asked on both sides of the cutoff; the
+   wording differs because the consequence does. See paint(). */
+var cancelAsk=false;
 
 /* A stop, once confirmed, is settled for that Sunday.
 
@@ -443,6 +454,7 @@ function load(again){
       booked = out.mine ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
       chosen = booked ? booked.stopId : null;
       seats  = booked ? booked.seats : null;
+      cancelAsk = false;        /* a fresh load is never mid-question */
 
       /* Which routes actually exist, in the order the timetable lists them. */
       ROUTES=[];
@@ -708,10 +720,20 @@ function paint(){
     /* The whole of Sunday morning now sits here: bookings shut at 09:30 and
        the page stays on today until the buses are back. It is the list the
        driver is working from, which is the one worth showing somebody who is
-       waiting. */
+       waiting.
+
+       What it says depends on whether this phone is ON that list. Telling
+       somebody with a seat to "tell the group directly" was true when the
+       page could do nothing for them; it is not true now, and a screen that
+       sends people to WhatsApp for something there is a button for is the
+       same fault as the one that told them to tap a locked stop. */
     html+='<div class="note note-warn"><b>Bookings have closed for this Sunday.</b> '+
-          'This is the list the driver has. If your plans have changed, tell '+
-          'the group directly.</div>';
+          'This is the list the driver has. '+
+          (booked
+            ? 'Your stop and your number are fixed now, but if you are not '+
+              'coming you can say so below.'
+            : 'If you need a seat today, tell the group directly.')+
+          '</div>';
   } else if(ROLLED){
     /* Two different Sundays are on this screen at once: the bus running now,
        up in the live panel, and the one below that is open for booking. Said
@@ -723,8 +745,16 @@ function paint(){
 
   if(!CLOSED){
     if(booked && !dirty()){
+      /* What this screen will actually do, and nothing it will not.
+         It used to say "Tap a different stop to move", which stopped being
+         true the day the stop was settled at Confirm: every other stop is
+         disabled from here on, so the instruction sent people tapping at
+         dead buttons with no way to tell a locked screen from a broken one.
+         The bar at the foot has said the right thing throughout. These two
+         now agree, and both name the same two ways out. */
       html+='<div class="note note-go"><b>You are booked.</b> '+
-            'Tap a different stop to move, or use Not coming below.</div>';
+            'Change the number below, or tap Not coming to cancel and '+
+            'book again.</div>';
     } else if(!booked && !chosen){
       html+='<p class="lede">Tap the stop where you will be boarding.</p>';
     }
@@ -793,7 +823,7 @@ function paint(){
      Numbers rather than a plus and minus, so answering it is one tap and
      there is nothing to hold down or overshoot. Nothing is preselected: an
      unanswered question must look unanswered. */
-  if(chosen && !CLOSED){
+  if(chosen && !CLOSED && !cancelAsk){
     html+='<div class="seats'+(seats?'':' is-asking')+'" id="seatsBox">'+
           '<h2>How many of you?</h2>'+
           '<p>Everyone boarding with you at that stop, including yourself.</p>'+
@@ -803,6 +833,31 @@ function paint(){
             'data-seats="'+sn+'" aria-pressed="'+(seats===sn)+'">'+sn+'</button>';
     }
     html+='</div></div>';
+  }
+
+  /* Withdrawing. Asked every time now, on both sides of the cutoff.
+
+     What it says is not the same on both sides, and that is the whole point
+     of asking twice rather than once. After the cutoff it cannot be taken
+     back: the seat leaves the driver's screen and there is no booking again
+     today. Before it, nothing is lost that two taps will not restore, and a
+     question that borrowed the later wording would be frightening somebody
+     out of a decision that costs them nothing. Same question, honest answer
+     in each case. */
+  if(booked && cancelAsk){
+    var myStop=stopById(booked.stopId);
+    var where=myStop? esc(myStop.stop) : "your stop";
+    html+='<div class="seats is-asking" id="cancelBox">'+
+          '<h2>'+(CLOSED? 'Not coming today?' : 'Not coming?')+'</h2>'+
+          '<p>'+(CLOSED
+            ? 'The driver will stop waiting at '+where+'. This cannot be '+
+              'undone: you cannot book again today.'
+            : 'Your seat at '+where+' goes back. You can book again any time '+
+              'before '+esc(CUTOFF||"Sunday 09:30")+'.')+'</p>'+
+          '<div class="cancel-row">'+
+            '<button type="button" class="btn btn-keep" id="cancelNo">Keep my seat</button>'+
+            '<button type="button" class="btn btn-drop" id="cancelYes">Yes, I am not coming</button>'+
+          '</div></div>';
   }
 
   $("body").innerHTML=html;
@@ -825,9 +880,13 @@ function paint(){
       var id=this.getAttribute("data-stop");
       var was=chosen;
       chosen = (chosen===id) ? null : id;
-      /* A passenger already booked keeps his own number when he moves stop:
-         that figure is his, and he chose it. Everybody else is asked. */
-      if(chosen && chosen!==was && !booked) seats=null;
+      /* A new stop is a new question. Nothing carries over, so the number
+         sitting there can never belong to an answer somebody else gave.
+         This once had a further test for a passenger already booked moving
+         stop. Nobody can reach it: every stop button is disabled the moment
+         a booking exists, so booked is always false by the time a tap gets
+         here, and a branch that cannot run is a branch nobody can check. */
+      if(chosen && chosen!==was) seats=null;
       seatsAsk = !!chosen && !seats;
       paint();
     });
@@ -837,6 +896,20 @@ function paint(){
       seats=Number(this.getAttribute("data-seats"))||null;
       seatsAsk=false;
       paint();
+    });
+  });
+
+  if($("cancelNo")) $("cancelNo").addEventListener("click",function(){
+    cancelAsk=false; paint();
+  });
+  if($("cancelYes")) $("cancelYes").addEventListener("click",function(){
+    if(saving) return;
+    this.innerHTML='<span class="spin"></span>';
+    send({ date:DATE, ref:REF, stopId:"", seats:0 }, function(out){
+      applySaved(out);
+      toast(CLOSED
+        ? "Cancelled. The driver will not wait for you, and you cannot book again today."
+        : "Cancelled. Book again if you change your mind.");
     });
   });
 
@@ -853,8 +926,33 @@ function paint(){
 
 /* The bar is the only thing that says whether the spreadsheet knows. */
 function paintBar(){
-  $("bar").style.display = CLOSED ? "none" : "";
-  if(CLOSED) return;
+  /* The question owns the screen while it is up, on either side of the
+     cutoff, so its two buttons are the only controls and there is never a
+     second way to answer the same thing. Guarded on booked as well, so a
+     flag left set with nothing to cancel cannot strand somebody with no bar
+     at all. */
+  if(cancelAsk && booked){ $("bar").style.display="none"; return; }
+
+  /* After the cutoff the bar exists for exactly one thing: letting somebody
+     who is no longer coming say so. Confirm is not merely disabled but gone,
+     because a seat cannot be booked, moved or resized once the driver has
+     the list, and a button that could never work is a question mark on a
+     screen where nobody has time for one. */
+  if(CLOSED){
+    if(!booked){ $("bar").style.display="none"; return; }
+    $("bar").style.display="";
+    $("save").style.display="none";
+    $("cancel").style.display="";
+    $("cancel").disabled=saving;
+    $("cancel").textContent="Not coming";
+    var shut=$("barSay");
+    shut.classList.remove("is-dirty");
+    shut.textContent="If you are no longer coming, say so here so the driver does not wait.";
+    return;
+  }
+
+  $("bar").style.display="";
+  $("save").style.display="";
 
   var d=dirty(), say=$("barSay");
 
@@ -935,8 +1033,14 @@ function verifySend(payload, done){
     .catch(function(){
       saving=false;
       $("save").textContent="Confirm";
-      paintBar();
-      toast("That did not save. Check your signal and tap Confirm again.");
+      /* A full repaint whenever the question is up, because the spinner is
+         sitting on a button inside that block and only paint() draws it.
+         Left to paintBar it would spin at nothing for the rest of the
+         morning. */
+      if(cancelAsk || CLOSED) paint(); else paintBar();
+      toast(cancelAsk
+        ? "That did not save. Check your signal and tap Yes again."
+        : "That did not save. Check your signal and tap Confirm again.");
     });
 }
 
@@ -951,6 +1055,10 @@ function applySaved(out){
     ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
   chosen = booked ? booked.stopId : null;
   seats  = booked ? booked.seats  : null;
+  /* Whatever was asked has been answered. Cleared here rather than in each
+     handler, so no path can leave the question standing over a booking that
+     no longer exists. */
+  cancelAsk = false;
   paint();
 }
 
@@ -972,10 +1080,11 @@ $("save").addEventListener("click",function(){
 });
 
 $("cancel").addEventListener("click",function(){
-  send({ date:DATE, ref:REF, stopId:"", seats:0 }, function(out){
-    applySaved(out);
-    toast("Cancelled. Book again if you change your mind.");
-  });
+  /* This button no longer sends anything, on either side of the cutoff. It
+     opens the question, and the question does the sending. */
+  if(saving) return;
+  cancelAsk=true; paint();
+  try{ $("cancelBox").scrollIntoView({block:"center",behavior:"smooth"}); }catch(e){}
 });
 
 load();

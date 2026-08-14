@@ -3128,15 +3128,34 @@ function handleBookingLocked(b) {
   var key = String(b.date || "") || busCurrentSunday();
   if (!busDateAllowed(key)) return reply({ ok: false, error: "That link is out of date. Ask for the current one." });
 
-  /* The page may have been open in a pocket since before the cutoff. Say
-     which Sunday closed, so a stale tab cannot silently book nothing. */
-  if (bookingsClosed(key)) return reply({ ok: false, error: "Bookings for that Sunday have closed. Reopen the page for the next one." });
-
   var ref = String(b.ref || "").replace(/[^A-Za-z0-9]/g, "").substring(0, 32);
   if (!ref) return reply({ ok: false, error: "no device handle" });
 
   var seats = Math.max(0, Math.min(12, Number(b.seats) || 0));
   var stopId = String(b.stopId || "").trim();
+
+  /* Closed, and exactly one thing is still allowed: withdrawing.
+     A seat cannot be taken, moved or resized once the driver is working from
+     the list — that list is fixed at the cutoff and he is reading it at the
+     kerb. But somebody who is no longer coming is worth hearing at any hour,
+     because the alternative is a driver waiting at a stop for nobody, and the
+     only route they had was a message in a group he is not reading while
+     driving. */
+  var late = false;
+  if (bookingsClosed(key)) {
+    /* The page may also have been open in a pocket since before the cutoff,
+       so name the Sunday that shut rather than failing mute. */
+    if (seats > 0) {
+      return reply({ ok: false, error: "Bookings for that Sunday have closed. Reopen the page for the next one." });
+    }
+    /* And only while the bus is still out. Once the run is over the list is
+       history, and a withdrawal written into it afterwards would quietly
+       disagree with what the driver actually worked from that morning. */
+    if (key !== runSunday() || runComplete()) {
+      return reply({ ok: false, error: "That Sunday is over. Reopen the page for the next one." });
+    }
+    late = true;
+  }
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var stop = null;
@@ -3149,9 +3168,25 @@ function handleBookingLocked(b) {
 
   /* Nothing booked, or cancelling. Both end the same way: no live row. */
   if (!seats) {
-    if (existing) sh.getRange(existing.row, 8).setValue("Cancelled");
+    if (existing) {
+      sh.getRange(existing.row, 8).setValue("Cancelled");
+      /* Exactly "Cancelled", never a status of its own. readBookings drops
+         that one word and counts EVERYTHING ELSE as booked, so a tidy-looking
+         "Cancelled late" would leave the seat sitting on the driver's screen:
+         the precise opposite of what the passenger just asked for. The
+         lateness goes in a note instead, which no code reads and anybody
+         opening the tab can see. */
+      if (late) {
+        try {
+          sh.getRange(existing.row, 8).setNote(
+            "Withdrew at " +
+            Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "HH:mm") +
+            ", after bookings closed. The driver may already have been on the road.");
+        } catch (err) { /* the withdrawal matters, the note does not */ }
+      }
+    }
     dropCountsCache(key);
-    return reply({ ok: true, cancelled: true, mine: null,
+    return reply({ ok: true, cancelled: true, late: late, mine: null,
                    counts: bookingCounts(ss, key) });
   }
 
