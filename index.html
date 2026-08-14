@@ -898,7 +898,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.19.8";
+var APP_VERSION = "v1.19.9";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -2246,10 +2246,10 @@ function rotaSundaysFor(name,wanted){
        refusing it later wastes a request and tells the driver nothing. */
     if(row.locked) continue;
 
-    if(nP===name){
-      if(!(nA&&nP&&nA!==nP)) out.push({key:key,date:d,route:"North"});
-    } else if(sP===name){
-      if(!(sA&&sP&&sA!==sP)) out.push({key:key,date:d,route:"South"});
+    if(sameName(nP,name)){
+      if(!(nA&&nP&&!sameName(nA,nP))) out.push({key:key,date:d,route:"North"});
+    } else if(sameName(sP,name)){
+      if(!(sA&&sP&&!sameName(sA,sP))) out.push({key:key,date:d,route:"South"});
     }
   }
   return out;
@@ -2289,7 +2289,7 @@ function rotaRequestsFor(date){
    somebody else's request. */
 function rotaRequestFor(date,driver){
   var all=rotaRequestsFor(date);
-  for(var i=0;i<all.length;i++){ if(!driver||all[i].driver===driver) return all[i]; }
+  for(var i=0;i<all.length;i++){ if(!driver||sameName(all[i].driver,driver)) return all[i]; }
   return null;
 }
 
@@ -2656,10 +2656,10 @@ function tripMayTap(route){
   var d=rotaBaseSunday(0), row=rotaRowFor(rotaKey(d));
   if(route==="South"){
     var sP=(row&&row.primary2)||rotaSeedSecondary(d), sA=(row&&row.actual2)||sP;
-    return me===sP || me===sA;
+    return sameName(me,sP) || sameName(me,sA);
   }
   var nP=(row&&row.primary)||rotaSeedPrimary(d), nA=(row&&row.actual)||nP;
-  return me===nP || me===nA;
+  return sameName(me,nP) || sameName(me,nA);
 }
 
 /* Coordinator and Minister in Charge see both routes live. They are the ones
@@ -2832,21 +2832,48 @@ function rotaCountsFetch(route,cb){
       var tp=out.trip;
       if(tp && tp.ok!==false){
         tripNoteSkew(tp.now);
-        if(tp.trip) trip.id=tp.trip;
-        trip.route  = route;
-        /* A phone that reinstalled mid-morning gets the bus back with the
-           run, rather than reappearing as a trip attached to no vehicle. */
-        if(tp.reg) trip.reg = tp.reg;
-        trip.started= tp.started||0;
-        trip.ended  = tp.ended||0;
-        trip.served = tp.served||{};
-        trip.lastAt = tp.lastAt||0;
-        trip.lastStop=tp.lastStop||"";
-        trip.offset =(tp.offset===null||tp.offset===undefined)?null:Number(tp.offset);
+
+        /* The cutoff, the clock and whether a rehearsal is running are the
+           same answer whichever route was asked about, so they are always
+           taken. Everything below belongs to one route. */
         tripClosed  = !!tp.closed;
         tripCutoff  = tp.cutoff||"";
         tripRehearsal=!!tp.rehearsal;
-        tripSaveState();
+
+        /* A run in progress owns its own route, and an answer about a
+           different one is not about it.
+
+           trip.route was set to whatever route the poll had asked for, and
+           the rest of the run was loaded over the top. One poll on the wrong
+           route therefore rewrote a South driver's morning as a North one:
+           started, served and reg all came back empty from a route with no
+           bus out, his screen dropped back to the start buttons mid-run, and
+           the next flush sent his South taps up labelled North. They landed
+           on the sheet under a route nothing looking for South would search.
+
+           Busy, not merely started: a run that has ended but still has taps
+           in the queue is equally at stake, because tripFlush reads
+           trip.route at the moment it sends. Started TODAY, so a phone still
+           holding last Sunday's run does not lock itself out of this one —
+           that stale state is cleared by being overwritten, as before. */
+        var mine = trip.route && trip.started &&
+                   new Date(trip.started).toDateString()===new Date().toDateString() &&
+                   (!trip.ended || tripLoadQ().length>0);
+
+        if(!mine || trip.route===route){
+          trip.route  = route;
+          if(tp.trip) trip.id=tp.trip;
+          /* A phone that reinstalled mid-morning gets the bus back with the
+             run, rather than reappearing as a trip attached to no vehicle. */
+          if(tp.reg) trip.reg = tp.reg;
+          trip.started= tp.started||0;
+          trip.ended  = tp.ended||0;
+          trip.served = tp.served||{};
+          trip.lastAt = tp.lastAt||0;
+          trip.lastStop=tp.lastStop||"";
+          trip.offset =(tp.offset===null||tp.offset===undefined)?null:Number(tp.offset);
+          tripSaveState();
+        }
       }
       rotaSaveCache();
 
@@ -2901,7 +2928,16 @@ function rotaCountsStart(){
     /* Also the retry for anything a blackspot left in the queue, so a driver
        never has to think about sending. */
     tripFlush();
-    rotaCountsFetch(rotaStopsRoute||"North",function(changed){
+    /* null, not a route of its own.
+
+       This used to pass rotaStopsRoute||"North". That argument is never
+       falsy, so it walked straight past the fallback chain inside
+       rotaCountsFetch, which is the only place that knows to ask
+       rotaHomeRoute before settling for North. rotaOpenStops clears
+       rotaStopsRoute on every open and it is not set again until the first
+       paint, so a poll landing in that gap asked about North on a South
+       driver's phone. Passing nothing lets the one chain answer. */
+    rotaCountsFetch(null,function(changed){
       if(!rotaStopsOpen) return;
       if(changed) rotaPaintStops();
       else if($("countsAge")) $("countsAge").textContent=rotaCountsWords();
@@ -3018,8 +3054,8 @@ function rotaPaint(keepPosition){
          driving, so the whole holiday and swap route was shut to them. */
       var south=row.primary2||rotaSeedSecondary(d);
       var southActual=row.actual2||south;
-      var mineNorth = my && (primary===my || actual===my);
-      var mineSouth = my && (south===my || southActual===my);
+      var mineNorth = my && (sameName(primary,my) || sameName(actual,my));
+      var mineSouth = my && (sameName(south,my) || sameName(southActual,my));
       var mine = mineNorth || mineSouth;
 
       var current=key===rotaKey(today), past=d<today;
@@ -3807,13 +3843,13 @@ function rotaOpenRequest(key){
   var sPrimary=(row&&row.primary2)||rotaSeedSecondary(d);
   var sActual=(row&&row.actual2)||sPrimary;
 
-  var onSouth=(sPrimary===me||sActual===me);
+  var onSouth=(sameName(sPrimary,me)||sameName(sActual,me));
   var route=onSouth?"South Liverpool":"North Liverpool";
   var primary=onSouth?sPrimary:nPrimary;
   var actual=onSouth?sActual:nActual;
 
   var lockedHere=!!(row&&row.locked);
-  var standing=(actual===me && primary && primary!==me)
+  var standing=(sameName(actual,me) && primary && !sameName(primary,me))
     ? "You are covering "+route+" this Sunday for "+esc(primary)+"."
     : "You are scheduled on "+route+" this Sunday.";
   /* A swap is an exchange, so it needs the OTHER Sunday as well as the other
@@ -3844,7 +3880,7 @@ function rotaOpenRequest(key){
 
   var sw=$("rotaSwapWith");
   REGISTER.forEach(function(x){
-    if(x.name===me) return;                      // you cannot swap with yourself
+    if(sameName(x.name,me)) return;              // you cannot swap with yourself
     var o=document.createElement("option"); o.value=x.name; o.textContent=x.name; sw.appendChild(o);
   });
 
@@ -4052,7 +4088,7 @@ function paintRotaHint(){
   var north=(row.actual||row.primary||"").trim();
   var south=(row.actual2||row.primary2||rotaSeedSecondary(d)||"").trim();
   if(!north && !south) return;
-  if(north===me || south===me) return;
+  if(sameName(north,me) || sameName(south,me)) return;
 
   el.textContent = (north && south)
     ? "Rota has "+north+" on North and "+south+" on South this Sunday."
@@ -4152,8 +4188,12 @@ var REGISTER = (CFG.drivers||[]).map(function(d){
     : { name:d.name||"", role:d.role||"", hasPin:!!(d.hasPin || d.pin) };
 }).filter(function(d){ return d.name; });
 
+/* sameName, not ===. This decides a driver's role and whether he is asked for
+   a PIN, and the name it is given has come round through the Drivers tab. A
+   register entry that fails to match here does not announce itself: the driver
+   simply loses his role, and with it the full inspection and his PIN prompt. */
 function entryFor(name){
-  for(var i=0;i<REGISTER.length;i++){ if(REGISTER[i].name===name) return REGISTER[i]; }
+  for(var i=0;i<REGISTER.length;i++){ if(sameName(REGISTER[i].name,name)) return REGISTER[i]; }
   return null;
 }
 function roleOf(name){ var e=entryFor(name); return e?e.role:""; }
