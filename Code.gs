@@ -24,7 +24,7 @@
 
 /* ---- settings ---------------------------------------------------------- */
 
-var TOKEN = "dominion-minibus";                   // must match config.js
+var TOKEN = "minibusapp";                   // must match config.js
 
 /* ---- passenger bookings -------------------------------------------------
 
