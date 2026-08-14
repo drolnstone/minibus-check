@@ -15,7 +15,7 @@ window.CONFIG = {
   endpoint: "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec",
 
   /* Must match the token in Code.gs. */
-  token: "dominion-minibus",
+  token: "minibusapp",
 
   /* Who drivers ring when a bus is stopped. Keep the number dialable. */
   coordinator: { name: "Asim Bassey", phone: "07377634214" },
