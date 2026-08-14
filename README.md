@@ -144,8 +144,8 @@ works, nothing is sent, and it says so on screen. Useful for training.
 Bump the version in **two places**, or phones keep the copy they already have:
 
 ```js
-const CACHE = "minibus-check-v1.19.7";   // sw.js
-var APP_VERSION = "v1.19.7";             // index.html
+const CACHE = "minibus-check-v1.19.8";   // sw.js
+var APP_VERSION = "v1.19.8";             // index.html
 ```
 
 They must match. `APP_VERSION` is printed at the foot of the first screen, so
@@ -186,18 +186,39 @@ Everything vehicle-specific lives in `config.js`.
 
 ### Check item ids
 
-`tyres`, `nuts`, `lights`, `fbrake`, `body`, `corrosion`, `under`, `pipes`,
-`suspension`, `exhaust`, `plates`, `oil`, `coolant`, `bfluid`, `wash`,
-`adblue`, `belts`, `belts_seat`, `anchor`, `step`, `exits`, `gangway`,
-`extinguisher`, `firstaid`, `cabin`, `abs`, `lamps`, `brakes`, `steering`,
-`clutch`, `mirrors`, `cab`
+The ids as the app has them. **A key that matches nothing does nothing, and
+says nothing** — no warning, no error, just an amber note that never appears —
+so copy them from here rather than from memory.
+
+Pre-drive, which every driver sees:
+
+`keys`, `tyres`, `nuts`, `lights`, `fbrake`, `doors`, `body`, `clean`,
+`under`, `pipes`, `suspension`, `exhaust`, `fuel`, `oil`, `coolant`,
+`bfluid`, `wash`, `adblue`, `battery`, `belts_seat`, `anchor`, `step`,
+`exits`, `gangway`, `intlights`, `extinguisher`, `firstaid`, `abs`, `lamps`,
+`brakes`, `steering`, `clutch`, `reverse_aid`, `mirrors`, `cab`
+
+Full inspection only, which is the coordinator's list:
+
+`spare`, `corrosion`, `pas`, `belts`, `wheelchair`, `cabin`, `limiter`,
+`infotainment`, `docs`
+
+**A `watch` note pulls a full-only item into the pre-drive list for that
+vehicle.** NH56's rust history sits on `corrosion`, which is otherwise the
+coordinator's item, and the most important thing known about a bus should not
+be invisible to the man driving it. So a `watch` key from the second list is
+not a mistake — it is how you put that item in front of every driver of that
+one bus.
 
 Safety critical, which stop the bus when a defect is recorded: `tyres`,
-`nuts`, `fbrake`, `pipes`, `bfluid`, `belts_seat`, `anchor`, `exits`, `abs`,
-`brakes`, `steering`.
+`nuts`, `fbrake`, `doors`, `pipes`, `bfluid`, `belts_seat`, `anchor`,
+`exits`, `abs`, `brakes`, `steering`.
 
 To change the checks themselves, edit the `STAGES` array in `index.html`.
-Adding `crit: true` makes an item stop the bus.
+Adding `crit: true` makes an item stop the bus; adding `full: true` keeps it
+off the pre-drive list. **Anything added, removed or renamed there belongs in
+the three lists above on the same pass**, or the next person writing a `watch`
+note is working from a list that has quietly stopped being true.
 
 ---
 

@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1B222C">
+<meta name="robots" content="noindex,nofollow">
+<title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
+
+<!--
+  What WhatsApp reads when somebody pastes this link into the group.
+
+  Without these there was nothing to show. The driver app gets a small icon
+  because it has an apple-touch-icon; this page had neither that nor any
+  Open Graph tag, so WhatsApp had nothing to fall back to and rendered a
+  bare link.
+
+  og:image has to be an absolute https address, not a relative path, and the
+  image has to be at least 300px wide, so icon-512.png rather than
+  icon-192.png. If the site ever moves, these two addresses move with it.
+
+  noindex above stays. It keeps the booking page out of search results and
+  WhatsApp is not a search indexer.
+-->
+<!--
+  The home screen icon, on its own address and its own background.
+
+  Two things went wrong with the line that used to be here. It pointed at
+  ../icon-192.png, which resolves correctly from /sunday/ but climbs a level
+  too far from /sunday with no trailing slash, and it shared a file with the
+  driver app, so both apps installed under the same tile and neither could be
+  told from the other on a home screen.
+
+  Absolute, so no address the page is reached by can break it. A new filename,
+  because iOS decides this icon once, when the page is added, and never looks
+  again: a single missed fetch during a deploy leaves a letter tile that no
+  amount of reloading will replace. A name it has never seen sidesteps that
+  whole argument.
+
+  Green rather than the driver app's navy. Same logo, different field: the
+  passenger app is the one the congregation installs, and it should not be
+  mistaken for the inspection app at a glance.
+-->
+<link rel="apple-touch-icon" sizes="180x180"
+      href="https://drolnstone.github.io/minibus-check/icon-sunday-180.png">
+<!-- The tab icon. Without this the tab list shows a grey globe whatever the
+     home screen is doing: the two are read from different tags. Green here
+     as well, so the passenger tab is not mistaken for the driver one.
+     Absolute for the same reason as the line above it. -->
+<link rel="icon" type="image/png" sizes="180x180"
+      href="https://drolnstone.github.io/minibus-check/icon-sunday-180.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Sunday Bus · RCCG Dominion Assembly Liverpool">
+<meta property="og:description" content="Book your seat on the church minibus. Tap your stop, say how many are boarding.">
+<meta property="og:url" content="https://drolnstone.github.io/minibus-check/sunday/">
+<meta property="og:image" content="https://drolnstone.github.io/minibus-check/icon-sunday-512.png">
+<meta property="og:image:width" content="512">
+<meta property="og:image:height" content="512">
+
+<!--
+  The passenger page. Deliberately separate from the driver app.
+
+  A passenger never sees inspections, defects, the rota, PINs or anything
+  else. This page loads a list of stops and sends back one line: a stop, and
+  how many people are boarding there.
+
+  It holds no names, no phone numbers and no driver token. The only thing
+  kept on the phone is a random handle it makes up for itself, so somebody
+  can come back and change their own booking. That handle means nothing to
+  anybody else and identifies no one.
+
+  THE LINK NEVER CHANGES. It used to carry a date and a per-Sunday code,
+  which meant a new link every week and an old one dying quietly in
+  somebody's chat history. Now it carries nothing: the script is asked which
+  Sunday it is and answers. Pin the address in the group once.
+
+  Which Sunday that is: this one, until bookings close on the morning, then
+  the next one. Somebody opening this at ten past ten on a Sunday is not
+  booking the bus that has already left, so the page says so plainly rather
+  than showing them an empty list they might mistake for a lost booking.
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Loaded without blocking first paint.
+
+     As a plain stylesheet link this held the page blank until Google
+     answered, which on a cold mobile connection is most of what "it took a
+     minute to load" actually was. media="print" makes the browser fetch it at
+     low priority and not wait for it; the onload switches it back once it
+     arrives. The body already falls back to system fonts, so text appears at
+     once and swaps when the real face lands. -->
+<link rel="stylesheet" media="print" onload="this.media='all';this.onload=null"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<noscript><link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"></noscript>
+
+<style>
+/* Tokens lifted from the checks app so the two pages read as one product. */
+:root{
+  --ink:#16191F;--paper:#F4F5F6;--card:#FFFFFF;
+  --steel:#1B222C;--hair:#D3D7DC;--muted:#5C6672;
+  --pass:#146B41;--pass-bg:#E6F2EB;
+  --warn:#B26B00;--warn-bg:#FDF3E2;
+  --r:10px;--tap:56px;
+  --safe-t:env(safe-area-inset-top,0px);--safe-b:env(safe-area-inset-bottom,0px);
+  --safe-l:env(safe-area-inset-left,0px);--safe-r:env(safe-area-inset-right,0px);
+}
+/* touch-action:manipulation kills double tap to zoom, which was firing
+   whenever somebody tapped a stop twice in a row. Pinch to zoom still works:
+   user-scalable=no would have stopped that too, and taking zoom away from
+   somebody who needs it to read a stop name is not a trade worth making. */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  padding:calc(16px + var(--safe-t)) calc(14px + var(--safe-r)) calc(132px + var(--safe-b)) calc(14px + var(--safe-l))}
+button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
+.wrap{max-width:640px;margin:0 auto}
+
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.brand img{width:34px;height:34px;flex:none}
+.brand-txt b{display:block;font-size:15px;font-weight:600;line-height:1.2}
+.brand-txt span{display:block;font-family:"Barlow Condensed",sans-serif;font-size:12px;
+  font-weight:600;letter-spacing:.11em;text-transform:uppercase;color:var(--muted)}
+
+.eyebrow{font-family:"Barlow Condensed",sans-serif;font-size:13px;font-weight:600;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin:0 0 3px}
+h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
+  line-height:1.03;margin:0 0 3px;letter-spacing:.005em}
+.when{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:600;
+  letter-spacing:.03em;color:var(--steel);margin:0 0 16px}
+.lede{color:var(--muted);margin:0 0 14px}
+
+/* ---------- route tabs ---------- */
+.tabs{display:flex;gap:8px;margin:0 0 10px}
+.tab{flex:1;min-height:48px;padding:9px 8px;border-radius:var(--r);
+  border:1px solid var(--hair);background:var(--card);color:var(--ink);
+  font-family:"Barlow Condensed",sans-serif;font-size:16px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;line-height:1.15}
+.tab small{display:block;font-family:"IBM Plex Sans",sans-serif;font-size:11px;
+  font-weight:500;letter-spacing:.02em;text-transform:none;color:var(--muted);margin-top:2px}
+.tab.is-active{background:var(--steel);border-color:var(--steel);color:#fff}
+.tab.is-active small{color:#AEB8C4}
+.tab:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
+
+.summary{font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.45}
+.summary b{color:var(--ink);font-weight:600}
+
+/* ---------- stops ---------- */
+.stop{display:flex;align-items:flex-start;gap:11px;width:100%;text-align:left;
+  background:var(--card);border:1px solid var(--hair);border-radius:var(--r);
+  padding:13px;margin-bottom:8px;min-height:var(--tap)}
+.stop.is-on{border-color:var(--pass);background:var(--pass-bg);box-shadow:0 0 0 1px var(--pass) inset}
+.stop:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
+.stop-time{flex:0 0 52px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--steel)}
+.stop-body{flex:1;min-width:0}
+/* These three stack. As inline spans they ran together into one unreadable
+   line, which is what the postcode was doing welded to the stop name. */
+.stop-name{display:block;font-weight:600;line-height:1.3}
+.stop-pc{display:block;font-size:12px;color:var(--muted);margin-top:3px;
+  font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.stop-n{display:block;font-family:"Barlow Condensed",sans-serif;font-size:13px;font-weight:600;
+  letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-top:5px}
+.stop-n.has{color:var(--pass)}
+.tick{flex:0 0 20px;font-weight:700;color:var(--pass);font-size:19px;line-height:1.25}
+.stop-arrival{opacity:.85}
+
+.group-label{font-family:"Barlow Condensed",sans-serif;font-size:13px;font-weight:700;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:20px 0 7px}
+
+/* ---------- seats ---------- */
+.seats{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);
+  padding:14px;margin:14px 0}
+.seats h2{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:700;
+  letter-spacing:.02em;margin:0 0 3px}
+.seats p{margin:0 0 12px;color:var(--muted);font-size:13px}
+.stop.is-locked{opacity:.5}
+.seats.is-asking{border-color:var(--steel);box-shadow:inset 3px 0 0 var(--steel)}
+.seatgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.seatpick{min-height:var(--tap);border-radius:var(--r);border:1px solid var(--hair);
+  background:var(--paper);font-family:inherit;font-size:19px;font-weight:600;line-height:1;
+  color:var(--ink);font-variant-numeric:tabular-nums}
+.seatpick.is-on{background:var(--steel);border-color:var(--steel);color:#fff}
+.seatpick:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
+
+/* ---------- notices ---------- */
+.note{border-radius:9px;padding:12px 13px;font-size:14px;line-height:1.5;margin:0 0 14px}
+.note b{font-weight:600}
+.note-warn{background:var(--warn-bg);border:1px solid #EBD3A8}
+.note-go{background:var(--pass-bg);border:1px solid #B7D8C6}
+
+/* ---------- bottom bar ---------- */
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(244,245,246,.97);
+  border-top:1px solid var(--hair);backdrop-filter:blur(8px);
+  padding:11px calc(14px + var(--safe-r)) calc(11px + var(--safe-b)) calc(14px + var(--safe-l))}
+.bar-in{max-width:640px;margin:0 auto}
+.bar-say{font-size:12px;color:var(--muted);text-align:center;margin:0 0 8px;min-height:16px}
+.bar-say.is-dirty{color:var(--warn);font-weight:600}
+.bar-btns{display:flex;gap:8px}
+.btn{flex:1;min-height:var(--tap);padding:14px 12px;border-radius:var(--r);
+  font-family:"Barlow Condensed",sans-serif;font-size:17px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase}
+.btn:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
+.btn-main{background:var(--steel);color:#fff}
+.btn-main:disabled{background:#AEB6BE;cursor:default}
+.btn-ghost{flex:0 0 auto;padding-left:18px;padding-right:18px;
+  background:var(--card);border:1px solid var(--hair)}
+
+.toast{position:fixed;left:50%;bottom:calc(112px + var(--safe-b));transform:translateX(-50%) translateY(14px);
+  background:var(--ink);color:#fff;padding:11px 16px;border-radius:9px;font-size:14px;
+  opacity:0;pointer-events:none;transition:.25s;z-index:90;max-width:90vw;text-align:center}
+.toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
+.live{border-radius:9px;padding:13px 14px;margin:0 0 14px;border:1px solid var(--hair);background:var(--card)}
+.live-eyebrow{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+.live-big{font-family:"Barlow Condensed",sans-serif;font-size:30px;font-weight:700;
+  line-height:1.05;margin:0 0 3px;color:var(--steel)}
+.live-sub{margin:0;font-size:13px;color:var(--muted);line-height:1.5}
+.live-sub .ring,.note .ring{color:inherit;font-weight:600;text-decoration:underline}
+.live-pick{display:flex;gap:6px;margin-top:10px}
+.live-pickbtn{flex:1;padding:7px 10px;border:1px solid currentColor;background:transparent;
+  border-radius:8px;font:inherit;font-size:13px;color:inherit;opacity:.6}
+.live-pickbtn.is-on{opacity:1;font-weight:600}
+.live-go{background:var(--pass-bg);border-color:#B7D8C6}
+.live-go .live-big{color:var(--pass)}
+.live-warn{background:var(--warn-bg);border-color:#EBD3A8}
+.live-test{background:#FBE9E7;border-color:#E8BCB7}
+.live-test .live-eyebrow{color:#A8231B}
+.foot{margin-top:24px;color:var(--muted);font-size:12px;line-height:1.55}
+.foot b{color:var(--ink);font-weight:600}
+.spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.4);
+  border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---- turn it upright ---------------------------------------------------
+
+   iOS cannot be told to stay in portrait. The manifest carries
+   orientation: portrait and Safari ignores it; screen.orientation.lock is
+   not implemented there either. The only real lock on an iPhone is the one
+   in Control Centre, and that holds the whole phone, not one app.
+
+   So the rotation happens and this answers it. Every screen here is built
+   for a tall phone: in landscape the header, the list and the footer bar
+   fight over about three hundred pixels and the buttons end up under the
+   thumb rest. Better to say the one thing that fixes it.
+
+   max-height rather than a width test, so this is phones only. An iPad in
+   landscape is a perfectly good way to read this and must not be nagged. */
+.upright{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  .upright{
+    display:flex;position:fixed;inset:0;z-index:9999;
+    align-items:center;justify-content:center;text-align:center;
+    background:var(--paper);color:var(--ink);
+    padding:24px calc(24px + var(--safe-r)) 24px calc(24px + var(--safe-l));
+  }
+  .upright b{font-size:20px;line-height:1.3;letter-spacing:.01em}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <!-- Two candidates, then nothing. Which one is right depends on how deep
+         this page sits, and a broken image icon on a church page looks worse
+         than no logo at all. -->
+    <img src="../logo.png" alt="" id="brandLogo"
+         onerror="if(this.dataset.tried){this.style.display='none';}else{this.dataset.tried=1;this.src='logo.png';}">
+    <span class="brand-txt">
+      <b>RCCG Dominion Assembly</b>
+      <span>Liverpool · Transport</span>
+    </span>
+  </div>
+
+  <p class="eyebrow">Getting you to church</p>
+  <h1>Sunday Bus</h1>
+  <p class="when" id="when"></p>
+  <div id="live"></div>
+  <div id="body"><p class="lede">Loading the stops…</p></div>
+
+  <p class="foot" id="foot"></p>
+</div>
+
+<div class="bar" id="bar" style="display:none">
+  <div class="bar-in">
+    <p class="bar-say" id="barSay"></p>
+    <div class="bar-btns">
+      <button class="btn btn-ghost" id="cancel" type="button">Not coming</button>
+      <button class="btn btn-main" id="save" type="button">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="upright" aria-hidden="true"><b>Turn your phone upright.</b></div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+
+var ENDPOINT = "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec";
+
+/* Who a passenger rings when something has gone wrong at their stop: the bus
+   has been and gone while they were still standing there, or it reached
+   church without their stop ever being marked.
+
+   The coordinator, and deliberately not the driver. The driver is driving.
+   The app already refuses his own taps while the wheels are turning, and
+   putting his number in the hand of somebody waiting at a kerb would undo
+   that from the other end. The coordinator can answer, and can ring the
+   driver himself if it is worth stopping the bus for.
+
+   Held here rather than fetched, because the message that needs it most is
+   the one shown when the server cannot be reached at all. Keep it in step
+   with coordinator in config.js, which is the same person for the drivers. */
+var COORDINATOR = { name: "Asim Bassey", phone: "07377634214" };
+
+/* A number that can actually be pressed. The written form keeps its spacing
+   for reading; the tel: link gets digits only, because a space in an href is
+   the difference between a call and nothing happening. */
+function ringCoordinator(){
+  var name = String(COORDINATOR.name||"").trim();
+  var show = String(COORDINATOR.phone||"").trim();
+  var dial = show.replace(/[^0-9+]/g,"");
+  if(!name) return "ring the transport group";
+  if(!dial) return "ring "+esc(name);
+  return 'ring <a class="ring" href="tel:'+esc(dial)+'">'+esc(name)+
+         '</a> on <a class="ring" href="tel:'+esc(dial)+'">'+esc(show)+'</a>';
+}
+
+var $ = function(id){ return document.getElementById(id); };
+function esc(x){ return String(x==null?"":x).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+
+/* Every call to Apps Script, with a limit on how long it may hang.
+
+   fetch has no timeout of its own. A request that never answers was held until
+   the browser gave up, which on a phone can be a minute or more, and the page
+   simply sat there. Twelve seconds is well past a cold start and well short of
+   somebody deciding the app is broken.
+
+   Twenty five seconds rather than twelve. A cold Apps Script container can
+   honestly take that long, and a timeout that cuts off a working call is
+   worse than no timeout at all: it turns a slow answer into a failure.
+
+   Done with a race rather than an AbortController on purpose. Passing a signal
+   in the request options threw "The object can not be cloned" on this page,
+   because a page inside a service worker's scope has its request options
+   structured-cloned to hand to the worker, and an AbortSignal cannot be
+   cloned. The request itself therefore is not cancelled here, it is only
+   stopped from being waited on, which is all the page actually needed. */
+var CALL_TIMEOUT = 25000;
+
+function callFetch(url, opts){
+  return Promise.race([
+    fetch(url, opts || {}),
+    new Promise(function(_, reject){
+      setTimeout(function(){ reject(new Error("took too long to answer")); }, CALL_TIMEOUT);
+    })
+  ]);
+}
+
+var toastTimer;
+function toast(msg){
+  var t=$("toast"); t.textContent=msg; t.classList.add("is-on");
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ t.classList.remove("is-on"); },3600);
+}
+
+/* A handle this phone makes up for itself, so somebody can come back and
+   change their booking. It is random, it is not sent anywhere except with
+   their own booking, and it says nothing about who they are. */
+function deviceRef(){
+  var k="bus.ref.v1", v="";
+  try{ v=localStorage.getItem(k)||""; }catch(e){}
+  if(!v){
+    v = "d" + Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,10);
+    try{ localStorage.setItem(k,v); }catch(e){}
+  }
+  return v;
+}
+var REF = deviceRef();
+
+/* ---- state ------------------------------------------------------------
+   booked is what the spreadsheet actually holds for this phone.
+   chosen and seats are what the passenger is looking at right now.
+
+   Keeping them apart is the whole point. When they were one thing, tapping
+   a stop was enough to make the page announce "You are booked", and
+   somebody could tap, read that, close the page and never press Confirm.
+   Nothing had been sent. The driver had no idea they were coming. */
+var STOPS=[], ARRIVALS=[], COUNTS={}, CLOSED=false, ROLLED=false, DATE="", CUTOFF="";
+var REHEARSAL=false;
+/* seats is null until the passenger says. It used to start at 1 and then
+   keep whatever the last answer was, which on a phone handed round a family
+   or used twice in a morning meant the number already sitting there belonged
+   to somebody else. Nothing carries over now: a new stop is a new question. */
+var booked=null, chosen=null, seats=null, saving=false, route="North", ROUTES=[];
+var seatsAsk=false;   /* the question has just appeared and wants looking at */
+
+/* A stop, once confirmed, is settled for that Sunday.
+
+   A passenger does not change kerb. Where somebody boards follows from where
+   they live, and if they move house the transport coordinator is told and the
+   stop list itself changes. In the life of this page it has not happened once.
+
+   What does happen is a change of mind about coming at all, and that has its
+   own button.
+
+   There used to be a whole apparatus here for moving stop: a question naming
+   both stops, the Confirm button relabelling itself to Move here and then to
+   Yes, move, the ghost button becoming Keep my stop. All of it existed to
+   protect a mis-tap on something nobody was doing, on the one screen a
+   hundred people touch on a Sunday morning. The remedy for a mis-tap is Not
+   coming and book again, which is two taps and says plainly what it does. */
+
+function dirty(){
+  if(!chosen) return !!booked;                       /* deselected a real booking */
+  if(!seats)  return false;                          /* how many is not answered yet */
+  if(!booked) return true;                           /* new booking, nothing saved */
+  return chosen!==booked.stopId || seats!==booked.seats;
+}
+
+function prettyDate(key){
+  var p=String(key).split("-");
+  if(p.length!==3) return "";
+  var d=new Date(+p[0],+p[1]-1,+p[2]);
+  return d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"});
+}
+
+function load(again){
+  callFetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      var out=readJson(t);
+      if(!out || out.ok!==true) throw new Error(out && out.error ? out.error : "unavailable");
+      STOPS=out.stops||[]; ARRIVALS=out.arrivals||[]; COUNTS=out.counts||{};
+      CLOSED=!!out.closed; ROLLED=!!out.rolled; DATE=out.date||""; CUTOFF=out.cutoff||"";
+      REHEARSAL=!!out.rehearsal;
+
+      booked = out.mine ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
+      chosen = booked ? booked.stopId : null;
+      seats  = booked ? booked.seats : null;
+
+      /* Which routes actually exist, in the order the timetable lists them. */
+      ROUTES=[];
+      STOPS.forEach(function(s){ if(ROUTES.indexOf(s.route)<0) ROUTES.push(s.route); });
+      if(!ROUTES.length) ROUTES=["North"];
+
+      /* Open on the route you are already booked on. */
+      var mine = booked && stopById(booked.stopId);
+      route = (mine && ROUTES.indexOf(mine.route)>=0) ? mine.route : ROUTES[0];
+
+      $("when").textContent = prettyDate(DATE);
+      paint();
+
+      /* After the cutoff, or during a rehearsal. The rehearsal case is why
+         the passenger side sat out the first test: bookings are open on a
+         Tuesday, so CLOSED was false and this never started watching. The
+         two are kept apart deliberately, because a rehearsal must not tell
+         anybody that bookings have shut. */
+      if(CLOSED || REHEARSAL) liveStart();
+      else { liveStop(); live=null; paintLive(); gateStart(); }
+    })
+    .catch(function(err){
+      /* Three attempts before saying anything, spaced out.
+
+         These fail transiently more often than they fail properly. One retry
+         a second later was not enough: Apps Script serves an error page for
+         several seconds while a deployment updates, and a passenger caught in
+         that window was shown a fault that had already cured itself. This is
+         the page the whole congregation opens on a Sunday morning, so it
+         should be slow to complain. */
+      var tries = (typeof again === "number") ? again : 0;
+      if(tries < 2){
+        setTimeout(function(){ load(tries + 1); }, tries === 0 ? 1500 : 4000);
+        return;
+      }
+      $("body").innerHTML='<div class="note note-warn"><b>The stops could not be loaded.</b><br>'+
+        esc(String(err.message||err))+'<br><br>Pull down to refresh. '+
+        'If it keeps happening, '+ringCoordinator()+'.</div>';
+    });
+}
+
+/* An answer that is not JSON is nearly always an HTML page from Google:
+   a sign-in screen, or an error page, meaning the request never reached the
+   script. Saying "Unrecognized token" to somebody trying to book a seat helps
+   nobody, and it hides the one fact that would help whoever has to fix it. */
+function readJson(t){
+  var txt=String(t||"").trim();
+  if(txt.charAt(0)==="<"){
+    throw new Error("The booking record is not answering just now.");
+  }
+  try{ return JSON.parse(txt); }
+  catch(e){ throw new Error("The record sent back something unreadable."); }
+}
+
+
+/* ==========================================================================
+   WHERE THE BUS IS
+
+   The floor is the timetable. A driver who never taps leaves this page saying
+   exactly what it said before the feature existed, which is no worse than
+   today. Every tap is an improvement on that floor, never a replacement for
+   it. Built that way round on purpose: a page that promises live times and
+   then goes quiet is worse than one that never promised, because the message
+   in the group at least stopped honestly.
+
+   Visible only once bookings have closed, and only to a phone with a booking.
+   ========================================================================== */
+
+var LIVE_POLL = 30000;
+var liveTimer = null, liveBusy = false, live = null;
+
+/* Rehearsal only. A phone with no booking of its own is lent a seeded one,
+   and this says which route to be lent. Blank means "whichever bus is out",
+   which is what a tester wants nine times in ten. A real passenger never
+   sets this: they are watching their own stop. */
+var liveWant = "";
+
+function liveFetch(){
+  if(liveBusy || !navigator.onLine) return;
+  liveBusy=true;
+  callFetch(ENDPOINT+"?trip=1&ref="+encodeURIComponent(REF)+
+            (liveWant? "&r="+encodeURIComponent(liveWant) : ""),
+            {method:"GET",redirect:"follow"})
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      var out=JSON.parse(t);
+      liveBusy=false;
+      if(!out || out.ok!==true) return;
+      live=out;
+      paintLive();
+      /* Once your own stop has been served there is nothing left to watch,
+         so the polling sheds itself as the run goes on rather than peaking
+         at the end when the most phones are open. */
+      if(out.live===false || out.mine==="served" || out.ended) liveStop();
+    })
+    .catch(function(){ liveBusy=false; });
+}
+
+function liveStart(){
+  liveStop();
+  gateStop();                       /* watching answers the gate question */
+  if(document.hidden) return;
+  liveFetch();
+  liveTimer=setInterval(function(){
+    if(document.hidden){ liveStop(); return; }
+    liveFetch();
+  },LIVE_POLL);
+}
+function liveStop(){ if(liveTimer){ clearInterval(liveTimer); liveTimer=null; } }
+
+/* ---- asking again whether it is time to watch --------------------------
+   CLOSED and REHEARSAL are the server's answer, and they were learned once,
+   at page load, and never revisited. That is the whole of the fault the
+   rehearsal exposed, and it is not only a rehearsal fault.
+
+   A passenger who opens this page at nine on a Sunday morning is told
+   bookings are open, because they are. The cutoff passes at half past, the
+   buses run, and this page sits there showing nothing for the whole morning,
+   because the one moment it asked was half an hour before there was anything
+   to see. Locking the phone and coming back did not help either: that
+   handler tested the same two stale flags.
+
+   So it asks again, slowly, and only from a phone that is actually on screen
+   and not already watching. It stops the moment watching starts, which is
+   also the moment the passenger most wants the calls spent on the bus. */
+var GATE_POLL = 60000;
+var gateTimer = null, gateBusy = false;
+
+function gateCheck(){
+  if(gateBusy || liveTimer || document.hidden || !navigator.onLine) return;
+  gateBusy=true;
+  callFetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      var out=readJson(t);
+      gateBusy=false;
+      if(!out || out.ok!==true) return;
+      if(!out.closed && !out.rehearsal) return;      /* still not time */
+      /* It has just opened. Reload in full rather than patching flags: the
+         booking form is closing anyway, the banner above it changes, and the
+         stop list becomes the list the driver is working from. Nothing a
+         passenger had half-chosen was going to be saved past the cutoff. */
+      gateStop();
+      load();
+    })
+    .catch(function(){ gateBusy=false; });
+}
+
+function gateStart(){
+  gateStop();
+  if(document.hidden) return;
+  gateTimer=setInterval(function(){
+    if(document.hidden){ gateStop(); return; }
+    gateCheck();
+  },GATE_POLL);
+}
+function gateStop(){ if(gateTimer){ clearInterval(gateTimer); gateTimer=null; } }
+
+document.addEventListener("visibilitychange",function(){
+  if(document.hidden){ liveStop(); gateStop(); return; }
+  /* Coming back to the page is the cheapest moment to find out we were
+     wrong, so the gate is asked at once rather than waiting out a minute. */
+  if(CLOSED || REHEARSAL) liveStart();
+  else { gateStart(); gateCheck(); }
+});
+
+function paintLive(){
+  var box=$("live");
+  if(!live || live.live===false){ box.innerHTML=""; return; }
+
+  /* A rehearsal forces the tracking gate open on a weekday, so somebody who
+     booked on Thursday would otherwise open this and see a bus running that
+     is not. Said first and said plainly. */
+  /* The switch exists because a rehearsal used to be lent whichever seeded
+     booking came first, which was always North, so the South bus could run
+     the whole morning with this page showing nothing. It is on the rehearsal
+     banner and nowhere else: a real passenger watches their own stop and is
+     never shown anybody else's route. */
+  var pick = "";
+  if(live.rehearsal && (live.routes||[]).length>1){
+    pick='<div class="live-pick">';
+    live.routes.forEach(function(rt){
+      pick+='<button type="button" class="live-pickbtn'+
+            (rt===live.route?' is-on':'')+'" data-liveroute="'+esc(rt)+'">'+
+            esc(rt)+'</button>';
+    });
+    pick+='</div>';
+  }
+
+  var banner = live.rehearsal
+    ? '<div class="live live-test"><p class="live-eyebrow">Rehearsal</p>'+
+      '<p class="live-sub">The transport team are testing the app. No bus is '+
+      'running and the position above is pretend. Your booking is not: it '+
+      'saves normally and counts for Sunday.</p>'+pick+'</div>'
+    : "";
+
+  var head="", sub="", cls="";
+
+  if(live.mine==="served"){
+    cls="live-go";
+    head="Picked up at "+esc(live.servedAt);
+    sub="The bus has been to "+esc(live.stop)+". If you are still standing there, "+
+        ringCoordinator()+".";
+  } else if(!live.started){
+    head="Not set off yet";
+    sub="Your stop is timetabled for "+esc(live.scheduled)+". This will update once the bus starts.";
+  } else if(live.mine==="eta"){
+    cls=live.imminent?"live-go":"";
+    head=live.imminent ? "Any moment now"
+       : (live.minutes<=0 ? "Due now" : live.minutes+" min");
+    sub="About "+esc(live.etaWords)+" at "+esc(live.stop)+
+        ", timetabled "+esc(live.scheduled)+". "+
+        (live.offset>0 ? "The bus is running "+live.offset+" minutes behind."
+         : live.offset<0 ? "The bus is running "+(-live.offset)+" minutes early."
+         : "The bus is on time.");
+  } else if(live.mine==="ended"){
+    head="The bus has finished its run";
+    sub="It reached church without your stop being marked. Please "+ringCoordinator()+".";
+  } else {
+    /* quiet, wild, noevents: state the last known fact and stop. A number
+       invented from a stale offset is worse than a blank. */
+    cls="live-warn";
+    head="No update yet";
+    sub=live.lastStop
+      ? "The bus has not reported since "+esc(live.lastAtWords)+", at "+esc(live.lastStop)+
+        ". Your stop is timetabled for "+esc(live.scheduled)+"."
+      : "The bus has started but has not reported a stop yet. Yours is timetabled for "+
+        esc(live.scheduled)+".";
+  }
+
+  box.innerHTML=banner+'<div class="live '+cls+'">'+
+    '<p class="live-eyebrow">'+(ROLLED?"Today\u2019s bus":"Your stop")+'</p>'+
+    '<p class="live-big">'+head+'</p>'+
+    '<p class="live-sub">'+sub+'</p></div>';
+
+  Array.prototype.forEach.call(box.querySelectorAll("[data-liveroute]"),function(b){
+    b.addEventListener("click",function(){
+      liveWant=this.getAttribute("data-liveroute");
+      liveFetch();
+    });
+  });
+}
+
+function stopById(id){
+  for(var i=0;i<STOPS.length;i++) if(STOPS[i].id===id) return STOPS[i];
+  return null;
+}
+function seatsOn(rt){
+  var n=0;
+  STOPS.forEach(function(s){ if(s.route===rt) n+=(COUNTS[s.id]||0); });
+  return n;
+}
+function activeOn(rt){
+  var n=0;
+  STOPS.forEach(function(s){ if(s.route===rt && (COUNTS[s.id]||0)>0) n++; });
+  return n;
+}
+
+function paint(){
+  var html="";
+
+  if(CLOSED){
+    /* The whole of Sunday morning now sits here: bookings shut at 09:30 and
+       the page stays on today until the buses are back. It is the list the
+       driver is working from, which is the one worth showing somebody who is
+       waiting. */
+    html+='<div class="note note-warn"><b>Bookings have closed for this Sunday.</b> '+
+          'This is the list the driver has. If your plans have changed, tell '+
+          'the group directly.</div>';
+  } else if(ROLLED){
+    /* Two different Sundays are on this screen at once: the bus running now,
+       up in the live panel, and the one below that is open for booking. Said
+       plainly, because a passenger watching today's bus and then tapping a
+       stop underneath it would reasonably think they were changing today. */
+    html+='<div class="note note-warn"><b>Today\u2019s buses are back.</b> '+
+          'Everything below is for <b>'+esc(prettyDate(DATE))+'</b>.</div>';
+  }
+
+  if(!CLOSED){
+    if(booked && !dirty()){
+      /* What this screen will actually do, and nothing it will not.
+         It used to say "Tap a different stop to move", which stopped being
+         true the day the stop was settled at Confirm: every other stop is
+         disabled from here on, so the instruction sent people tapping at
+         dead buttons with no way to tell a locked screen from a broken one.
+         The bar at the foot has said the right thing throughout. These two
+         now agree, and both name the same two ways out. */
+      html+='<div class="note note-go"><b>You are booked.</b> '+
+            'Change the number below, or tap Not coming to cancel and '+
+            'book again.</div>';
+    } else if(!booked && !chosen){
+      html+='<p class="lede">Tap the stop where you will be boarding.</p>';
+    }
+  }
+
+  /* Route tabs, each carrying its own summary so you can see where the bus
+     is busy without opening the other one. */
+  if(ROUTES.length>1){
+    html+='<div class="tabs" role="tablist">';
+    ROUTES.forEach(function(rt){
+      var n=seatsOn(rt);
+      html+='<button class="tab'+(rt===route?' is-active':'')+'" type="button" role="tab" '+
+            'aria-selected="'+(rt===route)+'" data-route="'+esc(rt)+'">'+esc(rt)+
+            '<small>'+(n? n+(n===1?' person':' people') : 'Nobody yet')+'</small></button>';
+    });
+    html+='</div>';
+  }
+
+  var mine=STOPS.filter(function(s){ return s.route===route; });
+  var active=activeOn(route), total=seatsOn(route);
+  html+='<p class="summary"><b>'+esc(route)+' Liverpool</b> · '+mine.length+' stops · '+
+        (total? '<b>'+active+'</b> with people, <b>'+total+'</b> booked'
+              : 'nobody booked yet')+'</p>';
+
+  /* Locked once booked. Not greyed into meaninglessness: the stop he has is
+     still shown ticked and legible, and the others simply stop responding. */
+  var locked = !!booked && !CLOSED;
+
+  mine.forEach(function(s){
+    var n=COUNTS[s.id]||0, on=(chosen===s.id);
+    html+='<button class="stop'+(on?' is-on':'')+(locked&&!on?' is-locked':'')+
+            '" type="button" data-stop="'+esc(s.id)+'"'+
+            ((CLOSED||locked)?' disabled':'')+' aria-pressed="'+on+'">'+
+            '<span class="stop-time">'+esc(s.time)+'</span>'+
+            '<span class="stop-body">'+
+              '<span class="stop-name">'+esc(s.stop)+'</span>'+
+              (s.postcode?'<span class="stop-pc">'+esc(s.postcode)+'</span>':'')+
+              '<span class="stop-n'+(n?' has':'')+'">'+
+                (n? n+(n===1?' person':' people')+' booked' : 'Nobody booked yet')+'</span>'+
+            '</span>'+
+            '<span class="tick">'+(on?"\u2713":"")+'</span>'+
+          '</button>';
+  });
+
+  var arr=ARRIVALS.filter(function(s){ return !s.route || s.route===route; });
+  if(!arr.length) arr=ARRIVALS;
+  if(arr.length){
+    html+='<div class="group-label">Arriving at church</div>';
+    arr.forEach(function(s){
+      html+='<div class="stop stop-arrival">'+
+              '<span class="stop-time">'+esc(s.time)+'</span>'+
+              '<span class="stop-body"><span class="stop-name">'+esc(s.stop)+'</span>'+
+              (s.postcode?'<span class="stop-pc">'+esc(s.postcode)+'</span>':'')+'</span>'+
+            '</div>';
+    });
+  }
+
+  /* The question sits here, last, immediately above the fixed Confirm bar.
+
+     It used to sit under the stop list, which on the North route is ten
+     stops long, so it was off the bottom of the screen. Confirm is fixed and
+     came alive the moment a stop was tapped, which meant a passenger could
+     pick his kerb, see Confirm sitting there ready, and complete a booking
+     for a number he had never seen, let alone chosen.
+
+     Numbers rather than a plus and minus, so answering it is one tap and
+     there is nothing to hold down or overshoot. Nothing is preselected: an
+     unanswered question must look unanswered. */
+  if(chosen && !CLOSED){
+    html+='<div class="seats'+(seats?'':' is-asking')+'" id="seatsBox">'+
+          '<h2>How many of you?</h2>'+
+          '<p>Everyone boarding with you at that stop, including yourself.</p>'+
+          '<div class="seatgrid">';
+    for(var sn=1; sn<=12; sn++){
+      html+='<button type="button" class="seatpick'+(seats===sn?' is-on':'')+'" '+
+            'data-seats="'+sn+'" aria-pressed="'+(seats===sn)+'">'+sn+'</button>';
+    }
+    html+='</div></div>';
+  }
+
+  $("body").innerHTML=html;
+
+  /* innerHTML rather than textContent, because the closing time is the one
+     thing down here somebody actually has to read. CUTOFF comes from the
+     script rather than from anybody typing, but it is escaped anyway: this
+     is the only place on the page that writes a server value as markup. */
+  $("foot").innerHTML = CLOSED
+    ? "The Sunday bus for RCCG Dominion Assembly Liverpool."
+    : "<b>Bookings close "+esc(CUTOFF||"Sunday 09:30")+", before the buses set off.</b>";
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-route]"),function(b){
+    b.addEventListener("click",function(){
+      route=this.getAttribute("data-route"); paint();
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-stop]"),function(b){
+    b.addEventListener("click",function(){
+      var id=this.getAttribute("data-stop");
+      var was=chosen;
+      chosen = (chosen===id) ? null : id;
+      /* A new stop is a new question. Nothing carries over, so the number
+         sitting there can never belong to an answer somebody else gave.
+         This once had a further test for a passenger already booked moving
+         stop. Nobody can reach it: every stop button is disabled the moment
+         a booking exists, so booked is always false by the time a tap gets
+         here, and a branch that cannot run is a branch nobody can check. */
+      if(chosen && chosen!==was) seats=null;
+      seatsAsk = !!chosen && !seats;
+      paint();
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-seats]"),function(b){
+    b.addEventListener("click",function(){
+      seats=Number(this.getAttribute("data-seats"))||null;
+      seatsAsk=false;
+      paint();
+    });
+  });
+
+  /* Bring it into view the first time it appears. The bar is fixed, so
+     without this the question can still be below the fold on a small phone
+     with a long stop list, which is the whole fault repeating itself. */
+  if(seatsAsk && $("seatsBox")){
+    seatsAsk=false;
+    try{ $("seatsBox").scrollIntoView({block:"center",behavior:"smooth"}); }catch(e){}
+  }
+
+  paintBar();
+}
+
+/* The bar is the only thing that says whether the spreadsheet knows. */
+function paintBar(){
+  $("bar").style.display = CLOSED ? "none" : "";
+  if(CLOSED) return;
+
+  var d=dirty(), say=$("barSay");
+
+  $("save").disabled = !chosen || !d || saving;
+  /* Not while it is spinning. The click handler puts the spinner in before
+     send repaints the bar, and writing a label here would rub it straight
+     out again, leaving a dead-looking button through the whole round trip. */
+  if(!saving) $("save").textContent = "Confirm";
+
+  $("cancel").textContent = "Not coming";
+  $("cancel").style.display = booked ? "" : "none";
+  /* Dead while a Confirm is in the air. Both buttons write the same row, so
+     tapping Not coming on top of a Confirm sent two changes for one booking
+     and whichever answered last decided what the driver saw. */
+  $("cancel").disabled = saving;
+
+  say.classList.toggle("is-dirty", (d && !!chosen) || (!!chosen && !seats));
+
+  /* Named before Confirm is mentioned. A disabled button with no reason
+     beside it is the thing that sent people scrolling. */
+  if(chosen && !seats)  say.textContent = "How many of you? Choose the number above.";
+  else if(d && chosen)  say.textContent = booked ? "Changed. Tap Confirm to save it."
+                                                 : "Not saved yet. Tap Confirm.";
+  /* The way out, said plainly. A stop that has quietly stopped responding
+     with nothing to explain it is worse than one that never moved. */
+  else if(booked)       say.textContent = "Booked. Change the number above, or tap "+
+                                          "Not coming to cancel and book again.";
+  else                  say.textContent = "";
+}
+
+function send(payload, done){
+  saving=true; paintBar();
+  callFetch(ENDPOINT,{
+    method:"POST", redirect:"follow",
+    headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body: JSON.stringify({ action:"booking", booking: payload })
+  }).then(function(r){ return r.text(); }).then(function(t){
+    var out=readJson(t);
+    if(!out || out.ok!==true) throw new Error(out && out.error ? out.error : "not saved");
+    saving=false;
+    done(out);
+  }).catch(function(err){
+    /* A failure here does NOT mean nothing was written.
+
+       Apps Script answers a POST with a redirect to a second address, and the
+       booking is already saved by the time that redirect is issued. If the
+       phone then fails to follow it, which happens on a weak signal or when a
+       handset swaps between wifi and mobile mid-request, the fetch rejects
+       even though the row is on the sheet. The page used to announce that
+       nothing had been saved, and somebody reopening it later would find
+       their booking sitting there after all. Worse the other way round: they
+       might tap Confirm again, or give up and not travel.
+
+       So it does not guess. It asks. */
+    verifySend(payload, done);
+  });
+}
+
+/* Did it land after all? One read, and the answer is not in doubt: the
+   spreadsheet either holds this booking or it does not. */
+function verifySend(payload, done){
+  callFetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      var out=readJson(t);
+      if(!out || out.ok!==true) throw new Error("no answer");
+
+      var wantStop=String(payload.stopId||""), wantSeats=Number(payload.seats)||0;
+      var got=out.mine;
+      var landed = wantSeats
+        ? !!(got && got.stopId===wantStop && Number(got.seats)===wantSeats)
+        : !got;                                  /* a cancellation leaves none */
+
+      if(!landed) throw new Error("not saved");
+      saving=false;
+      done(out);
+    })
+    .catch(function(){
+      saving=false;
+      $("save").textContent="Confirm";
+      paintBar();
+      toast("That did not save. Check your signal and tap Confirm again.");
+    });
+}
+
+/* Repaint from the answer we already have.
+
+   Both of these used to call load() and wait for the whole payload a second
+   time. The reply to the save already says what was saved and what every stop
+   now holds, so there is nothing left to ask for. */
+function applySaved(out){
+  if(out && out.counts) COUNTS=out.counts;
+  booked = (out && out.mine && out.mine.stopId)
+    ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
+  chosen = booked ? booked.stopId : null;
+  seats  = booked ? booked.seats  : null;
+  paint();
+}
+
+$("save").addEventListener("click",function(){
+  /* Belt and braces. The button is dead without both answers, so this cannot
+     fire — but a booking is a seat on a bus, and a blank reaching the sheet
+     would be a row nobody can act on. Checked before the spinner goes in, so
+     a refusal does not leave the button spinning at nothing. */
+  if(!chosen || !seats){ paintBar(); return; }
+
+  var first = !booked;
+  $("save").innerHTML='<span class="spin"></span>';
+  send({ date:DATE, ref:REF, stopId:chosen, seats:seats }, function(out){
+    $("save").textContent="Confirm";
+    applySaved(out);
+    toast((first ? "Booked. " : "Changed. ") +
+          "You can change this until "+(CUTOFF||"Sunday 09:30")+".");
+  });
+});
+
+$("cancel").addEventListener("click",function(){
+  send({ date:DATE, ref:REF, stopId:"", seats:0 }, function(out){
+    applySaved(out);
+    toast("Cancelled. Book again if you change your mind.");
+  });
+});
+
+load();
+</script>
+</body>
+</html>
