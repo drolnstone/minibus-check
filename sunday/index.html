@@ -723,8 +723,16 @@ function paint(){
 
   if(!CLOSED){
     if(booked && !dirty()){
+      /* What this screen will actually do, and nothing it will not.
+         It used to say "Tap a different stop to move", which stopped being
+         true the day the stop was settled at Confirm: every other stop is
+         disabled from here on, so the instruction sent people tapping at
+         dead buttons with no way to tell a locked screen from a broken one.
+         The bar at the foot has said the right thing throughout. These two
+         now agree, and both name the same two ways out. */
       html+='<div class="note note-go"><b>You are booked.</b> '+
-            'Tap a different stop to move, or use Not coming below.</div>';
+            'Change the number below, or tap Not coming to cancel and '+
+            'book again.</div>';
     } else if(!booked && !chosen){
       html+='<p class="lede">Tap the stop where you will be boarding.</p>';
     }
@@ -825,9 +833,13 @@ function paint(){
       var id=this.getAttribute("data-stop");
       var was=chosen;
       chosen = (chosen===id) ? null : id;
-      /* A passenger already booked keeps his own number when he moves stop:
-         that figure is his, and he chose it. Everybody else is asked. */
-      if(chosen && chosen!==was && !booked) seats=null;
+      /* A new stop is a new question. Nothing carries over, so the number
+         sitting there can never belong to an answer somebody else gave.
+         This once had a further test for a passenger already booked moving
+         stop. Nobody can reach it: every stop button is disabled the moment
+         a booking exists, so booked is always false by the time a tap gets
+         here, and a branch that cannot run is a branch nobody can check. */
+      if(chosen && chosen!==was) seats=null;
       seatsAsk = !!chosen && !seats;
       paint();
     });
