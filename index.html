@@ -6,22 +6,31 @@
 <meta name="theme-color" content="#1B222C">
 <title>Minibus Check · RCCG Dominion Assembly Liverpool</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-192.png">
-<!-- The little icon beside the title in a browser tab, and in Safari's tab
-     switcher. A separate thing from apple-touch-icon, which is only ever the
-     home screen: declare one and not the other and you get the home screen
-     tile you wanted and a grey globe in the tab list. Pointed at the icon
-     already in the repo rather than a cut-down favicon, because at the size
-     a tab renders it, what tells the two apps apart is the colour behind the
-     crest, not the crest.
+<!-- The home screen tile, and — because the two tags below declare this page
+     a web app — the icon Safari uses in its tab list as well.
 
-     Absolute, and a filename Safari has never fetched. The first attempt at
-     this pointed at icon-192.png, which was correct and did nothing: Safari
-     had already recorded a result for that page earlier the same day and did
-     not ask again, so the tab kept its grey globe while the passenger page,
-     which happened to be given a new name, came up straight away. -->
-23  <link rel="icon" type="image/png" sizes="180x180"
-24        href="https://drolnstone.github.io/minibus-check/icon-sunday-180.png">
+     This was icon-192.png: relative, no sizes, and the same file the manifest
+     names. That is why editing rel="icon" further down moved Chrome and never
+     once moved Safari. Chrome's tab strip reads rel="icon"; Safari, on a page
+     that declares a manifest and apple-mobile-web-app-capable, reads the app
+     icon chain instead and never looks at that tag at all. Four versions went
+     into a line that page was never consulting.
+
+     Absolute and sized, matching the passenger page exactly, and on its own
+     file so the two apps no longer share a tile. -->
+<link rel="apple-touch-icon" sizes="180x180"
+      href="https://drolnstone.github.io/minibus-check/icon-driver-180.png">
+<!-- The tab icon for browsers that read this tag: Chrome, Firefox, and Safari
+     on a page that has NOT declared itself an app. This page has, so Safari
+     ignores this line and takes the tile above instead. Kept, pointed at the
+     same file, because every other browser does read it and there is no sense
+     in the two disagreeing.
+
+     The comment that used to sit here blamed Safari's icon cache and a stale
+     filename. That was wrong, and wrong in an expensive way: it sent four
+     versions of edits at a tag Safari was never going to read. -->
+<link rel="icon" type="image/png" sizes="180x180"
+      href="https://drolnstone.github.io/minibus-check/icon-driver-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -898,7 +907,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.19.11";
+var APP_VERSION = "v1.19.12";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
