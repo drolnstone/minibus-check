@@ -191,7 +191,6 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .step:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
 .stepval{flex:1 1 auto;text-align:center;font-size:34px;font-weight:700;
   font-variant-numeric:tabular-nums;color:var(--ink)}
-.stephint{margin:10px 0 0;font-size:14px;color:var(--muted)}
 
 /* ---------- notices ---------- */
 .note{border-radius:9px;padding:12px 13px;font-size:14px;line-height:1.5;margin:0 0 14px}
@@ -754,10 +753,7 @@ function paint(){
        same fault as the one that told them to tap a locked stop. */
     html+='<div class="note note-warn"><b>Bookings have closed for this Sunday.</b> '+
           'This is the list the driver has. '+
-          (booked
-            ? 'Your stop and your number are fixed now, but if you are not '+
-              'coming you can say so below.'
-            : 'If you need a seat today, tell the group directly.')+
+          (booked ? '' : 'If you need a seat today, tell the group directly.')+
           '</div>';
   } else if(ROLLED){
     /* Two different Sundays are on this screen at once: the bus running now,
@@ -777,11 +773,9 @@ function paint(){
          dead buttons with no way to tell a locked screen from a broken one.
          The bar at the foot has said the right thing throughout. These two
          now agree, and both name the same two ways out. */
-      html+='<div class="note note-go"><b>You are booked.</b> '+
-            'Change the number below, or tap Not coming to cancel and '+
-            'book again.</div>';
+      html+='<div class="note note-go"><b>You are booked.</b></div>';
     } else if(!booked && !chosen){
-      html+='<p class="lede">Tap the stop where you will be boarding.</p>';
+      html+='';
     }
   }
 
@@ -869,7 +863,6 @@ function paint(){
             '<button type="button" class="step" id="seatsUp"'+
               (n>=12?' disabled':'')+' aria-label="One more">+</button>'+
           '</div>'+
-          (seats? '' : '<p class="stephint">Tap + to count everyone boarding with you.</p>')+
           '</div>';
   }
 
@@ -1008,9 +1001,17 @@ function paintBar(){
     }
     var shut=$("barSay");
     shut.classList.remove("is-dirty");
-    shut.textContent="If you are no longer coming, say so here so the driver does not wait.";
+    shut.textContent="";
     return;
   }
+
+  /* Nothing chosen and nothing booked, so the bar has no job. It sat there
+     regardless, carrying a dead Confirm and an empty line — a fixed strip of
+     nothing, which reads as a control that has failed rather than one waiting
+     its turn. Hidden until there is something to press, which also means the
+     moment a stop is cleared the bar goes with it, and the clearing shows
+     without a word being written about it. */
+  if(!chosen && !booked){ $("bar").style.display="none"; return; }
 
   $("bar").style.display="";
   $("save").style.display="";
@@ -1035,13 +1036,11 @@ function paintBar(){
 
   /* Named before Confirm is mentioned. A disabled button with no reason
      beside it is the thing that sent people scrolling. */
-  if(chosen && !seats)  say.textContent = "How many of you? Choose the number above.";
-  else if(d && chosen)  say.textContent = booked ? "Changed. Tap Confirm to save it."
-                                                 : "Not saved yet. Tap Confirm.";
+  if(chosen && !seats)  say.textContent = "How many of you?";
+  else if(d && chosen)  say.textContent = booked ? "Changed, not saved." : "Not saved yet.";
   /* The way out, said plainly. A stop that has quietly stopped responding
      with nothing to explain it is worse than one that never moved. */
-  else if(booked)       say.textContent = "Booked. Change the number above, or tap "+
-                                          "Not coming to cancel and book again.";
+  else if(booked)       say.textContent = "Booked.";
   else                  say.textContent = "";
 }
 
