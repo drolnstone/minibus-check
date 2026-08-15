@@ -4135,6 +4135,22 @@ $("driverPick").addEventListener("change",function(){
   st.driver=this.value; st.role=roleOf(this.value); st.pin=""; st.pinOk=false; st.pinState="";
   pinLast=""; $("pin").value="";
   showPinField(); paintFoot(); paintRotaHint();
+
+  /* Straight into the PIN box. Picking a name and needing a PIN is one act,
+     not two, and the box is the only thing that can happen next.
+
+     Read off what showPinField has just set rather than asking pinNeeded a
+     second time, so this cannot start disagreeing with the field it is aiming
+     at. No jump when the field is hidden, and none when the blank option is
+     reselected.
+
+     Called here inside the change handler on purpose. Deferring it — a
+     timeout, a frame — hands the browser a focus that no longer belongs to
+     anything the driver did, and iOS answers that by moving the caret without
+     raising the keypad. */
+  if(this.value && $("pinField").style.display!=="none"){
+    try{ $("pin").focus(); }catch(e){}
+  }
 });
 
 /* If the name chosen is not the one on the rota for this Sunday, say who is.
