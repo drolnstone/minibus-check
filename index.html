@@ -1445,8 +1445,8 @@ function paintFoot(){
           if(!entered || (prob && !st.mileOk)) { flash("mileCard"); $("miles").focus(); }
           else flash("fuelCard");
         });
-    if(!entered) c.textContent="Enter the mileage to begin";
-    else if(prob && !st.mileOk) c.textContent="Check the mileage, then confirm it below";
+    if(!entered) c.textContent="Enter the mileage";
+    else if(prob && !st.mileOk) c.textContent="Check the mileage";
     else if(st.fuel===null) c.textContent="Tap the fuel gauge reading";
     return;
   }
@@ -1485,7 +1485,7 @@ function paintFoot(){
           else { flash("signCard"); $("sign").focus(); }
         });
     /* Name the first thing missing, in the order they meet it. */
-    if(!jobsOk) c.textContent="Anything to arrange? Tap one, or Nothing needed";
+    if(!jobsOk) c.textContent="Anything to arrange?";
     else if(!signed) c.textContent="Type your name to sign";
     return;
   }
