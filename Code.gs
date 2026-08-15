@@ -1073,7 +1073,7 @@ function patternDriver(d, pattern, anchorKey) {
 function readRotaRows(ss) {
   var sh = ss.getSheetByName(ROTA_SHEET);
   if (!sh || sh.getLastRow() < 2) return [];
-  var values = sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues();
+  var values = sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues();
   var out = [];
   values.forEach(function (r) {
     var key = anyToKey(r[0]);
@@ -1146,7 +1146,11 @@ function readDrivers(ss) {
       /* Blank counts as North. The route column did not exist until the South
          run started, so every row written before then is a North row, and
          reading blank as North means nobody has to go back and fill it in. */
-      route: (String(r[6] || "").trim().toUpperCase().charAt(0) === "S") ? "South" : "North"
+      route: (String(r[6] || "").trim().toUpperCase().charAt(0) === "S") ? "South" : "North",
+      /* Set in the sheet, never in a file, exactly as the PIN is. A driver
+         with no number simply has no WhatsApp button on the passenger page,
+         so leaving this blank is a working answer rather than a fault. */
+      phone: String(r[7] || "").trim()
     });
   });
   return out;
@@ -1334,7 +1338,7 @@ function stamp(sh, row, who) {
    an empty column where the addresses used to be, and no message would say
    so. This is the smoke alarm. It changes nothing and repairs nothing: it
    only tells a human that the shape has drifted. */
-var DRIVERS_HEADERS = ["Name", "Role", "Active", "Primary order", "PIN", "Email", "Route"];
+var DRIVERS_HEADERS = ["Name", "Role", "Active", "Primary order", "PIN", "Email", "Route", "Phone"];
 
 /* Two time columns on purpose. Logged is when the sheet received it, Happened
    is when the driver's phone recorded the tap. They differ whenever there was
@@ -3070,6 +3074,49 @@ function busCurrentSunday() {
   return dateToKey(sunday);
 }
 
+/* Who is actually driving one route this Sunday, with a number a phone can
+   open WhatsApp on — or null, which is the ordinary answer and not a fault.
+
+   Cover first, pattern last: actual beats primary beats the repeating
+   pattern, so a swap the coordinator has written on the Rota tab is the name
+   that reaches the passenger, not the man who was originally down for it.
+
+   Names are matched with the ends trimmed and the case ignored, because the
+   name here has come round through the Rota tab and the one it is matched
+   against sits on the Drivers tab. Two spellings of one man is a silent miss
+   otherwise, and a silent miss here looks exactly like a driver who never
+   gave a number. */
+function driverOnDuty(ss, key, route) {
+  var flat = function (s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); };
+  var d = keyToDate(key);
+  var row = null;
+  readRotaRows(ss).forEach(function (r) { if (r.date === key) row = r; });
+  var pattern = bothPatterns(ss);
+
+  var who;
+  if (route === "South") {
+    who = (row && (row.actual2 || row.primary2)) || southDriver(d, pattern.south);
+  } else {
+    who = (row && (row.actual || row.primary)) || patternDriver(d, pattern.north);
+  }
+  if (!who) return null;
+
+  var hit = null;
+  readDrivers(ss).forEach(function (x) { if (!hit && flat(x.name) === flat(who)) hit = x; });
+  if (!hit || !hit.phone) return null;
+
+  /* wa.me wants digits only, in international form. A UK mobile written the
+     way anybody actually writes it starts 07, so the leading nought becomes
+     44. Anything already carrying a country code is left alone. Too short to
+     be a real number and nothing is sent, because a WhatsApp button that
+     opens a chat with a stranger is worse than no button. */
+  var digits = String(hit.phone).replace(/\D/g, "");
+  if (digits.charAt(0) === "0") digits = "44" + digits.substring(1);
+  if (digits.length < 11) return null;
+
+  return { name: hit.name, wa: digits, route: route };
+}
+
 function busPayload(key, ref) {
   /* No date in the link is the normal case now. Work it out here. */
   var rolled = false;
@@ -3086,6 +3133,29 @@ function busPayload(key, ref) {
   if (ref) {
     readBookings(ss, key).forEach(function (b) { if (b.device === ref) mine = b; });
   }
+
+  /* The driver's number goes out under four conditions at once, and it is the
+     conjunction that keeps this proportionate: only once bookings have shut,
+     only to a phone holding a booking, only for the route that booking is on,
+     and only the one driver on duty. A passenger with no booking, or any
+     stranger who finds the address, gets nothing.
+
+     Wrapped, and deliberately. Everything else in this payload is what the
+     page needs to function; this is a convenience button. If the rota, the
+     Drivers tab or the phone column is in a state this cannot read, the
+     button is absent and the page works exactly as it did before. A new
+     convenience must not be able to take Sunday morning down with it. */
+  var driver = null;
+  try {
+    if (mine && bookingsClosed(key)) {
+      var myRoute = "";
+      readBusStops(ss).forEach(function (s) {
+        if (s.id === mine.stopId) myRoute = s.route;
+      });
+      if (myRoute) driver = driverOnDuty(ss, key, myRoute);
+    }
+  } catch (err) { driver = null; }
+
   return {
     ok: true,
     date: key,
@@ -3099,6 +3169,7 @@ function busPayload(key, ref) {
     stops: readBusStops(ss).filter(function (s) { return !s.arrival; }),
     arrivals: readBusStops(ss).filter(function (s) { return s.arrival; }),
     counts: counts,
+    driver: driver,
     mine: mine ? { stopId: mine.stopId, seats: mine.seats } : null
   };
 }
@@ -3253,6 +3324,22 @@ function ensureDrivers(ss) {
         "North or South. Blank counts as North, so rows written before the\n" +
         "South route started keep working without being edited.");
       sh.getRange("G2:G200").setDataValidation(listRule(["North", "South"]));
+    }
+    /* Phone arrived later still, and gets the same treatment: written only
+       into a column that is genuinely empty, so nothing of anybody's is
+       relabelled out from under them. */
+    var h1 = String(sh.getRange(1, 8).getValue() || "").trim();
+    if (!h1) {
+      sh.getRange(1, 8).setValue("Phone").setFontWeight("bold");
+      sh.getRange(1, 8).setNote(
+        "Mobile number, for the WhatsApp button a passenger sees on Sunday\n" +
+        "morning once bookings have closed.\n\n" +
+        "READ THIS BEFORE FILLING IT IN. The number of whoever is driving\n" +
+        "that Sunday is sent to the passenger page, which is public and has\n" +
+        "no login. It goes out only on the day, only after 09:30, only to a\n" +
+        "passenger holding a booking, and only for that one route — but it\n" +
+        "does go out. Ask the driver first.\n\n" +
+        "Leave blank and that driver simply has no button. Nothing breaks.");
     }
   }
 

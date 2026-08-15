@@ -70,7 +70,21 @@
   --safe-l:env(safe-area-inset-left,0px);
   --safe-r:env(safe-area-inset-right,0px);
 }
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* touch-action:manipulation kills double tap to zoom. A checklist is dozens
+   of taps in a row, some hurried, some through a glove, and two that land
+   close together are almost always two answers rather than a request to
+   magnify. The screen lurching mid-check is a nuisance to get back out of.
+
+   The passenger page has had exactly this line, on exactly this selector,
+   since it was written. The driver app never got it, which is the whole of
+   why one zooms and the other does not.
+
+   It is also the only thing that works on an iPhone. user-scalable=no and
+   maximum-scale in the viewport tag are ignored by Safari, deliberately, and
+   have been since iOS 10. Nor should it be otherwise: PINCH STILL WORKS, and
+   taking zoom away from somebody who needs it to read a check is not a trade
+   worth making. What goes is only the accidental gesture. */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html,body{margin:0;padding:0}
 body{background:var(--paper);color:var(--ink);
   font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -907,7 +921,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.19.12";
+var APP_VERSION = "v1.19.17";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1035,12 +1049,36 @@ function buildFor(v){
   TOTAL = ALL.length;
 }
 
-/* Who is offered the full inspection. Roles, not names, so adding a second
-   coordinator is a one line change in config.js. */
-function canDoFull(){
-  var roles = CFG.fullInspectionRoles || ["Coordinator"];
-  return roles.indexOf(st.role) !== -1;
+/* Who is offered the full inspection, and who is offered a second bus at the
+   end of a check. Roles, not names, so adding a second coordinator is a one
+   line change in config.js.
+
+   Matched the way sameName matches a name: ends trimmed, case ignored, runs
+   of space collapsed. EQUALITY after that and never a substring, so
+   "Assistant Coordinator" is not a coordinator and no role can be widened by
+   having another word bolted on to it.
+
+   Strictly wider than the exact test it replaces — everything that passed
+   before still passes, so nobody loses anything they had this morning. The
+   one thing that changes is a role spelled differently on the Drivers tab
+   from the way it is spelled in config.js. That used to drop the man to the
+   pre-drive check with nothing on any screen to say why, which is the worst
+   shape a failure can take: he cannot see it, and neither can you.
+
+   One function rather than the same three lines written twice. They were
+   identical, and identical is not the same as joined: edit one and the full
+   inspection and Check another bus would quietly disagree about who runs the
+   fleet. */
+function roleAllowed(role){
+  var want = CFG.fullInspectionRoles || ["Coordinator"];
+  var flat = function(s){ return String(s||"").trim().toLowerCase().replace(/\s+/g," "); };
+  var r = flat(role);
+  if(!r) return false;                    /* nobody chosen yet is not a coordinator */
+  for(var i=0;i<want.length;i++){ if(flat(want[i])===r) return true; }
+  return false;
 }
+
+function canDoFull(){ return roleAllowed(st.role); }
 
 /* ---------------- last recorded mileage ---------------- */
 var MKEY = "fleet.lastmiles.v1";
@@ -1280,7 +1318,23 @@ function paintDash(){
   else { p.className="plate blank"; p.textContent="Fleet"; }
 
   var title, sub;
-  if(!st.veh){ title="Vehicle check"; sub="Choose a vehicle to begin"; }
+  /* The strip sits above every screen, so with no vehicle picked it used to
+     say "Choose a vehicle to begin" on all of them — over "Who is driving?",
+     over the rota, over the stops list. It was reading one step ahead of the
+     man using it and telling him to do a thing the screen in front of him
+     does not offer.
+
+     The test was on the vehicle alone, never on which screen was showing,
+     which is why it has been like this since the first version rather than
+     having drifted. */
+  if(!st.veh){
+    title="Vehicle check";
+    sub = st.screen==="driver"  ? "Choose your name to begin"
+        : st.screen==="rota"    ? "Driving rota"
+        : st.screen==="stops"   ? "Stops and bookings"
+        : st.screen==="pending" ? "Waiting to send"
+        : "Choose a vehicle to begin";
+  }
   else if(st.screen==="stage"||st.screen==="review"){ title=t.done+" of "+TOTAL+" checked"; sub=st.veh.name; }
   else { title=st.veh.reg; sub=st.veh.name; }
   if(t.critDef>0) sub=t.critDef+" critical defect"+(t.critDef>1?"s":"");
@@ -1443,7 +1497,13 @@ function paintFoot(){
        driver on duty has one bus and is about to drive it; putting that in
        front of him invites a second check nobody wants and suggests he has
        something left to do. It stays for a coordinator, who does the full
-       inspections and genuinely does move between vehicles. */
+       inspections and genuinely does move between vehicles.
+
+       That is what this always meant to say, and for a while it did not: the
+       test also fired for anybody NOT on the rota, which is the widest group
+       on the list and the one with least business checking a second bus. A
+       man who is not driving today has finished when his check is sent. The
+       way on for him is the door. */
     /* The run goes in the bar, not down the page.
 
        It sat under the summary, below the fold, while Done sat in the fixed
@@ -1456,7 +1516,7 @@ function paintFoot(){
     if(onDuty) btn("Start your run","btn-main",rotaOpenStops);
     btn("Done", onDuty ? "btn-ghost" : "btn-main", goHome);
     if(loadQ().length) btn("Waiting to send","btn-ghost",function(){ renderPending(); show("pending"); });
-    else if(!rotaMyRoute() || tripSeesAll()) btn("Check another bus","btn-ghost",reset);
+    else if(tripSeesAll()) btn("Check another bus","btn-ghost",reset);
     return;
   }
   if(st.screen==="pending"){
@@ -2675,8 +2735,7 @@ function tripMayTap(route){
    rung when a bus is late, and watching one route with no idea what the other
    is doing helps nobody. Read only unless they are also rostered. */
 function tripSeesAll(){
-  var roles=CFG.fullInspectionRoles||["Coordinator"];
-  return roles.indexOf(st.role)>=0;
+  return roleAllowed(st.role);
 }
 
 /* ---- fetching the route's own state ------------------------------------ */

@@ -178,12 +178,20 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .seats p{margin:0 0 12px;color:var(--muted);font-size:13px}
 .stop.is-locked{opacity:.5}
 .seats.is-asking{border-color:var(--steel);box-shadow:inset 3px 0 0 var(--steel)}
-.seatgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
-.seatpick{min-height:var(--tap);border-radius:var(--r);border:1px solid var(--hair);
-  background:var(--paper);font-family:inherit;font-size:19px;font-weight:600;line-height:1;
-  color:var(--ink);font-variant-numeric:tabular-nums}
-.seatpick.is-on{background:var(--steel);border-color:var(--steel);color:#fff}
-.seatpick:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
+/* Plus, the figure, minus. The two buttons are the full tap target height and
+   as wide as they can be without crowding the number, because they are pressed
+   repeatedly and often one-handed at a kerb. The figure is deliberately the
+   largest thing in the box: it is the answer, and the answer is what somebody
+   should be able to check at a glance before pressing Confirm. */
+.stepper{display:flex;align-items:center;gap:10px}
+.step{flex:0 0 auto;width:76px;min-height:var(--tap);border-radius:var(--r);
+  border:1px solid var(--hair);background:var(--paper);color:var(--ink);
+  font-size:30px;line-height:1;font-weight:600}
+.step:disabled{opacity:.35}
+.step:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
+.stepval{flex:1 1 auto;text-align:center;font-size:34px;font-weight:700;
+  font-variant-numeric:tabular-nums;color:var(--ink)}
+.stephint{margin:10px 0 0;font-size:14px;color:var(--muted)}
 
 /* ---------- notices ---------- */
 .note{border-radius:9px;padding:12px 13px;font-size:14px;line-height:1.5;margin:0 0 14px}
@@ -215,6 +223,11 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .cancel-row .btn{flex:1}
 .btn-keep{background:var(--steel);color:#fff}
 .btn-drop{background:var(--card);border:1px solid var(--warn);color:var(--warn);font-weight:600}
+/* WhatsApp green, and the only place on either page that colour appears, so
+   it reads as "this leaves for WhatsApp" without needing a logo. Centred by
+   hand because an anchor does not inherit a button's text centring. */
+.btn-wa{background:#25D366;color:#0B2E1A;font-weight:600;text-decoration:none;
+  display:flex;align-items:center;justify-content:center;text-align:center}
 
 .toast{position:fixed;left:50%;bottom:calc(112px + var(--safe-b));transform:translateX(-50%) translateY(14px);
   background:var(--ink);color:#fff;padding:11px 16px;border-radius:9px;font-size:14px;
@@ -298,6 +311,11 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
     <div class="bar-btns">
       <button class="btn btn-ghost" id="cancel" type="button">Not coming</button>
       <button class="btn btn-main" id="save" type="button">Confirm</button>
+      <!-- An anchor, not a button: it leaves for another app, and a phone
+           should be able to long-press it like any other link. Hidden until
+           paintBar has a driver and a number to point it at. -->
+      <a class="btn btn-wa" id="wa" style="display:none" rel="noopener"
+         href="#">Message the driver</a>
     </div>
   </div>
 </div>
@@ -411,6 +429,12 @@ var seatsAsk=false;   /* the question has just appeared and wants looking at */
    wording differs because the consequence does. See paint(). */
 var cancelAsk=false;
 
+/* The driver on duty for THIS passenger's route, and only once bookings have
+   closed. Null the rest of the time, and null for anybody without a booking,
+   because that is all the server will say. The page never holds a number it
+   was not given for the morning it is being used. */
+var DRIVER=null;
+
 /* A stop, once confirmed, is settled for that Sunday.
 
    A passenger does not change kerb. Where somebody boards follows from where
@@ -455,6 +479,7 @@ function load(again){
       chosen = booked ? booked.stopId : null;
       seats  = booked ? booked.seats : null;
       cancelAsk = false;        /* a fresh load is never mid-question */
+      DRIVER = (out.driver && out.driver.wa) ? out.driver : null;
 
       /* Which routes actually exist, in the order the timetable lists them. */
       ROUTES=[];
@@ -820,19 +845,32 @@ function paint(){
      pick his kerb, see Confirm sitting there ready, and complete a booking
      for a number he had never seen, let alone chosen.
 
-     Numbers rather than a plus and minus, so answering it is one tap and
-     there is nothing to hold down or overshoot. Nothing is preselected: an
-     unanswered question must look unanswered. */
+     Plus and minus, which is what this was originally and what he prefers.
+     It starts EMPTY, though, which the first version did not: it opened at 1,
+     and that one is the whole reason this box was rebuilt. A number already
+     sitting there is an answer nobody gave, Confirm goes live behind it, and
+     a booking for one completes without the question ever being read. An
+     unanswered question must look unanswered.
+
+     So: no figure until plus is pressed, minus dead until there is something
+     to take away, and Confirm dead until a number exists. Minus stops at one
+     rather than emptying the box again — once it has been answered there is
+     no sense in a way back to unanswered. */
   if(chosen && !CLOSED && !cancelAsk){
+    var n = seats || 0;
     html+='<div class="seats'+(seats?'':' is-asking')+'" id="seatsBox">'+
           '<h2>How many of you?</h2>'+
           '<p>Everyone boarding with you at that stop, including yourself.</p>'+
-          '<div class="seatgrid">';
-    for(var sn=1; sn<=12; sn++){
-      html+='<button type="button" class="seatpick'+(seats===sn?' is-on':'')+'" '+
-            'data-seats="'+sn+'" aria-pressed="'+(seats===sn)+'">'+sn+'</button>';
-    }
-    html+='</div></div>';
+          '<div class="stepper">'+
+            '<button type="button" class="step" id="seatsDown"'+
+              (n<=1?' disabled':'')+' aria-label="One fewer">\u2212</button>'+
+            '<span class="stepval" id="seatsVal" aria-live="polite">'+
+              (seats? String(seats) : "\u2014")+'</span>'+
+            '<button type="button" class="step" id="seatsUp"'+
+              (n>=12?' disabled':'')+' aria-label="One more">+</button>'+
+          '</div>'+
+          (seats? '' : '<p class="stephint">Tap + to count everyone boarding with you.</p>')+
+          '</div>';
   }
 
   /* Withdrawing. Asked every time now, on both sides of the cutoff.
@@ -891,12 +929,18 @@ function paint(){
       paint();
     });
   });
-  Array.prototype.forEach.call(document.querySelectorAll("[data-seats]"),function(b){
-    b.addEventListener("click",function(){
-      seats=Number(this.getAttribute("data-seats"))||null;
-      seatsAsk=false;
-      paint();
-    });
+  /* Clamped at both ends here as well as on the buttons' disabled state, so
+     a fast double tap on the last one cannot push it past 12 or under 1. */
+  if($("seatsUp")) $("seatsUp").addEventListener("click",function(){
+    seats = Math.min(12, (seats||0) + 1);
+    seatsAsk=false;
+    paint();
+  });
+  if($("seatsDown")) $("seatsDown").addEventListener("click",function(){
+    if(!seats) return;
+    seats = Math.max(1, seats - 1);
+    seatsAsk=false;
+    paint();
   });
 
   if($("cancelNo")) $("cancelNo").addEventListener("click",function(){
@@ -945,6 +989,23 @@ function paintBar(){
     $("cancel").style.display="";
     $("cancel").disabled=saving;
     $("cancel").textContent="Not coming";
+    /* Two different things, so two buttons rather than one that changes its
+       mind. Not coming settles the booking; this says the thing a booking
+       cannot say — running late, waiting a few doors up, a pram to get on.
+       Absent whenever the server has not named a driver with a number, which
+       is most of the week and any Sunday nobody has filled the column in for,
+       and the page reads perfectly well without it. */
+    var wa=$("wa");
+    if(DRIVER && DRIVER.wa){
+      var at=stopById(booked.stopId);
+      wa.href="https://wa.me/"+encodeURIComponent(DRIVER.wa)+"?text="+
+              encodeURIComponent("Sunday bus \u2014 I am booked at "+
+                (at? at.stop : "my stop")+". ");
+      wa.textContent="Message "+DRIVER.name;
+      wa.style.display="";
+    } else {
+      wa.style.display="none";
+    }
     var shut=$("barSay");
     shut.classList.remove("is-dirty");
     shut.textContent="If you are no longer coming, say so here so the driver does not wait.";
@@ -953,6 +1014,7 @@ function paintBar(){
 
   $("bar").style.display="";
   $("save").style.display="";
+  $("wa").style.display="none";
 
   var d=dirty(), say=$("barSay");
 
