@@ -1062,11 +1062,37 @@ function send(payload, done){
     body: JSON.stringify({ action:"booking", booking: payload })
   }).then(function(r){ return r.text(); }).then(function(t){
     var out=readJson(t);
-    if(!out || out.ok!==true) throw new Error(out && out.error ? out.error : "not saved");
+    if(!out || out.ok!==true){
+      /* The record answered, and the answer was no. Marked, because the two
+         kinds of failure below want opposite treatment and they arrive down
+         the same pipe. */
+      var refusal=new Error(out && out.error ? out.error : "not saved");
+      refusal.refused=true;
+      throw refusal;
+    }
     saving=false;
     done(out);
   }).catch(function(err){
-    /* A failure here does NOT mean nothing was written.
+    /* A refusal is not a signal problem, and must not be dressed as one.
+
+       The case this is really about is the cutoff. Somebody has had this page
+       open in a pocket since twenty past nine, taps Confirm at half past one
+       minute, and the record says plainly: bookings for that Sunday have
+       closed, reopen the page for the next one. Going and looking would only
+       confirm what it has already said, and the passenger would be told to
+       check their signal and try again — standing in the street on full bars,
+       tapping a button that can never work now. Say what the record said. */
+    if(err && err.refused){
+      saving=false;
+      $("save").textContent="Confirm";
+      /* Same repaint rule as verifySend: the spinner may be sitting on a
+         button inside the withdraw question, and only paint() draws that. */
+      if(cancelAsk || CLOSED) paint(); else paintBar();
+      toast(err.message);
+      return;
+    }
+
+    /* Everything else. A failure here does NOT mean nothing was written.
 
        Apps Script answers a POST with a redirect to a second address, and the
        booking is already saved by the time that redirect is issued. If the
@@ -1076,6 +1102,10 @@ function send(payload, done){
        nothing had been saved, and somebody reopening it later would find
        their booking sitting there after all. Worse the other way round: they
        might tap Confirm again, or give up and not travel.
+
+       An HTML page from Google lands here too, by way of readJson, and
+       belongs here: a sign-in screen or an error page served while a
+       deployment settles says nothing about whether the row was written.
 
        So it does not guess. It asks. */
     verifySend(payload, done);
