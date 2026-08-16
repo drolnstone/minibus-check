@@ -1131,7 +1131,23 @@ function readLatestRequests(ss) {
 function readDrivers(ss) {
   var sh = ss.getSheetByName(DRIVERS_SHEET);
   if (!sh || sh.getLastRow() < 2) return [];
-  var values = sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues();
+  /* Eight columns, not seven, and the eighth is the whole point of the change.
+     Phone is column H and this used to fetch as far as G, so r[7] below was
+     always undefined and every driver read back with no number. Nothing said
+     so: driverOnDuty simply found nobody with a phone and returned null, which
+     is exactly what it returns when the column is genuinely empty. Filling the
+     column in would have done nothing at all, and the note on the heading tells
+     you it will work.
+
+     If a column is ever added here, this number moves with it.
+
+     Clamped to the grid, the same way tripState reads Trip Events. A sheet
+     trimmed down to seven columns would otherwise throw on a request for eight,
+     and it would throw inside readDrivers, which nearly everything calls. A
+     short row leaves phone undefined, which reads as blank, which is the
+     truth. */
+  var width = Math.min(DRIVERS_HEADERS.length, sh.getMaxColumns());
+  var values = sh.getRange(2, 1, sh.getLastRow() - 1, width).getValues();
   var out = [];
   values.forEach(function (r) {
     var name = String(r[0] || "").trim();
@@ -1645,7 +1661,11 @@ function sheetLocks(ss) {
   }, "Bus Stops: the header row is fixed, the timetable below it is yours");
 
   add(DRIVERS_SHEET, function (sh) {
-    return [sh.getRange(2, 1, last(sh) - 1, 7)];     // the register itself
+    /* All eight columns, so Phone is editable like the rest of the register.
+       This stopped at G, which left the one column a coordinator is most
+       likely to be filling in for the first time as the only cell on the tab
+       that argues back. */
+    return [sh.getRange(2, 1, last(sh) - 1, DRIVERS_HEADERS.length)];
   }, "Drivers: the header row is fixed, the register below it is yours");
 
   return out;
@@ -2828,7 +2848,13 @@ function whoIsTapping() {
     var at = r[9] instanceof Date ? r[9].getTime() : 0;
     if (ev === "start") {
       runs[id].started = at;
-      if (status === "unchecked") runs[id].unchecked = true;
+      /* Anything beginning "unchecked", not the bare word.
+         The status column holds either "Unchecked" or "Unchecked (offline)",
+         and the second one is the whole reason the two were separated: a run
+         started in a blackspot is often nobody's fault. Testing for equality
+         meant precisely those runs were left out of this report, so the number
+         at the bottom quietly under-counted the thing it exists to count. */
+      if (status.indexOf("unchecked") === 0) runs[id].unchecked = true;
     }
     else if (ev === "end") runs[id].ended = at;
     else runs[id].taps++;
