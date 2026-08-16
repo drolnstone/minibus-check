@@ -329,7 +329,9 @@ function doGet(e) {
      applies the gate; with a route it answers for a driver's own screen. */
   if (p.trip) {
     try {
-      return reply(p.route ? tripDriverPayload(p.route) : tripPayload(p.ref, p.r));
+      /* s is the stop a passenger has said they are waiting at, for a phone
+         that holds no booking of its own. See tripPayload. */
+      return reply(p.route ? tripDriverPayload(p.route) : tripPayload(p.ref, p.r, p.s));
     } catch (err) { return reply({ ok: false, error: String(err) }); }
   }
 
@@ -2512,7 +2514,7 @@ function tripProjectable(state) {
  * Sunday, and only once bookings have closed. Both halves are one lookup the
  * endpoint has to do anyway to know which stop to give a time for.
  */
-function tripPayload(ref, want) {
+function tripPayload(ref, want, askedStop) {
   var ss  = SpreadsheetApp.getActiveSpreadsheet();
   var key = runSunday();
 
@@ -2586,6 +2588,33 @@ function tripPayload(ref, want) {
     if (!mine && seeds.length) mine = seeds[0];
   }
 
+  /* No booking on this phone, but the passenger has said which kerb they are
+     standing at. Watch that stop.
+
+     The handle was doing two jobs: finding your booking again, and proving you
+     were allowed to look. Only the first needs an identity. A man who booked on
+     his laptop and walked out with his phone had neither, and was told there
+     was nothing to see — which is what he reported. So were the phone whose
+     browser cleared its storage, the one that reinstalled, and the person who
+     never booked but is deciding whether to walk down to the stop in the rain.
+
+     Nothing is revealed by this. Everything below is a fact about the STOP —
+     when the bus is due there, how far off it is running, whether it has been.
+     Three households booked at one kerb already receive one identical answer,
+     because the driver taps the stop and never the people.
+
+     WHAT THIS MUST NOT DO is hand out the driver's number. That lives in
+     busPayload and stays behind a real booking for that route. Tracking is
+     untied from the booking here; the phone number is not. */
+  var watching = false;
+  if (!mine) {
+    var wantStop = String(askedStop || "").trim();
+    if (wantStop && stopById[wantStop] && !stopById[wantStop].arrival) {
+      mine = { stopId: wantStop, seats: 0, device: "" };
+      watching = true;
+    }
+  }
+
   if (!mine) return { ok: true, live: false, why: "nobooking", date: key };
 
   var myStop = stopById[mine.stopId] || null;
@@ -2594,6 +2623,9 @@ function tripPayload(ref, want) {
   var state = tripState(ss, key, myStop.route);
   var out = {
     ok: true, live: true, date: key, now: Date.now(), route: myStop.route,
+    /* So the page knows this is a stop somebody chose rather than one they
+       booked, and can say so rather than implying a seat is held. */
+    watching: watching,
     rehearsal: !!rehearsalOn(),
     /* Only during a rehearsal, and only so the tester can switch to the bus
        he is actually driving. A real passenger watches their own stop and is
@@ -2614,6 +2646,16 @@ function tripPayload(ref, want) {
     out.mine = "served";
     out.servedAt = Utilities.formatDate(new Date(state.served[myStop.id].at),
                                         Session.getScriptTimeZone(), "HH:mm");
+    /* WHICH of the two taps it was, which this used to throw away.
+
+       Both were collapsed into "served" and the page rendered both as "Picked
+       up at 11:14". So a family who booked at a shared stop and was thirty
+       seconds up the road was told they were on a bus they were not on. The
+       driver taps the stop, never the people: after "Nobody there" nobody at
+       that kerb was collected, and after "Picked up" he collected whoever he
+       saw. Those are different facts and the page can only say so if it is
+       told which one happened. */
+    out.servedEvent = String(state.served[myStop.id].event || "").toLowerCase();
     return out;
   }
 
@@ -3091,19 +3133,36 @@ function runComplete() {
   backstop.setHours(RUN_BACKSTOP_HOUR, RUN_BACKSTOP_MIN || 0, 0, 0);
   if (new Date() >= backstop) return true;
 
+  /* Every route with somebody booked on it must have started AND ended.
+     Anything short of that waits for the backstop.
+
+     This used to count only the runs that BEGAN, and then ask whether they had
+     all finished. A route whose driver never tapped Start therefore counted
+     for nothing at all, so on 16 August — North did its checks and never
+     started; South ran properly and tapped End at church — South's last tap
+     rolled the whole page. North's passengers, some of them still at a kerb,
+     were shown next Sunday's booking form under the words "Today's buses are
+     back", lost the stop list the driver was working from, and could no longer
+     say they were not coming. One route's driver decided the other route's
+     morning was over.
+
+     A route nobody booked is left out on purpose: there is no one waiting on
+     it, nothing to watch, and no reason for it to hold up next week. */
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var counts = bookingCounts(ss, key);
   var routes = [];
   readBusStops(ss).forEach(function (st) {
-    if (!st.arrival && routes.indexOf(st.route) < 0) routes.push(st.route);
+    if (st.arrival) return;
+    if (!(Number(counts[st.id]) > 0)) return;
+    if (routes.indexOf(st.route) < 0) routes.push(st.route);
   });
   if (!routes.length) return true;
 
-  var started = 0, ended = 0;
-  routes.forEach(function (r) {
-    var t = tripState(ss, key, r);
-    if (t.started) { started++; if (t.ended) ended++; }
-  });
-  return started > 0 && started === ended;
+  for (var i = 0; i < routes.length; i++) {
+    var t = tripState(ss, key, routes[i]);
+    if (!t.started || !t.ended) return false;
+  }
+  return true;
 }
 
 /**
