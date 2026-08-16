@@ -921,7 +921,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.19.22";
+var APP_VERSION = "v1.19.24";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1399,6 +1399,20 @@ function goHome(){
   show("driver");
 }
 
+/* What the footer looked like last time it was painted.
+
+   OUTSIDE paintFoot, and that is the whole of the fix. These two were declared
+   inside it, so every call reset them to false and "" before the test that
+   reads them — which made "has this just become ready" always true, and the
+   transition test below no different from a bare state test. Continue took the
+   focus on every repaint, and the register landing from the sheet a second
+   after the screen is drawn is a repaint, so a driver who had tapped back into
+   the PIN box lost the caret to a button he had not asked for.
+
+   A variable that remembers the last time cannot live in the thing that runs
+   each time. */
+var lastReady=false, lastVehId="";
+
 function paintFoot(){
   /* Also the moment the PIN gate learns its answer: checkPin ends here on
      every path it can take. */
@@ -1420,8 +1434,11 @@ function paintFoot(){
    vehicle check because he keyed a PIN out of habit.
 
    preventScroll because the footer is fixed and already in view; without it
-   the page can jump for no reason. */
-var lastReady=false, lastVehId="";
+   the page can jump for no reason.
+
+   lastReady and lastVehId, which decide whether this is a transition or just
+   another paint, are declared above paintFoot rather than here. See the note
+   there. */
 function goOnFocus(){
   var b=$("goOn");
   if(!b || b.classList.contains("is-off")) return;
@@ -3002,10 +3019,39 @@ function tripEnd(){
 
    The two halves still cache separately at the far end, so combining the
    request has not combined how fresh they are. */
+/* Run at the END of the handler, never in the middle of it: re-entering while
+   the outer one is still writing would let the older answer land on top of the
+   newer. */
+function rotaCountsRetry(){
+  var again=rotaCountsAgain;
+  rotaCountsAgain=null;
+  if(again) rotaCountsFetch(again.route, again.cb);
+}
+
+/* A request that arrives while one is in flight is remembered, not dropped.
+
+   This is why the same bus could be started on both routes. Which bus another
+   route has out is only known from the board, and the board answers about
+   ONE route: asked about North it reports South and says nothing about North,
+   because North is the route you asked about. So the South tab must fetch
+   again on the way in, or it is still holding the answer to a question about
+   North — in which case nothing is out, nothing is filtered, and both buses
+   are offered.
+
+   That refetch existed. It was being swallowed here: a poll fires every
+   thirty seconds and another lands right after a run starts, so the moment
+   most likely to be busy is exactly the moment a driver switches tabs after
+   starting. cb(false) went back, the screen repainted from stale data, and
+   nothing anywhere said the question had not been asked.
+
+   Same fault, same shape, as the one on the passenger page that made
+   switching to South show nothing at all. */
+var rotaCountsAgain=null;
 function rotaCountsFetch(route,cb){
   if(typeof route==="function"){ cb=route; route=null; }
   route = route || rotaStopsRoute || rotaHomeRoute() || "North";
-  if(!LIVE || !navigator.onLine || rotaCountsBusy){ if(cb) cb(false); return; }
+  if(!LIVE || !navigator.onLine){ if(cb) cb(false); return; }
+  if(rotaCountsBusy){ rotaCountsAgain={route:route, cb:cb}; return; }
   rotaCountsBusy=true;
   callFetch(CFG.endpoint+"?board=1&route="+encodeURIComponent(route),
             {method:"GET",redirect:"follow"}, POLL_TIMEOUT)
@@ -3087,12 +3133,14 @@ function rotaCountsFetch(route,cb){
       var after=JSON.stringify(rotaStopCounts)+"|"+rotaStopCountsFor+"|"+
                 JSON.stringify(trip.served)+"|"+trip.started+"|"+trip.ended;
       if(cb) cb(after!==before);
+      rotaCountsRetry();
     })
     .catch(function(){
       rotaCountsBusy=false;
       /* Silent. The screen already says how old the numbers are, which is
          more use than a toast telling him something failed. */
       if(cb) cb(false);
+      rotaCountsRetry();
     });
 }
 
