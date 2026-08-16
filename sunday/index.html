@@ -556,8 +556,14 @@ var liveTimer = null, liveBusy = false, live = null;
    sets this: they are watching their own stop. */
 var liveWant = "";
 
+/* A switch that lands while a poll is in flight used to be swallowed whole:
+   liveFetch returned at the door, and the new route waited for the next turn
+   of the timer with nothing on screen to say why. Remember it instead and go
+   again the moment the one in flight is done. */
+var liveAgain=false;
 function liveFetch(){
-  if(liveBusy || !navigator.onLine) return;
+  if(!navigator.onLine) return;
+  if(liveBusy){ liveAgain=true; return; }
   liveBusy=true;
   callFetch(ENDPOINT+"?trip=1&ref="+encodeURIComponent(REF)+
             (liveWant? "&r="+encodeURIComponent(liveWant) : ""),
@@ -566,6 +572,7 @@ function liveFetch(){
     .then(function(t){
       var out=JSON.parse(t);
       liveBusy=false;
+      if(liveAgain){ liveAgain=false; liveFetch(); }
       if(!out || out.ok!==true) return;
       live=out;
       paintLive();
@@ -574,7 +581,10 @@ function liveFetch(){
          at the end when the most phones are open. */
       if(out.live===false || out.mine==="served" || out.ended) liveStop();
     })
-    .catch(function(){ liveBusy=false; });
+    .catch(function(){
+      liveBusy=false;
+      if(liveAgain){ liveAgain=false; liveFetch(); }
+    });
 }
 
 function liveStart(){
