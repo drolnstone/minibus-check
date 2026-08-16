@@ -921,7 +921,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.19.19";
+var APP_VERSION = "v1.19.22";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1568,6 +1568,24 @@ function btn(label,cls,fn,dis,why){
      so what belongs down here is the way out of the app's reading screens
      rather than a second Back. */
   if(st.screen==="stops"){
+    /* No Done while a run is live.
+
+       Done sat under the thumb for the whole morning, one slip away from
+       closing the screen that the run is being recorded on. Nothing is lost
+       from the sheet when that happens — taps already sent stay sent — but
+       the poll stops, anything still queued stops being retried, and the
+       driver is looking at a home screen wondering whether the stop he just
+       tapped counted. That is the same doubt we spent tonight removing from
+       the tap itself, arriving by a different door.
+
+       So while the wheels are turning there is one button, and it is the one
+       that ends the morning honestly. It also moves the action off the page
+       and into the bar, which is where the thing a driver is meant to press
+       belongs — the same reasoning that put Start your run there. */
+    if(trip.started && !trip.ended){
+      btn("End trip, arrived at church","btn-end",tripEnd).id="tripEnd";
+      return;
+    }
     btn("Done","btn-main",stopsClose);
     return;
   }
@@ -2689,32 +2707,74 @@ function tripLoadState(){
   }catch(e){}
 }
 
+/* Every tap is stamped with the run it belongs to, at the moment it is made.
+
+   It used not to be. The queue held bare events and tripFlush labelled the
+   whole batch with whatever trip.route happened to say when the send went
+   out — which is fine for one phone, one driver, one route, and that is every
+   real Sunday. It is not fine on a phone that has just done North and is now
+   starting South: any North tap still waiting would go up labelled South and
+   land on the sheet under a route it never happened on. Rehearsing on one
+   phone is exactly how that gets discovered, and it looks like South
+   tracking misbehaving when nothing about South is wrong.
+
+   A tap belongs to the run it was made during. That is a fact at the moment
+   of the tap and nothing later should be able to change it. */
 function tripQueue(ev){
+  if(ev.route  === undefined) ev.route  = trip.route || "";
+  if(ev.trip   === undefined) ev.trip   = trip.id    || "";
+  if(ev.reg    === undefined) ev.reg    = trip.reg   || "";
+  if(ev.driver === undefined) ev.driver = st.driver  || "";
+  if(ev.sunday === undefined) ev.sunday = rotaKey(rotaBaseSunday(0));
   var q=tripLoadQ(); q.push(ev); tripSaveQ(q);
   tripFlush();
 }
 
+/* One run per send. The oldest tap waiting decides which run this send is
+   about, and only its own taps travel with it; anything belonging to another
+   run stays queued and goes next, under its own name. Two runs on one phone
+   therefore reach the sheet as two runs, which is what they were. */
 function tripFlush(){
-  var q=tripLoadQ();
-  if(!q.length || !LIVE || !navigator.onLine || tripBusy) return;
+  var all=tripLoadQ();
+  if(!all.length || !LIVE || !navigator.onLine || tripBusy) return;
+
+  var head  = all[0];
+  var rt    = head.route || trip.route || "";
+  var runId = head.trip  || trip.id    || "";
+
+  var batch=[], rest=[];
+  all.forEach(function(e){
+    var er=(e.route!==undefined?e.route:trip.route)||"";
+    var ei=(e.trip !==undefined?e.trip :trip.id)   ||"";
+    if(er===rt && ei===runId) batch.push(e); else rest.push(e);
+  });
+  if(!batch.length) return;
+
   tripBusy=true;
   callFetch(CFG.endpoint,{
     method:"POST", redirect:"follow",
     headers:{"Content-Type":"text/plain;charset=utf-8"},
     body: JSON.stringify({ token: CFG.token||"", action:"trip", trip:{
-      trip: trip.id, sunday: rotaKey(rotaBaseSunday(0)), route: trip.route,
-      reg: trip.reg||"", driver: st.driver||"", events: q
+      trip: runId,
+      sunday: head.sunday || rotaKey(rotaBaseSunday(0)),
+      route: rt,
+      reg: head.reg || trip.reg || "",
+      driver: head.driver || st.driver || "",
+      events: batch
     }})
   }).then(function(r){ return r.text(); }).then(function(t){
     var out=JSON.parse(t);
     tripBusy=false;
     if(!out || out.ok!==true) throw new Error(out&&out.error?out.error:"not sent");
-    tripSaveQ([]);                 /* accepted, including any it ignored as repeats */
+    tripSaveQ(rest);               /* accepted, including any it ignored as repeats */
     tripPaintWait();
+    /* Another run still has taps waiting. Straight on, so a phone that did
+       both routes does not sit on the older one until the next timer. */
+    if(rest.length) tripFlush();
   }).catch(function(){
     tripBusy=false;
-    /* Left in the queue. The screen already says how many are waiting, which
-       is more use than a toast that scrolls away. */
+    /* Left in the queue, all of it. The screen already says how many are
+       waiting, which is more use than a toast that scrolls away. */
     tripPaintWait();
   });
 }
@@ -3745,8 +3805,8 @@ function rotaPaintStops(){
   if($("tripDoCheck")) $("tripDoCheck").addEventListener("click",function(){
     tripUncheckedAsked=""; stopsClose(); reset();
   });
-  if($("tripEnd"))   $("tripEnd").addEventListener("click",tripEnd);
   tripPaintMoving();
+  pinGateAutoFocus();
 }
 
 /* ---- the movement strip at the top of the list ------------------------- */
@@ -3864,15 +3924,27 @@ function tripBusButtonsHtml(){
   var live=(VEHICLES||[]).filter(function(v){ return v && v.reg; });
   var one=live.length<2;
 
-  /* Which bus somebody else already has out. North sets off first, so by the
-     time South is getting in this is usually known, and with two buses it
-     settles which one is left.
+  /* A bus that is out on another route right now is not on offer here.
 
-     It orders the buttons and nothing more. The bus he is taking is still
-     the bus he taps: he may have swapped at the gate, and a registration the
-     app assumed rather than one he pressed would put a bus on the record
-     that never ran that route, which is the hole the registration was added
-     to close in the first place. */
+     This used to only reorder them — the taken bus dropped to second and
+     stayed pressable, on the reasoning that the drivers might have swapped at
+     the gate and the app should never put a registration on the record that
+     the driver did not press.
+
+     That was the wrong end of the risk. Two men can be looking at the same
+     two buttons within a minute of each other, and the second one has no way
+     of knowing the first has already taken that bus: a mis-tap puts one
+     registration on two routes at once, and from then on the sheet says a bus
+     was in two places and neither run can be trusted. Which bus is out is a
+     fact the record already holds, so the honest thing is not to offer it.
+
+     Swapping at the gate is still answerable, and by the man who can actually
+     answer it: North corrects his own start. South cannot fix North's record
+     by duplicating it.
+
+     Never down to nothing, though. If filtering would leave no button at all
+     — a fleet of one, or something odd in the record — every bus comes back,
+     because a driver who cannot start his run is worse than a duplicate. */
   var taken="", takenOn="";
   Object.keys(tripOthers||{}).forEach(function(rt){
     if(!taken && tripOthers[rt]){ taken=tripOthers[rt]; takenOn=rt; }
@@ -3883,7 +3955,7 @@ function tripBusButtonsHtml(){
     if(checkVerdict(v.reg).state==="stopped"){ stopped.push(v.reg); return; }
     if(taken && v.reg===taken) theirs.push(v); else mine.push(v);
   });
-  var order=mine.concat(theirs);
+  var order = mine.length ? mine : mine.concat(theirs);
 
   var off=pinGateNeeded();
   var h='<div class="trip-buses">', shown=0;
@@ -3932,6 +4004,27 @@ function tripBusButtonsHtml(){
    him anything: he pressed Start, nothing happened, and the only clue was a
    box further down that had never asked him for anything. The button is off
    rather than disabled now, so the tap is the prompt. */
+/* The gate appearing IS the prompt. A driver who came straight here without
+   signing in on the first screen meets a PIN box he has to notice and tap
+   before he can type into it, which is a step the app can take for him.
+
+   Once, on the paint where it first appears — never on the thirty second
+   poll, never while he is already typing in it. rotaPaintStops rebuilds this
+   whole panel, so without the transition test the keypad would be yanked open
+   again every time the counts moved. No toast: pinGateFocus below is the
+   answer to a driver PRESSING a dead button and deserves a word; this one is
+   the app quietly putting the caret where he was going anyway. */
+var pinGateWasUp=false;
+function pinGateAutoFocus(){
+  var i=$("pinGateInput");
+  var up=!!i;
+  if(up && !pinGateWasUp){
+    try{ i.focus({preventScroll:true}); }
+    catch(e){ try{ i.focus(); }catch(e2){} }
+  }
+  pinGateWasUp=up;
+}
+
 function pinGateFocus(){
   var i=$("pinGateInput");
   toast("Enter your four digit PIN to confirm it is you.");
@@ -3953,8 +4046,9 @@ function tripActionHtml(nextStop){
   } else {
     h+='<p class="trip-waiting">Every booked stop is done.</p>';
   }
-  h+='<button class="btn btn-end" id="tripEnd">End trip, arrived at church</button></div>';
-  return h+'';
+  /* End trip lives in the fixed bar now, not here. Two identical buttons on
+     one screen is a question a driver has to stop and answer. */
+  return h+'</div>';
 }
 
 /* Greys out every tap while the wheels are turning, and says why rather than
@@ -3982,7 +4076,18 @@ function tripWaitWords(){
 }
 
 /* The whole screen. Used when something structural has changed. */
-function tripPaint(){ if(rotaStopsOpen) rotaPaintStops(); }
+var tripFootLive=null;
+function tripPaint(){
+  if(!rotaStopsOpen) return;
+  rotaPaintStops();
+  /* The bar swaps between Done and End trip, so it has to be redrawn when a
+     run starts or finishes — but ONLY then. Redrawing it on every tap would
+     put the End trip button through exactly the teardown that was eating
+     stop taps an hour ago, and there is no sense curing that on one button
+     and reintroducing it on another. */
+  var live = !!trip.started && !trip.ended;
+  if(live!==tripFootLive){ tripFootLive=live; paintFoot(); }
+}
 
 /* One line, and nothing else touched.
 

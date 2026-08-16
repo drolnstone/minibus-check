@@ -144,8 +144,8 @@ works, nothing is sent, and it says so on screen. Useful for training.
 Bump the version in **two places**, or phones keep the copy they already have:
 
 ```js
-const CACHE = "minibus-check-v1.19.8";   // sw.js
-var APP_VERSION = "v1.19.8";             // index.html
+const CACHE = "minibus-check-v1.19.22";  // sw.js
+var APP_VERSION = "v1.19.22";            // index.html
 ```
 
 They must match. `APP_VERSION` is printed at the foot of the first screen, so
@@ -246,6 +246,11 @@ Set PINs in the **PIN column of the Drivers tab**, never in `config.js`. The
 PIN does not leave the spreadsheet; the app is sent a one way fingerprint and
 compares that.
 
+The Drivers tab also carries a **Phone** column, added for a WhatsApp button
+on the passenger page that was then decided against. **Leave it empty.** Empty
+means no button and one extra sheet read, and nothing else. Filling it would
+publish that driver's number on a page with no login.
+
 This exists so a driver cannot casually sign as somebody else. It is an
 attribution control, not a login. Real authentication would mean Google
 Sign-In, which needs every driver to have an account and a signal at seven on a
@@ -313,6 +318,53 @@ Change the options by editing `STATUS_OPTIONS` in `Code.gs`, then run
   bus he is taking, and taps each stop as he pulls away.
 - A stop, once confirmed, is settled for that Sunday. A change of mind is
   handled by **Not coming**, then booking again.
+
+### After the 09:30 cutoff
+
+Withdrawing is the one thing a passenger can still do. Booking, moving stop
+and changing the number are all refused — by the screen and by the script, so
+a stale tab cannot get round it.
+
+Withdrawing is asked before it happens, on both sides of the cutoff, because
+after it there is no booking again that day. The wording differs by side: the
+consequence does.
+
+The row's Status stays exactly **Cancelled**, never a status of its own. The
+sheet drops that one word and counts everything else as booked, so a tidier
+"Cancelled late" would leave the seat on the driver's screen. The lateness
+goes in a note on the cell instead.
+
+It is refused once the run is over, so the record cannot be rewritten to
+disagree with the list the driver actually worked from.
+
+### Which bus, and only one route at a time
+
+Starting a run names the bus. **A bus already out on another route is not
+offered to the second driver** — the record knows which one is out, so
+offering it invites one registration onto two routes at once. If they swapped
+at the gate, the driver who started corrects his own run; the other does not
+fix it by duplicating it.
+
+If filtering would leave no bus at all, every bus comes back. A driver who
+cannot start is worse than a duplicate.
+
+### While a run is live
+
+There is no **Done** on the Stops screen. The only way off is **End trip,
+arrived at church**, so the screen the run is recorded on cannot be closed by
+a slip of the thumb.
+
+Every tap is stamped with the run it belongs to and sends under that run's
+own name, so a phone that does two routes in a morning — which is really only
+a rehearsal — files them as two runs rather than folding the first into the
+second.
+
+Tapping a stop that already holds the same answer sends nothing. A driver who
+presses again because he is not sure cannot make two rows.
+
+Taps are greyed while the bus is moving, and that test needs a few seconds of
+sustained speed either way. A single noisy GPS sample cannot flicker the
+buttons any more.
 
 ---
 

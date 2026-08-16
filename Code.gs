@@ -2527,12 +2527,28 @@ function tripPayload(ref, want) {
      So: the route asked for, if the page asked for one. Failing that, a
      route with a bus actually out, because that is the one worth watching.
      Failing that, the first, as before. */
-  if (!mine && rehearsalOn()) {
+  /* An explicit route asked for by the page wins, even when this phone holds
+     a booking of its own.
+
+     It did not, and that is why switching the tester's page to South showed
+     nothing at all: the block below only ran when the phone had NO booking,
+     so a phone that had booked a seat during testing — which is the first
+     thing anybody does — was pinned to its own stop's route for good, and the
+     North/South switch above it did nothing whatsoever. A control that cannot
+     work should not be on screen; the cheaper fix of the two is to make it
+     work.
+
+     Rehearsal only, and only when the page actually sends r. A real passenger
+     never sets it, so their own booking still decides what they watch. */
+  var askedRoute = String(want || "").trim();
+  if (rehearsalOn() && (askedRoute || !mine)) {
     var seeds = rows.filter(function (b) {
       return b.stopId && String(b.device || "").indexOf("rehearsal-") === 0;
     });
-    var wantRoute = String(want || "").trim();
+    var wantRoute = askedRoute;
     if (wantRoute) {
+      /* Asked for by name, so let the seed replace whatever this phone had. */
+      mine = null;
       seeds.forEach(function (b) {
         var s = stopById[b.stopId];
         if (!mine && s && s.route === wantRoute) mine = b;
@@ -3088,6 +3104,20 @@ function busCurrentSunday() {
    gave a number. */
 function driverOnDuty(ss, key, route) {
   var flat = function (s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); };
+
+  /* The Phone column first, and out at once if it is empty.
+
+     This whole lookup only ever produces something when somebody has a
+     number against their name, and by decision nobody does — the WhatsApp
+     button is deliberately dormant. It was still reading the Rota tab and
+     the Drivers tab twice over on every passenger page load after 09:30,
+     doing three reads to arrive at nothing, on the one morning of the week
+     the sheet is busiest. One read now answers it. */
+  var drivers = readDrivers(ss);
+  var anyPhone = false;
+  for (var i = 0; i < drivers.length; i++) { if (drivers[i].phone) { anyPhone = true; break; } }
+  if (!anyPhone) return null;
+
   var d = keyToDate(key);
   var row = null;
   readRotaRows(ss).forEach(function (r) { if (r.date === key) row = r; });
@@ -3102,7 +3132,7 @@ function driverOnDuty(ss, key, route) {
   if (!who) return null;
 
   var hit = null;
-  readDrivers(ss).forEach(function (x) { if (!hit && flat(x.name) === flat(who)) hit = x; });
+  drivers.forEach(function (x) { if (!hit && flat(x.name) === flat(who)) hit = x; });
   if (!hit || !hit.phone) return null;
 
   /* wa.me wants digits only, in international form. A UK mobile written the
