@@ -921,7 +921,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.19.18";
+var APP_VERSION = "v1.19.19";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -2710,12 +2710,12 @@ function tripFlush(){
     tripBusy=false;
     if(!out || out.ok!==true) throw new Error(out&&out.error?out.error:"not sent");
     tripSaveQ([]);                 /* accepted, including any it ignored as repeats */
-    tripPaint();
+    tripPaintWait();
   }).catch(function(){
     tripBusy=false;
     /* Left in the queue. The screen already says how many are waiting, which
        is more use than a toast that scrolls away. */
-    tripPaint();
+    tripPaintWait();
   });
 }
 
@@ -2742,10 +2742,37 @@ function tripWatchStop(){
    which is most of them indoors and some of them always, must not lock a
    driver out of the whole feature. The law is the driver's; this is a guard,
    not a gate. */
+/* Hysteresis, because one GPS sample is not a fact.
+
+   This was a bare test of the newest reading against 2.2 m/s — under five
+   miles an hour — re-run on every fix the watcher produced, which is about
+   one a second. Crawling in traffic, or pulling up to a kerb, the speed sits
+   either side of that line and every button on the screen went dead and live
+   again once a second. A driver cannot tap a button that is only there half
+   the time, and he has no way of knowing that is what is happening.
+
+   So: it takes a few seconds above the line to call it moving, and a few
+   seconds below to call it stopped again. Noise crosses the line; a bus
+   pulling away stays across it. */
+/* When a stop was last tapped, so the background poll can keep out of the
+   way of a thumb. */
+var tripTapAt=0;
+var tripMovingNow=false, tripMovingSince=0;
 function tripMoving(){
-  if(tripSpeed===null) return false;
-  if(Date.now()-tripSpeedAt > 12000) return false;
-  return tripSpeed > TRIP_MOVING_MS;
+  var fresh = tripSpeed!==null && (Date.now()-tripSpeedAt <= 12000);
+  var over  = fresh && tripSpeed > TRIP_MOVING_MS;
+  var now   = Date.now();
+
+  if(over === tripMovingNow){ tripMovingSince = 0; return tripMovingNow; }
+  if(!tripMovingSince) tripMovingSince = now;
+  /* Slower to lock than to release: a wrongly dead button costs a driver a
+     stop, a wrongly live one costs nothing but a tap he could have made
+     anyway. */
+  if(now - tripMovingSince >= (over ? 4000 : 2500)){
+    tripMovingNow = over;
+    tripMovingSince = 0;
+  }
+  return tripMovingNow;
 }
 
 /* ---- who may tap -------------------------------------------------------
@@ -2855,6 +2882,19 @@ function tripStart(route, reg, anyway){
 function tripTap(stop,kind){
   if(!trip.started || trip.ended) return;
   if(tripMoving()){ toast("Not while the bus is moving. Tap it when you pull up."); return; }
+
+  /* Once is once. A driver who is not sure his tap took will press again —
+     that is not him being careless, it is the only thing he can do — and the
+     app must answer that with the same single record, not a second one.
+
+     Same stop, same answer, already held: nothing to send. Repaint so the
+     tick is unmistakably there, and stop. Tapping the OTHER answer for that
+     stop still goes through, because changing his mind from "nobody there"
+     to "picked up" is a real correction and must reach the sheet. */
+  var had=trip.served[stop.id];
+  if(had && had.event===kind){ tripPaint(); return; }
+
+  tripTapAt=Date.now();
   var at=tripNow();
   trip.served[stop.id]={ at:at, event:kind };
   trip.lastAt=at; trip.lastStop=stop.stop;
@@ -3046,7 +3086,11 @@ function rotaCountsStart(){
        driver's phone. Passing nothing lets the one chain answer. */
     rotaCountsFetch(null,function(changed){
       if(!rotaStopsOpen) return;
-      if(changed) rotaPaintStops();
+      /* Not on top of a thumb. This is the last thing left that can rebuild
+         the list while a driver is working down it, and a passenger
+         withdrawing is worth showing but not worth swallowing a tap for. It
+         waits for the next turn of this timer. */
+      if(changed && Date.now()-tripTapAt > 3000) rotaPaintStops();
       else if($("countsAge")) $("countsAge").textContent=rotaCountsWords();
     });
   },30000);
@@ -3796,7 +3840,11 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
   if(trip.lastStop) bits.push('last '+esc(trip.lastStop)+' at '+tripClock(trip.lastAt));
   h+='<p class="trip-note">'+bits.join(' \u00B7 ')+'</p>';
 
-  if(queued) h+='<p class="trip-note trip-wait">'+queued+' tap'+(queued>1?'s':'')+' waiting to send.</p>';
+  /* Always rendered, empty when there is nothing waiting, so the line exists
+     to be written into later. It is the only thing on this screen a finished
+     send changes, and having it always present is what lets the send stop
+     rebuilding the whole list to say so. */
+  h+='<p class="trip-note trip-wait" id="tripWait">'+tripWaitWords()+'</p>';
   h+='<p class="trip-note" id="tripMoving"></p>';
   return h+'</div>';
 }
@@ -3911,8 +3959,14 @@ function tripActionHtml(nextStop){
 
 /* Greys out every tap while the wheels are turning, and says why rather than
    leaving a driver poking at a dead button. */
+var tripMovingPainted=null;
 function tripPaintMoving(){
   var moving=tripMoving();
+  /* Called on every position fix, roughly once a second. Without this it
+     rewrote the banner and reached into every button on the screen each
+     time, whether anything had changed or not. */
+  if(moving===tripMovingPainted) return;
+  tripMovingPainted=moving;
   var note=$("tripMoving");
   if(note) note.innerHTML = moving
     ? '<b class="trip-stopme">The bus is moving.</b> Taps come back when you pull up.'
@@ -3922,7 +3976,29 @@ function tripPaintMoving(){
     function(b){ b.disabled=moving; b.classList.toggle("is-dead",moving); });
 }
 
+function tripWaitWords(){
+  var q=tripLoadQ().length;
+  return q ? q+" tap"+(q>1?"s":"")+" waiting to send." : "";
+}
+
+/* The whole screen. Used when something structural has changed. */
 function tripPaint(){ if(rotaStopsOpen) rotaPaintStops(); }
+
+/* One line, and nothing else touched.
+
+   A send finishing changes exactly one thing on this screen: how many taps
+   are still queued. It used to answer that by rebuilding the entire stop
+   list, a second or two after the tap that started it — which is to say,
+   right about when the driver's thumb was arriving at the next stop. The
+   button under his finger was destroyed and rebuilt mid-press, so no click
+   ever fired and the tap simply vanished. Tap, nothing, tap again.
+
+   Nothing structural has changed by then: the tick went on at the moment he
+   pressed. So write the one line and leave the DOM alone. */
+function tripPaintWait(){
+  var el=$("tripWait");
+  if(el) el.textContent=tripWaitWords();
+}
 
 function rotaOpenRequest(key){
   var d=rotaDateFromKey(key); rotaEditDate=key;
