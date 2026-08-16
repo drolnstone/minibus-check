@@ -921,7 +921,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.19.17";
+var APP_VERSION = "v1.19.18";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1406,7 +1406,30 @@ function paintFoot(){
 
   var f=$("footIn"), c=$("count");
   f.innerHTML=""; c.textContent="";
-  function btn(label,cls,fn,dis,why){
+  /* Moving the eye on, when a step has just been finished.
+
+   Picking a name, keying a PIN, choosing a bus: each of these completes and
+   the screen stays exactly where it was, so the driver is left looking for
+   what changed. Choosing a bus was the worst of the three — the card takes a
+   border, the button at the far end of the screen goes from grey to dark, and
+   from where he is standing nothing happened at all.
+
+   The focus goes to the way on. It does not press it: this is a fork on the
+   first screen — the rota and the stops list are both live exits — and a
+   driver who came to check next Sunday's rota should not be thrown into a
+   vehicle check because he keyed a PIN out of habit.
+
+   preventScroll because the footer is fixed and already in view; without it
+   the page can jump for no reason. */
+var lastReady=false, lastVehId="";
+function goOnFocus(){
+  var b=$("goOn");
+  if(!b || b.classList.contains("is-off")) return;
+  try{ b.focus({preventScroll:true}); }
+  catch(e){ try{ b.focus(); }catch(e2){} }
+}
+
+function btn(label,cls,fn,dis,why){
     var b=document.createElement("button");
     b.type="button"; b.className="btn "+cls+(dis?" is-off":""); b.textContent=label;
     b.addEventListener("click",function(){
@@ -1423,16 +1446,32 @@ function paintFoot(){
     showPinField();          /* same cycle as the caption, so they cannot drift */
     var named = st.driver.trim().length>1;
     var pinOk = !pinNeeded() || st.pinOk;
-    btn("Continue","btn-main",function(){ renderVehicles(); show("vehicle"); }, !(named && pinOk),
+    var goDrv = btn("Continue","btn-main",function(){ renderVehicles(); show("vehicle"); }, !(named && pinOk),
         function(){ if(!named && $("driverPick")) $("driverPick").focus(); });
+    goDrv.id="goOn";
     if(!named) c.textContent="Choose your name";
     else if(!pinOk) c.textContent="Enter your PIN";
+    /* The transition, not the state. Every route to a correct PIN — the live
+       check, this phone's own copy, the cached answer, no signal at all —
+       ends in paintFoot, so hooking the change here catches all of them
+       without four copies of the same line. A driver with no PIN set arrives
+       ready the moment he is named, and is carried by the same test. */
+    var ready = named && pinOk;
+    if(ready && !lastReady) goOnFocus();
+    lastReady = ready;
     return;
   }
   if(st.screen==="vehicle"){
     btn("Back","btn-ghost",function(){ show("driver"); });
-    btn("Continue","btn-main",function(){ renderPrep(); show("prep"); }, !st.veh);
+    var goVeh = btn("Continue","btn-main",function(){ renderPrep(); show("prep"); }, !st.veh);
+    goVeh.id="goOn";
     if(!st.veh) c.textContent="Choose a vehicle";
+    /* On the id, not on whether one is chosen, so swapping from one bus to
+       the other answers too. With two buses that is half the taps made on
+       this screen. */
+    var vid = st.veh ? st.veh.id : "";
+    if(vid && vid!==lastVehId) goOnFocus();
+    lastVehId = vid;
     return;
   }
   if(st.screen==="prep"){
