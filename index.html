@@ -921,7 +921,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.19.24";
+var APP_VERSION = "v1.19.27";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1599,7 +1599,22 @@ function btn(label,cls,fn,dis,why){
        that ends the morning honestly. It also moves the action off the page
        and into the bar, which is where the thing a driver is meant to press
        belongs — the same reasoning that put Start your run there. */
-    if(trip.started && !trip.ended){
+    /* Yours to end, not merely one that is running.
+
+       This tested only whether A run was in progress, and trip holds whatever
+       route the board last answered about. So a driver who tapped the other
+       route's tab to see how his brother was getting on had that run written
+       into his own trip state and saved to his phone — and the next time
+       anything repainted this bar, which is any close and reopen of the
+       screen, it offered him End trip for a bus he was not driving. Pressing
+       it ended the other man's run, and the sheet recorded the end under the
+       wrong name.
+
+       It happened. Moses looked in on South on the 16th and came back to End
+       trip sitting on his screen. Every other control here was already gated
+       on tripMayTap; this one was not, which is why the stop taps correctly
+       refused him and the heaviest button on the screen did not. */
+    if(trip.started && !trip.ended && tripMayTap(trip.route)){
       btn("End trip, arrived at church","btn-end",tripEnd).id="tripEnd";
       return;
     }
@@ -2959,6 +2974,24 @@ function tripStart(route, reg, anyway){
 function tripTap(stop,kind){
   if(!trip.started || trip.ended) return;
   if(tripMoving()){ toast("Not while the bus is moving. Tap it when you pull up."); return; }
+  /* The same gate Start trip has, and for the same reason. A tap is a record
+     filed under a driver's name — it is the record the Monday question rests
+     on — and this asked for nothing.
+
+     The hole was not theoretical. Start trip is the only thing that asked, and
+     it only ever runs before a run exists. Once a run is going, ANY phone that
+     picked that driver's name off the list could open Stops and bookings
+     straight from the home screen, adopt the live run off the sheet, and tap.
+     It did not need the PIN, it was never shown a PIN box, and what it wrote
+     landed on the driver's own trip id under the driver's own name. Nothing
+     downstream could tell the two phones apart, because as far as the sheet
+     was concerned there were not two phones.
+
+     Costs the real driver nothing: he keys his PIN before his walkaround and
+     it is still good here. With no signal and no PIN to check against, the
+     gate opens by itself and says so on the record, exactly as it does on the
+     first screen. Written down beats blocked; unattributed beats neither. */
+  if(pinGateNeeded()){ pinGateFocus(); return; }
 
   /* Once is once. A driver who is not sure his tap took will press again —
      that is not him being careless, it is the only thing he can do — and the
@@ -2983,6 +3016,8 @@ function tripTap(stop,kind){
 function tripUndo(stop){
   var was=trip.served[stop.id];
   if(!was) return;
+  /* Taking a tap back is as much a change to the record as making one. */
+  if(pinGateNeeded()){ pinGateFocus(); return; }
   delete trip.served[stop.id];
   tripSaveState();
   tripQueue({ event:"undo", undoes:was.event, stopId:stop.id, at:tripNow() });
@@ -2991,7 +3026,18 @@ function tripUndo(stop){
 
 function tripEnd(){
   if(!trip.started || trip.ended) return;
+  /* The same test the button is drawn behind, repeated here because the
+     button is not the only way in: a stale bar, a queued tap, anything that
+     reaches this function still has to answer for whose run it is ending. */
+  if(!tripMayTap(trip.route)){
+    toast("That is "+(tripWhoDrives(trip.route)||"another driver")+"’s run. Only he can end it.");
+    return;
+  }
   if(tripMoving()){ toast("Not while the bus is moving."); return; }
+  /* The heaviest tap of the morning: it closes the run for everybody, takes
+     the live times off every passenger's phone, and is what tells the booking
+     page the day is over. Least of all should it be the one that asks least. */
+  if(pinGateNeeded()){ pinGateFocus(); return; }
   trip.ended=tripNow();
   tripSaveState();
   tripQueue({ event:"end", stopId:"", at:trip.ended });
@@ -3948,6 +3994,18 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
   if(trip.lastStop) bits.push('last '+esc(trip.lastStop)+' at '+tripClock(trip.lastAt));
   h+='<p class="trip-note">'+bits.join(' \u00B7 ')+'</p>';
 
+  /* The PIN box has to exist HERE too, not only before the run starts.
+
+     It used to appear on the way in and nowhere else, which was fine for the
+     driver who signs in at half eight and never closes the app. It was no use
+     at all to the one whose phone restarted at the third stop: he came back to
+     a live run, buttons that would not answer him, and no box anywhere on the
+     screen to key the thing they were waiting for. Same box, same id, so there
+     is still only one implementation of it. */
+  if(mayTap && pinGateNeeded()){
+    h+=pinGateHtml("Every stop you tap is recorded in your name.");
+  }
+
   /* Always rendered, empty when there is nothing waiting, so the line exists
      to be written into later. It is the only thing on this screen a finished
      send changes, and having it always present is what lets the send stop
@@ -4083,13 +4141,16 @@ function pinGateFocus(){
 
 function tripActionHtml(nextStop){
   var waiting=nextStop?(rotaStopCounts[nextStop.id]||0):0;
+  /* Off, not disabled, so the tap is the prompt and the toast can say what is
+     wanted. Same bargain the bus buttons already make. */
+  var off=pinGateNeeded()?" is-off":"";
   var h='<div class="trip-actions">';
   if(nextStop){
     h+='<p class="trip-waiting"><b>'+waiting+(waiting===1?' person':' people')+
        '</b> waiting at '+esc(nextStop.stop)+'</p>'+
-       '<button class="btn btn-tap" data-triptap="'+esc(nextStop.id)+'" data-tripkind="pickup">'+
+       '<button class="btn btn-tap'+off+'" data-triptap="'+esc(nextStop.id)+'" data-tripkind="pickup">'+
        'Picked up: '+esc(nextStop.stop)+'</button>'+
-       '<button class="btn btn-ghost" data-triptap="'+esc(nextStop.id)+'" data-tripkind="empty">'+
+       '<button class="btn btn-ghost'+off+'" data-triptap="'+esc(nextStop.id)+'" data-tripkind="empty">'+
        'Nobody there</button>';
   } else {
     h+='<p class="trip-waiting">Every booked stop is done.</p>';
@@ -4729,8 +4790,12 @@ function pinGateSync(){
   if(b) b.disabled = !st.pinOk;
   /* Off, not disabled. A disabled button cannot tell anybody why it will not
      work, and that silence was the whole complaint. */
+  /* The stop taps and the undo are on this list as well now. They write to the
+     record under a name exactly as Start trip does, and leaving them off it
+     was the whole of the hole: a phone that never answered the PIN could not
+     begin a run, and could do anything it liked to one already going. */
   Array.prototype.forEach.call(
-    document.querySelectorAll("[data-tripstart],#tripStartAnyway"),
+    document.querySelectorAll("[data-tripstart],#tripStartAnyway,[data-triptap],[data-tripundo]"),
     function(x){ x.classList.toggle("is-off", !st.pinOk); });
   if(st.pinOk) g.classList.add("is-ok");
 }
