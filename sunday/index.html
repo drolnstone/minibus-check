@@ -408,6 +408,39 @@ function deviceRef(){
 }
 var REF = deviceRef();
 
+/* ---- the stop somebody is watching without a booking --------------------
+
+   The handle above was doing two jobs: finding your booking again, and
+   proving you were allowed to watch the bus. Only the first needs to know
+   who you are. A man who booked on his laptop and walked out with his phone
+   had a different handle in his pocket, so he was told there was nothing to
+   see — and he was right to complain.
+
+   So the watching half is answered by asking. He taps the kerb he is standing
+   at and follows the bus from there. It is kept because he should not have to
+   answer it again on every poll, and it is per-Sunday because next week he may
+   stand somewhere else.
+
+   It gives him nothing a booked passenger at that stop is not already shown:
+   every word in the panel is a fact about the stop. It does NOT get him the
+   driver's number, which stays behind a real booking. */
+var WKEY = "bus.watch.v1";
+function watchLoad(){
+  try{
+    var w = JSON.parse(localStorage.getItem(WKEY) || "null");
+    return (w && w.date && w.stopId) ? w : null;
+  }catch(e){ return null; }
+}
+function watchSave(stopId){
+  try{
+    if(stopId) localStorage.setItem(WKEY, JSON.stringify({ date:DATE, stopId:stopId }));
+    else localStorage.removeItem(WKEY);
+  }catch(e){}
+}
+/* The stop this phone is watching, or "" — and only ever for the Sunday now
+   on screen, so last week's answer cannot follow somebody into this one. */
+var watchStop = "";
+
 /* ---- state ------------------------------------------------------------
    booked is what the spreadsheet actually holds for this phone.
    chosen and seats are what the passenger is looking at right now.
@@ -485,8 +518,17 @@ function load(again){
       STOPS.forEach(function(s){ if(ROUTES.indexOf(s.route)<0) ROUTES.push(s.route); });
       if(!ROUTES.length) ROUTES=["North"];
 
-      /* Open on the route you are already booked on. */
+      /* The kerb this phone said it was standing at, if it has no booking of
+         its own. Dropped the moment a booking exists — the booking is the
+         better answer — and dropped when it belongs to another Sunday. */
+      var w = watchLoad();
+      watchStop = (!booked && w && w.date===DATE && stopById(w.stopId)) ? w.stopId : "";
+      if(!watchStop && w) watchSave("");
+
+      /* Open on the route you are already booked on, or the one you are
+         watching. */
       var mine = booked && stopById(booked.stopId);
+      if(!mine && watchStop) mine = stopById(watchStop);
       route = (mine && ROUTES.indexOf(mine.route)>=0) ? mine.route : ROUTES[0];
 
       $("when").textContent = prettyDate(DATE);
@@ -566,7 +608,10 @@ function liveFetch(){
   if(liveBusy){ liveAgain=true; return; }
   liveBusy=true;
   callFetch(ENDPOINT+"?trip=1&ref="+encodeURIComponent(REF)+
-            (liveWant? "&r="+encodeURIComponent(liveWant) : ""),
+            (liveWant? "&r="+encodeURIComponent(liveWant) : "")+
+            /* The kerb somebody without a booking said they were standing at.
+               Sent only when there is no booking to answer with. */
+            (watchStop? "&s="+encodeURIComponent(watchStop) : ""),
             {method:"GET",redirect:"follow"})
     .then(function(r){ return r.text(); })
     .then(function(t){
@@ -687,11 +732,44 @@ function paintLive(){
 
   var head="", sub="", cls="";
 
+  /* Who to turn to when somebody has been left at a kerb.
+
+     The coordinator can only apologise. The driver can turn round — he is on
+     the road, minutes away, and a message reaches him at the next stop, which
+     is exactly when he can read it and still do something about it. A ringing
+     phone would fight the rule this app already keeps: nothing is tapped while
+     the wheels are turning.
+
+     So the driver first, named, pointing at the button already sitting in the
+     bar — not a second button, which is a question nobody needs asked twice.
+     The coordinator when there is no number, and always once the run has
+     ended, because "come back for me" is not a thing anybody can act on from
+     the church car park. */
+  function turnTo(lead){
+    if(DRIVER && DRIVER.wa && live && !live.ended){
+      return lead+" tap <b>Message "+esc(DRIVER.name)+"</b> below — he may be "+
+             "able to come back for you.";
+    }
+    return lead+" "+ringCoordinator()+".";
+  }
+
   if(live.mine==="served"){
-    cls="live-go";
-    head="Picked up at "+esc(live.servedAt);
-    sub="The bus has been to "+esc(live.stop)+". If you are still standing there, "+
-        ringCoordinator()+".";
+    /* Two taps, two facts, and they are not the same fact.
+
+       After "Nobody there" nobody at that kerb was collected, so everyone
+       booked there is unambiguously still standing: say it plainly. After
+       "Picked up" he collected whoever he saw, and most people reading this
+       are on the bus — but the one who was thirty seconds up the road is
+       reading the identical screen, because the app has never known one
+       passenger from another. So that one is asked conditionally. */
+    var wasEmpty = live.servedEvent==="empty";
+    cls = wasEmpty ? "live-warn" : "live-go";
+    head = (wasEmpty ? "Nobody there at " : "Picked up at ")+esc(live.servedAt);
+    sub = wasEmpty
+      ? "The driver marked "+esc(live.stop)+" with nobody waiting. "+
+        turnTo("If you are at the stop,")
+      : "The bus has been to "+esc(live.stop)+". "+
+        turnTo("If you were not on it,");
   } else if(!live.started){
     head="Not set off yet";
     sub="Your stop is timetabled for "+esc(live.scheduled)+". This will update once the bus starts.";
@@ -706,6 +784,8 @@ function paintLive(){
          : "The bus is on time.");
   } else if(live.mine==="ended"){
     head="The bus has finished its run";
+    /* The coordinator, and only the coordinator. The bus is parked at church
+       and the service is starting; there is no coming back from here. */
     sub="It reached church without your stop being marked. Please "+ringCoordinator()+".";
   } else {
     /* quiet, wild, noevents: state the last known fact and stop. A number
@@ -719,10 +799,23 @@ function paintLive(){
         esc(live.scheduled)+".";
   }
 
+  /* "Your stop" is a claim about a seat. Somebody who is only watching a kerb
+     has not booked one, and the page should not imply otherwise. */
+  var eyebrow = ROLLED ? "Today\u2019s bus"
+              : live.watching ? "Watching "+esc(live.stop)
+              : "Your stop";
+
   box.innerHTML=banner+'<div class="live '+cls+'">'+
-    '<p class="live-eyebrow">'+(ROLLED?"Today\u2019s bus":"Your stop")+'</p>'+
+    '<p class="live-eyebrow">'+eyebrow+'</p>'+
     '<p class="live-big">'+head+'</p>'+
-    '<p class="live-sub">'+sub+'</p></div>';
+    '<p class="live-sub">'+sub+'</p>'+
+    (live.watching
+      ? '<p class="live-sub" style="margin-top:8px">'+
+        '<button type="button" class="ring" id="watchOff" '+
+        'style="background:none;border:none;padding:0;font:inherit;color:inherit">'+
+        'Watching the wrong stop?</button></p>'
+      : '')+
+    '</div>';
 
   Array.prototype.forEach.call(box.querySelectorAll("[data-liveroute]"),function(b){
     b.addEventListener("click",function(){
@@ -730,6 +823,16 @@ function paintLive(){
       liveFetch();
     });
   });
+  if($("watchOff")) $("watchOff").addEventListener("click",function(){
+    watchStop=""; watchSave(""); live=null; paintLive(); paint();
+  });
+
+  /* The bar carries the Message button, and what it should say depends on
+     what has just been painted here. paintLive is reached from the poll,
+     which does not otherwise repaint the bar, so the two would drift: the
+     button would keep a neutral opener through a stop that had been and gone,
+     and would still be there after the run ended. */
+  paintBar();
 }
 
 function stopById(id){
@@ -765,6 +868,19 @@ function paint(){
           'This is the list the driver has. '+
           (booked ? '' : 'If you need a seat today, tell the group directly.')+
           '</div>';
+
+    /* Waiting, but this phone holds no booking. Almost always because the
+       booking was made somewhere else — a laptop, a phone that has since
+       cleared its storage, one that was reinstalled — and occasionally
+       because somebody is simply thinking of walking down to the stop.
+
+       All three want the same thing, and none of them needs to be identified
+       to have it. Tap the kerb you are standing at and follow the bus from
+       there. It is not a seat and does not pretend to be. */
+    if(!booked && !watchStop){
+      html+='<div class="note"><b>Waiting for the bus?</b> Tap the stop you are '+
+            'at and this page will follow it for you. It does not book a seat.</div>';
+    }
   } else if(ROLLED){
     /* Two different Sundays are on this screen at once: the bus running now,
        up in the live panel, and the one below that is open for booking. Said
@@ -785,7 +901,22 @@ function paint(){
          now agree, and both name the same two ways out. */
       html+='<div class="note note-go"><b>You are booked.</b></div>';
     } else if(!booked && !chosen){
-      html+='';
+      /* A seat booked somewhere else is still a seat.
+
+         The handle that finds a booking again belongs to one browser, so a
+         family who booked on a laptop and then opens this on a phone is shown
+         an empty screen and books a second time. Two rows, two lots of seats,
+         one family — and cancelling on the phone leaves the laptop's seats
+         standing on the driver's list where they cannot see them. On a
+         fifteen seater that is how a bus fills up with people who are not
+         coming.
+
+         Deliberately about YOUR other device and never about this stop.
+         "Already booked at this stop" would read, at a kerb three households
+         share, as somebody having taken your seat. */
+      html+='<p class="foot" style="margin:0 0 14px">Booked already on another '+
+            'phone or a computer? That seat still counts — booking here as '+
+            'well adds a second one.</p>';
     }
   }
 
@@ -812,11 +943,19 @@ function paint(){
      still shown ticked and legible, and the others simply stop responding. */
   var locked = !!booked && !CLOSED;
 
+  /* After the cutoff a phone with no booking may still tap a stop \u2014 not to
+     book it, which is shut, but to say that is the kerb it is standing at.
+     Its own attribute, so nothing about the booking path is touched. */
+  var picking = CLOSED && !booked;
+
   mine.forEach(function(s){
-    var n=COUNTS[s.id]||0, on=(chosen===s.id);
+    var n=COUNTS[s.id]||0;
+    var on = picking ? (watchStop===s.id) : (chosen===s.id);
+    var attr = picking ? 'data-watch="'+esc(s.id)+'"' : 'data-stop="'+esc(s.id)+'"';
+    var dead = picking ? false : (CLOSED||locked);
     html+='<button class="stop'+(on?' is-on':'')+(locked&&!on?' is-locked':'')+
-            '" type="button" data-stop="'+esc(s.id)+'"'+
-            ((CLOSED||locked)?' disabled':'')+' aria-pressed="'+on+'">'+
+            '" type="button" '+attr+
+            (dead?' disabled':'')+' aria-pressed="'+on+'">'+
             '<span class="stop-time">'+esc(s.time)+'</span>'+
             '<span class="stop-body">'+
               '<span class="stop-name">'+esc(s.stop)+'</span>'+
@@ -932,6 +1071,18 @@ function paint(){
       paint();
     });
   });
+  /* Choosing a kerb to watch. Books nothing, sends nothing, and asks for
+     nothing: it only tells this page which stop to follow. */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-watch]"),function(b){
+    b.addEventListener("click",function(){
+      var id=this.getAttribute("data-watch");
+      watchStop = (watchStop===id) ? "" : id;
+      watchSave(watchStop);
+      live=null; paintLive();
+      paint();
+      if(watchStop) liveStart();
+    });
+  });
   /* Clamped at both ends here as well as on the buttons' disabled state, so
      a fast double tap on the last one cannot push it past 12 or under 1. */
   if($("seatsUp")) $("seatsUp").addEventListener("click",function(){
@@ -999,11 +1150,31 @@ function paintBar(){
        is most of the week and any Sunday nobody has filled the column in for,
        and the page reads perfectly well without it. */
     var wa=$("wa");
-    if(DRIVER && DRIVER.wa){
+    /* Gone once the run has ended. The bus is at church and the service is
+       starting, so every message this button could send has become a request
+       nobody can act on. */
+    if(DRIVER && DRIVER.wa && !(live && live.ended)){
       var at=stopById(booked.stopId);
+      var where = at ? at.stop : "my stop";
+      /* What the message says depends on what has happened at that kerb.
+
+         Once the stop has been marked \u2014 either way \u2014 the passenger reading
+         this may be standing there watching the bus leave, and the only thing
+         worth sending is the ask. It is written as an ask and not as a report:
+         a report can be argued with at the roadside, it tells a driver he
+         tapped wrong when he may have been perfectly right, and it needs
+         somebody to be at fault before anyone can help. This needs nobody to
+         be at fault. The decision is left where it actually sits, with the
+         driver and the people already aboard.
+
+         Before that, the neutral opener: running late, waiting a few doors
+         up, a pram to get on. */
+      var body = (live && live.mine==="served")
+        ? "Sunday bus \u2014 "+where+", "+(live.servedAt||"")+". I am sorry, I "+
+          "missed my bus. Please, can you come back for me? I am here now."
+        : "Sunday bus \u2014 I am booked at "+where+". ";
       wa.href="https://wa.me/"+encodeURIComponent(DRIVER.wa)+"?text="+
-              encodeURIComponent("Sunday bus \u2014 I am booked at "+
-                (at? at.stop : "my stop")+". ");
+              encodeURIComponent(body);
       wa.textContent="Message "+DRIVER.name;
       wa.style.display="";
     } else {
