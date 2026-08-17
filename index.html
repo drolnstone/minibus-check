@@ -64,6 +64,62 @@
   /* Edge colours the status families already used in several places, named so
      the newer work shares them instead of inventing its own. */
   --warn-line:#EBD3A8;--pass-line:#B7D8C6;--stop-line:#E8BCB7;
+
+  /* ---- The rest of the palette, named so a theme can reach it ----
+
+     Every value below was already on the screen, written in raw hex at the
+     point of use. Naming them changes nothing about how the app looks; it is
+     the whole of what makes a theme possible, because a theme can only move
+     a colour that has a name. */
+
+  /* White does two jobs and they part company in the dark. --card is a
+     surface and follows the theme. --on-accent is the text on a steel, green
+     or red button, and stays white in every theme because the button
+     underneath stays dark in every theme. */
+  --on-accent:#FFFFFF;
+
+  /* Faintly tinted surfaces: a chosen vehicle, a passed item, a defect. */
+  --card-2:#FBFCFD;
+  --pass-tint:#FBFDFC;--warn-tint:#FFFDF8;--stop-tint:#FFF9F8;--mute-tint:#FAFAFB;
+  --rail:#FAFBFC;--press:#EDEFF1;
+
+  /* Deep text sitting on a status background, and the two greys that are not
+     --muted: body copy inside a card, and a note under a queued item. */
+  --pass-ink:#0E4A2D;--warn-ink:#5A4008;--stop-ink:#6B1710;--call-ink:#8A1710;
+  --ink-2:#2E353D;--ink-3:#39414B;--faint:#AEB8C4;
+
+  /* The South route badge. North borrows the info family. */
+  --south:#5A3E14;--south-bg:#FBF4E8;--south-line:#E6D2AC;
+
+  /* The dashboard strip is dark already, in every theme, so these do not
+     move. A driver glancing down at the lamp is reading the same three
+     colours whatever the rest of the app is doing. */
+  --dash-ink:#EEF1F4;--dash-edge:#0C1016;--dash-slot:#39424E;--dash-dim:#9BA7B4;
+  --dash-plate-edge:#556170;
+  --dash-warn:#6E4300;--dash-stop:#7A1811;--dash-stop-edge:#E23B2C;
+  --dash-warn-ink:#F2DCC4;--dash-stop-ink:#FFD9D2;
+  --lamp-pass:#37C97E;--lamp-warn:#F5A623;--lamp-stop:#FF5A47;--lamp-bar:#7FB4E8;
+
+  /* A number plate is yellow with black lettering. It is not a theme. */
+  --plate-ink:#101010;
+
+  /* The four see-through colours. Written as rgba at the point of use, which
+     meant the fixed foot bar stayed the colour of a light page whatever the
+     rest of the app was doing, and the dashed rules between defects were
+     black lines drawn on a black card. */
+  --veil:rgba(244,245,246,.96);   /* behind the fixed foot bar */
+  --dashed:rgba(0,0,0,.18);       /* the rules between listed items */
+  --inset:rgba(0,0,0,.28);        /* the ring on the chosen fuel level */
+  --scrim:rgba(22,25,31,.48);     /* behind a modal */
+
+  /* The accent doing two different jobs. As a background it carries white
+     text; as text it must be legible on a card. In a light theme they are the
+     same colour, which is why this went unnoticed until there was a dark one:
+     a dark steel headline on a dark card is a headline nobody can read. */
+  --accent-ink:#1B222C;
+  --dead-ink:#FFFFFF;            /* the label on a disabled Confirm */
+
+  color-scheme:light;
   --r:10px;--tap:56px;
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-t:env(safe-area-inset-top,0px);
@@ -86,6 +142,73 @@
    worth making. What goes is only the accidental gesture. */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html,body{margin:0;padding:0}
+/* ======================= THEMES =======================================
+
+   A theme moves the furniture: the page, the cards, the header, the primary
+   button. It does not move green, amber and red.
+
+   That is a rule, not a preference. This app's job is to say whether a bus
+   may carry passengers, and it says it in three colours. A theme that could
+   repaint "Do not run" into something calmer would be a theme that can lie
+   about a vehicle. So every palette below keeps the same three hues, and
+   each was checked against WCAG before it was written down: white on the
+   pass, defect and stop buttons clears 4.5:1, every verdict's text clears
+   4.5:1 on its own background, and each status edge clears 3:1 against the
+   page it sits on.
+
+   Chosen on the sign-in screen, remembered on the phone, and set to follow
+   the phone's own light/dark setting until somebody says otherwise. Nothing
+   here is sent anywhere or shared between drivers.
+   ==================================================================== */
+
+/* ---- Dark. The one with a reason: a walkaround at half seven on a
+        December morning, in an unlit car park, one-handed. ---- */
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --ink:#E7EBF0;--paper:#0E1216;--card:#181D25;
+  --steel:#31404F;--steel-2:#3D4E60;--hair:#2B333E;--muted:#9EA9B6;
+  --pass:#1B8552;--pass-bg:#12291F;
+  --warn:#A36807;--warn-bg:#2B2113;
+  --stop:#C93A2E;--stop-bg:#2E1715;
+  --info:#3F7FBC;--info-deep:#9AC6EA;--info-bg:#152431;--info-line:#2E4356;
+  --info-soft:#7FB3E4;--info-ring:#3E5E79;
+  --warn-line:#5C4826;--pass-line:#265741;--stop-line:#5E2F2A;
+  --card-2:#1C222B;
+  --pass-tint:#131C18;--warn-tint:#1F1B13;--stop-tint:#201614;--mute-tint:#171B21;
+  --rail:#141920;--press:#232A33;
+  --pass-ink:#7FDCAB;--warn-ink:#EFCB8B;--stop-ink:#FFB0A4;--call-ink:#FF9C90;
+  --ink-2:#CAD1DA;--ink-3:#B0B9C4;--faint:#7E8996;
+  --south:#DFC48D;--south-bg:#241D11;--south-line:#4B3D23;
+  --accent-ink:#9DB4CC;--dead-ink:#67717E;
+  --veil:rgba(14,18,22,.96);--dashed:rgba(255,255,255,.15);
+  --inset:rgba(255,255,255,.26);--scrim:rgba(0,0,0,.62);
+}
+/* The chevron is drawn into the box as an image, so it cannot inherit a
+   variable. One rule rather than leaving a near-invisible arrow. */
+html[data-theme="dark"] .field select{
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9'><path d='M1 1l6 6 6-6' stroke='%239EA9B6' stroke-width='2' fill='none' stroke-linecap='round'/></svg>");
+}
+
+/* The picker itself. Borrows the chip shape already on the review screen, so
+   it is not a new kind of control, only a new place for an old one. */
+.themes{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:13px 0 3px}
+.themes button{min-height:32px;padding:0 11px;border:1.5px solid var(--hair);
+  border-radius:16px;background:var(--card);color:var(--muted);
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:13px;
+  letter-spacing:.06em;text-transform:uppercase}
+.themes button.on{background:var(--steel);border-color:var(--steel);color:var(--on-accent)}
+
+/* ---- Two colour choices. Light, and identical to the default in every
+        respect except the colour of the header, the primary button and the
+        active tab. Deliberately that narrow: it is the one part of the
+        screen that carries no meaning. ---- */
+html[data-theme="green"]{
+  --steel:#14532D;--steel-2:#1E6B3C;--paper:#F2F6F3;--accent-ink:#14532D;
+}
+html[data-theme="navy"]{
+  --steel:#1E3260;--steel-2:#2C4680;--paper:#F2F4F9;--accent-ink:#1E3260;
+}
+
 body{background:var(--paper);color:var(--ink);
   font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
@@ -93,8 +216,8 @@ button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
 input,textarea{font:inherit;color:inherit}
 
 /* ---------- instrument strip ---------- */
-.dash{position:sticky;top:0;z-index:60;background:var(--steel);color:#EEF1F4;
-  border-bottom:3px solid #0C1016;transition:background .25s,border-color .25s;
+.dash{position:sticky;top:0;z-index:60;background:var(--steel);color:var(--dash-ink);
+  border-bottom:3px solid var(--dash-edge);transition:background .25s,border-color .25s;
   padding-top:calc(var(--safe-t) + 4px)}
 /* Installed to the home screen the app runs full bleed, so the status bar
    would otherwise sit on top of the registration plate. Give it real room. */
@@ -104,35 +227,35 @@ input,textarea{font:inherit;color:inherit}
 @media all and (display-mode:fullscreen){
   .dash{padding-top:calc(var(--safe-t) + 8px)}
 }
-.dash.is-warn{background:#6E4300;border-bottom-color:var(--warn)}
-.dash.is-stop{background:#7A1811;border-bottom-color:#E23B2C}
+.dash.is-warn{background:var(--dash-warn);border-bottom-color:var(--warn)}
+.dash.is-stop{background:var(--dash-stop);border-bottom-color:var(--dash-stop-edge)}
 .dash-top{display:flex;align-items:center;gap:10px;
   padding:9px calc(14px + var(--safe-r)) 9px calc(14px + var(--safe-l))}
-.plate{display:inline-flex;align-items:center;background:var(--plate);color:#101010;
+.plate{display:inline-flex;align-items:center;background:var(--plate);color:var(--plate-ink);
   font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;letter-spacing:.055em;
-  padding:3px 9px 2px;border-radius:4px;border:1.5px solid #101010;flex:none}
-.plate.blank{background:#39424E;color:#9BA7B4;border-color:#556170;letter-spacing:.14em;font-size:14px}
+  padding:3px 9px 2px;border-radius:4px;border:1.5px solid var(--plate-ink);flex:none}
+.plate.blank{background:var(--dash-slot);color:var(--dash-dim);border-color:var(--dash-plate-edge);letter-spacing:.14em;font-size:14px}
 .dash-id{flex:1;min-width:0}
 .dash-id b{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:16px;
   letter-spacing:.09em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
-.dash-id span{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#9BA7B4;
+.dash-id span{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dash-dim);
   font-family:"Barlow Condensed",sans-serif;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dash.is-warn .dash-id span,.dash.is-stop .dash-id span{color:#F2DCC4}
+.dash.is-warn .dash-id span,.dash.is-stop .dash-id span{color:var(--dash-warn-ink)}
 .lamps{display:flex;gap:5px;flex:none}
-.lamp{width:11px;height:11px;border-radius:50%;background:#39424E;transition:background .2s,box-shadow .2s}
-.lamp.on-pass{background:#37C97E;box-shadow:0 0 9px rgba(55,201,126,.65)}
-.lamp.on-warn{background:#F5A623;box-shadow:0 0 9px rgba(245,166,35,.7)}
-.lamp.on-stop{background:#FF5A47;box-shadow:0 0 11px rgba(255,90,71,.85)}
-.bar{height:4px;background:#39424E}
-.bar i{display:block;height:100%;background:#7FB4E8;width:0;transition:width .3s}
-.dash.is-warn .bar i{background:#F5A623}
-.dash.is-stop .bar i{background:#FF5A47}
+.lamp{width:11px;height:11px;border-radius:50%;background:var(--dash-slot);transition:background .2s,box-shadow .2s}
+.lamp.on-pass{background:var(--lamp-pass);box-shadow:0 0 9px rgba(55,201,126,.65)}
+.lamp.on-warn{background:var(--lamp-warn);box-shadow:0 0 9px rgba(245,166,35,.7)}
+.lamp.on-stop{background:var(--lamp-stop);box-shadow:0 0 11px rgba(255,90,71,.85)}
+.bar{height:4px;background:var(--dash-slot)}
+.bar i{display:block;height:100%;background:var(--lamp-bar);width:0;transition:width .3s}
+.dash.is-warn .bar i{background:var(--lamp-warn)}
+.dash.is-stop .bar i{background:var(--lamp-stop)}
 .dash-alert{display:none;
   padding:9px calc(14px + var(--safe-r)) 11px calc(14px + var(--safe-l));
   font-family:"Barlow Condensed",sans-serif;font-weight:700;
   font-size:20px;letter-spacing:.06em;text-transform:uppercase;line-height:1.1}
 .dash-alert small{display:block;font-family:"IBM Plex Sans",sans-serif;font-weight:400;font-size:13px;
-  letter-spacing:0;text-transform:none;margin-top:3px;color:#FFD9D2}
+  letter-spacing:0;text-transform:none;margin-top:3px;color:var(--dash-stop-ink)}
 .dash.is-stop .dash-alert{display:block}
 
 /* ---------- shell ---------- */
@@ -155,7 +278,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .field label{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:14px;
   letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
 .field input,.field textarea{width:100%;padding:13px 12px;border:1.5px solid var(--hair);border-radius:8px;
-  background:#fff;font-size:17px}
+  background:var(--card);font-size:17px}
 .field input:focus,.field textarea:focus{outline:3px solid var(--info-ring);outline-offset:1px;border-color:var(--steel-2)}
 .field .hint{font-size:13px;color:var(--muted);margin-top:5px}
 
@@ -187,10 +310,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   border:1.5px solid var(--hair);border-left:5px solid var(--steel-2);border-radius:var(--r);
   padding:14px 13px;margin-bottom:11px;transition:transform .08s}
 .veh:active{transform:scale(.99)}
-.veh.is-on{border-color:var(--steel);border-left-color:var(--steel);background:#FBFCFD;
+.veh.is-on{border-color:var(--steel);border-left-color:var(--steel);background:var(--card-2);
   box-shadow:0 0 0 2px rgba(27,34,44,.14)}
-.veh-plate{background:var(--plate);color:#101010;font-family:"Barlow Condensed",sans-serif;font-weight:700;
-  font-size:20px;letter-spacing:.05em;padding:5px 10px 4px;border-radius:5px;border:2px solid #101010;flex:none}
+.veh-plate{background:var(--plate);color:var(--plate-ink);font-family:"Barlow Condensed",sans-serif;font-weight:700;
+  font-size:20px;letter-spacing:.05em;padding:5px 10px 4px;border-radius:5px;border:2px solid var(--plate-ink);flex:none}
 .veh-txt{flex:1;min-width:0}
 .veh-txt b{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;line-height:1.15}
 .veh-txt span{display:block;font-size:13px;color:var(--muted)}
@@ -201,9 +324,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   letter-spacing:.03em;text-transform:uppercase;color:var(--stop)}
 .gatebox p{margin:0 0 12px;font-size:14px}
 .confirm{display:flex;align-items:center;gap:12px;width:100%;min-height:var(--tap);padding:10px 12px;
-  background:#fff;border:1.5px solid var(--hair);border-radius:8px;text-align:left;font-size:15px;font-weight:500}
+  background:var(--card);border:1.5px solid var(--hair);border-radius:8px;text-align:left;font-size:15px;font-weight:500}
 .confirm .box{width:26px;height:26px;border:2px solid var(--muted);border-radius:5px;flex:none;
-  display:grid;place-items:center;font-size:16px;color:#fff}
+  display:grid;place-items:center;font-size:16px;color:var(--on-accent)}
 .confirm.is-on{border-color:var(--pass);background:var(--pass-bg)}
 .confirm.is-on .box{background:var(--pass);border-color:var(--pass)}
 
@@ -215,40 +338,40 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .item{background:var(--card);border:1px solid var(--hair);border-left:5px solid var(--hair);
   border-radius:var(--r);padding:13px 13px 11px;margin-bottom:11px}
 .item.crit{border-left-color:var(--stop)}
-.item.is-pass{border-left-color:var(--pass);background:#FBFDFC}
-.item.is-def{border-left-color:var(--warn);background:#FFFDF8}
-.item.is-def.crit{border-left-color:var(--stop);background:#FFF9F8}
+.item.is-pass{border-left-color:var(--pass);background:var(--pass-tint)}
+.item.is-def{border-left-color:var(--warn);background:var(--warn-tint)}
+.item.is-def.crit{border-left-color:var(--stop);background:var(--stop-tint)}
 .item h3{margin:0 0 3px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;line-height:1.15}
 .tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px}
 .tag{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11px;letter-spacing:.11em;
   text-transform:uppercase;padding:2px 7px;border-radius:4px}
 .tag.t-crit{background:var(--stop-bg);color:var(--stop);border:1px solid var(--stop-line)}
 .tag.t-watch{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
-.item p.what{margin:0 0 9px;font-size:15px;color:#2E353D}
+.item p.what{margin:0 0 9px;font-size:15px;color:var(--ink-2)}
 .history{font-size:13px;background:var(--warn-bg);border-left:3px solid var(--warn);padding:7px 9px;
-  border-radius:0 6px 6px 0;margin:0 0 10px;color:#5A4008}
+  border-radius:0 6px 6px 0;margin:0 0 10px;color:var(--warn-ink)}
 .history b{font-weight:600}
 .choose{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-.choose button{min-height:var(--tap);border:1.5px solid var(--hair);border-radius:8px;background:#fff;
+.choose button{min-height:var(--tap);border:1.5px solid var(--hair);border-radius:8px;background:var(--card);
   font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;letter-spacing:.06em;
   text-transform:uppercase;display:flex;align-items:center;justify-content:center;transition:transform .08s}
 .choose button:active{transform:scale(.97)}
-.choose .ok.on{background:var(--pass);border-color:var(--pass);color:#fff}
-.choose .def.on{background:var(--warn);border-color:var(--warn);color:#fff}
+.choose .ok.on{background:var(--pass);border-color:var(--pass);color:var(--on-accent)}
+.choose .def.on{background:var(--warn);border-color:var(--warn);color:var(--on-accent)}
 .choose .na{grid-column:1 / -1;min-height:38px;font-size:14px;color:var(--muted)}
-.choose .na.on{background:var(--muted);border-color:var(--muted);color:#fff}
-.item.is-na{border-left-color:var(--muted);background:#FAFAFB}
+.choose .na.on{background:var(--muted);border-color:var(--muted);color:var(--on-accent)}
+.item.is-na{border-left-color:var(--muted);background:var(--mute-tint)}
 .item.is-na h3{color:var(--muted)}
 .item.crit .choose .def.on{background:var(--stop);border-color:var(--stop)}
 .note{margin-top:10px;display:none}
 .note.is-on{display:block}
 .note textarea{width:100%;min-height:74px;padding:11px;border:1.5px solid var(--warn);border-radius:8px;
-  background:#fff;font-size:16px;resize:vertical}
+  background:var(--card);font-size:16px;resize:vertical}
 .note .lbl{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.11em;
   text-transform:uppercase;color:var(--warn);margin-bottom:5px}
 
 /* ---------- footer ---------- */
-.footbar{position:fixed;left:0;right:0;bottom:0;z-index:70;background:rgba(244,245,246,.96);
+.footbar{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--veil);
   backdrop-filter:blur(8px);border-top:1px solid var(--hair);
   padding:10px calc(14px + var(--safe-r)) calc(10px + var(--safe-b)) calc(14px + var(--safe-l))}
 .footbar-in{max-width:640px;margin:0 auto;display:flex;gap:9px;align-items:center}
@@ -256,7 +379,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   font-weight:700;font-size:20px;letter-spacing:.06em;text-transform:uppercase;display:inline-flex;
   align-items:center;justify-content:center;border:1.5px solid transparent;transition:transform .08s,opacity .15s}
 .btn:active{transform:scale(.98)}
-.btn-main{background:var(--steel);color:#fff;flex:1}
+.btn-main{background:var(--steel);color:var(--on-accent);flex:1}
 .btn-main[disabled]{opacity:.38;pointer-events:none}
 /* A blocked button keeps the faded look but stays tappable, so it can explain
    itself. Doing nothing at all reads as a broken app. */
@@ -267,67 +390,67 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   12%,58%{box-shadow:0 0 0 3px var(--warn)}
   100%{box-shadow:0 0 0 0 rgba(178,107,0,0)}
 }
-.btn-ghost{background:#fff;border-color:var(--hair);color:var(--ink)}
-.btn-stop{background:var(--stop);color:#fff;flex:1}
+.btn-ghost{background:var(--card);border-color:var(--hair);color:var(--ink)}
+.btn-stop{background:var(--stop);color:var(--on-accent);flex:1}
 .btn-wide{width:100%}
-.btn-end{background:#fff;border-color:var(--steel);color:var(--steel);width:100%}
+.btn-end{background:var(--card);border-color:var(--steel);color:var(--accent-ink);width:100%}
 /* Only ever seen when something is genuinely waiting, so it is allowed to
    carry the amber. */
 .btn-warn{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn)}
 .count{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted);text-align:center;margin-bottom:7px}
 
 /* ---------- review / result ---------- */
-.sum{border:1px solid var(--hair);border-radius:var(--r);overflow:hidden;background:#fff;margin-bottom:14px}
+.sum{border:1px solid var(--hair);border-radius:var(--r);overflow:hidden;background:var(--card);margin-bottom:14px}
 .sum-row{display:flex;justify-content:space-between;gap:12px;padding:11px 13px;border-bottom:1px solid var(--hair);font-size:15px}
 .sum-row:last-child{border-bottom:none}
 .sum-row b{font-weight:600}
 .sum-row .v{font-family:"IBM Plex Mono",monospace;font-size:14px;text-align:right}
 .verdict{border-radius:var(--r);padding:15px;margin-bottom:16px;border:1.5px solid}
 .verdict p{margin:0;font-size:14px}
-.v-go{background:var(--pass-bg);border-color:var(--pass);color:#0E4A2D}
+.v-go{background:var(--pass-bg);border-color:var(--pass);color:var(--pass-ink)}
 .v-go h2{color:var(--pass)}
-.v-warn{background:var(--warn-bg);border-color:var(--warn);color:#5A4008}
+.v-warn{background:var(--warn-bg);border-color:var(--warn);color:var(--warn-ink)}
 .v-warn h2{color:var(--warn)}
-.v-stop{background:var(--stop-bg);border-color:var(--stop);color:#6B1710}
+.v-stop{background:var(--stop-bg);border-color:var(--stop);color:var(--stop-ink)}
 .v-stop h2{color:var(--stop)}
 .deflist{list-style:none;margin:10px 0 0;padding:0}
-.deflist li{padding:8px 0;border-top:1px dashed rgba(0,0,0,.18);font-size:14px}
+.deflist li{padding:8px 0;border-top:1px dashed var(--dashed);font-size:14px}
 .deflist li:first-child{border-top:none}
 .deflist b{font-weight:600}
 
 /* ---------- send status ---------- */
 .sendbox{border-radius:var(--r);padding:14px;margin-bottom:14px;border:1.5px solid;display:flex;gap:12px;align-items:flex-start}
 .sendbox .ico{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;
-  font-size:17px;color:#fff;font-weight:700}
+  font-size:17px;color:var(--on-accent);font-weight:700}
 .sendbox b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:700;letter-spacing:.03em}
 .sendbox p{margin:2px 0 0;font-size:14px}
 .s-sending{background:var(--info-bg);border-color:var(--info-ring);color:var(--info-deep)}
 .s-sending .ico{background:var(--info-soft)}
-.s-ok{background:var(--pass-bg);border-color:var(--pass);color:#0E4A2D}
+.s-ok{background:var(--pass-bg);border-color:var(--pass);color:var(--pass-ink)}
 .s-ok .ico{background:var(--pass)}
-.s-hold{background:var(--warn-bg);border-color:var(--warn);color:#5A4008}
+.s-hold{background:var(--warn-bg);border-color:var(--warn);color:var(--warn-ink)}
 .s-hold .ico{background:var(--warn)}
-.spin{width:15px;height:15px;border:2.5px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;
+.spin{width:15px;height:15px;border:2.5px solid rgba(255,255,255,.45);border-top-color:var(--card);border-radius:50%;
   animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 
-.pend{background:#fff;border:1px solid var(--hair);border-left:5px solid var(--warn);border-radius:var(--r);
+.pend{background:var(--card);border:1px solid var(--hair);border-left:5px solid var(--warn);border-radius:var(--r);
   padding:12px;margin-bottom:10px}
 .pend-h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 .pend-h b{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:700}
 .pend-h .d{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted)}
-.pend p{margin:5px 0 0;font-size:14px;color:#39414B}
+.pend p{margin:5px 0 0;font-size:14px;color:var(--ink-3)}
 .empty{text-align:center;padding:34px 16px;color:var(--muted)}
 .empty b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:20px;color:var(--ink);margin-bottom:5px}
-.banner{display:none;background:var(--warn-bg);border-bottom:1px solid var(--warn);color:#5A4008;
+.banner{display:none;background:var(--warn-bg);border-bottom:1px solid var(--warn);color:var(--warn-ink);
   padding:9px calc(14px + var(--safe-r)) 9px calc(14px + var(--safe-l));font-size:14px;text-align:center}
 .banner.is-on{display:block}
-.banner button{text-decoration:underline;font-weight:600;color:#5A4008}
+.banner button{text-decoration:underline;font-weight:600;color:var(--warn-ink)}
 .linkrow{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap}
 .linkrow .btn{flex:1;min-width:140px;font-size:17px}
 .tiny{font-size:12px;color:var(--muted);text-align:center;margin-top:20px;line-height:1.5}
 .toast{position:fixed;left:50%;bottom:calc(84px + var(--safe-b));transform:translateX(-50%) translateY(14px);
-  background:var(--steel);color:#fff;padding:11px 17px;border-radius:8px;font-size:14px;opacity:0;
+  background:var(--steel);color:var(--on-accent);padding:11px 17px;border-radius:8px;font-size:14px;opacity:0;
   pointer-events:none;transition:.25s;z-index:200;max-width:90vw;text-align:center}
 /* 200, above the request sheet at 120. It used to sit at 90, which put every
    message fired while the sheet was open BEHIND the dark overlay. The rules
@@ -338,20 +461,20 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 
 /* ---------- select ---------- */
 .field select{width:100%;padding:13px 40px 13px 12px;border:1.5px solid var(--hair);border-radius:8px;
-  background:#fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9'><path d='M1 1l6 6 6-6' stroke='%235C6672' stroke-width='2' fill='none' stroke-linecap='round'/></svg>") no-repeat right 14px center;
+  background:var(--card) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9'><path d='M1 1l6 6 6-6' stroke='%235C6672' stroke-width='2' fill='none' stroke-linecap='round'/></svg>") no-repeat right 14px center;
   font-size:17px;appearance:none;-webkit-appearance:none}
 .field select:focus{outline:3px solid var(--info-ring);outline-offset:1px;border-color:var(--steel-2)}
 .linkbtn{background:none;text-decoration:underline;font-size:14px;color:var(--muted);padding:6px 0}
 
 /* ---------- due dates ---------- */
 .due{border-radius:var(--r);padding:13px;margin-bottom:14px;border:1.5px solid}
-.due.soon{background:var(--warn-bg);border-color:var(--warn);color:#5A4008;animation:pulseWarn 1.9s ease-in-out infinite}
-.due.over{background:var(--stop-bg);border-color:var(--stop);color:#6B1710;animation:pulseStop 1.4s ease-in-out infinite}
+.due.soon{background:var(--warn-bg);border-color:var(--warn);color:var(--warn-ink);animation:pulseWarn 1.9s ease-in-out infinite}
+.due.over{background:var(--stop-bg);border-color:var(--stop);color:var(--stop-ink);animation:pulseStop 1.4s ease-in-out infinite}
 .due h4{margin:0 0 7px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;
   letter-spacing:.05em;text-transform:uppercase}
 .due ul{list-style:none;margin:0;padding:0}
 .due li{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:14px;
-  border-top:1px dashed rgba(0,0,0,.16)}
+  border-top:1px dashed var(--dashed)}
 .due li:first-child{border-top:none}
 .due li b{font-weight:600}
 .due li .w{font-family:"IBM Plex Mono",monospace;font-size:13px;white-space:nowrap}
@@ -362,7 +485,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .chip.soon{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
 .chip.over{background:var(--stop-bg);color:var(--stop);border:1px solid var(--stop-line)}
 .callbtn{display:flex;align-items:center;justify-content:center;min-height:52px;margin-top:12px;
-  background:var(--stop);color:#fff;border-radius:9px;font-family:"Barlow Condensed",sans-serif;
+  background:var(--stop);color:var(--on-accent);border-radius:9px;font-family:"Barlow Condensed",sans-serif;
   font-weight:700;font-size:20px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none}
 
 /* ---------- church branding ---------- */
@@ -380,35 +503,35 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   text-transform:uppercase;color:var(--muted)}
 
 /* ---------- dash call button ---------- */
-.dash-call{display:inline-flex;align-items:center;gap:7px;margin-top:8px;background:#fff;color:#8A1710;
+.dash-call{display:inline-flex;align-items:center;gap:7px;margin-top:8px;background:var(--card);color:var(--call-ink);
   border-radius:7px;padding:9px 14px;text-decoration:none;font-family:"Barlow Condensed",sans-serif;
   font-weight:700;font-size:17px;letter-spacing:.05em;text-transform:uppercase}
 
 /* ---------- mileage confirm ---------- */
 .fuel{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin-top:4px}
-.fuel button{min-height:52px;border:1.5px solid var(--hair);border-radius:6px;background:#fff;
+.fuel button{min-height:52px;border:1.5px solid var(--hair);border-radius:6px;background:var(--card);
   padding:0;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:13px;
   color:var(--muted);display:flex;align-items:flex-end;justify-content:center;
   padding-bottom:5px;transition:background .12s,border-color .12s}
 /* The colour is set per segment in script. The grey here is only a fallback,
    so a lit segment can never end up white on white. */
-.fuel button.lit{color:#fff;border-color:transparent;background:var(--muted)}
-.fuel button.edge{box-shadow:inset 0 0 0 2px rgba(0,0,0,.28)}
+.fuel button.lit{color:var(--on-accent);border-color:transparent;background:var(--muted)}
+.fuel button.edge{box-shadow:inset 0 0 0 2px var(--inset)}
 .fuel button:active{transform:scale(.96)}
 
 #sign{font-style:italic}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chips button{min-height:44px;padding:0 15px;border:1.5px solid var(--hair);border-radius:22px;
-  background:#fff;color:var(--ink);font-size:14px;font-weight:500}
-.chips button.on{background:var(--steel);border-color:var(--steel);color:#fff}
+  background:var(--card);color:var(--ink);font-size:14px;font-weight:500}
+.chips button.on{background:var(--steel);border-color:var(--steel);color:var(--on-accent)}
 .chips button:active{transform:scale(.97)}
 
 .openbox{border:1.5px solid var(--warn);background:var(--warn-bg);border-radius:var(--r);
-  padding:13px;margin-bottom:14px;color:#5A4008}
+  padding:13px;margin-bottom:14px;color:var(--warn-ink)}
 .openbox h4{margin:0 0 7px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;
   letter-spacing:.05em;text-transform:uppercase}
 .openbox ul{list-style:none;margin:0;padding:0}
-.openbox li{padding:5px 0;font-size:14px;border-top:1px dashed rgba(0,0,0,.16)}
+.openbox li{padding:5px 0;font-size:14px;border-top:1px dashed var(--dashed)}
 .openbox li:first-child{border-top:none}
 .openbox li b{font-weight:600}
 .openbox .crit{color:var(--stop);font-weight:600}
@@ -418,9 +541,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 
 /* ---------- rolling driving rota ---------- */
 .rota-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
-.rota-back{min-height:44px;padding:0 12px;border:1.5px solid var(--hair);border-radius:8px;background:#fff;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase}
+.rota-back{min-height:44px;padding:0 12px;border:1.5px solid var(--hair);border-radius:8px;background:var(--card);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase}
 .rota-back:active{transform:scale(.98)}
-.rota-card{background:#fff;border:1px solid var(--hair);border-radius:var(--r);overflow:hidden;margin-bottom:10px}
+.rota-card{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);overflow:hidden;margin-bottom:10px}
 .rota-card.current{border:2px solid var(--steel);box-shadow:0 2px 8px rgba(27,34,44,.08)}
 .rota-row{display:grid;grid-template-columns:82px 1fr;gap:12px;padding:12px 13px;border-bottom:1px solid var(--hair)}
 .rota-row:last-child{border-bottom:none}
@@ -431,8 +554,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-driver{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:700;line-height:1.1}
 .rota-label{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--info-deep);background:var(--info-bg);border:1px solid var(--info-line);border-radius:4px;padding:2px 6px;white-space:nowrap}
 .rota-actions{display:flex;gap:7px;margin-top:9px}
-.rota-edit{min-height:40px;padding:0 11px;border:1.5px solid var(--hair);border-radius:7px;background:#fff;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:14px;letter-spacing:.04em;text-transform:uppercase}
-.rota-current{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#fff;background:var(--steel);border-radius:4px;padding:3px 7px;white-space:nowrap}
+.rota-edit{min-height:40px;padding:0 11px;border:1.5px solid var(--hair);border-radius:7px;background:var(--card);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:14px;letter-spacing:.04em;text-transform:uppercase}
+.rota-current{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--on-accent);background:var(--steel);border-radius:4px;padding:3px 7px;white-space:nowrap}
 .rota-controls{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap}
 .rota-controls .btn{min-height:46px;font-size:16px}
 .rota-request{border:1.5px solid var(--warn);background:var(--warn-bg);border-radius:var(--r);padding:12px;margin-top:9px}.rota-request b{color:var(--warn)}
@@ -448,7 +571,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-leg.is-mine{background:var(--info-bg);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:6px;box-shadow:inset 3px 0 0 var(--info)}
 .rota-you{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;
   letter-spacing:.1em;text-transform:uppercase;color:var(--info);border:1px solid var(--info-line);
-  background:#fff;border-radius:4px;padding:1px 5px;margin-left:7px;vertical-align:2px}
+  background:var(--card);border-radius:4px;padding:1px 5px;margin-left:7px;vertical-align:2px}
 .rota-leg.is-mine+.rota-leg{border-top-color:transparent}
 .rota-leg-note{font-size:13px;color:var(--muted);margin-top:2px}
 .rota-leg-none{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:700;color:var(--stop)}
@@ -456,20 +579,20 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
    this size reads as "increase", and a compass rose reads as nothing. */
 .rota-route{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;border-radius:4px;padding:2px 6px;white-space:nowrap;margin-top:4px}
 .rota-route.north{color:var(--info-deep);background:var(--info-bg);border:1px solid var(--info-line)}
-.rota-route.south{color:#5A3E14;background:#FBF4E8;border:1px solid #E6D2AC}
+.rota-route.south{color:var(--south);background:var(--south-bg);border:1px solid var(--south-line)}
 .rota-viewing{font-size:13px;color:var(--muted);margin:-4px 0 12px}
 .rota-viewing b{color:var(--ink)}
-.rota-card.past{opacity:.55;background:#FAFBFC}
+.rota-card.past{opacity:.55;background:var(--rail)}
 .rota-card.past .rota-driver{font-weight:600}
 .rota-card.past .rota-leg-name{font-weight:600}
 .rota-card.unfilled{border-color:var(--stop);border-left:4px solid var(--stop)}
-.rota-hint{margin-top:6px;color:var(--steel);font-weight:600}
+.rota-hint{margin-top:6px;color:var(--accent-ink);font-weight:600}
 .rota-earlier{display:block;width:100%;min-height:44px;margin-bottom:12px;border:1px dashed var(--hair);
   border-radius:8px;background:transparent;color:var(--muted);
   font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:14px;
   letter-spacing:.09em;text-transform:uppercase}
-.rota-earlier:active{background:#EDEFF1}
-.rota-controls .btn.is-active{background:var(--steel);color:#fff;border-color:var(--steel)}
+.rota-earlier:active{background:var(--press)}
+.rota-controls .btn.is-active{background:var(--steel);color:var(--on-accent);border-color:var(--steel)}
 .rota-empty{padding:34px 16px;text-align:center;color:var(--muted)}
 /* Explains why a list is empty. An empty dropdown tells a driver nothing
    except that something is wrong with the app. */
@@ -495,8 +618,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .trip-at{display:block;font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;
   letter-spacing:.06em;text-transform:uppercase;color:var(--pass);margin-top:3px}
 .trip-undo{flex:0 0 auto;align-self:center;font-family:"Barlow Condensed",sans-serif;
-  font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--steel);
-  border:1.5px solid var(--hair);border-radius:7px;padding:7px 11px;background:#fff}
+  font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink);
+  border:1.5px solid var(--hair);border-radius:7px;padding:7px 11px;background:var(--card)}
 /* Same radius and padding as every other card on this screen. The trip work
    was the newest layer and looked it: its own radii, its own spacing, and a
    sticky block nothing else in the app used. */
@@ -525,7 +648,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .trip-waiting b{color:var(--ink);font-size:16px}
 /* One target, full width, impossible to mis-hit from a cab. Green fill, so
    it reads as the thing to press from arm's length in daylight. */
-.btn-tap{min-height:66px;font-size:20px;width:100%;background:var(--pass);color:#fff;
+.btn-tap{min-height:66px;font-size:20px;width:100%;background:var(--pass);color:var(--on-accent);
   border-color:var(--pass);box-shadow:0 1px 0 rgba(0,0,0,.08)}
 .trip-actions .btn{width:100%}
 .trip-two{display:flex;gap:8px;margin-top:10px}
@@ -544,7 +667,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
    uppercase face every other button in the app uses. They were grey text on
    white before, which nobody reads as tappable. */
 .trip-mini{flex:1;min-height:44px;border:1.5px solid var(--steel);border-radius:8px;
-  background:#fff;color:var(--steel);font-family:"Barlow Condensed",sans-serif;
+  background:var(--card);color:var(--accent-ink);font-family:"Barlow Condensed",sans-serif;
   font-size:15px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
 .trip-mini:active{transform:scale(.98)}
 .is-dead{opacity:.4}
@@ -563,8 +686,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   font-size:15px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;line-height:1.15}
 .stop-tab small{display:block;font-family:"IBM Plex Sans",sans-serif;font-size:11px;font-weight:500;
   letter-spacing:.01em;text-transform:none;color:var(--muted);margin-top:2px}
-.stop-tab.is-active{background:var(--steel);border-color:var(--steel);color:#fff}
-.stop-tab.is-active small{color:#AEB8C4}
+.stop-tab.is-active{background:var(--steel);border-color:var(--steel);color:var(--on-accent)}
+.stop-tab.is-active small{color:var(--faint)}
 .stop-sum{font-size:13px;line-height:1.45;color:var(--muted);margin:0 0 6px}
 .stop-sum b{color:var(--ink);font-weight:600}
 .stop-yours{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-size:11px;
@@ -572,7 +695,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   background:var(--pass-bg);border:1px solid var(--pass-line);border-radius:5px;padding:1px 6px;margin-left:6px}
 .stop-tab.is-mine{border-color:var(--steel)}
 .stop-tabmine{display:block;font-family:"Barlow Condensed",sans-serif;font-size:10px;
-  letter-spacing:.06em;text-transform:uppercase;color:var(--steel);margin-top:2px}
+  letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink);margin-top:2px}
 .stop-whose{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-size:11px;
   letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border:1px solid var(--hair);
   border-radius:5px;padding:1px 7px;margin-left:8px;vertical-align:2px}
@@ -581,13 +704,13 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 /* Clear of the bottom bar. It sat at 20px, which put it behind the bar on
    any screen that has one, so half the arrow was unreachable. */
 .totop{position:fixed;right:calc(14px + var(--safe-r));bottom:calc(88px + var(--safe-b));z-index:65;
-  width:48px;height:48px;border-radius:50%;background:var(--steel);color:#fff;
+  width:48px;height:48px;border-radius:50%;background:var(--steel);color:var(--on-accent);
   font-size:20px;line-height:1;box-shadow:0 3px 12px rgba(22,25,31,.32);
   display:none;align-items:center;justify-content:center}
 .totop.is-on{display:flex}
 .rota-locked{margin-top:8px;padding:8px 10px;border-radius:7px;font-size:13px;line-height:1.45;
   background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--ink)}
-.rota-modal{position:fixed;inset:0;z-index:120;background:rgba(22,25,31,.48);display:none;align-items:flex-end;justify-content:center}
+.rota-modal{position:fixed;inset:0;z-index:120;background:var(--scrim);display:none;align-items:flex-end;justify-content:center}
 .rota-modal.is-on{display:flex}
 .rota-sheet{width:min(640px,100%);background:var(--paper);border-radius:14px 14px 0 0;padding:16px calc(14px + var(--safe-r)) calc(18px + var(--safe-b)) calc(14px + var(--safe-l));max-height:88vh;overflow:auto}
 .rota-sheet h2{margin-bottom:10px}
@@ -622,6 +745,23 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   .upright b{font-size:20px;line-height:1.3;letter-spacing:.01em}
 }
 </style>
+
+<script>
+/* The theme, set before the first paint.
+
+   If this waited for the main script the app would flash white and then go
+   dark, which on a phone at half seven in the morning is a torch in the face.
+   Six lines in the head, no dependencies, and it cannot throw: a locked-down
+   browser that refuses localStorage falls through to the phone's own setting,
+   which is the right answer anyway. */
+(function(){
+  var t="auto";
+  try{ t=localStorage.getItem("fleet.theme.v1")||"auto"; }catch(e){}
+  var m=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
+  document.documentElement.setAttribute("data-theme",
+    t!=="auto" ? t : ((m&&m.matches)?"dark":"light"));
+})();
+</script>
 </head>
 <body>
 
@@ -703,6 +843,17 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     </div>
     <p class="tiny" id="modeNote"></p>
     <div class="footer-brand"><img src="logo.png" alt=""><span>RCCG Dominion Assembly Liverpool</span></div>
+    <!-- Appearance. On the sign-in screen and nowhere else: it is a thing you
+         set once, not a thing you meet again halfway through a check. No
+         label above it and no sentence under it — five words that are their
+         own explanation. -->
+    <div class="themes" id="themes" role="group" aria-label="Appearance">
+      <button type="button" data-theme-set="auto">Auto</button>
+      <button type="button" data-theme-set="light">Light</button>
+      <button type="button" data-theme-set="dark">Dark</button>
+      <button type="button" data-theme-set="green">Green</button>
+      <button type="button" data-theme-set="navy">Navy</button>
+    </div>
     <div class="version" id="appVersion"></div>
   </section>
 
@@ -921,7 +1072,7 @@ var QKEY = "fleet.queue.v1";
 
 /* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
    you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.19.28";
+var APP_VERSION = "v1.19.29";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -3721,8 +3872,7 @@ function rotaPaintStops(){
        they are withheld. Say why, rather than showing a bare timetable and
        leaving him to wonder where the numbers went. */
     html+='<p class="lede" style="margin:0 0 8px">Times only. The booking '+
-          'numbers on this phone are for an earlier Sunday and have not been '+
-          'refreshed yet. They come back on their own once the record answers.</p>';
+          'numbers are from an earlier Sunday and will refresh on their own.</p>';
   }
 
   if(routes.length>1){
@@ -4099,8 +4249,7 @@ function tripBusButtonsHtml(){
     h+='<p class="trip-note">'+esc(taken)+' is out on '+esc(takenOn)+'.</p>';
   }
 
-  h+='<p class="trip-note">'+(one?"":"Tap the bus you are taking. ")+
-     'Then tap each stop as you pull away. Empty stops need nothing.</p>';
+  h+='<p class="trip-note">Tap each stop as you pull away.</p>';
   return h;
 }
 
@@ -4925,6 +5074,56 @@ function showPinField(){
 $("modeNote").textContent = LIVE
   ? "Works with no signal. Checks send themselves when you are back in range."
   : "Practice mode: no record address is set up yet, so nothing is being sent.";
+
+/* ---- Appearance ----------------------------------------------------
+
+   Kept on the phone and nowhere else. Nothing about a driver's eyesight or
+   his preference for a dark screen belongs on the coordinator's spreadsheet,
+   and a theme that travelled with the sign-in would fight two men sharing a
+   handset. One phone, one setting.
+
+   Auto is the default and follows the phone, so on most handsets this needs
+   no visit at all. It also keeps following: a phone that flips to dark at
+   dusk moves the app with it, mid-morning, without a reload. */
+var THEME_KEY="fleet.theme.v1";
+/* The colour the phone paints its own status bar with, so the strip above
+   the app matches the app. */
+var THEME_BAR={light:"#1B222C",dark:"#0E1216",green:"#14532D",navy:"#1E3260"};
+
+function themeChoice(){
+  try{ return localStorage.getItem(THEME_KEY)||"auto"; }catch(e){ return "auto"; }
+}
+function themeApply(){
+  var pick=themeChoice(), r=pick;
+  if(pick==="auto"){
+    var m=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
+    r=(m&&m.matches)?"dark":"light";
+  }
+  document.documentElement.setAttribute("data-theme",r);
+  var meta=document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute("content", THEME_BAR[r]||THEME_BAR.light);
+  var box=$("themes");
+  if(box) Array.prototype.forEach.call(box.querySelectorAll("[data-theme-set]"),
+    function(b){ b.classList.toggle("on", b.getAttribute("data-theme-set")===pick); });
+}
+safely(function(){
+  var box=$("themes");
+  if(box) Array.prototype.forEach.call(box.querySelectorAll("[data-theme-set]"),
+    function(b){
+      b.addEventListener("click",function(){
+        try{ localStorage.setItem(THEME_KEY,this.getAttribute("data-theme-set")); }catch(e){}
+        themeApply();
+      });
+    });
+  var m=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
+  if(m){
+    /* addListener is the old spelling. Still the only one some of the phones
+       in this fleet have, and the cost of keeping it is one line. */
+    if(m.addEventListener) m.addEventListener("change",themeApply);
+    else if(m.addListener) m.addListener(themeApply);
+  }
+  themeApply();
+});
 
 var vEl=$("appVersion");
 if(vEl){
