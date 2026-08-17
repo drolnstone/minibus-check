@@ -102,6 +102,28 @@
   --steel:#1B222C;--hair:#D3D7DC;--muted:#5C6672;
   --pass:#146B41;--pass-bg:#E6F2EB;
   --warn:#B26B00;--warn-bg:#FDF3E2;
+  --stop:#A8231B;--stop-bg:#FBE9E7;
+
+  /* Named so a theme can reach them. Every value was already on the screen,
+     written in raw hex where it was used. */
+  --on-accent:#FFFFFF;          /* text on the steel Confirm button */
+  --pass-line:#B7D8C6;--warn-line:#EBD3A8;--stop-line:#E8BCB7;
+  --faint:#AEB8C4;              /* the count under an inactive route tab */
+  --dead:#AEB6BE;               /* Confirm, before a stop and a number exist */
+  --veil:rgba(244,245,246,.97); /* behind the fixed bar */
+
+  /* WhatsApp's own green, because the button leaves for WhatsApp. It is
+     their colour and it does not follow this app's theme. */
+  --wa:#25D366;--wa-ink:#0B2E1A;
+
+  /* The accent doing two different jobs. As a background it carries white
+     text; as text it must be legible on a card. In a light theme they are the
+     same colour, which is why this went unnoticed until there was a dark one:
+     a dark steel headline on a dark card is a headline nobody can read. */
+  --accent-ink:#1B222C;
+  --dead-ink:#FFFFFF;            /* the label on a disabled Confirm */
+
+  color-scheme:light;
   --r:10px;--tap:56px;
   --safe-t:env(safe-area-inset-top,0px);--safe-b:env(safe-area-inset-bottom,0px);
   --safe-l:env(safe-area-inset-left,0px);--safe-r:env(safe-area-inset-right,0px);
@@ -112,6 +134,39 @@
    somebody who needs it to read a stop name is not a trade worth making. */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html,body{margin:0;padding:0}
+
+/* ======================= THEMES =======================================
+
+   A theme moves the page, the cards and the Confirm button. It does not move
+   the green that says a seat is booked, the amber that says something wants
+   attention, or WhatsApp's own green on the button that leaves for WhatsApp.
+
+   Chosen at the foot of the page, remembered on that phone, and set to follow
+   the phone's own light/dark setting until somebody says otherwise. Nothing
+   is sent anywhere: the record never learns, and never needs to.
+   ==================================================================== */
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --ink:#E7EBF0;--paper:#0E1216;--card:#181D25;
+  --steel:#31404F;--hair:#2B333E;--muted:#9EA9B6;
+  --pass:#1B8552;--pass-bg:#12291F;
+  --warn:#A36807;--warn-bg:#2B2113;
+  --stop:#C93A2E;--stop-bg:#2E1715;
+  --pass-line:#265741;--warn-line:#5C4826;--stop-line:#5E2F2A;
+  --accent-ink:#9DB4CC;--dead:#2A323C;--dead-ink:#67717E;--faint:#7E8996;
+  --veil:rgba(14,18,22,.97);
+}
+html[data-theme="green"]{ --steel:#14532D;--paper:#F2F6F3;--accent-ink:#14532D; }
+html[data-theme="navy"]{  --steel:#1E3260;--paper:#F2F4F9;--accent-ink:#1E3260; }
+
+/* The picker. Five words at the foot of the page, in the same shape as the
+   route tabs, so it is not a new kind of control. */
+.themes{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:16px 0 4px}
+.themes button{min-height:32px;padding:0 11px;border:1.5px solid var(--hair);
+  border-radius:16px;background:var(--card);color:var(--muted);
+  font:inherit;font-size:12px;font-weight:600;letter-spacing:.04em}
+.themes button.on{background:var(--steel);border-color:var(--steel);color:var(--on-accent)}
+
 body{background:var(--paper);color:var(--ink);
   font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;
@@ -130,7 +185,7 @@ button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
 h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   line-height:1.03;margin:0 0 3px;letter-spacing:.005em}
 .when{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:600;
-  letter-spacing:.03em;color:var(--steel);margin:0 0 16px}
+  letter-spacing:.03em;color:var(--accent-ink);margin:0 0 16px}
 .lede{color:var(--muted);margin:0 0 14px}
 
 /* ---------- route tabs ---------- */
@@ -141,8 +196,8 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   letter-spacing:.06em;text-transform:uppercase;line-height:1.15}
 .tab small{display:block;font-family:"IBM Plex Sans",sans-serif;font-size:11px;
   font-weight:500;letter-spacing:.02em;text-transform:none;color:var(--muted);margin-top:2px}
-.tab.is-active{background:var(--steel);border-color:var(--steel);color:#fff}
-.tab.is-active small{color:#AEB8C4}
+.tab.is-active{background:var(--steel);border-color:var(--steel);color:var(--on-accent)}
+.tab.is-active small{color:var(--faint)}
 .tab:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
 
 .summary{font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.45}
@@ -154,7 +209,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   padding:13px;margin-bottom:8px;min-height:var(--tap)}
 .stop.is-on{border-color:var(--pass);background:var(--pass-bg);box-shadow:0 0 0 1px var(--pass) inset}
 .stop:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
-.stop-time{flex:0 0 52px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--steel)}
+.stop-time{flex:0 0 52px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent-ink)}
 .stop-body{flex:1;min-width:0}
 /* These three stack. As inline spans they ran together into one unreadable
    line, which is what the postcode was doing welded to the stop name. */
@@ -195,11 +250,11 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 /* ---------- notices ---------- */
 .note{border-radius:9px;padding:12px 13px;font-size:14px;line-height:1.5;margin:0 0 14px}
 .note b{font-weight:600}
-.note-warn{background:var(--warn-bg);border:1px solid #EBD3A8}
-.note-go{background:var(--pass-bg);border:1px solid #B7D8C6}
+.note-warn{background:var(--warn-bg);border:1px solid var(--warn-line)}
+.note-go{background:var(--pass-bg);border:1px solid var(--pass-line)}
 
 /* ---------- bottom bar ---------- */
-.bar{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(244,245,246,.97);
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--veil);
   border-top:1px solid var(--hair);backdrop-filter:blur(8px);
   padding:11px calc(14px + var(--safe-r)) calc(11px + var(--safe-b)) calc(14px + var(--safe-l))}
 .bar-in{max-width:640px;margin:0 auto}
@@ -210,8 +265,8 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   font-family:"Barlow Condensed",sans-serif;font-size:17px;font-weight:700;
   letter-spacing:.06em;text-transform:uppercase}
 .btn:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
-.btn-main{background:var(--steel);color:#fff}
-.btn-main:disabled{background:#AEB6BE;cursor:default}
+.btn-main{background:var(--steel);color:var(--on-accent)}
+.btn-main:disabled{background:var(--dead);color:var(--dead-ink);cursor:default}
 .btn-ghost{flex:0 0 auto;padding-left:18px;padding-right:18px;
   background:var(--card);border:1px solid var(--hair)}
 /* The withdraw question. Two equal buttons, because neither is a trap: one
@@ -220,38 +275,38 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    warning colour so it cannot be hit by momentum alone. */
 .cancel-row{display:flex;gap:8px}
 .cancel-row .btn{flex:1}
-.btn-keep{background:var(--steel);color:#fff}
+.btn-keep{background:var(--steel);color:var(--on-accent)}
 .btn-drop{background:var(--card);border:1px solid var(--warn);color:var(--warn);font-weight:600}
 /* WhatsApp green, and the only place on either page that colour appears, so
    it reads as "this leaves for WhatsApp" without needing a logo. Centred by
    hand because an anchor does not inherit a button's text centring. */
-.btn-wa{background:#25D366;color:#0B2E1A;font-weight:600;text-decoration:none;
+.btn-wa{background:var(--wa);color:var(--wa-ink);font-weight:600;text-decoration:none;
   display:flex;align-items:center;justify-content:center;text-align:center}
 
 .toast{position:fixed;left:50%;bottom:calc(112px + var(--safe-b));transform:translateX(-50%) translateY(14px);
-  background:var(--ink);color:#fff;padding:11px 16px;border-radius:9px;font-size:14px;
+  background:var(--ink);color:var(--on-accent);padding:11px 16px;border-radius:9px;font-size:14px;
   opacity:0;pointer-events:none;transition:.25s;z-index:90;max-width:90vw;text-align:center}
 .toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
 .live{border-radius:9px;padding:13px 14px;margin:0 0 14px;border:1px solid var(--hair);background:var(--card)}
 .live-eyebrow{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;
   letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
 .live-big{font-family:"Barlow Condensed",sans-serif;font-size:30px;font-weight:700;
-  line-height:1.05;margin:0 0 3px;color:var(--steel)}
+  line-height:1.05;margin:0 0 3px;color:var(--accent-ink)}
 .live-sub{margin:0;font-size:13px;color:var(--muted);line-height:1.5}
 .live-sub .ring,.note .ring{color:inherit;font-weight:600;text-decoration:underline}
 .live-pick{display:flex;gap:6px;margin-top:10px}
 .live-pickbtn{flex:1;padding:7px 10px;border:1px solid currentColor;background:transparent;
   border-radius:8px;font:inherit;font-size:13px;color:inherit;opacity:.6}
 .live-pickbtn.is-on{opacity:1;font-weight:600}
-.live-go{background:var(--pass-bg);border-color:#B7D8C6}
+.live-go{background:var(--pass-bg);border-color:var(--pass-line)}
 .live-go .live-big{color:var(--pass)}
-.live-warn{background:var(--warn-bg);border-color:#EBD3A8}
-.live-test{background:#FBE9E7;border-color:#E8BCB7}
-.live-test .live-eyebrow{color:#A8231B}
+.live-warn{background:var(--warn-bg);border-color:var(--warn-line)}
+.live-test{background:var(--stop-bg);border-color:var(--stop-line)}
+.live-test .live-eyebrow{color:var(--stop)}
 .foot{margin-top:24px;color:var(--muted);font-size:12px;line-height:1.55}
 .foot b{color:var(--ink);font-weight:600}
 .spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.4);
-  border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
+  border-top-color:var(--on-accent);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
@@ -280,6 +335,23 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   .upright b{font-size:20px;line-height:1.3;letter-spacing:.01em}
 }
 </style>
+
+<script>
+/* The theme, set before the first paint.
+
+   If this waited for the main script the app would flash white and then go
+   dark, which on a phone at half seven in the morning is a torch in the face.
+   Six lines in the head, no dependencies, and it cannot throw: a locked-down
+   browser that refuses localStorage falls through to the phone's own setting,
+   which is the right answer anyway. */
+(function(){
+  var t="auto";
+  try{ t=localStorage.getItem("bus.theme.v1")||"auto"; }catch(e){}
+  var m=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
+  document.documentElement.setAttribute("data-theme",
+    t!=="auto" ? t : ((m&&m.matches)?"dark":"light"));
+})();
+</script>
 </head>
 <body>
 <div class="wrap">
@@ -302,6 +374,16 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   <div id="body"><p class="lede">Loading the stops…</p></div>
 
   <p class="foot" id="foot"></p>
+
+  <!-- Appearance. Last thing on the page, under the closing time, where it
+       is out of the way of somebody booking a seat. -->
+  <div class="themes" id="themes" role="group" aria-label="Appearance">
+    <button type="button" data-theme-set="auto">Auto</button>
+    <button type="button" data-theme-set="light">Light</button>
+    <button type="button" data-theme-set="dark">Dark</button>
+    <button type="button" data-theme-set="green">Green</button>
+    <button type="button" data-theme-set="navy">Navy</button>
+  </div>
 </div>
 
 <div class="bar" id="bar" style="display:none">
@@ -557,8 +639,8 @@ function load(again){
         return;
       }
       $("body").innerHTML='<div class="note note-warn"><b>The stops could not be loaded.</b><br>'+
-        esc(String(err.message||err))+'<br><br>Pull down to refresh. '+
-        'If it keeps happening, '+ringCoordinator()+'.</div>';
+        esc(String(err.message||err))+'<br><br>Pull down to refresh, or '+
+        ringCoordinator()+'.</div>';
     });
 }
 
@@ -725,9 +807,8 @@ function paintLive(){
 
   var banner = live.rehearsal
     ? '<div class="live live-test"><p class="live-eyebrow">Rehearsal</p>'+
-      '<p class="live-sub">The transport team are testing the app. No bus is '+
-      'running and the position above is pretend. Your booking is not: it '+
-      'saves normally and counts for Sunday.</p>'+pick+'</div>'
+      '<p class="live-sub">No bus is running. Your booking still counts for '+
+      'Sunday.</p>'+pick+'</div>'
     : "";
 
   var head="", sub="", cls="";
@@ -747,10 +828,9 @@ function paintLive(){
      the church car park. */
   function turnTo(lead){
     if(DRIVER && DRIVER.wa && live && !live.ended){
-      return lead+" tap <b>Message "+esc(DRIVER.name)+"</b> below — he may be "+
-             "able to come back for you.";
+      return lead+" <b>Message "+esc(DRIVER.name)+"</b> below.";
     }
-    return lead+" "+ringCoordinator()+".";
+    return lead+" Please "+ringCoordinator()+".";
   }
 
   if(live.mine==="served"){
@@ -766,53 +846,41 @@ function paintLive(){
     cls = wasEmpty ? "live-warn" : "live-go";
     head = (wasEmpty ? "Nobody there at " : "Picked up at ")+esc(live.servedAt);
     sub = wasEmpty
-      ? "The driver marked "+esc(live.stop)+" with nobody waiting. "+
-        turnTo("If you are at the stop,")
-      : "The bus has been to "+esc(live.stop)+". "+
-        turnTo("If you were not on it,");
+      ? "Nobody was waiting at "+esc(live.stop)+". "+turnTo("Still there?")
+      : "The bus has been to "+esc(live.stop)+". "+turnTo("Not on it?");
   } else if(!live.started){
     head="Not set off yet";
-    sub="Your stop is timetabled for "+esc(live.scheduled)+". This will update once the bus starts.";
+    sub="Timetabled "+esc(live.scheduled)+".";
   } else if(live.mine==="eta"){
     cls=live.imminent?"live-go":"";
     head=live.imminent ? "Any moment now"
        : (live.minutes<=0 ? "Due now" : live.minutes+" min");
     sub="About "+esc(live.etaWords)+" at "+esc(live.stop)+
-        ", timetabled "+esc(live.scheduled)+". "+
-        (live.offset>0 ? "The bus is running "+live.offset+" minutes behind."
-         : live.offset<0 ? "The bus is running "+(-live.offset)+" minutes early."
-         : "The bus is on time.")+
-        /* Where it actually is, which is the thing people open a map for.
-
-           The payload has carried this all along and the page threw it away
-           except when the bus went quiet. Saying it here costs nothing on the
-           wire and answers the question a passenger is really asking when he
-           says he expected to see a map — without putting a driver's position
-           on a public page, which is the one thing this app has always
-           refused to do.
-
-           "Left" rather than "is at", because that is what the tap means: he
-           marks a stop as he pulls away from it. Guarded, though it should
-           always be here — an ETA exists only because a stop was tapped. */
+        (live.offset>0 ? " · "+live.offset+" min behind"
+         : live.offset<0 ? " · "+(-live.offset)+" min early"
+         : " · on time")+
+        /* Where it actually is: the thing people open a map for, answered
+           without putting a driver's position on a public page. "Left"
+           rather than "is at", because that is what the tap means — he marks
+           a stop as he pulls away from it. */
         (live.lastStop
-          ? " It left "+esc(live.lastStop)+
-            (live.lastAtWords? " at "+esc(live.lastAtWords) : "")+"."
-          : "");
+          ? ". Left "+esc(live.lastStop)+
+            (live.lastAtWords? " "+esc(live.lastAtWords) : "")+"."
+          : ".");
   } else if(live.mine==="ended"){
     head="The bus has finished its run";
     /* The coordinator, and only the coordinator. The bus is parked at church
        and the service is starting; there is no coming back from here. */
-    sub="It reached church without your stop being marked. Please "+ringCoordinator()+".";
+    sub="Your stop was never marked. Please "+ringCoordinator()+".";
   } else {
     /* quiet, wild, noevents: state the last known fact and stop. A number
        invented from a stale offset is worse than a blank. */
     cls="live-warn";
     head="No update yet";
     sub=live.lastStop
-      ? "The bus has not reported since "+esc(live.lastAtWords)+", at "+esc(live.lastStop)+
-        ". Your stop is timetabled for "+esc(live.scheduled)+"."
-      : "The bus has started but has not reported a stop yet. Yours is timetabled for "+
-        esc(live.scheduled)+".";
+      ? "Last seen at "+esc(live.lastStop)+", "+esc(live.lastAtWords)+
+        ". Yours is timetabled "+esc(live.scheduled)+"."
+      : "No stops marked yet. Yours is timetabled "+esc(live.scheduled)+".";
   }
 
   /* "Your stop" is a claim about a seat. Somebody who is only watching a kerb
@@ -867,7 +935,7 @@ function activeOn(rt){
 }
 
 function paint(){
-  var html="";
+  var html="", dupWarn=false;
 
   if(CLOSED){
     /* The whole of Sunday morning now sits here: bookings shut at 09:30 and
@@ -880,9 +948,8 @@ function paint(){
        page could do nothing for them; it is not true now, and a screen that
        sends people to WhatsApp for something there is a button for is the
        same fault as the one that told them to tap a locked stop. */
-    html+='<div class="note note-warn"><b>Bookings have closed for this Sunday.</b> '+
-          'This is the list the driver has. '+
-          (booked ? '' : 'If you need a seat today, tell the group directly.')+
+    html+='<div class="note note-warn"><b>Bookings have closed.</b>'+
+          (booked ? '' : ' If you need a seat today, tell the group.')+
           '</div>';
 
     /* Waiting, but this phone holds no booking. Almost always because the
@@ -894,8 +961,8 @@ function paint(){
        to have it. Tap the kerb you are standing at and follow the bus from
        there. It is not a seat and does not pretend to be. */
     if(!booked && !watchStop){
-      html+='<div class="note"><b>Waiting for the bus?</b> Tap the stop you are '+
-            'at and this page will follow it for you. It does not book a seat.</div>';
+      html+='<div class="note"><b>Waiting for the bus?</b> Tap your stop to '+
+            'follow it. This does not book a seat.</div>';
     }
   } else if(ROLLED){
     /* Two different Sundays are on this screen at once: the bus running now,
@@ -930,9 +997,10 @@ function paint(){
          Deliberately about YOUR other device and never about this stop.
          "Already booked at this stop" would read, at a kerb three households
          share, as somebody having taken your seat. */
-      html+='<p class="foot" style="margin:0 0 14px">Booked already on another '+
-            'phone or a computer? That seat still counts — booking here as '+
-            'well adds a second one.</p>';
+      /* Moved to the foot. It was the first thing every passenger read, every
+         week, about a case that catches one of them a month. It is still on
+         the page, at the end, where somebody with a doubt goes looking. */
+      dupWarn = true;
     }
   }
 
@@ -1019,7 +1087,7 @@ function paint(){
     var n = seats || 0;
     html+='<div class="seats'+(seats?'':' is-asking')+'" id="seatsBox">'+
           '<h2>How many of you?</h2>'+
-          '<p>Everyone boarding with you at that stop, including yourself.</p>'+
+          '<p>Including yourself.</p>'+
           '<div class="stepper">'+
             '<button type="button" class="step" id="seatsDown"'+
               (n<=1?' disabled':'')+' aria-label="One fewer">\u2212</button>'+
@@ -1041,15 +1109,11 @@ function paint(){
      out of a decision that costs them nothing. Same question, honest answer
      in each case. */
   if(booked && cancelAsk){
-    var myStop=stopById(booked.stopId);
-    var where=myStop? esc(myStop.stop) : "your stop";
     html+='<div class="seats is-asking" id="cancelBox">'+
           '<h2>'+(CLOSED? 'Not coming today?' : 'Not coming?')+'</h2>'+
           '<p>'+(CLOSED
-            ? 'The driver will stop waiting at '+where+'. This cannot be '+
-              'undone: you cannot book again today.'
-            : 'Your seat at '+where+' goes back. You can book again any time '+
-              'before '+esc(CUTOFF||"Sunday 09:30")+'.')+'</p>'+
+            ? 'You cannot book again today.'
+            : 'You can book again before '+esc(CUTOFF||"Sunday 09:30")+'.')+'</p>'+
           '<div class="cancel-row">'+
             '<button type="button" class="btn btn-keep" id="cancelNo">Keep my seat</button>'+
             '<button type="button" class="btn btn-drop" id="cancelYes">Yes, I am not coming</button>'+
@@ -1062,9 +1126,13 @@ function paint(){
      thing down here somebody actually has to read. CUTOFF comes from the
      script rather than from anybody typing, but it is escaped anyway: this
      is the only place on the page that writes a server value as markup. */
-  $("foot").innerHTML = CLOSED
+  $("foot").innerHTML = (CLOSED
     ? "The Sunday bus for RCCG Dominion Assembly Liverpool."
-    : "<b>Bookings close "+esc(CUTOFF||"Sunday 09:30")+", before the buses set off.</b>";
+    : "<b>Bookings close "+esc(CUTOFF||"Sunday 09:30")+".</b>")+
+    (dupWarn
+      ? "<br>Booked on another phone or a computer? Booking here adds a "+
+        "second seat."
+      : "");
 
   Array.prototype.forEach.call(document.querySelectorAll("[data-route]"),function(b){
     b.addEventListener("click",function(){
@@ -1121,9 +1189,7 @@ function paint(){
     this.innerHTML='<span class="spin"></span>';
     send({ date:DATE, ref:REF, stopId:"", seats:0 }, function(out){
       applySaved(out);
-      toast(CLOSED
-        ? "Cancelled. The driver will not wait for you, and you cannot book again today."
-        : "Cancelled. Book again if you change your mind.");
+      toast("Cancelled.");
     });
   });
 
@@ -1362,8 +1428,7 @@ $("save").addEventListener("click",function(){
   send({ date:DATE, ref:REF, stopId:chosen, seats:seats }, function(out){
     $("save").textContent="Confirm";
     applySaved(out);
-    toast((first ? "Booked. " : "Changed. ") +
-          "You can change this until "+(CUTOFF||"Sunday 09:30")+".");
+    toast(first ? "Booked." : "Changed.");
   });
 });
 
@@ -1374,6 +1439,49 @@ $("cancel").addEventListener("click",function(){
   cancelAsk=true; paint();
   try{ $("cancelBox").scrollIntoView({block:"center",behavior:"smooth"}); }catch(e){}
 });
+
+/* ---- Appearance ----------------------------------------------------
+
+   Kept on this phone. A theme is not a booking and has no business on the
+   record: two people at one kerb can want opposite things and both be right.
+
+   Auto is the default and follows the phone, and keeps following it — a
+   handset that turns dark at dusk moves this page with it, without a
+   reload. */
+var THEME_KEY="bus.theme.v1";
+var THEME_BAR={light:"#1B222C",dark:"#0E1216",green:"#14532D",navy:"#1E3260"};
+
+function themeApply(){
+  var pick="auto";
+  try{ pick=localStorage.getItem(THEME_KEY)||"auto"; }catch(e){}
+  var r=pick;
+  if(pick==="auto"){
+    var mq=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
+    r=(mq&&mq.matches)?"dark":"light";
+  }
+  document.documentElement.setAttribute("data-theme",r);
+  var meta=document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute("content", THEME_BAR[r]||THEME_BAR.light);
+  var box=$("themes");
+  if(box) Array.prototype.forEach.call(box.querySelectorAll("[data-theme-set]"),
+    function(b){ b.classList.toggle("on", b.getAttribute("data-theme-set")===pick); });
+}
+try{
+  Array.prototype.forEach.call(
+    document.querySelectorAll("#themes [data-theme-set]"),function(b){
+      b.addEventListener("click",function(){
+        try{ localStorage.setItem(THEME_KEY,this.getAttribute("data-theme-set")); }catch(e){}
+        themeApply();
+      });
+    });
+  var themeMq=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
+  if(themeMq){
+    /* addListener is the old spelling, and some of these phones are old. */
+    if(themeMq.addEventListener) themeMq.addEventListener("change",themeApply);
+    else if(themeMq.addListener) themeMq.addListener(themeApply);
+  }
+  themeApply();
+}catch(e){ /* appearance only: never worth a blank page */ }
 
 load();
 </script>
