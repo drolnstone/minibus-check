@@ -781,7 +781,23 @@ function paintLive(){
         ", timetabled "+esc(live.scheduled)+". "+
         (live.offset>0 ? "The bus is running "+live.offset+" minutes behind."
          : live.offset<0 ? "The bus is running "+(-live.offset)+" minutes early."
-         : "The bus is on time.");
+         : "The bus is on time.")+
+        /* Where it actually is, which is the thing people open a map for.
+
+           The payload has carried this all along and the page threw it away
+           except when the bus went quiet. Saying it here costs nothing on the
+           wire and answers the question a passenger is really asking when he
+           says he expected to see a map — without putting a driver's position
+           on a public page, which is the one thing this app has always
+           refused to do.
+
+           "Left" rather than "is at", because that is what the tap means: he
+           marks a stop as he pulls away from it. Guarded, though it should
+           always be here — an ETA exists only because a stop was tapped. */
+        (live.lastStop
+          ? " It left "+esc(live.lastStop)+
+            (live.lastAtWords? " at "+esc(live.lastAtWords) : "")+"."
+          : "");
   } else if(live.mine==="ended"){
     head="The bus has finished its run";
     /* The coordinator, and only the coordinator. The bus is parked at church
