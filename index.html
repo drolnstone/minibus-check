@@ -628,6 +628,24 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .pingate{margin-top:11px;padding-top:11px;border-top:1px solid var(--hair)}
 .pingate .pinbox{width:120px;margin-top:6px}
 .pingate.is-ok .pinbox{border-color:var(--pass)}
+/* The same panel, in a sheet of its own.
+
+   On the Stops and bookings screen it used to sit inside the trip strip,
+   above the Start trip buttons, with the caret dropped into it on the paint
+   where it first appeared. That worked and it read badly: a box among the
+   other boxes, asking a question the driver had to notice was a question,
+   on the one screen he is looking at with a bus running. As a sheet it is
+   unmistakably the thing being asked, and the screen behind it is plainly
+   waiting.
+
+   Nothing else changed. Same markup, same checking, same rules about which
+   taps it holds back. Only where it is drawn. */
+.pin-modal{z-index:140}
+.pin-modal .rota-sheet{max-height:none}
+.pin-modal .pingate{margin-top:0;padding-top:0;border-top:none}
+.pin-modal .pinbox{width:100%;margin-top:10px;font-size:26px;letter-spacing:.42em;
+  min-height:var(--tap);padding-left:10px;padding-right:10px}
+.pin-modal .trip-note{font-size:14px}
 .trip-strip .btn{width:100%;margin-top:9px}
 .trip-note{margin:0;font-size:13px;line-height:1.5;color:var(--muted)}
 .trip-note b{color:var(--ink)}
@@ -1004,6 +1022,21 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     <p class="eyebrow" id="rotaModalEyebrow">Rota request</p>
     <h2 id="rotaModalTitle">Request a change</h2>
     <div id="rotaModalBody"></div>
+  </div>
+</div>
+
+<!-- The PIN, asked as a sheet rather than as a box on the running screen.
+     Filled by pinModalOpen from the very same pinGateHtml the request form
+     uses, so there is still one implementation of the box and one of the
+     checking behind it. -->
+<div class="rota-modal pin-modal" id="pinModal" aria-hidden="true">
+  <div class="rota-sheet" role="dialog" aria-modal="true" aria-labelledby="pinModalTitle">
+    <p class="eyebrow">Driver</p>
+    <h2 id="pinModalTitle">Confirm it is you</h2>
+    <div id="pinModalBody"></div>
+    <div class="rota-modal-actions">
+      <button class="btn btn-ghost" id="pinModalNot" type="button">Not now</button>
+    </div>
   </div>
 </div>
 
@@ -3776,6 +3809,10 @@ var stopsFrom="driver";     /* where Back should return to */
 function stopsClose(){
   rotaStopsOpen=false;
   rotaCountsStop();
+  /* And the sheet with it. Both flags too, or coming back to this screen
+     would find pinGateWasUp still true and never ask again. */
+  pinModalClose();
+  pinGateWasUp=false; pinWhy="";
   show(stopsFrom||"driver");
 }
 
@@ -3925,6 +3962,12 @@ function rotaPaintStops(){
     html='<div class="trip-rehearsal"><b>REHEARSAL</b> Nothing here is real. '+
          'Bookings shown are test data and no bus is running.</div>'+html;
   }
+  /* Why the PIN is being asked for, on this paint. Cleared HERE rather than
+     inside tripHeaderHtml, because that is not always reached: a coordinator
+     looking at somebody else's route gets neither taps nor a watch, and a
+     reason left over from the last screen would put a sheet in front of a man
+     who is not being asked for anything. */
+  pinWhy="";
   if(mayTap || watching){
     html+=tripHeaderHtml(route,mayTap,onThis,queued);
   }
@@ -4091,9 +4134,9 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
        line explaining that we could not ask is the permission sentence
        wearing a hat. The difference goes on the Trip Events row instead. */
     if(mayTap && tripUncheckedAsked){
+      if(pinGateNeeded()) pinWhy="Setting off with no check is recorded in your name.";
       h+='<p class="trip-note"><b>No check signed for '+esc(tripUncheckedAsked)+
          ' today.</b> Do the check first.</p>'+
-         (pinGateNeeded()? pinGateHtml("Setting off with no check is recorded in your name.") : "")+
          '<div class="trip-two">'+
            '<button class="btn btn-main" id="tripDoCheck">Do the check</button>'+
            '<button class="btn btn-ghost'+(pinGateNeeded()?' is-off':'')+'" id="tripStartAnyway" '+
@@ -4104,13 +4147,13 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
     }
 
     if(mayTap){
-      /* PIN first, then the buttons. It used to sit underneath them, which
-         meant a driver coming straight from the rota to the run met a dead
-         button with no idea why, and the thing that would have freed it was
-         below the fold saying nothing. One prompt, then the next. */
+      /* The PIN used to be drawn here, above the buttons, because underneath
+         them it was below the fold and a driver met a dead Start trip with no
+         idea what was holding it. Above them it was at least read. The sheet
+         settles that argument by being the only thing on the screen. */
+      if(tripClosed && pinGateNeeded()) pinWhy="This run is recorded in your name.";
       h+= tripClosed
-        ? (pinGateNeeded()? pinGateHtml("This run is recorded in your name.") : "")+
-          tripBusButtonsHtml()
+        ? tripBusButtonsHtml()
         : '<p class="trip-note"><b>Bookings are still open.</b> Start the run '+
           'after '+esc(tripCutoff||"09:30")+'.</p>';
     } else {
@@ -4144,17 +4187,14 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
   if(trip.lastStop) bits.push('last '+esc(trip.lastStop)+' at '+tripClock(trip.lastAt));
   h+='<p class="trip-note">'+bits.join(' \u00B7 ')+'</p>';
 
-  /* The PIN box has to exist HERE too, not only before the run starts.
+  /* The PIN has to be reachable HERE too, not only before the run starts.
 
-     It used to appear on the way in and nowhere else, which was fine for the
-     driver who signs in at half eight and never closes the app. It was no use
-     at all to the one whose phone restarted at the third stop: he came back to
-     a live run, buttons that would not answer him, and no box anywhere on the
-     screen to key the thing they were waiting for. Same box, same id, so there
-     is still only one implementation of it. */
-  if(mayTap && pinGateNeeded()){
-    h+=pinGateHtml("Every stop you tap is recorded in your name.");
-  }
+     It used to be offered on the way in and nowhere else, which was fine for
+     the driver who signs in at half eight and never closes the app. It was no
+     use at all to the one whose phone restarted at the third stop: he came
+     back to a live run, buttons that would not answer him, and nothing on the
+     screen to key the thing they were waiting for. */
+  if(mayTap && pinGateNeeded()) pinWhy="Every stop you tap is recorded in your name.";
 
   /* Always rendered, empty when there is nothing waiting, so the line exists
      to be written into later. It is the only thing on this screen a finished
@@ -4253,36 +4293,101 @@ function tripBusButtonsHtml(){
   return h;
 }
 
-/* Take him to the PIN box and say what it wants.
+/* ---- the PIN sheet -----------------------------------------------------
+
+   The gate itself is unchanged: same box, same checking, same rules about
+   which taps it holds back and which screens it appears on. What changed is
+   that on the running screen it is drawn in a sheet over everything rather
+   than in the strip among the buttons.
+
+   The reason is what the strip is for. That panel is where a driver reads
+   the run: which bus, how far behind, which stop is next, who is waiting.
+   A question wedged into the middle of it is a question he can scroll past,
+   and did — the box was already being auto-focused precisely because it was
+   not being noticed. A sheet needs no such help. It is the only thing on the
+   screen, the screen behind it is plainly waiting, and there is nothing to
+   scroll past.
+
+   The request form keeps its box inline. That form IS a sheet already, and a
+   sheet over a sheet is two backdrops and a question about which one a tap
+   is answering. */
+var pinWhy="";              /* why it is being asked, set by tripHeaderHtml */
+var pinModalGoing=false;    /* a close is already on its way */
+
+function pinModalUp(){
+  var b=$("pinModal");
+  return !!(b && b.classList.contains("is-on"));
+}
+
+function pinModalOpen(why){
+  var box=$("pinModal");
+  if(!box) return;
+  if(!pinModalUp()){
+    /* A fresh ask is a fresh box. Whatever was half keyed last time goes with
+       it, because an empty box sitting under "That PIN is not right" is a
+       driver working out which of the two to believe. */
+    st.pin="";
+    $("pinModalBody").innerHTML=pinGateHtml(why||pinWhy||"This is recorded in your name.", true);
+  }
+  box.classList.add("is-on");
+  box.setAttribute("aria-hidden","false");
+  pinGateWire();
+  pinGateSync();
+  var i=box.querySelector(".js-pin-input");
+  if(!i) return;
+  /* After the sheet is up. Focusing into something still arriving makes the
+     phone scroll the page behind it instead of bringing the keypad here. */
+  setTimeout(function(){
+    try{ i.focus({preventScroll:true}); }
+    catch(e){ try{ i.focus(); }catch(e2){} }
+  },70);
+}
+
+function pinModalClose(){
+  var box=$("pinModal");
+  if(!box || !pinModalUp()) return;
+  box.classList.remove("is-on");
+  box.setAttribute("aria-hidden","true");
+  /* Emptied on the way out, so there is never a second box on the page for
+     pinGateWire and pinGateSync to find, and never a stale one carrying a
+     driver's digits after he has walked away from it. */
+  $("pinModalBody").innerHTML="";
+}
+
+/* Put it up the first time the screen wants it.
+
+   Once, on the paint where it first becomes wanted — never on the thirty
+   second poll, never while he is already typing in it. rotaPaintStops
+   rebuilds the whole panel, so without the transition test the keypad would
+   be yanked open again every time the counts moved.
+
+   No toast: pinGateFocus below is the answer to a driver PRESSING a dead
+   button and deserves a word. This one is the app asking before he has had
+   to find out the hard way. */
+var pinGateWasUp=false;
+function pinGateAutoFocus(){
+  var up=!!pinWhy;
+  if(up && !pinGateWasUp) pinModalOpen(pinWhy);
+  /* Answered, or he has left the running screen. Either way the question has
+     gone, and a sheet left standing over a screen that no longer wants one is
+     a driver tapping at a backdrop. */
+  if(!up) pinModalClose();
+  pinGateWasUp=up;
+}
+
+/* He pressed something that will not answer him. Say what it wants and put
+   the sheet in front of him.
 
    A disabled button swallows the tap, so the old arrangement could not tell
    him anything: he pressed Start, nothing happened, and the only clue was a
    box further down that had never asked him for anything. The button is off
-   rather than disabled now, so the tap is the prompt. */
-/* The gate appearing IS the prompt. A driver who came straight here without
-   signing in on the first screen meets a PIN box he has to notice and tap
-   before he can type into it, which is a step the app can take for him.
-
-   Once, on the paint where it first appears — never on the thirty second
-   poll, never while he is already typing in it. rotaPaintStops rebuilds this
-   whole panel, so without the transition test the keypad would be yanked open
-   again every time the counts moved. No toast: pinGateFocus below is the
-   answer to a driver PRESSING a dead button and deserves a word; this one is
-   the app quietly putting the caret where he was going anyway. */
-var pinGateWasUp=false;
-function pinGateAutoFocus(){
-  var i=$("pinGateInput");
-  var up=!!i;
-  if(up && !pinGateWasUp){
-    try{ i.focus({preventScroll:true}); }
-    catch(e){ try{ i.focus(); }catch(e2){} }
-  }
-  pinGateWasUp=up;
-}
-
+   rather than disabled, so the tap is the prompt, and this is the answer. */
 function pinGateFocus(){
-  var i=$("pinGateInput");
   toast("Enter your four digit PIN to confirm it is you.");
+  if(rotaStopsOpen){ pinModalOpen(pinWhy); return; }
+  /* Anywhere else — the request form — the box is inline where it always
+     was, so take him to it. */
+  var i=document.querySelector(".js-pin-input");
   if(!i) return;
   try{ i.scrollIntoView({block:"center",behavior:"smooth"}); }catch(e){}
   try{ i.focus(); }catch(e){}
@@ -4608,6 +4713,15 @@ $("rotaMyDuties").addEventListener("click",function(){
   rotaRender(); window.scrollTo(0,0);
 });
 $("rotaModal").addEventListener("click",function(e){if(e.target===this)rotaClose();});
+
+/* Not now, the backdrop, and the escape key. All three mean the same thing,
+   and none of them lets anything through: the buttons behind stay off until
+   the PIN is answered, exactly as they did when the box was inline. */
+$("pinModalNot").addEventListener("click",pinModalClose);
+$("pinModal").addEventListener("click",function(e){ if(e.target===this) pinModalClose(); });
+document.addEventListener("keydown",function(e){
+  if((e.key==="Escape" || e.keyCode===27) && pinModalUp()) pinModalClose();
+});
 /* ---------------- wiring ---------------- */
 $("driverPick").addEventListener("change",function(){
   st.driver=this.value; st.role=roleOf(this.value); st.pin=""; st.pinOk=false; st.pinState="";
@@ -4901,24 +5015,47 @@ function pinPaintHint(){
 
 function pinGateNeeded(){ return pinNeeded() && !st.pinOk; }
 
-/* The markup. Same field in both places, one id, so there is never a second
-   implementation to drift from this one. */
-function pinGateHtml(why){
-  return '<div class="pingate" id="pinGate">'+
-           '<p class="trip-note"><b>Confirm it is you.</b> '+esc(why)+'</p>'+
-           '<input id="pinGateInput" type="password" inputmode="numeric" maxlength="8" '+
-             'class="mono pinbox" placeholder="&bull;&bull;&bull;&bull;" autocomplete="off">'+
-           '<p class="trip-note" id="pinGateSay"></p>'+
+/* The markup. Same field wherever it is drawn, so there is never a second
+   implementation to drift from this one.
+
+   Classes rather than ids now. It used to carry id="pinGateInput", which was
+   safe while only one could ever be on the page at a time. The PIN sheet
+   made that untrue: a driver with the request form open and the sheet over
+   it would have had two boxes with one id, and every lookup would silently
+   have found the first one and written the driver's answer into the wrong
+   one. Everything below reads the class and updates all of them. */
+/* bare drops the "Confirm it is you." lead. The sheet has that as its own
+   heading, and printing it twice, two lines apart, is the app talking to
+   itself. The request form keeps the lead, because there it is one panel
+   among several and needs to say what it is. */
+function pinGateHtml(why, bare){
+  return '<div class="pingate js-pingate">'+
+           '<p class="trip-note">'+
+             (bare ? '' : '<b>Confirm it is you.</b> ')+esc(why)+'</p>'+
+           '<input type="password" inputmode="numeric" maxlength="8" '+
+             'class="mono pinbox js-pin-input" placeholder="&bull;&bull;&bull;&bull;" '+
+             'autocomplete="off" aria-label="Your four digit PIN">'+
+           '<p class="trip-note js-pin-say"></p>'+
          '</div>';
 }
 
+/* Every box on the page, wired once each.
+
+   The once matters now. Before the sheet, this was only ever called straight
+   after an innerHTML rebuild, so the element was new every time and there was
+   nothing to double up. The sheet outlives a repaint of the screen behind it,
+   and rotaPaintStops calls this on every thirty second poll, so without the
+   mark a driver would have collected one more input handler a minute and each
+   keystroke would have fired the PIN check as many times over. */
 function pinGateWire(){
-  var i=$("pinGateInput");
-  if(!i) return;
-  i.addEventListener("input",function(){
-    st.pin=this.value.replace(/\D/g,"").slice(0,8);
-    if(this.value!==st.pin) this.value=st.pin;
-    checkPin();                       /* resolves, then calls paintFoot */
+  Array.prototype.forEach.call(document.querySelectorAll(".js-pin-input"),function(i){
+    if(i.getAttribute("data-wired")) return;
+    i.setAttribute("data-wired","1");
+    i.addEventListener("input",function(){
+      st.pin=this.value.replace(/\D/g,"").slice(0,8);
+      if(this.value!==st.pin) this.value=st.pin;
+      checkPin();                     /* resolves, then calls paintFoot */
+    });
   });
 }
 
@@ -4926,12 +5063,14 @@ function pinGateWire(){
    offline and cached, so hooking there catches all of them without touching
    any of them. */
 function pinGateSync(){
-  var g=$("pinGate");
-  if(!g) return;
-  var say=$("pinGateSay");
-  if(say) say.textContent = st.pinOk
+  var boxes=document.querySelectorAll(".js-pingate");
+  if(!boxes.length) return;
+  var words = st.pinOk
     ? (st.pinState==="offline" ? "Taken on trust: no signal to check against." : "Thank you.")
     : (String(st.pin||"").length>=4 ? "That PIN is not right." : "");
+  Array.prototype.forEach.call(document.querySelectorAll(".js-pin-say"),function(say){
+    say.textContent = words;
+  });
   /* [data-tripstart] rather than one id: there is a start button per bus
      now, and leaving the PIN gate looking for a single id would have left
      every bus button live behind an unanswered PIN. */
@@ -4946,7 +5085,21 @@ function pinGateSync(){
   Array.prototype.forEach.call(
     document.querySelectorAll("[data-tripstart],#tripStartAnyway,[data-triptap],[data-tripundo]"),
     function(x){ x.classList.toggle("is-off", !st.pinOk); });
-  if(st.pinOk) g.classList.add("is-ok");
+  if(st.pinOk){
+    Array.prototype.forEach.call(boxes,function(g){ g.classList.add("is-ok"); });
+    /* Answered, so the sheet has nothing left to ask and goes. After a beat,
+       because "Thank you." written and wiped in the same frame is a flicker
+       rather than an answer, and a driver who saw nothing will key it again.
+       Only the sheet: the box inside the request form stays where it is,
+       because that form has not finished with him. */
+    if(pinModalUp() && !pinModalGoing){
+      pinModalGoing=true;
+      setTimeout(function(){
+        pinModalGoing=false;
+        if(st.pinOk) pinModalClose();
+      },800);
+    }
+  }
 }
 
 function checkPin(){
