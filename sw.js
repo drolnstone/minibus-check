@@ -1,6 +1,6 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
-const CACHE = "minibus-check-v1.20.0";
+const CACHE = "minibus-check-v1.20.1";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -22,13 +22,33 @@ const SHELL = [
   "./sunday/index.html"
 ];
 
+/* Precache a file WITHOUT letting the browser answer from its own cache.
+
+   A new CACHE name above is supposed to mean phones take the new copy. It
+   did not quite. Pages serves these files with a ten minute freshness, and
+   cache.add goes through the browser's ordinary HTTP cache like any other
+   fetch, so a new worker installing within ten minutes of a deploy would
+   dutifully build a brand new cache out of the old files — and then serve
+   them for as long as that version lasted. Bumping the number appeared to do
+   nothing, which is worse than not bumping it, because it looks like the
+   deploy that failed rather than the cache that lied.
+
+   cache:"reload" bypasses the HTTP cache for the fetch and refreshes it on
+   the way past. Wrapped, because constructing a Request with a cache mode is
+   not universal and a phone that cannot do it should still get a cached app,
+   ten minutes stale at worst, rather than no app at all. */
+function shellRequest(u) {
+  try { return new Request(u, { cache: "reload" }); }
+  catch (err) { return u; }
+}
+
 self.addEventListener("install", (e) => {
   /* One missing file used to fail addAll outright, which left the whole app
      uncached rather than nearly cached. Add them one at a time so a stray
      404 costs one file instead of everything. */
   e.waitUntil(
     caches.open(CACHE)
-      .then((c) => Promise.all(SHELL.map((u) => c.add(u).catch(() => {}))))
+      .then((c) => Promise.all(SHELL.map((u) => c.add(shellRequest(u)).catch(() => {}))))
       .then(() => self.skipWaiting())
   );
 });
