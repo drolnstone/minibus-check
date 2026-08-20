@@ -1103,9 +1103,17 @@ var QKEY = "fleet.queue.v1";
 
 
 
-/* Bump alongside CACHE in sw.js. Shown at the bottom of the first screen so
-   you can tell at a glance which copy a phone is actually running. */
-var APP_VERSION = "v1.19.29";
+/* Bump alongside CACHE in sw.js AND the one in sunday/index.html. Shown at
+   the bottom of the first screen so you can tell at a glance which copy a
+   phone is actually running.
+
+   Three files, one number, and it stayed at v1.19.29 through two bumps of
+   the worker because the rule lived in a comment and nowhere else. A version
+   that lags is worse than no version: it is read, believed, and it sends
+   whoever is debugging off after the wrong thing entirely. If these three
+   ever disagree again, the highest one is the truth and the others were
+   forgotten. */
+var APP_VERSION = "v1.20.1";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
