@@ -1652,6 +1652,8 @@ function send(payload, done){
          the same pipe. */
       var refusal=new Error(out && out.error ? out.error : "not saved");
       refusal.refused=true;
+      /* The one refusal this page can do something about by itself. */
+      refusal.needPhone=!!(out && out.needPhone);
       throw refusal;
     }
     saving=false;
@@ -1672,6 +1674,30 @@ function send(payload, done){
       /* Same repaint rule as verifySend: the spinner may be sitting on a
          button inside the withdraw question, and only paint() draws that. */
       if(cancelAsk || CLOSED) paint(); else paintBar();
+
+      /* The record has no number against this booking and will not take it.
+
+         It cannot happen from a page that asked for one, which is every page
+         from this version on. What it catches is the phone still running an
+         older copy: out of a cache, off a home screen tile, out of a tab left
+         open since last Sunday. That phone knows nothing about numbers, so
+         being told to give one would strand it — which is exactly what
+         happened the first morning this went up.
+
+         So the page asks, and sends the very same booking again. The stop and
+         the number of seats are still in the payload; nothing is chosen twice. */
+      if(err.needPhone && !PID){
+        askOpen({ then:function(found){
+          /* Unless they turn out to hold a booking already, in which case it
+             is now on screen and overwriting it with this one would be a move
+             nobody asked for. */
+          if(found && found.mine){ toast("You are already booked."); return; }
+          payload.pid=PID; payload.phone=PHONE;
+          send(payload, done);
+        }});
+        return;
+      }
+
       toast(err.message);
       return;
     }
@@ -1747,13 +1773,7 @@ function applySaved(out){
   paint();
 }
 
-$("save").addEventListener("click",function(){
-  /* Belt and braces. The button is dead without both answers, so this cannot
-     fire — but a booking is a seat on a bus, and a blank reaching the sheet
-     would be a row nobody can act on. Checked before the spinner goes in, so
-     a refusal does not leave the button spinning at nothing. */
-  if(!chosen || !seats){ paintBar(); return; }
-
+function saveNow(){
   var first = !booked;
   $("save").innerHTML='<span class="spin"></span>';
   send({ date:DATE, ref:REF, pid:PID, phone:PHONE, stopId:chosen, seats:seats }, function(out){
@@ -1761,6 +1781,35 @@ $("save").addEventListener("click",function(){
     applySaved(out);
     toast(first ? "Booked." : "Changed.");
   });
+}
+
+$("save").addEventListener("click",function(){
+  /* Belt and braces. The button is dead without both answers, so this cannot
+     fire — but a booking is a seat on a bus, and a blank reaching the sheet
+     would be a row nobody can act on. Checked before the spinner goes in, so
+     a refusal does not leave the button spinning at nothing. */
+  if(!chosen || !seats){ paintBar(); return; }
+
+  /* Nor without a number. The tap that chose the stop asked for one, so this
+     cannot fire either — unless a stop was chosen and the storage holding
+     the answer was cleared underneath it, which is a private window, a phone
+     low on space, or somebody clearing site data mid-booking. Ask here rather
+     than let the record refuse it and have to explain itself afterwards. */
+  if(!PID){
+    /* Taken now, because saying who you are reloads the whole booking state
+       from the record, and the record has never heard of the stop and the
+       number sitting on this screen. Without these two lines the re-send goes
+       out empty and reads, to the record, as a cancellation. */
+    var wantStop=chosen, wantSeats=seats;
+    askOpen({ then:function(found){
+      if(found && found.mine){ toast("You are already booked."); return; }
+      chosen=wantStop; seats=wantSeats;
+      saveNow();
+    }});
+    return;
+  }
+
+  saveNow();
 });
 
 $("cancel").addEventListener("click",function(){

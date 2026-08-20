@@ -3561,7 +3561,14 @@ function handleBookingLocked(b) {
      the driver's list. Refusing that would be refusing the one message that
      is always worth hearing. */
   if (seats > 0 && !existing && !pid) {
-    return reply({ ok: false, error: "No phone number given." });
+    /* Flagged, not just worded. A page that asks for a number can never send
+       one without it, so what actually lands here is a phone still holding a
+       copy from before numbers existed \u2014 out of a cache, off a home screen
+       tile, out of a tab that has been open since last Sunday. A newer page
+       reads the flag and asks; an older one has no idea what the flag means
+       and shows the sentence, which is the one instruction that fixes it. */
+    return reply({ ok: false, needPhone: true,
+                   error: "This page is out of date. Reload it and book again." });
   }
 
   /* Nothing booked, or cancelling. Both end the same way: no live row. */
