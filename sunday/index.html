@@ -116,6 +116,10 @@
      their colour and it does not follow this app's theme. */
   --wa:#25D366;--wa-ink:#0B2E1A;
 
+  /* Behind the question that asks for a phone number. Dark enough that the
+     page underneath is plainly not the thing being answered. */
+  --scrim:rgba(22,25,31,.48);
+
   /* The accent doing two different jobs. As a background it carries white
      text; as text it must be legible on a card. In a light theme they are the
      same colour, which is why this went unnoticed until there was a dark one:
@@ -155,6 +159,7 @@ html[data-theme="dark"]{
   --pass-line:#265741;--warn-line:#5C4826;--stop-line:#5E2F2A;
   --accent-ink:#9DB4CC;--dead:#2A323C;--dead-ink:#67717E;--faint:#7E8996;
   --veil:rgba(14,18,22,.97);
+  --scrim:rgba(0,0,0,.62);
 }
 html[data-theme="green"]{ --steel:#14532D;--paper:#F2F6F3;--accent-ink:#14532D; }
 html[data-theme="navy"]{  --steel:#1E3260;--paper:#F2F4F9;--accent-ink:#1E3260; }
@@ -231,7 +236,6 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .seats h2{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:700;
   letter-spacing:.02em;margin:0 0 3px}
 .seats p{margin:0 0 12px;color:var(--muted);font-size:13px}
-.stop.is-locked{opacity:.5}
 .seats.is-asking{border-color:var(--steel);box-shadow:inset 3px 0 0 var(--steel)}
 /* Plus, the figure, minus. The two buttons are the full tap target height and
    as wide as they can be without crowding the number, because they are pressed
@@ -283,6 +287,40 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .btn-wa{background:var(--wa);color:var(--wa-ink);font-weight:600;text-decoration:none;
   display:flex;align-items:center;justify-content:center;text-align:center}
 
+/* ---- the question that asks who you are --------------------------------
+
+   A sheet over the page rather than a box on it. It is asked once, at the
+   moment somebody first reaches for a seat, and it has to be answered before
+   anything happens — which is exactly what a sheet says and a box does not.
+   The box was tried first: on a long stop list it sat wherever it landed,
+   people scrolled past it, and the Confirm button underneath went on looking
+   ready for a booking that had nobody's name on it.
+
+   Bottom of the screen on a phone, because that is where a thumb is. Centred
+   on anything wider, where there is no thumb to be near. */
+.ask{position:fixed;inset:0;z-index:150;background:var(--scrim);display:none;
+  align-items:flex-end;justify-content:center}
+.ask.is-on{display:flex}
+.ask-sheet{width:min(640px,100%);background:var(--paper);color:var(--ink);
+  border-radius:14px 14px 0 0;max-height:92vh;overflow:auto;
+  padding:18px calc(16px + var(--safe-r)) calc(20px + var(--safe-b)) calc(16px + var(--safe-l))}
+.ask-sheet h2{font-family:"Barlow Condensed",sans-serif;font-size:27px;font-weight:700;
+  line-height:1.06;margin:0 0 14px;letter-spacing:.005em}
+/* Big, spaced and centred, because it is eleven digits being read back by
+   somebody who has typed them on a kerb. font-size:16px or over, or iOS
+   zooms the whole page the moment the caret lands in it. */
+.ask-input{width:100%;min-height:var(--tap);border-radius:var(--r);
+  border:1.5px solid var(--hair);background:var(--card);color:var(--ink);
+  font:inherit;font-size:22px;font-weight:600;letter-spacing:.1em;text-align:center;
+  font-variant-numeric:tabular-nums;padding:10px 12px;-webkit-appearance:none}
+.ask-input:focus{outline:3px solid var(--steel);outline-offset:1px}
+.ask-input.is-ok{border-color:var(--pass);box-shadow:0 0 0 1px var(--pass) inset}
+.ask-say{min-height:19px;margin:9px 0 0;font-size:13px;line-height:1.45;color:var(--muted)}
+.ask-say.is-bad{color:var(--stop);font-weight:600}
+.ask-btns{display:flex;gap:8px;margin-top:14px}
+.ask-btns .btn{flex:1}
+@media (min-width:641px){.ask{align-items:center}.ask-sheet{border-radius:14px;max-height:86vh}}
+
 .toast{position:fixed;left:50%;bottom:calc(112px + var(--safe-b));transform:translateX(-50%) translateY(14px);
   background:var(--ink);color:var(--on-accent);padding:11px 16px;border-radius:9px;font-size:14px;
   opacity:0;pointer-events:none;transition:.25s;z-index:90;max-width:90vw;text-align:center}
@@ -293,7 +331,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .live-big{font-family:"Barlow Condensed",sans-serif;font-size:30px;font-weight:700;
   line-height:1.05;margin:0 0 3px;color:var(--accent-ink)}
 .live-sub{margin:0;font-size:13px;color:var(--muted);line-height:1.5}
-.live-sub .ring,.note .ring{color:inherit;font-weight:600;text-decoration:underline}
+.live-sub .ring,.note .ring,.foot .ring{color:inherit;font-weight:600;text-decoration:underline}
 .live-pick{display:flex;gap:6px;margin-top:10px}
 .live-pickbtn{flex:1;padding:7px 10px;border:1px solid currentColor;background:transparent;
   border-radius:8px;font:inherit;font-size:13px;color:inherit;opacity:.6}
@@ -401,6 +439,34 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   </div>
 </div>
 
+<!-- Asked on the first reach for a seat, and again on any device that has
+     not been told yet. The same sheet does the first booking, the second
+     phone and the change of number, because they are one question asked in
+     three situations.
+
+     A question and a box, and nothing else. There was a paragraph here
+     explaining that one number holds one booking, and another under the
+     buttons explaining where the number goes. Both were true and neither
+     belonged on the screen: the question already says what it wants, the
+     placeholder already shows the shape of the answer, and nobody standing
+     at a kerb reads a policy before typing their own phone number. What was
+     in those paragraphs is written down where it is actually needed, in the
+     notes on the Bus Bookings tab and in the comments in this file. -->
+<div class="ask" id="ask" aria-hidden="true">
+  <div class="ask-sheet" role="dialog" aria-modal="true" aria-labelledby="askTitle">
+    <p class="eyebrow" id="askEyebrow">Your booking</p>
+    <h2 id="askTitle">What is your phone number?</h2>
+    <input class="ask-input" id="askInput" type="tel" inputmode="numeric"
+           autocomplete="tel" maxlength="18" placeholder="07700 900123"
+           aria-describedby="askSay" aria-label="Your mobile number">
+    <p class="ask-say" id="askSay" aria-live="polite"></p>
+    <div class="ask-btns">
+      <button class="btn btn-ghost" id="askCancel" type="button">Cancel</button>
+      <button class="btn btn-main" id="askGo" type="button" disabled>Continue</button>
+    </div>
+  </div>
+</div>
+
 <div class="upright" aria-hidden="true"><b>Turn your phone upright.</b></div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -476,9 +542,20 @@ function toast(msg){
   clearTimeout(toastTimer); toastTimer=setTimeout(function(){ t.classList.remove("is-on"); },3600);
 }
 
-/* A handle this phone makes up for itself, so somebody can come back and
-   change their booking. It is random, it is not sent anywhere except with
-   their own booking, and it says nothing about who they are. */
+/* A handle this browser makes up for itself. It is random and it says
+   nothing about who anybody is.
+
+   It used to BE the identity, and that was the fault. One handle per
+   browser meant one booking per browser: a family who booked on the laptop
+   and then opened this on a phone was a stranger to the record and booked
+   again. Two rows, two lots of seats, one family — and cancelling on the
+   phone left the laptop's seats standing on the driver's list where nobody
+   could see them to take them off. A warning at the foot of the page was
+   tried, which only told people the app was going to get it wrong.
+
+   It is kept for two smaller jobs: it still finds a booking made before
+   numbers existed, and it is what the record counts against when somebody
+   sits there trying numbers. */
 function deviceRef(){
   var k="bus.ref.v1", v="";
   try{ v=localStorage.getItem(k)||""; }catch(e){}
@@ -489,6 +566,73 @@ function deviceRef(){
   return v;
 }
 var REF = deviceRef();
+
+/* ---- who this is ------------------------------------------------------
+
+   The phone number, given once on whichever device is in the hand at the
+   time, is what a booking now belongs to. Pick up a different phone, give
+   the same number, and your booking is there: change how many are coming,
+   move to another kerb, or give the seat up. What you cannot do is book a
+   second time, because there is only ever one row with your number on it.
+
+   Two things are kept on this device and neither leaves it except as
+   described:
+
+     PID    the fingerprint the record sent back. It cannot be turned into a
+            number by anybody who finds it, and it is what goes out with
+            every poll from then on.
+     PHONE  the number itself, so the page can say which one is holding the
+            booking, and so the record has something to write in the column
+            the coordinator rings from.
+
+   The number itself is sent exactly twice: once when it is given, and again
+   with a booking that needs writing. Never in a web address, so it is not in
+   a history, a referrer or a log line — which is the whole reason the
+   fingerprint exists. Nothing about it is in the code on the website: the
+   only place a number is ever written down is the spreadsheet. */
+var IDKEY="bus.pid.v1", PHKEY="bus.phone.v1";
+var PID="", PHONE="";
+try{ PID=localStorage.getItem(IDKEY)||""; PHONE=localStorage.getItem(PHKEY)||""; }catch(e){}
+
+function idSave(pid, phone){
+  PID   = String(pid||"");
+  PHONE = String(phone||"");
+  try{
+    if(PID) localStorage.setItem(IDKEY,PID); else localStorage.removeItem(IDKEY);
+    if(PHONE) localStorage.setItem(PHKEY,PHONE); else localStorage.removeItem(PHKEY);
+  }catch(e){}
+}
+
+/* What goes on the end of every read. The handle for the old bookings, the
+   fingerprint for everything since. */
+function idq(){
+  return "&ref="+encodeURIComponent(REF)+
+         (PID ? "&pid="+encodeURIComponent(PID) : "");
+}
+
+/* Eleven digits, however they were typed. +44 and 0044 are folded back to
+   the 0 they stand for; spaces, dashes and brackets are thrown away. Returns
+   "" for anything that is not eleven digits starting with a zero, and every
+   caller reads "" as no. The record checks this again for itself: this copy
+   is here so the Continue button can stay dead until there is an answer
+   worth sending. */
+function phoneDigits(v){
+  var d=String(v==null?"":v).replace(/[^0-9+]/g,"");
+  if(d.indexOf("+44")===0) d="0"+d.slice(3);
+  else if(d.indexOf("0044")===0) d="0"+d.slice(4);
+  else if(d.indexOf("44")===0 && d.length===12) d="0"+d.slice(2);
+  return d.replace(/[^0-9]/g,"");
+}
+function phoneOk(v){
+  var d=phoneDigits(v);
+  return (d.length===11 && d.charAt(0)==="0") ? d : "";
+}
+/* For reading back at somebody, in the shape they wrote it on a scrap of
+   paper: 07700 900123. */
+function prettyPhone(d){
+  d=String(d||"");
+  return d.length===11 ? d.slice(0,5)+"\u00A0"+d.slice(5) : d;
+}
 
 /* ---- the stop somebody is watching without a booking --------------------
 
@@ -579,50 +723,67 @@ function prettyDate(key){
   return d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"});
 }
 
+/* Everything the page is, from one payload.
+
+   Pulled out of load so that saying who you are runs through it too. The
+   record answers an identify with exactly the shape it answers ?bus=1 with,
+   so opening the page for the first time and giving your number on a second
+   phone are the same act as far as this file is concerned. One piece of code
+   paints from the record, and there is no second path to keep in step. */
+function applyBus(out){
+  STOPS=out.stops||[]; ARRIVALS=out.arrivals||[]; COUNTS=out.counts||{};
+  CLOSED=!!out.closed; ROLLED=!!out.rolled; DATE=out.date||""; CUTOFF=out.cutoff||"";
+  REHEARSAL=!!out.rehearsal;
+
+  booked = out.mine ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
+  chosen = booked ? booked.stopId : null;
+  seats  = booked ? booked.seats : null;
+  cancelAsk = false;        /* a fresh load is never mid-question */
+  DRIVER = (out.driver && out.driver.wa) ? out.driver : null;
+
+  /* The number the record holds against this booking wins over whatever this
+     browser has. It is how a phone whose storage was cleared, or one where a
+     digit was keyed wrong and put right on another device, comes back saying
+     the right number under the stop list. */
+  if(out.phone) idSave(PID, out.phone);
+
+  /* Which routes actually exist, in the order the timetable lists them. */
+  ROUTES=[];
+  STOPS.forEach(function(s){ if(ROUTES.indexOf(s.route)<0) ROUTES.push(s.route); });
+  if(!ROUTES.length) ROUTES=["North"];
+
+  /* The kerb this phone said it was standing at, if it has no booking of
+     its own. Dropped the moment a booking exists — the booking is the
+     better answer — and dropped when it belongs to another Sunday. */
+  var w = watchLoad();
+  watchStop = (!booked && w && w.date===DATE && stopById(w.stopId)) ? w.stopId : "";
+  if(!watchStop && w) watchSave("");
+
+  /* Open on the route you are already booked on, or the one you are
+     watching. */
+  var mine = booked && stopById(booked.stopId);
+  if(!mine && watchStop) mine = stopById(watchStop);
+  route = (mine && ROUTES.indexOf(mine.route)>=0) ? mine.route : ROUTES[0];
+
+  $("when").textContent = prettyDate(DATE);
+  paint();
+
+  /* After the cutoff, or during a rehearsal. The rehearsal case is why
+     the passenger side sat out the first test: bookings are open on a
+     Tuesday, so CLOSED was false and this never started watching. The
+     two are kept apart deliberately, because a rehearsal must not tell
+     anybody that bookings have shut. */
+  if(CLOSED || REHEARSAL) liveStart();
+  else { liveStop(); live=null; paintLive(); gateStart(); }
+}
+
 function load(again){
-  callFetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
+  callFetch(ENDPOINT+"?bus=1"+idq(),{method:"GET",redirect:"follow"})
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out=readJson(t);
       if(!out || out.ok!==true) throw new Error(out && out.error ? out.error : "unavailable");
-      STOPS=out.stops||[]; ARRIVALS=out.arrivals||[]; COUNTS=out.counts||{};
-      CLOSED=!!out.closed; ROLLED=!!out.rolled; DATE=out.date||""; CUTOFF=out.cutoff||"";
-      REHEARSAL=!!out.rehearsal;
-
-      booked = out.mine ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
-      chosen = booked ? booked.stopId : null;
-      seats  = booked ? booked.seats : null;
-      cancelAsk = false;        /* a fresh load is never mid-question */
-      DRIVER = (out.driver && out.driver.wa) ? out.driver : null;
-
-      /* Which routes actually exist, in the order the timetable lists them. */
-      ROUTES=[];
-      STOPS.forEach(function(s){ if(ROUTES.indexOf(s.route)<0) ROUTES.push(s.route); });
-      if(!ROUTES.length) ROUTES=["North"];
-
-      /* The kerb this phone said it was standing at, if it has no booking of
-         its own. Dropped the moment a booking exists — the booking is the
-         better answer — and dropped when it belongs to another Sunday. */
-      var w = watchLoad();
-      watchStop = (!booked && w && w.date===DATE && stopById(w.stopId)) ? w.stopId : "";
-      if(!watchStop && w) watchSave("");
-
-      /* Open on the route you are already booked on, or the one you are
-         watching. */
-      var mine = booked && stopById(booked.stopId);
-      if(!mine && watchStop) mine = stopById(watchStop);
-      route = (mine && ROUTES.indexOf(mine.route)>=0) ? mine.route : ROUTES[0];
-
-      $("when").textContent = prettyDate(DATE);
-      paint();
-
-      /* After the cutoff, or during a rehearsal. The rehearsal case is why
-         the passenger side sat out the first test: bookings are open on a
-         Tuesday, so CLOSED was false and this never started watching. The
-         two are kept apart deliberately, because a rehearsal must not tell
-         anybody that bookings have shut. */
-      if(CLOSED || REHEARSAL) liveStart();
-      else { liveStop(); live=null; paintLive(); gateStart(); }
+      applyBus(out);
     })
     .catch(function(err){
       /* Three attempts before saying anything, spaced out.
@@ -689,7 +850,7 @@ function liveFetch(){
   if(!navigator.onLine) return;
   if(liveBusy){ liveAgain=true; return; }
   liveBusy=true;
-  callFetch(ENDPOINT+"?trip=1&ref="+encodeURIComponent(REF)+
+  callFetch(ENDPOINT+"?trip=1"+idq()+
             (liveWant? "&r="+encodeURIComponent(liveWant) : "")+
             /* The kerb somebody without a booking said they were standing at.
                Sent only when there is no booking to answer with. */
@@ -747,7 +908,7 @@ var gateTimer = null, gateBusy = false;
 function gateCheck(){
   if(gateBusy || liveTimer || document.hidden || !navigator.onLine) return;
   gateBusy=true;
-  callFetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
+  callFetch(ENDPOINT+"?bus=1"+idq(),{method:"GET",redirect:"follow"})
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out=readJson(t);
@@ -935,7 +1096,7 @@ function activeOn(rt){
 }
 
 function paint(){
-  var html="", dupWarn=false;
+  var html="";
 
   if(CLOSED){
     /* The whole of Sunday morning now sits here: bookings shut at 09:30 and
@@ -982,26 +1143,20 @@ function paint(){
          dead buttons with no way to tell a locked screen from a broken one.
          The bar at the foot has said the right thing throughout. These two
          now agree, and both name the same two ways out. */
+      /* Four words. It carried an instruction for a while \u2014 tap another stop
+         to move, Not coming to give it up \u2014 both true and neither needed:
+         the stops are right there and the button says what it is. */
       html+='<div class="note note-go"><b>You are booked.</b></div>';
-    } else if(!booked && !chosen){
-      /* A seat booked somewhere else is still a seat.
-
-         The handle that finds a booking again belongs to one browser, so a
-         family who booked on a laptop and then opens this on a phone is shown
-         an empty screen and books a second time. Two rows, two lots of seats,
-         one family — and cancelling on the phone leaves the laptop's seats
-         standing on the driver's list where they cannot see them. On a
-         fifteen seater that is how a bus fills up with people who are not
-         coming.
-
-         Deliberately about YOUR other device and never about this stop.
-         "Already booked at this stop" would read, at a kerb three households
-         share, as somebody having taken your seat. */
-      /* Moved to the foot. It was the first thing every passenger read, every
-         week, about a case that catches one of them a month. It is still on
-         the page, at the end, where somebody with a doubt goes looking. */
-      dupWarn = true;
     }
+    /* There used to be a warning here, and then a line at the foot, telling
+       anybody without a booking on this device that booking now would add a
+       SECOND seat if they had already booked somewhere else. It was true, and
+       it was the wrong answer to it: a page that cannot tell one person from
+       another, apologising in advance for what it was about to get wrong.
+
+       There is nothing to warn about now. A booking belongs to a number, the
+       number is asked for before a seat is taken, and a second device finds
+       the first device's booking instead of adding to it. */
   }
 
   /* Route tabs, each carrying its own summary so you can see where the bus
@@ -1023,9 +1178,18 @@ function paint(){
         (total? '<b>'+active+'</b> with people, <b>'+total+'</b> booked'
               : 'nobody booked yet')+'</p>';
 
-  /* Locked once booked. Not greyed into meaninglessness: the stop he has is
-     still shown ticked and legible, and the others simply stop responding. */
-  var locked = !!booked && !CLOSED;
+  /* Stops used to lock the moment a booking existed, and there was a good
+     reason for it. A tap on another kerb did not MOVE anything: the record
+     knew this browser and not this person, so a second device tapping a stop
+     made a second booking, and refusing the tap was the only safe answer
+     available. The lock was there to protect the app from its own identity.
+
+     A booking belongs to a number now, so that tap moves the one row the
+     person holds. There is nothing left to protect and the lock goes.
+
+     A passenger still does not change kerb from one week to the next. This is
+     for the morning somebody is setting off from their sister's, and for the
+     mis-tap, which used to cost a withdrawal and a fresh booking. */
 
   /* After the cutoff a phone with no booking may still tap a stop \u2014 not to
      book it, which is shut, but to say that is the kerb it is standing at.
@@ -1036,8 +1200,8 @@ function paint(){
     var n=COUNTS[s.id]||0;
     var on = picking ? (watchStop===s.id) : (chosen===s.id);
     var attr = picking ? 'data-watch="'+esc(s.id)+'"' : 'data-stop="'+esc(s.id)+'"';
-    var dead = picking ? false : (CLOSED||locked);
-    html+='<button class="stop'+(on?' is-on':'')+(locked&&!on?' is-locked':'')+
+    var dead = picking ? false : CLOSED;
+    html+='<button class="stop'+(on?' is-on':'')+
             '" type="button" '+attr+
             (dead?' disabled':'')+' aria-pressed="'+on+'">'+
             '<span class="stop-time">'+esc(s.time)+'</span>'+
@@ -1129,10 +1293,8 @@ function paint(){
   $("foot").innerHTML = (CLOSED
     ? "The Sunday bus for RCCG Dominion Assembly Liverpool."
     : "<b>Bookings close "+esc(CUTOFF||"Sunday 09:30")+".</b>")+
-    (dupWarn
-      ? "<br>Booked on another phone or a computer? Booking here adds a "+
-        "second seat."
-      : "");
+    identityFoot();
+  wireIdentityFoot();
 
   Array.prototype.forEach.call(document.querySelectorAll("[data-route]"),function(b){
     b.addEventListener("click",function(){
@@ -1142,17 +1304,12 @@ function paint(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-stop]"),function(b){
     b.addEventListener("click",function(){
       var id=this.getAttribute("data-stop");
-      var was=chosen;
-      chosen = (chosen===id) ? null : id;
-      /* A new stop is a new question. Nothing carries over, so the number
-         sitting there can never belong to an answer somebody else gave.
-         This once had a further test for a passenger already booked moving
-         stop. Nobody can reach it: every stop button is disabled the moment
-         a booking exists, so booked is always false by the time a tap gets
-         here, and a branch that cannot run is a branch nobody can check. */
-      if(chosen && chosen!==was) seats=null;
-      seatsAsk = !!chosen && !seats;
-      paint();
+      /* The first reach for a seat on a device that has not said who it is.
+         The question comes up here rather than on the way in, because most
+         people opening this page are reading the times and have no business
+         being asked for anything. */
+      if(!PID){ askThenTap(id); return; }
+      tapStop(id);
     });
   });
   /* Choosing a kerb to watch. Books nothing, sends nothing, and asks for
@@ -1187,7 +1344,7 @@ function paint(){
   if($("cancelYes")) $("cancelYes").addEventListener("click",function(){
     if(saving) return;
     this.innerHTML='<span class="spin"></span>';
-    send({ date:DATE, ref:REF, stopId:"", seats:0 }, function(out){
+    send({ date:DATE, ref:REF, pid:PID, phone:PHONE, stopId:"", seats:0 }, function(out){
       applySaved(out);
       toast("Cancelled.");
     });
@@ -1202,6 +1359,180 @@ function paint(){
   }
 
   paintBar();
+}
+
+/* ==========================================================================
+   SAYING WHO YOU ARE
+
+   One question, asked in three situations, answered by one sheet:
+
+     the first reach for a seat on a device that has not been told;
+     somebody arriving on a second phone looking for the booking they
+       already hold;
+     somebody saying this is not their number.
+
+   All three end the same way: a number goes to the record, the record
+   answers with everything this page needs and a fingerprint to use from
+   then on, and applyBus paints from that answer exactly as it paints from
+   a fresh load.
+
+   Giving a number books nothing. It says which row is yours, if any. The
+   booking is still the Confirm button.
+   ========================================================================== */
+
+/* The line under the closing time. Where the second-booking warning used to
+   be, and doing the opposite job in a quarter of the words: not "this may go
+   wrong" but a way in for somebody who already has a booking. */
+function idBtn(id,label){
+  return '<button type="button" class="ring" id="'+id+'" style="background:none;'+
+         'border:none;padding:0;font:inherit;color:inherit">'+esc(label)+'</button>';
+}
+function identityFoot(){
+  if(PID){
+    return "<br>Booking as <b>"+
+           (PHONE ? esc(prettyPhone(PHONE)) : "the number you gave")+"</b>. "+
+           idBtn("idChange","Not you?");
+  }
+  return "<br>"+idBtn("idFind","Find your booking");
+}
+function wireIdentityFoot(){
+  if($("idFind")) $("idFind").addEventListener("click",function(){
+    askOpen({ then:function(out){
+      toast(out && out.mine ? "Found it." : "No booking under that number.");
+    }});
+  });
+  if($("idChange")) $("idChange").addEventListener("click",function(){
+    askOpen({
+      title:"Whose booking should this show?",
+      then:function(out){
+        toast(out && out.mine ? "Found it." : "No booking under that number.");
+      }
+    });
+  });
+}
+
+/* Choosing a kerb, once the record knows who is choosing. */
+function tapStop(id){
+  var was=chosen;
+  /* A booking always has a stop. Tapping the one you hold does not clear it:
+     Not coming is the way out of a booking and it says so plainly. Without
+     this a booked passenger could tap their own kerb, be left holding
+     nothing, and read a bar that still said Booked. */
+  chosen = (chosen===id) ? (booked ? id : null) : id;
+  if(chosen && chosen!==was){
+    /* A new stop is a new question \u2014 unless there is already an answer
+       worth carrying. Somebody moving kerb has said how many are coming and
+       should not be made to say it twice. Everybody else starts empty, so
+       the number sitting there can never be an answer somebody else gave. */
+    seats = booked ? booked.seats : null;
+  }
+  seatsAsk = !!chosen && !seats;
+  paint();
+}
+
+/* The tap that arrives before the record knows anybody. Ask, then either
+   carry the tap through or hand back the booking they already had. */
+function askThenTap(id){
+  askOpen({ then:function(out){
+    if(out && out.mine){
+      /* They had one already: on another device, or on this one before its
+         storage was cleared. applyBus has just put it on screen. Say so,
+         rather than quietly replacing it with the kerb they just tapped. */
+      toast("You are already booked.");
+      return;
+    }
+    tapStop(id);
+  }});
+}
+
+var askThenFn=null, askBusy=false, askErr=false;
+
+function askOpen(o){
+  o=o||{};
+  askThenFn = o.then || null;
+  $("askEyebrow").textContent = o.eyebrow || "Your booking";
+  $("askTitle").textContent   = o.title   || "What is your phone number?";
+  /* Pre-filled with whatever this device already knows, so "Not you?" starts
+     from the number being replaced rather than from an empty box. */
+  $("askInput").value = PHONE ? PHONE.slice(0,5)+" "+PHONE.slice(5) : "";
+  askErr=false;
+  askSay("");
+  askShape();
+  var box=$("ask");
+  box.classList.add("is-on");
+  box.setAttribute("aria-hidden","false");
+  /* After the sheet is up. Focusing while it is still arriving makes iOS
+     scroll the page behind it instead of bringing the keypad to the box. */
+  setTimeout(function(){ try{ $("askInput").focus(); }catch(e){} },70);
+}
+
+function askClose(){
+  var box=$("ask");
+  box.classList.remove("is-on");
+  box.setAttribute("aria-hidden","true");
+  askThenFn=null; askErr=false;
+}
+
+function askSay(msg,bad){
+  var el=$("askSay");
+  el.textContent=msg||"";
+  el.classList.toggle("is-bad",!!bad);
+  askErr=!!bad;
+}
+
+/* Continue stays dead until there are eleven digits starting with a zero.
+   The line underneath counts them, which is the whole of what needs saying:
+   a dead button beside "7 of 11" needs no sentence explaining itself. */
+function askShape(){
+  var v=$("askInput").value, d=phoneDigits(v), ok=!!phoneOk(v);
+  $("askInput").classList.toggle("is-ok",ok);
+  $("askGo").disabled = !ok || askBusy;
+  if(askErr) return;
+  askSay(ok ? "" : (d.length ? d.length+" of 11" : ""));
+}
+
+function askDone(){
+  askBusy=false;
+  $("askGo").textContent="Continue";
+  askShape();
+}
+
+function askSend(){
+  if(askBusy) return;
+  var phone=phoneOk($("askInput").value);
+  /* The button is dead without this, so it cannot fire. Checked anyway,
+     because a blank reaching the record would be a row nobody can act on. */
+  if(!phone){ askSay("Eleven digits, starting with 0.",true); return; }
+
+  askBusy=true;
+  $("askGo").disabled=true;
+  $("askGo").innerHTML='<span class="spin"></span>';
+
+  callFetch(ENDPOINT,{
+    method:"POST", redirect:"follow",
+    headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body: JSON.stringify({ action:"identify", phone:phone, ref:REF })
+  }).then(function(r){ return r.text(); }).then(function(t){
+    var out=readJson(t);
+    askDone();
+    if(!out || out.ok!==true){
+      askSay((out && out.error) || "That did not go through. Try again.", true);
+      return;
+    }
+    idSave(out.pid, out.phone || phone);
+    /* Taken before the sheet closes, because closing clears it. */
+    var fn=askThenFn;
+    askClose();
+    applyBus(out);
+    if(fn) fn(out);
+  }).catch(function(err){
+    /* Nothing has been written here, whatever went wrong: this call creates
+       no booking and changes no seat. So unlike Confirm there is nothing to
+       go and check, and saying try again is the honest whole of it. */
+    askDone();
+    askSay(String((err && err.message) || "That did not go through.")+
+           " Try again.", true);
+  });
 }
 
 /* The bar is the only thing that says whether the spreadsheet knows. */
@@ -1321,6 +1652,8 @@ function send(payload, done){
          the same pipe. */
       var refusal=new Error(out && out.error ? out.error : "not saved");
       refusal.refused=true;
+      /* The one refusal this page can do something about by itself. */
+      refusal.needPhone=!!(out && out.needPhone);
       throw refusal;
     }
     saving=false;
@@ -1341,6 +1674,30 @@ function send(payload, done){
       /* Same repaint rule as verifySend: the spinner may be sitting on a
          button inside the withdraw question, and only paint() draws that. */
       if(cancelAsk || CLOSED) paint(); else paintBar();
+
+      /* The record has no number against this booking and will not take it.
+
+         It cannot happen from a page that asked for one, which is every page
+         from this version on. What it catches is the phone still running an
+         older copy: out of a cache, off a home screen tile, out of a tab left
+         open since last Sunday. That phone knows nothing about numbers, so
+         being told to give one would strand it — which is exactly what
+         happened the first morning this went up.
+
+         So the page asks, and sends the very same booking again. The stop and
+         the number of seats are still in the payload; nothing is chosen twice. */
+      if(err.needPhone && !PID){
+        askOpen({ then:function(found){
+          /* Unless they turn out to hold a booking already, in which case it
+             is now on screen and overwriting it with this one would be a move
+             nobody asked for. */
+          if(found && found.mine){ toast("You are already booked."); return; }
+          payload.pid=PID; payload.phone=PHONE;
+          send(payload, done);
+        }});
+        return;
+      }
+
       toast(err.message);
       return;
     }
@@ -1368,7 +1725,7 @@ function send(payload, done){
 /* Did it land after all? One read, and the answer is not in doubt: the
    spreadsheet either holds this booking or it does not. */
 function verifySend(payload, done){
-  callFetch(ENDPOINT+"?bus=1&ref="+encodeURIComponent(REF),{method:"GET",redirect:"follow"})
+  callFetch(ENDPOINT+"?bus=1"+idq(),{method:"GET",redirect:"follow"})
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out=readJson(t);
@@ -1416,6 +1773,16 @@ function applySaved(out){
   paint();
 }
 
+function saveNow(){
+  var first = !booked;
+  $("save").innerHTML='<span class="spin"></span>';
+  send({ date:DATE, ref:REF, pid:PID, phone:PHONE, stopId:chosen, seats:seats }, function(out){
+    $("save").textContent="Confirm";
+    applySaved(out);
+    toast(first ? "Booked." : "Changed.");
+  });
+}
+
 $("save").addEventListener("click",function(){
   /* Belt and braces. The button is dead without both answers, so this cannot
      fire — but a booking is a seat on a bus, and a blank reaching the sheet
@@ -1423,13 +1790,26 @@ $("save").addEventListener("click",function(){
      a refusal does not leave the button spinning at nothing. */
   if(!chosen || !seats){ paintBar(); return; }
 
-  var first = !booked;
-  $("save").innerHTML='<span class="spin"></span>';
-  send({ date:DATE, ref:REF, stopId:chosen, seats:seats }, function(out){
-    $("save").textContent="Confirm";
-    applySaved(out);
-    toast(first ? "Booked." : "Changed.");
-  });
+  /* Nor without a number. The tap that chose the stop asked for one, so this
+     cannot fire either — unless a stop was chosen and the storage holding
+     the answer was cleared underneath it, which is a private window, a phone
+     low on space, or somebody clearing site data mid-booking. Ask here rather
+     than let the record refuse it and have to explain itself afterwards. */
+  if(!PID){
+    /* Taken now, because saying who you are reloads the whole booking state
+       from the record, and the record has never heard of the stop and the
+       number sitting on this screen. Without these two lines the re-send goes
+       out empty and reads, to the record, as a cancellation. */
+    var wantStop=chosen, wantSeats=seats;
+    askOpen({ then:function(found){
+      if(found && found.mine){ toast("You are already booked."); return; }
+      chosen=wantStop; seats=wantSeats;
+      saveNow();
+    }});
+    return;
+  }
+
+  saveNow();
 });
 
 $("cancel").addEventListener("click",function(){
@@ -1438,6 +1818,22 @@ $("cancel").addEventListener("click",function(){
   if(saving) return;
   cancelAsk=true; paint();
   try{ $("cancelBox").scrollIntoView({block:"center",behavior:"smooth"}); }catch(e){}
+});
+
+$("askGo").addEventListener("click",askSend);
+$("askCancel").addEventListener("click",askClose);
+$("askInput").addEventListener("input",function(){ askErr=false; askShape(); });
+$("askInput").addEventListener("keydown",function(e){
+  if(e.key==="Enter" || e.keyCode===13){
+    e.preventDefault();
+    if(!$("askGo").disabled) askSend();
+  }
+});
+/* The backdrop and the escape key. Both mean the same thing, which is not
+   now, and neither of them books or cancels anything. */
+$("ask").addEventListener("click",function(e){ if(e.target===this) askClose(); });
+document.addEventListener("keydown",function(e){
+  if((e.key==="Escape" || e.keyCode===27) && $("ask").classList.contains("is-on")) askClose();
 });
 
 /* ---- Appearance ----------------------------------------------------
