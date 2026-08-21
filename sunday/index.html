@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.21.1 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.22.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -117,8 +117,10 @@
 :root{
   --ink:#16191F;--paper:#F4F5F6;--card:#FFFFFF;
   --steel:#1B222C;--hair:#D3D7DC;--muted:#5C6672;
+  /* Kept in step with the driver app, which is where the reasoning lives.
+     Amber a shade down so it clears 4.5 to 1 on its own cream tint. */
   --pass:#146B41;--pass-bg:#E6F2EB;
-  --warn:#B26B00;--warn-bg:#FDF3E2;
+  --warn:#9E5F00;--warn-bg:#FDF3E2;
   --stop:#A8231B;--stop-bg:#FBE9E7;
 
   /* Named so a theme can reach them. Every value was already on the screen,
@@ -170,9 +172,11 @@ html[data-theme="dark"]{
   color-scheme:dark;
   --ink:#E7EBF0;--paper:#0E1216;--card:#181D25;
   --steel:#31404F;--hair:#2B333E;--muted:#9EA9B6;
-  --pass:#1B8552;--pass-bg:#12291F;
-  --warn:#A36807;--warn-bg:#2B2113;
-  --stop:#C93A2E;--stop-bg:#2E1715;
+  /* All three lifted, same hues, so a warning on a dark card can be read at
+     a glance rather than worked out. */
+  --pass:#21A163;--pass-bg:#12291F;
+  --warn:#BF7A08;--warn-bg:#2B2113;
+  --stop:#D85F55;--stop-bg:#2E1715;
   --pass-line:#265741;--warn-line:#5C4826;--stop-line:#5E2F2A;
   --accent-ink:#9DB4CC;--dead:#2A323C;--dead-ink:#67717E;--faint:#7E8996;
   --veil:rgba(14,18,22,.97);
@@ -338,8 +342,17 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .ask-btns .btn{flex:1}
 @media (min-width:641px){.ask{align-items:center}.ask-sheet{border-radius:14px;max-height:86vh}}
 
+/* The toast sat on --ink, which is the colour of TEXT, not a surface. In a
+   light theme those happen to look the same: ink is nearly black, so a
+   near-black chip with white on it read perfectly and nobody looked twice.
+   The dark theme turns ink into #E7EBF0, so the chip became near-white and
+   kept its white lettering. 1.2 to 1 — white on white, and the one message
+   somebody most needs to read is the one telling them something went wrong.
+
+   --steel is a surface and stays a surface in every theme, which is why the
+   driver app's toast never had this. Both apps now use the same one. */
 .toast{position:fixed;left:50%;bottom:calc(112px + var(--safe-b));transform:translateX(-50%) translateY(14px);
-  background:var(--ink);color:var(--on-accent);padding:11px 16px;border-radius:9px;font-size:14px;
+  background:var(--steel);color:var(--on-accent);padding:11px 16px;border-radius:9px;font-size:14px;
   opacity:0;pointer-events:none;transition:.25s;z-index:90;max-width:90vw;text-align:center}
 .toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
 .live{border-radius:9px;padding:13px 14px;margin:0 0 14px;border:1px solid var(--hair);background:var(--card)}
@@ -541,7 +554,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.21.1";
+var PAGE_VERSION = "v1.22.0";
 
 var ENDPOINT = "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec";
 
