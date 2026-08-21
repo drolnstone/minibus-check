@@ -5,6 +5,23 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1B222C">
 <meta name="robots" content="noindex,nofollow">
+<!-- What makes this installable rather than bookmarkable.
+
+     The manifest is the booking page's own, not the driver app's, so the two
+     go onto a home screen as two apps with two icons instead of overwriting
+     each other's tile. Without it an Android phone can only make a shortcut:
+     no icon, no full screen, and no offer from Chrome to install anything.
+
+     The apple- tags are what an iPhone reads instead, and both are needed:
+     older iOS never looks at a manifest at all. -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Sunday Bus">
+<!-- BUILD v1.21.1 · keep in step with CACHE in sw.js and APP_VERSION in the
+     driver app. Up here so a raw fetch of this file answers "which copy is
+     live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
 
 <!--
@@ -343,6 +360,31 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .live-test .live-eyebrow{color:var(--stop)}
 .foot{margin-top:24px;color:var(--muted);font-size:12px;line-height:1.55}
 .foot b{color:var(--ink);font-weight:600}
+/* Last thing on the page and the quietest. Nobody books a seat by reading
+   it; it is there for the one morning somebody has to ask which copy a phone
+   is running, and answering that from a screenshot beats asking. */
+.foot-ver{display:block;margin-top:12px;font-size:11px;letter-spacing:.07em;color:var(--faint)}
+
+/* ---- how to put it on a phone -----------------------------------------
+   Steps and nothing else. Which phone somebody is holding decides which
+   list is open; the other two are behind a fold for the morning somebody is
+   reading them out to a person standing next to them. */
+.how-lab{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin:0 0 11px}
+.how-steps{list-style:none;margin:0;padding:0}
+.how-steps li{display:flex;gap:11px;align-items:flex-start;margin:0 0 13px;
+  font-size:14px;line-height:1.5}
+.how-steps li:last-child{margin-bottom:0}
+.how-steps b{font-weight:600}
+.how-n{flex:0 0 24px;height:24px;border-radius:50%;background:var(--steel);
+  color:var(--on-accent);font-size:12px;font-weight:700;line-height:1;
+  display:flex;align-items:center;justify-content:center;margin-top:1px}
+.how-note{font-size:13px;line-height:1.5;background:var(--warn-bg);
+  border:1px solid var(--warn-line);border-radius:9px;padding:10px 12px;margin:0 0 14px}
+.how-more{margin-top:15px;border-top:1px solid var(--hair);padding-top:4px}
+.how-more summary{font-size:13px;font-weight:600;color:var(--muted);padding:8px 0;cursor:pointer}
+.how-more summary::-webkit-details-marker{color:var(--muted)}
+.how-btn{width:100%;margin:0 0 16px}
 .spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.4);
   border-top-color:var(--on-accent);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -467,12 +509,39 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   </div>
 </div>
 
+<!-- How to put it on a home screen. Filled by howOpen, which picks the list
+     that matches the phone doing the asking. -->
+<div class="ask" id="how" aria-hidden="true">
+  <div class="ask-sheet" role="dialog" aria-modal="true" aria-labelledby="howTitle">
+    <p class="eyebrow">This page</p>
+    <h2 id="howTitle">Add to your phone</h2>
+    <div id="howBody"></div>
+    <div class="ask-btns">
+      <button class="btn btn-main" id="howDone" type="button">Done</button>
+    </div>
+  </div>
+</div>
+
 <div class="upright" aria-hidden="true"><b>Turn your phone upright.</b></div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 "use strict";
+
+/* Which copy of this page a phone is actually running.
+
+   It had none, and the morning it mattered that was the whole of the
+   problem: the booking page was refusing every booking, and there was no way
+   to tell from the page, from the raw file or from anybody's phone whether
+   the file that had gone up was the file that was being served. The answer
+   took a check of the repository to find, and the answer was that the upload
+   had not landed at all.
+
+   Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
+   are one number. It is also in a comment in the head of this file, so it can
+   be read from the raw source without running anything. */
+var PAGE_VERSION = "v1.21.1";
 
 var ENDPOINT = "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec";
 
@@ -1293,7 +1362,10 @@ function paint(){
   $("foot").innerHTML = (CLOSED
     ? "The Sunday bus for RCCG Dominion Assembly Liverpool."
     : "<b>Bookings close "+esc(CUTOFF||"Sunday 09:30")+".</b>")+
-    identityFoot();
+    identityFoot()+
+    /* Not offered to a phone that already has it. */
+    (standalone() ? "" : "<br>"+idBtn("idInstall","Add to your phone"))+
+    '<span class="foot-ver">'+esc(PAGE_VERSION)+'</span>';
   wireIdentityFoot();
 
   Array.prototype.forEach.call(document.querySelectorAll("[data-route]"),function(b){
@@ -1396,6 +1468,7 @@ function identityFoot(){
   return "<br>"+idBtn("idFind","Find your booking");
 }
 function wireIdentityFoot(){
+  if($("idInstall")) $("idInstall").addEventListener("click",howOpen);
   if($("idFind")) $("idFind").addEventListener("click",function(){
     askOpen({ then:function(out){
       toast(out && out.mine ? "Found it." : "No booking under that number.");
@@ -1820,6 +1893,123 @@ $("cancel").addEventListener("click",function(){
   try{ $("cancelBox").scrollIntoView({block:"center",behavior:"smooth"}); }catch(e){}
 });
 
+/* ==========================================================================
+   PUTTING IT ON A PHONE
+
+   Steps, and only steps. Which phone is asking decides which list opens; the
+   other two sit behind a fold. Chrome will sometimes hand over a real install
+   prompt, and when it does one button replaces the list entirely.
+
+   Offered from the foot of the page and nowhere else, and not at all to a
+   phone that already has it: an app that has been installed has no business
+   asking to be installed.
+   ========================================================================== */
+
+var INSTALL_PROMPT=null;
+
+function standalone(){
+  try{
+    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+        || navigator.standalone===true;
+  }catch(e){ return false; }
+}
+
+/* An iPad on recent iOS reports itself as a Mac, and the only thing that
+   gives it away is that the Mac has a touch screen. */
+function deviceKind(){
+  var ua=navigator.userAgent||"";
+  if(/iPad|iPhone|iPod/.test(ua) ||
+     (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1)){
+    return /CriOS|FxiOS|EdgiOS/.test(ua) ? "ios-other" : "ios";
+  }
+  if(/Android/.test(ua)) return "android";
+  return "desktop";
+}
+
+function howStep(n,html){
+  return '<li><span class="how-n">'+n+'</span><div>'+html+'</div></li>';
+}
+
+var HOW={
+  ios:["On an iPhone or iPad",
+    howStep(1,'Tap the <b>Share</b> button \u2014 the square with an arrow coming out of the top.')+
+    howStep(2,'Scroll down and tap <b>Add to Home Screen</b>.')+
+    howStep(3,'Tap <b>Add</b>.')],
+  android:["On an Android phone",
+    howStep(1,'Tap the <b>\u22EE</b> menu, top right.')+
+    howStep(2,'Tap <b>Install app</b>, or <b>Add to Home screen</b>.')+
+    howStep(3,'Tap <b>Install</b>.')],
+  desktop:["On a computer",
+    howStep(1,'In Chrome or Edge, look in the address bar for the install icon, '+
+              'or open the <b>\u22EE</b> menu.')+
+    howStep(2,'Choose <b>Install</b>.')]
+};
+
+function howHtml(){
+  var d=deviceKind(), mine=(d==="ios-other") ? "ios" : d;
+  var h='<div id="howOne"></div>';
+  /* Apple allows this from Safari and from nothing else, so a phone in
+     Chrome is told the one thing that will make the steps work. */
+  if(d==="ios-other"){
+    h+='<p class="how-note">Open this address in <b>Safari</b> first. '+
+       'On an iPhone only Safari can do this.</p>';
+  }
+  h+='<p class="how-lab">'+esc(HOW[mine][0])+'</p>'+
+     '<ol class="how-steps">'+HOW[mine][1]+'</ol>';
+  ["ios","android","desktop"].forEach(function(k){
+    if(k===mine) return;
+    h+='<details class="how-more"><summary>'+esc(HOW[k][0])+'</summary>'+
+       '<ol class="how-steps" style="margin-top:12px">'+HOW[k][1]+'</ol></details>';
+  });
+  return h;
+}
+
+function howOpen(){
+  $("howBody").innerHTML=howHtml();
+  var box=$("how");
+  box.classList.add("is-on");
+  box.setAttribute("aria-hidden","false");
+  howOffer();
+}
+function howClose(){
+  var box=$("how");
+  box.classList.remove("is-on");
+  box.setAttribute("aria-hidden","true");
+}
+
+/* Chrome hands over a real prompt when the page qualifies. One tap beats
+   three, so when there is one it goes above the list. */
+function howOffer(){
+  var wrap=$("howOne");
+  if(!wrap || !INSTALL_PROMPT) return;
+  wrap.innerHTML='<button class="btn btn-main how-btn" id="howGo" type="button">Install</button>';
+  $("howGo").addEventListener("click",function(){
+    var p=INSTALL_PROMPT;
+    if(!p) return;
+    INSTALL_PROMPT=null;            /* it may only be used once */
+    try{ p.prompt(); }catch(e){}
+    var choice = p.userChoice || Promise.resolve({outcome:"dismissed"});
+    choice.then(function(r){
+      wrap.innerHTML = (r && r.outcome==="accepted")
+        ? '' : '<p class="how-note">The steps below do the same.</p>';
+    },function(){ wrap.innerHTML=''; });
+  });
+}
+
+window.addEventListener("beforeinstallprompt",function(e){
+  e.preventDefault();
+  INSTALL_PROMPT=e;
+  howOffer();                        /* no-op unless the sheet is open */
+});
+window.addEventListener("appinstalled",function(){
+  INSTALL_PROMPT=null;
+  howClose();
+  paint();                           /* the offer at the foot goes with it */
+});
+
+$("howDone").addEventListener("click",howClose);
+$("how").addEventListener("click",function(e){ if(e.target===this) howClose(); });
+
 $("askGo").addEventListener("click",askSend);
 $("askCancel").addEventListener("click",askClose);
 $("askInput").addEventListener("input",function(){ askErr=false; askShape(); });
@@ -1833,7 +2023,9 @@ $("askInput").addEventListener("keydown",function(e){
    now, and neither of them books or cancels anything. */
 $("ask").addEventListener("click",function(e){ if(e.target===this) askClose(); });
 document.addEventListener("keydown",function(e){
-  if((e.key==="Escape" || e.keyCode===27) && $("ask").classList.contains("is-on")) askClose();
+  if(e.key!=="Escape" && e.keyCode!==27) return;
+  if($("ask").classList.contains("is-on")) askClose();
+  else if($("how").classList.contains("is-on")) howClose();
 });
 
 /* ---- Appearance ----------------------------------------------------
