@@ -1,0 +1,15 @@
+{
+  "name": "RCCG Dominion Assembly Liverpool — Sunday Bus",
+  "short_name": "Sunday Bus",
+  "description": "Book a seat on the RCCG Dominion Assembly Liverpool Sunday minibus.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4F5F6",
+  "theme_color": "#1B222C",
+  "icons": [
+    { "src": "https://drolnstone.github.io/minibus-check/icon-sunday-180.png", "sizes": "180x180", "type": "image/png", "purpose": "any" },
+    { "src": "https://drolnstone.github.io/minibus-check/icon-sunday-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
