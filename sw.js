@@ -1,6 +1,6 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
-const CACHE = "minibus-check-v1.20.1";
+const CACHE = "minibus-check-v1.21.1";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -19,7 +19,13 @@ const SHELL = [
   "./icon-sunday-180.png",
   "./icon-sunday-512.png",
   "./sunday/",
-  "./sunday/index.html"
+  "./sunday/index.html",
+  /* The booking page has its own manifest, and needs one. Without it an
+     Android phone can only make a bookmark shortcut: no icon of its own, no
+     full screen, and no install offer from Chrome. It is a separate file
+     from the driver app's on purpose, so the two install as two apps rather
+     than fighting over one tile. */
+  "./sunday/manifest.webmanifest"
 ];
 
 /* Precache a file WITHOUT letting the browser answer from its own cache.

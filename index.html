@@ -499,6 +499,31 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .footer-brand img{width:24px;height:24px}
 .version{text-align:center;margin-top:6px;font-family:"Barlow Condensed",sans-serif;
   font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--hair)}
+
+/* ---- how to put it on a phone -----------------------------------------
+   Same sheet the rota request uses, same shape as the passenger page's, and
+   steps in it and nothing else. Under the version at the foot of the first
+   screen, which is where somebody looks when they are asking what this is
+   rather than driving with it. */
+.how-link{display:block;margin:9px auto 0;background:none;border:none;padding:4px 8px;
+  font-family:"Barlow Condensed",sans-serif;font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);text-decoration:underline}
+.how-modal{z-index:130}
+.how-lab{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin:0 0 11px}
+.how-steps{list-style:none;margin:0;padding:0}
+.how-steps li{display:flex;gap:11px;align-items:flex-start;margin:0 0 13px;
+  font-size:14px;line-height:1.5}
+.how-steps li:last-child{margin-bottom:0}
+.how-steps b{font-weight:600}
+.how-n{flex:0 0 24px;height:24px;border-radius:50%;background:var(--steel);
+  color:var(--on-accent);font-size:12px;font-weight:700;line-height:1;
+  display:flex;align-items:center;justify-content:center;margin-top:1px}
+.how-note{font-size:13px;line-height:1.5;background:var(--warn-bg);
+  border:1px solid var(--warn-line);border-radius:9px;padding:10px 12px;margin:0 0 14px}
+.how-more{margin-top:15px;border-top:1px solid var(--hair);padding-top:4px}
+.how-more summary{font-size:13px;font-weight:600;color:var(--muted);padding:8px 0;cursor:pointer}
+.how-btn{width:100%;margin:0 0 16px}
 .footer-brand span{font-family:"Barlow Condensed",sans-serif;font-size:12px;letter-spacing:.12em;
   text-transform:uppercase;color:var(--muted)}
 
@@ -873,6 +898,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       <button type="button" data-theme-set="navy">Navy</button>
     </div>
     <div class="version" id="appVersion"></div>
+    <button class="how-link" id="howLink" type="button" style="display:none">Add to your phone</button>
   </section>
 
   <!-- 2. VEHICLE -->
@@ -1025,6 +1051,19 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   </div>
 </div>
 
+<!-- How to put it on a home screen. Filled by howOpen, which picks the list
+     that matches the phone doing the asking. -->
+<div class="rota-modal how-modal" id="howModal" aria-hidden="true">
+  <div class="rota-sheet" role="dialog" aria-modal="true" aria-labelledby="howTitle">
+    <p class="eyebrow">This app</p>
+    <h2 id="howTitle">Add to your phone</h2>
+    <div id="howBody"></div>
+    <div class="rota-modal-actions">
+      <button class="btn btn-ghost" id="howDone" type="button">Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- The PIN, asked as a sheet rather than as a box on the running screen.
      Filled by pinModalOpen from the very same pinGateHtml the request form
      uses, so there is still one implementation of the box and one of the
@@ -1113,7 +1152,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.20.1";
+var APP_VERSION = "v1.21.1";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -4728,7 +4767,9 @@ $("rotaModal").addEventListener("click",function(e){if(e.target===this)rotaClose
 $("pinModalNot").addEventListener("click",pinModalClose);
 $("pinModal").addEventListener("click",function(e){ if(e.target===this) pinModalClose(); });
 document.addEventListener("keydown",function(e){
-  if((e.key==="Escape" || e.keyCode===27) && pinModalUp()) pinModalClose();
+  if(e.key!=="Escape" && e.keyCode!==27) return;
+  if(pinModalUp()) pinModalClose();
+  else if($("howModal").classList.contains("is-on")) howClose();
 });
 /* ---------------- wiring ---------------- */
 $("driverPick").addEventListener("change",function(){
@@ -5285,6 +5326,133 @@ safely(function(){
   }
   themeApply();
 });
+
+/* ==========================================================================
+   PUTTING IT ON A PHONE
+
+   Steps, and only steps. Which phone is asking decides which list opens; the
+   other two sit behind a fold. Chrome will sometimes hand over a real install
+   prompt, and when it does one button replaces the list entirely.
+
+   The same words as the passenger page, deliberately: a driver who has just
+   walked somebody through installing the booking page should not find this
+   one describes a different set of taps.
+
+   Offered under the version on the first screen, and not at all to a phone
+   that already has it.
+   ========================================================================== */
+
+var INSTALL_PROMPT=null;
+
+function standalone(){
+  try{
+    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+        || navigator.standalone===true;
+  }catch(e){ return false; }
+}
+
+/* An iPad on recent iOS reports itself as a Mac, and the only thing that
+   gives it away is that the Mac has a touch screen. */
+function deviceKind(){
+  var ua=navigator.userAgent||"";
+  if(/iPad|iPhone|iPod/.test(ua) ||
+     (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1)){
+    return /CriOS|FxiOS|EdgiOS/.test(ua) ? "ios-other" : "ios";
+  }
+  if(/Android/.test(ua)) return "android";
+  return "desktop";
+}
+
+function howStep(n,html){
+  return '<li><span class="how-n">'+n+'</span><div>'+html+'</div></li>';
+}
+
+var HOW={
+  ios:["On an iPhone or iPad",
+    howStep(1,'Tap the <b>Share</b> button \u2014 the square with an arrow coming out of the top.')+
+    howStep(2,'Scroll down and tap <b>Add to Home Screen</b>.')+
+    howStep(3,'Tap <b>Add</b>.')],
+  android:["On an Android phone",
+    howStep(1,'Tap the <b>\u22EE</b> menu, top right.')+
+    howStep(2,'Tap <b>Install app</b>, or <b>Add to Home screen</b>.')+
+    howStep(3,'Tap <b>Install</b>.')],
+  desktop:["On a computer",
+    howStep(1,'In Chrome or Edge, look in the address bar for the install icon, '+
+              'or open the <b>\u22EE</b> menu.')+
+    howStep(2,'Choose <b>Install</b>.')]
+};
+
+function howHtml(){
+  var d=deviceKind(), mine=(d==="ios-other") ? "ios" : d;
+  var h='<div id="howOne"></div>';
+  if(d==="ios-other"){
+    h+='<p class="how-note">Open this address in <b>Safari</b> first. '+
+       'On an iPhone only Safari can do this.</p>';
+  }
+  h+='<p class="how-lab">'+esc(HOW[mine][0])+'</p>'+
+     '<ol class="how-steps">'+HOW[mine][1]+'</ol>';
+  ["ios","android","desktop"].forEach(function(k){
+    if(k===mine) return;
+    h+='<details class="how-more"><summary>'+esc(HOW[k][0])+'</summary>'+
+       '<ol class="how-steps" style="margin-top:12px">'+HOW[k][1]+'</ol></details>';
+  });
+  return h;
+}
+
+function howOpen(){
+  $("howBody").innerHTML=howHtml();
+  var box=$("howModal");
+  box.classList.add("is-on");
+  box.setAttribute("aria-hidden","false");
+  howOffer();
+}
+function howClose(){
+  var box=$("howModal");
+  box.classList.remove("is-on");
+  box.setAttribute("aria-hidden","true");
+}
+
+/* Chrome hands over a real prompt when the page qualifies. One tap beats
+   three, so when there is one it goes above the list. */
+function howOffer(){
+  var wrap=$("howOne");
+  if(!wrap || !INSTALL_PROMPT) return;
+  wrap.innerHTML='<button class="btn btn-main how-btn" id="howGo" type="button">Install</button>';
+  $("howGo").addEventListener("click",function(){
+    var p=INSTALL_PROMPT;
+    if(!p) return;
+    INSTALL_PROMPT=null;            /* it may only be used once */
+    try{ p.prompt(); }catch(e){}
+    var choice = p.userChoice || Promise.resolve({outcome:"dismissed"});
+    choice.then(function(r){
+      wrap.innerHTML = (r && r.outcome==="accepted")
+        ? '' : '<p class="how-note">The steps below do the same.</p>';
+    },function(){ wrap.innerHTML=''; });
+  });
+}
+
+/* Hidden from a phone that already has it, and hidden again the moment one
+   is installed without a reload. */
+function howLinkSync(){
+  var b=$("howLink");
+  if(b) b.style.display = standalone() ? "none" : "";
+}
+
+window.addEventListener("beforeinstallprompt",function(e){
+  e.preventDefault();
+  INSTALL_PROMPT=e;
+  howOffer();                        /* no-op unless the sheet is open */
+});
+window.addEventListener("appinstalled",function(){
+  INSTALL_PROMPT=null;
+  howClose();
+  howLinkSync();
+});
+
+if($("howLink")) $("howLink").addEventListener("click",howOpen);
+if($("howDone")) $("howDone").addEventListener("click",howClose);
+$("howModal").addEventListener("click",function(e){ if(e.target===this) howClose(); });
+howLinkSync();
 
 var vEl=$("appVersion");
 if(vEl){
