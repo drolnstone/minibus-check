@@ -1191,7 +1191,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.22.0";
+var APP_VERSION = "v1.22.1";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -5438,8 +5438,11 @@ function howHtml(){
   return h;
 }
 
-function howOpen(){
+function howOpen(auto){
   $("howBody").innerHTML=howHtml();
+  /* "Done" is the wrong word on a sheet nobody asked for: nothing has been
+     done yet. Same button, saying the true thing in each case. */
+  $("howDone").textContent = auto ? "Not now" : "Done";
   var box=$("howModal");
   box.classList.add("is-on");
   box.setAttribute("aria-hidden","false");
@@ -5449,6 +5452,41 @@ function howClose(){
   var box=$("howModal");
   box.classList.remove("is-on");
   box.setAttribute("aria-hidden","true");
+}
+
+/* ---- The offer, made on the way in ---------------------------------
+
+   A driver who opens this in a browser every Sunday is doing the walkaround
+   through a tab: no home screen tile, and none of the offline shell the app
+   is built around. The one line under the version was easy to never read.
+
+   So it is offered once, on the first arrival in a browser, over the sign-in
+   screen once it has drawn. Never to a phone that already has it, and never
+   on top of another sheet — the PIN and the rota both use this same modal,
+   and two of them on one screen is a question nobody can answer.
+
+   The line under the version stays: it is the way back for anybody who
+   tapped Not now. */
+var HOWKEY="fleet.install.v1";
+var howTried=false;
+
+function howBlocked(){
+  if(standalone()) return true;
+  var open=document.querySelectorAll(".rota-modal.is-on");
+  for(var i=0;i<open.length;i++) if(open[i].id!=="howModal") return true;
+  return false;
+}
+function howAuto(){
+  if(howTried) return;
+  howTried=true;
+  if(howBlocked()) return;
+  try{ if(localStorage.getItem(HOWKEY)==="1") return; }
+  catch(e){ return; }   /* no storage means no memory of having asked: do not ask */
+  setTimeout(function(){
+    if(howBlocked()) return;
+    try{ localStorage.setItem(HOWKEY,"1"); }catch(e){}
+    howOpen(true);
+  },600);
 }
 
 /* Chrome hands over a real prompt when the page qualifies. One tap beats
@@ -5488,7 +5526,7 @@ window.addEventListener("appinstalled",function(){
   howLinkSync();
 });
 
-if($("howLink")) $("howLink").addEventListener("click",howOpen);
+if($("howLink")) $("howLink").addEventListener("click",function(){ howOpen(false); });
 if($("howDone")) $("howDone").addEventListener("click",howClose);
 $("howModal").addEventListener("click",function(e){ if(e.target===this) howClose(); });
 howLinkSync();
@@ -5510,6 +5548,9 @@ function safely(fn){ try{ fn(); }catch(e){ /* enrichment only, never fatal */ } 
 
 safely(paintBanner);
 safely(function(){ show("driver"); });
+
+/* The sign-in screen is up. Guarded to one attempt per load inside. */
+safely(howAuto);
 
 /* Last recorded mileage, so the prep screen can sanity check the reading. */
 safely(fetchLastMiles);
