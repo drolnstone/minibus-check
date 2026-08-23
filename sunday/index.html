@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.22.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.22.1 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -554,7 +554,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.22.0";
+var PAGE_VERSION = "v1.22.1";
 
 var ENDPOINT = "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec";
 
@@ -857,6 +857,9 @@ function applyBus(out){
      anybody that bookings have shut. */
   if(CLOSED || REHEARSAL) liveStart();
   else { liveStop(); live=null; paintLive(); gateStart(); }
+
+  /* The page has content now. Guarded to one attempt per load inside. */
+  howAuto();
 }
 
 function load(again){
@@ -1481,7 +1484,7 @@ function identityFoot(){
   return "<br>"+idBtn("idFind","Find your booking");
 }
 function wireIdentityFoot(){
-  if($("idInstall")) $("idInstall").addEventListener("click",howOpen);
+  if($("idInstall")) $("idInstall").addEventListener("click",function(){ howOpen(false); });
   if($("idFind")) $("idFind").addEventListener("click",function(){
     askOpen({ then:function(out){
       toast(out && out.mine ? "Found it." : "No booking under that number.");
@@ -1535,6 +1538,10 @@ var askThenFn=null, askBusy=false, askErr=false;
 
 function askOpen(o){
   o=o||{};
+  /* One sheet at a time. The install offer can still be up when a tap on a
+     kerb needs a number; the question wins, because it is the one the
+     passenger started. */
+  howClose();
   askThenFn = o.then || null;
   $("askEyebrow").textContent = o.eyebrow || "Your booking";
   $("askTitle").textContent   = o.title   || "What is your phone number?";
@@ -1977,8 +1984,11 @@ function howHtml(){
   return h;
 }
 
-function howOpen(){
+function howOpen(auto){
   $("howBody").innerHTML=howHtml();
+  /* "Done" is the wrong word on a sheet nobody asked for: nothing has been
+     done yet. Same button, saying the true thing in each case. */
+  $("howDone").textContent = auto ? "Not now" : "Done";
   var box=$("how");
   box.classList.add("is-on");
   box.setAttribute("aria-hidden","false");
@@ -1988,6 +1998,42 @@ function howClose(){
   var box=$("how");
   box.classList.remove("is-on");
   box.setAttribute("aria-hidden","true");
+}
+
+/* ---- The offer, made on the way in ---------------------------------
+
+   It lived only at the foot of the page, which put it furthest from the
+   people most likely to want it: somebody opening the link out of the
+   WhatsApp group for the first time, who books a seat and closes the tab
+   without ever scrolling past the stop list. So it comes to them instead.
+
+   Once. On the first arrival in a browser, over a page that has already
+   drawn, and never again on that phone. Never to a phone that already has
+   the app, and never on top of the number question — the booking flow uses
+   this same sheet to ask for a phone number, and two sheets on one screen is
+   a question nobody can answer.
+
+   The foot link stays. It is the way back for anybody who tapped Not now,
+   and it costs one line under the closing time. */
+var HOWKEY="bus.install.v1";
+var howTried=false;
+
+function howBlocked(){
+  return standalone() || $("ask").classList.contains("is-on");
+}
+function howAuto(){
+  if(howTried) return;
+  howTried=true;
+  if(howBlocked()) return;
+  try{ if(localStorage.getItem(HOWKEY)==="1") return; }
+  catch(e){ return; }   /* no storage means no memory of having asked: do not ask */
+  /* A beat after the stops land, so the sheet rises over a page with
+     something on it rather than over "Loading the stops…". */
+  setTimeout(function(){
+    if(howBlocked()) return;
+    try{ localStorage.setItem(HOWKEY,"1"); }catch(e){}
+    howOpen(true);
+  },600);
 }
 
 /* Chrome hands over a real prompt when the page qualifies. One tap beats
