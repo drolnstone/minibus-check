@@ -474,6 +474,32 @@ function handleCheck(c) {
   ]);
   ensureChecksColumns(checks);
 
+  /* What the location columns mean, written where somebody looking at a blank
+     cell will find it. Location note is empty on a good check and that is the
+     whole design — it speaks only when there is something to say — but an
+     empty column with a name like that reads as a column that has failed. */
+  if (!structFresh("checknotes")) {
+    try {
+      checks.getRange(1, 21).setNote(
+        "How far the phone was from where the buses are kept, in yards. " +
+        "Under the radius set in config.js and the check counts as done at " +
+        "the bus.");
+      checks.getRange(1, 22).setNote(
+        "Blank on a good check, and that is normal \u2014 it is not a column " +
+        "that failed to fill.\n\n" +
+        "It only speaks when something is worth saying:\n" +
+        "  Away from the buses         a fix, but further out than the radius\n" +
+        "  Driver did not allow location\n" +
+        "  No fix in time\n" +
+        "  Phone cannot give a location\n" +
+        "  Not recorded                turned off in config.js\n\n" +
+        "A blank here with a link in Where checked means the walkaround " +
+        "happened at the bus, which is the thing this column exists to be " +
+        "able to show.");
+    } catch (err) { /* notes are a courtesy, never worth failing a check for */ }
+    structDone("checknotes");
+  }
+
   // Never write the same check twice, even if the phone retries.
   if (alreadyHave(checks, c.id)) {
     return reply({ ok: true, duplicate: true });
@@ -604,6 +630,9 @@ function structReset() {
     stopsMemo = null;
     CacheService.getScriptCache().removeAll([structKey("rota"), structKey("checks"),
                                             structKey("trip"), structKey("bookings"),
+                                            structKey("stoptypes"),
+                                            structKey("tripvalid"),
+                                            structKey("checknotes"),
                                             STOPS_CACHE_KEY]);
   } catch (err) { /* nothing to do: the flags expire by themselves */ }
 }
@@ -2038,6 +2067,17 @@ function checkTimeZoneMenu() {
   }
 }
 
+var STOP_TYPES = ["Pickup", "Arrival", "Depart"];
+
+var STOP_TYPE_NOTE =
+  "Pickup, Arrival or Depart.\n\n" +
+  "Pickup  somewhere people wait.\n" +
+  "Arrival where the run ends. Nobody boards there.\n" +
+  "Depart  when the bus leaves church. One row per route, and it is a time " +
+  "rather than a place \u2014 it is what lets the app say how many minutes " +
+  "behind or ahead the run is before the first stop has been reached. " +
+  "Nobody can book it and no driver taps it.";
+
 function ensureBusStops(ss) {
   var existing = ss.getSheetByName(STOPS_SHEET);
   var sh = sheet(ss, STOPS_SHEET, STOPS_HEADERS);
@@ -2046,11 +2086,28 @@ function ensureBusStops(ss) {
     sh.setColumnWidth(4, 340);
     sh.getRange(1, 3).setNote("Written as text, 09:50, not a time value.");
     sh.getRange(1, 6).setNote("NO takes a stop out of the app without deleting it.");
-    sh.getRange(1, 7).setNote("Pickup or Arrival. Arrival is where the run ends, " +
-                              "not somewhere anybody boards.");
-    sh.getRange("F2:F400").setDataValidation(listRule(["YES", "NO"]));
-    sh.getRange("G2:G400").setDataValidation(listRule(["Pickup", "Arrival"]));
     sh.setFrozenRows(1);
+  }
+  /* The Type dropdown, applied to sheets that already exist as well as new
+     ones.
+
+     It used to be set once, when the tab was first created, from a list of
+     two words. Adding a third to the code therefore did nothing at all to any
+     spreadsheet already in use: the sheet went on refusing "Depart" with
+     "Input must be an item on the specified list", and the only clue was a
+     validation rule written months earlier that nothing in the code was ever
+     going to revisit.
+
+     Guarded so it is written once an hour at most rather than on every read,
+     and keyed on the list itself, so the next word added here fixes every
+     sheet by itself instead of waiting to be noticed. */
+  if (!structFresh("stoptypes")) {
+    try {
+      sh.getRange("F2:F400").setDataValidation(listRule(["YES", "NO"]));
+      sh.getRange("G2:G400").setDataValidation(listRule(STOP_TYPES));
+      sh.getRange(1, 7).setNote(STOP_TYPE_NOTE);
+    } catch (err) { /* a locked sheet is not worth failing a read over */ }
+    structDone("stoptypes");
   }
   return sh;
 }
@@ -2069,7 +2126,10 @@ function ensureBusStops(ss) {
 var STOPS_CACHE_KEY = "busstops_v1";
 var stopsMemo = null;
 
-function readBusStops(ss) {
+/* Every row on the tab, departures included. Only the departure lookup and
+   the trip writer want this; everything else wants readBusStops below, which
+   is the list of places a passenger can be picked up from. */
+function readBusStopsAll(ss) {
   if (stopsMemo) return stopsMemo;
   try {
     var hit = CacheService.getScriptCache().get(STOPS_CACHE_KEY);
@@ -2080,6 +2140,35 @@ function readBusStops(ss) {
     CacheService.getScriptCache().put(STOPS_CACHE_KEY, JSON.stringify(stopsMemo), 60);
   } catch (err) { /* it just gets read again */ }
   return stopsMemo;
+}
+
+/* ---- the stops, as everything except the timing code means them ---------
+
+   A Depart row is a timing point, not a place anybody waits. It exists so the
+   moment the bus pulls out of church can be measured against a timetable the
+   same way every pickup already is — and for no other reason.
+
+   Filtered out here rather than at each of the dozen call sites, so it cannot
+   leak into a booking list, a driver's tap list, a seat count or the "every
+   booked stop is done" test by somebody forgetting one of them. Nothing that
+   existed before this row can see it. */
+function readBusStops(ss) {
+  var all = readBusStopsAll(ss);
+  var out = [];
+  for (var i = 0; i < all.length; i++) if (!all[i].depart) out.push(all[i]);
+  return out;
+}
+
+/* Where a route is timetabled to leave from, if the tab says. One row per
+   route, or none, and none is a perfectly good answer: without it the run
+   simply has no offset until the first stop is marked, which is exactly how
+   it behaved before. */
+function departStopFor(ss, route) {
+  var all = readBusStopsAll(ss);
+  for (var i = 0; i < all.length; i++) {
+    if (all[i].depart && all[i].route === route && all[i].time) return all[i];
+  }
+  return null;
 }
 
 function readBusStopsFresh(ss) {
@@ -2101,7 +2190,10 @@ function readBusStopsFresh(ss) {
         : String(r[2] || "").trim(),
       stop: stop,
       postcode: String(r[4] || "").trim(),
-      arrival: String(r[6] || "").trim().toLowerCase().indexOf("arriv") === 0
+      arrival: String(r[6] || "").trim().toLowerCase().indexOf("arriv") === 0,
+      /* Type "Depart": where the run begins, and the only row on this tab
+         that is a time rather than a place to stand. */
+      depart: String(r[6] || "").trim().toLowerCase().indexOf("depart") === 0
     });
   });
   return out;
@@ -2564,6 +2656,28 @@ function ensureTripEvents(ss) {
   var existing = ss.getSheetByName(TRIP_SHEET);
   var sh = sheet(ss, TRIP_SHEET, TRIP_HEADERS);
   ensureTripColumns(sh);
+
+  /* No dropdowns on this tab. Ever.
+
+     This one is written by phones and read by people; the protection scheme a
+     few hundred lines down already says so in as many words — "Nothing here
+     is yours to edit". A dropdown therefore protects nobody and can only be
+     wrong, because it is a list of the drivers who happened to have rows on
+     the tab the day somebody made it. Add a driver to the register, roster
+     him, and every row he ever taps is flagged red with "Input must be an
+     item on the specified list" — a warning about perfectly good data,
+     pointing at a list nothing in this file maintains.
+
+     Google Sheets will offer to make one of these out of any column of
+     repeated words, which is how it happens without anybody deciding to.
+     Cleared here, once, and again whenever Set up / refresh rota is run. */
+  if (!structFresh("tripvalid")) {
+    try {
+      var wide = sh.getRange(1, 1, Math.max(sh.getMaxRows(), 2), TRIP_HEADERS.length);
+      wide.setDataValidation(null);
+    } catch (err) { /* a locked tab is not worth failing a write over */ }
+    structDone("tripvalid");
+  }
   if (!existing) {
     sh.getRange(1, 13).setNote(
       "Which bus ran it. Recorded from the driver's own start tap, because " +
@@ -2607,6 +2721,36 @@ function dropTripCache(key, route) {
   catch (err) { /* ten seconds of stale is not worth an error */ }
 }
 
+/* ---- the last time this route's rows changed ---------------------------
+
+   Dropping the cache on a write was not enough, and the first two-route
+   Sunday is where that showed.
+
+   A tap arrives as a POST and a phone polls the board every thirty seconds,
+   so the two overlap constantly. If a poll starts reading the tab a moment
+   BEFORE the tap is committed, it builds a state without the tap — and then
+   writes that state into the cache, which may well be after the POST has just
+   cleared it. The cache is poisoned for another ten seconds by a reader
+   rather than a writer, and every phone asking in that window is told the
+   stop was never marked.
+
+   So writes leave a mark. A build knows when it started; a cached state
+   carries the same stamp; and anything built before the last write is neither
+   served nor stored. */
+function tripStampKey(key, route) {
+  return "tripw_" + key + "_" + route + (rehearsalOn() ? "_r" : "");
+}
+
+function stampTripWrite(key, route) {
+  try { CacheService.getScriptCache().put(tripStampKey(key, route), String(Date.now()), 900); }
+  catch (err) { /* the drop above still did most of the job */ }
+}
+
+function tripWriteStamp(key, route) {
+  try { return Number(CacheService.getScriptCache().get(tripStampKey(key, route))) || 0; }
+  catch (err) { return 0; }
+}
+
 /**
  * Where one route has got to, this Sunday.
  *
@@ -2616,12 +2760,26 @@ function dropTripCache(key, route) {
 function tripState(ss, key, route) {
   var rehearsing = !!rehearsalOn();
   var cache = CacheService.getScriptCache();
+
+  /* Taken before a single row is read, so it is honestly the age of what is
+     about to be built. */
+  var builtAt = Date.now();
+  var stamp   = tripWriteStamp(key, route);
+
   var hit = null;
   try { hit = cache.get(tripCacheKey(key, route)); } catch (err) { hit = null; }
-  if (hit) { try { return JSON.parse(hit); } catch (err) { /* rebuild */ } }
+  if (hit) {
+    try {
+      var was = JSON.parse(hit);
+      /* Older than the last write to this route: it cannot know about that
+         write, so it is not an answer. Fall through and rebuild. */
+      if (Number(was.builtAt || 0) >= stamp) return was;
+    } catch (err) { /* rebuild */ }
+  }
 
   var state = { trip: "", driver: "", reg: "", started: 0, ended: 0,
-                lastAt: 0, lastStop: "", offset: null, served: {} };
+                lastAt: 0, lastStop: "", offset: null, served: {},
+                builtAt: builtAt };
 
   var sh = ss.getSheetByName(TRIP_SHEET);
   if (sh && sh.getLastRow() > 1) {
@@ -2648,7 +2806,28 @@ function tripState(ss, key, route) {
       state.driver = String(r[4] || "").trim() || state.driver;
       state.reg    = String(r[12] || "").trim() || state.reg;
 
-      if (ev === "start") { state.started = at; return; }
+      if (ev === "start") {
+        state.started = at;
+        /* A departure row gives the run an offset before a single stop has
+           been marked, so the first stop can be projected instead of the page
+           saying only that the bus is on its way. Guarded on the offset cell
+           actually holding a number: a route with no Depart row writes a
+           blank there, and blank must not read as "exactly on time". */
+        var doff = r[10];
+        if (doff !== "" && doff !== null && doff !== undefined &&
+            !isNaN(Number(doff)) && at >= state.lastAt) {
+          state.lastAt = at;
+          state.offset = Number(doff);
+          /* lastStop is deliberately NOT set. It means "the last stop the bus
+             was seen at", and leaving church is not that — nobody was waiting
+             there and nobody was collected. Setting it would have the page
+             announce the bus had been to a stop it never called at, and would
+             put a countdown on the screen built from nothing but a departure
+             time. The offset is the useful part and it is taken; where the bus
+             has got to is still unknown until a real stop is marked. */
+        }
+        return;
+      }
       if (ev === "end")   { state.ended   = at; return; }
 
       var id = String(r[6] || "").trim();
@@ -2666,8 +2845,14 @@ function tripState(ss, key, route) {
     });
   }
 
-  try { cache.put(tripCacheKey(key, route), JSON.stringify(state), 10); }
-  catch (err) { /* it just gets built again */ }
+  /* Asked again, because a write may have landed while this was reading. If
+     one did, this state is already out of date and must not be left behind
+     for the next fifteen people to be handed. Returned to the caller who
+     asked for it — they will poll again in thirty seconds — but not stored. */
+  if (tripWriteStamp(key, route) <= builtAt) {
+    try { cache.put(tripCacheKey(key, route), JSON.stringify(state), 10); }
+    catch (err) { /* it just gets built again */ }
+  }
   return state;
 }
 
@@ -2817,6 +3002,12 @@ function tripPayload(ref, want, askedStop, pid) {
     routes: rehearsalOn() ? routeNames(stops) : [],
     stop: myStop.stop, stopId: myStop.id, scheduled: myStop.time,
     started: !!state.started, ended: !!state.ended,
+    /* When it set off. The page had the flag and not the time, so the most
+       it could say to somebody waiting at ten past was that nothing had
+       happened yet. */
+    startedAtWords: state.started
+      ? Utilities.formatDate(new Date(state.started), Session.getScriptTimeZone(), "HH:mm")
+      : "",
     lastStop: state.lastStop,
     lastAgo: state.lastAt ? Math.round((Date.now() - state.lastAt) / 60000) : null,
     lastAtWords: state.lastAt
@@ -2959,6 +3150,10 @@ function handleTripLocked(payload) {
 
   var stops = {}, order = readBusStops(ss);
   order.forEach(function (s) { stops[s.id] = s; });
+  /* The departure, if this route has one. A start event carries no stop, so
+     it used to be written with no scheduled time and no offset beside it —
+     which is why the first stop of every run had nothing to project from. */
+  var depart = departStopFor(ss, route);
 
   var rows = [], pending = {}, undoneNow = 0;
   events.forEach(function (ev) {
@@ -2998,6 +3193,14 @@ function handleTripLocked(payload) {
     if (seen[k]) return;                       /* already down: a retry */
 
     var stop  = stops[stopId] || null;
+    /* Leaving church is a timing point like any other. Filled in here rather
+       than asked of the phone, so a handset running an older build still
+       lands a proper departure row, and so the times come from the tab the
+       coordinator edits rather than from anything a phone was told. */
+    if (!stop && kind === "start" && depart) {
+      stop   = depart;
+      stopId = depart.id;
+    }
     var sched = stop ? stopMomentOn(key, stop.time) : null;
     var off   = sched ? Math.round((at - sched.getTime()) / 60000) : "";
 
@@ -3035,7 +3238,14 @@ function handleTripLocked(payload) {
   if (rows.length) {
     sh.getRange(sh.getLastRow() + 1, 1, rows.length, TRIP_HEADERS.length).setValues(rows);
   }
-  if (rows.length || undoneNow) dropTripCache(key, route);
+  if (rows.length || undoneNow) {
+    /* Committed first, then marked, then dropped. In that order, or a reader
+       that starts between the mark and the commit would see the old tab and
+       still believe itself current. */
+    SpreadsheetApp.flush();
+    stampTripWrite(key, route);
+    dropTripCache(key, route);
+  }
 
   return reply({ ok: true, written: rows.length, undone: undoneNow });
 }
@@ -3431,6 +3641,26 @@ function busPayload(key, ref, pid) {
   /* The number first, the old browser handle second. See bookingFor. */
   var mine = bookingFor(readBookings(ss, key), pid, ref);
 
+  /* A seat at a stop that is no longer on the timetable.
+
+     It can only happen when a stop is withdrawn or renumbered after somebody
+     has booked, which is a thing that will happen every time the routes are
+     reworked. Left alone it is the worst kind of quiet failure: the page says
+     "Booked", no stop is ticked because none matches, the driver's list never
+     shows the seat because it hangs off an id that no longer exists, and the
+     passenger stands at a kerb no bus is coming to.
+
+     So it is not returned as a booking. The row stays on the sheet — it is a
+     record and somebody may want to ring them — but this phone is told
+     plainly that its stop has gone, and is put back to an empty screen where
+     it can book again. */
+  var stopGone = "";
+  if (mine && mine.stopId) {
+    var stillThere = false;
+    readBusStops(ss).forEach(function (s) { if (s.id === mine.stopId) stillThere = true; });
+    if (!stillThere) { stopGone = mine.stopId; mine = null; }
+  }
+
   /* The driver's number goes out under four conditions at once, and it is the
      conjunction that keeps this proportionate: only once bookings have shut,
      only to a phone holding a booking, only for the route that booking is on,
@@ -3472,7 +3702,9 @@ function busPayload(key, ref, pid) {
        passenger's own number going back to the passenger's own phone, and it
        goes nowhere without the fingerprint that only they have. */
     phone: mine && mine.phone ? mine.phone : "",
-    mine: mine ? { stopId: mine.stopId, seats: mine.seats } : null
+    mine: mine ? { stopId: mine.stopId, seats: mine.seats } : null,
+    /* Set only when a booking was dropped because its stop has gone. */
+    stopGone: stopGone
   };
 }
 
@@ -4986,6 +5218,41 @@ function healthCheck() {
   var pickups = stops.filter(function (s) { return !s.arrival; }).length;
   if (!pickups) bad.push("No pickup stops on the Bus Stops tab, so the booking page has nothing to show.");
   else good.push(pickups + " pickup stops on the timetable.");
+
+  /* Departure rows, said out loud.
+
+     A Depart row is the one row on the tab whose Type has to be exactly
+     right, and getting it wrong is silent in the worst way: the row simply
+     becomes an ordinary stop, church appears on the booking page as a place
+     to wait, and people book a seat at a kerb that is not one. Nothing
+     anywhere says so.
+
+     So this names what the app actually sees, per route. A route listed as
+     missing is not a fault — it just has no departure time and its first stop
+     will say only that the bus is on its way, as it did before. A route
+     appearing under pickups when it should be a departure is the fault, and
+     the numbers here are what make it visible. */
+  var allStops = readBusStopsAll(ss);
+  var routesSeen = [];
+  allStops.forEach(function (s) {
+    if (!s.arrival && !s.depart && routesSeen.indexOf(s.route) < 0) routesSeen.push(s.route);
+  });
+  var haveDepart = [], missingDepart = [];
+  routesSeen.forEach(function (rt) {
+    var d = departStopFor(ss, rt);
+    if (d) haveDepart.push(rt + " " + d.time);
+    else missingDepart.push(rt);
+  });
+  if (haveDepart.length) {
+    good.push("Departure times: " + haveDepart.join(", ") + ".");
+  }
+  if (missingDepart.length) {
+    good.push("No departure time for " + missingDepart.join(" or ") +
+              ". Not a fault: those routes simply say the bus is on its way " +
+              "until the first stop is marked.\n     " +
+              "To add one, put a row on the Bus Stops tab with Type set to " +
+              "Depart and the time the bus is due to leave church.");
+  }
 
   var msg = bad.length
     ? "Needs attention:\n\n  \u2717  " + bad.join("\n\n  \u2717  ") +
