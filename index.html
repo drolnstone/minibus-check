@@ -432,7 +432,24 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .btn-ghost{background:var(--card);border-color:var(--hair);color:var(--ink)}
 .btn-stop{background:var(--stop);color:var(--stop-on);flex:1}
 .btn-wide{width:100%}
-.btn-end{background:var(--card);border-color:var(--steel);color:var(--accent-ink);width:100%}
+/* End trip is the heaviest tap of the morning and the one made least often.
+   It used to run the full width of the bar, directly beneath the full-width
+   green Picked up button in the list above it — the two most consequential
+   taps on the screen, adjacent, on a moving vehicle. A thumb travelling to
+   Picked up and landing an inch low ended the run for every passenger on both
+   screens.
+
+   So it is short and pushed to one end, and the rest of the bar is left
+   empty. A mis-tap now lands on nothing at all. This is deliberately not a
+   confirmation box: a box whose answer is always Yes is read for about three
+   Sundays and then tapped through by reflex, and it teaches a driver that
+   prompts are things you get past — which is the last habit this app can
+   afford, because the prompts that matter are the ones about a bus that
+   should not be carrying anybody. A dead zone needs nobody to read it and
+   works just as well in week fifty. */
+.btn-end{background:var(--card);border-color:var(--steel);color:var(--accent-ink);
+  width:auto;flex:0 0 auto;margin-left:auto;font-size:15px;padding:0 15px;
+  letter-spacing:.04em;max-width:64%}
 /* Only ever seen when something is genuinely waiting, so it is allowed to
    carry the amber. */
 .btn-warn{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn)}
@@ -1191,7 +1208,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.22.1";
+var APP_VERSION = "v1.23.2";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -2960,13 +2977,37 @@ var TSKEY = "fleet.trip.state.v1";
    standstill, slow enough that nobody is tapping at a roll. */
 var TRIP_MOVING_MS = 2.2;
 
-var trip = { id:"", route:"", reg:"", started:0, ended:0, served:{}, lastAt:0, lastStop:"", offset:null };
+var trip = { id:"", route:"", reg:"", started:0, ended:0, served:{}, undone:{},
+             lastAt:0, lastStop:"", offset:null };
+
+/* Every route the board has answered about, exactly as it answered, kept
+   apart from the run this phone is driving.
+
+   One object could not hold both. A driver mid-run on North who taps the
+   South tab must not have his own morning overwritten by an answer about
+   somebody else's — that fault has been fixed once already — but he still
+   wants to see how South is getting on, and until now the only thing on that
+   tab was a line saying whose turn it was. Two places, two jobs: `trip` is
+   the run being driven, `tripSeen` is what is happening elsewhere. */
+var tripSeen = {};
+
+/* The state to draw a given route from: the live run when it is this one,
+   otherwise whatever the board last said about it. */
+function tripView(route){
+  if(trip.route===route) return trip;
+  return tripSeen[route] || { id:"", route:route, reg:"", started:0, ended:0,
+                              served:{}, lastAt:0, lastStop:"", offset:null };
+}
 var tripClosed = false, tripCutoff = "", tripRehearsal = false;
 /* 0 checked, 1 no check on record, 2 no check on record and the sheet could
    not be reached to ask. The difference is for the coordinator on Monday and
    is deliberately invisible to the driver: see tripHeaderHtml. */
 var tripUnchecked = 0;
 var tripUncheckedAsked = "";     /* the reg the warning is on screen about */
+/* Whether we have already gone and asked the sheet on this attempt, so the
+   retry above can never loop. Cleared whenever the screen is opened, so the
+   next Sunday morning gets its own attempt. */
+var tripCheckAsked = false;
 var tripSpeed = null;      /* metres per second, null when unknown */
 var tripSpeedAt = 0;
 var tripWatch = null;
@@ -2998,14 +3039,16 @@ function tripSaveQ(a){ store.set(TQKEY, JSON.stringify(a)); }
 function tripSaveState(){
   store.set(TSKEY, JSON.stringify({ id:trip.id, route:trip.route, reg:trip.reg,
                                     started:trip.started,
-                                    ended:trip.ended, served:trip.served }));
+                                    ended:trip.ended, served:trip.served,
+                                    undone:trip.undone }));
 }
 function tripLoadState(){
   try{
     var s=JSON.parse(store.get(TSKEY)||"null");
     if(s && s.id){ trip.id=s.id; trip.route=s.route||""; trip.reg=s.reg||"";
                    trip.started=s.started||0;
-                   trip.ended=s.ended||0; trip.served=s.served||{}; }
+                   trip.ended=s.ended||0; trip.served=s.served||{};
+                   trip.undone=s.undone||{}; }
   }catch(e){}
 }
 
@@ -3159,11 +3202,29 @@ function tripMayTap(route){
   return sameName(me,nP) || sameName(me,nA);
 }
 
-/* Coordinator and Minister in Charge see both routes live. They are the ones
-   rung when a bus is late, and watching one route with no idea what the other
-   is doing helps nobody. Read only unless they are also rostered. */
+/* Coordinator and Minister in Charge. They are the ones rung when a bus is
+   late, and this is what lets a rehearsal be driven from one phone. It is a
+   ROLE, and it stays one: see tripMayWatch below for the thing that was
+   widened, and note carefully that these are two different questions. */
 function tripSeesAll(){
   return roleAllowed(st.role);
+}
+
+/* Who may WATCH a route that is not theirs. Read only, always: tapping is a
+   separate question and tripMayTap alone answers it.
+
+   Watching used to be the coordinator's alone, and widening it is the reason
+   the feature is worth having — the men who cover for each other are the ones
+   who need to know whether the other bus is moving. A driver waiting to take
+   a second run, or one back from his own and wondering whether to go out
+   again, was shown a line naming whose turn it was and nothing else.
+
+   Kept apart from tripSeesAll on purpose. Sharing that function would have
+   handed every signed-in driver the right to tap ANY route during a
+   rehearsal, because tripMayTap leans on it for exactly that. Read and write
+   are not the same permission and must not be the same test. */
+function tripMayWatch(){
+  return !!(st.driver||"").trim();
 }
 
 /* ---- fetching the route's own state ------------------------------------ */
@@ -3225,6 +3286,37 @@ function tripStart(route, reg, anyway){
      done by the coordinator, done on the tablet, or done before a reinstall,
      so drivers learned it meant nothing and tapped past it. It now fires when
      no check for this bus exists anywhere we can see. */
+  /* "unasked" is not "no".
+
+     It means one thing only: this phone has nothing of its own for that bus
+     and the sheet has not been reached today to ask. The app was treating
+     that as a finding — telling a driver who had walked the bus twenty
+     minutes earlier that no check was signed for it — and the two are not the
+     same claim at all.
+
+     It is easy to be in that position honestly. The phone's own record lives
+     in the browser that made it, so a walkaround done in Safari and a run
+     started from the home-screen icon are two different stores, and the
+     second one is empty. The sheet knows perfectly well the check happened.
+     It just had not been asked yet, because the board request fired when the
+     screen opened and Apps Script can take several seconds to answer from
+     cold — which is exactly the moment a driver is reaching for Start.
+
+     So: ask, then decide. One fetch, one retry, and the warning stands only
+     if the record itself says there is nothing. A driver told to check a bus
+     he has already checked will do what this one did — tap straight through
+     a second check in two minutes — and that teaches him the warning means
+     nothing, which is the one habit this whole gate exists to prevent. */
+  if(chk.state==="unasked" && !anyway && !tripCheckAsked){
+    tripCheckAsked = true;
+    toast("Checking the record\u2026");
+    rotaCountsFetch(route, function(){
+      /* Whatever came back, decide on it now rather than warning first. */
+      tripStart(route, reg, anyway);
+    });
+    return;
+  }
+
   if(chk.state!=="ok" && !anyway){ tripUncheckedAsked=reg; tripPaint(); return; }
   tripUnchecked = chk.state==="ok" ? 0 : (chk.state==="unasked" ? 2 : 1);
   trip.id = "t"+Math.random().toString(36).slice(2,10)+Date.now().toString(36);
@@ -3233,6 +3325,7 @@ function tripStart(route, reg, anyway){
   trip.started = tripNow();
   trip.ended = 0;
   trip.served = {};
+  trip.undone = {};
   tripUncheckedAsked="";
   tripSaveState();
   tripQueue({ event:"start", stopId:"", at:trip.started,
@@ -3289,8 +3382,13 @@ function tripUndo(stop){
   /* Taking a tap back is as much a change to the record as making one. */
   if(pinGateNeeded()){ pinGateFocus(); return; }
   delete trip.served[stop.id];
+  /* Remembered, not merely deleted. The board is built from a cache that can
+     be older than this tap, and a plain deletion would be undone again by the
+     next answer that still had the stop on it. */
+  var undoAt=tripNow();
+  trip.undone[stop.id]=undoAt;
   tripSaveState();
-  tripQueue({ event:"undo", undoes:was.event, stopId:stop.id, at:tripNow() });
+  tripQueue({ event:"undo", undoes:was.event, stopId:stop.id, at:undoAt });
   tripPaint();
 }
 
@@ -3417,33 +3515,29 @@ function rotaCountsFetch(route,cb){
            route therefore rewrote a South driver's morning as a North one:
            started, served and reg all came back empty from a route with no
            bus out, his screen dropped back to the start buttons mid-run, and
-           the next flush sent his South taps up labelled North. They landed
-           on the sheet under a route nothing looking for South would search.
+           the next flush sent his South taps up labelled North.
 
            Busy, not merely started: a run that has ended but still has taps
            in the queue is equally at stake, because tripFlush reads
            trip.route at the moment it sends. Started TODAY, so a phone still
-           holding last Sunday's run does not lock itself out of this one —
-           that stale state is cleared by being overwritten, as before. */
-        var mine = trip.route && trip.started &&
+           holding last Sunday's run does not lock itself out of this one. */
+        var busy = trip.route && trip.started &&
                    new Date(trip.started).toDateString()===new Date().toDateString() &&
                    (!trip.ended || tripLoadQ().length>0);
 
-        if(!mine || trip.route===route){
-          trip.route  = route;
-          if(tp.trip) trip.id=tp.trip;
-          /* A phone that reinstalled mid-morning gets the bus back with the
-             run, rather than reappearing as a trip attached to no vehicle. */
-          if(tp.reg) trip.reg = tp.reg;
-          trip.started= tp.started||0;
-          trip.ended  = tp.ended||0;
-          trip.served = tp.served||{};
-          trip.lastAt = tp.lastAt||0;
-          trip.lastStop=tp.lastStop||"";
-          trip.offset =(tp.offset===null||tp.offset===undefined)?null:Number(tp.offset);
-          tripSaveState();
-        }
+        /* Kept for every route, always, whether or not it is ours. This is
+           what the other tab draws from. */
+        tripSeen[route] = { id:String(tp.trip||""), route:route, reg:tp.reg||"",
+                            driver:tp.driver||"",
+                            started:tp.started||0, ended:tp.ended||0,
+                            served:tp.served||{}, lastAt:tp.lastAt||0,
+                            lastStop:tp.lastStop||"",
+                            offset:(tp.offset===null||tp.offset===undefined)
+                                     ? null : Number(tp.offset) };
+
+        if(!busy || trip.route===route) tripMerge(route, tp);
       }
+
       rotaSaveCache();
 
       var after=JSON.stringify(rotaStopCounts)+"|"+rotaStopCountsFor+"|"+
@@ -3458,6 +3552,88 @@ function rotaCountsFetch(route,cb){
       if(cb) cb(false);
       rotaCountsRetry();
     });
+}
+
+/* ---- what a board answer is allowed to change --------------------------
+
+   Everything, it used to be. The answer came back and was written straight
+   over the run, whole, on the reasoning that the sheet is the record and the
+   phone is only a view of it.
+
+   That is true of a run that has settled and false of one in progress, and
+   the first two-route Sunday showed which. A tap reaches the sheet a second
+   or two after the thumb comes down, and the board is built from a ten second
+   cache at the far end, so for a few seconds after every tap there is an
+   answer already in flight that is telling the truth about a moment BEFORE
+   the tap. Written over the top, it took the tick off the stop the driver had
+   just marked and put the Picked up button back under his hand. He did the
+   only sensible thing available to him and pressed it again. Same on End
+   trip, which is why a run that had finished kept offering to finish.
+
+   The sheet is still the record, and nothing here writes to it. But a run
+   only ever moves forwards, so an answer that knows LESS than this phone does
+   is an answer that is out of date, and out of date loses. Nothing on this
+   path can un-start a run, un-end one, or unmark a stop. Only the driver's
+   own Undo does that, and it says so on the record.  */
+function tripMerge(route, tp){
+  var srvId  = String(tp.trip||"");
+  var today  = trip.started &&
+               new Date(trip.started).toDateString()===new Date().toDateString();
+  /* Silence is not disagreement. Right after Start trip the board has not
+     seen the run yet and answers with an empty one; that is a server still
+     catching up, not a morning that has not begun. */
+  var sameRun = !!trip.id && (!srvId || srvId===trip.id);
+
+  if(!sameRun || !today){
+    /* A different run, or none of ours worth keeping. Take theirs entire:
+       this is how a phone adopts a run after a reinstall, and how last
+       Sunday's leftovers get cleared. */
+    trip.route  = route;
+    trip.id     = srvId;
+    trip.reg    = tp.reg||"";
+    trip.started= tp.started||0;
+    trip.ended  = tp.ended||0;
+    trip.served = tp.served||{};
+    trip.undone = {};
+    trip.lastAt = tp.lastAt||0;
+    trip.lastStop=tp.lastStop||"";
+    trip.offset =(tp.offset===null||tp.offset===undefined)?null:Number(tp.offset);
+    tripSaveState();
+    return;
+  }
+
+  /* The same run, seen from two places. Forwards only. */
+  trip.route = route;
+  if(srvId)  trip.id  = srvId;
+  if(tp.reg) trip.reg = tp.reg;
+  trip.started = trip.started || tp.started || 0;
+  trip.ended   = trip.ended   || tp.ended   || 0;
+
+  var merged={};
+  var theirs=tp.served||{}, mine=trip.served||{}, undone=trip.undone||{};
+  Object.keys(theirs).forEach(function(id){ merged[id]=theirs[id]; });
+  /* Ours wins a tie, because ours is the one made on this phone and the only
+     way the two differ is that the sheet has not caught up — or that the
+     driver changed his mind, in which case ours is also the later of the
+     two. */
+  Object.keys(mine).forEach(function(id){
+    if(!merged[id] || Number(mine[id].at) >= Number(merged[id].at)) merged[id]=mine[id];
+  });
+  /* A stop this driver took back stays taken back until the sheet agrees. */
+  Object.keys(undone).forEach(function(id){
+    if(merged[id] && Number(undone[id]) > Number(merged[id].at)) delete merged[id];
+    else if(!merged[id]) delete undone[id];        /* the sheet agrees now */
+  });
+  trip.served=merged;
+
+  if(Number(tp.lastAt||0) >= Number(trip.lastAt||0)){
+    trip.lastAt = tp.lastAt || trip.lastAt || 0;
+    if(tp.lastStop) trip.lastStop = tp.lastStop;
+  }
+  /* Worked out against the timetable at the far end, so it is only ever the
+     server's to give. */
+  if(tp.offset!==null && tp.offset!==undefined) trip.offset=Number(tp.offset);
+  tripSaveState();
 }
 
 /* How old the numbers on screen are. A driver setting off needs to know
@@ -3514,7 +3690,9 @@ function rotaCountsStart(){
          the list while a driver is working down it, and a passenger
          withdrawing is worth showing but not worth swallowing a tap for. It
          waits for the next turn of this timer. */
-      if(changed && Date.now()-tripTapAt > 3000) rotaPaintStops();
+      /* tripPaint, not rotaPaintStops: the strip and the bar are one state
+         and must be redrawn from one call, or they drift apart. */
+      if(changed && Date.now()-tripTapAt > 3000) tripPaint();
       else if($("countsAge")) $("countsAge").textContent=rotaCountsWords();
     });
   },30000);
@@ -3525,7 +3703,7 @@ document.addEventListener("visibilitychange",function(){
   if(!rotaStopsOpen) return;
   /* Back from the lock screen. Whatever is on there is at least as old as
      the time it spent in his pocket, so ask before he reads it. */
-  rotaCountsFetch(function(){ if(rotaStopsOpen) rotaPaintStops(); });
+  rotaCountsFetch(function(){ if(rotaStopsOpen) tripPaint(); });
   rotaCountsStart();
 });
 
@@ -3879,9 +4057,15 @@ function rotaOpenStops(){
      reinstalled phone or a second one picks it up where it actually is. */
   tripLoadState();
   tripChecksLoad();
+  tripCheckAsked = false;
   rotaPaintStops();
+  /* tripPaint, not rotaPaintStops. This is the fetch that adopts a run off
+     the sheet — a phone reinstalled mid-morning, or a second one picked up —
+     and repainting only the body left the bar still drawn for a phone with no
+     run on it. The strip said the bus was out and the bar offered nothing to
+     end it with. */
   rotaCountsFetch(rotaStopsRoute||rotaHomeRoute()||"North",
-                  function(){ if(rotaStopsOpen) rotaPaintStops(); });
+                  function(){ if(rotaStopsOpen) tripPaint(); });
   tripFlush();
   if(trip.started && !trip.ended) tripWatchStart();
 
@@ -4037,9 +4221,14 @@ function rotaPaintStops(){
   /* ---- movement -------------------------------------------------------
      Live only on the route this phone is driving. A coordinator watching the
      other bus sees the same list without the buttons. */
+  /* His own run when this is his route, otherwise the board's last word on
+     the other one. Everything below reads from this rather than from `trip`,
+     which is how the South tab can show South's morning while a North driver
+     keeps his own. */
+  var view     = tripView(route);
   var onThis   = (trip.route===route) && !!trip.started && !trip.ended;
   var mayTap   = tripMayTap(route);
-  var watching = !mayTap && tripSeesAll();
+  var watching = !mayTap && tripMayWatch();
   var queued   = tripLoadQ().length;
 
   if(tripRehearsal){
@@ -4055,7 +4244,7 @@ function rotaPaintStops(){
      who is not being asked for anything. */
   pinWhy="";
   if(mayTap || watching){
-    html+=tripHeaderHtml(route,mayTap,onThis,queued);
+    html+=tripHeaderHtml(route,mayTap,onThis,queued,view);
   }
 
   /* How far along the route he actually is: the LAST stop he marked, not the
@@ -4066,7 +4255,7 @@ function rotaPaintStops(){
      So: next is the first booked stop after the furthest he has reached, and
      anything booked and unmarked behind that is a stop he has gone past. */
   var lastIdx=-1;
-  list.forEach(function(s,i){ if(trip.served[s.id] && i>lastIdx) lastIdx=i; });
+  list.forEach(function(s,i){ if(view.served[s.id] && i>lastIdx) lastIdx=i; });
 
   var nextStop=null, missed=[];
   if(onThis && mayTap){
@@ -4095,9 +4284,9 @@ function rotaPaintStops(){
        here says "no tap required", not "drive past": his eyes decide that,
        as they always did. */
     var n=(!s.arrival && showCounts) ? (rotaStopCounts[s.id]||0) : null;
-    var done=(!s.arrival && (mayTap||watching)) ? trip.served[s.id] : null;
+    var done=(!s.arrival && (mayTap||watching)) ? view.served[s.id] : null;
     var cls="stop-row"+(s.arrival?" stop-arrival":"");
-    if(!s.arrival && (onThis||watching)){
+    if(!s.arrival && (onThis || (watching && view.started))){
       if(done) cls+=" trip-done";
       else if(missedIds[s.id]) cls+=" trip-missed-row";
       else if(n===0) cls+=" trip-clear";
@@ -4146,7 +4335,7 @@ function rotaPaintStops(){
       rotaPaintStops();
       /* The other bus has its own run. Ask for it, or a coordinator would be
          reading North's progress under South's heading. */
-      tripFetch(rotaStopsRoute,function(){ if(rotaStopsOpen) rotaPaintStops(); });
+      tripFetch(rotaStopsRoute,function(){ if(rotaStopsOpen) tripPaint(); });
     });
   });
   Array.prototype.forEach.call(document.querySelectorAll("[data-triptap]"),function(b){
@@ -4203,10 +4392,13 @@ function tripClock(ms){
   return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
 }
 
-function tripHeaderHtml(route,mayTap,onThis,queued){
+function tripHeaderHtml(route,mayTap,onThis,queued,view){
   var h='<div class="trip-strip">';
+  /* The run being drawn. His own when this is his route, otherwise the last
+     thing the board said about the other one. */
+  var t = view || trip;
 
-  if(!trip.started || trip.route!==route){
+  if(!t.started){
 
     /* The instruction, then the two buttons, and nothing in between putting
        a case. What used to sit here told the driver he could set off if
@@ -4256,10 +4448,11 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
     return h+'</div>';
   }
 
-  if(trip.ended){
-    var mins=Math.round((trip.ended-trip.started)/60000);
-    h+='<p class="trip-note"><b>Trip finished.</b> '+tripClock(trip.started)+' to '+
-       tripClock(trip.ended)+', '+mins+' minutes.</p>';
+  if(t.ended){
+    var mins=Math.round((t.ended-t.started)/60000);
+    h+='<p class="trip-note">'+(mayTap?'<b>Trip finished.</b> ':
+         '<b>'+esc(tripWhoDrives(route)||route)+' has finished.</b> ')+
+       tripClock(t.started)+' to '+tripClock(t.ended)+', '+mins+' minutes.</p>';
     return h+'</div>';
   }
 
@@ -4267,10 +4460,12 @@ function tripHeaderHtml(route,mayTap,onThis,queued){
      time, offset, last stop, queue count, plus the moving warning, each on
      its own row, most of them saying nothing on a good morning. The
      exceptions still appear, but only when they apply. */
-  var off=trip.offset;
-  var bits=['<b>Running</b> since '+tripClock(trip.started)];
+  var off=t.offset;
+  var bits=[(mayTap? '<b>Running</b> since '
+                   : '<b>'+esc(tripWhoDrives(route)||route)+' is out</b> since ')+
+            tripClock(t.started)];
   if(off!==null && off!==0) bits.push(off>0? off+' min behind' : (-off)+' min ahead');
-  if(trip.lastStop) bits.push('last '+esc(trip.lastStop)+' at '+tripClock(trip.lastAt));
+  if(t.lastStop) bits.push('last '+esc(t.lastStop)+' at '+tripClock(t.lastAt));
   h+='<p class="trip-note">'+bits.join(' \u00B7 ')+'</p>';
 
   /* The PIN has to be reachable HERE too, not only before the run starts.
@@ -4525,7 +4720,7 @@ function tripWaitWords(){
 }
 
 /* The whole screen. Used when something structural has changed. */
-var tripFootLive=null;
+var tripFootSig=null;
 function tripPaint(){
   if(!rotaStopsOpen) return;
   rotaPaintStops();
@@ -4534,8 +4729,21 @@ function tripPaint(){
      put the End trip button through exactly the teardown that was eating
      stop taps an hour ago, and there is no sense curing that on one button
      and reintroducing it on another. */
-  var live = !!trip.started && !trip.ended;
-  if(live!==tripFootLive){ tripFootLive=live; paintFoot(); }
+  /* Which run, and where it is in its life. The bar carries End trip, so it
+     has to follow all of that — not just whether something is live.
+
+     It used to watch live-ness alone, and that is how a finished run kept
+     End trip on screen. A board answer older than the end put trip.ended back
+     to zero, the bar was redrawn WITH the button because live had flipped
+     true, and when the truth arrived a moment later only the strip above was
+     repainted. Two views of one variable, refreshed on different triggers,
+     disagreeing on one screen. One signature now, and both move together.
+
+     Still nothing on a tap: a tap changes none of these, so the bar is not
+     torn down under a driver's thumb, which is the fault this test was
+     narrowed to avoid in the first place. */
+  var sig=(trip.started?1:0)+"|"+(trip.ended?1:0)+"|"+trip.id+"|"+trip.route;
+  if(sig!==tripFootSig){ tripFootSig=sig; paintFoot(); }
 }
 
 /* One line, and nothing else touched.
