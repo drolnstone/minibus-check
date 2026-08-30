@@ -24,6 +24,27 @@
 
 /* ---- settings ---------------------------------------------------------- */
 
+/* Which copy of THIS FILE is deployed.
+
+   The two pages have carried a version in their footers for a long time,
+   because a morning was once lost to not knowing whether the file that had
+   gone up was the file being served. The script never carried one — and the
+   script is the worst place for that gap, because its deploy is the step
+   that silently does nothing.
+
+   Pasting Code.gs into the editor and saving changes NOTHING that a phone can
+   see. The Web App keeps serving the last DEPLOYED version until somebody
+   does Deploy > Manage deployments > New version. Miss that and the site
+   files are live, the script is a release behind, and whatever moved in here
+   is quietly inert until a Sunday finds it.
+
+   This number moves only when this file changes, so it will often sit behind
+   the pages, and that is correct. What it answers is one question: is the
+   script the copy I last pasted? Both apps print it beside their own.
+
+   Reported by "Is everything working?" and stamped on every reply. */
+var SCRIPT_VERSION = "v1.32.0";
+
 var TOKEN = "minibusapp";                   // must match config.js
 
 /* ---- passenger bookings -------------------------------------------------
@@ -5235,6 +5256,11 @@ function healthCheck() {
   var ui = SpreadsheetApp.getUi();
   var good = [], bad = [];
 
+  /* First line, because it is the first thing to doubt after a deploy. If
+     this is not the version just pasted, nothing else in this report is
+     about the code that was meant to be running. */
+  good.push("Script is " + SCRIPT_VERSION + ".");
+
   /* Time zone. Everything dated depends on this and it is invisible until
      something lands on the wrong Sunday. */
   var tz = timeZoneWarning();
@@ -6007,6 +6033,12 @@ function notifyRotaRequest(rq, sunday) {
 /* ---- helpers ----------------------------------------------------------- */
 
 function reply(obj) {
+  /* Every payload carries it, so whichever call a page makes first is enough
+     and no page needs a request of its own to find out. Added here rather
+     than at each return, so a payload added later cannot forget it. */
+  if (obj && typeof obj === "object" && obj.script === undefined) {
+    obj.script = SCRIPT_VERSION;
+  }
   return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);

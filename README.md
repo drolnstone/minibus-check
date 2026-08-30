@@ -65,6 +65,19 @@ to the Sheet.
 
 Bump all four together, every release. This is not bookkeeping.
 
+`Code.gs` carries a fifth, `SCRIPT_VERSION`, and it follows a **different**
+rule: bump it only when `Code.gs` itself changes. It will often sit a release
+or two behind the pages, and that is correct — the script changes less often
+than they do.
+
+It exists because the script's deploy is the one step that fails silently.
+Pasting into the editor and saving changes nothing a phone can see; the Web
+App keeps serving the last *deployed* version. Both apps now print the script's
+number beside their own — `v1.32.0 · script v1.28.0` — and
+**Minibus → Is everything working?** reports it on the first line. After a
+deploy, if that number is not the one you just pasted, you missed
+**Deploy → Manage deployments → New version**.
+
 - A worker whose `CACHE` name has not changed **keeps serving the old app**.
   Phones will not pick up your change, and it will look like the upload failed.
 - A version shown in a footer that lags behind the code is worse than no

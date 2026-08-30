@@ -1263,7 +1263,29 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.30.0";
+var APP_VERSION = "v1.32.0";
+
+/* Which copy of the Apps Script is answering. Learned from the first reply of
+   the morning — every payload carries it — and printed beside this app's own
+   number under the first screen.
+
+   It is not expected to match. Code.gs changes less often than this file
+   does, so it legitimately sits behind. What it answers is narrower: after a
+   deploy, is the script the copy that was just pasted? Saving in the Apps
+   Script editor changes nothing a phone can see until a new version is
+   deployed, and that is the one step in the whole release with no other
+   symptom when it is missed. */
+var SCRIPT_VERSION = "";
+function scriptSeen(out){
+  if(out && out.script && String(out.script)!==SCRIPT_VERSION){
+    SCRIPT_VERSION = String(out.script);
+    var el=document.getElementById("appVersion");
+    if(el) el.textContent = versionWords();
+  }
+}
+function versionWords(){
+  return APP_VERSION + (SCRIPT_VERSION ? " \u00B7 script "+SCRIPT_VERSION : "");
+}
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -2846,6 +2868,7 @@ function rotaFetch(fromDate,weeks,cb){
   rotaLoading=true;
   callFetch(CFG.endpoint+qs,{method:"GET",redirect:"follow"}).then(function(r){return r.text();}).then(function(t){
     var out=JSON.parse(t); if(!out||out.ok!==true) throw new Error("rota unavailable");
+    scriptSeen(out);
     var incoming=out.rows||[];
     var before=JSON.stringify(rotaRows);
 
@@ -3667,6 +3690,8 @@ function rotaCountsRetry(){
    Same fault, same shape, as the one on the passenger page that made
    switching to South show nothing at all. */
 var rotaCountsAgain=null;
+/* Also learned here, because a driver can spend a whole morning on the stops
+   screen without the rota ever being fetched. */
 function rotaCountsFetch(route,cb){
   if(typeof route==="function"){ cb=route; route=null; }
   route = route || rotaStopsRoute || rotaHomeRoute() || "North";
@@ -3680,6 +3705,7 @@ function rotaCountsFetch(route,cb){
       var out=JSON.parse(t);
       rotaCountsBusy=false;
       if(!out||out.ok!==true) throw new Error("board unavailable");
+      scriptSeen(out);
 
       var before=JSON.stringify(rotaStopCounts)+"|"+rotaStopCountsFor+"|"+
                  JSON.stringify(trip.served)+"|"+trip.started+"|"+trip.ended;
@@ -5435,6 +5461,7 @@ function pinDiagnosis(){
   var withPin = REGISTER.filter(function(d){ return d.hasPin; }).length;
   var L = [];
   L.push("App version: " + APP_VERSION);
+  L.push("Script version: " + (SCRIPT_VERSION || "not heard from yet"));
   L.push("");
   L.push("1. requirePin in config.js");
   L.push("   " + (CFG.requirePin ? "ON" : "OFF  <-- upload the new config.js"));
@@ -5998,7 +6025,7 @@ howLinkSync();
 
 var vEl=$("appVersion");
 if(vEl){
-  vEl.textContent=APP_VERSION;
+  vEl.textContent=versionWords();
   vEl.addEventListener("click",function(){ alert(pinDiagnosis()); });
 }
 /* Getting the first screen up is the only thing here that has to happen.
