@@ -479,7 +479,7 @@ function handleCheck(c) {
      whole design — it speaks only when there is something to say — but an
      empty column with a name like that reads as a column that has failed. */
   if (!structFresh("checknotes")) {
-    try {
+    pretty("Checks location column notes", function () {
       checks.getRange(1, 21).setNote(
         "How far the phone was from where the buses are kept, in yards. " +
         "Under the radius set in config.js and the check counts as done at " +
@@ -496,7 +496,7 @@ function handleCheck(c) {
         "A blank here with a link in Where checked means the walkaround " +
         "happened at the bus, which is the thing this column exists to be " +
         "able to show.");
-    } catch (err) { /* notes are a courtesy, never worth failing a check for */ }
+    });
     structDone("checknotes");
   }
 
@@ -608,6 +608,32 @@ function pinWords(c) {
 var STRUCT_VERSION = "2";
 
 function structKey(tag) { return "struct_" + STRUCT_VERSION + "_" + tag; }
+
+/* ---- a convenience that must never break a write ------------------------
+
+   Dropdowns, colours, column widths and header notes are all in one class:
+   worth having, never the point. A tab converted to a Google Sheets Table
+   refuses every one of them outright — "This operation is not allowed on
+   cells in typed columns" — because a Table gives its columns types of its
+   own and will not have a script setting validation over the top.
+
+   Until now that exception travelled all the way out. It stopped Set up dead
+   at the Drivers tab, which meant the rota fill, the scheduled emails and the
+   sheet protection below it never ran either. And had the Defects tab ever
+   been made a Table, applyStatusDropdown would have failed a driver's defect
+   report on its way in — a cosmetic dropdown losing a fault report.
+
+   Recorded rather than swallowed, so the health check can say what was
+   skipped instead of the sheet quietly doing less than it says. */
+var PRETTY_SKIPS = [];
+
+function pretty(what, fn) {
+  try { fn(); return true; }
+  catch (err) {
+    PRETTY_SKIPS.push(what + " \u2014 " + String((err && err.message) || err));
+    return false;
+  }
+}
 
 function structFresh(tag) {
   try { return !!CacheService.getScriptCache().get(structKey(tag)); }
@@ -1974,13 +2000,18 @@ function repairFuelColumn() {
 
 function setUpEverything() {
   structReset();
+  PRETTY_SKIPS = [];
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  ensureRotaSheets(ss);
-  ensureBusStops(ss);
-  ensureBookings(ss);
-  ensureTripEvents(ss);
-  ensureDrivers(ss);
-  ensureRota(ss);
+  /* Each tab on its own. One of them refusing a dropdown — which is all a
+     Table ever does — used to end the whole run where it stood, so the rota
+     fill, the scheduled emails and the sheet protection underneath never
+     happened and nothing said so. */
+  pretty("Rota tabs",   function () { ensureRotaSheets(ss); });
+  pretty("Bus Stops",   function () { ensureBusStops(ss); });
+  pretty("Bus Bookings",function () { ensureBookings(ss); });
+  pretty("Trip Events", function () { ensureTripEvents(ss); });
+  pretty("Drivers",     function () { ensureDrivers(ss); });
+  pretty("Rota",        function () { ensureRota(ss); });
 
   /* Run by hand means fill now, whatever the once-a-day stamp says. */
   try { PropertiesService.getScriptProperties().deleteProperty("rotaFilledAt"); }
@@ -1994,6 +2025,12 @@ function setUpEverything() {
   var dropSkips = [];
   try { dropSkips = refreshDropdowns() || []; }
   catch (err) { dropSkips = ["dropdowns and colours (" + String(err.message || err) + ")"]; }
+  /* Everything the tabs above refused, said in the same breath as the
+     dropdowns, because to whoever is reading it they are the same problem. */
+  dropSkips = PRETTY_SKIPS.concat(dropSkips);
+  try { PropertiesService.getScriptProperties()
+          .setProperty("setupSkipped", JSON.stringify(dropSkips)); }
+  catch (err) {}
 
   bumpRotaVersion();
   try { installWeeklyDigest(); } catch (err) { /* triggers need permission; never block setup */ }
@@ -2102,11 +2139,11 @@ function ensureBusStops(ss) {
      and keyed on the list itself, so the next word added here fixes every
      sheet by itself instead of waiting to be noticed. */
   if (!structFresh("stoptypes")) {
-    try {
+    pretty("Bus Stops Type dropdown (Pickup / Arrival / Depart)", function () {
       sh.getRange("F2:F400").setDataValidation(listRule(["YES", "NO"]));
       sh.getRange("G2:G400").setDataValidation(listRule(STOP_TYPES));
       sh.getRange(1, 7).setNote(STOP_TYPE_NOTE);
-    } catch (err) { /* a locked sheet is not worth failing a read over */ }
+    });
     structDone("stoptypes");
   }
   return sh;
@@ -2672,10 +2709,10 @@ function ensureTripEvents(ss) {
      repeated words, which is how it happens without anybody deciding to.
      Cleared here, once, and again whenever Set up / refresh rota is run. */
   if (!structFresh("tripvalid")) {
-    try {
-      var wide = sh.getRange(1, 1, Math.max(sh.getMaxRows(), 2), TRIP_HEADERS.length);
-      wide.setDataValidation(null);
-    } catch (err) { /* a locked tab is not worth failing a write over */ }
+    pretty("Clearing the Trip Events dropdowns", function () {
+      sh.getRange(1, 1, Math.max(sh.getMaxRows(), 2), TRIP_HEADERS.length)
+        .setDataValidation(null);
+    });
     structDone("tripvalid");
   }
   if (!existing) {
@@ -3971,7 +4008,8 @@ function ensureDrivers(ss) {
       sh.getRange(1, 7).setNote(
         "North or South. Blank counts as North, so rows written before the\n" +
         "South route started keep working without being edited.");
-      sh.getRange("G2:G200").setDataValidation(listRule(["North", "South"]));
+      pretty("Drivers Route dropdown", function () {
+        sh.getRange("G2:G200").setDataValidation(listRule(["North", "South"])); });
     }
     /* Phone arrived later still, and gets the same treatment: written only
        into a column that is genuinely empty, so nothing of anybody's is
@@ -3995,10 +4033,12 @@ function ensureDrivers(ss) {
     SEED_DRIVERS.forEach(function (d) {
       sh.appendRow([d.name, d.role, "YES", d.order, "", "", d.route]);
     });
-    sh.getRange("G2:G200").setDataValidation(listRule(["North", "South"]));
+    pretty("Drivers Route dropdown", function () {
+      sh.getRange("G2:G200").setDataValidation(listRule(["North", "South"])); });
     sh.setColumnWidth(1, 150);
     sh.setColumnWidth(2, 160);
-    sh.getRange("C2:C200").setDataValidation(listRule(["YES", "NO"]));
+    pretty("Drivers Active dropdown", function () {
+      sh.getRange("C2:C200").setDataValidation(listRule(["YES", "NO"])); });
     sh.getRange(1, 4).setNote(
       "Number the repeating pattern here: 1, 2, 3, 4...\n" +
       "Each route is numbered separately, so both start at 1.\n" +
@@ -4241,20 +4281,51 @@ function listRule(values) {
     .build();
 }
 
+/* ---- helpers that are safe to press Run on ------------------------------
+
+   The Apps Script editor lists every function in this file in one dropdown,
+   with nothing to say which of them expect arguments. Press Run on one that
+   does and it is handed nothing, so the first thing it touches is undefined
+   and you get "Cannot read properties of undefined (reading 'getRange')" —
+   a message about a missing sheet, from a function whose whole job is to
+   decorate one particular sheet it could perfectly well have found itself.
+
+   So they find it themselves. Called normally, from the code that already has
+   the sheet in its hand, nothing changes. Called from the editor with nothing
+   at all, each one now does the sensible whole-column version of its job
+   rather than throwing. */
+function tabOr(sh, name) {
+  if (sh) return sh;
+  var found = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+  if (!found) throw new Error("No tab named " + name + " on this spreadsheet.");
+  return found;
+}
+
 function applyRotaValidation(sh, row) {
+  sh = tabOr(sh, ROTA_SHEET);
   var drivers = readDrivers(SpreadsheetApp.getActiveSpreadsheet());
   var active = drivers.filter(function (d) { return d.active; }).map(function (d) { return d.name; });
   if (!active.length) active = SEED_DRIVERS.map(function (d) { return d.name; });
-  sh.getRange(row, 3).setDataValidation(listRule(active));
-  sh.getRange(row, 4).setDataValidation(listRule(ROTA_STATUS));
+  pretty("Rota row dropdowns", function () {
+    /* No row means every row: the same thing refreshDropdowns does. */
+    sh.getRange(row ? sh.getRange(row, 3).getA1Notation() : "C2:C3000")
+      .setDataValidation(listRule(active));
+    sh.getRange(row ? sh.getRange(row, 4).getA1Notation() : "D2:D3000")
+      .setDataValidation(listRule(ROTA_STATUS));
+  });
 }
 
 function applyRequestValidation(sh, row) {
+  sh = tabOr(sh, REQUESTS_SHEET);
   var drivers = readDrivers(SpreadsheetApp.getActiveSpreadsheet());
   var active = drivers.filter(function (d) { return d.active; }).map(function (d) { return d.name; });
   if (!active.length) active = SEED_DRIVERS.map(function (d) { return d.name; });
-  sh.getRange(row, 8).setDataValidation(listRule(REQ_STATUS));
-  sh.getRange(row, 10).setDataValidation(listRule(active));
+  pretty("Request row dropdowns", function () {
+    sh.getRange(row ? sh.getRange(row, 8).getA1Notation() : "H2:H2000")
+      .setDataValidation(listRule(REQ_STATUS));
+    sh.getRange(row ? sh.getRange(row, 10).getA1Notation() : "J2:J2000")
+      .setDataValidation(listRule(active));
+  });
 }
 
 /** Pushes the filled horizon another 26 weeks out. Menu item. */
@@ -5232,6 +5303,24 @@ function healthCheck() {
      will say only that the bus is on its way, as it did before. A route
      appearing under pickups when it should be a departure is the fault, and
      the numbers here are what make it visible. */
+  /* Anything the last Set up was refused. This is how a tab turned into a
+     Google Sheets Table becomes visible: the dropdowns quietly stop being
+     managed, the app goes on working, and nothing anywhere says why the Type
+     column will not take a new word. */
+  var refused = [];
+  try { refused = JSON.parse(PropertiesService.getScriptProperties()
+                              .getProperty("setupSkipped") || "[]") || []; }
+  catch (err) { refused = []; }
+  if (refused.length) {
+    bad.push(refused.length + " thing" + (refused.length > 1 ? "s were" : " was") +
+             " refused the last time Set up ran:\n     \u2022  " +
+             refused.join("\n     \u2022  ") + "\n\n     " +
+             "\"Not allowed on cells in typed columns\" means that tab has been " +
+             "made into a Table. Click any cell on it, then Format > Convert to " +
+             "range, and run Set up / refresh rota again. No data is touched \u2014 " +
+             "a Table is only a way of looking at rows.");
+  }
+
   var allStops = readBusStopsAll(ss);
   var routesSeen = [];
   allStops.forEach(function (s) {
@@ -5980,17 +6069,23 @@ function setUpDefectsSheet(sh) {
 }
 
 function applyClosedOnRules(sh) {
+  sh = tabOr(sh, DEFECTS_SHEET);
   var rule = SpreadsheetApp.newDataValidation()
     .requireDateBetween(new Date(2026, 0, 1), new Date(2100, 0, 1))
     .setAllowInvalid(false)
     .setHelpText("Enter the date the defect was actually put right. It cannot be a future date.")
     .build();
   var range = sh.getRange("K2:K1000");
-  range.setDataValidation(rule);
-  range.setNumberFormat("dd/mm/yyyy");
+  pretty("Defects Closed on date rule", function () {
+    range.setDataValidation(rule);
+    range.setNumberFormat("dd/mm/yyyy");
+  });
 }
 
 function applyStatusDropdown(sh, row) {
+  /* The one that actually caught somebody out. Run from the editor it was
+     handed no sheet at all; there is only ever one tab this belongs to. */
+  sh = tabOr(sh, DEFECTS_SHEET);
   var rule = SpreadsheetApp.newDataValidation()
     .requireValueInList(STATUS_OPTIONS, true)
     .setAllowInvalid(false)
@@ -5998,7 +6093,9 @@ function applyStatusDropdown(sh, row) {
     .build();
 
   var range = row ? sh.getRange(row, 9) : sh.getRange("I2:I1000");
-  range.setDataValidation(rule);
+  /* Guarded hardest of all: this runs inside handleCheck, while a defect
+     report is being written. A dropdown is not worth a fault report. */
+  pretty("Defects status dropdown", function () { range.setDataValidation(rule); });
 }
 
 function addDropdownToExistingSheet() {
