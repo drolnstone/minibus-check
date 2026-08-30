@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.22.1 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.23.3 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -554,7 +554,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.22.1";
+var PAGE_VERSION = "v1.23.3";
 
 var ENDPOINT = "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec";
 
@@ -764,6 +764,8 @@ var REHEARSAL=false;
    or used twice in a morning meant the number already sitting there belonged
    to somebody else. Nothing carries over now: a new stop is a new question. */
 var booked=null, chosen=null, seats=null, saving=false, route="North", ROUTES=[];
+/* Their seat was at a stop that has since been taken off the timetable. */
+var STOPGONE=false;
 var seatsAsk=false;   /* the question has just appeared and wants looking at */
 /* The withdraw question is open. Asked on both sides of the cutoff; the
    wording differs because the consequence does. See paint(). */
@@ -818,6 +820,7 @@ function applyBus(out){
   REHEARSAL=!!out.rehearsal;
 
   booked = out.mine ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
+  STOPGONE = !!out.stopGone;
   chosen = booked ? booked.stopId : null;
   seats  = booked ? booked.seats : null;
   cancelAsk = false;        /* a fresh load is never mid-question */
@@ -1097,6 +1100,22 @@ function paintLive(){
   } else if(!live.started){
     head="Not set off yet";
     sub="Timetabled "+esc(live.scheduled)+".";
+  } else if(live.mine==="eta" && !live.lastStop){
+    /* Away from church, and not a stop marked yet.
+
+       The timetable now carries a departure time, so the run has an honest
+       offset from the moment it pulls out — but an arrival time projected
+       from that alone, twenty-five minutes ahead of the event, is a guess
+       wearing the clothes of a fact. What is actually known is when it left
+       and whether that was late, and that is what gets said.
+
+       The countdown starts when the bus has been somewhere. */
+    head="On its way";
+    sub="Left church"+(live.startedAtWords? " at "+esc(live.startedAtWords) : "")+
+        (live.offset>0 ? ", "+live.offset+" minute"+(live.offset===1?"":"s")+" behind"
+         : live.offset<0 ? ", "+(-live.offset)+" minute"+(live.offset===-1?"":"s")+" early"
+         : ", on time")+
+        ". Yours is timetabled "+esc(live.scheduled)+".";
   } else if(live.mine==="eta"){
     cls=live.imminent?"live-go":"";
     head=live.imminent ? "Any moment now"
@@ -1118,15 +1137,28 @@ function paintLive(){
     /* The coordinator, and only the coordinator. The bus is parked at church
        and the service is starting; there is no coming back from here. */
     sub="Your stop was never marked. Please "+ringCoordinator()+".";
+  } else if(!live.lastStop){
+    /* Running, and not a stop marked yet.
+
+       This fell through to "No update yet", which was true of the ETA and
+       false of everything a passenger actually wanted to know. The first
+       Sunday two routes ran, people stood at kerbs from ten past ten with a
+       page telling them nothing had happened \u2014 when in fact the bus had
+       left church at ten and was on its way to them. The one fact they were
+       waiting for was the one fact the page was throwing away.
+
+       No warning colour: a bus that has set off on time is good news. */
+    head="On its way";
+    sub="Left church"+(live.startedAtWords? " at "+esc(live.startedAtWords) : "")+
+        ". Yours is timetabled "+esc(live.scheduled)+".";
   } else {
-    /* quiet, wild, noevents: state the last known fact and stop. A number
-       invented from a stale offset is worse than a blank. */
+    /* quiet, wild: it set off, it marked a stop, and then it went silent.
+       State the last known fact and stop. A number invented from a stale
+       offset is worse than a blank. */
     cls="live-warn";
     head="No update yet";
-    sub=live.lastStop
-      ? "Last seen at "+esc(live.lastStop)+", "+esc(live.lastAtWords)+
-        ". Yours is timetabled "+esc(live.scheduled)+"."
-      : "No stops marked yet. Yours is timetabled "+esc(live.scheduled)+".";
+    sub="Last seen at "+esc(live.lastStop)+", "+esc(live.lastAtWords)+
+        ". Yours is timetabled "+esc(live.scheduled)+".";
   }
 
   /* "Your stop" is a claim about a seat. Somebody who is only watching a kerb
@@ -1182,6 +1214,15 @@ function activeOn(rt){
 
 function paint(){
   var html="";
+
+  /* Their seat was at a stop that has since been withdrawn. First thing on
+     the screen, because everything below it is now about a different
+     journey. */
+  if(STOPGONE){
+    html+='<div class="note note-warn"><b>Your stop has been taken off the '+
+          'timetable.</b> '+(CLOSED ? 'Tell the group.' : 'Please pick another one below.')+
+          '</div>';
+  }
 
   if(CLOSED){
     /* The whole of Sunday morning now sits here: bookings shut at 09:30 and
@@ -1500,6 +1541,21 @@ function wireIdentityFoot(){
   });
 }
 
+/* How to open a message to a driver.
+
+   It began "Sunday bus \u2014", which is how you label a parcel, not how you
+   speak to a man who is about to turn a fifteen seater round for you.
+   Courtesy is manners, and it costs three words.
+
+   Read off the clock rather than fixed, because the runs are all morning but
+   the messages are not: somebody who has just been left at a kerb may write
+   at any hour, and a good morning at half past one reads as a machine wrote
+   it, which is the opposite of the point. */
+function greet(){
+  var h=new Date().getHours();
+  return h<12 ? "Good morning Sir" : (h<17 ? "Good afternoon Sir" : "Good evening Sir");
+}
+
 /* Choosing a kerb, once the record knows who is choosing. */
 function tapStop(id){
   var was=chosen;
@@ -1676,9 +1732,10 @@ function paintBar(){
          Before that, the neutral opener: running late, waiting a few doors
          up, a pram to get on. */
       var body = (live && live.mine==="served")
-        ? "Sunday bus \u2014 "+where+", "+(live.servedAt||"")+". I am sorry, I "+
-          "missed my bus. Please, can you come back for me? I am here now."
-        : "Sunday bus \u2014 I am booked at "+where+". ";
+        ? greet()+", I am booked on the Sunday bus at "+where+", "+
+          (live.servedAt||"")+". I am sorry, I missed my bus. Please, can you "+
+          "come back for me? I am here now."
+        : greet()+", I am booked on the Sunday bus at "+where+". ";
       wa.href="https://wa.me/"+encodeURIComponent(DRIVER.wa)+"?text="+
               encodeURIComponent(body);
       wa.textContent="Message "+DRIVER.name;
