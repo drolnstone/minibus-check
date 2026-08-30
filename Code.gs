@@ -3088,6 +3088,44 @@ function tripPayload(ref, want, askedStop, pid) {
     return out;
   }
 
+  /* The bus has gone by without this stop being marked.
+
+     A passenger watching a stop NOBODY booked will never see it marked, and
+     that is correct: the driver does not stop where there is no one, so he
+     has nothing to tap. But until now the page went on projecting an arrival
+     for a bus that was already two stops up the road, and then fell quiet.
+     Somebody could stand at that kerb waiting for a bus that had passed them
+     twenty minutes before.
+
+     It answers for a booked passenger too, and for the same reason. Marked
+     "Nobody there" is already handled above and says so plainly; a stop the
+     driver never touched at all had nothing to say for itself until now.
+
+     The proof is a LATER stop being marked, and nothing else is proof. A bus
+     merely running late has marked nothing beyond this stop. A bus that has
+     been past has. Order is the order of the tab, which is the same order the
+     driver taps his way down.
+
+     Deliberately AFTER the served test above: if the driver taps this stop
+     late — out of order, after a diversion — the next poll finds it served
+     and this screen corrects itself. */
+  var mineOrder = stops.filter(function (s) { return s.route === myStop.route; });
+  var mineAt = -1;
+  for (var mi = 0; mi < mineOrder.length; mi++) {
+    if (mineOrder[mi].id === myStop.id) { mineAt = mi; break; }
+  }
+  if (mineAt >= 0) {
+    for (var pi = mineAt + 1; pi < mineOrder.length; pi++) {
+      var beyond = state.served[mineOrder[pi].id];
+      if (!beyond) continue;
+      out.mine = "passed";
+      out.passedStop = mineOrder[pi].stop;
+      out.passedAtWords = Utilities.formatDate(new Date(beyond.at),
+                                               Session.getScriptTimeZone(), "HH:mm");
+      return out;
+    }
+  }
+
   var can = tripProjectable(state);
   if (!can.ok) { out.mine = can.why; return out; }
 

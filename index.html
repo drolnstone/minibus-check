@@ -1194,6 +1194,61 @@ function callFetch(url, opts, ms){
   ]);
 }
 
+/* Is this simply "no network"? It is the commonest reason anything here
+   fails, and it is not a fault at all, so it must never be dressed up as one
+   in front of a driver standing at a bus at seven in the morning.
+
+   Every browser words it differently and none of them word it for him:
+   Chrome "Failed to fetch", Safari "Load failed", Firefox "NetworkError when
+   attempting to fetch resource". navigator.onLine is checked first because it
+   is the only one that is not a guess, but it lies in the other direction
+   often enough — a phone can be on a network that goes nowhere — so the
+   wording is tested too. */
+function offlineNow(err){
+  if(navigator.onLine === false) return true;
+  var m = String((err && err.message) || err || "");
+  return /failed to fetch|load failed|networkerror|network request failed|network error/i.test(m);
+}
+
+/* Developer's English, which must never reach a screen.
+
+   Apps Script sends the real exception text back with a failure, and that is
+   right: it is the only way a fault gets diagnosed on Monday. But the page
+   was printing it word for word, so a passenger could be shown
+   "TypeError: Cannot read properties of undefined (reading 'getRange')" —
+   the exact line that turned up in the editor once — while standing at a bus
+   stop. The sheet's own log still has all of it. The screen does not need it. */
+function machineSpeak(m){
+  return /^[A-Za-z]*(Error|Exception)\b/.test(m)
+      || /cannot read propert|is not a function|is not defined|\bundefined\b|Code\.gs|\bat \w+ \(/i.test(m);
+}
+
+/* Words this app uses among itself, which are not sentences. They exist so a
+   failure has SOMETHING to carry when the server said nothing; they were
+   never meant to be read out. */
+var SHORTHAND = {
+  "unavailable": "The record is not answering just now.",
+  "rejected":    "The record would not accept it.",
+  "not sent":    "It did not go through.",
+  "not saved":   "It was not saved.",
+  "no answer":   "The record did not answer.",
+  "bad token":   "This copy of the app is not recognised. Ring the bus coordinator."
+};
+
+/* Whatever was thrown, in words he can act on. Messages this app or the
+   script wrote are already written for this screen and pass through
+   untouched; it is the browser's own that need translating. */
+function plainError(err){
+  if(offlineNow(err)) return "Your phone is not on the network just now.";
+  var m = String((err && err.message) || err || "").trim();
+  if(!m) return "Something did not work. Try again in a moment.";
+  if(SHORTHAND[m.toLowerCase()]) return SHORTHAND[m.toLowerCase()];
+  if(/took too long|abort|timed out|timeout/i.test(m))
+    return "The record took too long to answer.";
+  if(machineSpeak(m)) return "Something went wrong at the record's end.";
+  return m.charAt(0).toUpperCase() + m.slice(1);
+}
+
 var QKEY = "fleet.queue.v1";
 
 
@@ -1208,7 +1263,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.26.0";
+var APP_VERSION = "v1.29.0";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -1631,14 +1686,14 @@ function paintDash(){
 
   /* The number belongs on the button you press, not in the sentence as well.
      Saying it twice made the banner longer and no clearer. */
-  var who = (CFG.coordinator && CFG.coordinator.name) ? CFG.coordinator.name : "the coordinator";
+  var who = (CFG.coordinator && CFG.coordinator.name) ? CFG.coordinator.name : "the bus coordinator";
   var ph  = coordPhone();
   $("alertText").textContent = critNames().join(", ") +
     ". Ring the coordinator before anyone boards.";
   var link = $("dashCall");
   if(ph){
     link.href = "tel:" + ph;
-    link.textContent = "Call " + who.split(" ")[0] + " \u00B7 " + prettyPhone();
+    link.textContent = "Call " + who + " \u00B7 " + prettyPhone();
     link.style.display = "";
   } else {
     link.style.display = "none";
@@ -1916,7 +1971,14 @@ function btn(label,cls,fn,dis,why){
 
 /* ---------------- vehicle picker ---------------- */
 function renderVehicles(){
-  $("hello").textContent = "Hello " + st.driver.trim().split(" ")[0];
+  /* Names in this church carry an honorific and the register holds them that
+     way: "Bro Adebola", "Pst Kehinde", "Bro Asim". Taking the first word of one
+     gives "Bro", so the app greeted every driver in the fleet as "Hello Bro"
+     and the stopped-bus button read "Call Bro".
+
+     There is no first name to take. The registered name IS what the man is
+     called, by everybody, including himself. Use it whole. */
+  $("hello").textContent = "Hello " + st.driver.trim();
   var box=$("vehList"); box.innerHTML="";
   VEHICLES.forEach(function(v){
     var b=document.createElement("button");
@@ -2348,7 +2410,7 @@ function verdictHTML(lv,defs){
   var who=(CFG.coordinator&&CFG.coordinator.name)?CFG.coordinator.name:"the coordinator";
   if(lv==="stop"){
     var ph = coordPhone();
-    var call = ph ? '<a class="callbtn" href="tel:'+esc(ph)+'">Call '+esc(who.split(" ")[0])+' \u00B7 '+esc(prettyPhone())+'</a>' : "";
+    var call = ph ? '<a class="callbtn" href="tel:'+esc(ph)+'">Call '+esc(who)+' \u00B7 '+esc(prettyPhone())+'</a>' : "";
     return '<div class="verdict v-stop"><h2>The bus does not run</h2><p>A safety critical item has failed. Do not carry passengers. Ring the coordinator and arrange lifts. Nobody will be upset with you for stopping the bus.</p>'+defsHTML(defs)+call+'</div>';
   }
   if(lv==="warn") return '<div class="verdict v-warn"><h2>Safe to drive, with defects</h2><p>Nothing critical, but these are on the record now and need booking in.</p>'+defsHTML(defs)+'</div>';
@@ -4752,7 +4814,7 @@ function tripBusButtonsHtml(){
   });
 
   if(!shown) return h+'<p class="trip-note"><b>No bus can be started.</b> Ring '+
-    esc((CFG.coordinator&&CFG.coordinator.name)||"the coordinator")+'.</p>';
+    esc((CFG.coordinator&&CFG.coordinator.name)||"the bus coordinator")+'.</p>';
 
   /* Stated, not reasoned at him: where the other bus is. It is the fact that
      makes the order of the buttons obvious, and he can check it against what
@@ -5162,8 +5224,7 @@ function rotaSubmitRequest(){
             : "Request sent. The coordinator decides; the rota has not changed yet.");
           return;
         }
-        toast("Not submitted. "+(e.message||"The record would not accept it.")+
-              " Tap Send request again.");
+        toast("Not submitted. "+plainError(e)+" Tap Send request again.");
         btn.disabled=false; btn.textContent="Send request";
       });
     });

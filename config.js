@@ -17,8 +17,14 @@ window.CONFIG = {
   /* Must match the token in Code.gs. */
   token: "minibusapp",
 
-  /* Who drivers ring when a bus is stopped. Keep the number dialable. */
-  coordinator: { name: "Asim Bassey", phone: "07377634214" },
+  /* Who drivers and passengers ring when something has gone wrong. Keep the
+     number dialable.
+
+     The name is shown WHOLE, on a call button and in a sentence: "Call Bro
+     Asim", "ring Bro Asim on 07377634214". Write it the way people say it.
+     Both apps used to take the first word of this to shorten it, which turned
+     every name in this church into "Bro". They do not any more. */
+  coordinator: { name: "Bro Asim", phone: "07377634214" },
 
   /* ---- Where the check was done ----------------------------------------
      Records one location when an inspection starts, so a walkaround can be
