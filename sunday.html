@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.25.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.26.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -554,7 +554,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.25.0";
+var PAGE_VERSION = "v1.26.0";
 
 var ENDPOINT = "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec";
 
@@ -2188,6 +2188,56 @@ try{
 }catch(e){ /* appearance only: never worth a blank page */ }
 
 load();
+
+/* ---- offline shell -----------------------------------------------------
+   Registered from this folder, so the worker takes charge of this page and
+   nothing else. The driver app has its own at the site root and the two do
+   not touch: see the note at the top of sw.js in this folder.
+
+   What it buys is one thing, and it is the thing that matters most. A
+   passenger standing at a stop with one bar of signal used to get no page at
+   all. Now the page opens from the phone, and only where the bus has got to
+   needs the network. */
+if("serviceWorker" in navigator){
+  /* Was this page already under a worker when it loaded? On a first ever
+     visit it was not, and the worker's clients.claim() then fires
+     controllerchange within a second or two. Reloading on that is pointless:
+     the page IS the newest copy, it has only just been fetched. It would mean
+     every brand new phone reloading itself a moment after opening, which to
+     somebody waiting for a bus looks like a fault. Only a genuine takeover,
+     where an OLD copy is running and a NEW worker has replaced it, is worth
+     a reload. */
+  var swHadController = !!navigator.serviceWorker.controller;
+
+  window.addEventListener("load",function(){
+    navigator.serviceWorker.register("sw.js").then(function(reg){
+      /* Ask on every open. Without this a phone only notices a new version
+         when the browser happens to re-check, which can be a day, and a
+         timetable change would sit unseen for a Sunday.
+
+         update() hands back a promise, so a try/catch around it never sees
+         the failure. With no signal it rejects, and without the catch below
+         that surfaces as an unhandled error on every single open — in
+         precisely the situation this cache exists to cover. */
+      try{ reg.update().catch(function(){}); }catch(e){}
+    }).catch(function(){ /* no worker is not a broken page */ });
+  });
+
+  /* A new worker has taken control, so this page is running the old copy.
+     Reload once, guarded so it cannot loop.
+
+     Not while somebody is watching a bus. A reload there throws away the
+     stop they tapped and drops them back on the list, which at a bus stop in
+     the rain is worse than reading a page five minutes out of date. It will
+     be picked up the next time the page is opened. */
+  var swReloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", function(){
+    if(!swHadController || swReloaded) return;
+    if(liveTimer) return;
+    swReloaded = true;
+    location.reload();
+  });
+}
 </script>
 </body>
 </html>

@@ -32,6 +32,18 @@ window.CONFIG = {
      Set false to turn it off entirely. */
   recordLocation: true,
 
+  /* ---- Keeping the driver's screen awake --------------------------------
+     His phone is clamped to the dashboard. Without this it locks itself
+     every minute or so and he has to unlock it at every stop before he can
+     mark anyone picked up.
+
+     Held only between Start trip and End trip, and given back the moment he
+     ends the run. It cannot override him pressing the lock button himself,
+     and a phone too old to support it simply carries on as before.
+
+     Set false if a driver would rather have the battery. */
+  keepAwake: true,
+
   /* Where the buses are kept: 3-5 Chester Road, Liverpool L6 4DY.
 
      Measured standing at the bus, not taken off a map. The postcode centre

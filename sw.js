@@ -1,6 +1,7 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
-const CACHE = "minibus-check-v1.25.0";
+const CACHE_PREFIX = "minibus-check-";
+const CACHE = CACHE_PREFIX + "v1.26.0";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -17,15 +18,12 @@ const SHELL = [
   "./logo.png",
   "./icon-driver-180.png",
   "./icon-sunday-180.png",
-  "./icon-sunday-512.png",
-  "./sunday/",
-  "./sunday/index.html",
-  /* The booking page has its own manifest, and needs one. Without it an
-     Android phone can only make a bookmark shortcut: no icon of its own, no
-     full screen, and no install offer from Chrome. It is a separate file
-     from the driver app's on purpose, so the two install as two apps rather
-     than fighting over one tile. */
-  "./sunday/manifest.webmanifest"
+  "./icon-sunday-512.png"
+  /* The passenger page used to be cached here as well. It is not any more.
+     It has its own worker at ./sunday/sw.js, and two workers holding two
+     copies of one file is how a phone ends up serving last week's page from
+     a cache nobody thought to look in. The icons above stay: they are the
+     home screen tiles for BOTH apps and they are served from this folder. */
 ];
 
 /* Precache a file WITHOUT letting the browser answer from its own cache.
@@ -59,10 +57,22 @@ self.addEventListener("install", (e) => {
   );
 });
 
+/* Only ever this app's OWN old caches.
+
+   caches.keys() answers for the whole site, not for this worker. Filtering on
+   "anything that is not my current name" therefore deleted the OTHER app's
+   cache every time this worker activated — and the other app's worker
+   returned the favour on its next activation. Two apps on one phone, each
+   quietly wiping the other, and neither of them working offline afterwards.
+   Nothing visible would have gone wrong until somebody lost signal.
+
+   Match the prefix. Delete only our own. */
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
-      .then((k) => Promise.all(k.filter((x) => x !== CACHE).map((x) => caches.delete(x))))
+      .then((k) => Promise.all(k
+        .filter((x) => x !== CACHE && x.indexOf(CACHE_PREFIX) === 0)
+        .map((x) => caches.delete(x))))
       .then(() => self.clients.claim())
   );
 });
@@ -124,14 +134,17 @@ self.addEventListener("fetch", (e) => {
   }
   if (e.request.method !== "GET") return;
 
-  // The passenger booking page sits inside this scope but is a different
-  // app. Its fallback must never be the driver app: somebody tapping the
-  // booking link with no signal should not be handed a vehicle inspection
-  // screen, which is both baffling and none of their business.
-  if (url.pathname.indexOf("/sunday/") !== -1) {
-    e.respondWith(freshFirst(e.request, "./sunday/index.html"));
-    return;
-  }
+  // The passenger booking page is a different app with its own worker, and
+  // this one keeps its hands off it entirely. Answering here would put a
+  // second copy of the passenger page in a second cache, at whatever version
+  // this worker happened to be built at, and the phone would then serve
+  // whichever of the two answered first.
+  //
+  // Returning without responding is not a gap. A phone that has opened the
+  // passenger page is controlled by that page's own worker, which never sees
+  // this handler at all. A phone that has not is a driver's phone reaching
+  // for a page it does not use, and the plain network is the right answer.
+  if (url.pathname.indexOf("/sunday/") !== -1) return;
 
   // config.js: always try the network first so endpoint and rota changes
   // land quickly.

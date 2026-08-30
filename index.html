@@ -1208,7 +1208,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.25.0";
+var APP_VERSION = "v1.26.0";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -3146,6 +3146,66 @@ function tripWatchStop(){
   tripWatch=null; tripSpeed=null;
 }
 
+/* ---- keeping the screen awake ------------------------------------------
+   His phone is clamped to the dashboard and he is driving. Every phone locks
+   itself after a minute or so, so at each stop he was unlocking it before he
+   could tap anything, with a bus full of people watching him do it.
+
+   Only between Start trip and End trip. Always on would mean a lit screen on
+   a dashboard at night and a flat phone by the end of a long run, and neither
+   is worth it for a man who is not on a run.
+
+   It cannot beat him pressing the lock button himself. All it stops is the
+   automatic timeout, which is the thing that was actually in his way.
+
+   The awkward part: the browser TAKES THE LOCK BACK every time the page goes
+   out of sight, and never returns it. So it has to be asked for again on the
+   way back, which is why this is more than one line and why wakeAsk is called
+   from the visibility handler below. */
+var wakeLock = null;
+
+/* Whether a run wants the screen awake. Asked of the run itself rather than
+   kept in a flag of its own.
+
+   The first cut of this DID keep a flag, and set it at the top of wakeAsk.
+   The visibility handler calls wakeAsk on every return to the app, so the
+   first time he unlocked his phone AFTER ending a run, that line set the flag
+   back to true and took the screen again — a finished bus holding a phone
+   awake all afternoon. A second copy of a truth that already exists is a
+   second copy that can be wrong. */
+function wakeWanted(){ return !!(trip.started && !trip.ended); }
+
+function wakeAsk(){
+  if(!wakeWanted()) return;                    /* no run, no claim on his screen */
+  if(CFG.keepAwake === false) return;          /* switched off in config.js */
+  if(!navigator.wakeLock || document.hidden) return;
+  /* A sentinel the browser has already taken back still sits in this variable
+     until its release event runs. Test what it says about itself rather than
+     trusting it to be null, or one missed event leaves the screen timing out
+     for the rest of the morning with nothing to show why. */
+  if(wakeLock && !wakeLock.released) return;
+  wakeLock = null;
+  try{
+    navigator.wakeLock.request("screen").then(function(l){
+      /* End trip can land while this promise is still in the air. Without
+         this the lock arrives after the run is over and nothing is left to
+         release it: the phone stays awake in his pocket until it dies. */
+      if(!wakeWanted()){ try{ l.release(); }catch(e){} return; }
+      wakeLock = l;
+      l.addEventListener("release", function(){ if(wakeLock===l) wakeLock = null; });
+    }).catch(function(){
+      /* Refused, battery too low, or an older phone. A screen that sleeps is
+         how it worked until now: never worth a message. */
+    });
+  }catch(err){ /* older browsers throw rather than reject */ }
+}
+
+function wakeDrop(){
+  if(!wakeLock) return;
+  try{ wakeLock.release(); }catch(e){}
+  wakeLock = null;
+}
+
 /* Unknown speed is treated as stopped. A phone that will not report speed,
    which is most of them indoors and some of them always, must not lock a
    driver out of the whole feature. The law is the driver's; this is a guard,
@@ -3334,6 +3394,7 @@ function tripStart(route, reg, anyway){
   tripQueue({ event:"start", stopId:"", at:trip.started,
               reg: reg, unchecked: tripUnchecked });
   tripWatchStart();
+  wakeAsk();
   tripPaint();
 }
 
@@ -3492,6 +3553,7 @@ function tripEnd(){
   tripSaveState();
   tripQueue({ event:"end", stopId:"", at:trip.ended });
   tripWatchStop();
+  wakeDrop();
   tripPaint();
 }
 
@@ -3783,11 +3845,34 @@ function rotaCountsStart(){
 
 document.addEventListener("visibilitychange",function(){
   if(document.hidden){ rotaCountsStop(); return; }
+
+  /* The browser took the wake lock back the moment this page went out of
+     sight and will not hand it over again on its own. Ask every time. It
+     asks the run whether it wants the screen, so it is safe up here, before
+     the stops screen test: a driver mid-run who glanced at the rota should
+     not have his screen start timing out again, and a driver whose run
+     finished an hour ago gets nothing. */
+  wakeAsk();
+
   if(!rotaStopsOpen) return;
   /* Back from the lock screen. Whatever is on there is at least as old as
      the time it spent in his pocket, so ask before he reads it. */
   rotaCountsFetch(function(){ if(rotaStopsOpen) tripPaint(); });
   rotaCountsStart();
+
+  /* rotaCountsStart begins by calling rotaCountsStop, and rotaCountsStop
+     stops the speed watch — deliberately, because a GPS left running in a
+     pocket flattens a phone by lunchtime. Nothing turned it back on.
+
+     So from the driver's FIRST screen lock, the "not while the bus is
+     moving" lockout was off for the rest of the run. Silently, and in the
+     direction that leaves a live button on a moving bus. Only tripStart and
+     opening the stops screen ever started that watch, and neither of those
+     happens again in the middle of a run.
+
+     It has to come after rotaCountsStart, not before, or that call stops the
+     watch this line has just started. */
+  if(trip.started && !trip.ended) tripWatchStart();
 });
 
 /* Full sync with the Drivers tab, not just an add: a name taken off Active
@@ -4150,7 +4235,7 @@ function rotaOpenStops(){
   rotaCountsFetch(rotaStopsRoute||rotaHomeRoute()||"North",
                   function(){ if(rotaStopsOpen) tripPaint(); });
   tripFlush();
-  if(trip.started && !trip.ended) tripWatchStart();
+  if(trip.started && !trip.ended){ tripWatchStart(); wakeAsk(); }
 
   rotaCountsStart();
 }
@@ -5898,8 +5983,11 @@ if("serviceWorker" in navigator){
   window.addEventListener("load",function(){
     navigator.serviceWorker.register("sw.js").then(function(reg){
       /* Ask on every launch. Without this a phone only notices a new version
-         when the browser happens to re-check, which can be a day. */
-      try{ reg.update(); }catch(e){}
+         when the browser happens to re-check, which can be a day.
+
+         update() hands back a promise, so a try/catch around it never sees
+         the failure: with no signal it rejected unhandled on every launch. */
+      try{ reg.update().catch(function(){}); }catch(e){}
     }).catch(function(){});
   });
 
