@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.29.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.30.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -585,7 +585,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.29.0";
+var PAGE_VERSION = "v1.30.0";
 
 var ENDPOINT = "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec";
 
@@ -914,12 +914,46 @@ function applyBus(out){
   howAuto();
 }
 
+/* Whether this page has EVER had a good answer out of the record.
+
+   It matters because NOTHING here runs on a timer until it has. applyBus is
+   what starts the polling, and applyBus only runs on success — so a page
+   opened at a bus stop with no signal came up, said "No signal just now",
+   and then sat there completely inert. No poll, no gate, no retry. Turning
+   the signal back on changed nothing at all; only a manual reload did.
+
+   The message on that screen already promised "this page will show the bus
+   again as soon as your phone is back on the network". It was a promise the
+   code was not keeping. */
+var loadedOk = false;
+
+/* The backstop. navigator.onLine and the "online" event are the fast signal
+   and are used below, but neither is trustworthy alone: they fire when a
+   network INTERFACE changes, not when anything is actually reachable, so a
+   phone leaving a tunnel or a bus shelter often reports nothing at all.
+   Twenty seconds is cheap, stops the moment an answer arrives, and never
+   runs while the page is out of sight. */
+var RETRY_MS = 20000;
+var retryTimer = null;
+function retryStop(){ if(retryTimer){ clearInterval(retryTimer); retryTimer=null; } }
+function retryStart(){
+  retryStop();
+  if(loadedOk || document.hidden) return;
+  retryTimer = setInterval(function(){
+    if(loadedOk || document.hidden){ retryStop(); return; }
+    if(!navigator.onLine) return;      /* nothing to be gained by asking */
+    load();
+  }, RETRY_MS);
+}
+
 function load(again){
   callFetch(ENDPOINT+"?bus=1"+idq(),{method:"GET",redirect:"follow"})
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out=readJson(t);
       if(!out || out.ok!==true) throw new Error(out && out.error ? out.error : "unavailable");
+      loadedOk = true;
+      retryStop();
       applyBus(out);
     })
     .catch(function(err){
@@ -946,11 +980,13 @@ function load(again){
           'This page will show the bus again as soon as your phone is back on '+
           'the network. A call still works without it.'+
           '<br>'+callButton()+'</div>';
+        retryStart();
         return;
       }
       $("body").innerHTML='<div class="note note-warn"><b>The stops could not be loaded.</b><br>'+
         esc(plainError(err))+'<br>Pull down to refresh, or:'+
         '<br>'+callButton()+'</div>';
+      retryStart();
     });
 }
 
@@ -1145,11 +1181,23 @@ function gateStart(){
 function gateStop(){ if(gateTimer){ clearInterval(gateTimer); gateTimer=null; } }
 
 document.addEventListener("visibilitychange",function(){
-  if(document.hidden){ liveStop(); gateStop(); return; }
+  if(document.hidden){ liveStop(); gateStop(); retryStop(); return; }
+  /* Never got a first answer, so there is nothing to resume — only to try
+     again. Everything below assumes CLOSED and REHEARSAL mean something, and
+     on this path they have never been set. */
+  if(!loadedOk){ load(); retryStart(); return; }
   /* Coming back to the page is the cheapest moment to find out we were
      wrong, so the gate is asked at once rather than waiting out a minute. */
   if(CLOSED || REHEARSAL) liveStart();
   else { gateStart(); gateCheck(); }
+});
+
+/* The browser saying the network is back: the fastest signal there is, so it
+   is acted on at once. It is not the only one — see retryStart — because it
+   reports an interface, not reachability, and it stays silent for some of
+   the ways a phone at a bus stop gets its signal back. */
+window.addEventListener("online",function(){
+  if(!loadedOk) load();
 });
 
 function paintLive(){
