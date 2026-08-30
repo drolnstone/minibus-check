@@ -1,0 +1,672 @@
+<title>Minibus Audit Brief</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --ground:#F6F7F9; --surface:#FFFFFF; --sunk:#EDEFF3;
+  --ink:#141920; --ink-2:#4A5462; --ink-3:#6E7887;
+  --rule:#DDE1E7; --rule-2:#C6CCD5;
+  --accent:#1B4B8F; --accent-soft:#E7EEF8;
+  --flag:#8A6400; --flag-soft:#FBF1D8; --flag-edge:#E4CE8C;
+  --fault:#9E2018; --fault-soft:#FBE9E7; --fault-edge:#E8BDB8;
+  --hold:#115C38; --hold-soft:#E6F1EB; --hold-edge:#B3D5C4;
+  --plate:#F2C200;
+  --measure:66ch;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F1318; --surface:#161B22; --sunk:#1B2129;
+    --ink:#E7EBF1; --ink-2:#9BA6B4; --ink-3:#7E8896;
+    --rule:#28303A; --rule-2:#3A4450;
+    --accent:#84B4F0; --accent-soft:#15263B;
+    --flag:#E3B84A; --flag-soft:#241E10; --flag-edge:#4E4222;
+    --fault:#E88C82; --fault-soft:#241413; --fault-edge:#563029;
+    --hold:#5CCB92; --hold-soft:#0F2419; --hold-edge:#255440;
+    --plate:#E8B93E;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F1318; --surface:#161B22; --sunk:#1B2129;
+  --ink:#E7EBF1; --ink-2:#9BA6B4; --ink-3:#7E8896;
+  --rule:#28303A; --rule-2:#3A4450;
+  --accent:#84B4F0; --accent-soft:#15263B;
+  --flag:#E3B84A; --flag-soft:#241E10; --flag-edge:#4E4222;
+  --fault:#E88C82; --fault-soft:#241413; --fault-edge:#563029;
+  --hold:#5CCB92; --hold-soft:#0F2419; --hold-edge:#255440;
+  --plate:#E8B93E;
+}
+
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);
+  font-family:"Source Serif 4",Georgia,serif;font-size:17px;line-height:1.62;
+  -webkit-font-smoothing:antialiased}
+h1,h2,h3,.lbl,.num,th,.plate{font-family:"Barlow Condensed","Arial Narrow",sans-serif}
+code,kbd,.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+
+/* ---------- shell ---------- */
+.wrap{display:grid;grid-template-columns:1fr;gap:0;max-width:1180px;margin:0 auto;padding:0 22px}
+@media(min-width:1020px){
+  .wrap{grid-template-columns:212px minmax(0,1fr);gap:56px;padding:0 32px}
+}
+main{min-width:0;padding-bottom:96px}
+.col{max-width:var(--measure)}
+
+/* ---------- masthead ---------- */
+header.top{border-bottom:2px solid var(--ink);margin-bottom:44px;padding:52px 0 22px}
+.plate{display:inline-flex;align-items:center;background:var(--plate);color:#141920;
+  font-weight:700;font-size:15px;letter-spacing:.1em;text-transform:uppercase;
+  padding:4px 11px;border-radius:4px;border:2px solid #141920}
+h1{font-size:clamp(44px,8vw,76px);line-height:.94;font-weight:700;margin:20px 0 0;
+  letter-spacing:-.005em;text-wrap:balance;text-transform:uppercase}
+.standfirst{max-width:var(--measure);margin:18px 0 0;color:var(--ink-2);font-size:19px}
+.meta{display:flex;flex-wrap:wrap;gap:0 26px;margin-top:24px;
+  font-family:"Barlow Condensed",sans-serif;font-size:14px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-3)}
+.meta b{color:var(--ink-2);font-weight:600}
+
+/* ---------- side rail ---------- */
+nav.rail{display:none}
+@media(min-width:1020px){
+  nav.rail{display:block;position:sticky;top:0;align-self:start;
+    max-height:100vh;overflow-y:auto;padding:56px 0 40px}
+  nav.rail ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+  nav.rail a{display:block;padding:5px 0;text-decoration:none;color:var(--ink-3);
+    font-family:"Barlow Condensed",sans-serif;font-size:15px;letter-spacing:.05em;
+    text-transform:uppercase;border-left:2px solid transparent;padding-left:12px}
+  nav.rail a:hover,nav.rail a:focus-visible{color:var(--accent);border-left-color:var(--accent)}
+}
+
+/* ---------- sections ---------- */
+section{padding-top:52px;scroll-margin-top:16px}
+.lbl{display:block;font-size:13px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:9px}
+h2{font-size:clamp(28px,4.4vw,40px);line-height:1.06;font-weight:700;margin:0 0 20px;
+  text-transform:uppercase;letter-spacing:-.002em;text-wrap:balance}
+h3{font-size:21px;line-height:1.25;font-weight:600;margin:34px 0 10px;
+  letter-spacing:.01em;text-wrap:balance}
+p{margin:0 0 17px;max-width:var(--measure)}
+ul,ol.body{max-width:var(--measure);margin:0 0 17px;padding-left:22px}
+li{margin-bottom:9px}
+a{color:var(--accent)}
+strong{font-weight:600}
+code{font-size:.86em;background:var(--sunk);border:1px solid var(--rule);
+  border-radius:4px;padding:1px 5px;color:var(--ink)}
+hr.div{border:0;border-top:1px solid var(--rule);margin:48px 0 0;max-width:var(--measure)}
+
+/* ---------- invariants ---------- */
+.inv{display:flex;gap:18px;padding:18px 0;border-top:1px solid var(--rule);max-width:var(--measure)}
+.inv:last-of-type{border-bottom:1px solid var(--rule)}
+.num{flex:0 0 34px;font-size:26px;font-weight:700;line-height:1;color:var(--accent);
+  font-variant-numeric:tabular-nums;padding-top:2px}
+.inv h3{margin:0 0 6px;font-size:19px}
+.inv p{margin:0;font-size:16px;color:var(--ink-2)}
+.inv p+p{margin-top:8px}
+
+/* ---------- flagged blocks ---------- */
+.box{max-width:var(--measure);border:1px solid var(--rule);border-left-width:4px;
+  background:var(--surface);border-radius:3px;padding:16px 18px;margin:0 0 16px}
+.box .lbl{margin-bottom:6px}
+.box p{margin:0;font-size:16px}
+.box p+p{margin-top:10px}
+.box.challenge{border-left-color:var(--flag);background:var(--flag-soft);border-color:var(--flag-edge)}
+.box.challenge .lbl{color:var(--flag)}
+.box.holds{border-left-color:var(--hold);background:var(--hold-soft);border-color:var(--hold-edge)}
+.box.holds .lbl{color:var(--hold)}
+.box.limit{border-left-color:var(--fault);background:var(--fault-soft);border-color:var(--fault-edge)}
+.box.limit .lbl{color:var(--fault)}
+
+/* ---------- tables ---------- */
+.scroll{overflow-x:auto;max-width:var(--measure);margin:0 0 20px;
+  border:1px solid var(--rule);border-radius:3px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:15px;
+  font-family:"Source Serif 4",Georgia,serif}
+th{font-family:"Barlow Condensed",sans-serif;font-size:13px;font-weight:600;
+  letter-spacing:.12em;text-transform:uppercase;text-align:left;color:var(--ink-3);
+  padding:11px 14px;border-bottom:1px solid var(--rule-2);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid var(--rule);vertical-align:top;color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+td:first-child{color:var(--ink);font-weight:600;min-width:150px}
+td code{font-size:.82em}
+
+/* ---------- the journey ---------- */
+.step{display:grid;grid-template-columns:82px minmax(0,1fr);gap:20px;
+  max-width:var(--measure);padding:15px 0;border-top:1px solid var(--rule)}
+.step:last-of-type{border-bottom:1px solid var(--rule)}
+.step .where{font-family:"Barlow Condensed",sans-serif;font-size:13px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);padding-top:4px;line-height:1.35}
+.step p{margin:0;font-size:16px}
+.step p+p{margin-top:8px}
+.step .fn{display:block;font-size:13px;color:var(--ink-3);margin-top:7px}
+
+/* ---------- diagram ---------- */
+figure{margin:0 0 22px;max-width:var(--measure)}
+.figbox{overflow-x:auto;border:1px solid var(--rule);border-radius:3px;
+  background:var(--surface);padding:22px 18px}
+figcaption{font-size:14px;color:var(--ink-3);margin-top:10px;line-height:1.5}
+svg text{font-family:"Barlow Condensed","Arial Narrow",sans-serif}
+.d-fill{fill:var(--sunk)} .d-edge{stroke:var(--rule-2)} .d-ink{fill:var(--ink)}
+.d-mute{fill:var(--ink-3)} .d-acc{fill:var(--accent)} .d-accs{stroke:var(--accent)}
+.d-core{fill:var(--accent-soft);stroke:var(--accent)}
+
+footer{border-top:2px solid var(--ink);margin-top:64px;padding:24px 0 60px;
+  max-width:var(--measure);color:var(--ink-3);font-size:15px}
+
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+<nav class="rail" aria-label="Sections">
+  <ol>
+    <li><a href="#shape">The shape of it</a></li>
+    <li><a href="#journey">One journey</a></li>
+    <li><a href="#invariants">Invariants</a></li>
+    <li><a href="#trust">Trust &amp; privacy</a></li>
+    <li><a href="#failure">Failure &amp; recovery</a></li>
+    <li><a href="#tradeoffs">Trade-offs</a></li>
+    <li><a href="#field">What broke</a></li>
+    <li><a href="#challenge">Challenge these</a></li>
+    <li><a href="#verify">Verification</a></li>
+    <li><a href="#start">Where to start</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="top">
+  <span class="plate">Minibus · v1.29.0</span>
+  <h1>Audit Brief</h1>
+  <p class="standfirst">A Sunday minibus service for a Liverpool church: two routes,
+  two buses, volunteer drivers, and a congregation that needs to know where the bus is.
+  This is the orientation you would otherwise have to reverse-engineer.</p>
+  <div class="meta">
+    <span><b>For</b> an independent reviewer</span>
+    <span><b>Scope</b> three apps, one spreadsheet</span>
+    <span><b>Stack</b> static HTML · Apps Script · Google Sheets</span>
+  </div>
+</header>
+
+<section id="shape">
+  <span class="lbl">Architecture</span>
+  <h2>The shape of it</h2>
+  <div class="col">
+    <p>Three clients share one Google Sheet and nothing else. There is no server, no
+    database, no user table and no session. Apps Script is a thin request handler in
+    front of the spreadsheet; the spreadsheet is the system of record. Everything a
+    reviewer might expect to find in a backend either lives in a tab or does not exist.</p>
+
+    <figure>
+      <div class="figbox">
+        <svg viewBox="0 0 640 300" width="640" height="300" role="img"
+             aria-label="A driver's tap travels to the Trip Events tab and is read back by the passenger page.">
+          <rect x="8" y="26" width="150" height="86" rx="5" class="d-fill d-edge"/>
+          <text x="83" y="52" text-anchor="middle" font-size="15" font-weight="600" class="d-ink">DRIVER APP</text>
+          <text x="83" y="72" text-anchor="middle" font-size="12" class="d-mute">index.html</text>
+          <text x="83" y="90" text-anchor="middle" font-size="12" class="d-mute">local queue</text>
+
+          <rect x="8" y="188" width="150" height="86" rx="5" class="d-fill d-edge"/>
+          <text x="83" y="214" text-anchor="middle" font-size="15" font-weight="600" class="d-ink">PASSENGER PAGE</text>
+          <text x="83" y="234" text-anchor="middle" font-size="12" class="d-mute">sunday/index.html</text>
+          <text x="83" y="252" text-anchor="middle" font-size="12" class="d-mute">polls every 30s</text>
+
+          <rect x="244" y="96" width="146" height="108" rx="5" class="d-core" stroke-width="1.5"/>
+          <text x="317" y="128" text-anchor="middle" font-size="15" font-weight="600" class="d-acc">APPS SCRIPT</text>
+          <text x="317" y="148" text-anchor="middle" font-size="12" class="d-mute">doPost · doGet</text>
+          <text x="317" y="166" text-anchor="middle" font-size="12" class="d-mute">script lock</text>
+          <text x="317" y="184" text-anchor="middle" font-size="12" class="d-mute">10s state cache</text>
+
+          <rect x="474" y="70" width="158" height="160" rx="5" class="d-fill d-edge"/>
+          <text x="553" y="98" text-anchor="middle" font-size="15" font-weight="600" class="d-ink">THE SHEET</text>
+          <text x="553" y="122" text-anchor="middle" font-size="12" class="d-mute">Trip Events</text>
+          <text x="553" y="140" text-anchor="middle" font-size="12" class="d-mute">Bus Bookings</text>
+          <text x="553" y="158" text-anchor="middle" font-size="12" class="d-mute">Bus Stops · Rota</text>
+          <text x="553" y="176" text-anchor="middle" font-size="12" class="d-mute">Checks · Defects</text>
+          <text x="553" y="194" text-anchor="middle" font-size="12" class="d-mute">Drivers · Requests</text>
+          <text x="553" y="216" text-anchor="middle" font-size="12" font-style="italic" class="d-mute">system of record</text>
+
+          <path d="M158 69 L200 69 L200 130 L240 130" fill="none" class="d-accs" stroke-width="1.5"/>
+          <path d="M240 130 l-8 -4 v8 z" class="d-acc"/>
+          <text x="200" y="61" text-anchor="middle" font-size="11" class="d-mute">POST write</text>
+
+          <path d="M240 172 L200 172 L200 231 L158 231" fill="none" class="d-accs" stroke-width="1.5"
+                stroke-dasharray="4 3"/>
+          <path d="M158 231 l8 -4 v8 z" class="d-acc"/>
+          <text x="200" y="192" text-anchor="middle" font-size="11" class="d-mute">GET read</text>
+
+          <path d="M390 150 L470 150" fill="none" class="d-accs" stroke-width="1.5"/>
+          <path d="M470 150 l-8 -4 v8 z" class="d-acc"/>
+          <path d="M470 122 L390 122" fill="none" class="d-accs" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <path d="M390 122 l8 -4 v8 z" class="d-acc"/>
+
+          <text x="83" y="290" text-anchor="middle" font-size="11" class="d-mute">writes only</text>
+          <text x="317" y="242" text-anchor="middle" font-size="11" class="d-mute">no state of its own</text>
+          <text x="553" y="256" text-anchor="middle" font-size="11" class="d-mute">the only shared state</text>
+        </svg>
+      </div>
+      <figcaption>The driver writes; the passenger reads; nothing goes directly between
+      them. Apps Script holds no state beyond a ten-second cache it can always rebuild
+      from the sheet.</figcaption>
+    </figure>
+
+    <p>Both clients are single-file progressive web apps — markup, styles and script in
+    one document — installable to a home screen and functional with no signal. Each has
+    its own service worker, scoped to its own folder, with separate cache namespaces.</p>
+
+    <div class="box holds">
+      <span class="lbl">Why it is built this way</span>
+      <p>The coordinator is a volunteer, not an operator. The spreadsheet is the artefact
+      he already understood before any of this existed, and it is the one that survives
+      the software. Every design decision that looks primitive — polling, no accounts, a
+      tab as a queue — buys the property that the whole system can be read, corrected and
+      operated from a spreadsheet by someone who does not code.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="div">
+
+<section id="journey">
+  <span class="lbl">End to end</span>
+  <h2>One journey</h2>
+  <div class="col">
+    <p>A driver pulls up at a stop and taps <em>Picked up</em>. Roughly twenty seconds
+    later a phone at the next stop counts down differently. Everything between those two
+    moments, in order.</p>
+  </div>
+
+  <div class="step">
+    <span class="where">Phone<br>0 ms</span>
+    <div>
+      <p>The tap is checked before it is a fact. Refused if the bus is moving (GPS speed,
+      never transmitted); challenged if the run is under a minute old, or if less than
+      half the timetabled leg has elapsed. A second tap within twelve seconds overrides —
+      the driver is never locked out of his own record.</p>
+      <span class="fn mono">tripTap · tripMoving · tripTooSoon</span>
+    </div>
+  </div>
+  <div class="step">
+    <span class="where">Phone</span>
+    <div>
+      <p>Written to a local queue first, then sent. The timestamp is corrected by the
+      difference between this phone's clock and the server's, learned from every
+      successful call. A phone an hour out would otherwise poison every offset it sent,
+      undetectably.</p>
+      <span class="fn mono">tripQueue · tripNow · tripSkew · fleet.trip.queue.v1</span>
+    </div>
+  </div>
+  <div class="step">
+    <span class="where">Script<br>1–2 s</span>
+    <div>
+      <p>Token checked, script lock taken. Existing rows for this run are indexed by
+      <code>event|stopId</code>, so a resend, a double tap or a retry after a timeout
+      collapses onto the same row rather than appending a second one.</p>
+      <span class="fn mono">doPost · handleTrip · handleTripLocked</span>
+    </div>
+  </div>
+  <div class="step">
+    <span class="where">Sheet</span>
+    <div>
+      <p>One row in <em>Trip Events</em>: run id, Sunday, route, driver, event, stop,
+      scheduled time, actual time, offset, status, registration. The offset — minutes late
+      or early — is computed at write time against the timetable, so the arithmetic is
+      auditable in the sheet without running anything.</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="where">Script</span>
+    <div>
+      <p>The sheet is flushed, the write is stamped, then the cached run state is dropped —
+      in that order. Any other order lets a reader that started before the write repopulate
+      the cache with a state that predates it.</p>
+      <span class="fn mono">SpreadsheetApp.flush · stampTripWrite · dropTripCache</span>
+    </div>
+  </div>
+  <div class="step">
+    <span class="where">Passenger<br>≤ 30 s</span>
+    <div>
+      <p>The page polls, gets a state rebuilt from the rows, and is told one of a small set
+      of things about <em>its own stop only</em>: not set off, on its way, a countdown,
+      picked up, nobody there, or the bus has gone past. No coordinates cross the wire in
+      either direction.</p>
+      <span class="fn mono">tripState · tripPayload · paintLive</span>
+    </div>
+  </div>
+
+  <div class="col">
+    <p style="margin-top:22px">Typical end-to-end latency is fifteen to twenty seconds;
+    the worst case with a cold script is about forty-five. If the driver had no signal at
+    the moment of the tap, the row is written whenever signal returns, carrying its
+    original corrected timestamp.</p>
+  </div>
+</section>
+
+<hr class="div">
+
+<section id="invariants">
+  <span class="lbl">What must always be true</span>
+  <h2>Invariants</h2>
+  <div class="col">
+    <p>These are the properties the system is built to hold. They are the right things to
+    attack: each one is load-bearing, and breaking any of them produces a failure that is
+    quiet rather than loud.</p>
+  </div>
+
+  <div class="inv"><span class="num">1</span><div>
+    <h3>Every tap is attributable to a named person</h3>
+    <p>Only the driver the rota names for that route that Sunday, or his recorded cover,
+    may write. Every other signed-in driver — including a coordinator — reads. This is the
+    whole enforcement value of the record: on Monday, a row has a name against it.</p>
+  </div></div>
+
+  <div class="inv"><span class="num">2</span><div>
+    <h3>A repeated tap does not become a second fact</h3>
+    <p>Dedup is keyed <code>event|stopId</code> per run, server-side, under a lock. The
+    client also merges forward-only: a background poll can add to local state but never
+    remove what this phone has just recorded.</p>
+  </div></div>
+
+  <div class="inv"><span class="num">3</span><div>
+    <h3>The driver's number reaches only a booked phone, on his route, on the day</h3>
+    <p>Tracking is untied from booking on purpose — anyone may watch a stop without
+    identifying themselves. The phone number is not. Watchers are given the coordinator's
+    number instead.</p>
+  </div></div>
+
+  <div class="inv"><span class="num">4</span><div>
+    <h3>Position is inferred, never tracked</h3>
+    <p>GPS is used twice on the driver's phone: to stamp where a walkaround happened, and
+    to lock the tap buttons while the wheels are turning. Neither leaves the device as
+    coordinates. The passenger page has no geolocation code at all.</p>
+  </div></div>
+
+  <div class="inv"><span class="num">5</span><div>
+    <h3>A check that could not be verified says so</h3>
+    <p>A PIN entered with no signal lets the driver through and records the state as
+    <code>offline</code> — never as <code>ok</code>. The record distinguishes "verified",
+    "not asked" and "could not check", because on Monday those are three different facts.</p>
+  </div></div>
+
+  <div class="inv"><span class="num">6</span><div>
+    <h3>Nothing is claimed that has not been recorded</h3>
+    <p>The passenger page reports the record, not the road. It says "no pickup was recorded
+    here" rather than "nobody was waiting", because a driver can forget to tap and the
+    difference matters to the person standing at the kerb.</p>
+  </div></div>
+
+  <div class="inv"><span class="num">7</span><div>
+    <h3>Losing signal costs nothing but time</h3>
+    <p>Checks and taps queue locally and send themselves. Both apps open from cache. The
+    only thing a passenger cannot get without a network is the bus's current position,
+    which is the one thing that genuinely is not knowable offline.</p>
+  </div></div>
+
+  <div class="inv"><span class="num">8</span><div>
+    <h3>A stopped bus cannot start a run</h3>
+    <p>A walkaround with a critical defect blocks the trip. The app records and warns; it
+    cannot immobilise a vehicle, and does not pretend to.</p>
+  </div></div>
+</section>
+
+<hr class="div">
+
+<section id="trust">
+  <span class="lbl">Security posture</span>
+  <h2>Trust &amp; privacy</h2>
+  <div class="col">
+    <p>State the model plainly, because it is unusual and a reviewer should judge it on
+    its actual terms rather than against an assumed one.</p>
+
+    <h3>What guards a write</h3>
+    <p>A shared token, held in a public JavaScript file, checked by the script. Anyone who
+    can load the driver app can read that token. It is not a secret; it is a speed bump
+    that keeps casual traffic and crawlers out of the sheet.</p>
+    <p>Two things carry the real weight. Writes are constrained in shape — a tap must name
+    a run, a route and a stop that exist, and passes through dedup — so the blast radius of
+    a forged request is a wrong row in a tab a human reads every week. And the rota decides
+    who may write what, so a valid token still does not let one driver tap another's route.</p>
+
+    <h3>What identifies a passenger</h3>
+    <p>A phone number, sent once by POST rather than in a query string, so it does not land
+    in an address bar, a browser history, a referrer or Google's request log. The sheet
+    stores the number and a salted SHA-256 fingerprint of it; the fingerprint is what the
+    page carries afterwards. The salt is fixed and must stay fixed.</p>
+    <p>There are no passwords, no email addresses and no accounts anywhere in the
+    passenger path.</p>
+
+    <h3>What is deliberately public</h3>
+    <p>The config file — driver names, roles, vehicle registrations, the endpoint, the
+    token, the coordinator's number. It carries a standing instruction that nothing else
+    goes in it: no PINs, no addresses, and no note explaining how any of it could be got
+    round. Driver PINs live only in the sheet and are compared as one-way fingerprints.</p>
+
+    <h3>Rate limiting</h3>
+    <p>PIN entry locks after ten wrong tries for ten minutes. Identifying a phone is capped
+    at twenty-five attempts in fifteen minutes. Both counters live in script properties.</p>
+  </div>
+</section>
+
+<hr class="div">
+
+<section id="failure">
+  <span class="lbl">Behaviour under stress</span>
+  <h2>Failure &amp; recovery</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Condition</th><th>What happens</th></tr></thead>
+      <tbody>
+        <tr><td>Driver has no signal</td><td>Check or tap queues locally; retried every 30s and on the browser's <code>online</code> event. Timestamps carry their skew-corrected value, so a late send is not a late fact.</td></tr>
+        <tr><td>Driver's phone clock is wrong</td><td>Every successful call returns the server's clock. Differences over a minute are applied to everything queued.</td></tr>
+        <tr><td>Two phones on one run</td><td>Server dedup collapses duplicates. Client merge is forward-only, so a poll cannot erase a tap made a moment ago.</td></tr>
+        <tr><td>Slow reader vs. fresh write</td><td>Flush, stamp, then drop the cache. A reader that began before the write finds its stamp stale and does not repopulate.</td></tr>
+        <tr><td>Passenger has no signal</td><td>Page opens from its own cache; a plain message says there is no signal and offers a call button, since a phone call works without data.</td></tr>
+        <tr><td>Apps Script throws</td><td>The real exception is returned and logged, but the screen shows plain language. Stack traces never reach a passenger.</td></tr>
+        <tr><td>Google serves a sign-in page</td><td>A non-JSON reply is detected and reported as "the booking record is not answering", not as a parser error.</td></tr>
+        <tr><td>Deploy mid-morning</td><td>Both workers are network-first for their page. Static hosting adds up to ten minutes of freshness lag; an app open on a dashboard keeps its version until relaunched.</td></tr>
+        <tr><td>Both apps on one phone</td><td>Separate workers, separate cache prefixes; each deletes only its own. The prefix check is load-bearing — see the field log.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<hr class="div">
+
+<section id="tradeoffs">
+  <span class="lbl">Chosen, not inherited</span>
+  <h2>Trade-offs</h2>
+  <div class="col">
+    <h3>Polling, not push</h3>
+    <p>Thirty seconds on the passenger page, sixty on the pre-cutoff gate, thirty on the
+    driver's stop screen. Polling stops entirely when a page is hidden and resumes with an
+    immediate fetch when it returns, so nothing polls from a pocket. Push would need a
+    service and a subscription store; the cost is up to thirty seconds of staleness in a
+    context where the bus itself is the slow part.</p>
+
+    <h3>A spreadsheet as the database</h3>
+    <p>Costs: no transactions beyond a script lock, row-scan reads, quota limits, and
+    tabs a human can edit underneath the software. Buys: the coordinator can correct
+    anything, the whole system is inspectable without tooling, and there is no hosting
+    bill or migration to fail. The concurrency ceiling is two drivers.</p>
+
+    <h3>Tracking untied from booking</h3>
+    <p>Anyone may watch any stop without identifying themselves. This was a deliberate
+    loosening after real people were locked out — booked on a laptop, walked out with a
+    phone. It is safe because everything a watcher is told is a fact about a <em>stop</em>,
+    and several households at one kerb already receive one identical answer.</p>
+
+    <h3>One file per app</h3>
+    <p>Roughly 300KB and 110KB of markup, styles and script in single documents. It reads
+    badly and deploys perfectly: no build step, no bundler, no dependency tree, and the
+    running artefact is byte-identical to the source. For a volunteer-maintained system
+    with a five-year horizon, that trade was made knowingly.</p>
+
+    <h3>Reasoning in the code, not in documents</h3>
+    <p>Comments explain what went wrong before and why the code is shaped as it is —
+    including the faults that produced each shape. Documents drift; a comment beside the
+    line it explains is edited by whoever edits the line.</p>
+  </div>
+</section>
+
+<hr class="div">
+
+<section id="field">
+  <span class="lbl">Field log</span>
+  <h2>What broke</h2>
+  <div class="col">
+    <p>Faults found in live use or in review, with what each one taught. A reviewer looking
+    for the next one will find the pattern more useful than the list.</p>
+  </div>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Fault</th><th>Cause</th><th>Lesson</th></tr></thead>
+      <tbody>
+        <tr><td>Every tap recorded twice</td><td>Client poll overwrote local state; server cache re-poisoned by a slow reader</td><td>Two independent causes wearing one symptom</td></tr>
+        <tr><td>"End trip" after a finished trip</td><td>Strip and footer painted from two triggers</td><td>One state, one paint call</td></tr>
+        <tr><td>Driver asked to redo his check</td><td><code>unasked</code> treated as <code>none</code></td><td>"Unknown" is not "no"</td></tr>
+        <tr><td>Tap aimed at the wrong stop</td><td>Next-stop chosen by counts the app was refusing to display</td><td>Never act on data you won't show</td></tr>
+        <tr><td>Version stuck across two releases</td><td>The bump rule lived only in a comment</td><td>A stale version misleads worse than none</td></tr>
+        <tr><td>Cached error page served forever</td><td>Worker stored any response, including a 404 mid-deploy</td><td>One transient miss became permanent</td></tr>
+        <tr><td>Every driver greeted "Hello Bro"</td><td>First word taken as a first name; all names carry an honorific</td><td>Locale assumptions hide in string handling</td></tr>
+        <tr><td>Second worker wiped the first's cache</td><td><code>caches.keys()</code> answers for the origin, not the worker</td><td>Caught only by testing both apps on one device</td></tr>
+        <tr><td>Moving-lockout silently off</td><td>Unlock path called a start function that begins by stopping</td><td>Failed safe, so nobody would ever have reported it</td></tr>
+        <tr><td>Stop ticked green while the panel said the bus had gone</td><td>Selection and completion shared one mark</td><td>Found by looking at a screenshot, not by any test</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="col">
+    <div class="box limit">
+      <span class="lbl">The pattern worth noting</span>
+      <p>Most of these failed <em>safe and silent</em>. A wrongly-live button, a lockout
+      that quietly stopped, a cache that quietly emptied. None would have generated a
+      complaint. A review that only looks for loud failures will miss this system's
+      characteristic fault.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="div">
+
+<section id="challenge">
+  <span class="lbl">Weakest points, named</span>
+  <h2>Challenge these</h2>
+  <div class="col">
+    <p>Offered rather than defended. These are where a reviewer's time is best spent.</p>
+
+    <div class="box challenge">
+      <span class="lbl">The trust model</span>
+      <p>A public token is the only credential between the internet and a write to the
+      sheet. The mitigations are shape validation, rota-based authorisation and a human
+      reading the tabs weekly. Is that proportionate for a system holding congregation
+      phone numbers? Argue it either way.</p>
+    </div>
+
+    <div class="box challenge">
+      <span class="lbl">Phone numbers at rest</span>
+      <p>The sheet stores both the number and its fingerprint. The fingerprint alone would
+      not permit ringing a passenger back, which is a real operational need — but the
+      number's presence is the largest privacy exposure in the system, and it sits in a
+      Google Sheet governed by whoever holds the document.</p>
+    </div>
+
+    <div class="box challenge">
+      <span class="lbl">Offset arithmetic</span>
+      <p>Lateness is computed at write time from a timetable string and a corrected
+      timestamp, then bounded (45 minutes late, 12 early) to reject impossible values.
+      Those bounds are judgement, not measurement. Test the boundaries, the midnight
+      wrap, and British Summer Time transitions.</p>
+    </div>
+
+    <div class="box challenge">
+      <span class="lbl">The single-writer assumption</span>
+      <p>One driver per route is assumed throughout, enforced by the rota rather than by
+      the data model. A second phone signed in as the same driver is handled by dedup, but
+      the design has never been stressed beyond two concurrent runs.</p>
+    </div>
+
+    <div class="box challenge">
+      <span class="lbl">Service workers on iOS</span>
+      <p>Verified on desktop Chromium against localhost only. iOS Safari evicts worker
+      caches after roughly a week of disuse, which may mean occasional passengers never
+      get the offline benefit at all. Unproven in the field.</p>
+    </div>
+
+    <div class="box challenge">
+      <span class="lbl">Human editing of the record</span>
+      <p>The coordinator can edit Trip Events by hand, and once cleared a row rather than
+      using Undo, leaving arithmetic reading a gap. The software cannot prevent this and
+      does not detect it. Whether it should is a fair question.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="div">
+
+<section id="verify">
+  <span class="lbl">How it is checked</span>
+  <h2>Verification</h2>
+  <div class="col">
+    <p>There is no CI. Verification is a set of standalone harnesses run against the real
+    build before each release — no mocked application code, only a mocked network.</p>
+
+    <h3>Two kinds</h3>
+    <p><strong>Browser harnesses</strong> drive the actual pages in mobile Chromium against
+    a fake endpoint, and assert on what is on screen: the sentence a passenger reads, the
+    number of tap buttons offered, whether a call button appears. <strong>Sandbox
+    harnesses</strong> extract functions from the Apps Script source and run them against
+    synthetic sheet data with a fake clock, so server logic is tested as itself rather than
+    through an imitation.</p>
+
+    <h3>What is covered</h3>
+    <p>The live-run state machine; who may tap and who may only watch; mis-tap guards;
+    the passenger's full set of states including the bus having gone past; offline
+    behaviour for both apps; both service workers coexisting on one device; error wording
+    across every failure path; theme contrast in four themes.</p>
+
+    <h3>What is not</h3>
+    <p>No real handset has ever been tested. The wake lock is exercised against a
+    stand-in, not a real one. iOS is untested entirely. There is no load testing, and no
+    formal accessibility audit beyond programmatic contrast checks.</p>
+
+    <div class="box limit">
+      <span class="lbl">The honest limit</span>
+      <p>The most recently found defect — a stop marked with a completion tick while the
+      panel above it said the bus had gone past — was caught by looking at a screenshot.
+      Not one assertion failed. The remaining risk concentrates in faults where every part
+      is individually correct and the screen still says two things at once.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="div">
+
+<section id="start">
+  <span class="lbl">Orientation</span>
+  <h2>Where to start</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Read</th><th>Why first</th></tr></thead>
+      <tbody>
+        <tr><td><code>tripPayload</code><br><span class="mono" style="font-size:13px;font-weight:400">Code.gs</span></td><td>Everything a passenger is ever told, and every gate on it, in one function.</td></tr>
+        <tr><td><code>tripState</code><br><span class="mono" style="font-size:13px;font-weight:400">Code.gs</span></td><td>How rows become a run. The offset arithmetic and its bounds live here.</td></tr>
+        <tr><td><code>tripMerge</code> · <code>tripMayTap</code><br><span class="mono" style="font-size:13px;font-weight:400">index.html</span></td><td>Client run state and the authorisation rule. The forward-only merge is subtle.</td></tr>
+        <tr><td><code>paintLive</code><br><span class="mono" style="font-size:13px;font-weight:400">sunday/index.html</span></td><td>Every state a passenger can see, as a single branch chain.</td></tr>
+        <tr><td><code>freshFirst</code><br><span class="mono" style="font-size:13px;font-weight:400">both sw.js</span></td><td>Caching rules, and the comments recording the faults that shaped them.</td></tr>
+        <tr><td><code>handleTripLocked</code><br><span class="mono" style="font-size:13px;font-weight:400">Code.gs</span></td><td>The write path: locking, dedup, undo, and cache invalidation order.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="col">
+    <p>The comments are the documentation. Where a construction looks unnecessarily
+    careful, the comment beside it usually names the Sunday morning that made it
+    necessary. Those notes are worth reading before concluding that something is
+    over-engineered — and equally, worth challenging where the reasoning no longer
+    holds.</p>
+  </div>
+</section>
+
+<footer>
+  Minibus v1.29.0 · driver app, passenger page, Apps Script and one spreadsheet.
+  Prepared for independent review.
+</footer>
+
+</main>
+</div>

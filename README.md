@@ -1,396 +1,274 @@
-# Minibus Check
+# Minibus
 
-**RCCG Dominion Assembly Liverpool**
+Transport for RCCG Dominion Assembly Liverpool. Two Sunday routes, two buses,
+a rota of volunteer drivers, and a congregation that needs to know where the
+bus is.
 
-A phone app for the pre-departure inspection of the church minibuses, with a
-driving rota and a Sunday passenger booking page. Drivers sign in, pick a
-vehicle, work through the checks, and the completed check is written straight
-to a Google Sheet.
+Three parts that share one Google Sheet and nothing else. There is no server,
+no database and no user accounts. **The Sheet is the join.**
 
-Plain HTML, CSS and JavaScript. No build step, no framework, no accounts.
-Hosted on GitHub Pages, with Google Apps Script as the database.
+| Part | What it is | Who uses it |
+|---|---|---|
+| **Driver app** | Walkaround check, rota, and the live run | Drivers, on their phones |
+| **Passenger page** | Book a seat, then track the bus | The congregation |
+| **The Sheet** | Eight tabs and a Minibus menu | The coordinator |
+
+Both apps install to a phone's home screen, survive no signal, and work in
+light, dark, green and navy.
 
 ---
 
-## Before anything else: what is public
+## Repository layout
 
-This repository is served to the internet. Every file in it is downloaded by
-every phone that opens the app, so **treat the whole repository as a public
-noticeboard**.
+Everything is served as static files from GitHub Pages. **Where a file sits
+matters** — see the warning under `sunday/sw.js`.
 
-**Belongs here** — the app files, the driver register, vehicle registrations,
-the endpoint address and the token. The app cannot run without them.
+```
+/                          https://drolnstone.github.io/minibus-check/
+├── index.html             the driver app (one file: markup, styles, script)
+├── config.js              the only file you normally edit
+├── sw.js                  the driver app's offline shell
+├── manifest.webmanifest   driver app install details
+├── logo.png
+├── icon-192.png           \
+├── icon-512.png            |
+├── icon-driver-180.png     |  home screen tiles, for both apps
+├── icon-sunday-180.png     |
+├── icon-sunday-512.png    /
+└── sunday/
+    ├── index.html         the passenger page
+    ├── manifest.webmanifest
+    └── sw.js              the passenger page's offline shell
+```
 
-**Never here** — the spreadsheet address, personal email addresses, PINs, or
-any note describing how a control could be got round.
+`Code.gs` is not in this repository. It lives in the Apps Script project bound
+to the Sheet.
 
-**`Code.gs` does not belong here either.** It is pasted into the Apps Script
-editor and lives there. No browser ever downloads it, so putting a copy in the
-repository publishes the backend for nothing in return. Keep your copy with the
-operations documents, outside the repository.
+> **`sunday/sw.js` must be in the `sunday/` folder.** A service worker can only
+> take charge of pages at or below its own folder. At the root it would take
+> charge of the driver app instead, and the two would fight over one name. If
+> you are uploading a file named `sunday-sw.js`, rename it to `sw.js` and put
+> it in `sunday/`.
 
-Two settings do the real work, and neither is in this repository:
+---
 
-| Setting | Should be |
+## Versioning
+
+**Four files carry a version. They are one number.**
+
+| File | Where |
 |---|---|
-| Apps Script deployment → Who has access | **Anyone** — passengers have no Google account |
-| The spreadsheet → Share → General access | **Restricted** |
+| `index.html` | `var APP_VERSION` |
+| `sunday/index.html` | `var PAGE_VERSION` |
+| `sw.js` | `const CACHE` |
+| `sunday/sw.js` | `const CACHE` |
 
-Those are not in conflict. The web app runs as you and writes on your behalf,
-so the sheet stays shut while the app carries on working.
+Bump all four together, every release. This is not bookkeeping.
 
----
+- A worker whose `CACHE` name has not changed **keeps serving the old app**.
+  Phones will not pick up your change, and it will look like the upload failed.
+- A version shown in a footer that lags behind the code is worse than no
+  version at all: it gets read, believed, and sends whoever is debugging in the
+  wrong direction for an hour. This has happened twice.
 
-## How it hangs together
-
-```
-  phone  ──►  GitHub Pages  ──►  Apps Script  ──►  Google Sheet
-              (the app)          (the door)        (the record)
-```
-
-The app has no login. A driver picks their name from the register, keys a PIN,
-and that name travels with the check to the sheet.
-
-**Checks go straight to the sheet.** Nothing is kept on the phone as a record.
-If the send fails, the check is held on that phone and retried as soon as the
-connection returns, and the driver sees plainly whether it landed. Losing a
-check is worse than delaying one. Drivers should not close the app while a
-check is showing as held.
+Both footers show the running version. **Reading a footer is the fastest way to
+know which copy a phone is actually running.**
 
 ---
 
-## Part 1 — Set up the record
+## Deploying
 
-1. Create a new Google Sheet. Name it something like `Minibus checks`.
-2. **Share → General access → Restricted.**
-3. **Extensions → Apps Script.** Delete whatever is in the editor and paste in
-   your copy of `Code.gs`.
-4. **Project Settings → Script Properties → Add script property:**
+Order matters, and only in one direction.
 
-   | Property | Value |
-   |---|---|
-   | `COORDINATOR_EMAIL` | the address defect alerts should reach |
+### 1. The script, if `Code.gs` changed
 
-   Leave it unset and no emails are sent. It is set here rather than in the
-   code so the address is never in a file.
-5. Near the top of `Code.gs`, set `TOKEN` to a word of your own. It must match
-   `token` in `config.js`.
-6. **Deploy → New deployment → Web app.**
-   - **Execute as:** Me
-   - **Who has access:** Anyone
-7. **Deploy**, then **Authorize access**. Google warns that the app is
-   unverified; this is normal for your own scripts. Choose
-   **Advanced → Go to (project name)**.
-8. Copy the **Web app URL**. It ends in `/exec`.
+Paste into the Apps Script editor, save, then **Deploy → Manage deployments →
+edit → New version**. An existing deployment keeps serving the old code until
+you do. The Web App URL does not change.
 
-The tabs create themselves as they are first needed.
+### 2. The site files
 
-> **After any later edit to `Code.gs`**, go to **Deploy → Manage deployments**,
-> click the pencil, and set Version to **New version**. Saving the script does
-> not update the live address.
+Upload to the repo. Keep `sunday/sw.js` in `sunday/`.
 
-Check it with **Minibus → Check scheduled emails**, which tells you which
-address alerts are going to.
+### 3. Wait about ten minutes
 
----
+GitHub Pages tells browsers its files are good for **ten minutes**. Inside that
+window a phone can still be handed the old file from its own cache. This is not
+a fault and there is nothing to fix — just wait it out.
 
-## Part 2 — Put the app online
+### 4. Open each app twice
 
-1. Create a GitHub repository, for example `minibus-check`.
-2. In `config.js`, paste your Web app URL into `endpoint` and set the same
-   token.
-3. Upload to the root of the repository:
+The first open fetches the new version; the second runs it. Tell drivers to
+**close the app fully** (swipe it out of the app switcher, not just go to the
+home screen) rather than leaving it open on the dashboard.
 
-   ```
-   index.html
-   config.js
-   sw.js
-   manifest.webmanifest
-   README.md
-   icon-192.png
-   icon-512.png
-   icon-512-maskable.png
-   icon-driver-180.png
-   icon-sunday-180.png
-   icon-sunday-512.png
-   logo.png
-   sunday/index.html
-   ```
+**Deploy the script before the pages.** If the pages go up first they simply
+won't use whatever is new in the script and will behave exactly as they did
+before — no breakage either way. The reverse can leave a page asking for
+something that isn't there yet.
 
-   Not `Code.gs`. See the section above.
-4. **Settings → Pages**, Source *Deploy from a branch*, branch `main`, folder
-   `/ (root)`, **Save**.
-5. After a minute the app is live at
-   `https://YOUR-USERNAME.github.io/minibus-check/`, and the passenger page at
-   the same address ending `/sunday/`.
+### Checking it landed
 
-If `endpoint` is left blank the app runs in **practice mode**: everything
-works, nothing is sent, and it says so on screen. Useful for training.
+1. Open `…/minibus-check/sunday/sw.js` in a browser. **Code = right folder.
+   404 = wrong folder**, and the passenger offline shell is doing nothing.
+2. Put a phone in **airplane mode** and open the passenger page. It should still
+   come up. If you get the browser's no-internet page, the worker isn't running.
+3. Both footers read the version you just deployed.
+4. In the Sheet: **Minibus → Is everything working?**
 
 ---
 
-## Part 3 — Onto the phones
+## config.js
 
-- **Drivers:** send the main address. iPhone: open in Safari, Share, *Add to
-  Home Screen*. Android: Chrome, three dots, *Install app*.
-- **Passengers:** send the address ending `/sunday/` in the WhatsApp group.
-  It is permanent — the page works out which Sunday it is and rolls over at
-  the 09:30 cutoff.
+**This file is public.** Every phone that opens the app downloads it. Anything
+written here can be read by anyone with the address. Names, registrations, the
+endpoint and the token are here because the app cannot run without them.
+Nothing else belongs here — **no PINs, no addresses, no notes explaining how
+any of it could be got round.**
 
----
-
-## After any edit
-
-Bump the version in **two places**, or phones keep the copy they already have:
-
-```js
-const CACHE = "minibus-check-v1.19.22";  // sw.js
-var APP_VERSION = "v1.19.22";            // index.html
-```
-
-They must match. `APP_VERSION` is printed at the foot of the first screen, so
-it is how you tell what a phone is actually running. A phone showing the old
-number after a deploy has not taken the update.
-
----
-
-## Adding or changing a vehicle
-
-Everything vehicle-specific lives in `config.js`.
-
-```js
-{
-  reg: "NH56 FWP",
-  id: "nh56fwp",
-  name: "Ford Transit",
-  detail: "2007 · manual · 15 seats including driver",
-  dates: { mot: "2027-04-28", service: "", insurance: "", permit: "" },
-  watch: { corrosion: "What to look at, and what to do about it." },
-  skip: ["adblue"]
-}
-```
-
-- **`watch`** adds the amber note to a check item. Keys must match item ids.
-  This is what makes the app worth more than a paper sheet: a driver checks
-  harder when told what to look for. Write the **instruction** here. The
-  reasons live in the fleet history document, which is not in this repository.
-- **`skip`** removes items the vehicle does not have — AdBlue on a pre-2015
-  diesel.
-- **`override`** rewrites the wording of a check for one vehicle. Use it when
-  the vehicle has the thing in a different form; use `skip` only when it has
-  none at all. A check describing hardware a bus does not have teaches drivers
-  the list is approximate, and that habit spreads to the items that count.
-- **`dates`** drives the renewal banner. Amber within 30 days, red past it.
-  Whatever is showing travels with the check into the sheet, so a renewal
-  cannot quietly pass while checks carry on being filed.
-
-### Check item ids
-
-The ids as the app has them. **A key that matches nothing does nothing, and
-says nothing** — no warning, no error, just an amber note that never appears —
-so copy them from here rather than from memory.
-
-Pre-drive, which every driver sees:
-
-`keys`, `tyres`, `nuts`, `lights`, `fbrake`, `doors`, `body`, `clean`,
-`under`, `pipes`, `suspension`, `exhaust`, `fuel`, `oil`, `coolant`,
-`bfluid`, `wash`, `adblue`, `battery`, `belts_seat`, `anchor`, `step`,
-`exits`, `gangway`, `intlights`, `extinguisher`, `firstaid`, `abs`, `lamps`,
-`brakes`, `steering`, `clutch`, `reverse_aid`, `mirrors`, `cab`
-
-Full inspection only, which is the coordinator's list:
-
-`spare`, `corrosion`, `pas`, `belts`, `wheelchair`, `cabin`, `limiter`,
-`infotainment`, `docs`
-
-**A `watch` note pulls a full-only item into the pre-drive list for that
-vehicle.** NH56's rust history sits on `corrosion`, which is otherwise the
-coordinator's item, and the most important thing known about a bus should not
-be invisible to the man driving it. So a `watch` key from the second list is
-not a mistake — it is how you put that item in front of every driver of that
-one bus.
-
-Safety critical, which stop the bus when a defect is recorded: `tyres`,
-`nuts`, `fbrake`, `doors`, `pipes`, `bfluid`, `belts_seat`, `anchor`,
-`exits`, `abs`, `brakes`, `steering`.
-
-To change the checks themselves, edit the `STAGES` array in `index.html`.
-Adding `crit: true` makes an item stop the bus; adding `full: true` keeps it
-off the pre-drive list. **Anything added, removed or renamed there belongs in
-the three lists above on the same pass**, or the next person writing a `watch`
-note is working from a list that has quietly stopped being true.
-
----
-
-## The driver register
-
-`CONFIG.drivers` in `config.js` is everyone the leadership has authorised. The
-app shows it as a dropdown and there is no way round it.
-
-**Selecting a name is the authorisation check.** Only you can edit the list, so
-appearing in it means approved. There is deliberately no way to type a name in,
-because that would reopen the door the register exists to close. If a name is
-missing, the app tells the driver to ring the coordinator.
-
-**Add newly approved drivers before their first Sunday** — one line and a push.
-**Removing someone removes them everywhere** at the next refresh.
-
-The rota also reads the Drivers tab in the spreadsheet, so add new people to
-both.
-
-### PINs
-
-`requirePin: true` asks each driver for a four digit PIN before a check.
-
-Set PINs in the **PIN column of the Drivers tab**, never in `config.js`. The
-PIN does not leave the spreadsheet; the app is sent a one way fingerprint and
-compares that.
-
-The Drivers tab also carries a **Phone** column, added for a WhatsApp button
-on the passenger page that was then decided against. **Leave it empty.** Empty
-means no button and one extra sheet read, and nothing else. Filling it would
-publish that driver's number on a page with no login.
-
-This exists so a driver cannot casually sign as somebody else. It is an
-attribution control, not a login. Real authentication would mean Google
-Sign-In, which needs every driver to have an account and a signal at seven on a
-January morning, against a bus parked on a street.
-
-A driver with no PIN set is not asked for one, so adding somebody never locks
-them out.
-
----
-
-## What the app will not let a driver do
-
-Three things are blocked rather than warned about, because a warning that can
-be swiped past is not a control.
-
-**Skip a check.** Next stays dead until every item in the stage is answered.
-
-**Log a defect with no description.** "Brakes" is useless to a garage; "pulls
-left under braking" is a work instruction. The footer names which item is
-still missing its note.
-
-**Enter impossible mileage.** The app knows the last reading for that vehicle.
-A lower figure, or a jump over 1,500 miles, stops the check and asks the driver
-to read the dashboard again. They can proceed by ticking a confirmation, and
-the record is marked in a **Mileage flag** column. An odometer that genuinely
-goes backwards means a swapped cluster or a clocked vehicle, which you want to
-know about.
-
----
-
-## The Defects sheet
-
-Every defect gets its own row, separate from the check it came from, so you can
-work a list rather than read through clear checks looking for problems.
-
-| Column | Filled by |
+| Setting | What it does |
 |---|---|
-| Received, Check ID, Date, Registration, Driver, Item, Critical, What the driver found | The app |
-| **Status** | You, from a dropdown |
-| **Action taken**, **Closed on** | You, by hand |
+| `endpoint` | The Apps Script Web App URL. Blank = practice mode, nothing is sent |
+| `token` | Must match `TOKEN` in `Code.gs` |
+| `coordinator` | Name and number shown on the call buttons. The name is shown **whole** — write it the way people say it, e.g. `Bro Asim` |
+| `recordLocation` | Stamps where a walkaround was done. Never blocks a check |
+| `busBase` | Where the buses are kept, and how far still counts as "at the buses" (yards) |
+| `requirePin` | Whether drivers key in a PIN. PINs live in the **Drivers tab**, never here |
+| `keepAwake` | Holds the driver's screen awake between Start trip and End trip |
+| `fullInspectionRoles` | Which roles are offered the full inspection |
+| `drivers` | The authorised register. Only these names can be selected |
+| `rotaAnchor` / `rotaPrimaryPattern` | North rota fallback, when the Sheet can't be reached |
+| `rotaSecondaryAnchor` / `rotaSecondaryPattern` | The same for South |
 
-Status has six options — **Open**, **Booked in**, **Parts on order**,
-**Fixed**, **Monitoring**, **Not a defect** — each colouring its cell, so you
-can see the state of both buses by glancing down one column.
+`window.VEHICLES` below it holds each bus: registration, renewal dates
+(`mot`, `service`, `insurance`, `permit` — amber inside 30 days), the
+per-vehicle fault history that tells a driver what has gone wrong on **this**
+bus before, and any checks to skip or reword.
 
-**Closed on** keeps the record coherent: a real date, never in the future,
-never before the defect was reported. Set Status to Fixed and today's date
-appears; set it back to Open and it clears.
-
-Change the options by editing `STATUS_OPTIONS` in `Code.gs`, then run
-`addDropdownToExistingSheet` once from the editor.
-
----
-
-## Rota, bookings and the Sunday run
-
-- The **spreadsheet is the only place the rota is administered.** There is no
-  admin screen in the app.
-- Drivers can request a change from their phone; only the coordinator alters
-  the official rota.
-- The **passenger page** stores no names or numbers — only a stop, a headcount,
-  and a random handle the phone made up so someone can change their own
-  booking.
-- **Bookings close 09:30.** After that the driver sees Start trip, picks the
-  bus he is taking, and taps each stop as he pulls away.
-- A stop, once confirmed, is settled for that Sunday. A change of mind is
-  handled by **Not coming**, then booking again.
-
-### After the 09:30 cutoff
-
-Withdrawing is the one thing a passenger can still do. Booking, moving stop
-and changing the number are all refused — by the screen and by the script, so
-a stale tab cannot get round it.
-
-Withdrawing is asked before it happens, on both sides of the cutoff, because
-after it there is no booking again that day. The wording differs by side: the
-consequence does.
-
-The row's Status stays exactly **Cancelled**, never a status of its own. The
-sheet drops that one word and counts everything else as booked, so a tidier
-"Cancelled late" would leave the seat on the driver's screen. The lateness
-goes in a note on the cell instead.
-
-It is refused once the run is over, so the record cannot be rewritten to
-disagree with the list the driver actually worked from.
-
-### Which bus, and only one route at a time
-
-Starting a run names the bus. **A bus already out on another route is not
-offered to the second driver** — the record knows which one is out, so
-offering it invites one registration onto two routes at once. If they swapped
-at the gate, the driver who started corrects his own run; the other does not
-fix it by duplicating it.
-
-If filtering would leave no bus at all, every bus comes back. A driver who
-cannot start is worse than a duplicate.
-
-### While a run is live
-
-There is no **Done** on the Stops screen. The only way off is **End trip,
-arrived at church**, so the screen the run is recorded on cannot be closed by
-a slip of the thumb.
-
-Every tap is stamped with the run it belongs to and sends under that run's
-own name, so a phone that does two routes in a morning — which is really only
-a rehearsal — files them as two runs rather than folding the first into the
-second.
-
-Tapping a stop that already holds the same answer sends nothing. A driver who
-presses again because he is not sure cannot make two rows.
-
-Taps are greyed while the bus is moving, and that test needs a few seconds of
-sustained speed either way. A single noisy GPS sample cannot flicker the
-buttons any more.
+`rotaAnchor` must match `PATTERN_ANCHOR` in `Code.gs`, and
+`rotaSecondaryAnchor` must match `PATTERN_ANCHOR_SOUTH`.
 
 ---
 
-## Things to know
+## The Sheet
 
-**The token is a name tag, not a lock.** It is in `config.js`, which every
-phone downloads. It keeps stray traffic out. Keep the spreadsheet Restricted
-and the token stays sufficient. If junk ever appears in the sheet, change it in
-`Code.gs` and `config.js`, redeploy, and the old one stops working.
+### Tabs
 
-**Duplicates are handled.** Every check carries an id and the script refuses to
-write the same id twice, so a phone retrying after a failure cannot double up.
+| Tab | Holds |
+|---|---|
+| **Checks** | Every walkaround, with verdict, odometer, fuel, signature, location |
+| **Defects** | Anything reported, with a status to work through |
+| **Rota** | Who drives which route, which Sunday |
+| **Rota Requests** | Swaps and cover, pending your decision |
+| **Drivers** | Name, Role, Active, Primary order, PIN, Email, Route, Phone |
+| **Bus Stops** | Route, Stop ID, Time, Stop, Postcode, Active, Type |
+| **Bus Bookings** | Who booked which stop, this Sunday |
+| **Trip Events** | Every tap a driver makes. The record the whole live page rests on |
 
-**Export for the folder.** Download the sheet every few months. A cloud sheet
-is not a substitute for a record you still hold if the account goes away.
+### The Minibus menu
 
-**Mileage comes from the record, not the config.** The app asks the sheet for
-the last reading against each vehicle and shows who entered it and how far the
-bus has gone since. Nothing about mileage is hardcoded, so nothing about it
-goes stale.
+- **Bus link for this Sunday** — the link to share
+- **Bookings for this Sunday**
+- **Checks** → Is everything working? · Who is carrying the load · Who is
+  tapping · Check the Drivers tab · Check time zone
+- **Rota** → Set up / refresh rota · Refresh dropdowns · Add a Sunday · Extend
+  further ahead · Check scheduled emails · Rebuild future Sundays
+- **Emails** → Test email · Weekly summary · Sample duty reminder · Duty
+  reminders to the drivers
+- **Lock / unlock the sheet**
+- **Rehearsal** → Rehearse this Sunday · Stop rehearsing
 
-**Keep the paper sheet in the glovebox.** Flat battery, forgotten phone, or a
-driver who prefers paper. The app should reduce the pad, not become a single
-point of failure.
+### Running on its own
+
+| When | What |
+|---|---|
+| Daily 03:00 | Nightly tidy-up |
+| Daily 08:00 | Duty reminders to drivers due to drive |
+| Sunday 10:45 | Alert if a check hasn't come in |
+| Sunday 19:00 | Weekly summary |
+| On edit | A note when someone changes the rota |
+
+Set `COORDINATOR_EMAIL` in **Project Settings → Script Properties**, not in the
+code.
+
+### Stop types
+
+The `Type` column takes **Pickup**, **Arrival** or **Depart**.
+
+- **Pickup** — a kerb where people wait.
+- **Arrival** — the church, at the end of the route.
+- **Depart** — a *timing point*, not a place. One row per route, holding the
+  time the bus is timetabled to leave church. It is filtered out of every stop
+  list, booking list and driver tap list. It exists so the run has an honest
+  offset from the moment it pulls out, which is what lets the passenger page
+  say **"On its way, three minutes behind"** before a single stop is marked.
 
 ---
 
-Built for internal church use. Not a substitute for a competent person's
-inspection or the annual MOT.
+## Things that will bite you
+
+**Google Sheets Tables.** If a tab has been converted to a Table, the script
+cannot write formatting to it and setup fails with *"This operation is not
+allowed on cells in typed columns."* Fix: select the tab, **Format → Convert to
+range**. Cosmetic writes are individually guarded now, so setup no longer stops
+dead — but the tab stays unformatted until you convert it.
+
+**Never clear Trip Events rows by hand.** Use **Undo** in the driver app. A
+blanked row leaves the run's arithmetic reading a gap that was never there.
+
+**Don't run helper functions from the Apps Script editor.** Use the Minibus
+menu. Functions like `applyStatusDropdown` expect arguments the editor's Run
+button doesn't give them.
+
+**The two service workers must never cache the same file.** `caches.keys()`
+answers for the whole site, so each worker deletes only caches matching its own
+prefix (`minibus-check-` / `minibus-sunday-`). Break that and each app wipes
+the other's cache on activation — and nothing looks wrong until somebody loses
+signal.
+
+**Nothing shows the driver a new version mid-session.** The check happens at
+launch. An app left open all morning runs the version it started with.
+
+---
+
+## Rules the app enforces
+
+- **Only the rostered driver for that route, or his named cover, can tap.**
+  Everyone else — including other drivers — can watch, read-only.
+- **A critical defect stops the bus.** The app records and warns; it cannot
+  immobilise anything.
+- **Taps are refused while the bus is moving**, and a tap that is impossibly
+  early asks for confirmation before it is taken.
+- **The driver's number reaches only a booked phone, on that route, on the
+  day.** Anyone else watching gets the coordinator's number.
+- **A check that could not be verified says so.** Offline PIN entry is recorded
+  as `offline`, never as `ok`.
+
+---
+
+## What it does not do
+
+- No live map, no passenger GPS. Position is inferred from the driver's taps.
+  Between two stops it genuinely does not know.
+- No push notifications. The page has to be open.
+- It never messages anyone by itself. WhatsApp links open pre-filled; a person
+  presses send.
+- No return leg, no seat allocation, no fares, no payments.
+
+---
+
+## For anyone reviewing this
+
+The reasoning behind most decisions is **in the code, next to the decision** —
+not in this file, and not in a wiki that will drift. Comments explain what went
+wrong before and why the code is shaped the way it is. Start with:
+
+- `tripPayload` in `Code.gs` — everything a passenger is told, and the gates on it
+- `tripMerge` and `tripMayTap` in `index.html` — run state and who may write to it
+- `paintLive` in `sunday/index.html` — every state a passenger can see
+- `freshFirst` in either `sw.js` — the caching rules and the faults that shaped them
+
+Worth challenging: the offline-first tap queue and its clock-skew correction;
+the trust model, where a public token is the only thing between the internet
+and a write; the privacy boundary around the driver's number; and the fact that
+a passenger's identity is a phone number and a fingerprint of one.
