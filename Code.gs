@@ -219,6 +219,22 @@ var TRIP_QUIET_MINUTES = 15;
    with a soft number, which still beats a blank screen. */
 var TRIP_MAX_OFFSET = 45;
 
+/* How far AHEAD of the timetable a run may claim to be before the app stops
+   believing it.
+
+   Kept far tighter than the late side, and deliberately so: the two are not
+   the same kind of event. A bus can honestly be three quarters of an hour
+   late — traffic, a breakdown, a stop that took ten minutes to load. It
+   cannot be half an hour early on a route timetabled to take an hour, because
+   the road does not shrink. A large negative offset therefore does not mean a
+   fast morning; it means a stop was marked that the bus had not reached, and
+   every projection built on it is nonsense in the same direction.
+
+   That is not theoretical. On the 30th a stop timetabled 10:21 was marked at
+   09:45, the run read as 36 minutes ahead, and every passenger watching was
+   shown an arrival time that had already gone past. */
+var TRIP_MAX_EARLY = 12;
+
 /* Under this, the page says "any moment now" rather than a number. Counting
    down the last thirty seconds to somebody who is already looking up the road
    is false precision. */
@@ -2906,7 +2922,8 @@ function tripProjectable(state) {
 
   var quiet = (Date.now() - state.lastAt) / 60000;
   if (quiet > TRIP_QUIET_MINUTES) return { ok: false, why: "quiet" };
-  if (Math.abs(state.offset) > TRIP_MAX_OFFSET) return { ok: false, why: "wild" };
+  if (state.offset >  TRIP_MAX_OFFSET) return { ok: false, why: "wild" };
+  if (state.offset < -TRIP_MAX_EARLY)  return { ok: false, why: "wild" };
   return { ok: true };
 }
 
@@ -3080,6 +3097,19 @@ function tripPayload(ref, want, askedStop, pid) {
   var eta  = new Date(sched.getTime() + state.offset * 60000);
   var mins = Math.round((eta.getTime() - Date.now()) / 60000);
 
+  /* An arrival time that has already gone past is not an estimate.
+
+     The offset test above catches the impossible ones; this catches the
+     merely stale — a stop timetabled 09:50, a bus running three minutes
+     behind, and somebody opening the page at ten past. The arithmetic gives
+     09:53 and the page would announce it as though the bus were still to
+     come. Somebody standing at that kerb reads it as a promise.
+
+     Two minutes of grace, because a bus pulling in as the page loads is
+     genuinely "due now" and saying so is right. Beyond that the page falls
+     back to the last thing actually known, which is where it belongs. */
+  if (mins < -2) { out.mine = "quiet"; return out; }
+
   out.mine    = "eta";
   out.offset  = state.offset;
   out.etaWords = Utilities.formatDate(eta, Session.getScriptTimeZone(), "HH:mm");
@@ -3104,7 +3134,16 @@ function tripDriverPayload(route) {
     trip: state.trip, driver: state.driver, reg: state.reg,
     started: state.started || 0, ended: state.ended || 0,
     lastAt: state.lastAt || 0, lastStop: state.lastStop,
-    offset: state.offset, served: state.served
+    offset: state.offset, served: state.served,
+    /* When this route is timetabled to leave church, so the phone can work
+       out how long a leg is meant to take and refuse a stop the bus cannot
+       have reached yet. The Depart row is filtered out of the stop list the
+       driver's app receives — it is a timing point, not a place — so the time
+       has to travel separately or the phone cannot see it at all. */
+    departWords: (function () {
+      var d = departStopFor(ss, String(route || "").trim() || "North");
+      return d ? d.time : "";
+    })()
   };
 }
 

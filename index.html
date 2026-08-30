@@ -1208,7 +1208,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.23.3";
+var APP_VERSION = "v1.25.0";
 
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
@@ -2999,6 +2999,9 @@ function tripView(route){
                               served:{}, lastAt:0, lastStop:"", offset:null };
 }
 var tripClosed = false, tripCutoff = "", tripRehearsal = false;
+/* When this route is timetabled to leave church, "HH:MM", or "" if the Bus
+   Stops tab has no Depart row for it. Used only by the too-early guard. */
+var tripDepartWords = "";
 /* 0 checked, 1 no check on record, 2 no check on record and the sheet could
    not be reached to ask. The difference is for the coordinator on Monday and
    is deliberately invisible to the driver: see tripHeaderHtml. */
@@ -3334,6 +3337,65 @@ function tripStart(route, reg, anyway){
   tripPaint();
 }
 
+/* ---- a stop the bus cannot have reached yet ----------------------------
+
+   Three Sundays running, a stop was marked from the church car park within a
+   minute of Start. Pym Street, timetabled 10:21, marked 09:45. Parton Street,
+   timetabled 10:42, marked 10:33 — the same minute the run began. Two
+   different drivers, so it is not carelessness; it is the screen.
+
+   He taps a green button to begin the morning, and the screen immediately
+   fills with another green button reading PICKED UP: PARTON STREET. Nothing
+   has moved, nothing says wait, and a second green button appearing where you
+   just pressed one reads as the next step. Both men were right to read it
+   that way. The app was wrong to offer it.
+
+   What the app has, and was not using, is the timetable. Church leaves at
+   10:35 and Parton is 10:42, so that leg is meant to take seven minutes; it
+   cannot have been done in nought. This asks that question — has enough of
+   the journey happened to be standing where he says he is — and it needs no
+   GPS, no map and nothing the coordinator has not already typed in.
+
+   Deliberately not a dead button and not a dialogue. Dead teaches nothing. A
+   dialogue on every tap would be read for three Sundays and then tapped
+   through by reflex, which is the habit that loses the warnings that matter.
+   This one only ever appears when the tap is implausible, so it can never
+   become routine: it says what is wrong, and the same tap again goes through.
+   A timetable can be wrong, and a driver standing at a kerb must always be
+   able to record that he is there. */
+var TRIP_MIN_RUNNING_MS = 60000;   /* nothing at all in the first minute */
+var tripSoonAsked = { id:"", at:0 };
+
+function tripMinutesFromWords(a, b){
+  var p=String(a||"").split(":"), q=String(b||"").split(":");
+  if(p.length<2 || q.length<2) return null;
+  var m1=(Number(p[0])||0)*60+(Number(p[1])||0);
+  var m2=(Number(q[0])||0)*60+(Number(q[1])||0);
+  return m2-m1;
+}
+
+/* "" when the tap is plausible, otherwise why it is not. */
+function tripTooSoon(stop){
+  if(!trip.started) return "";
+  var elapsed = tripNow() - trip.started;
+
+  /* Nothing in the first minute, whatever the timetable says. No bus reaches
+     a stop in sixty seconds, and this is the one that catches a second tap
+     made while the thumb is still moving. */
+  if(elapsed < TRIP_MIN_RUNNING_MS) return "only";
+
+  /* How long this leg is meant to take, church to that stop. Without a Depart
+     row there is no leg to measure and the check simply does not apply. */
+  var leg = tripMinutesFromWords(tripDepartWords, stop.time);
+  if(leg===null || leg<=0) return "";
+
+  /* Half the timetabled leg. Buses do run early, and half is generous — it
+     would let a seven minute leg be done in three and a half. Neither of the
+     real mis-taps was anywhere near it. */
+  if(elapsed < (leg*60000)/2) return "leg";
+  return "";
+}
+
 function tripTap(stop,kind){
   if(!trip.started || trip.ended) return;
   if(tripMoving()){ toast("Not while the bus is moving. Tap it when you pull up."); return; }
@@ -3355,6 +3417,26 @@ function tripTap(stop,kind){
      gate opens by itself and says so on the record, exactly as it does on the
      first screen. Written down beats blocked; unattributed beats neither. */
   if(pinGateNeeded()){ pinGateFocus(); return; }
+
+  /* Too early to be standing there. Said once, and the very next tap on the
+     same stop goes through: a driver who knows better must never be locked
+     out of his own record. */
+  var soon = tripTooSoon(stop);
+  if(soon){
+    var again = tripSoonAsked.id===stop.id && (Date.now()-tripSoonAsked.at) < 12000;
+    if(!again){
+      tripSoonAsked = { id:stop.id, at:Date.now() };
+      var mins = Math.max(0, Math.round((tripNow()-trip.started)/60000));
+      toast(soon==="only"
+        ? (mins<1 ? "You set off less than a minute ago."
+                  : "Only "+mins+" minute"+(mins===1?"":"s")+" since you set off.")+
+          " Tap again if you are really at "+stop.stop+"."
+        : "Too early for "+stop.stop+", timetabled "+stop.time+". Tap again if "+
+          "you are there.");
+      return;
+    }
+  }
+  tripSoonAsked = { id:"", at:0 };
 
   /* Once is once. A driver who is not sure his tap took will press again —
      that is not him being careless, it is the only thing he can do — and the
@@ -3506,6 +3588,7 @@ function rotaCountsFetch(route,cb){
         tripClosed  = !!tp.closed;
         tripCutoff  = tp.cutoff||"";
         tripRehearsal=!!tp.rehearsal;
+        if(typeof tp.departWords==="string") tripDepartWords=tp.departWords;
 
         /* A run in progress owns its own route, and an answer about a
            different one is not about it.
@@ -4258,9 +4341,23 @@ function rotaPaintStops(){
   list.forEach(function(s,i){ if(view.served[s.id] && i>lastIdx) lastIdx=i; });
 
   var nextStop=null, missed=[];
-  if(onThis && mayTap){
+  /* showCounts, and that is the whole of the fix.
+
+     The button that aims the morning picked its stop out of rotaStopCounts
+     whatever those numbers were, while the list two lines below refused to
+     PRINT the same numbers unless they belonged to today. So a phone holding
+     an earlier Sunday's counts hid them, correctly, and then used them anyway
+     to point the biggest target on the screen at whichever kerb had been busy
+     the week before — with nothing on screen to say so, because the app had
+     already decided those numbers were not fit to show.
+
+     A driver reaching for the one green button is entitled to assume it names
+     the stop in front of him. If today's numbers are not in, we do not know
+     which stop that is, and the honest thing is to say so and let him mark
+     stops from the list. */
+  if(onThis && mayTap && showCounts){
     list.forEach(function(s,i){
-      if(trip.served[s.id]) return;
+      if(view.served[s.id]) return;
       if((rotaStopCounts[s.id]||0)===0) return;    /* empty: no tap wanted */
       if(i>lastIdx){ if(!nextStop) nextStop=s; }
       else missed.push(s);                          /* gone past, unmarked */
@@ -4313,7 +4410,7 @@ function rotaPaintStops(){
              appear on every booked stop including ones miles ahead, which a
              driver never needs and which put a pair of buttons on most rows.
              The big button covers the stop in front of him. */
-          ((onThis&&mayTap&&!done&&!s.arrival&&missedIds[s.id])
+          ((onThis&&mayTap&&!done&&!s.arrival&&(missedIds[s.id]||!showCounts))
             ? '<div class="trip-row-btns">'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="empty">Nobody there</button>'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="pickup">Picked up</button>'+
@@ -4323,7 +4420,7 @@ function rotaPaintStops(){
 
   /* The one big target, pinned under the list where his thumb already is. */
   if(onThis && mayTap){
-    html+=tripActionHtml(nextStop);
+    html+=tripActionHtml(nextStop, showCounts);
   }
 
   $("stopsBody").innerHTML=html;
@@ -4464,7 +4561,16 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
   var bits=[(mayTap? '<b>Running</b> since '
                    : '<b>'+esc(tripWhoDrives(route)||route)+' is out</b> since ')+
             tripClock(t.started)];
-  if(off!==null && off!==0) bits.push(off>0? off+' min behind' : (-off)+' min ahead');
+  /* Being far ahead of a fixed timetable is not a fast morning, it is a stop
+     marked before the bus got there — and the driver is the only person who
+     can put it right. Said where he is already looking, only when it is
+     genuinely impossible, and with the one thing to do about it. */
+  if(off!==null && off < -12){
+    bits.push('<b class="trip-stopme">'+(-off)+' min ahead \u2014 check the last '+
+              'stop you marked</b>');
+  } else if(off!==null && off!==0){
+    bits.push(off>0? off+' min behind' : (-off)+' min ahead');
+  }
   if(t.lastStop) bits.push('last '+esc(t.lastStop)+' at '+tripClock(t.lastAt));
   h+='<p class="trip-note">'+bits.join(' \u00B7 ')+'</p>';
 
@@ -4674,7 +4780,7 @@ function pinGateFocus(){
   try{ i.focus(); }catch(e){}
 }
 
-function tripActionHtml(nextStop){
+function tripActionHtml(nextStop, showCounts){
   var waiting=nextStop?(rotaStopCounts[nextStop.id]||0):0;
   /* Off, not disabled, so the tap is the prompt and the toast can say what is
      wanted. Same bargain the bus buttons already make. */
@@ -4687,6 +4793,11 @@ function tripActionHtml(nextStop){
        'Picked up: '+esc(nextStop.stop)+'</button>'+
        '<button class="btn btn-ghost'+off+'" data-triptap="'+esc(nextStop.id)+'" data-tripkind="empty">'+
        'Nobody there</button>';
+  } else if(showCounts===false){
+    /* No numbers for today, so no idea which stop is next. Said plainly, and
+       the list above carries a pair of buttons on every stop instead. */
+    h+='<p class="trip-waiting">Today\u2019s numbers have not come through. '+
+       'Mark each stop from the list above.</p>';
   } else {
     h+='<p class="trip-waiting">Every booked stop is done.</p>';
   }
