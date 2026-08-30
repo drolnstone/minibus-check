@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.30.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.32.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -353,6 +353,21 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 
    --steel is a surface and stays a surface in every theme, which is why the
    driver app's toast never had this. Both apps now use the same one. */
+/* Back to top. Two routes of stops is a long thumb journey, the same one the
+   driver's rota already had a button for.
+
+   It sits clear of the action bar, and the bar is not always there: it hides
+   when there is nothing to press. So the button has two resting heights and
+   takes the right one, rather than floating in the middle of nothing on the
+   screens where the bar is gone. */
+.totop{position:fixed;right:calc(14px + var(--safe-r));bottom:calc(20px + var(--safe-b));
+  z-index:65;width:48px;height:48px;border-radius:50%;
+  background:var(--steel);color:var(--on-accent);border:0;
+  font-size:20px;line-height:1;box-shadow:0 3px 12px rgba(20,25,32,.34);
+  display:none;align-items:center;justify-content:center;cursor:pointer}
+.totop.is-on{display:flex}
+.totop.above-bar{bottom:calc(104px + var(--safe-b))}
+.totop:focus-visible{outline:3px solid var(--steel);outline-offset:3px}
 .toast{position:fixed;left:50%;bottom:calc(112px + var(--safe-b));transform:translateX(-50%) translateY(14px);
   background:var(--steel);color:var(--on-accent);padding:11px 16px;border-radius:9px;font-size:14px;
   opacity:0;pointer-events:none;transition:.25s;z-index:90;max-width:90vw;text-align:center}
@@ -568,6 +583,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 
 <div class="upright" aria-hidden="true"><b>Turn your phone upright.</b></div>
 
+<button class="totop" id="toTop" type="button" aria-label="Back to top">↑</button>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -585,7 +601,18 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.30.0";
+var PAGE_VERSION = "v1.32.0";
+
+/* Which copy of the Apps Script is answering. Learned from the first reply of
+   the morning — every payload carries it — and printed beside this page's own
+   number below.
+
+   It is not expected to match. Code.gs changes less often than these pages
+   do, so it legitimately sits behind. What it answers is narrower and more
+   useful: after a deploy, is the script the copy that was just pasted? Saving
+   in the Apps Script editor changes nothing a phone can see until a new
+   version is deployed, and that is the one step with no other symptom. */
+var SCRIPT_VERSION = "";
 
 var ENDPOINT = "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec";
 
@@ -952,6 +979,7 @@ function load(again){
     .then(function(t){
       var out=readJson(t);
       if(!out || out.ok!==true) throw new Error(out && out.error ? out.error : "unavailable");
+      if(out.script) SCRIPT_VERSION = String(out.script);
       loadedOk = true;
       retryStop();
       applyBus(out);
@@ -1391,6 +1419,39 @@ function paintLive(){
      button would keep a neutral opener through a stop that had been and gone,
      and would still be there after the run ended. */
   paintBar();
+
+  /* Bring the answer to him rather than making him find it.
+
+     A booked passenger is shown his stop without touching anything, and so is
+     a driver. Somebody who never booked had to tap a stop halfway down the
+     list and then scroll back up on his own to see what he had asked for —
+     the one person doing the most work for the same fact.
+
+     Time-limited on purpose. If the record took long enough that he has given
+     up and started reading the timetable, the page has no business yanking
+     him somewhere he did not ask to be. */
+  if(watchJumped){
+    var waited = Date.now() - watchJumped;
+    watchJumped = 0;
+    if(waited < 6000) jumpTop();
+  }
+}
+
+/* Set the moment a kerb is chosen to watch, and spent by the next paint that
+   actually has something on it.
+
+   The reason it is a flag and not a scroll on the spot: at the moment of the
+   tap the panel is EMPTY. The answer is a fetch away, so scrolling then would
+   carry somebody up to a blank space and leave them watching it fill. This
+   waits for the answer and then moves. */
+var watchJumped = 0;
+
+/* Straight to the top, which is where the answer is, and the same journey the
+   button in the corner makes — one page, one way of getting back. */
+function jumpTop(){
+  var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  try{ window.scrollTo(still ? {top:0} : {top:0,behavior:"smooth"}); }
+  catch(e){ window.scrollTo(0,0); }
 }
 
 function stopById(id){
@@ -1630,7 +1691,8 @@ function paint(){
     identityFoot()+
     /* Not offered to a phone that already has it. */
     (standalone() ? "" : "<br>"+idBtn("idInstall","Add to your phone"))+
-    '<span class="foot-ver">'+esc(PAGE_VERSION)+'</span>';
+    '<span class="foot-ver">'+esc(PAGE_VERSION)+
+    (SCRIPT_VERSION ? ' \u00B7 script '+esc(SCRIPT_VERSION) : '')+'</span>';
   wireIdentityFoot();
 
   Array.prototype.forEach.call(document.querySelectorAll("[data-route]"),function(b){
@@ -1658,7 +1720,9 @@ function paint(){
       watchSave(watchStop);
       live=null; paintLive();
       paint();
-      if(watchStop) liveStart();
+      /* Only on choosing one. Tapping the same kerb again means "stop
+         watching", and there is nothing at the top to go and look at. */
+      if(watchStop){ watchJumped = Date.now(); liveStart(); }
     });
   });
   /* Clamped at both ends here as well as on the buttons' disabled state, so
@@ -2393,6 +2457,28 @@ try{
   }
   themeApply();
 }catch(e){ /* appearance only: never worth a blank page */ }
+
+/* Back to top. Shown once there is enough page behind him to be worth the
+   journey, and lifted clear of the action bar whenever the bar is up. Reading
+   an inline style is a property read, not a measurement, so this is safe to
+   do on every scroll. */
+(function(){
+  var b=$("toTop"); if(!b) return;
+  function sync(){
+    var bar=$("bar");
+    b.classList.toggle("above-bar", !!bar && bar.style.display!=="none");
+    /* 460 is the driver app's number, tuned for a rota holding two years of
+       Sundays. This page is shorter, and the useful moment here is different:
+       it is when the live panel has scrolled off the top and the answer he
+       came for is no longer on screen. That happens around a third of a
+       screen down on a phone. */
+    b.classList.toggle("is-on", window.pageYOffset>300);
+  }
+  window.addEventListener("scroll",sync,{passive:true});
+  window.addEventListener("resize",sync,{passive:true});
+  b.addEventListener("click",function(){ jumpTop(); b.classList.remove("is-on"); });
+  sync();
+})();
 
 load();
 
