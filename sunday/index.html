@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.26.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.29.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -246,6 +246,8 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-top:5px}
 .stop-n.has{color:var(--pass)}
 .tick{flex:0 0 20px;font-weight:700;color:var(--pass);font-size:19px;line-height:1.25}
+/* Watching, not collected: quieter, and never the colour of a finished thing. */
+.tick-watch{color:var(--muted);font-size:13px}
 .stop-arrival{opacity:.85}
 
 .group-label{font-family:"Barlow Condensed",sans-serif;font-size:13px;font-weight:700;
@@ -355,6 +357,35 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   background:var(--steel);color:var(--on-accent);padding:11px 16px;border-radius:9px;font-size:14px;
   opacity:0;pointer-events:none;transition:.25s;z-index:90;max-width:90vw;text-align:center}
 .toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
+/* The call button, shaped like the driver's.
+
+   It was two underlined words in the middle of a sentence. On the driver's
+   side the same call — ring the coordinator, now — is a target he can hit
+   with a thumb without reading anything, and this is the same moment: a
+   person at a kerb who has just learned the bus is not coming for them.
+   Same shape, same radius, same condensed uppercase, on purpose. One app to
+   the people who use both.
+
+   The COLOUR is deliberately not the driver's. Red there means "this bus
+   does not run", it is the only place in either app that it means anything,
+   and spending it on a missed pickup would blunt it. This one takes the tone
+   of the panel it is standing in, so it never claims more than the panel.
+
+   The border is not decoration. A button filled from the palette sits
+   between 1.07:1 and 1.15:1 against the panel behind it — invisible as a
+   shape on brightness alone, in both themes. The edge is the only thing that
+   makes it read as a button, so it is never optional. */
+.callbtn{display:inline-flex;align-items:center;justify-content:center;
+  margin-top:11px;min-height:46px;padding:0 16px;
+  background:var(--paper);color:var(--ink);
+  border:1px solid var(--hair);border-radius:8px;text-decoration:none;
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:17px;
+  letter-spacing:.05em;text-transform:uppercase}
+.callbtn:active{transform:translateY(1px)}
+/* Inside a tinted panel the fill flips, or it would vanish into the tint. */
+.live-go .callbtn,.live-warn .callbtn,.note-warn .callbtn,.note-go .callbtn{background:var(--card)}
+.live-go .callbtn{color:var(--pass);border-color:var(--pass-line)}
+.live-warn .callbtn,.note-warn .callbtn{color:var(--warn);border-color:var(--warn-line)}
 .live{border-radius:9px;padding:13px 14px;margin:0 0 14px;border:1px solid var(--hair);background:var(--card)}
 .live-eyebrow{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;
   letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
@@ -554,7 +585,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.26.0";
+var PAGE_VERSION = "v1.29.0";
 
 var ENDPOINT = "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec";
 
@@ -571,11 +602,29 @@ var ENDPOINT = "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-
    Held here rather than fetched, because the message that needs it most is
    the one shown when the server cannot be reached at all. Keep it in step
    with coordinator in config.js, which is the same person for the drivers. */
-var COORDINATOR = { name: "Asim Bassey", phone: "07377634214" };
+var COORDINATOR = { name: "Bro Asim", phone: "07377634214" };
 
 /* A number that can actually be pressed. The written form keeps its spacing
    for reading; the tel: link gets digits only, because a space in an href is
    the difference between a call and nothing happening. */
+/* 07377634214 is a string of digits. 07377 634214 is a phone number.
+   The driver's app has always broken it; this one never did. */
+function prettyPhone(show){
+  var p=String(show||"").replace(/[^0-9+]/g,"");
+  return /^07\d{9}$/.test(p) ? p.slice(0,5)+" "+p.slice(5) : String(show||"");
+}
+
+/* The same call as ringCoordinator, as a button rather than a sentence.
+   Used wherever somebody needs to DO it rather than read about it. */
+function callButton(){
+  var name = String(COORDINATOR.name||"").trim();
+  var show = String(COORDINATOR.phone||"").trim();
+  var dial = show.replace(/[^0-9+]/g,"");
+  if(!dial) return "";
+  return '<a class="callbtn" href="tel:'+esc(dial)+'">Call '+
+         esc(name||"the bus coordinator")+' \u00B7 '+esc(prettyPhone(show))+'</a>';
+}
+
 function ringCoordinator(){
   var name = String(COORDINATOR.name||"").trim();
   var show = String(COORDINATOR.phone||"").trim();
@@ -887,9 +936,21 @@ function load(again){
         setTimeout(function(){ load(tries + 1); }, tries === 0 ? 1500 : 4000);
         return;
       }
+      /* No signal gets its own answer, because it is not a failure and there
+         is nothing for them to do about it. What is happening, what will
+         happen, and no alarm. A phone call still works with no data, so the
+         number stays — quietly, at the end, for somebody who needs a person
+         rather than a page. */
+      if(offlineNow(err)){
+        $("body").innerHTML='<div class="note"><b>No signal just now.</b><br>'+
+          'This page will show the bus again as soon as your phone is back on '+
+          'the network. A call still works without it.'+
+          '<br>'+callButton()+'</div>';
+        return;
+      }
       $("body").innerHTML='<div class="note note-warn"><b>The stops could not be loaded.</b><br>'+
-        esc(String(err.message||err))+'<br><br>Pull down to refresh, or '+
-        ringCoordinator()+'.</div>';
+        esc(plainError(err))+'<br>Pull down to refresh, or:'+
+        '<br>'+callButton()+'</div>';
     });
 }
 
@@ -897,6 +958,66 @@ function load(again){
    a sign-in screen, or an error page, meaning the request never reached the
    script. Saying "Unrecognized token" to somebody trying to book a seat helps
    nobody, and it hides the one fact that would help whoever has to fix it. */
+/* Is this simply "no network"? It is the commonest reason anything on this
+   page fails, and it is not a fault at all — so it must never be dressed up
+   as one in front of somebody standing at a kerb.
+
+   Every browser words it differently and none of them word it for a
+   passenger: Chrome says "Failed to fetch", Safari "Load failed", Firefox
+   "NetworkError when attempting to fetch resource". navigator.onLine is
+   checked first because it is the only one that is not a guess, but it lies
+   in the other direction often enough — a phone can be on a network that
+   goes nowhere — so the wording is tested too. */
+function offlineNow(err){
+  if(navigator.onLine === false) return true;
+  var m = String((err && err.message) || err || "");
+  return /failed to fetch|load failed|networkerror|network request failed|network error/i.test(m);
+}
+
+/* Developer's English, which must never reach a screen.
+
+   Apps Script sends the real exception text back with a failure, and that is
+   right: it is the only way a fault gets diagnosed on Monday. But the page
+   was printing it word for word, so a passenger could be shown
+   "TypeError: Cannot read properties of undefined (reading 'getRange')" —
+   the exact line that turned up in the editor once — while standing at a bus
+   stop. The sheet's own log still has all of it. The screen does not need it. */
+function machineSpeak(m){
+  return /^[A-Za-z]*(Error|Exception)\b/.test(m)
+      || /cannot read propert|is not a function|is not defined|\bundefined\b|Code\.gs|\bat \w+ \(/i.test(m);
+}
+
+/* Words this app uses among itself, which are not sentences. They exist so a
+   failure has SOMETHING to carry when the server said nothing; they were
+   never meant to be read out. */
+var SHORTHAND = {
+  "unavailable": "The record is not answering just now.",
+  "rejected":    "The record would not accept it.",
+  "not sent":    "It did not go through.",
+  "not saved":   "It was not saved.",
+  "no answer":   "The record did not answer.",
+  "bad token":   "This copy of the app is not recognised. Ring the bus coordinator."
+};
+
+/* Whatever was thrown, in words somebody at a bus stop can do something with.
+
+   "Failed to fetch" went on this screen verbatim. It is not English, it is
+   not true — nothing failed, the phone simply has no signal — and it is the
+   line a stranger would read on the one morning the page could not help them.
+
+   Messages the script itself wrote are already written for this screen and
+   pass through untouched. It is the browser's own that need translating. */
+function plainError(err){
+  if(offlineNow(err)) return "Your phone is not on the network just now.";
+  var m = String((err && err.message) || err || "").trim();
+  if(!m) return "Something did not work. Try again in a moment.";
+  if(SHORTHAND[m.toLowerCase()]) return SHORTHAND[m.toLowerCase()];
+  if(/took too long|abort|timed out|timeout/i.test(m))
+    return "The record took too long to answer.";
+  if(machineSpeak(m)) return "Something went wrong at the record's end.";
+  return m.charAt(0).toUpperCase() + m.slice(1);
+}
+
 function readJson(t){
   var txt=String(t||"").trim();
   if(txt.charAt(0)==="<"){
@@ -1075,11 +1196,18 @@ function paintLive(){
      The coordinator when there is no number, and always once the run has
      ended, because "come back for me" is not a thing anybody can act on from
      the church car park. */
+  /* Set by turnTo when the coordinator is the right person, and rendered
+     under the sentence rather than inside it. A phone number buried in prose
+     is something to read; a button is something to press. */
+  var callBtn = "";
   function turnTo(lead){
     if(DRIVER && DRIVER.wa && live && !live.ended){
       return lead+" <b>Message "+esc(DRIVER.name)+"</b> below.";
     }
-    return lead+" Please "+ringCoordinator()+".";
+    callBtn = callButton();
+    /* The lead alone. "Still waiting?" over a button that already says who
+       to call and on what number needs no sentence between them. */
+    return callBtn ? lead : lead+" Please "+ringCoordinator()+".";
   }
 
   if(live.mine==="served"){
@@ -1097,6 +1225,25 @@ function paintLive(){
     sub = wasEmpty
       ? "Nobody was waiting at "+esc(live.stop)+". "+turnTo("Still there?")
       : "The bus has been to "+esc(live.stop)+". "+turnTo("Not on it?");
+  } else if(live.mine==="passed"){
+    /* The bus has been by and this stop was never marked.
+
+       Said carefully, because the record and the road are not always the
+       same thing. What is KNOWN is that the bus reached a later stop and that
+       no pickup was recorded here. What is likely — nobody was waiting — is
+       not certain: a driver can forget to tap. So the page reports the record
+       and lets the person draw their own conclusion, rather than telling
+       somebody standing in the rain that they were not there.
+
+       turnTo does the rest, and does it correctly for both people who see
+       this screen: a booked passenger gets the driver, who can still turn
+       round; a watcher who never booked gets the coordinator, because the
+       driver's number is not theirs to have. */
+    cls="live-warn";
+    head="The bus has gone past";
+    sub="It was at "+esc(live.passedStop)+" at "+esc(live.passedAtWords)+
+        ", and no pickup was recorded at "+esc(live.stop)+". "+
+        turnTo("Still waiting?");
   } else if(!live.started){
     head="Not set off yet";
     sub="Timetabled "+esc(live.scheduled)+".";
@@ -1171,6 +1318,7 @@ function paintLive(){
     '<p class="live-eyebrow">'+eyebrow+'</p>'+
     '<p class="live-big">'+head+'</p>'+
     '<p class="live-sub">'+sub+'</p>'+
+    callBtn+
     (live.watching
       ? '<p class="live-sub" style="margin-top:8px">'+
         '<button type="button" class="ring" id="watchOff" '+
@@ -1337,7 +1485,19 @@ function paint(){
               '<span class="stop-n'+(n?' has':'')+'">'+
                 (n? n+(n===1?' person':' people')+' booked' : 'Nobody booked yet')+'</span>'+
             '</span>'+
-            '<span class="tick">'+(on?"\u2713":"")+'</span>'+
+            /* A tick means done. Before the cutoff that is exactly right:
+               the stop is booked, the job is finished.
+
+               After it, the same mark means something else entirely — "this
+               is the kerb I am standing at" — and it was still a tick. So a
+               watcher whose panel said THE BUS HAS GONE PAST was looking, an
+               inch below, at his own stop wearing a green tick. The screen
+               contradicted itself, and the more reassuring half was the one
+               that was wrong.
+
+               A dot selects. A tick completes. */
+            '<span class="tick'+(picking?" tick-watch":"")+'">'+
+              (on?(picking?"\u25CF":"\u2713"):"")+'</span>'+
           '</button>';
   });
 
@@ -1679,8 +1839,7 @@ function askSend(){
        no booking and changes no seat. So unlike Confirm there is nothing to
        go and check, and saying try again is the honest whole of it. */
     askDone();
-    askSay(String((err && err.message) || "That did not go through.")+
-           " Try again.", true);
+    askSay(plainError(err) + " Try again.", true);
   });
 }
 
@@ -1848,7 +2007,7 @@ function send(payload, done){
         return;
       }
 
-      toast(err.message);
+      toast(plainError(err));
       return;
     }
 
