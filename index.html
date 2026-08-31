@@ -1263,7 +1263,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.32.0";
+var APP_VERSION = "v1.34.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -4587,6 +4587,33 @@ function rotaPaintStops(){
             ? '<div class="trip-row-btns">'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="empty">Nobody there</button>'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="pickup">Picked up</button>'+
+              '</div>'
+            : '')+
+          /* A stop nobody booked, during a run. One button, and only the one
+             that means anything here.
+
+             The line above deliberately asks for no tap at an empty stop, and
+             as a default that is right — it is one less thing on the screen.
+             But it left him with no way to record a stop he DID serve, and
+             the comment a few lines up says exactly why that matters: someone
+             who did not book still turns up, with a dead phone or no phone or
+             because nobody told them.
+
+             On a Sunday where nobody books at all, that was the whole screen:
+             a run going, a strip saying he was out, and not one button he
+             could press. No passenger would ever see "Picked up", and the
+             gone-past message could not fire either, because it needs a later
+             stop marked to prove anything.
+
+             "Nobody there" is not offered. At a kerb nobody booked it states
+             the default and records nothing worth having. The only fact here
+             is that somebody WAS waiting. */
+          ((onThis&&mayTap&&!done&&!s.arrival&&showCounts&&
+            !(rotaStopCounts[s.id]||0)&&!missedIds[s.id]&&
+            view.started&&!view.ended)
+            ? '<div class="trip-row-btns">'+
+                '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="pickup">'+
+                'Someone was here</button>'+
               '</div>'
             : '');
   });
