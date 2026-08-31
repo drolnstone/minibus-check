@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.32.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.34.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -601,7 +601,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.32.0";
+var PAGE_VERSION = "v1.34.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this page's own
@@ -1358,8 +1358,26 @@ function paintLive(){
   } else if(live.mine==="ended"){
     head="The bus has finished its run";
     /* The coordinator, and only the coordinator. The bus is parked at church
-       and the service is starting; there is no coming back from here. */
-    sub="Your stop was never marked. Please "+ringCoordinator()+".";
+       and the service is starting; there is no coming back from here.
+
+       Through turnTo, which knows that, rather than an inline link of its
+       own. This panel was the last one still asking somebody to ring a
+       number written into a sentence while every other panel on the page
+       gave them a button — the same request, two treatments, on one screen. */
+    sub=turnTo("Your stop was never marked.");
+  } else if(live.mine==="silent"){
+    /* It set off and has not been heard from since.
+
+       Distinct from "No update yet" below, which can at least name the last
+       stop the bus reached. Here there is no last stop: nothing has ever
+       been marked on this run, so the only two facts are when it left and
+       that nothing has happened since. Both get said, and neither is dressed
+       up as progress. */
+    cls="live-warn";
+    head="No update since it left";
+    sub="Left church"+(live.startedAtWords? " at "+esc(live.startedAtWords) : "")+
+        ", and no stop has been marked since. Yours is timetabled "+
+        esc(live.scheduled)+". "+turnTo("Still waiting?");
   } else if(!live.lastStop){
     /* Running, and not a stop marked yet.
 
