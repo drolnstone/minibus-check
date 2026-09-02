@@ -236,12 +236,25 @@ Run it after any change to a sheet.
 **Which bus, which route.** The rotation swaps every calendar month — a month
 is four or five Sundays, so it never falls into step with a three or four
 driver rota and nobody stays in one bus. `BUS_ROTATION_ODD` in `Code.gs` sets
-the pairing for odd-numbered months; even months are the reverse. To overrule
-it, put a registration in *North bus* or *South bus* on the Rota, for that
-Sunday only. **A blank cell means the rotation decides**, which is why the app
-never writes into those columns itself — anything there is a human decision.
+the pairing for odd-numbered months; even months are the reverse. The *North bus* and *South bus*
+columns on the Rota are **filled in for you** as far ahead as the rota goes.
+Change one and it stays changed: the app **only ever writes into an empty
+cell**, so it will never undo a decision of yours. Past Sundays are never
+touched — what actually went out is recorded in Trip Events, not here. To put a
+Sunday back the way the rotation wants it, clear the cell and run *Set up /
+refresh rota*; to reset them all — after swapping `BUS_ROTATION_ODD` — use
+**Minibus → Rota → Rebuild the bus rotation (asks first)**.
 Seats live on the **Buses** tab and are PASSENGER seats, not counting the
 driver.
+
+**What people see.** The booking page says nothing about seats until three are
+left, then "3 seats left", then "Bus full". **Booking is never refused** — the
+app has never known who really travels, and a page is the wrong thing to turn
+somebody away; a full route tells them to say something instead. The driver's
+board reads "13 booked of 14", and if he takes the bus the rota did not name he
+is told so under that button, with what it costs in seats. It does not stop
+him: the check gate already stops a bus that should not run, so a driver
+reaching for the other one has a reason.
 
 **Never clear Trip Events rows by hand.** Use **Undo** in the driver app. A
 blanked row leaves the run's arithmetic reading a gap that was never there.
