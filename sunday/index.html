@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.34.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.38.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -215,6 +215,14 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .lede{color:var(--muted);margin:0 0 14px}
 
 /* ---------- route tabs ---------- */
+/* How full the bus is. Amber while there is room left to name, red only
+   when there is none — the same grammar the rest of the page uses, so a
+   colour never says more than the words do. */
+.tab-room{display:block;margin-top:2px;font-weight:700;color:var(--warn)}
+.tab-room.is-full{color:var(--stop)}
+.room-low{color:var(--warn)}
+.room-full{color:var(--stop)}
+.summary-full{margin-top:-6px;color:var(--muted)}
 .tabs{display:flex;gap:8px;margin:0 0 10px}
 .tab{flex:1;min-height:48px;padding:9px 8px;border-radius:var(--r);
   border:1px solid var(--hair);background:var(--card);color:var(--ink);
@@ -601,7 +609,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.34.0";
+var PAGE_VERSION = "v1.38.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this page's own
@@ -980,6 +988,7 @@ function load(again){
       var out=readJson(t);
       if(!out || out.ok!==true) throw new Error(out && out.error ? out.error : "unavailable");
       if(out.script) SCRIPT_VERSION = String(out.script);
+      if(out.seats) SEATS = out.seats;
       loadedOk = true;
       retryStop();
       applyBus(out);
@@ -1476,6 +1485,31 @@ function stopById(id){
   for(var i=0;i<STOPS.length;i++) if(STOPS[i].id===id) return STOPS[i];
   return null;
 }
+/* What the record says about how full each bus is. One entry per route:
+   { reg, seats, booked, left }. Empty until the first answer arrives, and
+   empty is a perfectly good answer — no bus resolved means no number, which
+   is always better than a number that is wrong. */
+var SEATS = {};
+
+/* How the room left is put to somebody.
+
+   Silence for as long as there is room, because a seat count on a bus with
+   nine spaces is noise, and this page is meant to say only what is needed.
+   It speaks at three, which is close enough to matter to whoever is deciding
+   whether to walk down.
+
+   "Seats left" counts BOOKINGS, not people. Somebody who never booked still
+   turns up, so this is not a promise of a seat — which is exactly why the
+   full message tells them to say something rather than to stay at home. */
+function seatsWords(rt){
+  var s = SEATS[rt];
+  if(!s || !s.seats) return "";                  /* no bus known: say nothing */
+  var left = s.seats - s.booked;
+  if(left > 3) return "";
+  if(left > 0) return left + (left===1 ? " seat left" : " seats left");
+  return "Bus full";
+}
+
 function seatsOn(rt){
   var n=0;
   STOPS.forEach(function(s){ if(s.route===rt) n+=(COUNTS[s.id]||0); });
@@ -1565,19 +1599,32 @@ function paint(){
   if(ROUTES.length>1){
     html+='<div class="tabs" role="tablist">';
     ROUTES.forEach(function(rt){
-      var n=seatsOn(rt);
+      var n=seatsOn(rt), room=seatsWords(rt);
       html+='<button class="tab'+(rt===route?' is-active':'')+'" type="button" role="tab" '+
             'aria-selected="'+(rt===route)+'" data-route="'+esc(rt)+'">'+esc(rt)+
-            '<small>'+(n? n+(n===1?' person':' people') : 'Nobody yet')+'</small></button>';
+            '<small>'+(n? n+(n===1?' person':' people') : 'Nobody yet')+
+            (room? '<b class="tab-room'+(/full/i.test(room)?' is-full':'')+'">'+esc(room)+'</b>' : '')+
+            '</small></button>';
     });
     html+='</div>';
   }
 
   var mine=STOPS.filter(function(s){ return s.route===route; });
   var active=activeOn(route), total=seatsOn(route);
+  var roomNow = seatsWords(route);
   html+='<p class="summary"><b>'+esc(route)+' Liverpool</b> · '+mine.length+' stops · '+
         (total? '<b>'+active+'</b> with people, <b>'+total+'</b> booked'
-              : 'nobody booked yet')+'</p>';
+              : 'nobody booked yet')+
+        (roomNow? ' · <b class="'+(/full/i.test(roomNow)?'room-full':'room-low')+'">'+
+                  esc(roomNow)+'</b>' : '')+'</p>';
+  /* Said once, under the line that carries the number, and only when it is
+     actually full. Booking still goes through — the app has never known who
+     really travels, and a page is the wrong thing to turn somebody away. */
+  if(/full/i.test(roomNow)){
+    html+='<p class="summary summary-full">Every seat is booked. You can still '+
+          'book — tell '+esc((COORDINATOR&&COORDINATOR.name)||"the bus coordinator")+
+          ' so a seat can be found for you.</p>';
+  }
 
   /* Stops used to lock the moment a booking existed, and there was a good
      reason for it. A tap on another kerb did not MOVE anything: the record
