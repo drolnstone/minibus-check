@@ -174,6 +174,7 @@ bus before, and any checks to skip or reword.
 | **Rota** | Who drives which route, which Sunday |
 | **Rota Requests** | Swaps and cover, pending your decision |
 | **Drivers** | Name, Role, Active, Primary order, PIN, Email, Route, Phone |
+| **Buses** | Registration, Seats for passengers, Active, Notes |
 | **Bus Stops** | Route, Stop ID, Time, Stop, Postcode, Active, Type |
 | **Bus Bookings** | Who booked which stop, this Sunday |
 | **Trip Events** | Every tap a driver makes. The record the whole live page rests on |
@@ -183,7 +184,7 @@ bus before, and any checks to skip or reword.
 - **Bus link for this Sunday** — the link to share
 - **Bookings for this Sunday**
 - **Checks** → Is everything working? · Who is carrying the load · Who is
-  tapping · Check the Drivers tab · Check time zone
+  tapping · **Which bus is on which route** · Check the Drivers tab · Check time zone
 - **Rota** → Set up / refresh rota · Refresh dropdowns · Add a Sunday · Extend
   further ahead · Check scheduled emails · Rebuild future Sundays
 - **Emails** → Test email · Weekly summary · Sample duty reminder · Duty
@@ -225,6 +226,22 @@ cannot write formatting to it and setup fails with *"This operation is not
 allowed on cells in typed columns."* Fix: select the tab, **Format → Convert to
 range**. Cosmetic writes are individually guarded now, so setup no longer stops
 dead — but the tab stays unformatted until you convert it.
+
+**Column headings are read by name on the Rota tab.** Rename one and the app
+stops and tells you which; it does not guess. Every other tab is still read by
+position, so a renamed column there would be read silently as the wrong one —
+which is why *Is everything working?* now checks the headings on all nine tabs.
+Run it after any change to a sheet.
+
+**Which bus, which route.** The rotation swaps every calendar month — a month
+is four or five Sundays, so it never falls into step with a three or four
+driver rota and nobody stays in one bus. `BUS_ROTATION_ODD` in `Code.gs` sets
+the pairing for odd-numbered months; even months are the reverse. To overrule
+it, put a registration in *North bus* or *South bus* on the Rota, for that
+Sunday only. **A blank cell means the rotation decides**, which is why the app
+never writes into those columns itself — anything there is a human decision.
+Seats live on the **Buses** tab and are PASSENGER seats, not counting the
+driver.
 
 **Never clear Trip Events rows by hand.** Use **Undo** in the driver app. A
 blanked row leaves the run's arithmetic reading a gap that was never there.
