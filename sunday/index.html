@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.38.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.40.3 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -39,25 +39,17 @@
   noindex above stays. It keeps the booking page out of search results and
   WhatsApp is not a search indexer.
 -->
-<!--
-  The home screen icon, on its own address and its own background.
+<!-- The home screen icon, on its own address and its own background.
 
-  Two things went wrong with the line that used to be here. It pointed at
-  ../icon-192.png, which resolves correctly from /sunday/ but climbs a level
-  too far from /sunday with no trailing slash, and it shared a file with the
-  driver app, so both apps installed under the same tile and neither could be
-  told from the other on a home screen.
+     Absolute, so no address the page is reached by can break it. A new
+     filename, because iOS decides this icon once, when the page is added, and
+     never looks again: a single missed fetch during a deploy leaves a letter
+     tile that no amount of reloading will replace. A name it has never seen
+     sidesteps that whole argument.
 
-  Absolute, so no address the page is reached by can break it. A new filename,
-  because iOS decides this icon once, when the page is added, and never looks
-  again: a single missed fetch during a deploy leaves a letter tile that no
-  amount of reloading will replace. A name it has never seen sidesteps that
-  whole argument.
-
-  Green rather than the driver app's navy. Same logo, different field: the
-  passenger app is the one the congregation installs, and it should not be
-  mistaken for the inspection app at a glance.
--->
+     Green rather than the driver app's navy. Same logo, different field: the
+     passenger app is the one the congregation installs, and it should not be
+     mistaken for the inspection app at a glance. -->
 <link rel="apple-touch-icon" sizes="180x180"
       href="https://drolnstone.github.io/minibus-check/icon-sunday-180.png">
 <!-- The tab icon. Without this the tab list shows a grey globe whatever the
@@ -382,13 +374,6 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
 /* The call button, shaped like the driver's.
 
-   It was two underlined words in the middle of a sentence. On the driver's
-   side the same call — ring the coordinator, now — is a target he can hit
-   with a thumb without reading anything, and this is the same moment: a
-   person at a kerb who has just learned the bus is not coming for them.
-   Same shape, same radius, same condensed uppercase, on purpose. One app to
-   the people who use both.
-
    The COLOUR is deliberately not the driver's. Red there means "this bus
    does not run", it is the only place in either app that it means anything,
    and spending it on a missed pickup would blunt it. This one takes the tone
@@ -599,27 +584,14 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 
 /* Which copy of this page a phone is actually running.
 
-   It had none, and the morning it mattered that was the whole of the
-   problem: the booking page was refusing every booking, and there was no way
-   to tell from the page, from the raw file or from anybody's phone whether
-   the file that had gone up was the file that was being served. The answer
-   took a check of the repository to find, and the answer was that the upload
-   had not landed at all.
-
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.38.0";
+var PAGE_VERSION = "v1.40.3";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this page's own
-   number below.
-
-   It is not expected to match. Code.gs changes less often than these pages
-   do, so it legitimately sits behind. What it answers is narrower and more
-   useful: after a deploy, is the script the copy that was just pasted? Saving
-   in the Apps Script editor changes nothing a phone can see until a new
-   version is deployed, and that is the one step with no other symptom. */
+   number below. */
 var SCRIPT_VERSION = "";
 
 var ENDPOINT = "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec";
@@ -709,19 +681,7 @@ function toast(msg){
 }
 
 /* A handle this browser makes up for itself. It is random and it says
-   nothing about who anybody is.
-
-   It used to BE the identity, and that was the fault. One handle per
-   browser meant one booking per browser: a family who booked on the laptop
-   and then opened this on a phone was a stranger to the record and booked
-   again. Two rows, two lots of seats, one family — and cancelling on the
-   phone left the laptop's seats standing on the driver's list where nobody
-   could see them to take them off. A warning at the foot of the page was
-   tried, which only told people the app was going to get it wrong.
-
-   It is kept for two smaller jobs: it still finds a booking made before
-   numbers existed, and it is what the record counts against when somebody
-   sits there trying numbers. */
+   nothing about who anybody is. */
 function deviceRef(){
   var k="bus.ref.v1", v="";
   try{ v=localStorage.getItem(k)||""; }catch(e){}
@@ -868,14 +828,7 @@ var DRIVER=null;
    stop list itself changes. In the life of this page it has not happened once.
 
    What does happen is a change of mind about coming at all, and that has its
-   own button.
-
-   There used to be a whole apparatus here for moving stop: a question naming
-   both stops, the Confirm button relabelling itself to Move here and then to
-   Yes, move, the ghost button becoming Keep my stop. All of it existed to
-   protect a mis-tap on something nobody was doing, on the one screen a
-   hundred people touch on a Sunday morning. The remedy for a mis-tap is Not
-   coming and book again, which is two taps and says plainly what it does. */
+   own button. */
 
 function dirty(){
   if(!chosen) return !!booked;                       /* deselected a real booking */
@@ -955,11 +908,7 @@ function applyBus(out){
    what starts the polling, and applyBus only runs on success — so a page
    opened at a bus stop with no signal came up, said "No signal just now",
    and then sat there completely inert. No poll, no gate, no retry. Turning
-   the signal back on changed nothing at all; only a manual reload did.
-
-   The message on that screen already promised "this page will show the bus
-   again as soon as your phone is back on the network". It was a promise the
-   code was not keeping. */
+   the signal back on changed nothing at all; only a manual reload did. */
 var loadedOk = false;
 
 /* The backstop. navigator.onLine and the "online" event are the fast signal
@@ -1014,8 +963,7 @@ function load(again){
          rather than a page. */
       if(offlineNow(err)){
         $("body").innerHTML='<div class="note"><b>No signal just now.</b><br>'+
-          'This page will show the bus again as soon as your phone is back on '+
-          'the network. A call still works without it.'+
+          'Will load once signal returns.'+
           '<br>'+callButton()+'</div>';
         retryStart();
         return;
@@ -1335,12 +1283,6 @@ function paintLive(){
   } else if(live.mine==="eta" && !live.lastStop){
     /* Away from church, and not a stop marked yet.
 
-       The timetable now carries a departure time, so the run has an honest
-       offset from the moment it pulls out — but an arrival time projected
-       from that alone, twenty-five minutes ahead of the event, is a guess
-       wearing the clothes of a fact. What is actually known is when it left
-       and whether that was late, and that is what gets said.
-
        The countdown starts when the bus has been somewhere. */
     head="On its way";
     sub="Left church"+(live.startedAtWords? " at "+esc(live.startedAtWords) : "")+
@@ -1389,13 +1331,6 @@ function paintLive(){
         esc(live.scheduled)+". "+turnTo("Still waiting?");
   } else if(!live.lastStop){
     /* Running, and not a stop marked yet.
-
-       This fell through to "No update yet", which was true of the ETA and
-       false of everything a passenger actually wanted to know. The first
-       Sunday two routes ran, people stood at kerbs from ten past ten with a
-       page telling them nothing had happened \u2014 when in fact the bus had
-       left church at ten and was on its way to them. The one fact they were
-       waiting for was the one fact the page was throwing away.
 
        No warning colour: a bus that has set off on time is good news. */
     head="On its way";
@@ -1583,13 +1518,7 @@ function paint(){
          the stops are right there and the button says what it is. */
       html+='<div class="note note-go"><b>You are booked.</b></div>';
     }
-    /* There used to be a warning here, and then a line at the foot, telling
-       anybody without a booking on this device that booking now would add a
-       SECOND seat if they had already booked somewhere else. It was true, and
-       it was the wrong answer to it: a page that cannot tell one person from
-       another, apologising in advance for what it was about to get wrong.
-
-       There is nothing to warn about now. A booking belongs to a number, the
+    /* There is nothing to warn about now. A booking belongs to a number, the
        number is asked for before a seat is taken, and a second device finds
        the first device's booking instead of adding to it. */
   }
@@ -1621,23 +1550,12 @@ function paint(){
      actually full. Booking still goes through — the app has never known who
      really travels, and a page is the wrong thing to turn somebody away. */
   if(/full/i.test(roomNow)){
-    html+='<p class="summary summary-full">Every seat is booked. You can still '+
-          'book — tell '+esc((COORDINATOR&&COORDINATOR.name)||"the bus coordinator")+
-          ' so a seat can be found for you.</p>';
+    html+='<p class="summary summary-full">Every seat is booked. Tell '+
+          esc((COORDINATOR&&COORDINATOR.name)||"the bus coordinator")+'.</p>';
   }
 
-  /* Stops used to lock the moment a booking existed, and there was a good
-     reason for it. A tap on another kerb did not MOVE anything: the record
-     knew this browser and not this person, so a second device tapping a stop
-     made a second booking, and refusing the tap was the only safe answer
-     available. The lock was there to protect the app from its own identity.
-
-     A booking belongs to a number now, so that tap moves the one row the
-     person holds. There is nothing left to protect and the lock goes.
-
-     A passenger still does not change kerb from one week to the next. This is
-     for the morning somebody is setting off from their sister's, and for the
-     mis-tap, which used to cost a withdrawal and a fresh booking. */
+  /* A booking belongs to a number now, so that tap moves the one row the
+     person holds. There is nothing left to protect and the lock goes. */
 
   /* After the cutoff a phone with no booking may still tap a stop \u2014 not to
      book it, which is shut, but to say that is the kerb it is standing at.
@@ -1661,13 +1579,6 @@ function paint(){
             '</span>'+
             /* A tick means done. Before the cutoff that is exactly right:
                the stop is booked, the job is finished.
-
-               After it, the same mark means something else entirely — "this
-               is the kerb I am standing at" — and it was still a tick. So a
-               watcher whose panel said THE BUS HAS GONE PAST was looking, an
-               inch below, at his own stop wearing a green tick. The screen
-               contradicted itself, and the more reassuring half was the one
-               that was wrong.
 
                A dot selects. A tick completes. */
             '<span class="tick'+(picking?" tick-watch":"")+'">'+
@@ -2190,15 +2101,6 @@ function send(payload, done){
 
     /* Everything else. A failure here does NOT mean nothing was written.
 
-       Apps Script answers a POST with a redirect to a second address, and the
-       booking is already saved by the time that redirect is issued. If the
-       phone then fails to follow it, which happens on a weak signal or when a
-       handset swaps between wifi and mobile mid-request, the fetch rejects
-       even though the row is on the sheet. The page used to announce that
-       nothing had been saved, and somebody reopening it later would find
-       their booking sitting there after all. Worse the other way round: they
-       might tap Confirm again, or give up and not travel.
-
        An HTML page from Google lands here too, by way of readJson, and
        belongs here: a sign-in screen or an error page served while a
        deployment settles says nothing about whether the row was written.
@@ -2241,11 +2143,7 @@ function verifySend(payload, done){
     });
 }
 
-/* Repaint from the answer we already have.
-
-   Both of these used to call load() and wait for the whole payload a second
-   time. The reply to the save already says what was saved and what every stop
-   now holds, so there is nothing left to ask for. */
+/* Repaint from the answer we already have. */
 function applySaved(out){
   if(out && out.counts) COUNTS=out.counts;
   booked = (out && out.mine && out.mine.stopId)
@@ -2550,12 +2448,7 @@ load();
 /* ---- offline shell -----------------------------------------------------
    Registered from this folder, so the worker takes charge of this page and
    nothing else. The driver app has its own at the site root and the two do
-   not touch: see the note at the top of sw.js in this folder.
-
-   What it buys is one thing, and it is the thing that matters most. A
-   passenger standing at a stop with one bar of signal used to get no page at
-   all. Now the page opens from the phone, and only where the bus has got to
-   needs the network. */
+   not touch: see the note at the top of sw.js in this folder. */
 if("serviceWorker" in navigator){
   /* Was this page already under a worker when it loaded? On a first ever
      visit it was not, and the worker's clients.claim() then fires
