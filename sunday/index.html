@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.40.3 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.41.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -587,7 +587,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.40.3";
+var PAGE_VERSION = "v1.41.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this page's own
@@ -615,7 +615,13 @@ var COORDINATOR = { name: "Bro Asim", phone: "07377634214" };
    for reading; the tel: link gets digits only, because a space in an href is
    the difference between a call and nothing happening. */
 /* 07377634214 is a string of digits. 07377 634214 is a phone number.
-   The driver's app has always broken it; this one never did. */
+
+   ONE of these, and it took an audit to notice there had been two. A second
+   prettyPhone lower down this file declared the same name, so it silently
+   replaced this one for every caller — including the coordinator's call
+   button, which is the number somebody rings when the bus has not come. The
+   two differed: the other split any eleven digits and joined them with a
+   non-breaking space. This one is the stricter and the one that was meant. */
 function prettyPhone(show){
   var p=String(show||"").replace(/[^0-9+]/g,"");
   return /^07\d{9}$/.test(p) ? p.slice(0,5)+" "+p.slice(5) : String(show||"");
@@ -753,12 +759,7 @@ function phoneOk(v){
   var d=phoneDigits(v);
   return (d.length===11 && d.charAt(0)==="0") ? d : "";
 }
-/* For reading back at somebody, in the shape they wrote it on a scrap of
-   paper: 07700 900123. */
-function prettyPhone(d){
-  d=String(d||"");
-  return d.length===11 ? d.slice(0,5)+"\u00A0"+d.slice(5) : d;
-}
+/* Reading a number back is prettyPhone, defined once, near the top. */
 
 /* ---- the stop somebody is watching without a booking --------------------
 
