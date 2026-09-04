@@ -432,14 +432,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .btn-ghost{background:var(--card);border-color:var(--hair);color:var(--ink)}
 .btn-stop{background:var(--stop);color:var(--stop-on);flex:1}
 .btn-wide{width:100%}
-/* End trip is the heaviest tap of the morning and the one made least often.
-   It used to run the full width of the bar, directly beneath the full-width
-   green Picked up button in the list above it — the two most consequential
-   taps on the screen, adjacent, on a moving vehicle. A thumb travelling to
-   Picked up and landing an inch low ended the run for every passenger on both
-   screens.
-
-   So it is short and pushed to one end, and the rest of the bar is left
+/* So it is short and pushed to one end, and the rest of the bar is left
    empty. A mis-tap now lands on nothing at all. This is deliberately not a
    confirmation box: a box whose answer is always Yes is read for about three
    Sundays and then tapped through by reflex, and it teaches a driver that
@@ -536,6 +529,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .due li .w{font-family:"IBM Plex Mono",monospace;font-size:13px;white-space:nowrap}
 @keyframes pulseWarn{0%,100%{box-shadow:0 0 0 0 rgba(178,107,0,0)}50%{box-shadow:0 0 0 5px rgba(178,107,0,.18)}}
 @keyframes pulseStop{0%,100%{box-shadow:0 0 0 0 rgba(168,35,27,0)}50%{box-shadow:0 0 0 6px rgba(168,35,27,.24)}}
+/* The route's bus for today. Steel rather than a warning colour: it is not a
+   caution, it is the answer to the question the screen is asking. */
+.chip.yours{background:var(--info-bg);color:var(--info-deep);border-color:var(--info-line)}
 .chip{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11px;
   letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:4px;margin-top:5px}
 .chip.soon{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
@@ -710,14 +706,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .pingate .pinbox{width:120px;margin-top:6px}
 .pingate.is-ok .pinbox{border-color:var(--pass)}
 /* The same panel, in a sheet of its own.
-
-   On the Stops and bookings screen it used to sit inside the trip strip,
-   above the Start trip buttons, with the caret dropped into it on the paint
-   where it first appeared. That worked and it read badly: a box among the
-   other boxes, asking a question the driver had to notice was a question,
-   on the one screen he is looking at with a bus running. As a sheet it is
-   unmistakably the thing being asked, and the screen behind it is plainly
-   waiting.
 
    Nothing else changed. Same markup, same checking, same rules about which
    taps it holds back. Only where it is drawn. */
@@ -907,12 +895,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
            truncate at half width, while a four digit PIN needs very little.
            The two boxes are the same height and their labels sit on one
            baseline, so it reads as one row rather than two things pushed
-           together.
-
-           The hints used to sit under each field. Side by side in narrow
-           columns they wrapped to three or four lines each and cost more
-           than the split saved, so there is one line under the row instead,
-           saying whichever thing is true at the time. -->
+           together. -->
       <div class="idrow" id="idRow">
         <div class="field idrow-name" id="pickField">
           <label for="driverPick">Driver name</label>
@@ -1113,6 +1096,21 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 
 <!-- How to put it on a home screen. Filled by howOpen, which picks the list
      that matches the phone doing the asking. -->
+<!-- Asked at both the places a bus gets chosen: the walkaround picker, and
+     the Start trip buttons for a driver who skipped the walkaround. One
+     sheet, one wording, so the two paths cannot drift apart. -->
+<div class="rota-modal" id="busModal" aria-hidden="true">
+  <div class="rota-sheet" role="dialog" aria-modal="true" aria-labelledby="busAskTitle">
+    <p class="eyebrow">Today\u2019s bus</p>
+    <h2 id="busAskTitle">Not the bus you were given</h2>
+    <div id="busAskBody"></div>
+    <div class="rota-modal-actions">
+      <button class="btn btn-ghost" id="busAskStay" type="button">Stay</button>
+      <button class="btn btn-main" id="busAskSwap" type="button">Take the other</button>
+    </div>
+  </div>
+</div>
+
 <div class="rota-modal how-modal" id="howModal" aria-hidden="true">
   <div class="rota-sheet" role="dialog" aria-modal="true" aria-labelledby="howTitle">
     <p class="eyebrow">This app</p>
@@ -1175,13 +1173,6 @@ var store = {
    cloned. The request itself therefore is not cancelled here, it is only
    stopped from being waited on, which is all the page actually needed. */
 /* Twelve seconds was too short for the one call that matters most.
-
-   The rota payload is the heaviest thing this app asks for: the driver
-   register, PIN hashes, open defects, the timetable and four weeks of rota
-   rows, and on a cold Apps Script container it can pass twelve seconds
-   honestly. So the timeout added in v1.14 was not protecting a driver from a
-   hung request, it was cutting off a working one, and Stops and bookings then
-   told him his phone had no timetable while he stood there on full 5G.
 
    Long by default. Short only where the call repeats anyway, so a slow poll
    is skipped rather than left overlapping the next one. */
@@ -1267,18 +1258,11 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.38.0";
+var APP_VERSION = "v1.40.3";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
-   number under the first screen.
-
-   It is not expected to match. Code.gs changes less often than this file
-   does, so it legitimately sits behind. What it answers is narrower: after a
-   deploy, is the script the copy that was just pasted? Saving in the Apps
-   Script editor changes nothing a phone can see until a new version is
-   deployed, and that is the one step in the whole release with no other
-   symptom when it is missed. */
+   number under the first screen. */
 var SCRIPT_VERSION = "";
 /* What the record says about each route's bus today: { reg, seats, booked }.
    Learned from the board, which this screen already polls. */
@@ -1304,6 +1288,67 @@ function busSeatsOf(reg){
    friction in front of a decision already made at nine in the morning helps
    nobody. What it does is tell him the one thing he can act on: whether the
    bus he is taking has enough seats for the people expecting one. */
+/* The bus the rota gives THIS driver today, or "" when there is no answer.
+
+   Needs both halves: which route he is on, which comes from his name and the
+   rota, and which bus that route has, which comes from the record. If either
+   is unknown the answer is nothing at all — an empty answer is always better
+   than a confident wrong one, and a coordinator who is not driving today
+   should be told nothing. */
+function myBusToday(){
+  var rt = myRouteToday();
+  if(!rt) return "";
+  var s = SEATS[rt];
+  return (s && s.reg) ? String(s.reg) : "";
+}
+
+/* rotaMyRoute, NOT rotaHomeRoute.
+
+   On duty, or named as cover, or nothing at all. Somebody checking a bus for
+   somebody else gets no tag and no question, which is right: the rota gave
+   him neither. */
+function myRouteToday(){ return rotaMyRoute() || ""; }
+
+/* Is this the bus he was given? Unknown counts as yes: nothing to warn about
+   when there is nothing to compare against. */
+function isMyBus(reg){
+  var want = myBusToday();
+  if(!want || !reg) return true;
+  return String(reg).toUpperCase() === want.toUpperCase();
+}
+
+/* The question, asked once, at whichever of the two moments a bus is being
+   chosen. It never refuses: one button takes the bus the rota gave him, the
+   other keeps the one he picked, and both of them proceed.
+
+   ask   the registration he has chosen
+   go    what to run once he has answered, with the registration he settled on
+*/
+var busAskGo = null;
+function busAskOpen(chosen, go){
+  var want = myBusToday(), rt = myRouteToday();
+
+  /* One line. The bus he chose is on the button he is about to press, and the
+     seat count is already on the screen behind this sheet, so neither is
+     repeated here. */
+  $("busAskBody").innerHTML =
+    '<p>The rota has <b>'+esc(want)+'</b> for '+esc(rt)+' today.</p>';
+  $("busAskStay").textContent = "Stay with "+chosen;
+  $("busAskSwap").textContent = "Take "+want;
+  busAskGo = go;
+  var box=$("busModal");
+  box.classList.add("is-on");
+  box.setAttribute("aria-hidden","false");
+}
+function busAskClose(){
+  var box=$("busModal");
+  box.classList.remove("is-on");
+  box.setAttribute("aria-hidden","true");
+}
+/* Whether to ask at all. No assignment known, or he has taken the one he was
+   given, and there is nothing to say. */
+function busAskNeeded(reg){ return !!myBusToday() && !isMyBus(reg); }
+
 function busMismatch(route, reg){
   var s = SEATS[route];
   if(!s || !s.reg || !reg) return "";
@@ -1461,13 +1506,6 @@ function buildFor(v){
    "Assistant Coordinator" is not a coordinator and no role can be widened by
    having another word bolted on to it.
 
-   Strictly wider than the exact test it replaces — everything that passed
-   before still passes, so nobody loses anything they had this morning. The
-   one thing that changes is a role spelled differently on the Drivers tab
-   from the way it is spelled in config.js. That used to drop the man to the
-   pre-drive check with nothing on any screen to say why, which is the worst
-   shape a failure can take: he cannot see it, and neither can you.
-
    One function rather than the same three lines written twice. They were
    identical, and identical is not the same as joined: edit one and the full
    inspection and Check another bus would quietly disagree about who runs the
@@ -1506,6 +1544,8 @@ function fetchLastMiles(cb){
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out = JSON.parse(t);
+      scriptSeen(out);
+      seatsSeen(out);
       if(out && out.ok && out.last){
         LASTMILES = out.last;
         lastMilesAt = Date.now();
@@ -1721,13 +1761,7 @@ function paintDash(){
   else { p.className="plate blank"; p.textContent="Fleet"; }
 
   var title, sub;
-  /* The strip sits above every screen, so with no vehicle picked it used to
-     say "Choose a vehicle to begin" on all of them — over "Who is driving?",
-     over the rota, over the stops list. It was reading one step ahead of the
-     man using it and telling him to do a thing the screen in front of him
-     does not offer.
-
-     The test was on the vehicle alone, never on which screen was showing,
+  /* The test was on the vehicle alone, never on which screen was showing,
      which is why it has been like this since the first version rather than
      having drifted. */
   if(!st.veh){
@@ -1802,9 +1836,7 @@ function goHome(){
   show("driver");
 }
 
-/* What the footer looked like last time it was painted.
-
-   OUTSIDE paintFoot, and that is the whole of the fix. These two were declared
+/* OUTSIDE paintFoot, and that is the whole of the fix. These two were declared
    inside it, so every call reset them to false and "" before the test that
    reads them — which made "has this just become ready" always true, and the
    transition test below no different from a bare state test. Continue took the
@@ -1825,23 +1857,17 @@ function paintFoot(){
   f.innerHTML=""; c.textContent="";
   /* Moving the eye on, when a step has just been finished.
 
-   Picking a name, keying a PIN, choosing a bus: each of these completes and
-   the screen stays exactly where it was, so the driver is left looking for
-   what changed. Choosing a bus was the worst of the three — the card takes a
-   border, the button at the far end of the screen goes from grey to dark, and
-   from where he is standing nothing happened at all.
+     The focus goes to the way on. It does not press it: this is a fork on the
+     first screen — the rota and the stops list are both live exits — and a
+     driver who came to check next Sunday's rota should not be thrown into a
+     vehicle check because he keyed a PIN out of habit.
 
-   The focus goes to the way on. It does not press it: this is a fork on the
-   first screen — the rota and the stops list are both live exits — and a
-   driver who came to check next Sunday's rota should not be thrown into a
-   vehicle check because he keyed a PIN out of habit.
+     preventScroll because the footer is fixed and already in view; without it
+     the page can jump for no reason.
 
-   preventScroll because the footer is fixed and already in view; without it
-   the page can jump for no reason.
-
-   lastReady and lastVehId, which decide whether this is a transition or just
-   another paint, are declared above paintFoot rather than here. See the note
-   there. */
+     lastReady and lastVehId, which decide whether this is a transition or
+     just another paint, are declared above paintFoot rather than here. See
+     the note there. */
 function goOnFocus(){
   var b=$("goOn");
   if(!b || b.classList.contains("is-off")) return;
@@ -1883,7 +1909,23 @@ function btn(label,cls,fn,dis,why){
   }
   if(st.screen==="vehicle"){
     btn("Back","btn-ghost",function(){ show("driver"); });
-    var goVeh = btn("Continue","btn-main",function(){ renderPrep(); show("prep"); }, !st.veh);
+    var goVeh = btn("Continue","btn-main",function(){
+      /* Asked here rather than on the tap: choosing a card is browsing, and
+         Continue is the moment he commits this bus to a walkaround. */
+      if(st.veh && busAskNeeded(st.veh.reg)){
+        busAskOpen(st.veh.reg, function(swapTo){
+          if(swapTo){
+            var v=null; VEHICLES.forEach(function(x){
+              if(String(x.reg).toUpperCase()===String(swapTo).toUpperCase()) v=x; });
+            if(v){ st.veh=v; st.res={}; st.miles=""; st.mileOk=false; st.stage=0;
+                   buildFor(v); renderVehicles(); paintDash(); }
+          }
+          renderPrep(); show("prep");
+        });
+        return;
+      }
+      renderPrep(); show("prep");
+    }, !st.veh);
     goVeh.id="goOn";
     if(!st.veh) c.textContent="Choose a vehicle";
     /* On the id, not on whether one is chosen, so swapping from one bus to
@@ -2041,7 +2083,15 @@ function renderVehicles(){
      called, by everybody, including himself. Use it whole. */
   $("hello").textContent = "Hello " + st.driver.trim();
   var box=$("vehList"); box.innerHTML="";
-  VEHICLES.forEach(function(v){
+  /* His bus at the top, so the obvious button is the right one. Only when
+     the record actually says which — otherwise the order is left alone
+     rather than shuffled for no reason. */
+  var want = myBusToday();
+  var list = VEHICLES.slice();
+  if(want) list.sort(function(a,b){
+    return (isMyBus(a.reg)?0:1) - (isMyBus(b.reg)?0:1);
+  });
+  list.forEach(function(v){
     var b=document.createElement("button");
     b.type="button";
     b.className="veh"+(st.veh && st.veh.id===v.id?" is-on":"");
@@ -2052,8 +2102,16 @@ function renderVehicles(){
       chip = '<span class="chip '+(ov?"over":"soon")+'">'+
              (ov?"Renewal overdue":"Renewal due soon")+'</span>';
     }
+    /* Said on the bus it belongs to, in the fewest words that are true: the
+       route, and that it is today's. Not "yours" — he may be covering, and
+       the rota gives a bus to a ROUTE, never to a man. */
+    var yours = "";
+    if(want && isMyBus(v.reg) && myRouteToday()){
+      yours = '<span class="chip yours">'+esc(myRouteToday())+' today</span>';
+    }
     b.innerHTML='<span class="veh-plate">'+esc(v.reg)+'</span>'+
-      '<span class="veh-txt"><b>'+esc(v.name)+'</b><span>'+esc(v.detail||"")+'</span>'+chip+'</span>';
+      '<span class="veh-txt"><b>'+esc(v.name)+'</b><span>'+esc(v.detail||"")+'</span>'+
+      yours+chip+'</span>';
     b.addEventListener("click",function(){
       st.veh=v; st.res={}; st.miles=""; st.mileOk=false; st.stage=0;
       buildFor(v); renderVehicles(); paintDash(); paintFoot();
@@ -2405,14 +2463,6 @@ function renderStage(){
       if(!next) return;
       /* Measure the header rather than guessing at it.
 
-         This was a flat 72px, but the sticky dash is taller than that once
-         the safe area, the plate and the progress bar are counted, and taller
-         again on a phone installed to the home screen. So the next card
-         landed UNDERNEATH the header: its name and its instruction were
-         hidden and the driver arrived looking straight at Fine and Defect
-         with nothing telling him what he was answering. Exactly the wrong
-         thing to hurry somebody past.
-
          Measured, plus room to breathe, so the title is the first thing in
          view and the instruction sits under it. */
       var dash=$("dash");
@@ -2497,15 +2547,7 @@ function sumHTML(rec){
 }
 function renderReview(){
   /* Pre-tick Needs fuel on a low tank, but only while the driver has not
-     answered yet. Once they have, their answer stands.
-
-     This used to push fuel on regardless, so a driver who tapped Nothing
-     needed and then stepped back into the check came back to both chips lit
-     and the screen saying two opposite things. It also overrode a perfectly
-     good answer: Nothing needed on a low tank is what a driver says when
-     they are going to fill it themselves on the way. The tank level reaches
-     the record and the Sunday summary either way, so nothing is lost by
-     believing them. */
+     answered yet. Once they have, their answer stands. */
   if(st.fuel!==null && st.fuel<=2 && !st.jobs.length) st.jobs.push("fuel");
   $("verdict").innerHTML = verdictHTML(level(), defectList());
   $("sumBox").innerHTML = sumHTML();
@@ -2794,13 +2836,7 @@ function swapKeyFor(key,who){ return swapPartner(key,who)?key:""; }
    Counts THEIR Sundays, not weeks. Searching a fixed 16 week window looked
    even handed and was not: North turns over every four Sundays and South
    every three, so a North driver was offered four dates and a South driver
-   six. Whoever you picked, you now see the same number of their Sundays.
-
-   A Sunday they are only covering is not theirs to trade away, and a Sunday
-   already covered cannot take a third person. But that test is per route.
-   It used to look at both, so a cover on North removed that Sunday from the
-   South driver's list as well, even though the South duty was untouched.
-   One cover was quietly wiping a Sunday off everybody. */
+   six. Whoever you picked, you now see the same number of their Sundays. */
 function rotaSundaysFor(name,wanted){
   var out=[], base=rotaBaseSunday(0), want=wanted||6, weeks=want*5+8;
   for(var i=0;i<weeks && out.length<want;i++){
@@ -2975,13 +3011,6 @@ function rotaFetch(fromDate,weeks,cb){
    read off the sheet, because a check waiting in the queue with no signal
    still counts: he did the work, and the network is not his doing.
 
-   It was held by driver and day rather than by vehicle, on the reasoning that
-   the likeliest reason to have no record is a coordinator inspecting on his
-   own phone while somebody else drives. That reasoning was sound while one
-   bus went out. It stopped being sound the day two did: a driver who checked
-   YS70 was then cleared to take NH56, because the question being asked was
-   "did you check something" rather than "was this bus checked".
-
    So the reg is compared now, and the coordinator case is answered properly
    instead, by asking the sheet as well. See checkVerdict below. */
 var CHKKEY = "fleet.lastcheck.v1";
@@ -2999,13 +3028,8 @@ function noteCheckDone(rec){
   }catch(e){}
 }
 
-/* What this phone's own record says about one bus.
-   ok      a check was signed today on this bus and it was not stopped
-   stopped a check was signed today on this bus and it stopped the bus
-   none    nothing on this phone today for this bus
-
-   Called with a reg. Called without one it answers for whatever this phone
-   last checked, which is what the screen wants before a bus has been picked. */
+/* Called with a reg. Called without one it answers for whatever this phone last
+   checked, which is what the screen wants before a bus has been picked. */
 function checkStanding(reg){
   var c=null;
   try{ c=JSON.parse(store.get(CHKKEY)||"null"); }catch(e){ c=null; }
@@ -3041,12 +3065,6 @@ var tripOthers={};
 
 /* Kept on the phone, not only in memory.
 
-   Without this there is a gap every Sunday morning: the screen paints from
-   what it already has, the board request is still in flight, and a driver
-   who taps Start in that second or two is warned about a bus the sheet was
-   about to say had been checked. He would learn to tap past the warning,
-   which is the habit this whole change exists to break.
-
    It also carries the answer through a screen close, a reload, and the walk
    out to the yard where the signal goes. An answer fetched at twenty past
    nine is still evidence at half past. */
@@ -3072,12 +3090,7 @@ function tripChecksFresh(){ return tripChecksDay===new Date().toDateString(); }
    Each is evidence a check HAPPENED. Neither is evidence one did not.
 
    So the newer of the two wins where both have something to say, and where
-   only one does, it is the one that counts.
-
-   ok       a check stands for this bus today, wherever it was signed
-   stopped  the standing check stopped this bus
-   none     asked both, and there is no check for this bus today
-   unasked  nothing on this phone, and the sheet has not been reached today */
+   only one does, it is the one that counts. */
 function checkVerdict(reg){
   var loc=checkStanding(reg);
   var rem=(tripChecksFresh() && reg && tripChecks[reg]) ? tripChecks[reg] : null;
@@ -3182,16 +3195,13 @@ function tripLoadState(){
 /* Every tap is stamped with the run it belongs to, at the moment it is made.
 
    It used not to be. The queue held bare events and tripFlush labelled the
-   whole batch with whatever trip.route happened to say when the send went
-   out — which is fine for one phone, one driver, one route, and that is every
+   whole batch with whatever trip.route happened to say when the send went out
+   — which is fine for one phone, one driver, one route, and that is every
    real Sunday. It is not fine on a phone that has just done North and is now
    starting South: any North tap still waiting would go up labelled South and
    land on the sheet under a route it never happened on. Rehearsing on one
-   phone is exactly how that gets discovered, and it looks like South
-   tracking misbehaving when nothing about South is wrong.
-
-   A tap belongs to the run it was made during. That is a fact at the moment
-   of the tap and nothing later should be able to change it. */
+   phone is exactly how that gets discovered, and it looks like South tracking
+   misbehaving when nothing about South is wrong. */
 function tripQueue(ev){
   if(ev.route  === undefined) ev.route  = trip.route || "";
   if(ev.trip   === undefined) ev.trip   = trip.id    || "";
@@ -3251,6 +3261,39 @@ function tripFlush(){
   });
 }
 
+/* One fix, at Start trip, on the start row only. Not a fix per tap: that
+   would be tracking the bus, which this app does not do and says it does not.
+
+   It answers one question. A bus can be inspected at the yard and then driven
+   somewhere else before anyone presses Start, or be on the road already when
+   somebody remembers to press it. The check says where the walkaround
+   happened; this says where the run began, and on a Sunday with no walkaround
+   it is the only thing that says anything at all.
+
+   It never holds anything up. The run starts on screen the moment he presses
+   the button; only the queued row waits, and the queue is built to wait. If
+   the phone refuses or takes too long, the reason goes in the cell where the
+   position would have been — a blank cell and a refused one are different
+   facts and should not look alike. */
+function tripGeoThen(done){
+  if(CFG.recordLocation === false || !navigator.geolocation){ done(null); return; }
+  var settled=false;
+  var finish=function(g){ if(settled) return; settled=true; done(g); };
+  try{
+    navigator.geolocation.getCurrentPosition(function(p){
+      var lat=p.coords.latitude, lng=p.coords.longitude;
+      var m=geoDistance(lat,lng);
+      finish({ lat:lat, lng:lng,
+               acc: Math.round(toYards(p.coords.accuracy||0)),
+               away: (m===null) ? null : Math.round(toYards(m)) });
+    }, function(e){
+      finish({ why: (e && e.code===1) ? "refused" : "not available" });
+    }, { enableHighAccuracy:true, maximumAge:30000, timeout:8000 });
+  }catch(err){ finish({ why:"not available" }); }
+  /* The backstop. A fix that never answers must not hold a row for ever. */
+  setTimeout(function(){ finish({ why:"no fix in time" }); }, 9000);
+}
+
 /* ---- is the bus moving ------------------------------------------------- */
 function tripWatchStart(){
   if(tripWatch!==null || !navigator.geolocation) return;
@@ -3278,9 +3321,6 @@ function tripWatchStop(){
    Only between Start trip and End trip. Always on would mean a lit screen on
    a dashboard at night and a flat phone by the end of a long run, and neither
    is worth it for a man who is not on a run.
-
-   It cannot beat him pressing the lock button himself. All it stops is the
-   automatic timeout, which is the thing that was actually in his way.
 
    The awkward part: the browser TAKES THE LOCK BACK every time the page goes
    out of sight, and never returns it. So it has to be asked for again on the
@@ -3335,13 +3375,6 @@ function wakeDrop(){
    driver out of the whole feature. The law is the driver's; this is a guard,
    not a gate. */
 /* Hysteresis, because one GPS sample is not a fact.
-
-   This was a bare test of the newest reading against 2.2 m/s — under five
-   miles an hour — re-run on every fix the watcher produced, which is about
-   one a second. Crawling in traffic, or pulling up to a kerb, the speed sits
-   either side of that line and every button on the screen went dead and live
-   again once a second. A driver cannot tap a button that is only there half
-   the time, and he has no way of knowing that is what is happening.
 
    So: it takes a few seconds above the line to call it moving, and a few
    seconds below to call it stopped again. Noise crosses the line; a bus
@@ -3399,12 +3432,6 @@ function tripSeesAll(){
 
 /* Who may WATCH a route that is not theirs. Read only, always: tapping is a
    separate question and tripMayTap alone answers it.
-
-   Watching used to be the coordinator's alone, and widening it is the reason
-   the feature is worth having — the men who cover for each other are the ones
-   who need to know whether the other bus is moving. A driver waiting to take
-   a second run, or one back from his own and wondering whether to go out
-   again, was shown a line naming whose turn it was and nothing else.
 
    Kept apart from tripSeesAll on purpose. Sharing that function would have
    handed every signed-in driver the right to tap ANY route during a
@@ -3466,13 +3493,7 @@ function tripStart(route, reg, anyway){
      What makes a check get done is that the alternative is a second
      deliberate tap, behind his PIN, landing on the sheet as an Unchecked run
      in his name, which somebody can ask him about on Monday. A locked button
-     leaves nothing to ask about.
-
-     What HAS changed is that the warning is now honest. It used to fire at
-     any driver whose own phone had no record, which included every walkaround
-     done by the coordinator, done on the tablet, or done before a reinstall,
-     so drivers learned it meant nothing and tapped past it. It now fires when
-     no check for this bus exists anywhere we can see. */
+     leaves nothing to ask about. */
   /* "unasked" is not "no".
 
      It means one thing only: this phone has nothing of its own for that bus
@@ -3515,8 +3536,13 @@ function tripStart(route, reg, anyway){
   trip.undone = {};
   tripUncheckedAsked="";
   tripSaveState();
-  tripQueue({ event:"start", stopId:"", at:trip.started,
-              reg: reg, unchecked: tripUnchecked });
+  /* Queued from inside the callback so the row carries the fix. Everything
+     below runs at once: he is not kept waiting on a satellite. */
+  var startedAt = trip.started, startedReg = reg, unchecked = tripUnchecked;
+  tripGeoThen(function(g){
+    tripQueue({ event:"start", stopId:"", at:startedAt,
+                reg: startedReg, unchecked: unchecked, geo: g });
+  });
   tripWatchStart();
   wakeAsk();
   tripPaint();
@@ -3713,18 +3739,12 @@ function rotaCountsRetry(){
 /* A request that arrives while one is in flight is remembered, not dropped.
 
    This is why the same bus could be started on both routes. Which bus another
-   route has out is only known from the board, and the board answers about
-   ONE route: asked about North it reports South and says nothing about North,
+   route has out is only known from the board, and the board answers about ONE
+   route: asked about North it reports South and says nothing about North,
    because North is the route you asked about. So the South tab must fetch
    again on the way in, or it is still holding the answer to a question about
    North — in which case nothing is out, nothing is filtered, and both buses
    are offered.
-
-   That refetch existed. It was being swallowed here: a poll fires every
-   thirty seconds and another lands right after a run starts, so the moment
-   most likely to be busy is exactly the moment a driver switches tabs after
-   starting. cb(false) went back, the screen repainted from stale data, and
-   nothing anywhere said the question had not been asked.
 
    Same fault, same shape, as the one on the passenger page that made
    switching to South show nothing at all. */
@@ -3829,10 +3849,6 @@ function rotaCountsFetch(route,cb){
 
 /* ---- what a board answer is allowed to change --------------------------
 
-   Everything, it used to be. The answer came back and was written straight
-   over the run, whole, on the reasoning that the sheet is the record and the
-   phone is only a view of it.
-
    That is true of a run that has settled and false of one in progress, and
    the first two-route Sunday showed which. A tap reaches the sheet a second
    or two after the thumb comes down, and the board is built from a ten second
@@ -3847,7 +3863,7 @@ function rotaCountsFetch(route,cb){
    only ever moves forwards, so an answer that knows LESS than this phone does
    is an answer that is out of date, and out of date loses. Nothing on this
    path can un-start a run, un-end one, or unmark a stop. Only the driver's
-   own Undo does that, and it says so on the record.  */
+   own Undo does that, and it says so on the record. */
 function tripMerge(route, tp){
   var srvId  = String(tp.trip||"");
   var today  = trip.started &&
@@ -4299,11 +4315,6 @@ function inPattern(list,me){
 
 /* The route a driver BELONGS to, on duty or not.
 
-   Bro Tunde is a South driver every week of the year, not only on the three
-   Sundays in four when his name is against it. Opening Stops and bookings on
-   an off Sunday used to put him on North, because the only question being
-   asked was "are you driving today", and the answer was no.
-
    Duty first, since a cover on the other route really is on that route today.
    Then the rotation he is named in. Then nothing, and the caller falls back
    to the first route on the timetable. */
@@ -4561,14 +4572,6 @@ function rotaPaintStops(){
   var nextStop=null, missed=[];
   /* showCounts, and that is the whole of the fix.
 
-     The button that aims the morning picked its stop out of rotaStopCounts
-     whatever those numbers were, while the list two lines below refused to
-     PRINT the same numbers unless they belonged to today. So a phone holding
-     an earlier Sunday's counts hid them, correctly, and then used them anyway
-     to point the biggest target on the screen at whichever kerb had been busy
-     the week before — with nothing on screen to say so, because the app had
-     already decided those numbers were not fit to show.
-
      A driver reaching for the one green button is entitled to assume it names
      the stop in front of him. If today's numbers are not in, we do not know
      which stop that is, and the honest thing is to say so and let him mark
@@ -4644,12 +4647,6 @@ function rotaPaintStops(){
              who did not book still turns up, with a dead phone or no phone or
              because nobody told them.
 
-             On a Sunday where nobody books at all, that was the whole screen:
-             a run going, a strip saying he was out, and not one button he
-             could press. No passenger would ever see "Picked up", and the
-             gone-past message could not fire either, because it needs a later
-             stop marked to prove anything.
-
              "Nobody there" is not offered. At a kerb nobody booked it states
              the default and records nothing worth having. The only fact here
              is that somebody WAS waiting. */
@@ -4699,7 +4696,15 @@ function rotaPaintStops(){
     b.addEventListener("click",function(){
       if(pinGateNeeded()){ pinGateFocus(); return; }
       var reg=this.getAttribute("data-tripstart");
-      tripStart(route, reg==="-" ? "" : reg);
+      var pick = (reg==="-") ? "" : reg;
+      /* The same question, at the other place a bus gets chosen. A driver who
+         skipped the walkaround reaches this button without ever having seen
+         the picker, so without this he would never be told at all. */
+      if(pick && busAskNeeded(pick)){
+        busAskOpen(pick, function(swapTo){ tripStart(route, swapTo || pick); });
+        return;
+      }
+      tripStart(route, pick);
     });
   });
   if($("tripStartAnyway")) $("tripStartAnyway").addEventListener("click",function(){
@@ -4742,13 +4747,7 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
 
   if(!t.started){
 
-    /* The instruction, then the two buttons, and nothing in between putting
-       a case. What used to sit here told the driver he could set off if
-       somebody else had checked the bus, which is an explanation of a
-       decision and reads as permission. The door stays; the invitation to
-       walk through it does not.
-
-       It names the bus now, because it can. And it says the same words
+    /* It names the bus now, because it can. And it says the same words
        whether the sheet answered "nobody has checked it" or could not be
        reached to be asked: the instruction is identical either way, and a
        line explaining that we could not ask is the permission sentence
@@ -4864,13 +4863,6 @@ function tripBusButtonsHtml(){
      the gate and the app should never put a registration on the record that
      the driver did not press.
 
-     That was the wrong end of the risk. Two men can be looking at the same
-     two buttons within a minute of each other, and the second one has no way
-     of knowing the first has already taken that bus: a mis-tap puts one
-     registration on two routes at once, and from then on the sheet says a bus
-     was in two places and neither run can be trusted. Which bus is out is a
-     fact the record already holds, so the honest thing is not to offer it.
-
      Swapping at the gate is still answerable, and by the man who can actually
      answer it: North corrects his own start. South cannot fix North's record
      by duplicating it.
@@ -4895,13 +4887,28 @@ function tripBusButtonsHtml(){
   /* The bus the rota named for this route today, so the one he is expected
      to take reads as the obvious button rather than whichever happened to be
      first in the register. */
+  /* Two things can claim the first button, and they rank in this order:
+
+     1. The bus he has just walked round IN THIS SESSION. A check is the
+        strongest statement about what he is about to drive, and the bus he
+        checked is the one that will not stop to ask him an extra question.
+        Only this session's own check counts — a check somebody else did this
+        morning is about their route, not his.
+     2. The bus the rota gave the route.
+
+     Most Sundays they are the same bus and nothing looks different. They only
+     disagree when he has deliberately taken the other one, and then his own
+     walkaround should win. */
+  var checkedReg = (st.veh && st.veh.reg) ? String(st.veh.reg) : "";
   var wantReg = (SEATS[route] && SEATS[route].reg) ? String(SEATS[route].reg) : "";
-  if(wantReg){
-    order = order.slice().sort(function(a,b){
-      var A=String(a.reg).toUpperCase()===wantReg.toUpperCase()?0:1;
-      var B=String(b.reg).toUpperCase()===wantReg.toUpperCase()?0:1;
-      return A-B;
-    });
+  var rank = function(v){
+    var r = String(v.reg||"").toUpperCase();
+    if(checkedReg && r===checkedReg.toUpperCase()) return 0;
+    if(wantReg    && r===wantReg.toUpperCase())    return 1;
+    return 2;
+  };
+  if(checkedReg || wantReg){
+    order = order.slice().sort(function(a,b){ return rank(a)-rank(b); });
   }
   order.forEach(function(v){
     shown++;
@@ -4956,14 +4963,6 @@ function tripBusButtonsHtml(){
    which taps it holds back and which screens it appears on. What changed is
    that on the running screen it is drawn in a sheet over everything rather
    than in the strip among the buttons.
-
-   The reason is what the strip is for. That panel is where a driver reads
-   the run: which bus, how far behind, which stop is next, who is waiting.
-   A question wedged into the middle of it is a question he can scroll past,
-   and did — the box was already being auto-focused precisely because it was
-   not being noticed. A sheet needs no such help. It is the only thing on the
-   screen, the screen behind it is plainly waiting, and there is nothing to
-   scroll past.
 
    The request form keeps its box inline. That form IS a sheet already, and a
    sheet over a sheet is two backdrops and a question about which one a tap
@@ -5113,13 +5112,6 @@ function tripPaint(){
   /* Which run, and where it is in its life. The bar carries End trip, so it
      has to follow all of that — not just whether something is live.
 
-     It used to watch live-ness alone, and that is how a finished run kept
-     End trip on screen. A board answer older than the end put trip.ended back
-     to zero, the bar was redrawn WITH the button because live had flipped
-     true, and when the truth arrived a moment later only the strip above was
-     repainted. Two views of one variable, refreshed on different triggers,
-     disagreeing on one screen. One signature now, and both move together.
-
      Still nothing on a tap: a tap changes none of these, so the bar is not
      torn down under a driver's thumb, which is the fault this test was
      narrowed to avoid in the first place. */
@@ -5128,13 +5120,6 @@ function tripPaint(){
 }
 
 /* One line, and nothing else touched.
-
-   A send finishing changes exactly one thing on this screen: how many taps
-   are still queued. It used to answer that by rebuilding the entire stop
-   list, a second or two after the tap that started it — which is to say,
-   right about when the driver's thumb was arriving at the next stop. The
-   button under his finger was destroyed and rebuilt mid-press, so no click
-   ever fired and the tap simply vanished. Tap, nothing, tap again.
 
    Nothing structural has changed by then: the tick went on at the moment he
    pressed. So write the one line and leave the DOM alone. */
@@ -5674,15 +5659,8 @@ function pinPaintHint(){
    sending a rota request both file a record under a driver's name, and
    neither asked.
 
-   That is not a theory. The app remembers the last driver's name and
-   pre-selects it, and the PIN clears on the way home, so a shared phone opens
-   with somebody else's name already in the box. Whoever picks it up could
-   start and tap a run that is then filed as his. The Monday question, you did
-   not tap Utting Avenue, rests on attribution that was not being enforced on
-   the one screen where it matters.
-
-   The rule, written down this time so the next thing added is held to it:
-   THE PIN CONFIRMS YOUR NAME ON A RECORD. It does not protect information.
+   The rule, written down this time so the next thing added is held to it: THE
+   PIN CONFIRMS YOUR NAME ON A RECORD. It does not protect information.
    Reading the rota and looking at stops write nothing and stay open. Anything
    that files a record under a name asks first.
 
@@ -5693,14 +5671,7 @@ function pinPaintHint(){
 function pinGateNeeded(){ return pinNeeded() && !st.pinOk; }
 
 /* The markup. Same field wherever it is drawn, so there is never a second
-   implementation to drift from this one.
-
-   Classes rather than ids now. It used to carry id="pinGateInput", which was
-   safe while only one could ever be on the page at a time. The PIN sheet
-   made that untrue: a driver with the request form open and the sheet over
-   it would have had two boxes with one id, and every lookup would silently
-   have found the first one and written the driver's answer into the wrong
-   one. Everything below reads the class and updates all of them. */
+   implementation to drift from this one. */
 /* bare drops the "Confirm it is you." lead. The sheet has that as its own
    heading, and printing it twice, two lines apart, is the app talking to
    itself. The request form keeps the lead, because there it is one panel
@@ -5716,14 +5687,7 @@ function pinGateHtml(why, bare){
          '</div>';
 }
 
-/* Every box on the page, wired once each.
-
-   The once matters now. Before the sheet, this was only ever called straight
-   after an innerHTML rebuild, so the element was new every time and there was
-   nothing to double up. The sheet outlives a repaint of the screen behind it,
-   and rotaPaintStops calls this on every thirty second poll, so without the
-   mark a driver would have collected one more input handler a minute and each
-   keystroke would have fired the PIN check as many times over. */
+/* Every box on the page, wired once each. */
 function pinGateWire(){
   Array.prototype.forEach.call(document.querySelectorAll(".js-pin-input"),function(i){
     if(i.getAttribute("data-wired")) return;
@@ -5888,16 +5852,8 @@ function showPinField(){
     o.textContent=d.name;
     sel.appendChild(o);
   });
-  /* Nobody is chosen when the app opens. Choose your name is always the
-     first thing.
-
-     It used to restore whoever used this phone last. On a phone that only one
-     person ever touches that saved a tap; on a shared one it put somebody
-     else's name in the box before the new user had looked at the screen, and
-     a name already filled in is exactly the casual mis-selection the PIN was
-     built to prevent. Since v1.18 nothing can be written under that name
-     without the PIN, so the pre-selection was buying a tap at the cost of the
-     one habit worth keeping: read the name, then key your own PIN. */
+  /* Nobody is chosen when the app opens. Choose your name is always the first
+     thing. */
   showPinField();
 })();
 
@@ -6117,6 +6073,15 @@ window.addEventListener("appinstalled",function(){
 
 if($("howLink")) $("howLink").addEventListener("click",function(){ howOpen(false); });
 if($("howDone")) $("howDone").addEventListener("click",howClose);
+$("busModal").addEventListener("click",function(e){ if(e.target===this) busAskClose(); });
+$("busAskStay").addEventListener("click",function(){
+  var go=busAskGo; busAskGo=null; busAskClose();
+  if(go) go(null);                       /* null: keep what he chose */
+});
+$("busAskSwap").addEventListener("click",function(){
+  var go=busAskGo, want=myBusToday(); busAskGo=null; busAskClose();
+  if(go) go(want);                       /* the rota's bus instead */
+});
 $("howModal").addEventListener("click",function(e){ if(e.target===this) howClose(); });
 howLinkSync();
 
