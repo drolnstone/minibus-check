@@ -177,7 +177,27 @@ bus before, and any checks to skip or reword.
 | **Buses** | Registration, Seats for passengers, Active, Notes |
 | **Bus Stops** | Route, Stop ID, Time, Stop, Postcode, Active, Type |
 | **Bus Bookings** | Who booked which stop, this Sunday |
-| **Trip Events** | Every tap a driver makes. The record the whole live page rests on |
+| **Trip Events** | Every tap a driver makes. The record the whole live page rests on. The start row also carries the rota's bus and where the run began |
+
+#### Adding your own column
+
+**Every tab finds its columns by reading the headings.** Insert a column of
+your own anywhere on any tab — a note, a headcount, a fare, a cost — and the
+app reads straight past it. Your column keeps its heading and its values
+through every refresh, and nothing the app writes will land in it.
+
+Two rules, and they are the only two:
+
+- **Do not rename or delete a heading the app uses.** If you do, the app stops
+  with a sentence naming the column, and **Minibus → Rota → Set up / refresh
+  rota** puts it back.
+- **Add a bus by adding a row, never by retyping a registration.** Every other
+  tab refers to a bus by its registration, so renaming one detaches it from its
+  own history.
+
+Column *order* is yours. Move them, insert between them, widen them. The app
+does not care where a column sits, only that its heading is still spelled the
+way it was.
 
 ### The Minibus menu
 
@@ -216,6 +236,104 @@ The `Type` column takes **Pickup**, **Arrival** or **Depart**.
   list, booking list and driver tap list. It exists so the run has an honest
   offset from the moment it pulls out, which is what lets the passenger page
   say **"On its way, three minutes behind"** before a single stop is marked.
+
+---
+
+## Two ways a driver starts a Sunday
+
+Both are normal. The app supports each fully and tells the driver the same
+things in both.
+
+### 1 · The walkaround
+
+Name → PIN → **"Which one today?"** → forty-five items → sign → later, *Stops
+and bookings* → Start trip.
+
+### 2 · Straight to driving
+
+Weather, running late, or the coordinator did the check already. He opens
+*Stops and bookings*, enters his PIN there, and presses Start trip. **No
+walkaround.** This is a supported path, not a workaround.
+
+### What he is told, on both
+
+| | Walkaround | Straight to driving |
+|---|---|---|
+| His bus listed **first** | on the picker | on the Start trip buttons |
+| Tagged **"North today"** | yes | — (the button names it) |
+| Asked if he picks another | **yes**, on Continue | **yes**, on Start trip |
+| Seats and bookings | on the stops screen | on the stops screen, and under the button |
+| Missing check | n/a | the existing "No check signed" gate, unchanged |
+
+**The question is one pop-up, shared by both paths**, so the wording cannot
+drift apart:
+
+> **Not the bus you were given**
+> The rota has **NH56 FWP** for North today.
+>
+> **[ Stay with YS70 PWE ]  [ Take NH56 FWP ]**
+
+One line and two buttons, whatever the numbers. The bus he chose is on the
+button he is about to press, and the seat count is already on the screen behind
+the sheet, so neither is repeated here.
+
+*Take* switches him and carries on. *Stay* keeps his choice and carries on.
+**Neither refuses.** On the walkaround path it asks at **Continue**, not on
+tapping a card — choosing a card is browsing; Continue is committing a bus to
+an inspection.
+
+### Who gets asked
+
+Only a driver **actually out today** — rostered, or named as cover. A driver
+doing a check as a favour, or a coordinator checking a bus in advance, gets no
+tag and no question: the rota gave him neither, so the app has nothing to tell
+him.
+
+### Where the answer comes from
+
+The day's buses ride on the **one call the app makes at launch** (last week's
+mileage). Before that they only arrived when *Stops and bookings* opened —
+which is *after* the picker, so the information was reaching the driver later
+than the moment it was for. That same change is why the script version now
+appears in the footer within a second of opening the app.
+
+### Which bus leads the Start trip buttons
+
+1. The bus he **walked round in this session** — a check is the strongest
+   statement about what he is about to drive, and it is the one that will not
+   stop to ask him about a missing check.
+2. Then the bus the **rota** gave the route.
+
+Most Sundays these are the same bus. They only disagree when he has
+deliberately taken the other one, and then his own walkaround wins.
+
+### Location
+
+Two fixes, both at the start of something, and nothing in between.
+
+**When a walkaround begins** — recorded on the Checks tab as *Where checked*,
+*Accuracy*, *Distance from base* and a note.
+
+**When Start trip is pressed** — recorded on the Trip Events **start row** as
+*Where started*, *Accuracy (yd)* and *Distance from base (yd)*. Not on every
+tap: a fix per stop would be tracking the bus, which this app does not do.
+
+The second one exists because the two are different facts. A bus can be
+inspected at the yard and driven somewhere else before anyone presses Start,
+or be on the road already when somebody remembers to. On a Sunday driven
+without a walkaround it is the only thing that places the bus anywhere.
+
+Neither ever blocks or delays. The run starts on screen the moment the button
+is pressed; only the queued row waits, and the queue is built to wait. If the
+phone refuses or takes too long, **the reason goes in the cell where the
+position would have been** — a blank cell and a refused one are different
+facts. Both are governed by `recordLocation` in `config.js`.
+
+### What the record shows about the bus
+
+The start row also carries **Rota bus** — the bus the rota gave that route —
+beside **Reg**, the bus that actually went. A row where the two differ is a
+deviation, visible without cross-referencing anything.
 
 ---
 
