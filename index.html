@@ -1258,7 +1258,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.40.3";
+var APP_VERSION = "v1.41.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -5668,7 +5668,20 @@ function pinPaintHint(){
    on a normal Sunday: the driver keys it before his check and it is still
    good when he presses Start trip a few minutes later. */
 
-function pinGateNeeded(){ return pinNeeded() && !st.pinOk; }
+/* A PIN is still wanted unless one was actually checked.
+
+   st.pinOk on its own is not enough. checkPin() sets it true whenever no PIN
+   is required — which is the case for the whole time the register is still
+   loading, because nobody is yet known to have a PIN. showPinField() takes
+   that back, but paintFoot only calls showPinField on the driver screen, so a
+   driver who moved on before the register landed carried an open gate into
+   every screen after it: Start trip, End trip, a rota request. Nothing was
+   refused and the sheet recorded that no PIN had been asked for.
+
+   pinState is the honest record of what happened: "" nothing, "ok" checked
+   and right, "offline" no signal to check with and let through on purpose.
+   Only the last two are an answer. */
+function pinGateNeeded(){ return pinNeeded() && !(st.pinOk && st.pinState); }
 
 /* The markup. Same field wherever it is drawn, so there is never a second
    implementation to drift from this one. */
@@ -5828,6 +5841,22 @@ function showPinField(){
   var need = pinNeeded();   /* same test as the gate, so they cannot diverge */
   $("pinField").style.display = need ? "" : "none";
   if(!need){ st.pin=""; st.pinOk=false; st.pinState=""; pinMsg=""; $("pin").value=""; }
+  /* A PIN that has just BECOME required.
+
+     pinNeeded() is false while the register is still loading, because nobody
+     is known to have a PIN yet, and checkPin() answers that by setting
+     pinOk true. On a phone with no cached register that true was never taken
+     back: the register arrived, the driver did have a PIN, and the gate had
+     already been opened for the whole session. Nothing was refused and the
+     sheet recorded that no PIN was asked for.
+
+     So: the moment a PIN is required and nothing has been checked at all,
+     pinOk goes back to false. pinState carries the three answers this can
+     have — "" nothing yet, "ok" checked and right, "offline" no signal to
+     check with, let through and recorded as such — and only the empty one
+     is reset. Testing for "not ok" instead would lock out every driver in a
+     blackspot, which is the fault this app exists to avoid. */
+  else if(!st.pinState){ st.pinOk = false; }
 
   /* One line under the row rather than one under each field, and one
      function writes it, so the gate and the caption cannot drift apart. */
