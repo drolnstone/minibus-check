@@ -284,10 +284,15 @@ an inspection.
 
 ### Who gets asked
 
-Only a driver **actually out today** — rostered, or named as cover. A driver
-doing a check as a favour, or a coordinator checking a bus in advance, gets no
-tag and no question: the rota gave him neither, so the app has nothing to tell
-him.
+**The tag is on both buses, on every phone.** Which route has which bus is a
+fact about the bus, not about the man holding it, so the driver on North, the
+driver on South and anyone doing a check in advance all read the same thing. It
+says "North today" on a Sunday and "North this Sunday" any other day.
+
+**The question is only for a driver actually out today** — rostered, or named as
+cover. A driver doing a check as a favour, or a coordinator checking a bus in
+advance, is asked nothing and has nothing sorted for him: the rota gave him no
+bus of his own, so there is nothing personal to say.
 
 ### Where the answer comes from
 
