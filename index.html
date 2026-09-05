@@ -1258,7 +1258,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.41.0";
+var APP_VERSION = "v1.42.1";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -1272,8 +1272,25 @@ var SEATS = {};
    can change them, and one list is the only way two cannot disagree. */
 var BUSES = [];
 function seatsSeen(out){
+  var had = JSON.stringify(SEATS) + "|" + JSON.stringify(BUSES);
   if(out && out.seats) SEATS = out.seats;
   if(out && out.buses && out.buses.length) BUSES = out.buses;
+  if(JSON.stringify(SEATS) + "|" + JSON.stringify(BUSES) === had) return;
+  /* This lands a second or two after launch, and the only repaint used to be
+     the mileage hint on the prep screen. Pick a name, tap Continue quickly,
+     and the vehicle picker had already been drawn without any of it. */
+  if(st.screen === "vehicle") safely(function(){ renderVehicles(); });
+
+  /* Written down the moment it arrives, rather than waiting for whatever else
+     happens to save next, so a phone opened cold in the yard already has it.
+
+     Guarded on there being a rota worth writing beside it: rotaSaveCache
+     writes the whole cache as one object, so calling it before the rota has
+     landed would put an EMPTY rota over a good cached one. rotaLoadCache
+     refuses an empty rota as well — the two guards are the same rule kept on
+     both sides of the door, because either one alone leaves the other caller
+     free to do it. */
+  if(rotaRows && rotaRows.length) safely(function(){ rotaSaveCache(); });
 }
 function busSeatsOf(reg){
   var want=String(reg||"").toUpperCase(), n=0;
@@ -1308,6 +1325,35 @@ function myBusToday(){
    somebody else gets no tag and no question, which is right: the rota gave
    him neither. */
 function myRouteToday(){ return rotaMyRoute() || ""; }
+
+/* Which routes this registration is down for on the coming Sunday.
+
+   A fact about the BUS, taken from the record, so it reads the same on every
+   phone: the driver on North, the driver on South, and the coordinator doing
+   a check on a Wednesday all get the same answer to a question that has one.
+   It used to be built from the man holding the phone, so it appeared on his
+   own bus only, and on nothing at all for anyone not rostered.
+
+   A list, not a name. Nothing here knows the words North or South — it walks
+   whatever routes the record returns, so a third route or a rename needs no
+   change. And if both routes are ever set to the same bus by hand, the card
+   says so, which puts the clash in front of the person about to drive it. */
+function busRoutesFor(reg){
+  var want = String(reg||"").trim().toUpperCase(), out = [];
+  if(!want) return out;
+  Object.keys(SEATS).forEach(function(rt){
+    var s = SEATS[rt];
+    if(s && s.reg && String(s.reg).trim().toUpperCase() === want) out.push(rt);
+  });
+  return out.sort();
+}
+
+/* The words on the chip, or "" when the record does not say. */
+function busTagFor(reg){
+  var on = busRoutesFor(reg);
+  if(!on.length) return "";
+  return on.join(" and ") + (sundayIsToday() ? " today" : " this Sunday");
+}
 
 /* Is this the bus he was given? Unknown counts as yes: nothing to warn about
    when there is nothing to compare against. */
@@ -1891,7 +1937,11 @@ function btn(label,cls,fn,dis,why){
   if(st.screen==="driver"){
     showPinField();          /* same cycle as the caption, so they cannot drift */
     var named = st.driver.trim().length>1;
-    var pinOk = !pinNeeded() || st.pinOk;
+    /* The gate function, not a second copy of its rule. This used to be
+       "!pinNeeded() || st.pinOk", which accepts a pinOk that was never
+       actually checked — the laxer half of the same fault pinGateNeeded was
+       tightened to close. */
+    var pinOk = !pinGateNeeded();
     var goDrv = btn("Continue","btn-main",function(){ renderVehicles(); show("vehicle"); }, !(named && pinOk),
         function(){ if(!named && $("driverPick")) $("driverPick").focus(); });
     goDrv.id="goOn";
@@ -2103,12 +2153,11 @@ function renderVehicles(){
              (ov?"Renewal overdue":"Renewal due soon")+'</span>';
     }
     /* Said on the bus it belongs to, in the fewest words that are true: the
-       route, and that it is today's. Not "yours" — he may be covering, and
-       the rota gives a bus to a ROUTE, never to a man. */
-    var yours = "";
-    if(want && isMyBus(v.reg) && myRouteToday()){
-      yours = '<span class="chip yours">'+esc(myRouteToday())+' today</span>';
-    }
+       route, and which Sunday. Not "yours" — he may be covering, and the rota
+       gives a bus to a ROUTE, never to a man. Which is why it now comes off
+       the record and sits on both buses rather than only on his. */
+    var tag = busTagFor(v.reg);
+    var yours = tag ? '<span class="chip yours">'+esc(tag)+'</span>' : "";
     b.innerHTML='<span class="veh-plate">'+esc(v.reg)+'</span>'+
       '<span class="veh-txt"><b>'+esc(v.name)+'</b><span>'+esc(v.detail||"")+'</span>'+
       yours+chip+'</span>';
@@ -2912,6 +2961,12 @@ function rotaSaveCache(){
       pattern: ROTA_PRIMARY_PATTERN,
       pattern2: ROTA_SECONDARY_PATTERN,
       register: REGISTER,
+      /* Which bus each route has, and how many seats it holds. The rota, the
+         register, the stops and the counts were all cached and this was not,
+         so a phone opened cold in the yard had no bus tag AND no "not the bus
+         you were given" question — the whole feature silently absent, with
+         nothing on screen to say why. */
+      seats: SEATS, buses: BUSES,
       stops: rotaStops, counts: rotaStopCounts, countsFor: rotaStopCountsFor,
       countsAt: rotaCountsAt
     }));
@@ -2920,11 +2975,17 @@ function rotaSaveCache(){
 function rotaLoadCache(){
   try{
     var c = JSON.parse(store.get(RKEY)||"null");
-    if(!c || !c.rows) return false;
+    /* An empty rows array is truthy, so a cache written before the rota had
+       landed used to overwrite a good one with nothing. Anything that can
+       call rotaSaveCache early — rotaCountsFetch from the stops screen, for
+       one — could quietly empty the rota on a phone that had it. */
+    if(!c || !c.rows || !c.rows.length) return false;
     rotaRows = c.rows;
     if(c.pattern && c.pattern.length) ROTA_PRIMARY_PATTERN = c.pattern.slice();
     if(c.pattern2 && c.pattern2.length) ROTA_SECONDARY_PATTERN = c.pattern2.slice();
     if(c.register && c.register.length) rotaSyncRegister(c.register);
+    if(c.seats && Object.keys(c.seats).length) SEATS = c.seats;
+    if(c.buses && c.buses.length) BUSES = c.buses;
     if(c.stops && c.stops.length) rotaStops = c.stops;
     if(c.counts){ rotaStopCounts = c.counts; rotaStopCountsFor = c.countsFor||""; }
     rotaCountsAt = Number(c.countsAt)||0;
@@ -3927,15 +3988,18 @@ function tripMerge(route, tp){
 
 /* How old the numbers on screen are. A driver setting off needs to know
    whether he is looking at the list or at a memory of the list. */
-/* "Yours today" is only true on a Sunday. rotaBaseSunday(0) is the COMING
-   Sunday, so on a Tuesday the badge was claiming a duty four days away was
-   happening now. */
-function yoursWhen(){
+/* Is the Sunday everything on screen refers to actually today?
+
+   rotaBaseSunday(0) is the COMING Sunday, so on a Tuesday it is four days
+   away and nothing should be saying "today". One function, called by both
+   the picker and the stops screen, so the two cannot disagree about what
+   day it is. */
+function sundayIsToday(){
   var d=rotaBaseSunday(0), now=new Date();
-  var sameDay = d.getFullYear()===now.getFullYear() &&
-                d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
-  return sameDay ? "Yours today" : "Yours this Sunday";
+  return d.getFullYear()===now.getFullYear() &&
+         d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
 }
+function yoursWhen(){ return sundayIsToday() ? "Yours today" : "Yours this Sunday"; }
 
 function rotaCountsWords(){
   if(!rotaCountsAt) return "Numbers as last received.";
@@ -4027,6 +4091,9 @@ document.addEventListener("visibilitychange",function(){
    {name, role} so an app open during a deploy does not glitch. */
 function rotaSyncRegister(list){
   if(!list || !list.length) return;
+  /* The sheet has answered. Until this is true, config.js is only a guess at
+     who has a PIN, and a guess of "nobody" is the dangerous direction. */
+  REGISTER_FROM_SHEET = true;
 
   var incoming = list.map(function(d){
     return (typeof d === "string")
@@ -4809,7 +4876,7 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
      marked before the bus got there — and the driver is the only person who
      can put it right. Said where he is already looking, only when it is
      genuinely impossible, and with the one thing to do about it. */
-  if(off!==null && off < -12){
+  if(off!==null && off < -MAX_EARLY){
     bits.push('<b class="trip-stopme">'+(-off)+' min ahead \u2014 check the last '+
               'stop you marked</b>');
   } else if(off!==null && off!==0){
@@ -5519,6 +5586,15 @@ window.addEventListener("online",function(){ fetchLastMiles(); if(loadQ().length
    hash of everybody's PIN with the rota, on an endpoint that asks for no
    token, which made the whole set readable by anyone holding the address out
    of config.js. All this app ever needed to know was whether to ask. */
+/* True once the Drivers tab itself has answered. Before that, REGISTER is
+   config.js's guess, and pinNeeded treats "we have not heard" as "ask". */
+var REGISTER_FROM_SHEET = false;
+
+/* The same twelve minutes the script bounds an offset by, as one name rather
+   than a bare -12 buried in a paint function. The server calls it
+   TRIP_MAX_EARLY; if that ever moves, this is the line that moves with it. */
+var MAX_EARLY = 12;
+
 var REGISTER = (CFG.drivers||[]).map(function(d){
   return (typeof d === "string")
     ? { name:d, role:"", hasPin:false }
@@ -5569,11 +5645,26 @@ function pinDiagnosis(){
   L.push(pinNeeded() ? "PIN box SHOULD be showing." : "PIN box is hidden, for the reason marked above.");
   return L.join("\n");
 }
+/* Whether this driver should be asked for a PIN.
+
+   The old test was "does the register say he has one". On a phone that has
+   never held the register — first use, no signal — the register is only
+   config.js, config.js names no PINs, and so nobody was asked for anything
+   all session. The record then said "no PIN was asked for", which is a false
+   statement about a Sunday when one should have been.
+
+   Not knowing is not the same as no. So: ask when the register says he has
+   one, and ask when the sheet has not answered yet. Asking costs nothing when
+   he has no PIN — the sheet replies valid for a name with no PIN against it,
+   and with no signal pinLetThrough sends him on and records that it could not
+   be checked. Both are honest answers; "no PIN was asked for" was not.
+
+   Guarded on a name being chosen, so the box does not appear above an empty
+   picker in the second before the register lands. */
 function pinNeeded(){
-  /* canHash is no longer part of this. The sheet does the checking, so the
-     browser's crypto is only wanted for the offline copy below, and a phone
-     without it should still be asked for a PIN rather than waved past. */
-  return !!CFG.requirePin && hasPin(st.driver);
+  if(!CFG.requirePin) return false;
+  if(!String(st.driver || "").trim()) return false;
+  return hasPin(st.driver) || !REGISTER_FROM_SHEET;
 }
 
 /* Checking a fingerprint needs the browser's crypto, which only exists on a
