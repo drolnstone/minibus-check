@@ -179,6 +179,24 @@ bus before, and any checks to skip or reword.
 | **Bus Bookings** | Who booked which stop, this Sunday |
 | **Trip Events** | Every tap a driver makes. The record the whole live page rests on. The start row also carries the rota's bus and where the run began |
 
+#### Dates and times on the sheet
+
+Every column that holds a **moment** shows the moment: `dd/mm/yyyy hh:mm:ss`.
+
+| Tab | Columns |
+|---|---|
+| Bus Bookings | Received |
+| Trip Events | Logged, Scheduled, Happened |
+| Checks | Received |
+| Defects | Received |
+| Rota Requests | Received, Decided on |
+
+Columns that hold a **day** — Sunday, Date — stay as a day.
+
+The format is set on the whole column, so rows already written are corrected
+and rows written afterwards inherit it. **Minibus → Rota → Set up / refresh
+rota** applies it whatever the tab's freshness stamp says.
+
 #### Adding your own column
 
 **Every tab finds its columns by reading the headings.** Insert a column of
@@ -211,6 +229,45 @@ way it was.
   reminders to the drivers
 - **Lock / unlock the sheet**
 - **Rehearsal** → Rehearse this Sunday · Stop rehearsing
+
+### Telling a driver his run is still open
+
+Once **every booked stop on his route is marked**, or the clock is **past his
+arrival at church**, the strip says so and the End trip button is marked with
+it:
+
+> **Every stop marked.** End trip when you are back.
+>
+> **Still running — due at church 11:00.** End trip when you are back.
+
+The same line appears on the **first screen he lands on** when he reopens the
+app, because the stops screen only helps a driver who is looking at it:
+
+> Your North run is still open. End trip when you are back.
+
+It stops the moment he taps End. Nothing is blocked and nothing is written on
+his behalf — it is a notice, and the run stays open until he ends it.
+
+### When next week opens
+
+The passenger page shows today's morning until the service is over, then rolls
+to next Sunday. A route counts as over when:
+
+- the driver taps **End trip** — always, and immediately; or
+- it is **30 minutes past that route's arrival at church** *and* nothing has
+  been heard from it for **30 minutes**; or
+- it is **12:00**, whatever anybody tapped.
+
+Both halves of the middle rule, never one. A bus running badly late is still
+tapping, so it is not silent and the page holds for it. A bus in a blackspot is
+silent but its taps are queued, and the clock has not reached its arrival, so
+the schedule half holds the page instead.
+
+A route **nobody booked** never holds the page. A route that **never set off**
+waits for 12:00, because the bus may be out with an app nobody opened.
+
+None of this writes an End tap. The record still shows the run was never ended,
+and the Sunday report still counts it.
 
 ### Running on its own
 
@@ -341,6 +398,22 @@ beside **Reg**, the bus that actually went. A row where the two differ is a
 deviation, visible without cross-referencing anything.
 
 ---
+
+### The PIN
+
+**Three wrong tries, then that name pauses for ten minutes.** The count is per
+driver, so one man pausing does not pause anybody else, and the right PIN
+clears it immediately.
+
+A driver with **no PIN on the Drivers tab** is let straight through, whatever
+he types, and always was. The pause only exists for names that have one.
+
+With no signal, a PIN cannot be checked at all: he is let through and the
+Checks tab records **"let through, no signal to check"** rather than that no
+PIN was asked for.
+
+If somebody is genuinely stuck, the ten minutes is the only way past it — there
+is no override. Ring them and read the PIN off the Drivers tab.
 
 ## Things that will bite you
 
