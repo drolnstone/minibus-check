@@ -721,6 +721,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .trip-note+.trip-note{margin-top:6px}
 .trip-wait{color:var(--warn);font-weight:600}
 .trip-stopme{color:var(--stop)}
+/* The End trip button once it is the only thing left. Same colour as the
+   notice above it, so the sentence and the button read as one instruction
+   rather than two things competing. */
+.btn-end.is-due{border-color:var(--stop);color:var(--stop);font-weight:700}
 /* A stop gone past without being marked. Amber where it sits in the list,
    rather than a card above repeating what the row already says. */
 .trip-missed-row{background:var(--warn-bg);box-shadow:inset 3px 0 0 var(--warn)}
@@ -1258,7 +1262,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.42.1";
+var APP_VERSION = "v1.43.2";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -2110,7 +2114,13 @@ function btn(label,cls,fn,dis,why){
        on tripMayTap; this one was not, which is why the stop taps correctly
        refused him and the heaviest button on the screen did not. */
     if(trip.started && !trip.ended && tripMayTap(trip.route)){
-      btn("End trip, arrived at church","btn-end",tripEnd).id="tripEnd";
+      /* The same fact on the button he is about to press, so the notice and
+         the target are not two separate things to notice. */
+      var endBtn = btn("End trip, arrived at church","btn-end",tripEnd);
+      endBtn.id="tripEnd";
+      if(!tripLeftToTap(trip.route) || (tripDueAt(trip.route) && tripNow() >= tripDueAt(trip.route))){
+        endBtn.classList.add("is-due");
+      }
       return;
     }
     btn("Done","btn-main",stopsClose);
@@ -3189,6 +3199,22 @@ var trip = { id:"", route:"", reg:"", started:0, ended:0, served:{}, undone:{},
    the run being driven, `tripSeen` is what is happening elsewhere. */
 var tripSeen = {};
 
+/* Everything the stops screen is drawn from, in one string, so a board answer
+   can be compared with the one before it and the screen repainted only when
+   something it shows has actually moved.
+
+   tripSeen is in here as well as trip, and it has to be. A phone with no run
+   of its own — anybody watching, which since this screen opened without a
+   name is most of them — has nothing in `trip` that ever changes. A signature
+   built from `trip` alone therefore said "nothing new" every thirty seconds
+   for the whole morning, and the strip sat on the first answer it was given
+   while the bus went round the route. */
+function tripSig(){
+  return JSON.stringify(rotaStopCounts)+"|"+rotaStopCountsFor+"|"+
+         JSON.stringify(trip.served)+"|"+trip.started+"|"+trip.ended+"|"+
+         JSON.stringify(tripSeen);
+}
+
 /* The state to draw a given route from: the live run when it is this one,
    otherwise whatever the board last said about it. */
 function tripView(route){
@@ -3491,15 +3517,26 @@ function tripSeesAll(){
   return roleAllowed(st.role);
 }
 
-/* Who may WATCH a route that is not theirs. Read only, always: tapping is a
+/* Who may WATCH. Anybody who opens the page. Read only, always: tapping is a
    separate question and tripMayTap alone answers it.
 
-   Kept apart from tripSeesAll on purpose. Sharing that function would have
-   handed every signed-in driver the right to tap ANY route during a
-   rehearsal, because tripMayTap leans on it for exactly that. Read and write
-   are not the same permission and must not be the same test. */
+   It asked for a name once, and the name was the whole problem. A driver who
+   is not out today, a steward at the door, a coordinator on a borrowed phone:
+   none of them sign in to read a noticeboard. They went straight to the link,
+   got the stop list with no live layer on it, and reasonably concluded the
+   thing was broken.
+
+   Nothing is given away by opening it. This screen prints the rostered
+   driver's name with nobody signed in, the link is already public, and where
+   the bus got to is what the passenger page tells any passenger. What it adds
+   is the two things that page cannot: both routes at once, and no booking
+   needed to see them.
+
+   Kept apart from tripSeesAll deliberately. Sharing that function would hand
+   the right to TAP any route to whoever this lets in. Read and write are not
+   the same permission and must not be the same test. */
 function tripMayWatch(){
-  return !!(st.driver||"").trim();
+  return true;
 }
 
 /* ---- fetching the route's own state ------------------------------------ */
@@ -3746,6 +3783,33 @@ function tripUndo(stop){
   tripPaint();
 }
 
+/* Stops on this route with people booked that he has not marked yet. Zero
+   means the kerbs are done and only church is left. */
+function tripLeftToTap(route){
+  var left = 0;
+  (rotaStops||[]).forEach(function(s){
+    if(s.route !== route || s.arrival) return;
+    if(!(Number(rotaStopCounts[s.id]) > 0)) return;
+    if(trip.served && trip.served[s.id]) return;
+    left++;
+  });
+  return left;
+}
+
+/* When this route is timetabled into church, today, in milliseconds. 0 when
+   the tab does not say — and nothing is claimed on a guess. */
+function tripDueAt(route){
+  var arr = (rotaStops||[]).filter(function(s){ return s.route===route && s.arrival; });
+  if(!arr.length) arr = (rotaStops||[]).filter(function(s){ return s.arrival; });
+  if(!arr.length) return 0;
+  var p = String(arr[0].time||"").split(":");
+  if(p.length < 2) return 0;
+  var d = new Date();
+  d.setHours(Number(p[0])||0, Number(p[1])||0, 0, 0);
+  var ms = d.getTime();
+  return isNaN(ms) ? 0 : ms;
+}
+
 function tripEnd(){
   if(!trip.started || trip.ended) return;
   /* The same test the button is drawn behind, repeated here because the
@@ -3828,8 +3892,7 @@ function rotaCountsFetch(route,cb){
       scriptSeen(out);
       seatsSeen(out);
 
-      var before=JSON.stringify(rotaStopCounts)+"|"+rotaStopCountsFor+"|"+
-                 JSON.stringify(trip.served)+"|"+trip.started+"|"+trip.ended;
+      var before=tripSig();
 
       /* A part of the answer may be missing now: the server fences each one
          off so a fault in one does not cost the screen. Keep what arrived
@@ -3889,13 +3952,21 @@ function rotaCountsFetch(route,cb){
                             offset:(tp.offset===null||tp.offset===undefined)
                                      ? null : Number(tp.offset) };
 
-        if(!busy || trip.route===route) tripMerge(route, tp);
+        /* Into tripSeen for everybody; into `trip` only for a phone with a
+           driver on it. `trip` is THIS PHONE'S run — the one it may end, the
+           one its queue belongs to — and a phone nobody has signed in on has
+           none. Without this the stops screen, which now opens with no name
+           at all, would adopt whichever run it was reading, save it, and hand
+           the next person to pick that phone up a morning that was never
+           his. */
+        if((!busy || trip.route===route) && (st.driver||"").trim()){
+          tripMerge(route, tp);
+        }
       }
 
       rotaSaveCache();
 
-      var after=JSON.stringify(rotaStopCounts)+"|"+rotaStopCountsFor+"|"+
-                JSON.stringify(trip.served)+"|"+trip.started+"|"+trip.ended;
+      var after=tripSig();
       if(cb) cb(after!==before);
       rotaCountsRetry();
     })
@@ -4894,6 +4965,33 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
      screen to key the thing they were waiting for. */
   if(mayTap && pinGateNeeded()) pinWhy="Every stop you tap is recorded in your name.";
 
+  /* Nothing left but End trip.
+
+     A driver taps his last kerb and the app has, until now, said nothing at
+     all about the one thing still outstanding. On 6 September North marked
+     three stops, drove home, and never tapped End: the passenger page held a
+     finished morning for every stop on both routes, and next week could not
+     be booked, because the app was waiting for a message from somebody who
+     had put the keys back.
+
+     Said when either is true — every booked stop marked, or the clock is past
+     his arrival at church — because he can reach church with a stop unmarked
+     and he can finish early. Two wordings, because "one thing left" and "you
+     are overdue" are different facts and reading the wrong one is worse than
+     reading neither. */
+  if(mayTap){
+    var left = tripLeftToTap(route);
+    var due  = tripDueAt(route);
+    var overdue = due && tripNow() >= due;
+    if(!left || overdue){
+      h+='<p class="trip-note"><b class="trip-stopme">'+
+         (overdue
+           ? 'Still running — due at church '+tripClock(due)+'.'
+           : 'Every stop marked.')+
+         ' End trip when you are back.</b></p>';
+    }
+  }
+
   /* Always rendered, empty when there is nothing waiting, so the line exists
      to be written into later. It is the only thing on this screen a finished
      send changes, and having it always present is what lets the send stop
@@ -5491,6 +5589,19 @@ function paintRotaHint(){
      very Sunday they were driving the app told them somebody else was. */
   var north=(row.actual||row.primary||"").trim();
   var south=(row.actual2||row.primary2||rotaSeedSecondary(d)||"").trim();
+
+  /* His own run, still open, said on the FIRST screen he lands on.
+
+     The strip on the stops screen only helps a driver who is looking at the
+     stops screen. A driver who closed the app at his last kerb and opens it
+     again in the church car park was told nothing at all, which is exactly
+     the morning that produced this. */
+  if(trip.started && !trip.ended && tripMayTap(trip.route)){
+    el.textContent = "Your "+trip.route+" run is still open. End trip when you are back.";
+    el.style.display="";
+    return;
+  }
+
   if(!north && !south) return;
   if(sameName(north,me) || sameName(south,me)) return;
 
@@ -5893,8 +6004,14 @@ function checkPin(){
           if(canHash()) sha256Hex(tried).then(function(h){ pinRemember(st.driver, h); },
                                               function(){});
         } else {
+          /* "1 more tries" is the sort of thing a driver notices and nobody
+             fixes. Singular when it is one, and at three tries it is a
+             sentence he will actually see. */
           pinSay("That PIN is not right." +
-                 (out.left > 0 ? " " + out.left + " more tries before it pauses." : ""));
+                 (out.left > 0
+                   ? " " + out.left + (out.left === 1 ? " more try" : " more tries") +
+                     " before it pauses."
+                   : ""));
         }
         paintFoot();
       })
