@@ -1262,7 +1262,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.43.2";
+var APP_VERSION = "v1.43.3";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -3269,13 +3269,32 @@ function tripSaveState(){
                                     ended:trip.ended, served:trip.served,
                                     undone:trip.undone }));
 }
+/* Restored only when it is TODAY'S run.
+
+   There was no date test here at all, so a phone that had driven on Sunday
+   opened on Monday still holding Sunday. The stops screen paints from storage
+   before the board can answer, so at seven in the morning it drew the driver
+   finishing at 11:42 the day before, his stops green and stamped PICKED UP.
+   Every part downstream was working correctly on a fact that was a day old.
+
+   Nothing is lost by dropping it. The sheet is the record; the queue is
+   separate and stamps each tap with the run it belongs to; and a run that is
+   genuinely still out is re-adopted off the board a second after the screen
+   opens. Yesterday's copy is cleared rather than merely ignored, so it cannot
+   come back on the next cold open. */
 function tripLoadState(){
   try{
     var s=JSON.parse(store.get(TSKEY)||"null");
-    if(s && s.id){ trip.id=s.id; trip.route=s.route||""; trip.reg=s.reg||"";
-                   trip.started=s.started||0;
-                   trip.ended=s.ended||0; trip.served=s.served||{};
-                   trip.undone=s.undone||{}; }
+    if(!s || !s.id) return;
+    var began = Number(s.started)||0;
+    if(!began || new Date(began).toDateString()!==new Date().toDateString()){
+      store.del(TSKEY);
+      return;
+    }
+    trip.id=s.id; trip.route=s.route||""; trip.reg=s.reg||"";
+    trip.started=began;
+    trip.ended=s.ended||0; trip.served=s.served||{};
+    trip.undone=s.undone||{};
   }catch(e){}
 }
 
