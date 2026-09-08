@@ -769,6 +769,14 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .stop-time{flex:0 0 52px;font-weight:700;font-variant-numeric:tabular-nums}
 .stop-name{flex:1}
 .stop-pc{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+/* The same badge, on the one stop he is driving to, when the sheet knows the
+   address. Outlined rather than coloured in: it is a way out of the app, not
+   the action of the screen, and the green button stays the loudest thing. */
+.stop-go{display:inline-block;margin-top:4px;padding:6px 10px;min-height:32px;
+  border:1.5px solid var(--steel);border-radius:8px;background:var(--card);
+  color:var(--accent-ink);font-size:12px;font-weight:700;letter-spacing:.04em;
+  text-decoration:none}
+.stop-go:active{transform:scale(.98)}
 .stop-arrival{color:var(--muted)}
 .stop-n{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-top:3px;
   text-transform:uppercase;letter-spacing:.05em}
@@ -1262,7 +1270,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.43.3";
+var APP_VERSION = "v1.44.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -3558,6 +3566,28 @@ function tripMayWatch(){
   return true;
 }
 
+/* ---- opening a stop in a map ------------------------------------------
+   Whatever map app the phone has, rather than the one we happen to prefer.
+
+   Android is handed a geo: link, which the handset itself answers: it offers
+   Google Maps, Waze, or whatever else is installed and lets the driver pick.
+   iOS has no such chooser — a link opens one app and that is the end of it —
+   so it gets a plain Maps address, which opens the app if it is installed and
+   the browser if it is not.
+
+   An ADDRESS, not coordinates. Coordinates would mean somebody standing at
+   seventeen kerbs with a phone, and this is volunteer work done from a desk.
+   An address can be typed from the spreadsheet, reads correctly to a human
+   looking at the tab, and is what a driver would have been told over the
+   phone anyway. */
+function mapHref(where){
+  var q = encodeURIComponent(String(where||"").trim());
+  if(!q) return "";
+  return /Android/i.test(navigator.userAgent||"")
+    ? "geo:0,0?q="+q
+    : "https://www.google.com/maps/search/?api=1&query="+q;
+}
+
 /* ---- fetching the route's own state ------------------------------------ */
 /* Kept as a name because several places ask for one route in particular, but
    it is the same single request underneath. Nothing asks twice any more. */
@@ -4771,7 +4801,22 @@ function rotaPaintStops(){
             '<span class="stop-time">'+esc(s.time)+'</span>'+
             '<span class="stop-name">'+esc(s.stop)+
               (s.arrival?' <b>(arrive)</b>':'')+
-              (s.postcode?'<span class="stop-pc">'+esc(s.postcode)+'</span>':'')+
+              /* The postcode badge becomes the way into a map, but only on
+                 the stop he is actually driving to and only when the sheet
+                 has an address for it. Every other row stays plain text.
+
+                 nextStop already carries both halves of that test: it is set
+                 only during his own run, and only for a stop somebody has
+                 booked. A stop with nobody waiting is not somewhere he needs
+                 directions to. */
+              (s.postcode
+                ? ((nextStop && s.id===nextStop.id && s.where)
+                    ? '<a class="stop-go" href="'+esc(mapHref(s.where))+'" '+
+                      'target="_blank" rel="noopener" '+
+                      'aria-label="Open '+esc(s.stop)+' in maps">'+
+                      esc(s.postcode)+' \u2197</a>'
+                    : '<span class="stop-pc">'+esc(s.postcode)+'</span>')
+                : '')+
               (n===null?'':'<span class="stop-n'+(n?' has':'')+'">'+
                  (n? (n+(n===1?' person':' people')+' booked') : 'Nobody booked')+'</span>')+
               (done?'<span class="trip-at">'+
