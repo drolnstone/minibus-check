@@ -43,7 +43,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.42.1";
+var SCRIPT_VERSION = "v1.46.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -88,7 +88,12 @@ var BUS_PAGE_URL = "https://drolnstone.github.io/minibus-check/sunday/";
    It deliberately does not invent an end time for a trip nobody ended. A
    three and a half hour journey on the record is worse than a blank, so Who
    is tapping goes on saying started, never ended. */
-var RUN_BACKSTOP_HOUR = 14;
+/* The hour the page gives up waiting for an End tap and rolls to next week
+   regardless. Both routes are timetabled into church at 11:00, so this is an
+   hour's grace on the whole morning. It used to be 14:00, which meant a
+   forgotten End tap left every passenger reading a finished morning, and next
+   week unbookable, until the middle of the afternoon. */
+var RUN_BACKSTOP_HOUR = 12;
 var RUN_BACKSTOP_MIN  = 0;
 
 var BOOKING_CUTOFF_DAY = 0;
@@ -354,6 +359,12 @@ function ensureRequestColumns(sh) {
     sh.setColumnWidth(at, 130);
     did = true;
   });
+  /* Received and Decided on are moments, and a moment shown as a bare date is
+     half a record. */
+  try {
+    var qc = requestCols(sh);
+    stampTimeFormats(sh, qc, ["received", "decidedOn"]);
+  } catch (err) { /* a heading missing is the health check's problem, not this */ }
   return did;
 }
 
@@ -882,6 +893,10 @@ function handleCheck(c) {
     var defs = sheet(ss, DEFECTS_SHEET, DEFECT_HEADERS);
     ensureCols(defs, DEFECT_HEADERS);
     var dfc = colsHard(defs, DEFECTS_SHEET);
+    if (!structFresh("defectfmt")) {
+      stampTimeFormats(defs, dfc, ["received"]);
+      structDone("defectfmt");
+    }
     var dfw = Math.max(defs.getLastColumn(), DEFECT_HEADERS.length);
     c.defects.forEach(function (d) {
       var drow = [];
@@ -1020,6 +1035,7 @@ function ensureChecksColumns(sh) {
   /* Anything missing goes in beside its neighbour, not on the end and never
      over the top of a column somebody added. */
   ensureCols(sh, CHECK_HEADERS);
+  stampTimeFormats(sh, colsSoft(sh, CHECKS_SHEET), ["received"]);
 
   structDone("checks");
 }
@@ -1440,15 +1456,21 @@ function southDriver(d, pattern) {
  * and to North if even that is unset.
  */
 function routeColumns(ss, rota, rRow, driver) {
-  var NORTH = { scheduled: 2, cover: 3 };
-  var SOUTH = { scheduled: 5, cover: 6 };
+  /* By heading. These were fixed numbers — South at 5 and 6 — which were the
+     right numbers only until the two bus columns were inserted. After that,
+     column 5 is Status and column 6 is the scheduled South driver, so a South
+     cover was written over the person it was covering for. */
+  var rc = rotaCols(rota);
+  var NORTH = { scheduled: rc.north, cover: rc.northCover, route: "North" };
+  var SOUTH = { scheduled: rc.south, cover: rc.southCover, route: "South" };
   var who = String(driver || "").trim();
   if (!who) return NORTH;
 
   try {
-    var vals = rota.getRange(rRow, 1, 1, 6).getValues()[0];
-    if (String(vals[4] || "").trim() === who || String(vals[5] || "").trim() === who) return SOUTH;
-    if (String(vals[1] || "").trim() === who || String(vals[2] || "").trim() === who) return NORTH;
+    var row = rota.getRange(rRow, 1, 1, rota.getLastColumn()).getValues()[0];
+    var at  = function (col) { return String(at1(row, col) || "").trim(); };
+    if (at(rc.south) === who || at(rc.southCover) === who) return SOUTH;
+    if (at(rc.north) === who || at(rc.northCover) === who) return NORTH;
   } catch (err) {}
 
   var found = null;
@@ -1474,14 +1496,21 @@ function applySwap(ss, rota, keyA, driverA, keyB, driverB) {
   var rowA = findRotaRow(rota, keyA) || appendRotaRow(ss, rota, keyToDate(keyA));
   var rowB = findRotaRow(rota, keyB) || appendRotaRow(ss, rota, keyToDate(keyB));
 
-  var a = rota.getRange(rowA, 1, 1, 6).getValues()[0];
-  var b = rota.getRange(rowB, 1, 1, 6).getValues()[0];
+  /* Every column on this tab is found by heading. The four fixed numbers that
+     used to be here were correct only for the layout that existed before the
+     bus columns were inserted; afterwards a South driver could never be
+     matched at all, so no South swap could be approved. */
+  var rc = rotaCols(rota);
+  var wide = rota.getLastColumn();
+  var a = rota.getRange(rowA, 1, 1, wide).getValues()[0];
+  var b = rota.getRange(rowB, 1, 1, wide).getValues()[0];
 
   function slotOf(vals, who) {
-    if (String(vals[1] || "").trim() === who) return { sched: 2, cover: 3, covering: false };
-    if (String(vals[4] || "").trim() === who) return { sched: 5, cover: 6, covering: false };
-    if (String(vals[2] || "").trim() === who) return { sched: 2, cover: 3, covering: true };
-    if (String(vals[5] || "").trim() === who) return { sched: 5, cover: 6, covering: true };
+    var at = function (col) { return String(at1(vals, col) || "").trim(); };
+    if (at(rc.north)      === who) return { sched: rc.north, cover: rc.northCover, covering: false, route: "North" };
+    if (at(rc.south)      === who) return { sched: rc.south, cover: rc.southCover, covering: false, route: "South" };
+    if (at(rc.northCover) === who) return { sched: rc.north, cover: rc.northCover, covering: true,  route: "North" };
+    if (at(rc.southCover) === who) return { sched: rc.south, cover: rc.southCover, covering: true,  route: "South" };
     return null;
   }
 
@@ -1500,8 +1529,8 @@ function applySwap(ss, rota, keyA, driverA, keyB, driverB) {
   /* A protected Sunday is not available to trade. Checked here as well as
      in the app, because the app can be an old cached copy and this is the
      only place that actually moves anybody. */
-  var pA = parseProtected(String(rota.getRange(rowA, 7).getValue() || ""));
-  var pB = parseProtected(String(rota.getRange(rowB, 7).getValue() || ""));
+  var pA = parseProtected(String(rota.getRange(rowA, rc.notes).getValue() || ""));
+  var pB = parseProtected(String(rota.getRange(rowB, rc.notes).getValue() || ""));
   if (pA.on) return keyA + " is a protected Sunday" + (pA.reason ? " (" + pA.reason + ")" : "") + ", so it cannot be swapped.";
   if (pB.on) return keyB + " is a protected Sunday" + (pB.reason ? " (" + pB.reason + ")" : "") + ", so it cannot be swapped.";
 
@@ -1514,15 +1543,17 @@ function applySwap(ss, rota, keyA, driverA, keyB, driverB) {
 
   rota.getRange(rowA, sA.sched).setValue(driverB);
   rota.getRange(rowB, sB.sched).setValue(driverA);
-  rota.getRange(rowA, 4).setValue("Confirmed");
-  rota.getRange(rowB, 4).setValue("Confirmed");
+  rota.getRange(rowA, rc.status).setValue("Confirmed");
+  rota.getRange(rowB, rc.status).setValue("Confirmed");
 
   appendNote(rota, rowA, "Swapped: " + driverB + " in for " + driverA + " (with " + keyB + ")");
   appendNote(rota, rowB, "Swapped: " + driverA + " in for " + driverB + " (with " + keyA + ")");
   stamp(rota, rowB, "Approved swap");
 
-  notifyDutyChange(ss, keyA, driverA, driverB, sA.sched === 5 ? "South Liverpool" : "North Liverpool");
-  notifyDutyChange(ss, keyB, driverB, driverA, sB.sched === 5 ? "South Liverpool" : "North Liverpool");
+  /* The slot carries its own route now. Comparing the column number against 5
+     said "North Liverpool" on every email the moment the columns moved. */
+  notifyDutyChange(ss, keyA, driverA, driverB, sA.route + " Liverpool");
+  notifyDutyChange(ss, keyB, driverB, driverA, sB.route + " Liverpool");
   return "";
 }
 
@@ -1671,7 +1702,12 @@ function pinHash(name, pin) {
    dropped the worst case is that a guesser gets their ten tries back. A
    lockout that outlived a real driver's fumble would be the worse failure:
    he is standing at a bus with people waiting to get on it. */
-var PIN_MAX_TRIES = 10;
+/* Three, not ten. Ten is a number that suits a password; a PIN is four digits
+   a man has known for months, and somebody who has got it wrong three times
+   running is not close to remembering it — he is on the wrong name, or the
+   sheet has the wrong number against him. The pause is what makes guessing
+   slow, and it is the only thing that does, because the endpoint is open. */
+var PIN_MAX_TRIES = 3;
 var PIN_LOCK_MINUTES = 10;
 
 function pinTriesKey(name) {
@@ -2363,6 +2399,28 @@ function setUpEverything() {
   });
   pretty("Rota",        function () { ensureRota(ss); });
 
+  /* Every column that holds a moment, told to show the moment. Run here as
+     well as inside each tab's own ensure, because those are guarded by a
+     freshness stamp and a sheet already in service has that stamp set — so
+     without this, a fix to the formatting would not reach the very sheets
+     that need it until the stamp happened to lapse. */
+  pretty("Date and time formats", function () {
+    var jobs = [
+      [ss.getSheetByName(BOOKINGS_SHEET), BOOKINGS_SHEET, ["received"]],
+      [ss.getSheetByName(TRIP_SHEET),     TRIP_SHEET,     ["logged", "scheduled", "happened"]],
+      [ss.getSheetByName(CHECKS_SHEET),   CHECKS_SHEET,   ["received"]],
+      [ss.getSheetByName(DEFECTS_SHEET),  DEFECTS_SHEET,  ["received"]]
+    ];
+    jobs.forEach(function (j) {
+      if (j[0]) stampTimeFormats(j[0], colsSoft(j[0], j[1]), j[2]);
+    });
+    var rq = ss.getSheetByName(REQUESTS_SHEET);
+    if (rq) {
+      try { stampTimeFormats(rq, requestCols(rq), ["received", "decidedOn"]); }
+      catch (err) {}
+    }
+  });
+
   /* Run by hand means fill now, whatever the once-a-day stamp says. */
   try { PropertiesService.getScriptProperties().deleteProperty("rotaFilledAt"); }
   catch (err) {}
@@ -2645,6 +2703,7 @@ function ensureBookingColumns(sh) {
     try { sh.getRange(2, c.phone, Math.max(1, sh.getMaxRows() - 1), 1).setNumberFormat("@"); }
     catch (err) { /* the apostrophe below is the one that actually matters */ }
   }
+  stampTimeFormats(sh, c, ["received"]);
 
   structDone("bookings");
 }
@@ -3047,6 +3106,8 @@ function tripColsSoft(sh) { return colsSoft(sh, TRIP_SHEET); }
 function ensureTripColumns(sh) {
   if (structFresh("trip")) return;
   ensureCols(sh, TRIP_HEADERS);
+  stampTimeFormats(sh, colsSoft(sh, TRIP_SHEET),
+                   ["logged", "scheduled", "happened"]);
   structDone("trip");
 }
 
@@ -3245,8 +3306,15 @@ function tripState(ss, key, route) {
       if (at >= state.lastAt) {
         state.lastAt   = at;
         state.lastStop = String(at1(r, c.stop) || "").trim();
-        var off = Number(at1(r, c.offset));
-        state.offset = isNaN(off) ? null : off;
+        /* The same guard the start branch above has, and for the same reason.
+           Number("") is 0, not NaN, so a blank Offset cell read as "exactly
+           on time" and the passenger page printed a countdown built from
+           nothing. A blank cell knows nothing, and null is how this state
+           says so. A missing Offset column reads blank too, which is why
+           this matters more now than it did. */
+        var raw = at1(r, c.offset);
+        state.offset = (raw === "" || raw === null || raw === undefined ||
+                        isNaN(Number(raw))) ? null : Number(raw);
       }
     });
   }
@@ -4112,10 +4180,71 @@ function runComplete() {
   if (!routes.length) return true;
 
   for (var i = 0; i < routes.length; i++) {
-    var t = tripState(ss, key, routes[i]);
-    if (!t.started || !t.ended) return false;
+    if (!routeOver(ss, key, routes[i])) return false;
   }
   return true;
+}
+
+/* How long past a route's timetabled arrival before a silent run counts as
+   finished. An hour was the old answer by way of the backstop; half an hour
+   past the arrival is the same grace measured from the thing that matters. */
+var RUN_DONE_MARGIN_MIN = 30;
+
+/* And how long it must have been silent. Deliberately NOT TRIP_QUIET_MINUTES.
+
+   That fifteen minutes decides when the passenger page stops offering a
+   countdown, which is a small claim to withdraw and easily made again on the
+   next tap. This decides whether to take the whole morning off the screen,
+   which cannot be undone for the person who was reading it. A bus fifty
+   minutes late that has just gone fifteen minutes without a tap is genuinely
+   ambiguous; at half an hour it is not. Two different questions, two
+   thresholds, and the more destructive one gets the longer wait. */
+var RUN_DONE_QUIET_MIN = 30;
+
+/**
+ * Is this route's morning over?
+ *
+ * The End tap is the real answer and always wins. But a driver who is home,
+ * has put the keys back and never tapped End used to hold the page for every
+ * passenger on both routes until the backstop — the app waiting for a message
+ * from somebody who has gone.
+ *
+ * So, failing an End tap: BOTH of these, never one.
+ *
+ *   past its timetabled arrival by RUN_DONE_MARGIN_MIN
+ *   nothing heard from it for RUN_DONE_QUIET_MIN
+ *
+ * Both, because either alone is wrong. A bus running badly late is still
+ * tapping, so it is not silent and the page holds for it — which is the whole
+ * lesson of 16 August. A bus in a blackspot IS silent, but its taps are
+ * queued and the clock has not reached its arrival yet, so the schedule half
+ * holds the page instead. It takes a run that is both overdue and quiet
+ * before this says anything at all.
+ *
+ * And it says it only about WHEN NEXT WEEK OPENS. The record still shows no
+ * End tap, because none was made, and the Sunday report still counts it as a
+ * run that was never ended.
+ */
+function routeOver(ss, key, route) {
+  var t = tripState(ss, key, route);
+  if (t.ended)   return true;
+  if (!t.started) return false;          /* never left: the backstop's job */
+
+  var last = null;
+  readBusStops(ss).forEach(function (s) {
+    if (s.route !== route) return;
+    var m = stopMomentOn(key, s.time);
+    if (m && (!last || m.getTime() > last)) last = m.getTime();
+  });
+  if (!last) return false;               /* no timetable, nothing to measure */
+
+  var now = Date.now();
+  if (now < last + RUN_DONE_MARGIN_MIN * 60000) return false;
+
+  /* Silence measured from the last thing it said, or from setting off when it
+     has said nothing since. */
+  var heard = t.lastAt || t.started;
+  return (now - heard) >= RUN_DONE_QUIET_MIN * 60000;
 }
 
 /**
@@ -4475,8 +4604,14 @@ function handleIdentify(body) {
       if (!orphan && !b.pid && ref && b.device === ref) orphan = b;
     });
     if (locked && !owned && orphan) {
+      /* One cell each, by heading. As a two-wide block from column 9 this
+         assumed Phone and Passenger ID were adjacent and in that order, which
+         one inserted column would have made false — and the value it puts in
+         the wrong cell is somebody's phone number. */
       var sh = ensureBookings(ss);
-      sh.getRange(orphan.row, 9, 1, 2).setValues([["'" + phone, pid]]);
+      var oc = colsHard(sh, BOOKINGS_SHEET);
+      sh.getRange(orphan.row, oc.phone).setValue("'" + phone);
+      sh.getRange(orphan.row, oc.passenger).setValue(pid);
     }
   } catch (err) {
     /* Nothing here is worth failing the call for. The worst case is that the
@@ -5617,7 +5752,7 @@ function onRotaEditNotify(e) {
       if (row < 2 || [rc.north, rc.northCover, rc.south, rc.southCover].indexOf(col) === -1) return;
       if (typeof e.oldValue === "undefined" && typeof e.value === "undefined") return;
 
-      var key = anyToKey(sh.getRange(row, 1).getValue());
+      var key = anyToKey(sh.getRange(row, rc.date).getValue());
       if (!key) return;
 
       var south = (col === rc.south || col === rc.southCover);
@@ -5630,23 +5765,30 @@ function onRotaEditNotify(e) {
       /* Who was actually driving before this edit, and who is now. */
       var before = (col === schedCol) ? (cover || was) : (was || scheduled);
       var after  = cover || scheduled;
+      /* `south` is already the answer. Testing the column number against 5
+         could never be true once the bus columns moved South to 6, so every
+         duty-change email named North Liverpool whichever route it was. */
       notifyDutyChange(ss, key, before, after,
-                       schedCol === 5 ? "South Liverpool" : "North Liverpool");
+                       south ? "South Liverpool" : "North Liverpool");
       return;
     }
 
     if (name === REQUESTS_SHEET) {
       var r = e.range.getRow(), c = e.range.getColumn();
-      if (r < 2 || (c !== 8 && c !== 10)) return;
-      if (String(sh.getRange(r, 8).getValue() || "") !== "Approved") return;
-      var replacement = String(sh.getRange(r, 10).getValue() || "").trim();
+      var qc = requestCols(sh);
+      if (r < 2 || (c !== qc.status && c !== qc.replacement)) return;
+      if (String(sh.getRange(r, qc.status).getValue() || "") !== "Approved") return;
+      var replacement = String(sh.getRange(r, qc.replacement).getValue() || "").trim();
       if (!replacement) return;
-      var k = anyToKey(sh.getRange(r, 3).getValue());
+      var k = anyToKey(sh.getRange(r, qc.sunday).getValue());
       if (!k) return;
-      var reqDriver = String(sh.getRange(r, 4).getValue() || "").trim();
+      var reqDriver = String(sh.getRange(r, qc.driver).getValue() || "").trim();
       var rota2 = ss.getSheetByName(ROTA_SHEET);
       var rRow2 = rota2 ? findRotaRow(rota2, k) : 0;
-      var rt = (rota2 && rRow2 && routeColumns(ss, rota2, rRow2, reqDriver).scheduled === 5)
+      /* routeColumns says which route it found, rather than leaving the caller
+         to infer it from a column number. */
+      var rt = (rota2 && rRow2 &&
+                routeColumns(ss, rota2, rRow2, reqDriver).route === "South")
         ? "South Liverpool" : "North Liverpool";
       notifyDutyChange(ss, k, reqDriver, replacement, rt);
     }
@@ -6310,15 +6452,18 @@ function onEditRequests(e, sh) {
       continue;
     }
 
+    /* Status by heading. Column 4 is the North bus now, so every one of these
+       wrote a status word over a registration. */
+    var rcE = rotaCols(rota);
     if (status === "Approved" && replacement) {
       rota.getRange(rRow, cols.cover).setValue(replacement);
-      rota.getRange(rRow, 4).setValue("Covered");
+      rota.getRange(rRow, rcE.status).setValue("Covered");
       stamp(rota, rRow, "Approved request");
     } else if (status === "Approved" && !replacement) {
-      rota.getRange(rRow, 4).setValue("No driver assigned");
+      rota.getRange(rRow, rcE.status).setValue("No driver assigned");
       stamp(rota, rRow, "Approved, needs cover");
     } else if (status === "Rejected") {
-      rota.getRange(rRow, 4).setValue("Confirmed");
+      rota.getRange(rRow, rcE.status).setValue("Confirmed");
       stamp(rota, rRow, "Request rejected");
     }
     touched = true;
@@ -6848,6 +6993,39 @@ function colsSoft(sh, tabName) {
 /* One row value, by mapped column. Column 0 — a heading this sheet has not
    got — reads blank, which is what a sheet without that column knows. */
 function at1(r, col) { return col ? r[col - 1] : ""; }
+
+/* ---- showing the time as well as the date -----------------------------
+
+   A cell holding a moment is useless as a record if the sheet shows only the
+   day. Received at 17:15:46 and received at 03:50 are different facts about a
+   booking, and "13/08/2026" says neither.
+
+   appendRow used to hide this. Sheets auto-formats a fresh Date written that
+   way and picked a full date-and-time by itself. Writing the same value with
+   setValues — which is what every write here does now, so a coordinator's own
+   column is stepped over rather than written into — takes whatever format the
+   cell already carries, and an untouched cell far down the grid carries the
+   sheet default, which renders as a bare date. Nothing was lost: the moment is
+   still in the cell, and only the display was thrown away. But a record you
+   have to widen a column and click a cell to read is not a record anybody
+   reads.
+
+   So the format is set on the column, deliberately, the way the Phone column
+   already sets text. Set once on the whole column, so every row written after
+   it inherits, and every row written before it is corrected. */
+var DATETIME_FORMAT = "dd/mm/yyyy hh:mm:ss";
+
+function stampTimeFormats(sh, cols, names) {
+  if (!sh || !cols) return;
+  var rows = Math.max(1, sh.getMaxRows() - 1);
+  names.forEach(function (k) {
+    if (!cols[k]) return;
+    /* Guarded one column at a time. A tab that refuses one is not a reason to
+       leave the rest of them unreadable. */
+    try { sh.getRange(2, cols[k], rows, 1).setNumberFormat(DATETIME_FORMAT); }
+    catch (err) {}
+  });
+}
 
 /* Put any missing heading on a tab, WITHOUT relabelling a column somebody
    else added.
