@@ -18,7 +18,7 @@
    BUMP CACHE below after editing index.html in this folder, or phones keep
    the old copy. */
 const CACHE_PREFIX = "minibus-sunday-";
-const CACHE = CACHE_PREFIX + "v1.43.3";
+const CACHE = CACHE_PREFIX + "v1.44.0";
 
 /* What a passenger needs to see a page at all.
 
