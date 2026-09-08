@@ -1270,7 +1270,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.44.0";
+var APP_VERSION = "v1.44.1";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -4981,12 +4981,18 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
       /* Name the driver and the moment. Somebody looking for a button that is
          not theirs should be told whose it is, not left wondering whether the
          app is broken. Stated, not explained: whose phone, and what time. */
+      /* Whose route it is, and nothing else.
+
+         It used to add "Start trip appears on his phone at 09:30", which is a
+         sentence explaining the app to men who drive it every Sunday. Whose
+         turn it is, is a fact somebody looking at this screen may not know.
+         When the app opens is not.
+
+         No name, no line: an empty note is a strip of nothing that reads as
+         something that failed to load. */
       var who=tripWhoDrives(route);
-      h+='<p class="trip-note">'+
-         (who? '<b>'+esc(who)+'</b> drives '+esc(route)+' this Sunday. ' : '')+
-         'Start trip appears on '+esc(who?'his':'the driver\u2019s')+
-         ' phone at '+esc(tripCutoff||"09:30")+'.'+
-         '</p>';
+      if(who) h+='<p class="trip-note"><b>'+esc(who)+'</b> drives '+
+                 esc(route)+' this Sunday.</p>';
     }
     return h+'</div>';
   }
