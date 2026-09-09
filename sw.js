@@ -1,7 +1,7 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
 const CACHE_PREFIX = "minibus-check-";
-const CACHE = CACHE_PREFIX + "v1.44.1";
+const CACHE = CACHE_PREFIX + "v1.45.0";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -77,6 +77,27 @@ self.addEventListener("activate", (e) => {
   );
 });
 
+/* How long the network gets before the cache answers instead.
+
+   Network first is right and it stays: a driver opening the app on Sunday
+   morning must not be reading last month's rota out of a cache. But this
+   worker had no timeout of any kind. callFetch's twenty five second race
+   lives in index.html; this file calls bare fetch, so a phone on a network
+   that goes nowhere — which is the car park, not the middle of nowhere —
+   held the socket until the browser gave up. A minute or more on iOS, with
+   a perfect copy of the app sitting in the cache the whole time. And it
+   happened twice in series: once for the page, then again for config.js,
+   which blocks the entire app script behind it.
+
+   No signal at all was never the problem. fetch rejects in milliseconds and
+   the cache answers instantly, which is what everything below was written
+   for. It is the network that opens a socket and then says nothing that
+   this exists for.
+
+   Three seconds keeps network first in every normal case and gives it up
+   only where the network was not going to answer anyway. */
+const SHELL_WAIT = 3000;
+
 /* Whatever we cached, when the network cannot better it. Used for the files
    that must not go stale. Still fully offline: the cached copy answers
    instantly the moment the network fails.
@@ -94,7 +115,7 @@ function freshFirst(request, fallback) {
     return caches.match(fallback).then((f) => f || res || Response.error());
   });
 
-  return fetch(request)
+  const net = fetch(request)
     .then((res) => {
       /* Only keep an answer worth keeping. This used to store whatever came
          back, so a 404 during an upload, or a Pages error page served for a
@@ -120,6 +141,30 @@ function freshFirst(request, fallback) {
       return settle(res);
     })
     .catch(() => settle(null));
+
+  /* The cached copy answers if the network has not spoken by SHELL_WAIT.
+
+     It deliberately never resolves when there is nothing cached. With no copy
+     to fall back on, waiting for the network is the only thing left to do,
+     and the race below simply runs as long as it has to — which is the old
+     behaviour, kept exactly, for the one case where it was the right answer.
+
+     The fetch above is NOT abandoned and NOT cancelled. It runs on and still
+     writes the fresh copy into the cache, so a phone handed the cached app at
+     eight on Sunday morning is running the new one by its next launch. That
+     is the whole trade: the driver waits three seconds instead of a minute,
+     and pays for it by being one launch behind on a morning when the network
+     was failing anyway. */
+  const waited = new Promise((resolve) => {
+    setTimeout(() => {
+      caches.match(request)
+        .then((hit) => hit || (fallback ? caches.match(fallback) : null))
+        .then((hit) => { if (hit) resolve(hit); })
+        .catch(() => {});
+    }, SHELL_WAIT);
+  });
+
+  return Promise.race([net, waited]);
 }
 
 self.addEventListener("fetch", (e) => {

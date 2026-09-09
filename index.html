@@ -1270,7 +1270,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.44.1";
+var APP_VERSION = "v1.45.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -2747,16 +2747,35 @@ function submit(){
   });
 }
 
+/* True while a flush is walking the queue. The queue is walked one at a time
+   now, so a flush takes as long as the checks in it, and a second one started
+   over the top of the first would send the same records twice. */
+var flushing = false;
+
 function flush(){
   var q=loadQ();
   if(!q.length){ toast("Nothing waiting."); return; }
   if(!LIVE){ toast("No record address set up yet."); return; }
-  var done=0, failed=0;
-  var jobs = q.map(function(rec){
-    return sendRec(rec).then(function(){ dropFromQ(rec.id); done++; },
-                             function(){ failed++; });
-  });
-  Promise.all(jobs).then(function(){
+  if(flushing){ toast("Still sending."); return; }
+
+  var done=0, failed=0, i=0;
+  flushing = true;
+
+  /* ONE AT A TIME.
+
+     This used to map the whole queue through sendRec and hand the lot to
+     Promise.all. Five held checks meant five simultaneous Apps Script
+     executions, and that does not make them arrive five times faster: every
+     one of them takes the same script-wide lock at the far end, so four
+     queue anyway — holding four connections open while they wait — and the
+     last of them can time out on a lock it was always going to be given
+     last. A check that timed out stays in the queue and gets sent again, so
+     the cost of losing that race is paid twice.
+
+     Sending them in turn is the same total work, arriving in the order they
+     were made, with one connection open and nothing racing anything. */
+  function finish(){
+    flushing = false;
     renderPending(); paintBanner();
     if(done && !failed) toast(done+" sent.");
     else if(done && failed) toast(done+" sent, "+failed+" still waiting.");
@@ -2765,7 +2784,15 @@ function flush(){
        whichever screen the driver is on, so it is already right when they
        come back to it. */
     refreshSendState();
-  });
+  }
+
+  function next(){
+    if(i >= q.length){ finish(); return; }
+    var rec = q[i++];
+    sendRec(rec).then(function(){ dropFromQ(rec.id); done++; next(); },
+                      function(){ failed++; next(); });
+  }
+  next();
 }
 
 function renderPending(){
