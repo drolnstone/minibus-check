@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.49.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.51.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -611,7 +611,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.49.0";
+var PAGE_VERSION = "v1.51.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this page's own
@@ -1217,6 +1217,117 @@ window.addEventListener("online",function(){
   if(!loadedOk) load();
 });
 
+/* ==========================================================================
+   ALERTS
+   ==========================================================================
+
+   Offered, never sprung. The browser only allows one permission prompt and a
+   refusal is close to permanent, so it is asked for at the one moment somebody
+   obviously wants it — with a seat already booked and the bus on the way —
+   and behind a button they press themselves.
+
+   Nothing is stored on this page. The live server holds the subscription and
+   matches it to a booking by the same two handles a booking uses: this
+   device's reference and the salted phone fingerprint. */
+var PUSH_ABLE = ("Notification" in window) && ("serviceWorker" in navigator) &&
+                ("PushManager" in window);
+var pushOn = false;      /* this phone already has a live subscription */
+var pushBusy = false;
+
+/* Apple gives a page in a TAB no push at all, and does it silently: the API is
+   there, permission can be granted, and nothing is ever delivered. Only a Home
+   Screen install gets them. So on an iPhone the offer becomes a pointer at the
+   install sheet, because a button that cannot work is worse than no button. */
+function pushCanAsk(){
+  if(!PUSH_ABLE) return false;
+  if(deviceKind().indexOf("ios")===0 && !standalone()) return false;
+  return true;
+}
+
+function pushOfferHtml(){
+  if(!PUSH_ABLE) return "";
+  if(ROLLED) return "";                       /* last week's bus: nothing to say */
+  if(pushOn) return "";                       /* already on, so say nothing */
+
+  if(!pushCanAsk()){
+    /* iPhone, in a tab. */
+    return '<p class="live-sub" style="margin-top:10px">'+
+      '<button type="button" id="pushHow" class="ring" '+
+      'style="background:none;border:none;padding:0;font:inherit;color:inherit;text-decoration:underline">'+
+      'Add to your Home Screen to get alerts</button></p>';
+  }
+  if(Notification.permission === "denied") return "";   /* asked once, told no */
+
+  return '<p class="live-sub" style="margin-top:10px">'+
+    '<button type="button" id="pushOn" class="ring" '+
+    'style="background:none;border:none;padding:0;font:inherit;color:inherit;text-decoration:underline">'+
+    'Tell me when the bus is near</button></p>';
+}
+
+/* The key comes back from the live server as base64url and the browser wants
+   bytes. */
+function pushKeyBytes(k){
+  var pad = "=".repeat((4 - k.length % 4) % 4);
+  var raw = atob((k + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  var out = new Uint8Array(raw.length);
+  for(var i=0;i<raw.length;i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+function pushTurnOn(){
+  if(pushBusy || !pushCanAsk()) return;
+  pushBusy = true;
+  Notification.requestPermission().then(function(p){
+    if(p !== "granted"){
+      pushBusy = false;
+      toast("Not turned on. You can still watch this page.");
+      paintLive();
+      return;
+    }
+    return navigator.serviceWorker.ready.then(function(reg){
+      return fetch(ENDPOINT + "?vapid=1").then(function(r){ return r.json(); })
+        .then(function(v){
+          if(!v || !v.ok || !v.key) throw new Error("no key");
+          return reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: pushKeyBytes(v.key)
+          });
+        })
+        .then(function(sub){
+          var j = sub.toJSON();
+          return callFetch(ENDPOINT, {
+            method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+            body: JSON.stringify({ action:"subscribe", endpoint: j.endpoint,
+                                   keys: j.keys, role:"passenger",
+                                   ref: REF, pid: PID })
+          });
+        })
+        .then(function(){
+          pushOn = true; pushBusy = false;
+          toast("Alerts on.");
+          paintLive();
+        });
+    });
+  }).catch(function(){
+    pushBusy = false;
+    toast("Could not turn alerts on.");
+    paintLive();
+  });
+}
+
+/* Already subscribed on this handset? Asked once, quietly, so the offer is
+   not put in front of somebody who took it up a fortnight ago. */
+function pushLook(){
+  if(!PUSH_ABLE) return;
+  try{
+    navigator.serviceWorker.ready.then(function(reg){
+      return reg.pushManager.getSubscription();
+    }).then(function(sub){
+      if(sub){ pushOn = true; paintLive(); }
+    }).catch(function(){});
+  }catch(e){}
+}
+
 function paintLive(){
   var box=$("live");
   if(!live || live.live===false){ box.innerHTML=""; return; }
@@ -1395,6 +1506,7 @@ function paintLive(){
         'style="background:none;border:none;padding:0;font:inherit;color:inherit">'+
         'Watching the wrong stop?</button></p>'
       : '')+
+    pushOfferHtml()+
     '</div>';
 
   Array.prototype.forEach.call(box.querySelectorAll("[data-liveroute]"),function(b){
@@ -1403,6 +1515,8 @@ function paintLive(){
       liveFetch();
     });
   });
+  if($("pushOn")) $("pushOn").addEventListener("click",pushTurnOn);
+  if($("pushHow")) $("pushHow").addEventListener("click",function(){ howOpen(false); });
   if($("watchOff")) $("watchOff").addEventListener("click",function(){
     watchStop=""; watchSave(""); live=null; paintLive(); paint();
   });
@@ -2297,6 +2411,17 @@ function howHtml(){
     h+='<p class="how-note">Open this address in <b>Safari</b> first. '+
        'On an iPhone only Safari can do this.</p>';
   }
+  /* What an iPhone gives up by not installing. Shown to iPhones and nobody
+     else: a warning about iPhones put in front of an Android user is noise,
+     and noise is what teaches people to close this sheet without reading it.
+
+     Only true once alerts exist, which is why it did not ship before them. */
+  if(mine==="ios"){
+    h+='<p class="how-note">On an iPhone, alerts only work once this is on '+
+       'your Home Screen. Without it, Safari cannot tell you when the bus is '+
+       'near \u2014 you would still see everything on this page, but only '+
+       'while you have it open.</p>';
+  }
   h+='<p class="how-lab">'+esc(HOW[mine][0])+'</p>'+
      '<ol class="how-steps">'+HOW[mine][1]+'</ol>';
   ["ios","android","desktop"].forEach(function(k){
@@ -2503,6 +2628,9 @@ if("serviceWorker" in navigator){
          that surfaces as an unhandled error on every single open — in
          precisely the situation this cache exists to cover. */
       try{ reg.update().catch(function(){}); }catch(e){}
+      /* After the worker is registered, because a subscription belongs to one
+         and there is nothing to ask before it exists. */
+      try{ pushLook(); }catch(e){}
     }).catch(function(){ /* no worker is not a broken page */ });
   });
 
