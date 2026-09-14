@@ -657,6 +657,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-route{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;border-radius:4px;padding:2px 6px;white-space:nowrap;margin-top:4px}
 .rota-route.north{color:var(--info-deep);background:var(--info-bg);border:1px solid var(--info-line)}
 .rota-route.south{color:var(--south);background:var(--south-bg);border:1px solid var(--south-line)}
+/* The PIN nudge on the hub. Amber: something to do, not something wrong. */
+.hub-pin{background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn);
+  border-radius:var(--r);padding:11px 13px;margin:0 0 14px;font-size:14px;line-height:1.45}
+.hub-pin button{text-decoration:underline;color:inherit;font-weight:600;padding:2px 0}
 .rota-viewing{font-size:13px;color:var(--muted);margin:-4px 0 12px}
 .rota-viewing b{color:var(--ink)}
 .rota-card.past{opacity:.55;background:var(--rail)}
@@ -975,16 +979,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       </div>
     </div>
     <p class="tiny" style="margin-top:14px">Name missing? Ring the coordinator before taking a bus out.</p>
-    <div class="linkrow">
-      <!-- These were three identical grey buttons given equal weight, which
-           they do not have. One is a queue that is usually empty, one is
-           reference, and one is the live screen on a Sunday morning. Painted
-           by paintLinks() below. -->
-      <button class="btn btn-ghost btn-wide" id="toPending" type="button" style="display:none">Waiting to send</button>
-      <button class="btn btn-ghost btn-wide" id="toRota" type="button">Driving rota</button>
-      <button class="btn btn-ghost btn-wide" id="toStops" type="button">Stops and bookings</button>
-    </div>
-    <p class="tiny" id="modeNote"></p>
+    <!-- The three destinations used to sit here, under the name and the PIN,
+         so this screen was a sign-in AND a launcher and a driver met seven
+         things on the way to doing one. They have moved to a screen of their
+         own, one tap on. -->
     <div class="footer-brand"><img src="logo.png" alt=""><span>RCCG Dominion Assembly Liverpool</span></div>
     <!-- Appearance. On the sign-in screen and nowhere else: it is a thing you
          set once, not a thing you meet again halfway through a check. No
@@ -1126,6 +1124,40 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       <button class="rota-back" id="stopsBack" type="button">Back</button>
     </div>
     <div id="stopsBody"></div>
+  </section>
+
+  <!-- 1b. THE HUB
+
+       One screen, one question. It exists because the first screen was doing
+       two jobs — proving who you are, and choosing what you came for — and
+       the second job kept burying the first. A man who opened the app to key
+       his PIN before a walkaround was met by the rota button, the stops
+       button, a queue counter and two hints, all above the fold.
+
+       The PIN is NOT a door here, and that is deliberate. Reading the rota
+       and the stops board writes nothing and stays open to anybody who opens
+       the app: the steward at the door, a coordinator on a borrowed phone, a
+       driver who is not out today. The gate is on Vehicle check, which is the
+       thing that files a record, and it is the same gate that was on Continue
+       before any of this moved. -->
+  <section class="screen" id="s-hub">
+    <p class="eyebrow" id="hubWho">Signed in</p>
+    <h1>What are you doing?</h1>
+
+    <!-- Said when a PIN is wanted and has not been keyed. Never a block: it
+         names the one button that is off and offers the way to switch it on.
+         Before the split this was a disabled Continue and a word in the
+         footer, which told a driver that something was wrong but not what. -->
+    <div class="hint hub-pin" id="hubPin" style="display:none"></div>
+
+    <div class="linkrow">
+      <button class="btn btn-main btn-wide" id="toCheck" type="button">Vehicle check</button>
+      <button class="btn btn-ghost btn-wide" id="toStops" type="button">Stops and bookings</button>
+      <button class="btn btn-ghost btn-wide" id="toRota" type="button">Driving rota</button>
+      <button class="btn btn-ghost btn-wide" id="toPending" type="button" style="display:none">Waiting to send</button>
+    </div>
+    <p class="tiny" id="modeNote"></p>
+    <div class="footer-brand"><img src="logo.png" alt=""><span>RCCG Dominion Assembly Liverpool</span></div>
   </section>
 
   <!-- 9. PENDING -->
@@ -1315,7 +1347,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.47.0";
+var APP_VERSION = "v1.49.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -1760,10 +1792,20 @@ var lastMilesAt = 0;
 
 function fetchLastMiles(cb){
   if(!LIVE || !navigator.onLine){ if(cb) cb(false); return; }
-  callFetch(CFG.endpoint + "?last=1", { method:"GET", redirect:"follow" }, POLL_TIMEOUT)
+
+  /* The second of the two calls the app makes on the way in, and the same
+     bargain as the rota above: the live server holds last week's mileage on a
+     shelf, works out which bus is on which route live from its own booking
+     table, and hands back ok:false when it has nothing worth serving. The
+     spreadsheet answers whenever it does. */
+  var canFall = LIVE_ENDPOINT !== CFG.endpoint;
+
+  function ask(base, mayFall){
+  callFetch(base + "?last=1", { method:"GET", redirect:"follow" }, POLL_TIMEOUT)
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out = JSON.parse(t);
+      if((!out || out.ok !== true) && mayFall){ ask(CFG.endpoint,false); return; }
       scriptSeen(out);
       seatsSeen(out);
       if(out && out.ok && out.last){
@@ -1776,7 +1818,13 @@ function fetchLastMiles(cb){
       }
       if(cb) cb(false);
     })
-    .catch(function(){ if(cb) cb(false); });
+    .catch(function(){
+      if(mayFall){ ask(CFG.endpoint,false); return; }
+      if(cb) cb(false);
+    });
+  }
+
+  ask(canFall ? LIVE_ENDPOINT : CFG.endpoint, canFall);
 }
 function lastFor(reg){
   var r = LASTMILES[reg];
@@ -1959,10 +2007,44 @@ function paintLinks(){
     pend.className = "btn btn-wide "+(q?"btn-warn":"btn-ghost");
   }
 
+  /* Who the hub is for, said at the top of it. A handset gets passed round
+     and a name can be a fortnight stale; the rota screen has said this for a
+     while and the screen every driver actually starts from did not. */
+  var who=$("hubWho");
+  if(who) who.textContent = st.driver.trim()
+    ? "Signed in as "+st.driver.trim()
+    : "Nobody signed in";
+
+  /* Which button is the obvious one depends on the morning. Before the
+     cutoff, or on a Wednesday, the job is a walkaround. Once bookings have
+     closed and there are stops to show, the live screen is the one he came
+     for, and the check is behind him. Never two primaries at once. */
   var live = tripClosed && !!rotaStops.length;
-  var stops=$("toStops"), rota=$("toRota");
+  var stops=$("toStops"), rota=$("toRota"), check=$("toCheck");
   if(stops) stops.className = "btn btn-wide "+(live?"btn-main":"btn-ghost");
   if(rota)  rota.className  = "btn btn-ghost btn-wide";
+
+  /* The gate that used to grey out Continue, moved onto the one button it
+     was ever really about. Off, not disabled: a disabled button cannot say
+     why it will not work, and that silence was the whole complaint. */
+  var needPin = pinGateNeeded();
+  if(check){
+    check.className = "btn btn-wide "+(live?"btn-ghost":"btn-main")+(needPin?" is-off":"");
+  }
+  var nudge=$("hubPin");
+  if(nudge){
+    nudge.style.display = needPin ? "" : "none";
+    if(needPin){
+      nudge.innerHTML = '<b>Your PIN has not been keyed yet.</b> The rota and the '+
+        'stops are open without it. A vehicle check is recorded in your name, so '+
+        'that one asks first. <button type="button" id="hubPinGo">Key it now</button>';
+      var go=$("hubPinGo");
+      if(go) go.addEventListener("click",function(){
+        show("driver");
+        try{ $("pin").focus(); }catch(e){}
+      });
+    }
+  }
 }
 
 function paintDash(){
@@ -2016,7 +2098,7 @@ function paintDash(){
 }
 
 /* ---------------- screens ---------------- */
-var SCREENS = ["driver","vehicle","prep","stage","review","sent","rota","stops","pending"];
+var SCREENS = ["driver","hub","vehicle","prep","stage","review","sent","rota","stops","pending"];
 var syncToTop=function(){};
 /* How tall the instrument strip is, published to CSS as --dashH.
 
@@ -2075,7 +2157,11 @@ function goHome(){
   geo={status:"off"};
   stages=[]; ALL=[]; TOTAL=0; lastRec=null;
   paintBanner();
-  show("driver");
+  /* The hub, not the name screen. He is still signed in — goHome clears the
+     PIN with the check it belonged to, never the name — so sending him back
+     to Choose your name would be asking a question already answered. The
+     cleared PIN shows up where it matters, as Vehicle check being off. */
+  show("hub");
 }
 
 /* OUTSIDE paintFoot, and that is the whole of the fix. These two were declared
@@ -2138,11 +2224,25 @@ function btn(label,cls,fn,dis,why){
        actually checked — the laxer half of the same fault pinGateNeeded was
        tightened to close. */
     var pinOk = !pinGateNeeded();
-    var goDrv = btn("Continue","btn-main",function(){ renderVehicles(); show("vehicle"); }, !(named && pinOk),
-        function(){ if(!named && $("driverPick")) $("driverPick").focus(); });
+
+    /* THE PIN NO LONGER STANDS IN FRONT OF THIS BUTTON.
+
+       It used to, and it was right to while Continue meant "begin a vehicle
+       check". Continue now means "show me what I can do", and the two things
+       on that screen a man reaches for without a PIN — the rota and the stops
+       board — write nothing. Gating the way through to them would close a
+       noticeboard that has always been open, to a steward at the door and to
+       a coordinator on a borrowed phone.
+
+       The gate has not gone soft. It has moved one screen on, onto Vehicle
+       check, which is the button that files a record. Same test, same
+       function, one tap later, and now it can say which button it is about
+       instead of greying out the only way forward. */
+    var goDrv = btn("Continue","btn-main",function(){ show("hub"); }, !named,
+        function(){ if($("driverPick")) $("driverPick").focus(); });
     goDrv.id="goOn";
     if(!named) c.textContent="Choose your name";
-    else if(!pinOk) c.textContent="Enter your PIN";
+    else if(!pinOk) c.textContent="PIN not keyed yet";
     /* The transition, not the state. Every route to a correct PIN — the live
        check, this phone's own copy, the cached answer, no signal at all —
        ends in paintFoot, so hooking the change here catches all of them
@@ -2153,8 +2253,20 @@ function btn(label,cls,fn,dis,why){
     lastReady = ready;
     return;
   }
+  if(st.screen==="hub"){
+    /* Repainted from here as well as from show(), because the register can
+       land a second or two after this screen is drawn and it is the register
+       that decides whether this driver has a PIN at all. Without it, a phone
+       that opened cold would sit on the hub with Vehicle check live and the
+       nudge hidden until he changed screens. */
+    paintLinks();
+    /* The way back to the name, for a handset changing hands. Nothing else:
+       every way on is a full-width button on the screen itself. */
+    btn("Change driver","btn-ghost",function(){ show("driver"); });
+    return;
+  }
   if(st.screen==="vehicle"){
-    btn("Back","btn-ghost",function(){ show("driver"); });
+    btn("Back","btn-ghost",function(){ show("hub"); });
     var goVeh = btn("Continue","btn-main",function(){
       /* Asked here rather than on the tap: choosing a card is browsing, and
          Continue is the moment he commits this bus to a walkaround. */
@@ -2319,7 +2431,7 @@ function btn(label,cls,fn,dis,why){
     return;
   }
   if(st.screen==="rota"){
-    btn("Done","btn-main",function(){ show("driver"); });
+    btn("Done","btn-main",function(){ show("hub"); });
     return;
   }
 }
@@ -3227,12 +3339,43 @@ function rotaLoadCache(){
 var rotaFetchedWeeks = 0;
 var rotaFetchedPast = 0;
 
-function rotaFetch(fromDate,weeks,cb){
+/* fresh skips the live server and asks the spreadsheet directly.
+
+   Used at the one moment the shelf is knowingly behind: straight after this
+   phone has written something to the rota. A driver who taps Request change
+   and does not see "change requested" appear will tap it again, and the
+   second request is a row somebody has to read on Monday. Everyone else picks
+   the change up on the next push, within five minutes. */
+function rotaFetch(fromDate,weeks,cb,fresh){
   if(!LIVE || !navigator.onLine){ cb(false); return; }
   var qs="?rota=1&from="+encodeURIComponent(rotaKey(fromDate))+"&weeks="+weeks;
   rotaLoading=true;
-  callFetch(CFG.endpoint+qs,{method:"GET",redirect:"follow"}).then(function(r){return r.text();}).then(function(t){
-    var out=JSON.parse(t); if(!out||out.ok!==true) throw new Error("rota unavailable");
+
+  /* THE LIVE SERVER FIRST, THE SPREADSHEET AS THE ANSWER OF LAST RESORT.
+
+     Measured on the real project, this call took five to ten and a half
+     seconds from Apps Script — at three in the morning, with nothing else
+     running, so it was never load. It is the first thing the app does on
+     opening, which is why opening felt the way it did.
+
+     The live server answers it from a copy the spreadsheet posts over
+     whenever anything changes. When it has no copy, or the copy is too old,
+     or the window asked for is wider than the copy it holds, it says ok:false
+     with a reason rather than answering short — and THAT is what this
+     fallback is for. A rota that silently stops in February is worse than a
+     rota that takes seven seconds.
+
+     One attempt each, never a loop: the fallback itself is not allowed a
+     fallback, so a dead network costs two tries and not an endless chain. */
+  var canFall = !fresh && LIVE_ENDPOINT !== CFG.endpoint;
+
+  function ask(base, mayFall){
+  callFetch(base+qs,{method:"GET",redirect:"follow"}).then(function(r){return r.text();}).then(function(t){
+    var out=JSON.parse(t);
+    if(!out||out.ok!==true){
+      if(mayFall){ ask(CFG.endpoint,false); return; }
+      throw new Error("rota unavailable");
+    }
     scriptSeen(out);
     var incoming=out.rows||[];
     var before=JSON.stringify(rotaRows);
@@ -3273,10 +3416,14 @@ function rotaFetch(fromDate,weeks,cb){
        for no reason is its own kind of slow. */
     cb(JSON.stringify(rotaRows)!==before);
   }).catch(function(){
+    if(mayFall){ ask(CFG.endpoint,false); return; }
     rotaLoading=false; cb(false);
     /* Only worth saying out loud if they are actually looking at the rota. */
     if(st.screen==="rota") toast("Could not reach the shared rota. Showing the last copy.");
   });
+  }
+
+  ask(canFall ? LIVE_ENDPOINT : CFG.endpoint, canFall);
 }
 
 
@@ -4487,7 +4634,10 @@ function rotaSyncRegister(list){
   paintFoot();
 }
 /* Draw now, correct later. rotaPaint never waits for the network. */
-function rotaRender(keepPosition,anchorKey){
+/* fresh goes straight past the live server to the spreadsheet. Passed only
+   from rotaSubmitRequest, where this phone has just written the very thing it
+   is about to read back. */
+function rotaRender(keepPosition,anchorKey,fresh){
   if(anchorKey) rotaAnchorKey=anchorKey;
   rotaPaint(keepPosition);
 
@@ -4496,7 +4646,8 @@ function rotaRender(keepPosition,anchorKey){
   var needFuture = rotaLoadedWeeks > rotaFetchedWeeks;
   var needPast   = rotaPastWeeks   > rotaFetchedPast;
   var stale      = Date.now() - rotaLastFetch > 60000;
-  if(!(needFuture || needPast || stale)) return;
+  /* A request just written is worth a read even inside the sixty seconds. */
+  if(!(needFuture || needPast || stale || fresh)) return;
 
   rotaFetchedWeeks = Math.max(rotaFetchedWeeks, rotaLoadedWeeks);
   rotaFetchedPast  = Math.max(rotaFetchedPast, rotaPastWeeks);
@@ -4506,7 +4657,7 @@ function rotaRender(keepPosition,anchorKey){
     if(!changed) return;
     paintRotaHint();
     if(st.screen==="rota") rotaPaint(true);
-  });
+  }, fresh);
 }
 
 function rotaPaint(keepPosition){
@@ -5901,7 +6052,7 @@ function rotaSubmitRequest(){
     .then(function(t){
       var out=JSON.parse(t);
       if(!out.ok) throw new Error(out.error||"The record would not accept it.");
-      rotaClose(); rotaRender(true);
+      rotaClose(); rotaRender(true,null,true);
       toast(type==="Request a swap"
         ? "Swap sent. The coordinator decides; neither Sunday has changed yet."
         : "Request sent. The coordinator decides; the rota has not changed yet.");
@@ -5923,9 +6074,13 @@ function rotaSubmitRequest(){
       }
       btn.textContent="Checking\u2026";
       var askedFor=rotaEditDate, me=st.driver.trim();
+      /* The spreadsheet, not the shelf. This is asking "did my request
+         actually land?" after a lost connection, and the live server's copy
+         is minutes behind by definition — it would answer no to a request
+         that had gone through perfectly well, and he would send a second. */
       rotaFetch(rotaBaseSunday(-rotaFetchedPast), rotaFetchedPast+rotaFetchedWeeks, function(){
         if(rotaRequestFor(askedFor, me)){
-          rotaClose(); rotaRender(true);
+          rotaClose(); rotaRender(true,null,true);
           toast(type==="Request a swap"
             ? "Swap sent. The coordinator decides; neither Sunday has changed yet."
             : "Request sent. The coordinator decides; the rota has not changed yet.");
@@ -5933,7 +6088,7 @@ function rotaSubmitRequest(){
         }
         toast("Not submitted. "+plainError(e)+" Tap Send request again.");
         btn.disabled=false; btn.textContent="Send request";
-      });
+      }, true);
     });
 }
 /* Every way out of the request sheet: Cancel, the backdrop, and submitting.
@@ -5960,7 +6115,7 @@ function reset(){
 /* The floating "Driving rota" button that used to sit over the church name
    has been removed. The rota is reached from the button on the first screen,
    beside "Waiting to send". */
-$("rotaBack").addEventListener("click",function(){show("driver");});
+$("rotaBack").addEventListener("click",function(){show("hub");});
 $("rotaToday").addEventListener("click",function(){
   rotaViewMode="all"; rotaPastWeeks=0; rotaRender(); window.scrollTo(0,0);
 });
@@ -6072,6 +6227,20 @@ $("toRota").addEventListener("click",rotaOpen);
    It used to be two levels down, behind the rota, which is a poor place for
    the thing he wants at ten past nine on a Sunday. */
 $("toStops").addEventListener("click",rotaOpenStops);
+
+/* The walkaround. The PIN is asked here rather than at the door, because
+   this is the first thing on the hub that writes anything down. Bounced back
+   to the name screen with the box focused rather than refused in place: the
+   box lives there, and sending him to it is more use than a toast. */
+$("toCheck").addEventListener("click",function(){
+  if(pinGateNeeded()){
+    show("driver");
+    try{ $("pin").focus(); }catch(e){}
+    toast("Key your PIN first. A check is recorded in your name.");
+    return;
+  }
+  renderVehicles(); show("vehicle");
+});
 $("stopsBack").addEventListener("click",stopsClose);
 
 
