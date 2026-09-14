@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.45.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.46.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -587,14 +587,19 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.45.0";
+var PAGE_VERSION = "v1.46.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this page's own
    number below. */
 var SCRIPT_VERSION = "";
 
-var ENDPOINT = "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec";
+/* The live server. Every call this page makes goes here: the load, the
+   booking, identifying a phone, and where the bus has got to.
+
+   TO GO BACK: put the Apps Script /exec address here instead. The payloads
+   are identical on both sides, so nothing else in this file changes. */
+var ENDPOINT = "https://minibus-api.asimbassey.workers.dev";
 
 /* Who a passenger rings when something has gone wrong at their stop: the bus
    has been and gone while they were still standing there, or it reached
@@ -1063,7 +1068,9 @@ function readJson(t){
    Visible only once bookings have closed, and only to a phone with a booking.
    ========================================================================== */
 
-var LIVE_POLL = 30000;
+/* Five seconds, not thirty. See the driver app: thirty was what Apps Script
+   could stand, not what somebody standing in the rain needs. */
+var LIVE_POLL = 5000;
 var liveTimer = null, liveBusy = false, live = null;
 
 /* Rehearsal only. A phone with no booking of its own is lent a seeded one,
