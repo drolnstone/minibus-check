@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.51.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.52.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -208,6 +208,16 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    or the timetable is seen sliding up through the gutter at each side, which
    looks like a fault rather than a design. Nothing else on this page is
    pinned to the top, so top is simply zero. */
+/* The offer to be told things. Quiet, one line, and it goes away for good
+   once it has been taken up. */
+.alerts-line{margin-top:10px}
+.alerts-line button{background:none;border:none;padding:4px 0;font:inherit;
+  color:var(--accent-ink);text-decoration:underline;cursor:pointer}
+/* The booking note sits in the frozen pane now, so it needs the gap the list
+   used to give it. */
+#mine .note{margin-bottom:10px}
+#mine:empty{display:none}
+#alerts:empty{display:none}
 .live-head{position:sticky;top:0;z-index:40;background:var(--paper);
   margin:0 calc(-14px - var(--safe-r)) 10px calc(-14px - var(--safe-l));
   padding:8px calc(14px + var(--safe-r)) 4px calc(14px + var(--safe-l));
@@ -525,7 +535,16 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
        move them inside this div. -->
   <div class="live-head">
     <p class="when" id="when"></p>
+    <!-- Your own booking, and then the bus.
+
+         "You are booked" used to be drawn at the top of the stop list, which
+         meant it scrolled away the moment somebody looked for their own stop —
+         and it left the frozen pane holding a date and an empty box. The two
+         things a passenger re-reads are whether they have a seat and where the
+         bus is, so both belong up here, together, staying put. -->
+    <div id="mine"></div>
     <div id="live"></div>
+    <div id="alerts"></div>
   </div>
   <div id="body"><p class="lede">Loading the stops…</p></div>
 
@@ -611,7 +630,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.51.0";
+var PAGE_VERSION = "v1.52.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this page's own
@@ -1233,6 +1252,7 @@ var PUSH_ABLE = ("Notification" in window) && ("serviceWorker" in navigator) &&
                 ("PushManager" in window);
 var pushOn = false;      /* this phone already has a live subscription */
 var pushBusy = false;
+var MINE_BOOKED = false; /* has this phone got a seat on the coming Sunday */
 
 /* Apple gives a page in a TAB no push at all, and does it silently: the API is
    there, permission can be granted, and nothing is ever delivered. Only a Home
@@ -1244,24 +1264,44 @@ function pushCanAsk(){
   return true;
 }
 
-function pushOfferHtml(){
-  if(!PUSH_ABLE) return "";
-  if(ROLLED) return "";                       /* last week's bus: nothing to say */
-  if(pushOn) return "";                       /* already on, so say nothing */
+/* Whether this is an iPhone, worked out WITHOUT asking whether push exists.
 
-  if(!pushCanAsk()){
-    /* iPhone, in a tab. */
-    return '<p class="live-sub" style="margin-top:10px">'+
-      '<button type="button" id="pushHow" class="ring" '+
-      'style="background:none;border:none;padding:0;font:inherit;color:inherit;text-decoration:underline">'+
-      'Add to your Home Screen to get alerts</button></p>';
+   That distinction is the whole of a bug this had. PUSH_ABLE tests for
+   PushManager, and Apple does not put PushManager in a Safari TAB at all — it
+   appears only once a page is on the Home Screen. So the offer was hidden
+   behind a test that every iPhone fails, and the one message an iPhone user
+   needs to see — install it, or you get nothing — was the one message an
+   iPhone could never be shown. */
+function isApple(){
+  var ua = navigator.userAgent || "";
+  return /iPad|iPhone|iPod/.test(ua) ||
+         (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+/* Drawn under the bus panel, in the frozen pane, and only for somebody who
+   has actually booked a seat. A page open on a stranger's phone is not asked
+   for anything. */
+function paintAlerts(){
+  var box = $("alerts");
+  if(!box) return;
+  box.innerHTML = "";
+  if(!MINE_BOOKED || ROLLED || pushOn) return;
+
+  var line = function(id, words){
+    return '<p class="live-sub alerts-line">'+
+      '<button type="button" id="'+id+'">'+words+'</button></p>';
+  };
+
+  if(isApple() && !standalone()){
+    box.innerHTML = line("pushHow", "Add to your Home Screen to get bus alerts");
+    if($("pushHow")) $("pushHow").addEventListener("click",function(){ howOpen(false); });
+    return;
   }
-  if(Notification.permission === "denied") return "";   /* asked once, told no */
+  if(!PUSH_ABLE) return;                               /* browser has no push at all */
+  if(Notification.permission === "denied") return;     /* asked once, told no */
 
-  return '<p class="live-sub" style="margin-top:10px">'+
-    '<button type="button" id="pushOn" class="ring" '+
-    'style="background:none;border:none;padding:0;font:inherit;color:inherit;text-decoration:underline">'+
-    'Tell me when the bus is near</button></p>';
+  box.innerHTML = line("pushOn", "Tell me when the bus is near");
+  if($("pushOn")) $("pushOn").addEventListener("click", pushTurnOn);
 }
 
 /* The key comes back from the live server as base64url and the browser wants
@@ -1281,7 +1321,7 @@ function pushTurnOn(){
     if(p !== "granted"){
       pushBusy = false;
       toast("Not turned on. You can still watch this page.");
-      paintLive();
+      paintAlerts();
       return;
     }
     return navigator.serviceWorker.ready.then(function(reg){
@@ -1305,13 +1345,13 @@ function pushTurnOn(){
         .then(function(){
           pushOn = true; pushBusy = false;
           toast("Alerts on.");
-          paintLive();
+          paintAlerts();
         });
     });
   }).catch(function(){
     pushBusy = false;
     toast("Could not turn alerts on.");
-    paintLive();
+    paintAlerts();
   });
 }
 
@@ -1323,7 +1363,7 @@ function pushLook(){
     navigator.serviceWorker.ready.then(function(reg){
       return reg.pushManager.getSubscription();
     }).then(function(sub){
-      if(sub){ pushOn = true; paintLive(); }
+      if(sub){ pushOn = true; paintAlerts(); }
     }).catch(function(){});
   }catch(e){}
 }
@@ -1506,7 +1546,6 @@ function paintLive(){
         'style="background:none;border:none;padding:0;font:inherit;color:inherit">'+
         'Watching the wrong stop?</button></p>'
       : '')+
-    pushOfferHtml()+
     '</div>';
 
   Array.prototype.forEach.call(box.querySelectorAll("[data-liveroute]"),function(b){
@@ -1515,8 +1554,6 @@ function paintLive(){
       liveFetch();
     });
   });
-  if($("pushOn")) $("pushOn").addEventListener("click",pushTurnOn);
-  if($("pushHow")) $("pushHow").addEventListener("click",function(){ howOpen(false); });
   if($("watchOff")) $("watchOff").addEventListener("click",function(){
     watchStop=""; watchSave(""); live=null; paintLive(); paint();
   });
@@ -1650,6 +1687,11 @@ function paint(){
           'Everything below is for <b>'+esc(prettyDate(DATE))+'</b>.</div>';
   }
 
+  /* Held while the list is built and written to the frozen pane at the end,
+     so there is one place that decides what it says. */
+  var mineNote = "";
+  MINE_BOOKED = !!booked;
+
   if(!CLOSED){
     if(booked && !dirty()){
       /* What this screen will actually do, and nothing it will not.
@@ -1662,7 +1704,8 @@ function paint(){
       /* Four words. It carried an instruction for a while \u2014 tap another stop
          to move, Not coming to give it up \u2014 both true and neither needed:
          the stops are right there and the button says what it is. */
-      html+='<div class="note note-go"><b>You are booked.</b></div>';
+      /* Into the frozen pane, not the list. See the markup above. */
+      mineNote = '<div class="note note-go"><b>You are booked.</b></div>';
     }
     /* There is nothing to warn about now. A booking belongs to a number, the
        number is asked for before a seat is taken, and a second device finds
@@ -1800,6 +1843,11 @@ function paint(){
             '<button type="button" class="btn btn-drop" id="cancelYes">Yes, I am not coming</button>'+
           '</div></div>';
   }
+
+  /* The frozen pane, written from the same pass that built the list, so the
+     two cannot disagree about whether this phone has a seat. */
+  if($("mine")) $("mine").innerHTML = mineNote;
+  paintAlerts();
 
   $("body").innerHTML=html;
 
