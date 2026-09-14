@@ -1366,7 +1366,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.60.0";
+var APP_VERSION = "v1.61.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -5423,15 +5423,6 @@ function rotaMyRoute(){
 
 /* Who is down to drive a route on the Sunday being shown. Cover wins over
    the scheduled name, because cover is what will actually happen. */
-function rotaDriverFor(route){
-  var d=rotaBaseSunday(0), row=rotaRowFor(rotaKey(d));
-  if(route==="South"){
-    var sP=(row&&row.primary2)||rotaSeedSecondary(d);
-    return ((row&&row.actual2)||sP)||"";
-  }
-  var nP=(row&&row.primary)||rotaSeedPrimary(d);
-  return ((row&&row.actual)||nP)||"";
-}
 
 function inPattern(list,me){
   var hit=false;
@@ -5705,8 +5696,8 @@ function rotaPaintStops(){
           /* Not his. Say whose, rather than nothing: a driver checking
              whether it is his turn gets an answer either way, and the badge
              above means something because it is not on every screen. */
-          : (rotaDriverFor(route)
-              ? '<span class="stop-whose">'+esc(rotaDriverFor(route))+'</span>'
+          : (tripWhoDrives(route)
+              ? '<span class="stop-whose">'+esc(tripWhoDrives(route))+'</span>'
               : ''))+'</p>';
 
   /* End of the frozen block. The live strip and the stops themselves scroll
@@ -6055,18 +6046,22 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
       /* Name the driver and the moment. Somebody looking for a button that is
          not theirs should be told whose it is, not left wondering whether the
          app is broken. Stated, not explained: whose phone, and what time. */
-      /* Whose route it is, and nothing else.
+      /* THE NAME IS ALREADY ON THIS SCREEN, so it is not said twice.
 
-         It used to add "Start trip appears on his phone at 09:30", which is a
-         sentence explaining the app to men who drive it every Sunday. Whose
-         turn it is, is a fact somebody looking at this screen may not know.
-         When the app opens is not.
+         A sentence lived here reading "<name> drives North this Sunday". The
+         summary line in the frozen pane, a few centimetres above, already ends
+         with that name as a badge, under the same condition: somebody looking
+         at a route that is not theirs.
 
-         No name, no line: an empty note is a strip of nothing that reads as
-         something that failed to load. */
-      var who=tripWhoDrives(route);
-      if(who) h+='<p class="trip-note"><b>'+esc(who)+'</b> drives '+
-                 esc(route)+' this Sunday.</p>';
+         The badge wins on every count. It is frozen, so it stays put while the
+         stop list scrolls. It is attached to the line already carrying the
+         route, the stops, the numbers and the registration, so the whole
+         picture arrives at once. And it survives the run starting, where the
+         sentence lived in the not-started branch and vanished.
+
+         It also fixes the case the comment below complains about. The rostered
+         driver signed out by a reload was told, in a full sentence, that he
+         drives North this Sunday. His own name. With no button. */
 
       /* And the reason there is no button, when the reason is us.
 
