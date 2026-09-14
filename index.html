@@ -771,6 +771,17 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 /* The one note on this screen that is about the phone rather than the bus.
    Given its own colour so it does not read as another seat warning. */
 .trip-signin{color:var(--stop)}
+/* Covering a route he is not rostered on. Amber, because it is a departure
+   from the rota and the record will say so, not because anything is wrong. */
+.trip-cover{color:var(--warn)}
+/* The one stop being asked about. Amber like the row it stands for, so the
+   eye joins them, and wide enough that a thumb on a dashboard cannot miss. */
+.trip-ask{background:var(--warn-bg);border:1px solid var(--warn-line);
+  border-radius:10px;padding:10px;margin:0 0 10px}
+.trip-ask-q{margin:0 0 8px;font-size:14px;line-height:1.45;color:var(--warn)}
+.trip-ask-btns{display:flex;gap:6px;flex-wrap:wrap}
+.trip-ask-btns .trip-mini{flex:1 1 auto;min-height:40px}
+.trip-ask-no{opacity:.75}
 .trip-buses{display:grid;gap:8px;margin-top:2px}
 .trip-buses .btn{width:100%}
 .trip-rehearsal{background:var(--stop-bg);border:1px solid var(--stop-line);color:var(--stop);
@@ -1355,7 +1366,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.53.0";
+var APP_VERSION = "v1.60.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -1521,9 +1532,10 @@ function busAskNeeded(reg){ return !!myBusToday() && !isMyBus(reg); }
    the only thing worth telling him is what it costs in seats. */
 /* off is a list of registrations that are NOT available right now: stopped by
    today's check, or already out on the other route. Without it this happily
-   named a bus four lines above the screen's own "NH56 was stopped by today's
-   check. Take the other bus." — the app contradicting itself on one screen,
-   and pointing a driver at a vehicle a driver had just condemned. */
+   named a bus four lines above the screen's own note about a bus stopped by
+   today's check: the app contradicting itself on one screen, and pointing a
+   driver at a vehicle a driver had just condemned. Both notes now send him to
+   the coordinator instead of naming a replacement. */
 function busSeatNote(route, reg, off){
   var s = SEATS[route] || {};
   if(!reg) return "";
@@ -1962,6 +1974,14 @@ function coordPhone(){
   var p = CFG.coordinator && CFG.coordinator.phone;
   return p ? String(p).replace(/[^0-9+]/g,"") : "";
 }
+
+/* Written out three times before this existed, and one of the three fell out
+   of step. Whole, never shortened: taking the first word of it turned every
+   name in this church into "Bro". */
+function coordName(){
+  return (CFG.coordinator && CFG.coordinator.name) ? CFG.coordinator.name
+                                                   : "the bus coordinator";
+}
 function prettyPhone(){
   var p = coordPhone();
   if(/^07\d{9}$/.test(p)) return p.slice(0,5) + " " + p.slice(5);
@@ -2028,15 +2048,27 @@ var pushOn = false, pushBusy = false;
    a second one. */
 var pinJumping = false;
 
+/* Whether this is an iPhone, worked out WITHOUT asking whether push exists.
+
+   That distinction matters. PUSH_ABLE tests for PushManager, and Apple does
+   not put PushManager in a Safari TAB at all: it appears only once a page is
+   on the Home Screen. So any line hidden behind PUSH_ABLE is hidden from every
+   iPhone that has not installed the app, which is exactly the phone that needs
+   telling to install it. The passenger page had this bug and fixes it the same
+   way; the driver app had it too, silently, because the only message it could
+   ever have shown an iPhone was the one about the Home Screen. */
+function isApple(){
+  var ua = navigator.userAgent || "";
+  return /iPad|iPhone|iPod/.test(ua) ||
+         (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 /* Apple gives a page in a tab no push at all, silently. Only a Home Screen
    install gets them. */
 function pushCanAsk(){
   if(!PUSH_ABLE) return false;
   if(standalone()) return true;
-  var ua = navigator.userAgent || "";
-  var ios = /iPad|iPhone|iPod/.test(ua) ||
-            (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  return !ios;
+  return !isApple();
 }
 
 function pushKeyBytes(k){
@@ -2073,6 +2105,45 @@ function pushTurnOn(){
         .then(function(){ pushOn=true; pushBusy=false; toast("Reminders on."); paintLinks(); });
     });
   }).catch(function(){ pushBusy=false; toast("Could not turn reminders on."); paintLinks(); });
+}
+
+/* PROVE IT, ON THIS PHONE, NOW.
+
+   A rehearsal wakes nobody and the End trip reminder waits for a run to be
+   past its arrival time, so until this existed there was no way to find out
+   that alerts worked except to need one. A token the push service will not
+   accept looks exactly like a quiet morning.
+
+   The server answers with what the push service said, so a refusal arrives as
+   words on this screen. */
+function pushTest(){
+  if(pushBusy) return;
+  pushBusy = true;
+  toast("Asking...");
+  navigator.serviceWorker.ready.then(function(reg){
+    return reg.pushManager.getSubscription();
+  }).then(function(sub){
+    if(!sub) throw new Error("no subscription");
+    return callFetch(LIVE_ENDPOINT, {
+      method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify({ action:"testpush", endpoint: sub.endpoint })
+    });
+  }).then(function(r){ return r.json(); }).then(function(out){
+    pushBusy = false;
+    if(out && out.ok){ toast("Sent. Give it a few seconds."); return; }
+    /* The server's own words. It is the only thing on this screen that can
+       tell the difference between a phone that is gone and a key that is
+       wrong, and both look identical from here otherwise. */
+    toast((out && out.error) ? "Not sent: "+out.error : "Not sent.");
+    /* Only when the push service has disowned this phone. That row is deleted
+       server side, so the offer to turn alerts on has to come back. Every
+       other failure leaves the subscription alone: a bad minute at Google is
+       not a reason to tell a driver he is not signed up. */
+    if(out && out.gone){ pushOn = false; paintLinks(); }
+  }).catch(function(){
+    pushBusy = false;
+    toast("Could not ask for a test.");
+  });
 }
 
 function pushLook(){
@@ -2126,19 +2197,35 @@ function paintLinks(){
   if(check){
     check.className = "btn btn-wide "+(live?"btn-ghost":"btn-main")+(checkOff?" is-off":"");
   }
-  /* The offer. Only to somebody signed in, only when it is not already on,
-     and never to a phone that cannot receive one. */
+  /* The offer, or the test once it is on. Only to somebody signed in, and
+     never to a phone that cannot receive one.
+
+     It used to disappear the moment reminders were on, which was right while
+     there was nothing left to say. There is now: a rehearsal wakes nobody and
+     the real reminder only comes on a Sunday, so a driver who has turned them
+     on has no way of knowing they work. */
   var al=$("hubAlert");
   if(al){
-    var showAl = PUSH_ABLE && !pushOn && st.driver.trim() &&
-                 (typeof Notification === "undefined" || Notification.permission !== "denied");
+    var denied = (typeof Notification !== "undefined" && Notification.permission === "denied");
+    /* An iPhone in a tab has no PushManager, so PUSH_ABLE alone hid this line
+       from the phone with most to learn from it. See isApple above. */
+    var needsHome = isApple() && !standalone();
+    var showAl = st.driver.trim() && !denied && (PUSH_ABLE || needsHome);
     al.style.display = showAl ? "" : "none";
     if(showAl){
-      al.innerHTML = pushCanAsk()
-        ? 'Remind me to end the trip. <button type="button" id="hubAlertGo">Turn on</button>'
-        : 'Add this app to your Home Screen to get reminders.';
-      var ago=$("hubAlertGo");
-      if(ago) ago.addEventListener("click",pushTurnOn);
+      if(needsHome && !PUSH_ABLE){
+        al.innerHTML = 'Add this app to your Home Screen to get reminders.';
+      } else if(pushOn){
+        al.innerHTML = 'Reminders are on. <button type="button" id="hubAlertTest">Send me a test</button>';
+        var atest=$("hubAlertTest");
+        if(atest) atest.addEventListener("click",pushTest);
+      } else {
+        al.innerHTML = pushCanAsk()
+          ? 'Remind me to end the trip. <button type="button" id="hubAlertGo">Turn on</button>'
+          : 'Add this app to your Home Screen to get reminders.';
+        var ago=$("hubAlertGo");
+        if(ago) ago.addEventListener("click",pushTurnOn);
+      }
     }
   }
 
@@ -2671,14 +2758,40 @@ function geoStart(){
 }
 
 /* Metres between the fix and where the buses are kept, if that is set. */
-function geoDistance(lat,lng){
-  var b=CFG.busBase;
+/* Metres between a fix and a named point. Null when there is no such point,
+   which is a different answer from zero and must stay different. */
+function geoTo(lat,lng,b){
   if(!b || typeof b.lat!=="number" || typeof b.lng!=="number") return null;
   var R=6371000, rad=Math.PI/180;
   var dLat=(lat-b.lat)*rad, dLng=(lng-b.lng)*rad;
   var a=Math.sin(dLat/2)*Math.sin(dLat/2)+
         Math.cos(b.lat*rad)*Math.cos(lat*rad)*Math.sin(dLng/2)*Math.sin(dLng/2);
   return Math.round(R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
+}
+
+/* Distance from where the buses are kept. What a walkaround is measured
+   against, and it keeps its own name because that is what the check means by
+   "away". */
+function geoDistance(lat,lng){ return geoTo(lat,lng,CFG.busBase); }
+
+/* WHERE CHURCH IS.
+
+   Its own setting, because it is its own place: the buses are kept on Chester
+   Road and the service is somewhere else for plenty of churches. Left unset,
+   it falls back to the bus base, which is the only fix this app has ever had
+   and is the right answer where the two are the same yard.
+
+   Measure it standing at the door, not off a map. The bus base was 103 metres
+   out when it was taken off a postcode, and 103 metres is the difference
+   between a run that ends itself and one that never does. */
+function churchPoint(){
+  var c=CFG.churchBase;
+  if(c && typeof c.lat==="number" && typeof c.lng==="number") return c;
+  return CFG.busBase || null;
+}
+function churchRadius(){
+  var c=churchPoint();
+  return (c && typeof c.radius==="number") ? c.radius : 165;   /* yards */
 }
 
 /* Only call it away from the bus when the fix is good enough to be sure.
@@ -3655,6 +3768,39 @@ var TCKEY="fleet.checks.today.v1";
    as the obvious button rather than having it decided for him. */
 var tripOthers={};
 
+/* A cover claim made on this phone, for one route, this session.
+
+   Deliberately NOT saved. Covering a route is a deliberate act and it should
+   be made deliberately every time; a claim that survived a reload would sit
+   in a phone's storage for the rest of the day and quietly hand the route to
+   whoever picked the handset up next. */
+var tripCoverClaimed="";
+/* First tap of the two. Held for one paint, cleared by anything else. */
+var tripCoverArmed="";
+
+/* Stops he has been asked about and waved off. Per run, in memory: the
+   question is worth asking once, and a driver who has said "not now" to a
+   stop two miles back has answered it. */
+var tripSkipAsked={};
+
+
+/* ---- arriving back at church, without being told ------------------------
+
+   The failure this is really aimed at is the same one the End trip push is
+   aimed at: he parks, lets everyone off, and walks into the service with the
+   run still open. The push tells him afterwards. This just closes it.
+
+   Three flags, and the middle one is the whole of the correctness:
+
+   tripAwayEver   the bus has been OUTSIDE the church fence at some point this
+                  run. Without it the run would end itself thirty seconds
+                  after Start, because Start happens in the churchyard.
+   tripHomeSince  when the current unbroken run of inside-the-fence fixes
+                  began. Reset by any fix that is clearly outside.
+   tripAutoEndedAt  when this app ended a run on its own, so the Undo can be
+                  offered for a while afterwards and withdrawn later. */
+var tripAwayEver=false, tripHomeSince=0, tripAutoEndedAt=0;
+
 /* Kept on the phone, not only in memory.
 
    It also carries the answer through a screen close, a reload, and the walk
@@ -3929,10 +4075,148 @@ function tripWatchStart(){
                 ? p.coords.speed : null;
     tripSpeedAt = Date.now();
     tripPaintMoving();
+    safely(function(){ tripAutoArrive(p); });
   }, function(){
     tripSpeed=null; tripPaintMoving();
   }, { enableHighAccuracy:true, maximumAge:2000, timeout:15000 });
 }
+/* One fix, judged.
+
+   ACCURACY IS PART OF THE TEST, not a detail. A phone in a built-up street
+   reports fifty and sometimes two hundred yards of uncertainty, and a fix
+   that uncertain has no opinion about a hundred and sixty five yard fence. So
+   there are three answers here and not two: clearly outside, clearly inside,
+   and not sure. Not sure changes nothing at all — it neither starts the clock
+   nor breaks it — which is what stops a run ending itself at a red light two
+   streets away, and equally what stops one bad fix in the car park resetting
+   a timer that was nearly up.
+
+   The same rule the walkaround uses for "away". It has been right there for a
+   year and it is right here. */
+function tripAutoArrive(p){
+  var opt = (CFG.autoEnd && typeof CFG.autoEnd==="object") ? CFG.autoEnd : {};
+  if(CFG.autoEnd === false || opt.enabled === false) return;
+  if(!trip.started || trip.ended) return;
+  if(!p || !p.coords) return;
+
+  var c=churchPoint();
+  if(!c) return;
+  var m = geoTo(p.coords.latitude, p.coords.longitude, c);
+  if(m===null) return;
+
+  var mins = (typeof opt.minutes==="number" && opt.minutes>0) ? opt.minutes : 3;
+  var next = autoEndNext(
+    { away: tripAwayEver, since: tripHomeSince },
+    geoFenceVerdict(toYards(m), toYards(p.coords.accuracy||0), churchRadius()),
+    Date.now(), mins*60000);
+
+  tripAwayEver  = next.away;
+  tripHomeSince = next.since;
+  if(next.end) tripAutoEnd();
+}
+
+/* ---- the two decisions, kept pure so they can be tested ---------------- */
+
+/* THREE ANSWERS, NOT TWO, and that is the whole of the correctness.
+
+   A phone in a built-up street reports fifty and sometimes two hundred yards
+   of uncertainty, and a fix that vague has no opinion at all about a hundred
+   and sixty five yard fence. Forcing it to say in or out is what would end a
+   run at a red light two streets away, and equally what would let one bad
+   reading in the car park reset a timer that was nearly up.
+
+   "unsure" changes nothing. It neither starts the clock nor breaks it. */
+function geoFenceVerdict(yards, accYards, radiusYards){
+  if(yards - accYards > radiusYards) return "out";
+  if(yards + accYards > radiusYards) return "unsure";
+  return "in";
+}
+
+/* What the run should now know, and whether it should close.
+
+   away is the one that matters: the bus STARTS inside the fence, in the
+   churchyard, so without a record of having left it every run would end
+   itself about thirty seconds after Start trip. */
+function autoEndNext(s, verdict, now, needMs){
+  if(verdict === "out")    return { away:true,    since:0,       end:false };
+  if(verdict === "unsure") return { away:s.away,  since:s.since, end:false };
+  if(!s.away)              return { away:false,   since:0,       end:false };
+  if(!s.since)             return { away:true,    since:now,     end:false };
+  return { away:true, since:s.since, end:(now - s.since) >= needMs };
+}
+
+/* END IT, THEN SAY SO.
+
+   Not a prompt. The entire reason End trip gets missed is that he has parked
+   and walked inside, and a man who is not looking at his phone will not
+   answer a prompt either: it would sit on a dark screen being exactly as
+   useful as the button it replaced.
+
+   So it acts, and then it tells him, and the telling carries the way back.
+
+   Deliberately NOT tripEnd(). That function guards itself against a moving
+   bus and against a missing PIN, and both are right for a thumb and wrong for
+   this: he PIN'd in to start the run and is not standing here to do it
+   again. What it does keep is the one guard that matters, which is that this
+   phone owns the run it is ending. */
+function tripAutoEnd(){
+  if(!trip.started || trip.ended) return;
+  if(!tripMayTap(trip.route)) return;
+
+  trip.ended=tripNow();
+  tripAutoEndedAt=trip.ended;
+  tripSaveState();
+  tripQueue({ event:"end", stopId:"", at:trip.ended, auto:1 });
+  tripWatchStop();
+  wakeDrop();
+  tripPaint();
+  tripAutoEndTell();
+}
+
+/* Shown by the app's own service worker rather than sent from the server.
+
+   The server could not do it: it does not know the run has ended until the
+   queue reaches it, and the whole point is that this lands the moment it
+   happens. A page may raise its own notification once permission has been
+   given, which it has, because he turned reminders on. */
+function tripAutoEndTell(){
+  try{
+    if(!("Notification" in window) || Notification.permission!=="granted") return;
+    if(!navigator.serviceWorker) return;
+    navigator.serviceWorker.ready.then(function(reg){
+      reg.showNotification("Run ended, back at church", {
+        body: "Open the app to undo if that is wrong.",
+        tag: "autoend", renotify: true,
+        icon: "./icon-192.png", badge: "./icon-192.png",
+        data: { url: "./" }
+      });
+    }).catch(function(){});
+  }catch(e){}
+}
+
+/* The way back. Offered only after an end this app made by itself, and only
+   for a while: an undo at four in the afternoon is somebody reopening a run
+   that finished hours ago, and nothing good comes of that. */
+var AUTO_UNDO_FOR = 30*60000;
+function tripAutoUndoOpen(){
+  return !!(trip.ended && tripAutoEndedAt &&
+            (tripNow()-tripAutoEndedAt) < AUTO_UNDO_FOR);
+}
+function tripAutoUndo(){
+  if(!tripAutoUndoOpen()) return;
+  trip.ended=0;
+  tripAutoEndedAt=0;
+  /* Straight back to needing a real arrival. He is at church now, so without
+     this the next fix would end it again inside a second. */
+  tripAwayEver=false; tripHomeSince=0;
+  tripSaveState();
+  tripQueue({ event:"undo", undoes:"end", stopId:"", at:tripNow() });
+  tripWatchStart();
+  wakeAsk();
+  toast("Run reopened.");
+  tripPaint();
+}
+
 function tripWatchStop(){
   if(tripWatch!==null && navigator.geolocation){
     try{ navigator.geolocation.clearWatch(tripWatch); }catch(e){}
@@ -4032,6 +4316,56 @@ function tripMoving(){
    Everyone else reads. It keeps a second driver from tapping a route he is
    not on, and it makes every tap attributable to a name, which is the whole
    enforcement value. */
+/* What the rota says, for one man and one route. Pulled out of tripMayTap so
+   the cover path below can ask the same question without answering it. */
+function tripRostered(me, route){
+  if(!me) return false;
+  var d=rotaBaseSunday(0), row=rotaRowFor(rotaKey(d));
+  if(route==="South"){
+    var sP=(row&&row.primary2)||rotaSeedSecondary(d), sA=(row&&row.actual2)||sP;
+    return sameName(me,sP) || sameName(me,sA);
+  }
+  var nP=(row&&row.primary)||rotaSeedPrimary(d), nA=(row&&row.actual)||nP;
+  return sameName(me,nP) || sameName(me,nA);
+}
+
+/* A run already open on this route, driven by somebody who is not the man
+   holding this phone. The empty string when there is none.
+
+   Read off tripSeen, which is kept for every route whether or not it is ours,
+   so this answers about North while South is on the screen. */
+function tripOpenBy(route){
+  var seen = tripSeen && tripSeen[route];
+  if(!seen || !seen.started || seen.ended) return "";
+  var who = String(seen.driver||"").trim();
+  if(!who) return "";
+  /* Our own run is never somebody else's, however the name came back. */
+  if(trip.id && seen.id && trip.id===String(seen.id)) return "";
+  var me=(st.driver||"").trim();
+  if(me && sameName(me,who)) return "";
+  return who;
+}
+
+/* Whether this phone may offer to COVER a route.
+
+   Deliberately not folded into tripMayTap. Doing that would put an ordinary
+   Start trip button in front of every signed-in driver for every route with
+   no bus out yet, and the man rostered North would find himself one stray tap
+   away from starting South in his own name. Cover is a separate, deliberate
+   act, drawn as its own thing and confirmed before it happens. */
+function tripMayCover(route){
+  var me=(st.driver||"").trim();
+  if(!me) return false;
+  /* A rehearsal already hands a coordinator every route. Offering to cover one
+     he has been given puts two ways to start the same run on one screen. */
+  if(tripRehearsal && tripSeesAll()) return false;
+  if(tripRostered(me,route)) return false;    /* he is not covering, he is on */
+  if(tripOpenBy(route)) return false;         /* somebody is already out */
+  if(!tripClosed) return false;               /* bookings still open; too early */
+  if(trip.started && !trip.ended) return false;  /* he is out on something already */
+  return true;
+}
+
 function tripMayTap(route){
   var me=(st.driver||"").trim();
   if(!me) return false;
@@ -4040,13 +4374,18 @@ function tripMayTap(route){
      nothing for anybody else, so a driver who opens his phone in the middle
      of one still only has his own route. */
   if(tripRehearsal && tripSeesAll()) return true;
-  var d=rotaBaseSunday(0), row=rotaRowFor(rotaKey(d));
-  if(route==="South"){
-    var sP=(row&&row.primary2)||rotaSeedSecondary(d), sA=(row&&row.actual2)||sP;
-    return sameName(me,sP) || sameName(me,sA);
-  }
-  var nP=(row&&row.primary)||rotaSeedPrimary(d), nA=(row&&row.actual)||nP;
-  return sameName(me,nP) || sameName(me,nA);
+  if(tripRostered(me,route)) return true;
+  /* A claim made on this phone, a moment ago, by this man. It unlocks nothing
+     more than the ordinary Start trip flow: he still picks his bus, still
+     passes the check gate, and still lands on the record in his own name. */
+  if(tripCoverClaimed===route) return true;
+  /* His own cover run, once he has claimed it. Claiming is the deliberate act
+     drawn by tripMayCover; this is only what keeps his taps working for the
+     rest of the morning after he has made it. Started TODAY, so last week's
+     leftovers never hand anybody a route. */
+  if(trip.route===route && trip.started && !trip.ended &&
+     new Date(trip.started).toDateString()===new Date().toDateString()) return true;
+  return false;
 }
 
 /* Coordinator and Minister in Charge. They are the ones rung when a bus is
@@ -4123,6 +4462,24 @@ function tripStart(route, reg, anyway){
      puts the only real guard here: a run is recorded in a driver's name, and
      the PIN is what makes the name mean anything. */
   if(pinGateNeeded()){ pinGateFocus(); return; }
+
+  /* THE SECOND HARD REFUSAL IN THE APP.
+
+     The first is a bus stopped by a critical defect. This one is not about
+     the record, it is about the road: two buses cannot run one route at the
+     same time. A second start would split the morning's stop taps across two
+     runs, leave the passenger page flicking between them, and give two men
+     each half a picture of where the other one was.
+
+     The server refuses it as well, on the same test. It has to: this one is
+     made off a board answer that is a few seconds old, and two thumbs coming
+     down inside that window would both be told yes. */
+  var already = tripOpenBy(route);
+  if(already){
+    toast(already+" is already out on "+route+".");
+    return;
+  }
+
   if(!reg){ toast("Tap the bus you are taking."); return; }
 
   var chk=checkVerdict(reg);
@@ -4131,7 +4488,17 @@ function tripStart(route, reg, anyway){
 
      A check that ends in a critical defect stops the bus. Letting a run start
      after that would mean the app recorded the vehicle as unfit and then
-     helped somebody drive it. Take the other bus, check it, start again.
+     helped somebody drive it.
+
+     WHAT HE IS TOLD TO DO IS RING THE COORDINATOR, and that is not a detail.
+     The defect verdict screen has always said "Ring the coordinator and
+     arrange lifts"; this line and the bus note below it used to say "Take the
+     other bus", which is a different instruction, given by the same app, about
+     the same bus, four lines apart. Worse, it is a decision this app is not
+     entitled to make. Which bus goes out when one is condemned is the
+     coordinator's call: the other one may be booked, may be short of seats for
+     this route, or may be the one already out. The app says what has happened
+     and who to ring, and stops.
 
      It now catches a stop signed by anyone, not only by the driver holding
      the phone, which is the case it was always meant to catch: a coordinator
@@ -4140,7 +4507,7 @@ function tripStart(route, reg, anyway){
   if(chk.state==="stopped"){
     /* No esc: toast sets textContent, which escapes nothing and needs
        nothing escaped. Passing esc() here would print the entities. */
-    toast(reg+" was stopped by today\u2019s check. Take the other bus.");
+    toast(reg+" was stopped by today\u2019s check. Ring "+coordName()+".");
     return;
   }
 
@@ -4194,6 +4561,8 @@ function tripStart(route, reg, anyway){
   trip.ended = 0;
   trip.served = {};
   trip.undone = {};
+  tripSkipAsked={};              /* last run's "not now" answers are not this run's */
+  tripAwayEver=false; tripHomeSince=0; tripAutoEndedAt=0;
   tripUncheckedAsked="";
   tripSaveState();
   /* Queued from inside the callback so the row carries the fix. Everything
@@ -5405,6 +5774,42 @@ function rotaPaintStops(){
   var missedIds={};
   missed.forEach(function(m){ missedIds[m.id]=true; });
 
+  /* THE STOP HE HAS GONE PAST WITHOUT MARKING.
+
+     Amber on the row was the whole of this until now, and amber waits to be
+     noticed. A driver watching the road does not notice it, and the two
+     mornings this app has lost stops to were both a man moving on without
+     looking down. So the oldest unmarked stop behind him gets asked about
+     directly, once.
+
+     The earliest one, not the nearest, because the person still standing
+     there has been standing the longest.
+
+     ONE PLACE TO ANSWER IT. While this is up, that stop's own row buttons are
+     suppressed below. The same stop asking to be dealt with in two places is
+     the fault that got the old warning cards removed, and it would be the
+     same fault again. */
+  var askStop=null;
+  if(onThis && mayTap){
+    for(var mi=0; mi<missed.length; mi++){
+      if(!tripSkipAsked[missed[mi].id]){ askStop=missed[mi]; break; }
+    }
+  }
+  if(askStop){
+    var askN=rotaStopCounts[askStop.id]||0;
+    html+='<div class="trip-ask">'+
+            '<p class="trip-ask-q"><b>'+esc(askStop.stop)+'</b> at '+esc(askStop.time)+
+              ' is not marked.'+
+              (askN? ' '+askN+(askN===1?' person':' people')+' booked there.' : '')+
+            '</p>'+
+            '<div class="trip-ask-btns">'+
+              '<button class="trip-mini" data-triptap="'+esc(askStop.id)+'" data-tripkind="empty">Nobody there</button>'+
+              '<button class="trip-mini" data-triptap="'+esc(askStop.id)+'" data-tripkind="pickup">Picked up</button>'+
+              '<button class="trip-mini trip-ask-no" data-tripskip="'+esc(askStop.id)+'">Not now</button>'+
+            '</div>'+
+          '</div>';
+  }
+
   list.concat(arr).forEach(function(s){
     /* How many are booked there. Shown, never acted on: the app does not
        tell anybody to skip a stop. Somebody who did not book still turns
@@ -5460,7 +5865,8 @@ function rotaPaintStops(){
              appear on every booked stop including ones miles ahead, which a
              driver never needs and which put a pair of buttons on most rows.
              The big button covers the stop in front of him. */
-          ((onThis&&mayTap&&!done&&!s.arrival&&(missedIds[s.id]||!showCounts))
+          ((onThis&&mayTap&&!done&&!s.arrival&&(missedIds[s.id]||!showCounts)&&
+            !(askStop&&askStop.id===s.id))
             ? '<div class="trip-row-btns">'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="empty">Nobody there</button>'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="pickup">Picked up</button>'+
@@ -5504,6 +5910,16 @@ function rotaPaintStops(){
       /* The other bus has its own run. Ask for it, or a coordinator would be
          reading North's progress under South's heading. */
       tripFetch(rotaStopsRoute,function(){ if(rotaStopsOpen) tripPaint(); });
+    });
+  });
+  /* "Not now." Not an answer about the stop, and nothing is recorded: it says
+     only that he does not want to be asked again this run. The stop stays
+     amber in the list with its own buttons back, so it is still there to be
+     dealt with when he has stopped driving. */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-tripskip]"),function(b){
+    b.addEventListener("click",function(){
+      tripSkipAsked[this.getAttribute("data-tripskip")]=1;
+      tripPaint();
     });
   });
   Array.prototype.forEach.call(document.querySelectorAll("[data-triptap]"),function(b){
@@ -5557,6 +5973,21 @@ function rotaPaintStops(){
       try{ $("driver").focus(); }catch(e){}
     }
   }
+  if($("tripAutoUndo")) $("tripAutoUndo").addEventListener("click",tripAutoUndo);
+  if($("tripCover")) $("tripCover").addEventListener("click",function(){
+    /* His name on the record is the whole point of this, so the PIN gate
+       comes before the claim rather than after it. */
+    if(pinGateNeeded()){ pinGateFocus(); return; }
+    if(tripCoverArmed!==route){ tripCoverArmed=route; tripPaint(); return; }
+    /* Asked again at the moment of claiming, not only at the moment of
+       drawing. Somebody else may have started it while this sat on screen. */
+    var out=tripOpenBy(route);
+    if(out){ tripCoverArmed=""; toast(out+" is already out on "+route+"."); tripPaint(); return; }
+    tripCoverArmed="";
+    tripCoverClaimed=route;
+    toast("Covering "+route+". Pick your bus.");
+    tripPaint();
+  });
   if($("tripSignIn")) $("tripSignIn").addEventListener("click",toSignIn);
   if($("stopNotMe")) $("stopNotMe").addEventListener("click",toSignIn);
   tripPaintMoving();
@@ -5663,6 +6094,13 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
     h+='<p class="trip-note">'+(mayTap?'<b>Trip finished.</b> ':
          '<b>'+esc(tripWhoDrives(route)||route)+' has finished.</b> ')+
        tripClock(t.started)+' to '+tripClock(t.ended)+', '+mins+' minutes.</p>';
+    /* The way back out of an end this app made by itself. Only on his own
+       phone, only for half an hour, and it says which end it is offering to
+       take back so it is never mistaken for undoing his own tap. */
+    if(mayTap && onThis && tripAutoUndoOpen()){
+      h+='<p class="trip-note trip-cover">Ended automatically, back at church.</p>'+
+         '<button class="btn btn-ghost btn-wide" id="tripAutoUndo">It has not finished, reopen it</button>';
+    }
     return h+'</div>';
   }
 
@@ -5714,6 +6152,35 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
     h+='<p class="trip-note trip-signin"><b>Nobody is signed in.</b> '+
        'Your run is still going.</p>'+
        '<button class="btn btn-main" id="tripSignIn">Sign in</button>';
+  }
+
+  /* COVERING A ROUTE HE IS NOT ON.
+
+     The gap this closes: a man turns up to drive because the rostered driver
+     rang him at eight, the coordinator has not edited the Rota tab, and the
+     app gives him no Start trip and no clue why. He drives anyway. The
+     morning goes unrecorded — no stops, no times, no trace it happened.
+
+     The rule is one bus, one route, one driver, so this is drawn only when
+     nobody is out on it. It is not the ordinary Start trip button and it is
+     not meant to look like one: it is its own act, confirmed, and it lands on
+     the record as Cover so the column gets filled by somebody who knows what
+     actually happened.
+
+     Two taps rather than a dialog. A confirm box on a phone clamped to a
+     dashboard is a modal nobody reads, and the second tap says the same
+     thing. */
+  if(tripMayCover(route)){
+    var armed = tripCoverArmed===route;
+    h+='<p class="trip-note trip-cover"><b>You are not on the rota for '+
+         esc(route)+'.</b> '+
+         (tripWhoDrives(route)
+            ? esc(tripWhoDrives(route))+' is. Nobody is out.'
+            : 'Nobody is rostered, and nobody is out.')+'</p>'+
+       '<button class="btn '+(armed?'btn-warn':'btn-ghost')+' btn-wide" id="tripCover">'+
+         (armed ? 'Confirm: you are covering '+esc(route)
+                : 'I am covering this run')+
+       '</button>';
   }
 
   /* The PIN has to be reachable HERE too, not only before the run starts.
@@ -5864,11 +6331,14 @@ function tripBusButtonsHtml(){
   h+='</div>';
 
   /* A bus stopped by today's check gets no button. Same refusal tripStart
-     already makes; making it here means he never taps something that was
-     only ever going to say no, and the other bus is beside it. */
+     already makes; making it here means he never taps something that was only
+     ever going to say no.
+
+     It used to end "Take the other bus", which is the app choosing a vehicle.
+     It is not the app's choice. See the comment at the top of tripStart. */
   stopped.forEach(function(reg){
     h+='<p class="trip-note"><b class="trip-stopme">'+esc(reg)+
-       ' was stopped by today\u2019s check.</b> Take the other bus.</p>';
+       ' was stopped by today\u2019s check.</b> Ring '+esc(coordName())+'.</p>';
   });
 
   if(!shown) return h+'<p class="trip-note"><b>No bus can be started.</b> Ring '+
