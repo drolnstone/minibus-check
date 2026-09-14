@@ -1,7 +1,7 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
 const CACHE_PREFIX = "minibus-check-";
-const CACHE = CACHE_PREFIX + "v1.49.0";
+const CACHE = CACHE_PREFIX + "v1.51.0";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -230,4 +230,60 @@ self.addEventListener("fetch", (e) => {
         .catch(() => Response.error());
     })
   );
+});
+
+/* ==========================================================================
+   BEING WOKEN
+   ==========================================================================
+
+   The push that arrives carries NOTHING. That is on purpose: this asks the
+   live server what it means, right now, and shows the answer. A push that sat
+   in a tunnel for four minutes therefore says where the bus is at the moment
+   the phone is looked at, not where it was when somebody tapped.
+
+   Something is ALWAYS shown. A browser that sees a push event produce no
+   notification counts it against the site and eventually stops delivering
+   them at all, so every path below ends in showNotification — the real
+   message when the server answers, a plain one when it cannot. */
+const LIVE_API = "https://minibus-api.asimbassey.workers.dev";
+
+self.addEventListener("push", (e) => {
+  e.waitUntil((async () => {
+    let say = { title: "Sunday Bus", body: "Open the app for the latest.", tag: "bus", url: "./" };
+    try {
+      const sub = await self.registration.pushManager.getSubscription();
+      if (sub) {
+        const res = await fetch(LIVE_API, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "pushwhat", endpoint: sub.endpoint })
+        });
+        const out = await res.json();
+        if (out && out.ok && out.title) say = out;
+      }
+    } catch (err) { /* the plain one, below */ }
+
+    await self.registration.showNotification(say.title, {
+      body: say.body || "",
+      tag: say.tag || "bus",          /* one line per subject, replaced not stacked */
+      renotify: true,
+      icon: "./icon-192.png",
+      badge: "./icon-192.png",
+      data: { url: say.url || "./" }
+    });
+  })());
+});
+
+/* Tapping it opens the app rather than a new copy of it. A driver with the
+   page already open in a tab gets that tab, focused, not a second one. */
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const want = (e.notification.data && e.notification.data.url) || "./";
+  e.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of all) {
+      if (c.url.indexOf(self.registration.scope) === 0 && "focus" in c) return c.focus();
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(want);
+  })());
 });

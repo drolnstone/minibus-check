@@ -657,6 +657,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-route{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;border-radius:4px;padding:2px 6px;white-space:nowrap;margin-top:4px}
 .rota-route.north{color:var(--info-deep);background:var(--info-bg);border:1px solid var(--info-line)}
 .rota-route.south{color:var(--south);background:var(--south-bg);border:1px solid var(--south-line)}
+/* Quieter than the PIN nudge: this is an offer, not an outstanding job. */
+.hub-alert{background:var(--rail);border:1px solid var(--hair);color:var(--muted);
+  border-radius:var(--r);padding:10px 13px;margin:0 0 14px;font-size:14px;line-height:1.45}
+.hub-alert button{text-decoration:underline;color:var(--accent-ink);font-weight:600;padding:2px 0}
 /* The PIN nudge on the hub. Amber: something to do, not something wrong. */
 .hub-pin{background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn);
   border-radius:var(--r);padding:11px 13px;margin:0 0 14px;font-size:14px;line-height:1.45}
@@ -1149,6 +1153,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
          Before the split this was a disabled Continue and a word in the
          footer, which told a driver that something was wrong but not what. -->
     <div class="hint hub-pin" id="hubPin" style="display:none"></div>
+    <!-- Offered, never sprung: see pushOfferHtml. -->
+    <div class="hint hub-alert" id="hubAlert" style="display:none"></div>
 
     <div class="linkrow">
       <button class="btn btn-main btn-wide" id="toCheck" type="button">Vehicle check</button>
@@ -1347,7 +1353,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.49.0";
+var APP_VERSION = "v1.51.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -1996,6 +2002,84 @@ function paintSentNext(){
   why.textContent = ready ? "You are on "+route+" today." : "";
 }
 
+/* ==========================================================================
+   ALERTS, DRIVER SIDE
+   ==========================================================================
+
+   One message, and it is the one that has now failed twice: End trip. On 6
+   September North marked three stops, drove home and never tapped it; on 13
+   September South did the same. Both times the app had a line on a screen
+   nobody was looking at, because by then he had parked, let everyone off and
+   walked into the service.
+
+   Every other nudge in this app lives inside the app. A push is the only
+   thing that reaches a man who has stopped looking at it.
+
+   The live server decides when: a run started, past its arrival time, and
+   nothing heard for ten minutes. It asks twice, a quarter of an hour apart,
+   and then leaves him alone. */
+var PUSH_ABLE = ("Notification" in window) && ("serviceWorker" in navigator) &&
+                ("PushManager" in window);
+var pushOn = false, pushBusy = false;
+
+/* Apple gives a page in a tab no push at all, silently. Only a Home Screen
+   install gets them. */
+function pushCanAsk(){
+  if(!PUSH_ABLE) return false;
+  if(standalone()) return true;
+  var ua = navigator.userAgent || "";
+  var ios = /iPad|iPhone|iPod/.test(ua) ||
+            (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  return !ios;
+}
+
+function pushKeyBytes(k){
+  var pad = "=".repeat((4 - k.length % 4) % 4);
+  var raw = atob((k + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  var out = new Uint8Array(raw.length);
+  for(var i=0;i<raw.length;i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+function pushTurnOn(){
+  if(pushBusy || !pushCanAsk()) return;
+  var me = String(st.driver||"").trim();
+  if(!me) return;
+  pushBusy = true;
+  Notification.requestPermission().then(function(p){
+    if(p !== "granted"){ pushBusy=false; toast("Not turned on."); paintLinks(); return; }
+    return navigator.serviceWorker.ready.then(function(reg){
+      return fetch(LIVE_ENDPOINT + "?vapid=1").then(function(r){ return r.json(); })
+        .then(function(v){
+          if(!v || !v.ok || !v.key) throw new Error("no key");
+          return reg.pushManager.subscribe({
+            userVisibleOnly: true, applicationServerKey: pushKeyBytes(v.key) });
+        })
+        .then(function(sub){
+          var j = sub.toJSON();
+          return callFetch(LIVE_ENDPOINT, {
+            method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+            body: JSON.stringify({ action:"subscribe", endpoint:j.endpoint, keys:j.keys,
+                                   role:"driver", driver: me,
+                                   route: myRouteToday() || "North" })
+          });
+        })
+        .then(function(){ pushOn=true; pushBusy=false; toast("Reminders on."); paintLinks(); });
+    });
+  }).catch(function(){ pushBusy=false; toast("Could not turn reminders on."); paintLinks(); });
+}
+
+function pushLook(){
+  if(!PUSH_ABLE) return;
+  try{
+    navigator.serviceWorker.ready.then(function(reg){
+      return reg.pushManager.getSubscription();
+    }).then(function(sub){
+      if(sub){ pushOn = true; safely(paintLinks); }
+    }).catch(function(){});
+  }catch(e){}
+}
+
 function paintLinks(){
   var q=0;
   try{ q=(JSON.parse(store.get(QKEY)||"[]")||[]).length; }catch(e){ q=0; }
@@ -2031,13 +2115,30 @@ function paintLinks(){
   if(check){
     check.className = "btn btn-wide "+(live?"btn-ghost":"btn-main")+(needPin?" is-off":"");
   }
+  /* The offer. Only to somebody signed in, only when it is not already on,
+     and never to a phone that cannot receive one. */
+  var al=$("hubAlert");
+  if(al){
+    var showAl = PUSH_ABLE && !pushOn && st.driver.trim() &&
+                 (typeof Notification === "undefined" || Notification.permission !== "denied");
+    al.style.display = showAl ? "" : "none";
+    if(showAl){
+      al.innerHTML = pushCanAsk()
+        ? 'Remind me to end the trip. <button type="button" id="hubAlertGo">Turn on</button>'
+        : 'Add this app to your Home Screen to get reminders.';
+      var ago=$("hubAlertGo");
+      if(ago) ago.addEventListener("click",pushTurnOn);
+    }
+  }
+
   var nudge=$("hubPin");
   if(nudge){
     nudge.style.display = needPin ? "" : "none";
     if(needPin){
-      nudge.innerHTML = '<b>Your PIN has not been keyed yet.</b> The rota and the '+
-        'stops are open without it. A vehicle check is recorded in your name, so '+
-        'that one asks first. <button type="button" id="hubPinGo">Key it now</button>';
+      /* The fact and the way to fix it. Nothing about why the rota is still
+         open without it: he can see that it is. */
+      nudge.innerHTML = '<b>PIN not keyed.</b> Vehicle check needs it. '+
+        '<button type="button" id="hubPinGo">Key it now</button>';
       var go=$("hubPinGo");
       if(go) go.addEventListener("click",function(){
         show("driver");
@@ -5465,14 +5566,10 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
          Written down now, with the way back on the screen rather than three
          taps away through a screen he has no reason to revisit. */
       if(!String(st.driver||"").trim()){
-        /* "Start trip appears here" was a promise this cannot keep: before the
-           booking cutoff the same branch says "Bookings are still open", and a
-           man who signs in at ten past nine on that promise meets a different
-           sentence. Says what signing in actually does. */
-        h+='<p class="trip-note trip-signin"><b>Nobody is signed in on this '+
-           'phone.</b> '+
-           (who ? 'If you are '+esc(who)+', sign in and your driver buttons come back.'
-                : 'Sign in to get your driver buttons.')+'</p>'+
+        /* The line above has already named who drives this route today. This
+           adds the one fact that line does not carry, and a button. Nothing
+           about what signing in will produce: the button says it. */
+        h+='<p class="trip-note trip-signin"><b>Nobody is signed in.</b></p>'+
            '<button class="btn btn-main" id="tripSignIn">Sign in</button>';
       }
     }
@@ -5532,9 +5629,8 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
      a borrowed phone all open it, and none of them should be told to sign in. */
   if(!mayTap && !String(st.driver||"").trim() &&
      trip.route===route && trip.started && !trip.ended){
-    h+='<p class="trip-note trip-signin"><b>This phone has forgotten who you are.</b> '+
-       'Your run is still going and it is safe. Sign in again and your stop '+
-       'buttons come back.</p>'+
+    h+='<p class="trip-note trip-signin"><b>Nobody is signed in.</b> '+
+       'Your run is still going.</p>'+
        '<button class="btn btn-main" id="tripSignIn">Sign in</button>';
   }
 
@@ -6236,7 +6332,7 @@ $("toCheck").addEventListener("click",function(){
   if(pinGateNeeded()){
     show("driver");
     try{ $("pin").focus(); }catch(e){}
-    toast("Key your PIN first. A check is recorded in your name.");
+    toast("Key your PIN first.");
     return;
   }
   renderVehicles(); show("vehicle");
@@ -6578,6 +6674,86 @@ function checkPin(){
 
   function answered(ok){ pinLast = tried; pinLastOk = ok; }
 
+  /* THIS PHONE'S OWN COPY FIRST.
+
+     The hashed answer has been kept here since the first time this driver
+     keyed his PIN on this handset, and it was only ever reached for after the
+     network had failed. So a man who has signed in on his own phone every
+     Sunday for a month still waited on a round trip to be told what the phone
+     already knew — measured on this project at two to two and a half seconds,
+     at the one moment he is standing beside a bus wanting to start.
+
+     Only a MATCH short-circuits. A wrong PIN has no copy here to match, so it
+     falls through to the sheet exactly as before and the ten-try lockout still
+     counts it. Nothing is given away by a fast yes and nothing is loosened by
+     it: the gate answers the same question, sooner.
+
+     The sheet is still asked, straight afterwards and out of the way. If the
+     coordinator has changed his PIN, that answer lands a second or two later
+     and takes the gate back. */
+  if(canHash() && pinSeen()[st.driver]){
+    var known = pinSeen()[st.driver];
+    sha256Hex(tried).then(function(h){
+      if(!stillTyping()) return;
+      if(h === known){
+        st.pinOk = true; st.pinState = "ok";
+        answered(true);
+        pinSay("");
+        paintFoot();
+        /* Confirm behind him. A changed PIN is rare and this is what catches
+           it; a network that cannot answer changes nothing, because the copy
+           it was checked against came from the sheet in the first place. */
+        pinConfirmQuietly(tried);
+        return;
+      }
+      pinAskSheet(tried, stillTyping, answered);
+    }).catch(function(){ pinAskSheet(tried, stillTyping, answered); });
+    return;
+  }
+
+  pinAskSheet(tried, stillTyping, answered);
+}
+
+/* The sheet's answer, checked after this phone has already said yes.
+
+   Deliberately quiet: no "Checking…", no spinner, nothing on screen. He has
+   been let in and the overwhelming majority of the time this agrees. It
+   exists for the one case the local copy cannot know about — a PIN changed in
+   the Drivers tab since he last keyed it — and when that happens it takes the
+   gate back and says so. */
+function pinConfirmQuietly(tried){
+  if(!(LIVE && navigator.onLine)) return;
+  callFetch(CFG.endpoint, {
+    method:"POST", redirect:"follow",
+    headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: CFG.token||"", action:"pin",
+                           pin:{ driver: st.driver, pin: st.pin } })
+  }, PIN_TIMEOUT)
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      var out = JSON.parse(t);
+      if(!out || out.ok !== true) return;              /* no answer, no change */
+      if(st.driver + ":" + st.pin !== tried) return;   /* moved on since */
+      if(out.valid === true){
+        /* Agreed. Refresh this phone's copy so it stays current. */
+        if(canHash()) sha256Hex(tried).then(function(h){ pinRemember(st.driver, h); },
+                                            function(){});
+        return;
+      }
+      /* The sheet says no to a PIN this phone said yes to: it has been
+         changed. Take it back rather than let a record be filed under it. */
+      st.pinOk = false; st.pinState = "";
+      pinLast = ""; pinLastOk = false;
+      try{ var m=pinSeen(); delete m[st.driver]; store.set(PKEY, JSON.stringify(m)); }catch(e){}
+      pinSay("That PIN has been changed. Key the new one.");
+      paintFoot();
+    })
+    .catch(function(){ /* silent: he is already in, on an answer from the sheet */ });
+}
+
+/* The original path, unchanged, lifted out so both callers reach the same
+   code rather than two copies of it drifting apart. */
+function pinAskSheet(tried, stillTyping, answered){
   if(LIVE && navigator.onLine){
     pinSay("Checking\u2026");
     callFetch(CFG.endpoint, {
@@ -6967,6 +7143,7 @@ function safely(fn){ try{ fn(); }catch(e){ /* enrichment only, never fatal */ } 
 safely(paintBanner);
 safely(function(){ show("driver"); });
 safely(dashHeightSync);
+safely(pushLook);
 
 /* The sign-in screen is up. Guarded to one attempt per load inside. */
 safely(howAuto);
