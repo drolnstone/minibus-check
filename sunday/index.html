@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.52.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.53.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -210,6 +210,9 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    pinned to the top, so top is simply zero. */
 /* The offer to be told things. Quiet, one line, and it goes away for good
    once it has been taken up. */
+/* The refresh clock. Small, grey, and only ever amber when it has stopped. */
+.live-age{margin:6px 0 0;font-size:12px;letter-spacing:.02em;color:var(--muted)}
+.age-late{color:var(--warn);font-weight:600}
 .alerts-line{margin-top:10px}
 .alerts-line button{background:none;border:none;padding:4px 0;font:inherit;
   color:var(--accent-ink);text-decoration:underline;cursor:pointer}
@@ -630,7 +633,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.52.0";
+var PAGE_VERSION = "v1.53.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this page's own
@@ -1114,6 +1117,11 @@ function readJson(t){
 /* Five seconds, not thirty. See the driver app: thirty was what Apps Script
    could stand, not what somebody standing in the rain needs. */
 var LIVE_POLL = 5000;
+/* When the last good answer came back. Shown, because a page that is quietly
+   telling somebody at a kerb where a bus was four minutes ago looks exactly
+   like a page telling them where it is. */
+var liveAt = 0;
+var liveAgeTimer = null;
 var liveTimer = null, liveBusy = false, live = null;
 
 /* Rehearsal only. A phone with no booking of its own is lent a seeded one,
@@ -1144,6 +1152,7 @@ function liveFetch(){
       if(liveAgain){ liveAgain=false; liveFetch(); }
       if(!out || out.ok!==true) return;
       live=out;
+      liveAt=Date.now();
       paintLive();
       /* Once your own stop has been served there is nothing left to watch,
          so the polling sheds itself as the run goes on rather than peaking
@@ -1368,6 +1377,30 @@ function pushLook(){
   }catch(e){}
 }
 
+function liveAgeWords(){
+  if(!liveAt) return "";
+  var d=new Date(liveAt);
+  var t=("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
+  var s=Math.round((Date.now()-liveAt)/1000);
+  if(s<45) return "Updated "+t;
+  var m=Math.round(s/60);
+  return "Last updated "+t+", "+m+" minute"+(m===1?"":"s")+" ago";
+}
+function liveLate(){ return !!liveAt && (Date.now()-liveAt) > 45000; }
+
+/* The clock has to keep counting even when no answer arrives, because a
+   stopped clock is the whole point of showing one. Ticks once a second only
+   while there is a panel to tick under. */
+function liveAgeStart(){
+  if(liveAgeTimer) return;
+  liveAgeTimer=setInterval(function(){
+    var el=$("liveAge");
+    if(!el){ clearInterval(liveAgeTimer); liveAgeTimer=null; return; }
+    el.textContent=liveAgeWords();
+    el.classList.toggle("age-late", liveLate());
+  },1000);
+}
+
 function paintLive(){
   var box=$("live");
   if(!live || live.live===false){ box.innerHTML=""; return; }
@@ -1546,7 +1579,13 @@ function paintLive(){
         'style="background:none;border:none;padding:0;font:inherit;color:inherit">'+
         'Watching the wrong stop?</button></p>'
       : '')+
-    '</div>';
+    '</div>'+
+    /* Under the panel, inside the frozen pane, so it stays on screen with the
+       thing it vouches for. A clock rather than "just now": the number moving
+       every few seconds is the proof, and a number that has stopped moving is
+       the warning. */
+    '<p class="live-age'+(liveLate()?' age-late':'')+'" id="liveAge">'+
+      esc(liveAgeWords())+'</p>';
 
   Array.prototype.forEach.call(box.querySelectorAll("[data-liveroute]"),function(b){
     b.addEventListener("click",function(){
@@ -1554,6 +1593,7 @@ function paintLive(){
       liveFetch();
     });
   });
+  liveAgeStart();
   if($("watchOff")) $("watchOff").addEventListener("click",function(){
     watchStop=""; watchSave(""); live=null; paintLive(); paint();
   });
