@@ -1,7 +1,7 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
 const CACHE_PREFIX = "minibus-check-";
-const CACHE = CACHE_PREFIX + "v1.45.0";
+const CACHE = CACHE_PREFIX + "v1.46.0";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -170,13 +170,21 @@ function freshFirst(request, fallback) {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
 
-  // Never cache submissions to Apps Script. Checks, rota requests, PIN
-  // checks and bookings must always go to the real network, or somebody
-  // could believe a booking was sent when it never left the phone.
-  if (url.hostname.indexOf("script.google") !== -1 ||
-      url.hostname.indexOf("googleusercontent") !== -1) {
-    return;
-  }
+  /* ANYTHING NOT ON THIS SITE goes straight to the network, untouched.
+
+     This used to name script.google and googleusercontent. That was correct
+     for exactly as long as Apps Script was the only server this app talked
+     to. The moment the live calls moved to the Worker, a named-host test
+     stopped covering them — and an uncovered API call falls through to the
+     cache-first branch at the bottom of this handler, which would have
+     served a booking reply, or a bus position, out of a cache. A cached bus
+     position is worse than none: it is a wrong answer wearing the clothes of
+     a right one.
+
+     Testing the ORIGIN instead cannot go stale. This worker exists to cache
+     the app's own files; every server it will ever talk to is somewhere
+     else, and every one of them is now covered without being named. */
+  if (url.origin !== self.location.origin) return;
   if (e.request.method !== "GET") return;
 
   // The passenger booking page is a different app with its own worker, and

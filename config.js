@@ -14,6 +14,21 @@ window.CONFIG = {
   /* The Apps Script Web App URL. Blank means practice mode: nothing is sent. */
   endpoint: "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec",
 
+  /* ---- the live server -------------------------------------------------
+     The calls that happen DURING a Sunday go here instead: the driver's stop
+     taps and his Stops and bookings screen. It answers in well under a tenth
+     of a second where Apps Script took two to eight, because there is no
+     forced redirect to a second host and nothing has gone to sleep.
+
+     Everything else — the rota, last mileage, the PIN, submitting a check,
+     asking for a rota change — still goes to endpoint above, where it always
+     did. None of it has anybody waiting at a kerb.
+
+     TO GO BACK: blank this line. Every call returns to Apps Script and the
+     app behaves exactly as it did before, slowly but correctly. That is the
+     whole of the rollback. */
+  liveEndpoint: "https://minibus-api.asimbassey.workers.dev",
+
   /* Must match the token in Code.gs. */
   token: "minibusapp",
 

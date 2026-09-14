@@ -663,6 +663,15 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-card.past .rota-driver{font-weight:600}
 .rota-card.past .rota-leg-name{font-weight:600}
 .rota-card.unfilled{border-color:var(--stop);border-left:4px solid var(--stop)}
+/* Under the route chip, in the same column, so the eye reads "North, NH56"
+   as one fact about one leg rather than a number floating on the card.
+
+   The chip used to be the flex item itself and carried its own margin-top.
+   It is now inside this wrapper, so the wrapper is the flex item and the
+   column below it keeps the chip exactly where it was. */
+.rota-legright{display:flex;flex-direction:column;align-items:flex-end;flex:0 0 auto}
+.rota-bus{margin-top:3px;font-size:11px;letter-spacing:.06em;
+  font-family:"Barlow Condensed",sans-serif;color:var(--muted)}
 .rota-hint{margin-top:6px;color:var(--accent-ink);font-weight:600}
 .rota-earlier{display:block;width:100%;min-height:44px;margin-bottom:12px;border:1px dashed var(--hair);
   border-radius:8px;background:transparent;color:var(--muted);
@@ -751,6 +760,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
    reads as something to weigh rather than something that has gone wrong. */
 .trip-otherbus{margin:-4px 0 8px;padding:0 2px;font-size:13px;line-height:1.4;
   color:var(--warn)}
+/* The one note on this screen that is about the phone rather than the bus.
+   Given its own colour so it does not read as another seat warning. */
+.trip-signin{color:var(--stop)}
 .trip-buses{display:grid;gap:8px;margin-top:2px}
 .trip-buses .btn{width:100%}
 .trip-rehearsal{background:var(--stop-bg);border:1px solid var(--stop-line);color:var(--stop);
@@ -793,6 +805,15 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .stop-tab.is-active small{color:var(--faint)}
 .stop-sum{font-size:13px;line-height:1.45;color:var(--muted);margin:0 0 6px}
 .stop-sum b{color:var(--ink);font-weight:600}
+/* Who the phone thinks you are, on the screen the taps are made from. Quiet:
+   it is a fact to glance at, not a warning, and it is on screen all morning
+   for the man it is already right about. */
+.stop-who{font-size:13px;color:var(--muted);margin:-2px 0 10px}
+.stop-who b{color:var(--ink);font-weight:600}
+/* A real target for a thumb, without shouting. 44px of tappable height comes
+   from the padding, which is why it is not a bare link. */
+.stop-notme{border:0;background:none;padding:4px 2px;font:inherit;font-size:13px;
+  color:var(--accent-ink);text-decoration:underline;cursor:pointer}
 .stop-yours{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-size:11px;
   font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--pass);
   background:var(--pass-bg);border:1px solid var(--pass-line);border-radius:5px;padding:1px 6px;margin-left:6px}
@@ -1270,7 +1291,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.45.0";
+var APP_VERSION = "v1.46.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -1306,7 +1327,15 @@ function seatsSeen(out){
 }
 function busSeatsOf(reg){
   var want=String(reg||"").toUpperCase(), n=0;
-  BUSES.forEach(function(b){ if(String(b.reg).toUpperCase()===want) n=b.seats||0; });
+  /* Guarded on the entry, not just on the answer. This is now called for every
+     bus button and again for the seat line on the stops screen, and both of
+     those are drawn by rotaPaintStops, which has no safely() around it. One
+     malformed row in the register would have taken the whole stops screen down
+     — a blank page, on a Sunday, with no error anybody could report. */
+  (BUSES||[]).forEach(function(b){
+    if(!b || !b.reg) return;
+    if(String(b.reg).toUpperCase()===want) n=b.seats||0;
+  });
   return n;
 }
 
@@ -1407,15 +1436,68 @@ function busAskClose(){
    given, and there is nothing to say. */
 function busAskNeeded(reg){ return !!myBusToday() && !isMyBus(reg); }
 
-function busMismatch(route, reg){
-  var s = SEATS[route];
-  if(!s || !s.reg || !reg) return "";
-  if(String(s.reg).toUpperCase() === String(reg).toUpperCase()) return "";
-  var mine = busSeatsOf(reg);
-  var out = "Rota had " + s.reg + " for " + route + ".";
-  if(s.booked && mine) out += " " + s.booked + " booked, this bus seats " + mine + ".";
-  else if(s.booked)    out += " " + s.booked + " booked.";
-  return out;
+/* What this registration means for today's seats, said under its own button.
+
+   It used to be drawn ONLY under a bus that was not the rota's, on the
+   reasoning that the rota's own bus needed no comment. That reasoning has a
+   hole in it the size of a Sunday: the bus the rota chose can be overbooked
+   too, and when it was, this screen said nothing at all. Eighteen people
+   booked onto a fourteen seat bus is the single most useful thing the app
+   knows at nine in the morning, and it was withheld precisely when the rota
+   had done nothing wrong.
+
+   It also NAMES THE BUS. The old wording opened "Rota had YS70 for South",
+   then continued "18 booked, this bus seats 14" — and "this bus" meant the
+   button it sat under, which is not how it reads on a phone when you are
+   scanning. A coordinator read it as a warning about the bus he was signed in
+   against. A registration cannot be misread that way.
+
+   Still never a block and never a confirm. The check gate already stops a bus
+   that should not run; a driver reaching for the other one has a reason, and
+   the only thing worth telling him is what it costs in seats. */
+/* off is a list of registrations that are NOT available right now: stopped by
+   today's check, or already out on the other route. Without it this happily
+   named a bus four lines above the screen's own "NH56 was stopped by today's
+   check. Take the other bus." — the app contradicting itself on one screen,
+   and pointing a driver at a vehicle a driver had just condemned. */
+function busSeatNote(route, reg, off){
+  var s = SEATS[route] || {};
+  if(!reg) return "";
+  var mine   = busSeatsOf(reg);
+  var booked = Number(s.booked) || 0;
+
+  var wrong = !!(s.reg && String(s.reg).toUpperCase() !== String(reg).toUpperCase());
+  var over  = !!(booked && mine && booked > mine);
+
+  /* Silent on an ordinary morning. A line under every button every Sunday is
+     a line nobody reads by October. */
+  if(!wrong && !over) return "";
+
+  var bits = [];
+  if(wrong) bits.push("Rota had " + s.reg + " for " + route + ".");
+
+  if(booked && mine) bits.push(reg + " seats " + mine + " and " + booked + " are booked.");
+  else if(booked)    bits.push(booked + " booked on " + route + ".");
+  else if(mine && wrong) bits.push(reg + " seats " + mine + ".");
+
+  /* Where the rest could go, when another bus in the fleet would take them.
+     Naming it is the only part of this he can act on, and it is the sentence
+     he asked for: the other bus, and what it holds. */
+  if(over){
+    var bar={};
+    (off||[]).forEach(function(r){ if(r) bar[String(r).toUpperCase()]=true; });
+    var best="", bestSeats=0;
+    (BUSES||[]).forEach(function(b){
+      if(!b || !b.reg) return;
+      var R=String(b.reg).toUpperCase();
+      if(R===String(reg).toUpperCase()) return;
+      if(bar[R]) return;                     /* stopped, or out on the other route */
+      if(b.active===false) return;           /* retired, kept on the tab for its history */
+      if((b.seats||0) > bestSeats){ best=b.reg; bestSeats=b.seats||0; }
+    });
+    if(best && bestSeats > mine) bits.push(best + " seats " + bestSeats + ".");
+  }
+  return bits.join(" ");
 }
 
 function scriptSeen(out){
@@ -1432,6 +1514,16 @@ function versionWords(){
 var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
 var LIVE = !!(CFG.endpoint && CFG.endpoint.indexOf("http") === 0);
+
+/* Where the calls that happen DURING a Sunday go: the stop taps and the
+   Stops and bookings screen. Everything else — the rota, last mileage, the
+   PIN, submitting a check — still goes to CFG.endpoint, where it always did.
+
+   Falls back to CFG.endpoint the moment liveEndpoint is blank, and that is
+   the whole rollback: one line in config.js and every call returns to Apps
+   Script, slow but correct. */
+var LIVE_ENDPOINT = (CFG.liveEndpoint && String(CFG.liveEndpoint).indexOf("http") === 0)
+  ? CFG.liveEndpoint : CFG.endpoint;
 
 /* ---------------- the shared checklist ---------------- */
 var STAGES = [
@@ -1494,6 +1586,52 @@ var STAGES = [
    asked for, "ok" when the sheet confirmed it, "offline" when this phone had
    nothing to check against and let the driver through on purpose. */
 var st = { screen:"driver", veh:null, mode:"pre", stage:0, driver:"", role:"", pin:"", miles:"", mileOk:false, fuel:null, jobs:[], sign:"", pinOk:false, pinState:"", res:{} };
+
+/* ---- who is signed in, written down --------------------------------------
+
+   st.driver used to live in memory and nowhere else, and that one fact cost
+   a route a whole Sunday morning.
+
+   A page reload wipes it. Reloads are not rare and most of them are not the
+   driver's doing: a phone under memory pressure discards a backgrounded tab
+   and rebuilds it when he comes back, and this app reloads ITSELF whenever a
+   new service worker takes over, which is every deploy. On 13 September the
+   North driver did his check at 10:03, put the phone in his pocket, and the
+   page he came back to had no name in it. tripMayTap returns false with no
+   name, so Start trip was not drawn, and the screen gave him no clue why. He
+   made no entries at all that morning. The app never told him it had
+   forgotten him; it just quietly stopped offering him the button.
+
+   So it is written down, day-stamped exactly the way tripLoadState is, and
+   for the same reason: a name is true for a Sunday, not forever. Two men
+   share a handset between routes, and a stale name is worse than no name
+   because it files a record under somebody who was not there.
+
+   The PIN is deliberately NOT kept. It confirms a name at the point of
+   writing and that rule does not get weakened to save four keystrokes. It
+   costs almost nothing to key again: pinSeen() already holds this phone's
+   own hashed copy, so it resolves instantly and works with no signal. */
+var SIGNKEY = "fleet.signin.v1";
+
+function signSave(){
+  var who=String(st.driver||"").trim();
+  if(!who){ store.del(SIGNKEY); return; }
+  store.set(SIGNKEY, JSON.stringify({ name:who, at:Date.now() }));
+}
+
+/* Today's only. Yesterday's copy is cleared rather than merely ignored, so
+   it cannot come back on the next cold open. */
+function signLoad(){
+  try{
+    var s=JSON.parse(store.get(SIGNKEY)||"null");
+    if(!s || !s.name) return "";
+    if(!s.at || new Date(s.at).toDateString()!==new Date().toDateString()){
+      store.del(SIGNKEY);
+      return "";
+    }
+    return String(s.name);
+  }catch(e){ return ""; }
+}
 var stages = [];   /* the stage list for the chosen vehicle */
 var ALL = [];
 var TOTAL = 0;
@@ -3374,7 +3512,7 @@ function tripFlush(){
   if(!batch.length) return;
 
   tripBusy=true;
-  callFetch(CFG.endpoint,{
+  callFetch(LIVE_ENDPOINT,{
     method:"POST", redirect:"follow",
     headers:{"Content-Type":"text/plain;charset=utf-8"},
     body: JSON.stringify({ token: CFG.token||"", action:"trip", trip:{
@@ -3958,7 +4096,7 @@ function rotaCountsFetch(route,cb){
   if(!LIVE || !navigator.onLine){ if(cb) cb(false); return; }
   if(rotaCountsBusy){ rotaCountsAgain={route:route, cb:cb}; return; }
   rotaCountsBusy=true;
-  callFetch(CFG.endpoint+"?board=1&route="+encodeURIComponent(route),
+  callFetch(LIVE_ENDPOINT+"?board=1&route="+encodeURIComponent(route),
             {method:"GET",redirect:"follow"}, POLL_TIMEOUT)
     .then(function(r){return r.text();})
     .then(function(t){
@@ -4195,7 +4333,18 @@ function rotaCountsStart(){
       if(changed && Date.now()-tripTapAt > 3000) tripPaint();
       else if($("countsAge")) $("countsAge").textContent=rotaCountsWords();
     });
-  },30000);
+  /* Five seconds, not thirty.
+
+     Thirty was never a judgement about what a driver needs. It was what Apps
+     Script could stand: every call cost two to eight seconds there and queued
+     behind a script-wide lock, so polling harder made the whole morning
+     worse. On the live server a call is a few hundredths of a second, and a
+     Sunday is about ten thousand requests against a hundred thousand a day.
+
+     It is also the fallback for the push layer when that arrives. A held
+     connection on a moving bus WILL drop, and this is what covers the gap
+     until it comes back. */
+  },5000);
 }
 
 document.addEventListener("visibilitychange",function(){
@@ -4269,7 +4418,11 @@ function rotaSyncRegister(list){
 
   var sel=$("driverPick");
   if(sel){
-    var chosen=sel.value;
+    /* st.driver, not just the dropdown. On a phone whose config.js carried
+       no drivers, the restored sign-in exists in state before any <option>
+       does, so reading the element alone would drop it the moment the sheet
+       answered. */
+    var chosen=sel.value || String(st.driver||"");
     sel.innerHTML='<option value="">Choose your name</option>';
     REGISTER.forEach(function(d){
       var o=document.createElement("option");
@@ -4382,7 +4535,13 @@ function rotaPaint(keepPosition){
          normal row said nothing and implied a rank that does not exist among
          people giving up their Sundays. A cover or a swap is a fact worth
          seeing, so those speak up and the ordinary case stays silent. */
-      function leg(routeName, cls, sched, act, isMine){
+      /* bus is the registration the record gives that leg on that Sunday:
+         the rota's own column where a coordinator has overruled it, and the
+         standing month-by-month rotation everywhere else. It is the answer to
+         the question a driver could not ask until he had already signed in
+         and started a check — by which time he is holding a key he may have
+         picked up on an assumption. */
+      function leg(routeName, cls, sched, act, isMine, bus){
         if(!sched && !act) return "";
         var who=act||sched;
         var note="";
@@ -4397,7 +4556,12 @@ function rotaPaint(keepPosition){
                       hide theirs. */
                    (isMine?'<span class="rota-you">You</span>':'')+'</div>'+
                  (note?'<div class="rota-leg-note">'+note+'</div>':'')+'</div>'+
-                 '<span class="rota-route '+cls+'">'+routeName+'</span>'+
+                 '<div class="rota-legright"><span class="rota-route '+cls+'">'+routeName+'</span>'+
+                   /* Silent when the record does not say, rather than
+                      printing a reassuring blank where a registration should
+                      be. An empty answer beats a confident wrong one, and
+                      this one is acted on with a key in your hand. */
+                   (bus?'<span class="rota-bus">'+esc(bus)+'</span>':'')+'</div>'+
                '</div>';
       }
 
@@ -4413,8 +4577,8 @@ function rotaPaint(keepPosition){
 
       var legs=unfilled
         ? '<div class="rota-leg"><span class="rota-leg-none">No driver assigned</span></div>'
-        : leg("North","north",primary,actual,mineNorth)+
-          leg("South","south",south,southActual,mineSouth);
+        : leg("North","north",primary,actual,mineNorth,row.northBus||"")+
+          leg("South","south",south,southActual,mineSouth,row.southBus||"");
       legs+=lockHtml;
 
       /* The current Sunday is a property of the DATE, so it is marked beside
@@ -4703,6 +4867,26 @@ function rotaPaintStops(){
           'numbers are from an earlier Sunday and will refresh on their own.</p>';
   }
 
+  /* Who this phone thinks you are, said on the screen the taps are made from.
+
+     The rota screen has said this for a while ("Viewing as X") and this one
+     never did, which was survivable only for as long as a name lasted one
+     visit. It now survives the whole day, so the case it was protecting
+     against is real: two men sharing a handset between routes, the first
+     forgetting to sign out, and every tap the second makes going onto the
+     record in the first man's name. A line he reads before he taps is the
+     cheapest possible guard, and it is the honest one — the app says what it
+     believes and lets him correct it.
+
+     Nothing at all when nobody is signed in. Most people who open this screen
+     are passengers and stewards, and telling them they are not signed in is
+     both useless and an invitation. */
+  var signedIn=String(st.driver||"").trim();
+  if(signedIn){
+    html+='<p class="stop-who">Signed in as <b>'+esc(signedIn)+'</b> · '+
+          '<button type="button" class="stop-notme" id="stopNotMe">Not you?</button></p>';
+  }
+
   if(routes.length>1){
     html+='<div class="stop-tabs">';
     routes.forEach(function(rt){
@@ -4724,6 +4908,30 @@ function rotaPaintStops(){
   var arr =stops.filter(function(s){ return s.route===route && s.arrival; });
   if(!arr.length) arr=stops.filter(function(s){ return s.arrival; });
 
+  /* Which bus the seat count below is actually against.
+
+     It used to be SEATS[route], which is the bus the ROTA gave the route. That
+     is the right answer until somebody takes the other one — and the screen
+     above now tells him to, whenever the rostered bus is too small. Take that
+     advice and the buttons disappear (the run has started), leaving this line
+     as the only seat figure on the screen he works from all morning, stating a
+     capacity and a registration for a bus nobody is driving.
+
+     A run that has actually started beats the rota, on both numbers. Falls
+     straight back to the rota before anybody sets off, which is every Sunday
+     until about half past ten. */
+  var sumRun = tripView(route);
+  var sumReg = (sumRun && sumRun.started && !sumRun.ended && sumRun.reg)
+                 ? String(sumRun.reg)
+                 : ((SEATS[route] && SEATS[route].reg) ? String(SEATS[route].reg) : "");
+  /* Seats from the register first. SEATS[route].seats belongs to the rota's
+     bus, so it may only be used when the bus being counted IS that bus. */
+  var sumSeats = busSeatsOf(sumReg);
+  if(!sumSeats && SEATS[route] && SEATS[route].reg && sumReg &&
+     String(SEATS[route].reg).toUpperCase() === sumReg.toUpperCase()){
+    sumSeats = SEATS[route].seats || 0;
+  }
+
   html+='<p class="stop-sum"><b>'+esc(route)+' Liverpool</b> \u00B7 '+list.length+' stops'+
         (showCounts
           ? ' \u00B7 '+(seatsOn(route)
@@ -4731,8 +4939,14 @@ function rotaPaintStops(){
                 /* Out of how many. Only when a bus is known for the day, and
                    only as a fact — a full bus is his judgement to make at the
                    kerb, not the app's to announce. */
-                ((SEATS[route]&&SEATS[route].seats)
-                   ? ' of <b>'+SEATS[route].seats+'</b>' : '')
+                /* Named, not just counted. "18 booked of 16" was read off
+                   a phone as a warning about whichever bus the reader was
+                   signed in against, which on that morning was the other one
+                   and seats 14. The registration removes the question. */
+                (sumSeats
+                   ? ' of <b>'+sumSeats+'</b>'+
+                     (sumReg ? ' on <b>'+esc(sumReg)+'</b>' : '')
+                   : '')
               : 'nobody booked yet')
           : '')+
         (onDuty===route
@@ -4943,6 +5157,22 @@ function rotaPaintStops(){
   if($("tripDoCheck")) $("tripDoCheck").addEventListener("click",function(){
     tripUncheckedAsked=""; stopsClose(); reset();
   });
+  /* Back to the picker, and open it. Landing him on the first screen and
+     leaving him to find the row is most of the way to not bothering.
+     "Not you?" goes to exactly the same place: it is the same question. */
+  function toSignIn(){
+    stopsClose();
+    show("driver");
+    var sel=$("driverPick");
+    if(sel && sel.options.length>1){
+      try{ sel.focus(); }catch(e){}
+      try{ sel.scrollIntoView({block:"center"}); }catch(e){}
+    } else {
+      try{ $("driver").focus(); }catch(e){}
+    }
+  }
+  if($("tripSignIn")) $("tripSignIn").addEventListener("click",toSignIn);
+  if($("stopNotMe")) $("stopNotMe").addEventListener("click",toSignIn);
   tripPaintMoving();
   pinGateAutoFocus();
 }
@@ -5020,6 +5250,28 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
       var who=tripWhoDrives(route);
       if(who) h+='<p class="trip-note"><b>'+esc(who)+'</b> drives '+
                  esc(route)+' this Sunday.</p>';
+
+      /* And the reason there is no button, when the reason is us.
+
+         Nobody signed in is not the same as somebody else's route, and this
+         branch used to say the same sentence for both. The rostered driver,
+         signed out by a reload, was told who drives North this Sunday — his
+         own name — and given nothing to press. It reads as the app being
+         broken, which on that morning it effectively was.
+
+         Written down now, with the way back on the screen rather than three
+         taps away through a screen he has no reason to revisit. */
+      if(!String(st.driver||"").trim()){
+        /* "Start trip appears here" was a promise this cannot keep: before the
+           booking cutoff the same branch says "Bookings are still open", and a
+           man who signs in at ten past nine on that promise meets a different
+           sentence. Says what signing in actually does. */
+        h+='<p class="trip-note trip-signin"><b>Nobody is signed in on this '+
+           'phone.</b> '+
+           (who ? 'If you are '+esc(who)+', sign in and your driver buttons come back.'
+                : 'Sign in to get your driver buttons.')+'</p>'+
+           '<button class="btn btn-main" id="tripSignIn">Sign in</button>';
+      }
     }
     return h+'</div>';
   }
@@ -5052,6 +5304,36 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
   }
   if(t.lastStop) bits.push('last '+esc(t.lastStop)+' at '+tripClock(t.lastAt));
   h+='<p class="trip-note">'+bits.join(' \u00B7 ')+'</p>';
+
+  /* Signed out in the MIDDLE of a run, which is the worse half of the same
+     fault and was left standing when the PIN gate below was added.
+
+     That gate assumed a name: it is drawn only when mayTap is true, and
+     mayTap is false the moment there is no name to match against the rota. So
+     a driver whose phone reloaded at the third stop did not get the PIN box
+     the comment below promises him. He got the read-only strip — his own
+     morning, described in the third person, as though he were a steward
+     watching somebody else's bus — with no taps and nothing to press.
+
+     The run itself is safe: it is on the record and re-adopted off the board.
+     It is only this phone that has forgotten who he is, and this is how he
+     tells it. */
+  /* Only on the phone that STARTED this run. trip.route and trip.started come
+     from this handset's own stored state, and tripMerge refuses to adopt a run
+     onto a phone with no name — so a run sitting in `trip` with no name in
+     st.driver can only be one thing: this driver's own morning, on his own
+     phone, which has forgotten him.
+
+     That test is what keeps this off the noticeboard. The stops screen is
+     deliberately public — a steward at the door, a passenger, a coordinator on
+     a borrowed phone all open it, and none of them should be told to sign in. */
+  if(!mayTap && !String(st.driver||"").trim() &&
+     trip.route===route && trip.started && !trip.ended){
+    h+='<p class="trip-note trip-signin"><b>This phone has forgotten who you are.</b> '+
+       'Your run is still going and it is safe. Sign in again and your stop '+
+       'buttons come back.</p>'+
+       '<button class="btn btn-main" id="tripSignIn">Sign in</button>';
+  }
 
   /* The PIN has to be reachable HERE too, not only before the run starts.
 
@@ -5174,7 +5456,6 @@ function tripBusButtonsHtml(){
   }
   order.forEach(function(v){
     shown++;
-    var isWanted = wantReg && String(v.reg).toUpperCase()===wantReg.toUpperCase();
     h+='<button class="btn '+(shown===1?"btn-main":"btn-ghost")+(off?" is-off":"")+'" '+
        'data-tripstart="'+esc(v.reg)+'">'+
        (one? "Start trip" : "Start trip \u00B7 "+esc(v.reg))+'</button>';
@@ -5182,10 +5463,14 @@ function tripBusButtonsHtml(){
        block and never a confirm: the check gate already stops a bus that
        should not run, so a driver reaching for the other one has a reason,
        and the only thing worth telling him is what it costs in seats. */
-    if(!isWanted){
-      var note = busMismatch(route, v.reg);
-      if(note) h+='<p class="trip-otherbus">'+esc(note)+'</p>';
-    }
+    /* Every bus, not only the ones the rota did not pick. busSeatNote is
+       silent unless there is something to say, so the ordinary Sunday still
+       shows a bare button. */
+    /* stopped and taken are worked out a few lines above, for the buttons.
+       The same two facts decide what may be SUGGESTED, or the note would
+       recommend a bus this very screen refuses to draw a button for. */
+    var note = busSeatNote(route, v.reg, stopped.concat(taken?[taken]:[]));
+    if(note) h+='<p class="trip-otherbus">'+esc(note)+'</p>';
   });
 
   /* No register at all: keep a way to start, with no reg on the row. Better
@@ -5649,6 +5934,7 @@ document.addEventListener("keydown",function(e){
 $("driverPick").addEventListener("change",function(){
   st.driver=this.value; st.role=roleOf(this.value); st.pin=""; st.pinOk=false; st.pinState="";
   pinLast=""; $("pin").value="";
+  signSave();
   showPinField(); paintFoot(); paintRotaHint();
 
   /* Straight into the PIN box. Picking a name and needing a PIN is one act,
@@ -5708,7 +5994,7 @@ function paintRotaHint(){
   el.style.display="";
 }
 $("driver").addEventListener("input",function(){
-  st.driver=this.value; st.role=""; paintFoot();
+  st.driver=this.value; st.role=""; signSave(); paintFoot();
 });
 $("pin").addEventListener("input",function(){
   st.pin=this.value.replace(/\D/g,"").slice(0,4);
@@ -6174,6 +6460,10 @@ function showPinField(){
     $("idRow").style.display="none";
     $("idHint").style.display="none";
     $("typeField").style.display="";
+    /* Same restore, into the box he typed it in. A phone with no register
+       has the same reload and loses the same name. */
+    var typed=signLoad();
+    if(typed){ st.driver=typed; $("driver").value=typed; }
     return;
   }
   REGISTER.forEach(function(d){
@@ -6186,8 +6476,27 @@ function showPinField(){
     o.textContent=d.name;
     sel.appendChild(o);
   });
-  /* Nobody is chosen when the app opens. Choose your name is always the first
-     thing. */
+  /* Whoever was signed in earlier TODAY, put back.
+
+     This used to read "Nobody is chosen when the app opens. Choose your name
+     is always the first thing", and as a rule for a fresh morning it was
+     right. As a rule for a reload it was the fault: the app forgot the driver
+     mid-Sunday and then presented the empty picker as though he had just
+     arrived, on a screen he had already filled in an hour before.
+
+     Picking a name is still the first thing on a genuinely new day. What it
+     is no longer is the first thing after every reload. */
+  /* entryFor matches loosely (trimmed, case-insensitive); sel.value matches
+     exactly. Take the REGISTER's own spelling for both, or a name saved with
+     different capitalisation sets st.driver, fails the assignment, and leaves
+     a blank-looking picker on an app that believes it is signed in. */
+  var back=signLoad(), backEntry=back?entryFor(back):null;
+  if(backEntry){
+    st.driver=backEntry.name;
+    st.role=roleOf(backEntry.name);
+    sel.value=backEntry.name;
+    signSave();                       /* rewrite it in the register's spelling */
+  }
   showPinField();
 })();
 
