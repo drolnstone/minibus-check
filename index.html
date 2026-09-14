@@ -830,6 +830,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
    screen, past .wrap's own padding. Without them the stop list would be seen
    sliding up through the fourteen pixels of gutter on each side, which reads
    as a rendering fault rather than as a design. */
+/* The refresh clock, when it has stopped moving. */
+.age-late{color:var(--warn);font-weight:600}
 .stop-head{position:sticky;top:var(--dashH,64px);z-index:6;background:var(--paper);
   margin:0 calc(-14px - var(--safe-r)) 8px calc(-14px - var(--safe-l));
   padding:8px calc(14px + var(--safe-r)) 2px calc(14px + var(--safe-l));
@@ -1353,7 +1355,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.52.0";
+var APP_VERSION = "v1.53.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -2115,9 +2117,14 @@ function paintLinks(){
   /* The gate that used to grey out Continue, moved onto the one button it
      was ever really about. Off, not disabled: a disabled button cannot say
      why it will not work, and that silence was the whole complaint. */
+  /* Both, because pinNeeded() answers false for an empty name — there is
+     nobody to have a PIN yet — so the PIN gate alone would leave Vehicle
+     check live for somebody who had not said who he was. */
+  var named   = !!st.driver.trim();
   var needPin = pinGateNeeded();
+  var checkOff = !named || needPin;
   if(check){
-    check.className = "btn btn-wide "+(live?"btn-ghost":"btn-main")+(needPin?" is-off":"");
+    check.className = "btn btn-wide "+(live?"btn-ghost":"btn-main")+(checkOff?" is-off":"");
   }
   /* The offer. Only to somebody signed in, only when it is not already on,
      and never to a phone that cannot receive one. */
@@ -2137,16 +2144,19 @@ function paintLinks(){
 
   var nudge=$("hubPin");
   if(nudge){
-    nudge.style.display = needPin ? "" : "none";
-    if(needPin){
+    nudge.style.display = checkOff ? "" : "none";
+    if(checkOff){
       /* The fact and the way to fix it. Nothing about why the rota is still
          open without it: he can see that it is. */
-      nudge.innerHTML = '<b>PIN not keyed.</b> Vehicle check needs it. '+
-        '<button type="button" id="hubPinGo">Key it now</button>';
+      nudge.innerHTML = named
+        ? '<b>PIN not keyed.</b> Vehicle check needs it. '+
+          '<button type="button" id="hubPinGo">Key it now</button>'
+        : '<b>Nobody signed in.</b> Vehicle check needs a name. '+
+          '<button type="button" id="hubPinGo">Choose yours</button>';
       var go=$("hubPinGo");
       if(go) go.addEventListener("click",function(){
         show("driver");
-        try{ $("pin").focus(); }catch(e){}
+        try{ (named ? $("pin") : $("driverPick")).focus(); }catch(e){}
       });
     }
   }
@@ -2343,8 +2353,20 @@ function btn(label,cls,fn,dis,why){
        check, which is the button that files a record. Same test, same
        function, one tap later, and now it can say which button it is about
        instead of greying out the only way forward. */
-    var goDrv = btn("Continue","btn-main",function(){ show("hub"); }, !named,
-        function(){ if($("driverPick")) $("driverPick").focus(); });
+    /* NO NAME NEEDED TO GET THROUGH THIS DOOR.
+
+       It used to want one, and that was a regression I put in and did not
+       see: the rota and the stops board moved onto the hub, and the hub sat
+       behind a Continue that was dead until somebody picked a name. Which is
+       option B — the one we looked at and turned down — arrived at sideways.
+       A steward at the door, a coordinator on a borrowed phone and a driver
+       who is not out today all read that board, and none of them should have
+       to pick somebody's name to do it.
+
+       Nothing is loosened. The hub says plainly that nobody is signed in, and
+       Vehicle check — the only thing there that writes anything down — asks
+       for both a name and a PIN before it will open. */
+    var goDrv = btn("Continue","btn-main",function(){ show("hub"); });
     goDrv.id="goOn";
     if(!named) c.textContent="Choose your name";
     else if(!pinOk) c.textContent="PIN not keyed yet";
@@ -4612,14 +4634,35 @@ function sundayIsToday(){
 }
 function yoursWhen(){ return sundayIsToday() ? "Yours today" : "Yours this Sunday"; }
 
+/* THE CLOCK, NOT A WORD.
+
+   This used to say "Updated just now" for anything under forty-five seconds.
+   That was written when the screen refreshed every thirty, so the words
+   changed often enough to mean something. The poll is five seconds now, so it
+   said "just now" permanently — a sentence that is always true and therefore
+   tells nobody anything, and which reads exactly the same whether the data is
+   five seconds old or the whole thing has quietly stopped.
+
+   A time moves. A driver glancing at it twice sees two different numbers and
+   knows the screen is alive, which is the thing he actually wants to know.
+   And when it stops moving, that is visible too — so the one case worth
+   shouting about says so outright. */
 function rotaCountsWords(){
   if(!rotaCountsAt) return "Numbers as last received.";
   var s=Math.round((Date.now()-rotaCountsAt)/1000);
-  if(s<45) return "Updated just now.";
+  var t=tripClock(rotaCountsAt);
+  if(s<45) return "Updated "+t+".";
   var m=Math.round(s/60);
-  if(m<60) return "Updated "+m+" minute"+(m===1?"":"s")+" ago.";
+  if(m<60) return "Last updated "+t+", "+m+" minute"+(m===1?"":"s")+" ago.";
   var h=Math.round(m/60);
-  return "Updated "+h+" hour"+(h===1?"":"s")+" ago.";
+  return "Last updated "+h+" hour"+(h===1?"":"s")+" ago.";
+}
+
+/* Whether the number above has stopped moving. Used to colour it, and only
+   ever amber: a screen that has not refreshed for a minute is a thing to
+   notice, not a thing that has failed. */
+function rotaCountsLate(){
+  return !!rotaCountsAt && (Date.now()-rotaCountsAt) > 45000;
 }
 
 function rotaCountsStop(){
@@ -4657,7 +4700,13 @@ function rotaCountsStart(){
       /* tripPaint, not rotaPaintStops: the strip and the bar are one state
          and must be redrawn from one call, or they drift apart. */
       if(changed && Date.now()-tripTapAt > 3000) tripPaint();
-      else if($("countsAge")) $("countsAge").textContent=rotaCountsWords();
+      else if($("countsAge")){
+        var ageEl=$("countsAge");
+        ageEl.textContent=rotaCountsWords();
+        /* The colour with the words, or a screen that went quiet would keep
+           the calm styling of the last time it was drawn in full. */
+        ageEl.classList.toggle("age-late", rotaCountsLate());
+      }
     });
   /* Five seconds, not thirty.
 
@@ -5190,7 +5239,8 @@ function rotaPaintStops(){
   if(showCounts){
     html+='<p class="lede" style="margin:0 0 8px">Bookings for '+
           esc(rotaBaseSunday(0).toLocaleDateString("en-GB",{day:"numeric",month:"long"}))+
-          '. <span id="countsAge">'+esc(rotaCountsWords())+'</span></p>';
+          '. <span id="countsAge"'+(rotaCountsLate()?' class="age-late"':'')+
+          '>'+esc(rotaCountsWords())+'</span></p>';
   } else {
     /* Counts belonging to a Sunday that has gone are worse than none, so
        they are withheld. Say why, rather than showing a bare timetable and
@@ -6361,6 +6411,12 @@ $("toStops").addEventListener("click",rotaOpenStops);
    to the name screen with the box focused rather than refused in place: the
    box lives there, and sending him to it is more use than a toast. */
 $("toCheck").addEventListener("click",function(){
+  if(!st.driver.trim()){
+    show("driver");
+    try{ $("driverPick").focus(); }catch(e){}
+    toast("Choose your name first.");
+    return;
+  }
   if(pinGateNeeded()){
     show("driver");
     try{ $("pin").focus(); }catch(e){}
