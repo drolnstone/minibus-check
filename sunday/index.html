@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.53.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.60.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -323,6 +323,12 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    keeps the seat and one gives it up, and the person has already said which
    way they were heading by tapping Not coming. The giving-up one carries the
    warning colour so it cannot be hit by momentum alone. */
+/* A route that is not running. Flat and grey, never alarming: nothing has
+   gone wrong on this phone and the colour should not suggest it has. */
+.live-off{background:var(--card);border:1px solid var(--line)}
+.live-off .live-eyebrow{color:var(--muted)}
+.summary-off{color:var(--warn)}
+.stop-off{opacity:.55}
 .cancel-row{display:flex;gap:8px}
 .cancel-row .btn{flex:1}
 .btn-keep{background:var(--steel);color:var(--on-accent)}
@@ -633,7 +639,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.53.0";
+var PAGE_VERSION = "v1.60.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this page's own
@@ -854,6 +860,9 @@ var watchStop = "";
    somebody could tap, read that, close the page and never press Confirm.
    Nothing had been sent. The driver had no idea they were coming. */
 var STOPS=[], ARRIVALS=[], COUNTS={}, CLOSED=false, ROLLED=false, DATE="", CUTOFF="";
+/* Routes the coordinator has marked off in the Rota. Usually empty. */
+var OFF=[];
+function routeOff(rt){ return OFF.indexOf(String(rt||"")) !== -1; }
 var REHEARSAL=false;
 /* seats is null until the passenger says. It used to start at 1 and then
    keep whatever the last answer was, which on a phone handed round a family
@@ -906,6 +915,7 @@ function prettyDate(key){
 function applyBus(out){
   STOPS=out.stops||[]; ARRIVALS=out.arrivals||[]; COUNTS=out.counts||{};
   CLOSED=!!out.closed; ROLLED=!!out.rolled; DATE=out.date||""; CUTOFF=out.cutoff||"";
+  OFF = (out.off && out.off.length) ? out.off : [];
   REHEARSAL=!!out.rehearsal;
 
   booked = out.mine ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
@@ -1294,12 +1304,30 @@ function paintAlerts(){
   var box = $("alerts");
   if(!box) return;
   box.innerHTML = "";
-  if(!MINE_BOOKED || ROLLED || pushOn) return;
 
   var line = function(id, words){
     return '<p class="live-sub alerts-line">'+
       '<button type="button" id="'+id+'">'+words+'</button></p>';
   };
+
+  /* ALREADY ON. The line used to vanish here, which was right while there was
+     nothing left to offer. There is now.
+
+     A rehearsal wakes nobody, deliberately, and the four real alerts only
+     arrive on a Sunday with the bus actually moving, so somebody who turned
+     these on has no way of finding out they work until the morning he was
+     relying on them. This is that way.
+
+     Shown whether or not there is a booking today, and after the week has
+     rolled: this phone is subscribed either way, and the subscription is what
+     is being tested. */
+  if(pushOn){
+    box.innerHTML = line("pushTest", "Send me a test alert");
+    if($("pushTest")) $("pushTest").addEventListener("click", pushTest);
+    return;
+  }
+
+  if(!MINE_BOOKED || ROLLED) return;
 
   if(isApple() && !standalone()){
     box.innerHTML = line("pushHow", "Add to your Home Screen to get bus alerts");
@@ -1311,6 +1339,45 @@ function paintAlerts(){
 
   box.innerHTML = line("pushOn", "Tell me when the bus is near");
   if($("pushOn")) $("pushOn").addEventListener("click", pushTurnOn);
+}
+
+/* PROVE IT, ON THIS PHONE, NOW.
+
+   A rehearsal wakes nobody and the real alerts need a bus on the road, so
+   until this existed the only way to find out that alerts worked was to need
+   one. A token the push service will not accept looks exactly like a quiet
+   Sunday.
+
+   The server answers with what the push service said, so a refusal arrives as
+   words on this screen. */
+function pushTest(){
+  if(pushBusy) return;
+  pushBusy = true;
+  toast("Asking...");
+  navigator.serviceWorker.ready.then(function(reg){
+    return reg.pushManager.getSubscription();
+  }).then(function(sub){
+    if(!sub) throw new Error("no subscription");
+    return callFetch(ENDPOINT, {
+      method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify({ action:"testpush", endpoint: sub.endpoint })
+    });
+  }).then(function(r){ return r.json(); }).then(function(out){
+    pushBusy = false;
+    if(out && out.ok){ toast("Sent. Give it a few seconds."); return; }
+    /* The server's own words. It is the only thing here that can tell a phone
+       the push service has disowned from a key that is wrong, and the two look
+       identical from this page otherwise. */
+    toast((out && out.error) ? "Not sent: "+out.error : "Not sent.");
+    /* Only when the push service has disowned this phone. That row is deleted
+       server side, so the offer to turn alerts on has to come back. Every
+       other failure leaves the subscription alone: a bad minute at Google is
+       not a reason to tell somebody he is not signed up. */
+    if(out && out.gone){ pushOn = false; paintAlerts(); }
+  }).catch(function(){
+    pushBusy = false;
+    toast("Could not ask for a test.");
+  });
 }
 
 /* The key comes back from the live server as base64url and the browser wants
@@ -1403,7 +1470,25 @@ function liveAgeStart(){
 
 function paintLive(){
   var box=$("live");
-  if(!live || live.live===false){ box.innerHTML=""; return; }
+  if(!live || live.live===false){
+    /* The one live:false worth drawing. Every other one means there is
+       nothing to show YET: bookings still open, no booking on this phone. A
+       cancelled route means there is nothing to show at all, and a blank
+       panel would leave somebody watching an empty box until he gave up and
+       walked to the kerb anyway. */
+    if(live && live.why==="cancelled"){
+      box.innerHTML=
+        '<div class="live live-off">'+
+          '<p class="live-eyebrow">Not running</p>'+
+          '<h2>No bus to '+esc(live.stop||"your stop")+' today</h2>'+
+          '<p class="live-sub">The '+esc(live.route||"")+' bus is not running '+
+            'this Sunday. Sorry for the short notice.</p>'+
+          callButton()+
+        '</div>';
+      return;
+    }
+    box.innerHTML=""; return;
+  }
 
   /* A rehearsal forces the tracking gate open on a weekday, so somebody who
      booked on Thursday would otherwise open this and see a bus running that
@@ -1768,17 +1853,34 @@ function paint(){
   }
 
   var mine=STOPS.filter(function(s){ return s.route===route; });
+
+  /* THE ROUTE IS OFF.
+
+     A branch and NOT an early return. paint() is one long function that ends
+     by writing the page, filling the frozen pane and binding every handler on
+     it; returning from the middle of it renders a blank screen with nothing
+     to press, which is a worse morning than the one this is trying to fix. */
+  var off = routeOff(route);
+
+  if(off){
+    html+='<p class="summary summary-off"><b>'+esc(route)+' Liverpool is not '+
+          'running this Sunday.</b> No seats can be booked.</p>'+
+          '<p class="summary">'+callButton()+'</p>';
+  }
+
   var active=activeOn(route), total=seatsOn(route);
   var roomNow = seatsWords(route);
-  html+='<p class="summary"><b>'+esc(route)+' Liverpool</b> · '+mine.length+' stops · '+
-        (total? '<b>'+active+'</b> with people, <b>'+total+'</b> booked'
-              : 'nobody booked yet')+
-        (roomNow? ' · <b class="'+(/full/i.test(roomNow)?'room-full':'room-low')+'">'+
-                  esc(roomNow)+'</b>' : '')+'</p>';
+  if(!off){
+    html+='<p class="summary"><b>'+esc(route)+' Liverpool</b> · '+mine.length+' stops · '+
+          (total? '<b>'+active+'</b> with people, <b>'+total+'</b> booked'
+                : 'nobody booked yet')+
+          (roomNow? ' · <b class="'+(/full/i.test(roomNow)?'room-full':'room-low')+'">'+
+                    esc(roomNow)+'</b>' : '')+'</p>';
+  }
   /* Said once, under the line that carries the number, and only when it is
      actually full. Booking still goes through — the app has never known who
      really travels, and a page is the wrong thing to turn somebody away. */
-  if(/full/i.test(roomNow)){
+  if(!off && /full/i.test(roomNow)){
     html+='<p class="summary summary-full">Every seat is booked. Tell '+
           esc((COORDINATOR&&COORDINATOR.name)||"the bus coordinator")+'.</p>';
   }
@@ -1793,6 +1895,18 @@ function paint(){
 
   mine.forEach(function(s){
     var n=COUNTS[s.id]||0;
+    /* Dead, and still shown. A stop that vanishes from the list reads as an
+       app fault; a greyed one under a line saying the route is off reads as
+       the fact it is. No attribute either, so a tap cannot reach a handler
+       that would try to book it. */
+    if(off){
+      html+='<div class="stop stop-off">'+
+              '<span class="stop-time">'+esc(s.time)+'</span>'+
+              '<span class="stop-body"><span class="stop-name">'+esc(s.stop)+'</span>'+
+              (s.postcode?'<span class="stop-pc">'+esc(s.postcode)+'</span>':'')+
+              '</span></div>';
+      return;
+    }
     var on = picking ? (watchStop===s.id) : (chosen===s.id);
     var attr = picking ? 'data-watch="'+esc(s.id)+'"' : 'data-stop="'+esc(s.id)+'"';
     var dead = picking ? false : CLOSED;
