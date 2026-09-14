@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.60.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.61.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -639,7 +639,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.60.0";
+var PAGE_VERSION = "v1.61.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this page's own
@@ -1214,7 +1214,23 @@ function gateCheck(){
       var out=readJson(t);
       gateBusy=false;
       if(!out || out.ok!==true) return;
-      if(!out.closed && !out.rehearsal) return;      /* still not time */
+
+      /* STILL NOT TIME, AND THAT IS NOT A REASON TO BIN THE ANSWER.
+
+         This used to return here and throw the whole payload away, because
+         the only question it was asking was whether the cutoff had passed.
+         The answer it discarded carried the seat counts, the room left on
+         each bus, and the list of routes that are not running.
+
+         So a phone left open all week showed the numbers it loaded on
+         Tuesday, and, worse, somebody who tapped a "the bus is not running"
+         alert came back to a page still offering seats on it. The alert and
+         the page it opened disagreed.
+
+         Only the shared facts are taken. Nothing that belongs to the person
+         holding the phone: a half-chosen stop, an open cancel question and a
+         seat count they have not confirmed all survive untouched. */
+      if(!out.closed && !out.rehearsal){ applyShared(out); return; }
       /* It has just opened. Reload in full rather than patching flags: the
          booking form is closing anyway, the banner above it changes, and the
          stop list becomes the list the driver is working from. Nothing a
@@ -1310,24 +1326,32 @@ function paintAlerts(){
       '<button type="button" id="'+id+'">'+words+'</button></p>';
   };
 
-  /* ALREADY ON. The line used to vanish here, which was right while there was
-     nothing left to offer. There is now.
+  /* BELOW THE BOOKING CHECK, and that ordering is the fix.
 
-     A rehearsal wakes nobody, deliberately, and the four real alerts only
-     arrive on a Sunday with the bus actually moving, so somebody who turned
-     these on has no way of finding out they work until the morning he was
-     relying on them. This is that way.
+     This sat above it for a day, so a member who booked once in August, turned
+     alerts on, and had not travelled since opened the page in September to a
+     box containing one thing: an offer to buzz his phone for no reason. He was
+     not booked on anything. The reasoning I wrote for putting it there, that
+     the subscription is what is being tested and a booking is beside the
+     point, holds for a coordinator checking nine handsets in a car park and
+     for nobody else.
 
-     Shown whether or not there is a booking today, and after the week has
-     rolled: this phone is subscribed either way, and the subscription is what
-     is being tested. */
+     It earns its place for somebody expecting a bus, and it earns it twice
+     over: a push subscription can die quietly, and when it does getSubscription
+     still hands one back, so the page keeps reading pushOn as true and keeps
+     hiding the offer to turn alerts on. Tapping this is the only thing that
+     finds out. The refusal comes back flagged gone, the dead row is deleted,
+     and the page offers to turn them on again.
+
+     Worded as a check rather than a test, because "send me a test alert" is
+     the language of somebody building the thing. */
+  if(!MINE_BOOKED || ROLLED) return;
+
   if(pushOn){
-    box.innerHTML = line("pushTest", "Send me a test alert");
+    box.innerHTML = line("pushTest", "Check my alerts are working");
     if($("pushTest")) $("pushTest").addEventListener("click", pushTest);
     return;
   }
-
-  if(!MINE_BOOKED || ROLLED) return;
 
   if(isApple() && !standalone()){
     box.innerHTML = line("pushHow", "Add to your Home Screen to get bus alerts");
@@ -1454,6 +1478,13 @@ function liveAgeWords(){
   return "Last updated "+t+", "+m+" minute"+(m===1?"":"s")+" ago";
 }
 function liveLate(){ return !!liveAt && (Date.now()-liveAt) > 45000; }
+
+/* Nothing left to watch. The same three facts liveStop is called on, in one
+   place so the clock and the poller cannot disagree about when a morning is
+   finished. */
+function liveDone(){
+  return !!live && (live.mine==="served" || live.mine==="ended" || !!live.ended);
+}
 
 /* The clock has to keep counting even when no answer arrives, because a
    stopped clock is the whole point of showing one. Ticks once a second only
@@ -1669,8 +1700,20 @@ function paintLive(){
        thing it vouches for. A clock rather than "just now": the number moving
        every few seconds is the proof, and a number that has stopped moving is
        the warning. */
-    '<p class="live-age'+(liveLate()?' age-late':'')+'" id="liveAge">'+
-      esc(liveAgeWords())+'</p>';
+    /* SUPPRESSED EXACTLY WHERE THE POLLING STOPS.
+
+       The clock exists to warn that answers have stopped arriving while
+       somebody is still waiting. Once a stop is marked or the run is over,
+       the page deliberately stops asking, so a clock counting up from the
+       last answer is measuring a silence the page chose. It turned amber and
+       climbed, and a passenger who had been picked up at 10:42 opened this
+       during the service to a warning-coloured line telling him it was
+       forty-seven minutes since anything happened. Nothing was wrong.
+
+       Same test as liveStop's, deliberately, so the two can never drift. */
+    (liveDone() ? ''
+      : '<p class="live-age'+(liveLate()?' age-late':'')+'" id="liveAge">'+
+        esc(liveAgeWords())+'</p>');
 
   Array.prototype.forEach.call(box.querySelectorAll("[data-liveroute]"),function(b){
     b.addEventListener("click",function(){
@@ -2083,6 +2126,40 @@ function paint(){
     try{ $("seatsBox").scrollIntoView({block:"center",behavior:"smooth"}); }catch(e){}
   }
 
+  /* TO THE ROW HE JUST BOOKED.
+
+     Confirm sits in the fixed bar at the foot of a long list. The answer to
+     what he just did is a row somewhere above him, now ticked and highlighted,
+     and until this nobody carried him to it. The page already admits the
+     problem: there is a back-to-top button in the corner precisely because
+     people end up scrolled away from things.
+
+     block:"center" and not "start". The head is sticky at the top and the bar
+     is fixed at the bottom, so a row scrolled to "start" tucks itself under
+     the head. Centred, it clears both on any phone.
+
+     Time-limited for the same reason the watch jump is: if the record took
+     long enough that he has given up and started reading the timetable, the
+     page has no business moving him.
+
+     Nothing found means nothing happens. A booking recovered through the
+     identify sheet can belong to the other route, whose rows are not in the
+     document, and that is a fine outcome rather than something to guard. */
+  if(bookJumped){
+    var waitedBook = Date.now() - bookJumped;
+    bookJumped = 0;
+    if(waitedBook < 6000){
+      var row = chosen ? document.querySelector('[data-stop="'+chosen+'"]') : null;
+      if(row){
+        try{ row.scrollIntoView({block:"center",behavior:"smooth"}); }catch(e){}
+      } else {
+        /* Given up his seat, so there is no row to go to. The change he made
+           is at the top, where the note and the bar both live. */
+        jumpTop();
+      }
+    }
+  }
+
   paintBar();
 }
 
@@ -2492,7 +2569,33 @@ function verifySend(payload, done){
 }
 
 /* Repaint from the answer we already have. */
+/* What everybody on the page shares, and nothing that belongs to one person.
+
+   applyBus is the wrong tool for a background refresh: it rebuilds the whole
+   screen from the record, which means clearing a cancel question somebody is
+   reading and replacing a stop they have tapped but not confirmed. That is
+   right on a fresh load and wrong sixty seconds into somebody's booking. */
+function applyShared(out){
+  var before = OFF.join(",") + "|" + JSON.stringify(COUNTS);
+  if(out.counts) COUNTS = out.counts;
+  if(out.seats)  SEATS  = out.seats;
+  OFF = (out.off && out.off.length) ? out.off : [];
+  /* Only if something a person can see actually moved. A repaint every minute
+     for nothing costs a scroll position and gains no fact. */
+  if(before !== OFF.join(",") + "|" + JSON.stringify(COUNTS)) paint();
+}
+
+/* Set when a booking is confirmed, changed or given up, and spent by the
+   paint that follows the record's answer.
+
+   A flag and not a scroll on the spot. At the moment of the tap the row has
+   not been redrawn: no tick, no highlight, and on a cancellation the row is
+   still showing as booked. Moving then carries somebody to a row that is
+   about to change under them. This waits for the answer and then moves. */
+var bookJumped = 0;
+
 function applySaved(out){
+  bookJumped = Date.now();
   if(out && out.counts) COUNTS=out.counts;
   booked = (out && out.mine && out.mine.stopId)
     ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
