@@ -803,6 +803,30 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   letter-spacing:.01em;text-transform:none;color:var(--muted);margin-top:2px}
 .stop-tab.is-active{background:var(--steel);border-color:var(--steel);color:var(--on-accent)}
 .stop-tab.is-active small{color:var(--faint)}
+/* The block that stays put while the stop list scrolls under it.
+
+   Everything a driver needs to KNOW is up here — which Sunday, who the phone
+   thinks he is, which route he is looking at, how many are booked against how
+   many seats — and everything he needs to DO is in the list below it. Before
+   this, reading the first while working the second meant scrolling to the top
+   and back for every stop.
+
+   top is the dash's height rather than zero, because the instrument strip is
+   already pinned at zero and this must sit under it, not behind it. The dash
+   changes height between phones and between a browser tab and a home screen
+   install, so the number is measured at runtime by dashHeightSync and arrives
+   here as --dashH. The fallback only has to be close enough to look right for
+   the one frame before that runs.
+
+   The negative side margins pull the background out to the full width of the
+   screen, past .wrap's own padding. Without them the stop list would be seen
+   sliding up through the fourteen pixels of gutter on each side, which reads
+   as a rendering fault rather than as a design. */
+.stop-head{position:sticky;top:var(--dashH,64px);z-index:6;background:var(--paper);
+  margin:0 calc(-14px - var(--safe-r)) 8px calc(-14px - var(--safe-l));
+  padding:8px calc(14px + var(--safe-r)) 2px calc(14px + var(--safe-l));
+  box-shadow:0 10px 12px -12px rgba(27,34,44,.5)}
+.stop-head > :last-child{margin-bottom:6px}
 .stop-sum{font-size:13px;line-height:1.45;color:var(--muted);margin:0 0 6px}
 .stop-sum b{color:var(--ink);font-weight:600}
 /* Who the phone thinks you are, on the screen the taps are made from. Quiet:
@@ -1291,7 +1315,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.46.0";
+var APP_VERSION = "v1.47.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -1994,12 +2018,34 @@ function paintDash(){
 /* ---------------- screens ---------------- */
 var SCREENS = ["driver","vehicle","prep","stage","review","sent","rota","stops","pending"];
 var syncToTop=function(){};
+/* How tall the instrument strip is, published to CSS as --dashH.
+
+   .stop-head pins itself underneath the dash, and the dash is not a fixed
+   height: it grows for the safe area on a notched phone, grows again when it
+   is showing a Do not run alert, and is shorter in a browser tab than on a
+   home screen install. A hard-coded number would be right on exactly one
+   handset. Measured instead, and re-measured whenever the screen changes
+   shape. */
+function dashHeightSync(){
+  var d=$("dash");
+  if(!d) return;
+  try{
+    var h=d.offsetHeight;
+    if(h > 0) document.documentElement.style.setProperty("--dashH", h+"px");
+  }catch(e){}
+}
+window.addEventListener("resize", dashHeightSync);
+window.addEventListener("orientationchange", function(){ setTimeout(dashHeightSync,150); });
+
 function show(n){
   st.screen=n;
   SCREENS.forEach(function(x){ $("s-"+x).classList.toggle("is-on", x===n); });
   window.scrollTo(0,0);
   syncToTop();
   paintDash(); paintFoot(); paintLinks();
+  /* After paintDash, because that is what can change the strip's height —
+     a registration plate appearing, or the Do not run alert opening. */
+  dashHeightSync();
   if(n==="sent"){ refreshSendState(); armBackGuard(); paintSentNext(); }
 }
 
@@ -4854,7 +4900,9 @@ function rotaPaintStops(){
     return n;
   }
 
-  var html="";
+  /* Opened here and closed after the summary line. Everything between the
+     two is what stays on screen while the stops scroll. */
+  var html='<div class="stop-head">';
   if(showCounts){
     html+='<p class="lede" style="margin:0 0 8px">Bookings for '+
           esc(rotaBaseSunday(0).toLocaleDateString("en-GB",{day:"numeric",month:"long"}))+
@@ -4957,6 +5005,10 @@ function rotaPaintStops(){
           : (rotaDriverFor(route)
               ? '<span class="stop-whose">'+esc(rotaDriverFor(route))+'</span>'
               : ''))+'</p>';
+
+  /* End of the frozen block. The live strip and the stops themselves scroll
+     normally from here down. */
+  html+='</div>';
 
   /* ---- movement -------------------------------------------------------
      Live only on the route this phone is driving. A coordinator watching the
@@ -6745,6 +6797,7 @@ function safely(fn){ try{ fn(); }catch(e){ /* enrichment only, never fatal */ } 
 
 safely(paintBanner);
 safely(function(){ show("driver"); });
+safely(dashHeightSync);
 
 /* The sign-in screen is up. Guarded to one attempt per load inside. */
 safely(howAuto);
