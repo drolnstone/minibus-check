@@ -1353,7 +1353,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.51.0";
+var APP_VERSION = "v1.52.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -2021,6 +2021,10 @@ function paintSentNext(){
 var PUSH_ABLE = ("Notification" in window) && ("serviceWorker" in navigator) &&
                 ("PushManager" in window);
 var pushOn = false, pushBusy = false;
+/* A jump to the hub is already on its way. Without this, paintFoot running
+   again inside the half second — and it runs on every keystroke — would queue
+   a second one. */
+var pinJumping = false;
 
 /* Apple gives a page in a tab no push at all, silently. Only a Home Screen
    install gets them. */
@@ -2350,7 +2354,35 @@ function btn(label,cls,fn,dis,why){
        without four copies of the same line. A driver with no PIN set arrives
        ready the moment he is named, and is carried by the same test. */
     var ready = named && pinOk;
-    if(ready && !lastReady) goOnFocus();
+
+    /* A RIGHT PIN IS AN ANSWER. TAKE IT AS ONE.
+
+       The keyboard is up and covering the footer. He has just keyed four
+       digits, the check has come back, and the app's answer is to leave him
+       looking at a screen he has finished with — so he closes the keyboard,
+       finds Continue, and presses it to be told what he already knew.
+
+       Only when a PIN was actually ASKED FOR and answered. A driver with no
+       PIN on record is ready the moment he is named, and carrying him off the
+       screen on a name alone would take the choice away from somebody who is
+       still deciding whether it is his. pinState carries that difference: ""
+       is nobody asked, and only "ok" or "offline" are answers.
+
+       A breath first, so he sees the box turn and knows it was his PIN that
+       moved him rather than the app doing something of its own. */
+    if(ready && !lastReady && pinNeeded() && st.pinState && !pinJumping){
+      pinJumping = true;
+      setTimeout(function(){
+        pinJumping = false;
+        /* Still where he was, still signed in, still answered. Any of those
+           having changed in half a second means he has moved on himself. */
+        if(st.screen === "driver" && !pinGateNeeded() && st.driver.trim()){
+          try{ if($("pin")) $("pin").blur(); }catch(e){}
+          show("hub");
+        }
+      }, 550);
+    }
+    else if(ready && !lastReady) goOnFocus();
     lastReady = ready;
     return;
   }
