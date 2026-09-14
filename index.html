@@ -1366,7 +1366,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.61.0";
+var APP_VERSION = "v1.62.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -6006,8 +6006,25 @@ function tripClock(ms){
   return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
 }
 
+/* The strip is a card: border, background, thirteen pixels of padding. So an
+   empty one is not nothing on the screen, it is a small blank box that reads
+   as something that failed to load.
+
+   That used to be impossible. Every path through this function put at least
+   one line in, and the one that guaranteed it for a driver looking at the
+   other route was the sentence naming whose route it is. Removing that
+   sentence, because the frozen summary already ends with the same name as a
+   badge, left the box behind with nothing in it.
+
+   So the wrapper is decided at the end rather than assumed at the start.
+   Nothing to say, nothing drawn. */
+var TRIP_STRIP_OPEN = '<div class="trip-strip">';
+function tripStripEnd(h){
+  return h === TRIP_STRIP_OPEN ? "" : h + '</div>';
+}
+
 function tripHeaderHtml(route,mayTap,onThis,queued,view){
-  var h='<div class="trip-strip">';
+  var h=TRIP_STRIP_OPEN;
   /* The run being drawn. His own when this is his route, otherwise the last
      thing the board said about the other one. */
   var t = view || trip;
@@ -6029,7 +6046,7 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
              'data-tripanyway="'+esc(tripUncheckedAsked)+'"'+
              '>Set off anyway</button>'+
          '</div>';
-      return h+'</div>';
+      return tripStripEnd(h);
     }
 
     if(mayTap){
@@ -6081,7 +6098,7 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
            '<button class="btn btn-main" id="tripSignIn">Sign in</button>';
       }
     }
-    return h+'</div>';
+    return tripStripEnd(h);
   }
 
   if(t.ended){
@@ -6096,7 +6113,7 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
       h+='<p class="trip-note trip-cover">Ended automatically, back at church.</p>'+
          '<button class="btn btn-ghost btn-wide" id="tripAutoUndo">It has not finished, reopen it</button>';
     }
-    return h+'</div>';
+    return tripStripEnd(h);
   }
 
   /* One line while everything is normal. It used to be up to four: running
@@ -6220,7 +6237,7 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
      rebuilding the whole list to say so. */
   h+='<p class="trip-note trip-wait" id="tripWait">'+tripWaitWords()+'</p>';
   h+='<p class="trip-note" id="tripMoving"></p>';
-  return h+'</div>';
+  return tripStripEnd(h);
 }
 
 /* One button per bus, because choosing the bus and starting the run are the
