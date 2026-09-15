@@ -717,6 +717,24 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 /* Same radius and padding as every other card on this screen. The trip work
    was the newest layer and looked it: its own radii, its own spacing, and a
    sticky block nothing else in the app used. */
+
+/* THE ALERTS CHECK, AS AN ICON.
+
+   Drawn with stroke="currentColor" and no fill of its own, so it takes the
+   colour the theme has already set on the row it sits in. Both apps carry five
+   themes (auto, light, dark, green, navy), and this is one rule covering all
+   ten combinations rather than ten rules.
+
+   Colour is never the only signal: it also carries an aria-label and a title,
+   so a screen reader and a long press both say what it does. */
+.alertbtn{display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 auto;width:40px;height:40px;padding:0;margin:0;
+  border:1px solid var(--hair);border-radius:10px;background:transparent;
+  color:var(--muted);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.alertbtn svg{width:20px;height:20px;display:block}
+.alertbtn:active{transform:translateY(1px)}
+.headrow{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.headrow>:first-child{flex:1 1 auto;min-width:0}
 .trip-strip{border:1px solid var(--hair);border-radius:var(--r);padding:13px;margin:0 0 12px;background:var(--card)}
 /* The confirm-it-is-you panel, in the trip strip and in the request form. */
 .pingate{margin-top:11px;padding-top:11px;border-top:1px solid var(--hair)}
@@ -1159,7 +1177,19 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
        before any of this moved. -->
   <section class="screen" id="s-hub">
     <p class="eyebrow" id="hubWho">Signed in</p>
-    <h1>What are you doing?</h1>
+    <!-- The heading, and the alerts check.
+
+         Deliberately in the header row and not on the Stops screen. The
+         walkaround is the statutory act of this app and the one thing that
+         must never be crowded: a thumb reaching for Vehicle check has to find
+         Vehicle check. Up here it cannot displace any of the three buttons
+         below, and it is nowhere near the check flow. -->
+    <div class="headrow">
+      <h1>What are you doing?</h1>
+      <button class="alertbtn" id="alertIcon" type="button" style="display:none"
+              aria-label="Check my reminders are working"
+              title="Check my reminders are working"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>
+    </div>
 
     <!-- Said when a PIN is wanted and has not been keyed. Never a block: it
          names the one button that is off and offers the way to switch it on.
@@ -1366,7 +1396,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.62.0";
+var APP_VERSION = "v1.64.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this app's own
@@ -2216,9 +2246,10 @@ function paintLinks(){
       if(needsHome && !PUSH_ABLE){
         al.innerHTML = 'Add this app to your Home Screen to get reminders.';
       } else if(pushOn){
-        al.innerHTML = 'Reminders are on. <button type="button" id="hubAlertTest">Send me a test</button>';
-        var atest=$("hubAlertTest");
-        if(atest) atest.addEventListener("click",pushTest);
+        /* Nothing to say. The check is the icon in the header row now, and a
+           line saying reminders are on, under an icon that only appears when
+           they are, is the same fact twice. */
+        al.style.display = "none";
       } else {
         al.innerHTML = pushCanAsk()
           ? 'Remind me to end the trip. <button type="button" id="hubAlertGo">Turn on</button>'
@@ -2228,6 +2259,10 @@ function paintLinks(){
       }
     }
   }
+
+  /* The icon: only to a driver signed in, with reminders already on. */
+  var aic=$("alertIcon");
+  if(aic) aic.style.display = (pushOn && st.driver.trim()) ? "" : "none";
 
   var nudge=$("hubPin");
   if(nudge){
@@ -6886,6 +6921,10 @@ $("toRota").addEventListener("click",rotaOpen);
 /* Straight from the home screen to the list a driver actually works from.
    It used to be two levels down, behind the rota, which is a poor place for
    the thing he wants at ten past nine on a Sunday. */
+/* Bound once. paintLinks only shows and hides it, so a repaint cannot stack
+   a second handler on the same button. */
+if($("alertIcon")) $("alertIcon").addEventListener("click",pushTest);
+
 $("toStops").addEventListener("click",rotaOpenStops);
 
 /* The walkaround. The PIN is asked here rather than at the door, because
@@ -7276,12 +7315,19 @@ function checkPin(){
         pinConfirmQuietly(tried);
         return;
       }
-      pinAskSheet(tried, stillTyping, answered);
-    }).catch(function(){ pinAskSheet(tried, stillTyping, answered); });
+      pinAsk(tried, stillTyping, answered);
+    }).catch(function(){ pinAsk(tried, stillTyping, answered); });
     return;
   }
 
-  pinAskSheet(tried, stillTyping, answered);
+  pinAsk(tried, stillTyping, answered);
+}
+
+/* Fast server, then the sheet. One name, so every caller gets both. */
+function pinAsk(tried, stillTyping, answered){
+  pinAskLive(tried, stillTyping, answered, function(){
+    pinAskSheet(tried, stillTyping, answered);
+  });
 }
 
 /* The sheet's answer, checked after this phone has already said yes.
@@ -7293,6 +7339,20 @@ function checkPin(){
    gate back and says so. */
 function pinConfirmQuietly(tried){
   if(!(LIVE && navigator.onLine)) return;
+  /* THE SHEET, DELIBERATELY, AND NOT THE FAST SERVER.
+
+     I pointed this at the Worker for speed and that was the wrong instinct.
+     Speed is not what this call is for. It runs behind a driver who is
+     already through the gate, nobody is waiting on it, and its entire job is
+     to catch a PIN the coordinator has changed. That is a question about
+     authority, and the spreadsheet is the authority.
+
+     The Worker's copy is a hash pushed on a five minute sync. Ask it and a
+     PIN changed a minute ago still reads as good, so a driver let in on a
+     cached hash keeps the gate for up to five minutes after you took it off
+     him. Apps Script knows the moment you type it.
+
+     Slow is fine here. It is the one PIN call where it is. */
   callFetch(CFG.endpoint, {
     method:"POST", redirect:"follow",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
@@ -7323,6 +7383,69 @@ function pinConfirmQuietly(tried){
 
 /* The original path, unchanged, lifted out so both callers reach the same
    code rather than two copies of it drifting apart. */
+/* THE FAST SERVER FIRST, THE SHEET BEHIND IT.
+
+   Apps Script answers a PIN in two to eight seconds. The Worker answers in
+   well under a tenth of one, from a salted hash the sheet pushed it, and the
+   four digits still never leave the spreadsheet.
+
+   There is a cache on this handset too, and it should have made most of this
+   moot. On the coordinator's phone it never hit, and rather than spend the
+   evening finding out why one cache misses, the uncached path is now fast
+   enough that it does not matter which.
+
+   It hands off to the sheet on anything it cannot answer: no live endpoint, a
+   name the live server has never been told about, a sync that has not run, a
+   refusal, a timeout. So the worst case is exactly the behaviour that shipped
+   before this, and the ordinary case is instant. */
+function pinAskLive(tried, stillTyping, answered, thenSheet){
+  if(!(LIVE_ENDPOINT && navigator.onLine)){ thenSheet(); return; }
+  pinSay("Checking\u2026");
+  callFetch(LIVE_ENDPOINT, {
+    method:"POST", redirect:"follow",
+    headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: CFG.token||"", action:"pin",
+                           pin:{ driver: st.driver, pin: st.pin } })
+  }, PIN_TIMEOUT)
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      var out = JSON.parse(t);
+      if(!stillTyping()) return;
+      /* ok:false is this server saying it cannot answer, not that the PIN is
+         wrong. Unknown name, no hash yet, nothing synced. The sheet knows. */
+      if(!out || out.ok !== true){ thenSheet(); return; }
+      pinApply(out, tried, answered);
+    })
+    .catch(function(){ if(stillTyping()) thenSheet(); });
+}
+
+/* One place that turns an answer into a gate, because there are two servers
+   giving the same answer now and two copies of this would drift. */
+function pinApply(out, tried, answered){
+  if(out.locked){
+    st.pinOk=false; st.pinState="";
+    pinSay("Too many wrong tries. Wait "+(out.minutes||10)+" minutes, or ring the coordinator.");
+    paintFoot(); return;
+  }
+  st.pinOk = (out.valid === true);
+  st.pinState = st.pinOk ? "ok" : "";
+  answered(st.pinOk);
+  if(st.pinOk){
+    pinSay("");
+    /* Kept so this phone works without signal next time. Made here, never
+       received and never sent. */
+    if(canHash()) sha256Hex(tried).then(function(h){ pinRemember(st.driver, h); },
+                                        function(){});
+  } else {
+    pinSay("That PIN is not right." +
+           (out.left > 0
+             ? " " + out.left + (out.left === 1 ? " more try" : " more tries") +
+               " before it pauses."
+             : ""));
+  }
+  paintFoot();
+}
+
 function pinAskSheet(tried, stillTyping, answered){
   if(LIVE && navigator.onLine){
     pinSay("Checking\u2026");
@@ -7337,33 +7460,10 @@ function pinAskSheet(tried, stillTyping, answered){
         var out = JSON.parse(t);
         if(!stillTyping()) return;
         if(!out || out.ok !== true) throw new Error("no answer");
-
-        if(out.locked){
-          st.pinOk=false; st.pinState="";
-          pinSay("Too many wrong tries. Wait "+(out.minutes||10)+" minutes, or ring the coordinator.");
-          paintFoot(); return;
-        }
-
-        st.pinOk = (out.valid === true);
-        st.pinState = st.pinOk ? "ok" : "";
-        answered(st.pinOk);
-        if(st.pinOk){
-          pinSay("");
-          /* Kept so this phone works without signal next time. Made here,
-             never received and never sent. */
-          if(canHash()) sha256Hex(tried).then(function(h){ pinRemember(st.driver, h); },
-                                              function(){});
-        } else {
-          /* "1 more tries" is the sort of thing a driver notices and nobody
-             fixes. Singular when it is one, and at three tries it is a
-             sentence he will actually see. */
-          pinSay("That PIN is not right." +
-                 (out.left > 0
-                   ? " " + out.left + (out.left === 1 ? " more try" : " more tries") +
-                     " before it pauses."
-                   : ""));
-        }
-        paintFoot();
+        /* Same hands that read the live server's answer. "1 more tries" is
+           the sort of thing a driver notices and nobody fixes, and it is
+           fixed in one place rather than two. */
+        pinApply(out, tried, answered);
       })
       .catch(function(){ if(stillTyping()) pinOffline(tried); });
     return;
