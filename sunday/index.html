@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.62.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.64.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -211,6 +211,24 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 /* The offer to be told things. Quiet, one line, and it goes away for good
    once it has been taken up. */
 /* The refresh clock. Small, grey, and only ever amber when it has stopped. */
+
+/* THE ALERTS CHECK, AS AN ICON.
+
+   Drawn with stroke="currentColor" and no fill of its own, so it takes the
+   colour the theme has already set on the row it sits in. Both apps carry five
+   themes (auto, light, dark, green, navy), and this is one rule covering all
+   ten combinations rather than ten rules.
+
+   Colour is never the only signal: it also carries an aria-label and a title,
+   so a screen reader and a long press both say what it does. */
+.alertbtn{display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 auto;width:40px;height:40px;padding:0;margin:0;
+  border:1px solid var(--hair);border-radius:10px;background:transparent;
+  color:var(--muted);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.alertbtn svg{width:20px;height:20px;display:block}
+.alertbtn:active{transform:translateY(1px)}
+.headrow{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.headrow>:first-child{flex:1 1 auto;min-width:0}
 .live-age{margin:6px 0 0;font-size:12px;letter-spacing:.02em;color:var(--muted)}
 .age-late{color:var(--warn);font-weight:600}
 .alerts-line{margin-top:10px}
@@ -543,7 +561,14 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
        be a pixel taken off the timetable. If you want them pinned as well,
        move them inside this div. -->
   <div class="live-head">
-    <p class="when" id="when"></p>
+    <!-- The date, and the alerts check. Top right of the frozen pane, so it
+         stays reachable while the stop list scrolls. -->
+    <div class="headrow">
+      <p class="when" id="when"></p>
+      <button class="alertbtn" id="alertIcon" type="button" style="display:none"
+              aria-label="Check my alerts are working"
+              title="Check my alerts are working"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>
+    </div>
     <!-- Your own booking, and then the bus.
 
          "You are booked" used to be drawn at the top of the stop list, which
@@ -639,7 +664,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.62.0";
+var PAGE_VERSION = "v1.64.0";
 
 /* Which copy of the Apps Script is answering. Learned from the first reply of
    the morning — every payload carries it — and printed beside this page's own
@@ -1316,7 +1341,16 @@ function isApple(){
 /* Drawn under the bus panel, in the frozen pane, and only for somebody who
    has actually booked a seat. A page open on a stranger's phone is not asked
    for anything. */
+/* The icon in the frozen pane. Same conditions the text line had: somebody
+   travelling this Sunday, with alerts already on. */
+function paintAlertIcon(){
+  var b = $("alertIcon");
+  if(!b) return;
+  b.style.display = (pushOn && MINE_BOOKED && !ROLLED) ? "" : "none";
+}
+
 function paintAlerts(){
+  paintAlertIcon();
   var box = $("alerts");
   if(!box) return;
   box.innerHTML = "";
@@ -1347,11 +1381,11 @@ function paintAlerts(){
      the language of somebody building the thing. */
   if(!MINE_BOOKED || ROLLED) return;
 
-  if(pushOn){
-    box.innerHTML = line("pushTest", "Check my alerts are working");
-    if($("pushTest")) $("pushTest").addEventListener("click", pushTest);
-    return;
-  }
+  /* Already on. The check moved to the icon in the frozen pane, so this box
+     now holds only the two things that need words: the offer to turn alerts
+     on, and the iPhone Home Screen line. An icon cannot say "add this to your
+     Home Screen". */
+  if(pushOn) return;
 
   if(isApple() && !standalone()){
     box.innerHTML = line("pushHow", "Add to your Home Screen to get bus alerts");
@@ -2874,6 +2908,8 @@ try{
         themeApply();
       });
     });
+  if($("alertIcon")) $("alertIcon").addEventListener("click", pushTest);
+
   var themeMq=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
   if(themeMq){
     /* addListener is the old spelling, and some of these phones are old. */
