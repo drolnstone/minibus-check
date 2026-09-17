@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.64.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.65.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -462,7 +462,9 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 /* Last thing on the page and the quietest. Nobody books a seat by reading
    it; it is there for the one morning somebody has to ask which copy a phone
    is running, and answering that from a screenshot beats asking. */
-.foot-ver{display:block;margin-top:12px;font-size:11px;letter-spacing:.07em;color:var(--faint)}
+.foot-ver{display:block;margin-top:12px;font-size:11px;letter-spacing:.07em;color:var(--faint);
+  line-height:1.7}
+.foot-ver .vpart{white-space:nowrap}
 
 /* ---- how to put it on a phone -----------------------------------------
    Steps and nothing else. Which phone somebody is holding decides which
@@ -651,6 +653,19 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   </div>
 </div>
 
+<!-- The offer of bus alerts, asked rather than posted. Only ever to somebody
+     who has actually booked a seat: see alertAskMaybe. -->
+<div class="ask" id="alertAsk" aria-hidden="true">
+  <div class="ask-sheet" role="dialog" aria-modal="true" aria-labelledby="alertAskTitle">
+    <p class="eyebrow" id="alertAskEyebrow">Your seat</p>
+    <h2 id="alertAskTitle">Tell you when the bus is near?</h2>
+    <div class="ask-btns">
+      <button class="btn btn-ghost" id="alertAskNot" type="button">Not now</button>
+      <button class="btn btn-main" id="alertAskGo" type="button">Turn on</button>
+    </div>
+  </div>
+</div>
+
 <div class="upright" aria-hidden="true"><b>Turn your phone upright.</b></div>
 
 <button class="totop" id="toTop" type="button" aria-label="Back to top">↑</button>
@@ -664,12 +679,31 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.64.0";
+var PAGE_VERSION = "v1.65.0";
 
-/* Which copy of the Apps Script is answering. Learned from the first reply of
-   the morning — every payload carries it — and printed beside this page's own
-   number below. */
-var SCRIPT_VERSION = "";
+/* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
+   open the spreadsheet to find the third.
+
+   Each machine names itself in every reply. The Worker knows the sheet's
+   number because the sync carries it over; Apps Script answering on its own,
+   with the Worker blanked or down, knows only its own. A slot nobody has
+   named stays blank, which is the truth.
+
+   These were one variable called SCRIPT_VERSION, and "script" meant the
+   Worker here and the Apps Script in the spreadsheet. */
+var SERVER_VERSION = "";   /* the Cloudflare Worker */
+var SHEET_VERSION  = "";   /* the Apps Script behind the spreadsheet */
+
+/* Each part is kept whole, so a narrow phone wraps BETWEEN the three and
+   never through the middle of a version number. */
+function versionPart(label, v){
+  return '<span class="vpart">'+label+' '+esc(v)+'</span>';
+}
+function versionWords(){
+  return versionPart("app", PAGE_VERSION) +
+         (SERVER_VERSION ? ' \u00B7 ' + versionPart("server", SERVER_VERSION) : '') +
+         (SHEET_VERSION  ? ' \u00B7 ' + versionPart("sheet",  SHEET_VERSION)  : '');
+}
 
 /* The live server. Every call this page makes goes here: the load, the
    booking, identifying a phone, and where the bus has got to.
@@ -692,6 +726,21 @@ var ENDPOINT = "https://minibus-api.asimbassey.workers.dev";
    the one shown when the server cannot be reached at all. Keep it in step
    with coordinator in config.js, which is the same person for the drivers. */
 var COORDINATOR = { name: "Bro Asim", phone: "07377634214" };
+
+/* Whether the offer of bus alerts is asked or posted.
+
+   true puts it on the screen as a question over a dimmed page, once each time
+   the page is opened, until they turn alerts on or the phone refuses. It is
+   only ever shown to somebody who has actually booked a seat.
+
+   false leaves it as the line under the bus panel, which is where it was and
+   which almost nobody read.
+
+   Kept here rather than in config.js because this page loads no config.js at
+   all: it is opened by members from a WhatsApp link and has no business
+   downloading the driver register to do it. Keep it in step with alertPopup
+   in config.js, which is the same decision for the driver app. */
+var ALERT_POPUP = true;
 
 /* A number that can actually be pressed. The written form keeps its spacing
    for reading; the tel: link gets digits only, because a space in an href is
@@ -1023,7 +1072,8 @@ function load(again){
     .then(function(t){
       var out=readJson(t);
       if(!out || out.ok!==true) throw new Error(out && out.error ? out.error : "unavailable");
-      if(out.script) SCRIPT_VERSION = String(out.script);
+      if(out.server) SERVER_VERSION = String(out.server);
+      if(out.sheet)  SHEET_VERSION  = String(out.sheet);
       if(out.seats) SEATS = out.seats;
       loadedOk = true;
       retryStop();
@@ -1351,6 +1401,26 @@ function paintAlertIcon(){
 
 function paintAlerts(){
   paintAlertIcon();
+
+  /* ASKED HERE, ABOVE EVERY EARLY RETURN BELOW, and that position is the fix.
+
+     It sat at the foot of this function for an hour. An iPhone in a tab
+     returns four lines above it, at the Apple branch, so the one handset that
+     can do nothing until the page is on its Home Screen was the one handset
+     never asked to put it there. That is the same shape as the bug this file
+     already carries a comment about further down, and I wrote it again.
+
+     Position is all it needs. alertAskMaybe holds every condition of its own,
+     MINE_BOOKED and pushOn included, so being called earlier cannot make it
+     ask anybody it should not. */
+  /* Guarded, because this is the first statement of a function that goes on
+     to write the whole page. paint() calls paintAlerts() and then sets
+     body.innerHTML, the footer and every click handler below it. A throw here
+     would take all of that with it, and somebody at a kerb would be looking
+     at "The stops could not be loaded". The offer of alerts is not worth one
+     line of the stop list. */
+  try{ alertAskMaybe(); }catch(e){}
+
   var box = $("alerts");
   if(!box) return;
   box.innerHTML = "";
@@ -1395,6 +1465,8 @@ function paintAlerts(){
   if(!PUSH_ABLE) return;                               /* browser has no push at all */
   if(Notification.permission === "denied") return;     /* asked once, told no */
 
+  /* The line stays under the panel whatever ALERT_POPUP is set to. It is the
+     way back for anybody who tapped Not now, and it costs one line. */
   box.innerHTML = line("pushOn", "Tell me when the bus is near");
   if($("pushOn")) $("pushOn").addEventListener("click", pushTurnOn);
 }
@@ -1491,15 +1563,129 @@ function pushTurnOn(){
 
 /* Already subscribed on this handset? Asked once, quietly, so the offer is
    not put in front of somebody who took it up a fortnight ago. */
+
+/* HOW LONG THE PAGE WAITS TO BE TOLD WHETHER THIS PHONE IS ALREADY SIGNED UP.
+
+   navigator.serviceWorker.ready is a promise that resolves when a worker is
+   ACTIVE. If registration never succeeds it does not reject, it simply never
+   settles, and nothing downstream of it ever runs. The offer of alerts is
+   gated on that lookup having answered, so a failed registration meant the
+   offer was never made at all, silently, for the life of the page.
+
+   So the wait is bounded. If the lookup has not answered by then, the page
+   carries on as though this phone has no subscription. The cost of being
+   wrong that way is being offered alerts you already have, and tapping Turn
+   on then re-registers the same endpoint and changes nothing. The cost of the
+   other way is never being asked. */
+var PUSH_LOOK_WAIT = 4000;
+
 function pushLook(){
-  if(!PUSH_ABLE) return;
+  /* However this goes, and whether or not it goes at all, the page stops
+     waiting. pushDone is safe to run twice. */
+  setTimeout(pushDone, PUSH_LOOK_WAIT);
+  if(!PUSH_ABLE){
+    /* Nothing to look up and the answer is already final. An iPhone in a tab
+       lands here, and it is the handset with most to gain from being asked. */
+    pushDone();
+    return;
+  }
   try{
     navigator.serviceWorker.ready.then(function(reg){
       return reg.pushManager.getSubscription();
     }).then(function(sub){
       if(sub){ pushOn = true; paintAlerts(); }
-    }).catch(function(){});
-  }catch(e){}
+      pushDone();
+    }).catch(pushDone);
+  }catch(e){ pushDone(); }
+}
+
+/* Every way out of that lookup, both failures included. Until it has run,
+   pushOn is still the false it was initialised to, and offering alerts to
+   somebody who turned them on a fortnight ago is a question already
+   answered. */
+function pushDone(){
+  pushChecked = true;
+  try{ alertAskMaybe(); }catch(e){}
+}
+
+/* ---- THE OFFER, ASKED RATHER THAN POSTED -------------------------------
+
+   "Tell me when the bus is near" was a faint grey line under the bus panel
+   and it was read by almost nobody, so almost nobody had alerts on and the
+   whole push pipeline sat there serving four people.
+
+   It is now asked: one question over a dimmed page, once each time the page
+   is opened, until they turn alerts on or the phone refuses.
+
+   ONLY TO SOMEBODY TRAVELLING. A page open on a stranger's phone is asked
+   for nothing, and neither is somebody whose Sunday has already rolled past.
+
+   Never on top of another sheet. The booking flow uses this same sheet to
+   ask for a phone number and the install steps use it too; two sheets on one
+   screen is a question nobody can answer.
+
+   Not red. Red on this page means a bus that is not running. */
+var alertAsked  = false;   /* shown once per page open */
+var pushChecked = false;   /* the subscription lookup has answered */
+
+function alertAskUp(){
+  var b=$("alertAsk");
+  return !!(b && b.classList.contains("is-on"));
+}
+function anySheetUp(){
+  var ids=["ask","how","alertAsk"], i, b;
+  for(i=0;i<ids.length;i++){
+    b=$(ids[i]);
+    if(b && b.classList.contains("is-on")) return true;
+  }
+  return false;
+}
+function alertAskClose(){
+  var box=$("alertAsk");
+  if(!box) return;
+  box.classList.remove("is-on");
+  box.setAttribute("aria-hidden","true");
+}
+
+function alertAskMaybe(){
+  if(alertAsked) return;
+  if(!ALERT_POPUP) return;                     /* the line does the work instead */
+  if(!pushChecked) return;                     /* pushOn is not yet known */
+  if(!MINE_BOOKED || ROLLED) return;           /* nobody is expecting a bus */
+  if(pushOn) return;                           /* already on */
+  if(typeof Notification !== "undefined" && Notification.permission === "denied") return;
+
+  var needsHome = isApple() && !standalone();
+  if(!pushCanAsk() && !needsHome) return;      /* this phone cannot do it at all */
+  if(anySheetUp()) return;
+
+  var box=$("alertAsk");
+  if(!box) return;
+
+  /* A beat, so it rises over a page that has settled rather than over a
+     booking still landing. Re-tested on the way in: the install sheet opens
+     on a timer of its own and may have arrived in between.
+
+     alertAsked is set INSIDE the timer, on the path that actually opens it.
+     Set before the wait, an install sheet arriving in those five hundred
+     milliseconds would have counted as the asking, and they would not be
+     offered alerts again until they reloaded the page. */
+  setTimeout(function(){
+    if(anySheetUp()) return;
+    if(alertAsked) return;
+    alertAsked = true;
+    /* The eyebrow says what the sheet is about, so it must not be the heading
+       again in fewer words. "Bus alerts" over "Tell you when the bus is
+       near?" was the same sentence twice. */
+    $("alertAskEyebrow").textContent = needsHome ? "This page" : "Your seat";
+    $("alertAskTitle").textContent = needsHome
+      ? "Add this page to your Home Screen"
+      : "Tell you when the bus is near?";
+    $("alertAskGo").textContent = needsHome ? "Show me how" : "Turn on";
+    box.setAttribute("data-how", needsHome ? "1" : "");
+    box.classList.add("is-on");
+    box.setAttribute("aria-hidden","false");
+  }, 500);
 }
 
 function liveAgeWords(){
@@ -2092,8 +2278,7 @@ function paint(){
     identityFoot()+
     /* Not offered to a phone that already has it. */
     (standalone() ? "" : "<br>"+idBtn("idInstall","Add to your phone"))+
-    '<span class="foot-ver">'+esc(PAGE_VERSION)+
-    (SCRIPT_VERSION ? ' \u00B7 script '+esc(SCRIPT_VERSION) : '')+'</span>';
+    '<span class="foot-ver">'+versionWords()+'</span>';
   wireIdentityFoot();
 
   Array.prototype.forEach.call(document.querySelectorAll("[data-route]"),function(b){
@@ -2785,6 +2970,19 @@ function howClose(){
   var box=$("how");
   box.classList.remove("is-on");
   box.setAttribute("aria-hidden","true");
+
+  /* THE INSTALL SHEET WAS THE ONE THING THAT COULD SWALLOW THE OFFER.
+
+     It opens on a timer of its own on a first ever visit, which is exactly
+     the visit where somebody has never turned alerts on. The alert sheet is
+     held back while it is up, correctly, and then nothing calls again: the
+     driver reaches the hub once a launch, and the passenger page only
+     repaints when the record changes. So the person most likely to want
+     alerts was the person least likely to be asked.
+
+     Every way out of that sheet comes through here, so asking here covers
+     Done, Not now, the backdrop and Escape at once. */
+  alertAskMaybe();
 }
 
 /* ---- The offer, made on the way in ---------------------------------
@@ -2806,7 +3004,7 @@ var HOWKEY="bus.install.v1";
 var howTried=false;
 
 function howBlocked(){
-  return standalone() || $("ask").classList.contains("is-on");
+  return standalone() || $("ask").classList.contains("is-on") || alertAskUp();
 }
 function howAuto(){
   if(howTried) return;
@@ -2871,7 +3069,23 @@ $("ask").addEventListener("click",function(e){ if(e.target===this) askClose(); }
 document.addEventListener("keydown",function(e){
   if(e.key!=="Escape" && e.keyCode!==27) return;
   if($("ask").classList.contains("is-on")) askClose();
+  else if(alertAskUp()) alertAskClose();
   else if($("how").classList.contains("is-on")) howClose();
+});
+
+/* Not now, the backdrop and Escape all mean the same thing, and so does Turn
+   on: the sheet closes either way. It is asked once a load, so a Not now
+   costs nothing until the page is opened again. */
+$("alertAskNot").addEventListener("click", alertAskClose);
+$("alertAsk").addEventListener("click",function(e){ if(e.target===this) alertAskClose(); });
+$("alertAskGo").addEventListener("click",function(){
+  /* An iPhone in a tab cannot be given an alert at all, so the button on that
+     phone opens the Home Screen steps instead. Closed first: two sheets on one
+     screen is a question nobody can answer. */
+  var how = $("alertAsk").getAttribute("data-how") === "1";
+  alertAskClose();
+  if(how){ howOpen(false); return; }
+  pushTurnOn();
 });
 
 /* ---- Appearance ----------------------------------------------------
@@ -2942,6 +3156,23 @@ try{
 })();
 
 load();
+
+/* WHETHER THIS PHONE IS ALREADY SIGNED UP, ASKED UNCONDITIONALLY.
+
+   It used to be asked only from inside the service worker registration below,
+   which is well reasoned — a subscription belongs to a worker — and was the
+   whole of the problem. iOS Safari in Private Browsing has no
+   navigator.serviceWorker at all, so that block is skipped entirely; a
+   private Firefox window is the same; and a registration that simply fails
+   lands in a catch that swallows it. On any of those the lookup never ran,
+   the offer of alerts was gated on it having run, and the sheet never
+   appeared on the one class of handset that cannot be reached any other way.
+   The driver app has always called this at boot, which is what makes the
+   difference a defect rather than a decision.
+
+   Safe to call twice. The registration below still calls it, because that
+   call is the one that runs with a worker actually active. */
+try{ pushLook(); }catch(e){}
 
 /* ---- offline shell -----------------------------------------------------
    Registered from this folder, so the worker takes charge of this page and
