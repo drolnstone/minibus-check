@@ -550,7 +550,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .footer-brand{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:22px;opacity:.75}
 .footer-brand img{width:24px;height:24px}
 .version{text-align:center;margin-top:6px;font-family:"Barlow Condensed",sans-serif;
-  font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--hair)}
+  font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--hair);
+  line-height:1.7}
+.version .vpart{white-space:nowrap}
 
 /* ---- how to put it on a phone -----------------------------------------
    Same sheet the rota request uses, same shape as the passenger page's, and
@@ -1275,6 +1277,20 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   </div>
 </div>
 
+<!-- The offer to turn reminders on, asked rather than posted. See
+     alertAskMaybe for the rules it keeps, the first of which is that it is
+     never drawn anywhere near the vehicle check. -->
+<div class="rota-modal" id="alertAsk" aria-hidden="true">
+  <div class="rota-sheet" role="dialog" aria-modal="true" aria-labelledby="alertAskTitle">
+    <p class="eyebrow" id="alertAskEyebrow">Driver</p>
+    <h2 id="alertAskTitle">Remind you to end the trip?</h2>
+    <div class="rota-modal-actions">
+      <button class="btn btn-ghost" id="alertAskNot" type="button">Not now</button>
+      <button class="btn btn-main" id="alertAskGo" type="button">Turn on</button>
+    </div>
+  </div>
+</div>
+
 <button class="totop" id="toTop" type="button" aria-label="Back to top">&#8593;</button>
 
 <div class="footbar" id="footbar">
@@ -1396,12 +1412,21 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.64.0";
+var APP_VERSION = "v1.65.0";
 
-/* Which copy of the Apps Script is answering. Learned from the first reply of
-   the morning — every payload carries it — and printed beside this app's own
-   number under the first screen. */
-var SCRIPT_VERSION = "";
+/* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
+   the spreadsheet to find the third.
+
+   Each machine names itself in every reply. The Worker knows the sheet's
+   number because the sync carries it over; Apps Script answering on its own,
+   with the Worker blanked or down, knows only its own. A slot nobody has
+   named stays blank, which is the truth and is worth more here than a guess.
+
+   They were one variable called SCRIPT_VERSION, and "script" meant the Worker
+   in the app and the Apps Script in the spreadsheet. Two different numbers
+   wearing one word is what sent anyone checking a deploy to two places. */
+var SERVER_VERSION = "";   /* the Cloudflare Worker */
+var SHEET_VERSION  = "";   /* the Apps Script behind the spreadsheet */
 /* What the record says about each route's bus today: { reg, seats, booked }.
    Learned from the board, which this screen already polls. */
 var SEATS = {};
@@ -1607,14 +1632,24 @@ function busSeatNote(route, reg, off){
 }
 
 function scriptSeen(out){
-  if(out && out.script && String(out.script)!==SCRIPT_VERSION){
-    SCRIPT_VERSION = String(out.script);
-    var el=document.getElementById("appVersion");
-    if(el) el.textContent = versionWords();
-  }
+  if(!out) return;
+  var had = SERVER_VERSION + "|" + SHEET_VERSION;
+  if(out.server) SERVER_VERSION = String(out.server);
+  if(out.sheet)  SHEET_VERSION  = String(out.sheet);
+  if(had === SERVER_VERSION + "|" + SHEET_VERSION) return;
+  var el=document.getElementById("appVersion");
+  if(el) el.innerHTML = versionWords();
+}
+
+/* Each part is kept whole. On a narrow phone the line wraps BETWEEN the
+   three, never through the middle of a version number. */
+function versionPart(label, v){
+  return '<span class="vpart">'+label+' '+esc(v)+'</span>';
 }
 function versionWords(){
-  return APP_VERSION + (SCRIPT_VERSION ? " \u00B7 script "+SCRIPT_VERSION : "");
+  return versionPart("app", APP_VERSION) +
+         (SERVER_VERSION ? " \u00B7 " + versionPart("server", SERVER_VERSION) : "") +
+         (SHEET_VERSION  ? " \u00B7 " + versionPart("sheet",  SHEET_VERSION)  : "");
 }
 
 var CFG = window.CONFIG || {};
@@ -2176,15 +2211,129 @@ function pushTest(){
   });
 }
 
+
+/* HOW LONG THE PAGE WAITS TO BE TOLD WHETHER THIS PHONE IS ALREADY SIGNED UP.
+
+   navigator.serviceWorker.ready is a promise that resolves when a worker is
+   ACTIVE. If registration never succeeds it does not reject, it simply never
+   settles, and nothing downstream of it ever runs. The offer of alerts is
+   gated on that lookup having answered, so a failed registration meant the
+   offer was never made at all, silently, for the life of the page.
+
+   So the wait is bounded. If the lookup has not answered by then, the page
+   carries on as though this phone has no subscription. The cost of being
+   wrong that way is being offered alerts you already have, and tapping Turn
+   on then re-registers the same endpoint and changes nothing. The cost of the
+   other way is never being asked. */
+var PUSH_LOOK_WAIT = 4000;
+
 function pushLook(){
-  if(!PUSH_ABLE) return;
+  /* However this goes, and whether or not it goes at all, the page stops
+     waiting. pushDone is safe to run twice. */
+  setTimeout(pushDone, PUSH_LOOK_WAIT);
+  if(!PUSH_ABLE){
+    /* There is nothing to look up and the answer is already final: no
+       subscription, and none possible in this tab. An iPhone in a tab lands
+       here, and it is the handset with most to gain from being asked. */
+    pushDone();
+    return;
+  }
   try{
     navigator.serviceWorker.ready.then(function(reg){
       return reg.pushManager.getSubscription();
     }).then(function(sub){
       if(sub){ pushOn = true; safely(paintLinks); }
-    }).catch(function(){});
-  }catch(e){}
+      pushDone();
+    }).catch(pushDone);
+  }catch(e){ pushDone(); }
+}
+
+/* Every way out of that lookup, including both failures. Until it has run,
+   pushOn is still the false it was initialised to and asking a driver who
+   turned reminders on a fortnight ago would be asking a question already
+   answered. */
+function pushDone(){
+  pushChecked = true;
+  safely(alertAskMaybe);
+}
+
+/* ---- THE OFFER, ASKED RATHER THAN POSTED -------------------------------
+
+   It was a grey line under the buttons reading "Remind me to end the trip.
+   Turn on", and drivers did not read it. A reminder nobody switches on is
+   the same as no reminder, so it is now put in front of him: one question
+   over a dimmed screen, once each time the app is opened, until he turns
+   them on or his phone refuses.
+
+   THE RULE IT MUST NEVER BREAK. The walkaround is the statutory act of this
+   app and nothing may stand between a driver and Vehicle check. So it is
+   drawn on the hub and nowhere else, never while a check is open, never on
+   top of another sheet, and it closes on either button, on the backdrop and
+   on Escape. Nothing here can be reached from inside the check flow.
+
+   Not red. Red in this app means a defect or a bus off the road. Spending it
+   on an offer to switch on reminders would cost it where it is needed. A
+   sheet over a dimmed screen stops the eye by standing in front of it, which
+   costs no colour at all.
+
+   config.alertPopup false turns the sheet off. The line under the buttons is
+   drawn either way: it is the way back for a driver who tapped Not now, and
+   it costs one line. */
+var alertAsked  = false;   /* shown once per app open */
+var pushChecked = false;   /* the subscription lookup has answered */
+
+function alertAskUp(){
+  var b=$("alertAsk");
+  return !!(b && b.classList.contains("is-on"));
+}
+
+/* Every sheet this app can put up. A sheet over a sheet is two backdrops and
+   a question about which one a tap is answering. */
+function anySheetUp(){
+  var ids=["rotaModal","busModal","howModal","pinModal","alertAsk"], i, b;
+  for(i=0;i<ids.length;i++){
+    b=$(ids[i]);
+    if(b && b.classList.contains("is-on")) return true;
+  }
+  return false;
+}
+
+function alertAskClose(){
+  var box=$("alertAsk");
+  if(!box) return;
+  box.classList.remove("is-on");
+  box.setAttribute("aria-hidden","true");
+}
+
+function alertAskMaybe(){
+  if(alertAsked) return;
+  if(!CFG.alertPopup) return;                  /* the line does the work instead */
+  if(!pushChecked) return;                     /* pushOn is not yet known */
+  if(st.screen !== "hub") return;              /* never over the check */
+  if(anySheetUp()) return;
+  if(!st.driver || !st.driver.trim()) return;  /* nobody has signed in */
+  if(pushOn) return;                           /* already on */
+  if(typeof Notification !== "undefined" && Notification.permission === "denied") return;
+
+  /* An iPhone in a tab has no push at all and cannot be given any until the
+     app is on the Home Screen, so that phone is asked the other question. */
+  var needsHome = isApple() && !standalone();
+  if(!pushCanAsk() && !needsHome) return;      /* this phone cannot do it at all */
+
+  var box=$("alertAsk");
+  if(!box) return;
+  alertAsked = true;
+  /* The eyebrow says what the sheet is about, so it must not be the heading
+     again in fewer words. "Reminders" over "Remind you to end the trip?" was
+     the same sentence twice. */
+  $("alertAskEyebrow").textContent = needsHome ? "This app" : "Driver";
+  $("alertAskTitle").textContent = needsHome
+    ? "Add this app to your Home Screen"
+    : "Remind you to end the trip?";
+  $("alertAskGo").textContent = needsHome ? "Show me how" : "Turn on";
+  box.setAttribute("data-how", needsHome ? "1" : "");
+  box.classList.add("is-on");
+  box.setAttribute("aria-hidden","false");
 }
 
 function paintLinks(){
@@ -2366,6 +2515,13 @@ function show(n){
      a registration plate appearing, or the Do not run alert opening. */
   dashHeightSync();
   if(n==="sent"){ refreshSendState(); armBackGuard(); paintSentNext(); }
+  /* The hub only. Everything this guards against is in alertAskMaybe.
+
+     And gone the moment he leaves, because a sheet left standing over a
+     screen that no longer wants one is a driver tapping at a backdrop. He
+     cannot reach a button through it, so this is belt and braces. */
+  if(n==="hub") safely(alertAskMaybe);
+  else safely(alertAskClose);
 }
 
 /**
@@ -6830,7 +6986,24 @@ $("pinModal").addEventListener("click",function(e){ if(e.target===this) pinModal
 document.addEventListener("keydown",function(e){
   if(e.key!=="Escape" && e.keyCode!==27) return;
   if(pinModalUp()) pinModalClose();
+  else if(alertAskUp()) alertAskClose();
   else if($("howModal").classList.contains("is-on")) howClose();
+});
+
+/* Not now, the backdrop and Escape all mean the same thing here, and so does
+   Turn on: the sheet closes either way and he is on the hub with Vehicle
+   check in front of him. It is asked once a launch, so a Not now costs him
+   nothing until the next time he opens the app. */
+$("alertAskNot").addEventListener("click", alertAskClose);
+$("alertAsk").addEventListener("click",function(e){ if(e.target===this) alertAskClose(); });
+$("alertAskGo").addEventListener("click",function(){
+  /* An iPhone in a tab cannot be given a reminder at all, so the button on
+     that phone opens the Home Screen steps instead. Closed first: a sheet
+     over a sheet is two backdrops. */
+  var how = $("alertAsk").getAttribute("data-how") === "1";
+  alertAskClose();
+  if(how){ howOpen(false); return; }
+  pushTurnOn();
 });
 /* ---------------- wiring ---------------- */
 $("driverPick").addEventListener("change",function(){
@@ -7039,7 +7212,8 @@ function pinDiagnosis(){
   var withPin = REGISTER.filter(function(d){ return d.hasPin; }).length;
   var L = [];
   L.push("App version: " + APP_VERSION);
-  L.push("Script version: " + (SCRIPT_VERSION || "not heard from yet"));
+  L.push("Server version: " + (SERVER_VERSION || "not heard from yet"));
+  L.push("Sheet version: " + (SHEET_VERSION || "not heard from yet"));
   L.push("");
   L.push("1. requirePin in config.js");
   L.push("   " + (CFG.requirePin ? "ON" : "OFF  <-- upload the new config.js"));
@@ -7707,6 +7881,19 @@ function howClose(){
   var box=$("howModal");
   box.classList.remove("is-on");
   box.setAttribute("aria-hidden","true");
+
+  /* THE INSTALL SHEET WAS THE ONE THING THAT COULD SWALLOW THE OFFER.
+
+     It opens on a timer of its own on a first ever visit, which is exactly
+     the visit where somebody has never turned alerts on. The alert sheet is
+     held back while it is up, correctly, and then nothing calls again: the
+     driver reaches the hub once a launch, and the passenger page only
+     repaints when the record changes. So the person most likely to want
+     alerts was the person least likely to be asked.
+
+     Every way out of that sheet comes through here, so asking here covers
+     Done, Not now, the backdrop and Escape at once. */
+  safely(alertAskMaybe);
 }
 
 /* ---- The offer, made on the way in ---------------------------------
@@ -7795,11 +7982,16 @@ $("busAskSwap").addEventListener("click",function(){
 $("howModal").addEventListener("click",function(e){ if(e.target===this) howClose(); });
 howLinkSync();
 
-var vEl=$("appVersion");
-if(vEl){
-  vEl.textContent=versionWords();
+/* Guarded, and it is the only new line that was not. It runs above
+   safely(show("driver")), so a throw here would leave a driver looking at the
+   sign in screen with an empty footbar: the exact failure the note below is
+   about. */
+var vEl=null;
+try{ vEl=$("appVersion"); }catch(e){}
+if(vEl) try{
+  vEl.innerHTML=versionWords();
   vEl.addEventListener("click",function(){ alert(pinDiagnosis()); });
-}
+}catch(e){}
 /* Getting the first screen up is the only thing here that has to happen.
    Everything else is enrichment: last week's mileage, the stored rota, the
    waiting queue. All of it was running unguarded and in front of the screen,

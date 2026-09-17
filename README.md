@@ -72,7 +72,7 @@ of a page at two versions and serve whichever answered first.
 
 ## Versions — read this before deploying
 
-There are **five** version stamps and four of them must move together.
+There are **six** version stamps and four of them must move together.
 
 | Stamp | File |
 |---|---|
@@ -86,8 +86,94 @@ There are **five** version stamps and four of them must move together.
 **If you change any page and do not bump all four page stamps, phones keep the
 old copy** and it will look as though the deploy failed.
 
-The app prints its version at the foot of the first screen. Apps Script shows
-its deployment number in the editor. After a deploy, check both.
+### Reading all three at once
+
+From v1.65.0 the foot of the driver app's first screen and the foot of the
+passenger page both read:
+
+    app v1.65.0 · server w2.1.0 · sheet v1.60.0
+
+That is the page, the Cloudflare Worker and the Apps Script, on one line. On a
+narrow phone it wraps between the three and never through the middle of a
+number.
+
+**A blank `sheet` slot means the sync has not run.** The Worker cannot see the
+spreadsheet, so it is told: every *Send everything to the live server now*
+carries the Apps Script's version, the Worker parks it in `settings` under
+`sheet_version` and hands it back on every reply. A slot nobody has named
+stays blank rather than guessing, so blank is a fact about the sync and not
+about the version.
+
+The Worker's copy can be up to five minutes behind a deploy, for the same
+reason the PIN hashes can: it is cached in the isolate rather than read from
+the database on every request.
+
+*Minibus → Have a look → Is everything working?* reports the sheet's own
+version and then asks the Worker for its, so the spreadsheet and the phones
+can be checked against each other from either end. The app's own number
+cannot be known from the spreadsheet and is not claimed there.
+
+### Who has not got alerts on
+
+The same report now **names the drivers with no live subscription**, in the
+Drivers tab's Order column:
+
+    Still to do:
+
+      •  No alerts yet for: Bro Moses, Bro Adesina.
+         Open the app on that phone and tap Turn on.
+
+    Fine:
+
+      ✓  Alerts on: 7 of 9 drivers, 14 passenger phones.
+
+Every alert in this system depends on somebody having tapped **Turn on** on
+that handset and let the phone ask. Until v1.65.0 there was no way to find out
+who had, short of taking each phone and pressing the bell. Nine drivers
+trained, three who never allowed notifications, and it looks identical to the
+alerts being broken.
+
+Both halves were already there: the `drivers` table is synced from the Drivers
+tab, and `push_subs` is written when somebody taps Turn on.
+
+**It asks the same question the waking asks.** `DRIVER_SUB_MATCH` in
+`worker.js` is one SQL fragment used by both `wakeDrivers`, which sends the
+alert, and `alertRoll`, which reports on it. For one afternoon the report had a
+clever join of its own and the two disagreed on both the comparison and the
+column: a handset registered as `bro asim` satisfied the report and was
+invisible to the only query that would ever have woken it, so the report
+certified the exact silence it was built to catch. It now loops one driver at a
+time. Nine small indexed lookups off a menu nobody runs in a loop, and being
+right by construction is worth more than the join.
+
+Four things worth knowing about how it counts:
+
+- **Names are matched lower-cased and trimmed.** Both ends are typed by hand:
+  the Drivers tab, the Rota cell, and the name the app sends on Turn on. That
+  same looseness now applies to the sweep that wakes a driver, which used to
+  need an exact match against the **Rota** cell. A cover typed in by hand on a
+  Saturday night could spell a name differently from the Drivers tab, and that
+  driver was never woken, silently.
+- **Retired drivers are not chased.** They stay on the tab for their history.
+- **The count comes off the register, not off `push_subs`**, so *on* plus
+  *not yet* is exactly the number of active drivers. Counted the other way, a
+  retired driver's handset padded the total and the report read six out of
+  five.
+- **Three different nothings are kept apart.** An old Worker with no roll call
+  says nothing, a Worker that tried and failed says so, and an empty missing
+  list means it really asked about every driver. An empty list once meant all
+  three, so a D1 outage read as "alerts are on for every driver".
+
+A driver with no alerts is **not a fault**. He may have said no, and the group
+message still reaches him. So the report has a third bucket, **Still to do**,
+between *Needs attention* and *Fine*. Only *Needs attention* counts in the
+dialog title, so this cannot open with "1 thing to look at" every week until
+the last man taps Turn on.
+
+Before v1.65.0 both apps printed one number called `script`, which meant the
+Worker in the app and the Apps Script in the spreadsheet. `out.script` is
+still sent by both servers so an old page shows something, but the pages now
+read `out.server` and `out.sheet`.
 
 ---
 
@@ -98,6 +184,7 @@ Order matters, because the pages depend on the two servers being ready.
 0. **First time only:** paste `schema-push.sql` into the D1 console and run it.
    It adds the one table the alerts need. From v1.63.0, `schema-pin.sql` too,
    which adds the one column the PIN needs. Both are safe to run twice.
+   Nothing since v1.63.0 has needed a migration.
 1. **worker.js** → Cloudflare dashboard → Deploy
 2. **Code.gs** → Apps Script editor → Save → Deploy
 3. Minibus menu → **Send everything to the live server now**
@@ -448,9 +535,49 @@ nowhere near the check flow. The walkaround is the statutory act of this app
 and a thumb reaching for **Vehicle check** has to find Vehicle check.
 
 Shown to a passenger only when they are booked this Sunday and alerts are
-already on, and to a driver only when signed in with reminders on. The two
-states that need words stay as words in the box below: the offer to turn alerts
-on, and the iPhone Home Screen line. It pushes to that one phone and to nobody else.
+already on, and to a driver only when signed in with reminders on. It pushes to
+that one phone and to nobody else.
+
+### Asking people to turn alerts on
+
+Until v1.65.0 the offer was a grey line: *Remind me to end the trip. Turn on*
+in the driver app, *Tell me when the bus is near* on the passenger page. Almost
+nobody read either, so almost nobody had alerts on and the whole push pipeline
+served four phones.
+
+From v1.65.0 it is **asked**: one question on a sheet over a dimmed screen,
+with **Not now** and **Turn on**. It comes up once each time the app is opened,
+until they turn alerts on or the phone refuses. Not now costs them nothing
+until the next launch.
+
+**It never covers the vehicle check.** In the driver app it is drawn on the hub
+and nowhere else, never while a check is open, never on top of another sheet,
+and it closes on either button, on the backdrop and on Escape. `anySheetUp()`
+lists every sheet the app can put up, and a contract test asserts that list
+against the markup, so adding a sheet later without adding it to that list
+fails the suite rather than producing two backdrops on a Sunday morning.
+
+On the passenger page it is shown only to somebody who has actually booked a
+seat for the coming Sunday. A page open on a stranger's phone is asked for
+nothing. It also waits half a second and re-tests, because the install sheet
+opens on a timer of its own.
+
+**On an iPhone in a tab it asks the other question**, because that phone cannot
+be given an alert at all until the app is on the Home Screen. The button opens
+the steps instead.
+
+**Not red.** Red in these apps means a defect or a bus off the road, and
+spending it on an offer to switch on reminders would cost it where it is
+needed. The sheet stops the eye by standing in front of the screen.
+
+**To turn it off:** `alertPopup` in `config.js` for the driver app, and
+`ALERT_POPUP` near the top of `sunday/index.html` for the passenger page. Set
+either false and that app goes back to the line. The line is still there in
+both apps either way: it is the way back for anybody who tapped Not now.
+
+The passenger page keeps its own copy of the setting because **it loads no
+`config.js`**. It is opened from a WhatsApp link by members and has no business
+downloading the driver register to do it. Keep the two in step.
 
 - A notification saying **Alerts are working** means the whole chain is good:
   the signing, the push service, the wake, and the service worker asking the

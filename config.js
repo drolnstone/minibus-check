@@ -65,6 +65,21 @@ window.CONFIG = {
      Set false if a driver would rather have the battery. */
   keepAwake: true,
 
+  /* ---- The offer to turn alerts on --------------------------------------
+     This was a grey line under the buttons and it was read by nobody.
+
+     true puts it on the screen as a question over a dimmed background, once
+     each time the app is opened, until they turn alerts on or the phone
+     refuses. Both apps use this setting.
+
+     It never covers the vehicle check. On the driver app it is only ever
+     drawn on the first screen after he has picked his name, never while a
+     check is open, and never on top of another sheet. On the passenger page
+     it is only drawn to somebody who has actually booked a seat.
+
+     Set false and it goes back to being a line. */
+  alertPopup: true,
+
   /* Where the buses are kept: 3-5 Chester Road, Liverpool L6 4DY.
 
      Measured standing at the bus, not taken off a map. The postcode centre
@@ -75,6 +90,46 @@ window.CONFIG = {
      The app only calls a check "away" when the phone's own accuracy figure
      leaves no doubt, so a poor fix never accuses anyone. */
   busBase: { lat: 53.424169, lng: -2.936799, radius: 165 },
+
+  /* ---- Where church is ---------------------------------------------------
+     Used for one thing: deciding that the bus is back, so a run can close
+     itself.
+
+     HERE, THE BUSES PARK IN FRONT OF THE CHURCH, so these are the busBase
+     figures and they are already right. It is a setting of its own anyway,
+     because the next church to use this may keep its buses somewhere else,
+     and a run that closes itself at the depot instead of at the door is worse
+     than one that never closes at all. Leave it out entirely and busBase is
+     used, which is the same answer for this church.
+
+     If it is ever set to a different place, MEASURE IT STANDING AT THE DOOR,
+     not off a map. The bus base was 103 metres out when it was taken off a
+     postcode centre, and at this fence size that is the difference between a
+     run that ends itself and one that never does.
+
+     radius is in YARDS, and wants to cover the whole of where a bus might be
+     left, including along the road. */
+  churchBase: { lat: 53.424169, lng: -2.936799, radius: 165 },
+
+  /* ---- Ending the run by itself -----------------------------------------
+     He parks, lets everyone off, and walks into the service with the run
+     still open. That has now happened twice. This closes it.
+
+     The run must have LEFT the fence before coming back counts, so a bus
+     sitting in the yard at half nine never ends its own run. Then it must sit
+     inside the fence for `minutes` without a break. A fix too vague to be
+     sure about counts as neither in nor out, so a bad reading at a red light
+     cannot end a run and one in the car park cannot reset the timer.
+
+     He is told the moment it happens, and the app offers to reopen it for
+     half an hour afterwards.
+
+     It needs the app open on the dashboard, which is what keepAwake is for.
+     A phone in a pocket with the screen off gives no positions, and the run
+     falls back to the End trip reminder.
+
+     Set enabled false to turn it off and go back to the tap. */
+  autoEnd: { enabled: true, minutes: 3 },
 
   /* Drivers key in a four digit PIN before they can start a check.
 
