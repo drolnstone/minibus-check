@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.67.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.69.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -715,7 +715,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.67.0";
+var PAGE_VERSION = "v1.69.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -835,6 +835,15 @@ function ringCoordinator(){
   if(!dial) return "ring "+esc(name);
   return 'ring <a class="ring" href="tel:'+esc(dial)+'">'+esc(name)+
          '</a> on <a class="ring" href="tel:'+esc(dial)+'">'+esc(show)+'</a>';
+}
+
+/* Seats as a whole number between 1 and 12, whatever arrived. 12 is the
+   Worker's own clamp; matching it here means the two cannot disagree about
+   what a plausible booking is. */
+function seatCount(v){
+  var n = Math.floor(Number(v));
+  if(!(n > 0)) return 1;
+  return n > 12 ? 12 : n;
 }
 
 var $ = function(id){ return document.getElementById(id); };
@@ -1050,7 +1059,17 @@ function applyBus(out){
   OFF = (out.off && out.off.length) ? out.off : [];
   REHEARSAL=!!out.rehearsal;
 
-  booked = out.mine ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
+  /* A WHOLE NUMBER, COERCED HERE AND NOWHERE ELSE.
+
+     This value is written into the page as markup in two places: the stepper,
+     and the seat count beside "You are booked." Neither escapes it, because
+     a number needs no escaping — which is only true if it is a number.
+
+     Both servers already clamp it, so nothing was reachable. But the page
+     escapes every other server value on principle rather than on trust, and
+     this one was relying on the far end staying careful. One coercion at the
+     door makes the assumption true instead of likely. */
+  booked = out.mine ? { stopId:out.mine.stopId, seats:seatCount(out.mine.seats) } : null;
   STOPGONE = !!out.stopGone;
   chosen = booked ? booked.stopId : null;
   seats  = booked ? booked.seats : null;
@@ -2151,7 +2170,27 @@ function paint(){
          to move, Not coming to give it up \u2014 both true and neither needed:
          the stops are right there and the button says what it is. */
       /* Into the frozen pane, not the list. See the markup above. */
-      mineNote = '<div class="note note-go"><b>You are booked.</b></div>';
+
+      /* AND HOW MANY, because this was the only number the page made somebody
+         go looking for.
+
+         The count under each stop is the STOP's total and always has been, the
+         same number the driver reads: eleven people at Bedford Road is eleven
+         people, not eleven of yours. That is right, and it is what tells a
+         family they are not the only ones waiting.
+
+         What was missing is the other half. A person who booked two seats a
+         week ago opened this page to "You are booked." and "3 people booked"
+         at their kerb, and could not tell from the top how many of those three
+         were theirs. The only place their own number appeared was the stepper
+         at the foot of the page, which meant scrolling past every stop to
+         check a thing they had already decided.
+
+         Both numbers are now on screen at once and neither has to be worked
+         out from the other. */
+      var mineSeats = (booked.seats||1);
+      mineNote = '<div class="note note-go"><b>You are booked.</b> '+
+                 mineSeats+(mineSeats===1?' seat':' seats')+'.</div>';
     }
     /* There is nothing to warn about now. A booking belongs to a number, the
        number is asked for before a seat is taken, and a second device finds
@@ -2335,7 +2374,12 @@ function paint(){
   /* innerHTML rather than textContent, because the closing time is the one
      thing down here somebody actually has to read. CUTOFF comes from the
      script rather than from anybody typing, but it is escaped anyway: this
-     is the only place on the page that writes a server value as markup. */
+     is the only place on the page that writes server TEXT as markup. Two
+     numbers also reach markup — the stepper and the seat count beside "You
+     are booked." — and neither is escaped, because seatCount above makes
+     them numbers before they get there. This comment used to claim the foot
+     was the only such place at all, which stopped being true the day the
+     stepper was written. */
   $("foot").innerHTML = (CLOSED
     ? "The Sunday bus for RCCG Dominion Assembly Liverpool."
     : "<b>Bookings close "+esc(CUTOFF||"Sunday 09:30")+".</b>")+
@@ -2924,7 +2968,7 @@ function applySaved(out){
   bookJumped = Date.now();
   if(out && out.counts) COUNTS=out.counts;
   booked = (out && out.mine && out.mine.stopId)
-    ? { stopId:out.mine.stopId, seats:out.mine.seats||1 } : null;
+    ? { stopId:out.mine.stopId, seats:seatCount(out.mine.seats) } : null;
   chosen = booked ? booked.stopId : null;
   seats  = booked ? booked.seats  : null;
   /* Whatever was asked has been answered. Cleared here rather than in each
