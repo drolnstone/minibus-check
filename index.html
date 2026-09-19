@@ -1201,11 +1201,29 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     <!-- Offered, never sprung: see pushOfferHtml. -->
     <div class="hint hub-alert" id="hubAlert" style="display:none"></div>
 
+    <!-- DRIVING ROTA AND VEHICLE CHECK CHANGED PLACES. A SWAP, NOT A SHUFFLE.
+
+         Vehicle check was first and the rota was third. They are now the
+         other way round, and Stops and bookings has not moved at all.
+
+         Last is nearest. A driver holds the phone in one hand and the bottom
+         of the list is where his thumb already is, so the button he needs
+         every single Sunday is the one he does not have to reach for. The two
+         above it are read before they are pressed: the rota is a question,
+         and the stops screen is where he goes once the check is done.
+
+         Vehicle check stays the only lit button. Position changed, weight did
+         not: three ghosts and one filled button, so the screen still answers
+         "what am I here to do" without reading a word.
+
+         Waiting to send is hidden except when the queue has something in it,
+         and it sits directly above Vehicle check so that appearing never
+         pushes Vehicle check off the bottom of the list. -->
     <div class="linkrow">
-      <button class="btn btn-main btn-wide" id="toCheck" type="button">Vehicle check</button>
-      <button class="btn btn-ghost btn-wide" id="toStops" type="button">Stops and bookings</button>
       <button class="btn btn-ghost btn-wide" id="toRota" type="button">Driving rota</button>
+      <button class="btn btn-ghost btn-wide" id="toStops" type="button">Stops and bookings</button>
       <button class="btn btn-ghost btn-wide" id="toPending" type="button" style="display:none">Waiting to send</button>
+      <button class="btn btn-main btn-wide" id="toCheck" type="button">Vehicle check</button>
     </div>
     <p class="tiny" id="modeNote"></p>
     <div class="footer-brand"><img src="logo.png" alt=""><span>RCCG Dominion Assembly Liverpool</span></div>
@@ -1412,7 +1430,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.65.0";
+var APP_VERSION = "v1.66.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -4647,7 +4665,7 @@ function tripFetch(route,cb){ rotaCountsFetch(route,cb); }
 
    So it is his start button. One tap, the one he was going to make anyway. */
 function tripStart(route, reg, anyway){
-  if(!tripClosed){ toast("Bookings are still open. The run starts after "+(tripCutoff||"09:30")+"."); return; }
+  if(!tripClosed){ toast("Bookings close "+(tripCutoff||"09:30")+". You can start the run then."); return; }
   if(tripMoving()){ toast("Not while the bus is moving."); return; }
   /* The buttons are off rather than disabled now, so they can say why. That
      puts the only real guard here: a run is recorded in a driver's name, and
@@ -6248,8 +6266,18 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
       if(tripClosed && pinGateNeeded()) pinWhy="This run is recorded in your name.";
       h+= tripClosed
         ? tripBusButtonsHtml()
-        : '<p class="trip-note"><b>Bookings are still open.</b> Start the run '+
-          'after '+esc(tripCutoff||"09:30")+'.</p>';
+        /* NAMES THE CUTOFF AS A CUTOFF AND STOPS.
+ 
+           It read "Start the run after 09:30", which is an instruction to
+           start at half nine, and half nine is not when this bus leaves. The
+           departure time is per route and it is in the spreadsheet. A driver
+           on the South route reading a 09:30 in the only sentence on the
+           screen has been told the wrong time by the app.
+ 
+           Bookings closing is the fact. When to pull out is the timetable's
+           business and this says nothing about it. */
+        : '<p class="trip-note"><b>Bookings close '+esc(tripCutoff||"09:30")+'.</b> '+
+          'You can start the run then.</p>';
     } else {
       /* Name the driver and the moment. Somebody looking for a button that is
          not theirs should be told whose it is, not left wondering whether the
@@ -7207,13 +7235,51 @@ function hasPin(name){ var e=entryFor(name); return !!(e && e.hasPin); }
 
 /* Four separate things must all be true before the PIN box appears, and any
    one of them failing hides it without a word. Tap the version line at the
-   bottom of the first screen and this says which. */
+   bottom of the first screen and this says which.
+
+   THE VERSIONS ARE FOR ANYBODY. THE REST IS NOT.
+
+   This is reached by tapping a line on the opening screen, so everybody who
+   opens the app can read whatever it says, and it said: how many drivers are
+   on the register, how many of them are gated by a PIN, and whether the named
+   man currently picked has one. That is a description of the lock, handed to
+   whoever asks for it.
+
+   The version numbers stay public. They are in the page source already, they
+   are the first thing to check after a deploy, and they tell nobody anything
+   about the gate.
+
+   The rest is shown only to a coordinator. That is not a security boundary,
+   because the name is picked from a dropdown anybody can open, and it is not
+   meant to be one: the lock is the salted hash on the server. It is the same
+   judgement as not printing the roster on the front door. Somebody idly
+   tapping a version line is no longer told who is gated and who is not. */
+function pinCoordinator(){
+  /* NOBODY ON THE REGISTER IS THE ONE CASE THAT MUST STAY OPEN.
+
+     With an empty register no name can be picked, so nothing can satisfy the
+     role test, so the report was sealed shut in exactly the situation it
+     exists for: line 3 reading "0 names" is the whole answer to why the PIN
+     box is missing, and it was unreachable. There is also nothing to protect
+     at that point. An empty register describes no one. */
+  if(!REGISTER.length) return true;
+
+  var roles = CFG.fullInspectionRoles || [];
+  var mine = st.driver ? roleOf(st.driver) : "";
+  for(var i=0;i<roles.length;i++){ if(roles[i] === mine) return true; }
+  return false;
+}
+
 function pinDiagnosis(){
   var withPin = REGISTER.filter(function(d){ return d.hasPin; }).length;
   var L = [];
   L.push("App version: " + APP_VERSION);
   L.push("Server version: " + (SERVER_VERSION || "not heard from yet"));
   L.push("Sheet version: " + (SHEET_VERSION || "not heard from yet"));
+
+  /* Everything below this line describes the gate. */
+  if(!pinCoordinator()) return L.join("\n");
+
   L.push("");
   L.push("1. requirePin in config.js");
   L.push("   " + (CFG.requirePin ? "ON" : "OFF  <-- upload the new config.js"));
