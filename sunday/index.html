@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.65.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.66.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -118,6 +118,16 @@
   /* Named so a theme can reach them. Every value was already on the screen,
      written in raw hex where it was used. */
   --on-accent:#FFFFFF;          /* text on the steel Confirm button */
+
+  /* Text on the amber and red chips that say how full a bus is. NOT
+     --on-accent, and that is not a nicety.
+
+     The dark theme lifts --warn and --stop so they read on a dark card, which
+     makes them too light to carry white: white on the dark theme's red
+     measures 3.69 to 1 and on its amber 3.5. Both are below the floor, and
+     both were found by a test that computes the ratio rather than looking at
+     it. Every other theme wants white. Dark wants its own paper. */
+  --chip-ink:#FFFFFF;
   --pass-line:#B7D8C6;--warn-line:#EBD3A8;--stop-line:#E8BCB7;
   --faint:#AEB8C4;              /* the count under an inactive route tab */
   --dead:#AEB6BE;               /* Confirm, before a stop and a number exist */
@@ -170,6 +180,9 @@ html[data-theme="dark"]{
   --warn:#BF7A08;--warn-bg:#2B2113;
   --stop:#D85F55;--stop-bg:#2E1715;
   --pass-line:#265741;--warn-line:#5C4826;--stop-line:#5E2F2A;
+  /* The lifted red and amber above are too light for white. Paper on them is
+     5.09 and 5.37 to 1. See --chip-ink in :root. */
+  --chip-ink:#0E1216;
   --accent-ink:#9DB4CC;--dead:#2A323C;--dead-ink:#67717E;--faint:#7E8996;
   --veil:rgba(14,18,22,.97);
   --scrim:rgba(0,0,0,.62);
@@ -250,9 +263,25 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 /* ---------- route tabs ---------- */
 /* How full the bus is. Amber while there is room left to name, red only
    when there is none — the same grammar the rest of the page uses, so a
-   colour never says more than the words do. */
-.tab-room{display:block;margin-top:2px;font-weight:700;color:var(--warn)}
-.tab-room.is-full{color:var(--stop)}
+   colour never says more than the words do.
+
+   A CHIP, NOT COLOURED TEXT, and that is the fix.
+
+   It was colour on whatever the tab happened to be. On the ACTIVE tab that
+   is --steel, and nobody rechecked the pairing: dark red on the green
+   theme's steel measures 1.25 to 1, and on navy 1.71 to 1. Light was 2.19
+   and dark 2.88. So the one word that says a bus has no seats left was
+   somewhere between hard and impossible to read on every theme there is,
+   and worst on the two the eye is least prepared for.
+
+   A chip carries its own background, so it reads the same on a white tab, a
+   green one and a navy one without a rule per theme. White on #A8231B is
+   7.3 to 1 wherever it lands. */
+.tab-room{display:block;width:-moz-fit-content;width:fit-content;
+  margin:4px auto 0;padding:1px 8px 2px;
+  border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.04em;
+  background:var(--warn);color:var(--chip-ink)}
+.tab-room.is-full{background:var(--stop);color:var(--chip-ink)}
 .room-low{color:var(--warn)}
 .room-full{color:var(--stop)}
 .summary-full{margin-top:-6px;color:var(--muted)}
@@ -679,7 +708,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.65.0";
+var PAGE_VERSION = "v1.66.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -2142,10 +2171,22 @@ function paint(){
   }
   /* Said once, under the line that carries the number, and only when it is
      actually full. Booking still goes through — the app has never known who
-     really travels, and a page is the wrong thing to turn somebody away. */
+     really travels, and a page is the wrong thing to turn somebody away.
+
+     THE CALL, NOT THE INSTRUCTION TO CALL. It read "Tell Bro Asim", which is
+     a thing to do later and on a page nobody comes back to. The same button
+     the rest of this page uses is here instead: it dials, and it carries the
+     number, so somebody standing at a kerb with a full bus has one tap
+     rather than a name to look up. */
   if(!off && /full/i.test(roomNow)){
-    html+='<p class="summary summary-full">Every seat is booked. Tell '+
-          esc((COORDINATOR&&COORDINATOR.name)||"the bus coordinator")+'.</p>';
+    /* The button carries the name and the number. With no number set, which
+       is how this app is handed on, it returns nothing and the sentence has
+       to carry the name by itself: a full bus and no one to tell is worse
+       than the line it replaced. */
+    var ring = callButton();
+    html+='<p class="summary summary-full">Every seat is booked.'+
+          (ring ? '' : ' Tell '+esc((COORDINATOR&&COORDINATOR.name)||"the bus coordinator")+'.')+
+          '</p>'+ring;
   }
 
   /* A booking belongs to a number now, so that tap moves the one row the
@@ -2367,6 +2408,13 @@ function paint(){
   if(bookJumped){
     var waitedBook = Date.now() - bookJumped;
     bookJumped = 0;
+    /* CLAIMED HERE, NOT IN seatJump.
+
+       seatJump runs at the foot of this same paint and its own guard reads
+       bookJumped, which this line has already cleared. So the guard could
+       never fire and a booking set two smooth scrolls going at once, one
+       centring the row and one tucking it under the panel. */
+    seatShown = true;
     if(waitedBook < 6000){
       var row = chosen ? document.querySelector('[data-stop="'+chosen+'"]') : null;
       if(row){
@@ -2380,6 +2428,10 @@ function paint(){
   }
 
   paintBar();
+
+  /* After the bar, because the page is now its final height and a scroll
+     target measured before it would land short. */
+  try{ seatJump(); }catch(e){}
 }
 
 /* ==========================================================================
@@ -2812,6 +2864,38 @@ function applyShared(out){
    still showing as booked. Moving then carries somebody to a row that is
    about to change under them. This waits for the answer and then moves. */
 var bookJumped = 0;
+var seatShown = false;    /* the arrival jump, once per page open */
+
+/* HIS OWN STOP, UNDER THE PANEL, ON THE WAY IN.
+
+   Somebody who booked last week opens the link and lands at the top of a
+   list that is mostly other people's kerbs. His own is below the fold on a
+   phone as soon as a route has four stops, so the one row he came to read is
+   the one row he has to go looking for.
+
+   Under the frozen pane rather than in the middle of the screen: the panel is
+   what says whether the bus is running and where it has got to, and his stop
+   belongs directly beneath its own update rather than under somebody else's.
+
+   Once per page open, and never while he is reading something else. It does
+   not fight the booking jump — that one has just moved him deliberately — and
+   it does not fire when he has already scrolled, because a page that moves
+   under a thumb is worse than a page that never moved at all. */
+function seatJump(){
+  if(seatShown) return;                  /* done, or claimed by a booking */
+  if(!booked || !chosen) return;         /* nobody booked: nothing to go to */
+  seatShown = true;
+  if(window.pageYOffset > 4) return;     /* he has started reading */
+  var row = document.querySelector('[data-stop="'+chosen+'"]');
+  var pane = document.querySelector(".live-head");
+  if(!row) return;
+  var head = pane ? pane.getBoundingClientRect().height : 0;
+  var to = window.pageYOffset + row.getBoundingClientRect().top - head - 8;
+  if(to < 8) return;                     /* already under the panel */
+  var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  try{ window.scrollTo(still ? {top:to} : {top:to,behavior:"smooth"}); }
+  catch(e){ window.scrollTo(0,to); }
+}
 
 function applySaved(out){
   bookJumped = Date.now();
