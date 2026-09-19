@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.66.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.67.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -477,6 +477,13 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   line-height:1.05;margin:0 0 3px;color:var(--accent-ink)}
 .live-sub{margin:0;font-size:13px;color:var(--muted);line-height:1.5}
 .live-sub .ring,.note .ring,.foot .ring{color:inherit;font-weight:600;text-decoration:underline}
+/* The full-bus line. Ink rather than inherit, so the part worth pressing
+   stands out of a muted sentence without changing its size.
+
+   nowrap because a phone number broken across two lines is not a phone
+   number. The sentence wraps between the words instead. */
+.summary .ring{color:var(--ink);font-weight:600;text-decoration:underline;
+  white-space:nowrap}
 .live-pick{display:flex;gap:6px;margin-top:10px}
 .live-pickbtn{flex:1;padding:7px 10px;border:1px solid currentColor;background:transparent;
   border-radius:8px;font:inherit;font-size:13px;color:inherit;opacity:.6}
@@ -708,7 +715,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.66.0";
+var PAGE_VERSION = "v1.67.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -796,6 +803,28 @@ function callButton(){
   if(!dial) return "";
   return '<a class="callbtn" href="tel:'+esc(dial)+'">Call '+
          esc(name||"the bus coordinator")+' \u00B7 '+esc(prettyPhone(show))+'</a>';
+}
+
+/* THE CALL, ON THE LINE, AT THE SIZE OF THE LINE.
+
+   callButton above is a 46px uppercase slab. It is right inside the live
+   panel and the notes, which are blocks big enough to hold it. Dropped under
+   a 13px summary line it is a slab floating on the page background, wider
+   than the sentence it belongs to and half the height of a stop card.
+
+   This is the same call in the shape ringCoordinator already uses: one
+   sentence, inherited size, the name and the number underlined and tappable.
+   Same line, same proportion, still one tap.
+
+   No number set, which is how this app is handed on, and it degrades to the
+   name without a link rather than to nothing. */
+function callInline(){
+  var name = String(COORDINATOR.name||"").trim() || "the bus coordinator";
+  var show = String(COORDINATOR.phone||"").trim();
+  var dial = show.replace(/[^0-9+]/g,"");
+  if(!dial) return "Call "+esc(name)+".";
+  return 'Call <a class="ring" href="tel:'+esc(dial)+'">'+esc(name)+
+         '</a> on <a class="ring" href="tel:'+esc(dial)+'">'+esc(prettyPhone(show))+'</a>.';
 }
 
 function ringCoordinator(){
@@ -2179,14 +2208,8 @@ function paint(){
      number, so somebody standing at a kerb with a full bus has one tap
      rather than a name to look up. */
   if(!off && /full/i.test(roomNow)){
-    /* The button carries the name and the number. With no number set, which
-       is how this app is handed on, it returns nothing and the sentence has
-       to carry the name by itself: a full bus and no one to tell is worse
-       than the line it replaced. */
-    var ring = callButton();
-    html+='<p class="summary summary-full">Every seat is booked.'+
-          (ring ? '' : ' Tell '+esc((COORDINATOR&&COORDINATOR.name)||"the bus coordinator")+'.')+
-          '</p>'+ring;
+    html+='<p class="summary summary-full">Every seat is booked. '+
+          callInline()+'</p>';
   }
 
   /* A booking belongs to a number now, so that tap moves the one row the
