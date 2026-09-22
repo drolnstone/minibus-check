@@ -1,7 +1,7 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
 const CACHE_PREFIX = "minibus-check-";
-const CACHE = CACHE_PREFIX + "v1.69.0";
+const CACHE = CACHE_PREFIX + "v1.74.0";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -198,6 +198,19 @@ self.addEventListener("fetch", (e) => {
   // this handler at all. A phone that has not is a driver's phone reaching
   // for a page it does not use, and the plain network is the right answer.
   if (url.pathname.indexOf("/sunday/") !== -1) return;
+
+  // The page an email links to is never cached, by this worker or any other.
+  //
+  // It is opened once, from a message, to make a decision, and a decision
+  // served from a cache is a decision made against a stale picture of the
+  // morning: a bus somebody else has already authorised, a request already
+  // answered. It has no worker of its own for the same reason.
+  //
+  // Returning without responding hands it to the plain network, which is
+  // exactly right. If there is no signal the page does not load, and a page
+  // that does not load is a far better answer here than one that loads and is
+  // wrong.
+  if (url.pathname.indexOf("/do/") !== -1) return;
 
   // config.js: always try the network first so endpoint and rota changes
   // land quickly.

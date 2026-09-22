@@ -20,9 +20,14 @@ window.CONFIG = {
      of a second where Apps Script took two to eight, because there is no
      forced redirect to a second host and nothing has gone to sleep.
 
-     Everything else — the rota, last mileage, the PIN, submitting a check,
-     asking for a rota change — still goes to endpoint above, where it always
-     did. None of it has anybody waiting at a kerb.
+     Submitting a check comes here as well now. It used to go to endpoint
+     above and wait, and on 20 September 2026 the wait was long enough to fail
+     at the kerb. The sheet still gets every check; it just is not the thing
+     a driver waits for.
+
+     Everything else, the rota, last mileage, asking for a rota change, still
+     goes to endpoint above, where it always did. None of it has anybody
+     waiting at a kerb.
 
      TO GO BACK: blank this line. Every call returns to Apps Script and the
      app behaves exactly as it did before, slowly but correctly. That is the
@@ -134,8 +139,9 @@ window.CONFIG = {
   /* Drivers key in a four digit PIN before they can start a check.
 
      Set them in the PIN column of the Drivers tab in the spreadsheet, never
-     here. The PIN itself does not leave the spreadsheet: the app is sent a
-     one way fingerprint and compares that.
+     here. The four digits never leave the spreadsheet. The app sends what is
+     keyed to the server, which compares it with a salted one-way fingerprint
+     and answers yes or no. No phone is ever sent a fingerprint.
 
      Choose four digits that are not derived from anything else about the
      person. This file is downloaded by every phone that opens the app, so
@@ -151,6 +157,143 @@ window.CONFIG = {
      coordinator is a one word change. Everyone else only ever sees the
      pre-drive check and is not shown a choice. */
   fullInspectionRoles: ["Coordinator", "Minister in Charge"],
+
+  /* ---- When a check stops the bus ---------------------------------------
+     Three answers on the walkaround, not two.
+
+       Fine       nothing to report
+       Advisory   worth watching, does not stop the bus
+       Defect     a fault, and on a critical item it stops the bus
+
+     Advisory exists because the middle case had nowhere to go. A tyre wearing
+     faster than the others is not a fault and it is not nothing, and with two
+     buttons the only honest answer was Defect, which on a critical item
+     stopped a bus that was safe to drive.
+
+     advisory        false removes the third button and the app goes back to
+                     two answers. The answer is still read on old records.
+     criticalAdvisory  what an advisory on a critical item does.
+                       "notice"    goes on the record and in the email, the
+                                   bus runs
+                       "authorise" the bus does not run until a coordinator
+                                   authorises it, the same as a defect
+     showWhoAuthorised whether the driver is told who authorised the bus, by
+                       name. false shows only that it was authorised.
+     sameHandBothWays  whether the person who did the walkaround may also
+                       authorise the bus. false means a second coordinator
+                       has to do it, and with one coordinator that means
+                       nobody can, so think before changing it.
+                       SAME_HAND_BOTH_WAYS in Code.gs must match: this one
+                       hides the button, that one makes the server refuse.
+
+     When the coordinator is emailed about an authorisation is set in Code.gs,
+     TELL_COORDINATOR, because that is the file that sends the email. */
+  override: {
+    advisory: true,
+    criticalAdvisory: "notice",
+    showWhoAuthorised: true,
+    sameHandBothWays: true
+  },
+
+  /* ---- The estimate -----------------------------------------------------
+     What the app and the live server subtract when the bus is going past a
+     stop nobody booked.
+
+     Until v1.71.0 a passenger's estimate was his own timetabled time plus
+     however many minutes the bus was running behind, which charges it for
+     every stop on the tab including the empty ones. On a morning where four
+     of the seven North stops have nobody booked, the bus reaches London Road
+     several minutes before the estimate says and the passenger who trusted it
+     is still walking to the kerb.
+
+     THE DEFAULTS LEAN TOWARDS PREDICTING THE BUS EARLY, and that is the whole
+     design rather than an accident of tuning. Too late means the bus came and
+     went while somebody was still walking; too early means a wait at a stop
+     they were standing at anyway. Those are not the same cost. If you change
+     these, change them in the direction of earlier.
+
+       dwellSeconds    how long the bus stands at a stop it calls at
+       skipSaves       of a gap, the fraction a skip removes. Only used where
+                       there are no coordinates to work it out properly
+       speedMph        only used to turn a distance into a drive time
+       maxSkipMinutes  a cap, so one absurd gap cannot swallow a whole leg
+
+     KEEP THIS EQUAL TO ETA_RULES IN Code.gs. The driver's list is drawn from
+     the live server's copy and the passenger's alert is worded from it too,
+     and Code.gs is what puts it there; this copy is what the app falls back
+     on. Two different numbers for one bus is the one thing this must not do.
+
+     The Lat and Lng columns on the Bus Stops tab make this better and are not
+     required by it. With no coordinates the dwell still comes off, which is
+     already better than the timetable. */
+  eta: {
+    dwellSeconds: 75,
+    skipSaves: 0.8,
+    speedMph: 18,
+    maxSkipMinutes: 6
+  },
+
+  /* ---- When a passenger is told something -------------------------------
+     The ruling is that a passenger hears at every booked pickup before his
+     own: the first with the drivers, one at each stop in front of him, and
+     his own last. That lets him watch the bus coming down the line instead of
+     being tapped on the shoulder once and hoping.
+
+     The cost of it is volume. North has eight pickups and South seven, so on
+     a full morning the last man is woken seven or eight times — and those
+     stops are not evenly spread. S05, S06 and S07 sit inside 438 metres of
+     each other and N05 through N07 inside 556, so three of his messages land
+     within a few minutes all saying nearly the same thing.
+
+       resendMinutes    how far the estimate has to have moved before he is
+                        told again. The stop just before his and his own
+                        ALWAYS send, whatever this says, because those two
+                        carry an instruction rather than an update.
+       morningMessage   false drops the first message of the day.
+       quietFrom/To     whole hours, London time, nothing is sent between.
+                        Booking reminders only. A bus that is coming is never
+                        held back: it is not a convenience.
+
+     KEEP THIS EQUAL TO PASSENGER_RULES IN Code.gs, which is what puts it on
+     the live server. */
+  passenger: {
+    resendMinutes: 3,
+    morningMessage: true,
+    quietFrom: 21,
+    quietTo: 8
+  },
+
+  /* ---- Asking people to book --------------------------------------------
+     Nudges to anybody whose phone has asked to be told things and who has no
+     seat for the Sunday bookings are open for. Anybody who has already booked
+     is dropped from the list the moment he books.
+
+     Three windows, which are the three moments a seat gets decided:
+
+       Sunday afternoon    the run is over and next Sunday has just opened
+       Wednesday evening   the middle of the week
+       Saturday evening    the last one that can do anything, since bookings
+                           close 09:30 Sunday. Its wording says so.
+
+       windows        each { day, from, to }. day is 0 for Sunday, from and
+                      to are whole hours, London time.
+       oncePerWeek    true means the first window a man is caught by is the
+                      only one he hears that week. False means every window
+                      he is still unbooked at reaches him.
+
+     No window may sit inside quiet hours; the test suite fails rather than
+     ship one that does.
+
+     KEEP THIS EQUAL TO BOOKING_RULES IN Code.gs. */
+  booking: {
+    on: true,
+    oncePerWeek: false,
+    windows: [
+      { day: 0, from: 15, to: 16 },
+      { day: 3, from: 18, to: 19 },
+      { day: 6, from: 18, to: 19 }
+    ]
+  },
 
   /* ---- Authorised driver register --------------------------------------
      Only names here can be selected. Add someone before their first Sunday.

@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1B222C">
-<title>Minibus Check · RCCG Dominion Assembly Liverpool</title>
+<!-- The name under the Home Screen tile on an iPhone. Without it Safari
+     takes the title below and cuts it off. -->
+<meta name="apple-mobile-web-app-title" content="Dominion Transport">
+<title>Dominion Transport · RCCG Dominion Assembly Liverpool</title>
 <link rel="manifest" href="manifest.webmanifest">
 <!-- The home screen tile, and — because the two tags below declare this page
      a web app — the icon Safari uses in its tab list as well.
@@ -67,7 +70,7 @@
      preference: the dark theme has to LIFT these three so they can be read
      as text on a dark card, and once lifted they are far too bright to carry
      white. */
-  --pass-on:#FFFFFF;--warn-on:#FFFFFF;--stop-on:#FFFFFF;
+  --pass-on:#FFFFFF;--warn-on:#FFFFFF;--stop-on:#FFFFFF;--info-on:#FFFFFF;
   --plate:#F4C11E;
 
   /* The fourth colour, finally named.
@@ -106,7 +109,7 @@
 
   /* Faintly tinted surfaces: a chosen vehicle, a passed item, a defect. */
   --card-2:#FBFCFD;
-  --pass-tint:#FBFDFC;--warn-tint:#FFFDF8;--stop-tint:#FFF9F8;--mute-tint:#FAFAFB;
+  --pass-tint:#FBFDFC;--warn-tint:#FFFDF8;--stop-tint:#FFF9F8;--mute-tint:#FAFAFB;--adv-tint:#F9FBFD;
   --rail:#FAFBFC;--press:#EDEFF1;
 
   /* Deep text sitting on a status background, and the two greys that are not
@@ -203,7 +206,7 @@ html[data-theme="dark"]{
   --pass:#21A163;--pass-bg:#12291F;
   --warn:#BF7A08;--warn-bg:#2B2113;
   --stop:#D85F55;--stop-bg:#2E1715;
-  --pass-on:#16191F;--warn-on:#16191F;--stop-on:#16191F;
+  --pass-on:#16191F;--warn-on:#16191F;--stop-on:#16191F;--info-on:#16191F;
   /* --info letters the YOU badge on the rota, at eleven pixels, and reached
      only 4.01 against a dark card. Lifted on the same hue. It is used in
      exactly one other place, a three pixel rail down the side of your own
@@ -212,7 +215,7 @@ html[data-theme="dark"]{
   --info-soft:#7FB3E4;--info-ring:#3E5E79;
   --warn-line:#5C4826;--pass-line:#265741;--stop-line:#5E2F2A;
   --card-2:#1C222B;
-  --pass-tint:#131C18;--warn-tint:#1F1B13;--stop-tint:#201614;--mute-tint:#171B21;
+  --pass-tint:#131C18;--warn-tint:#1F1B13;--stop-tint:#201614;--mute-tint:#171B21;--adv-tint:#141A21;
   --rail:#141920;--press:#232A33;
   --pass-ink:#7FDCAB;--warn-ink:#EFCB8B;--stop-ink:#FFB0A4;--call-ink:#FF9C90;
   --ink-2:#CAD1DA;--ink-3:#B0B9C4;--faint:#7E8996;
@@ -380,12 +383,19 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .item.is-pass{border-left-color:var(--pass);background:var(--pass-tint)}
 .item.is-def{border-left-color:var(--warn);background:var(--warn-tint)}
 .item.is-def.crit{border-left-color:var(--stop);background:var(--stop-tint)}
+/* Blue, not a second amber. Advisory sits between Fine and Defect and it
+   has to be told apart from Defect at arm's length in daylight, which two
+   shades of the same colour are not. */
+.item.is-adv{border-left-color:var(--info);background:var(--adv-tint)}
+/* Only when the setting makes a critical advisory hold the bus. */
+.item.is-adv.crit.adv-stops{border-left-color:var(--stop);background:var(--stop-tint)}
 .item h3{margin:0 0 3px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;line-height:1.15}
 .tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px}
 .tag{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11px;letter-spacing:.11em;
   text-transform:uppercase;padding:2px 7px;border-radius:4px}
 .tag.t-crit{background:var(--stop-bg);color:var(--stop);border:1px solid var(--stop-line)}
 .tag.t-watch{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
+.tag.t-adv{background:var(--info-bg);color:var(--info-deep);border:1px solid var(--info-line)}
 .item p.what{margin:0 0 9px;font-size:15px;color:var(--ink-2)}
 .history{font-size:13px;background:var(--warn-bg);border-left:3px solid var(--warn);padding:7px 9px;
   border-radius:0 6px 6px 0;margin:0 0 10px;color:var(--warn-ink)}
@@ -397,6 +407,11 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .choose button:active{transform:scale(.97)}
 .choose .ok.on{background:var(--pass);border-color:var(--pass);color:var(--pass-on)}
 .choose .def.on{background:var(--warn);border-color:var(--warn);color:var(--warn-on)}
+.choose .adv.on{background:var(--info);border-color:var(--info);color:var(--info-on)}
+/* Three across needs the letters to give a little, or ADVISORY wraps on a
+   narrow handset and the row grows a second line. */
+.choose.three{grid-template-columns:1fr 1fr 1fr;gap:6px}
+.choose.three button{font-size:16px;letter-spacing:.02em}
 .choose .na{grid-column:1 / -1;min-height:38px;font-size:14px;color:var(--muted)}
 .choose .na.on{background:var(--muted);border-color:var(--muted);color:var(--muted-ink)}
 .item.is-na{border-left-color:var(--muted);background:var(--mute-tint)}
@@ -404,6 +419,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .item.crit .choose .def.on{background:var(--stop);border-color:var(--stop);color:var(--stop-on)}
 .note{margin-top:10px;display:none}
 .note.is-on{display:block}
+.note.is-adv textarea{border-color:var(--info)}
+.note.is-adv .lbl{color:var(--info)}
 .note textarea{width:100%;min-height:74px;padding:11px;border:1.5px solid var(--warn);border-radius:8px;
   background:var(--card);font-size:16px;resize:vertical}
 .note .lbl{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.11em;
@@ -466,6 +483,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .deflist li{padding:8px 0;border-top:1px dashed var(--dashed);font-size:14px}
 .deflist li:first-child{border-top:none}
 .deflist b{font-weight:600}
+.advhead{margin:12px 0 0;font-family:"Barlow Condensed",sans-serif;font-weight:700;
+  font-size:12px;letter-spacing:.11em;text-transform:uppercase;color:var(--info-deep)}
+.advlist li{border-top-color:var(--info-line)}
 
 /* ---------- send status ---------- */
 .sendbox{border-radius:var(--r);padding:14px;margin-bottom:14px;border:1.5px solid;display:flex;gap:12px;align-items:flex-start}
@@ -536,6 +556,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:4px;margin-top:5px}
 .chip.soon{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
 .chip.over{background:var(--stop-bg);color:var(--stop);border:1px solid var(--stop-line)}
+.verdict .auth-btn{margin-top:10px;background:var(--card)}
+.verdict .auth-note{margin-top:10px;font-size:14px;font-weight:600}
 .callbtn{display:flex;align-items:center;justify-content:center;min-height:52px;margin-top:12px;
   background:var(--stop);color:var(--stop-on);border-radius:9px;font-family:"Barlow Condensed",sans-serif;
   font-weight:700;font-size:20px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none}
@@ -614,6 +636,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .openbox li:first-child{border-top:none}
 .openbox li b{font-weight:600}
 .openbox .crit{color:var(--stop);font-weight:600}
+.openbox .adv{color:var(--info-deep);font-weight:600}
 .milecheck{margin-top:12px;display:none}
 .milecheck.is-on{display:block}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -818,6 +841,12 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .trip-mini:active{transform:scale(.98)}
 .is-dead{opacity:.4}
 .stop-time{flex:0 0 52px;font-weight:700;font-variant-numeric:tabular-nums}
+/* The estimate leads and the timetable sits under it, smaller and quieter.
+   Same 52px column, so a list where only some rows have an estimate does not
+   go ragged down the left. */
+.stop-time-eta{display:flex;flex-direction:column;line-height:1.15}
+.stop-time-plan{font-weight:400;font-size:.72em;opacity:.55;
+                font-variant-numeric:tabular-nums}
 .stop-name{flex:1}
 .stop-pc{display:block;font-size:12px;color:var(--muted);margin-top:2px}
 /* The same badge, on the one stop he is driving to, when the sheet knows the
@@ -1295,6 +1324,28 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   </div>
 </div>
 
+<!-- Authorising a stopped bus. Behind a PIN because it is the one action in
+     this app that lets a bus out with a fault on it, and the name that goes on
+     the record has to be a name somebody can be asked about on Monday. -->
+<div class="rota-modal" id="authModal" aria-hidden="true">
+  <div class="rota-sheet" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <p class="eyebrow">Coordinator</p>
+    <h2 id="authTitle">Authorise this bus to run</h2>
+    <p class="tiny" id="authWhat"></p>
+    <div class="field" style="margin-top:10px">
+      <label for="authPin">Your PIN</label>
+      <input id="authPin" type="password" inputmode="numeric" autocomplete="off"
+             maxlength="8" pattern="[0-9]*" class="mono pinbox"
+             placeholder="&bull;&bull;&bull;&bull;">
+    </div>
+    <p class="tiny" id="authSay"></p>
+    <div class="rota-modal-actions">
+      <button class="btn btn-ghost" id="authNot" type="button">Not now</button>
+      <button class="btn btn-stop" id="authGo" type="button">Authorise</button>
+    </div>
+  </div>
+</div>
+
 <!-- The offer to turn reminders on, asked rather than posted. See
      alertAskMaybe for the rules it keeps, the first of which is that it is
      never drawn anywhere near the vehicle check. -->
@@ -1430,7 +1481,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.69.0";
+var APP_VERSION = "v1.74.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -1674,15 +1725,42 @@ var CFG = window.CONFIG || {};
 var VEHICLES = window.VEHICLES || [];
 var LIVE = !!(CFG.endpoint && CFG.endpoint.indexOf("http") === 0);
 
-/* Where the calls that happen DURING a Sunday go: the stop taps and the
-   Stops and bookings screen. Everything else — the rota, last mileage, the
-   PIN, submitting a check — still goes to CFG.endpoint, where it always did.
+/* Where the calls that happen DURING a Sunday go: the stop taps, the Stops
+   and bookings screen, and now the check itself. Everything else — the rota,
+   last mileage, a rota change — still goes to CFG.endpoint, where it always
+   did, because nothing on that list has a man standing at a kerb waiting.
+
+   Submitting a check moved here on 20 September 2026, after a walkaround took
+   long enough to fail and only went through once the driver had given up and
+   moved to Start trip. The sheet is still the record; it just stops being the
+   thing he waits for.
 
    Falls back to CFG.endpoint the moment liveEndpoint is blank, and that is
    the whole rollback: one line in config.js and every call returns to Apps
    Script, slow but correct. */
 var LIVE_ENDPOINT = (CFG.liveEndpoint && String(CFG.liveEndpoint).indexOf("http") === 0)
   ? CFG.liveEndpoint : CFG.endpoint;
+
+/* ---- what a stopped bus is allowed to do --------------------------------
+
+   Read through defaults, never straight off CFG. A phone running an older
+   config.js has no override block at all, and every default below is the
+   behaviour that was settled on, so an app that has not been given the
+   settings still behaves the way the settings say. */
+var OVR = (function(){
+  var o = CFG.override || {};
+  return {
+    advisory:          o.advisory !== false,
+    criticalAdvisory:  o.criticalAdvisory === "authorise" ? "authorise" : "notice",
+    showWhoAuthorised: o.showWhoAuthorised !== false,
+    sameHandBothWays:  o.sameHandBothWays !== false
+  };
+})();
+
+/* Whether an advisory on a critical item holds the bus. Asked in four places
+   and settled in one, because two copies of this would drift and the drift
+   would be a bus either stopped or running on a disagreement. */
+function advStops(){ return OVR.criticalAdvisory === "authorise"; }
 
 /* ---------------- the shared checklist ---------------- */
 var STAGES = [
@@ -2047,12 +2125,29 @@ function dueHTML(v){
 
 /* ---------------- tallies ---------------- */
 function tally(){
-  var done=0,def=0,critDef=0;
+  var done=0,def=0,critDef=0,adv=0,critAdv=0;
   ALL.forEach(function(it){ var r=st.res[it.id]; if(!r) return; done++;
-    if(r.v==="def"){ def++; if(it.crit) critDef++; } });
-  return { done:done, def:def, critDef:critDef };
+    if(r.v==="def"){ def++; if(it.crit) critDef++; }
+    else if(r.v==="adv"){ adv++; if(it.crit) critAdv++; } });
+  return { done:done, def:def, critDef:critDef, adv:adv, critAdv:critAdv };
 }
-function level(){ var t=tally(); return t.critDef>0?"stop":(t.def>0?"warn":"ok"); }
+
+/* THREE ANSWERS, AND ONLY ONE OF THEM STOPS A BUS.
+
+   A critical defect stops it, as it always has. An advisory does not, because
+   an advisory is the driver saying this is worth watching and is not a fault,
+   and a man who has to call a worn tyre a defect to record it at all will
+   stop learning to record it.
+
+   The exception is a setting, not a rule: criticalAdvisory "authorise" makes
+   a critical advisory hold the bus until somebody signs for it. Left at
+   "notice" it goes on the record, into the email, and the bus runs. */
+function level(){
+  var t=tally();
+  if(t.critDef>0) return "stop";
+  if(advStops() && t.critAdv>0) return "stop";
+  return (t.def>0 || t.adv>0) ? "warn" : "ok";
+}
 function coordPhone(){
   var p = CFG.coordinator && CFG.coordinator.phone;
   return p ? String(p).replace(/[^0-9+]/g,"") : "";
@@ -2071,8 +2166,11 @@ function prettyPhone(){
   return p;
 }
 function critNames(){
-  return ALL.filter(function(it){ var r=st.res[it.id]; return it.crit && r && r.v==="def"; })
-            .map(function(it){ return it.name; });
+  return ALL.filter(function(it){
+    var r=st.res[it.id];
+    if(!it.crit || !r) return false;
+    return r.v==="def" || (r.v==="adv" && advStops());
+  }).map(function(it){ return it.name; });
 }
 
 /* ---------------- dashboard ---------------- */
@@ -2308,7 +2406,7 @@ function alertAskUp(){
 /* Every sheet this app can put up. A sheet over a sheet is two backdrops and
    a question about which one a tap is answering. */
 function anySheetUp(){
-  var ids=["rotaModal","busModal","howModal","pinModal","alertAsk"], i, b;
+  var ids=["rotaModal","busModal","howModal","pinModal","alertAsk","authModal"], i, b;
   for(i=0;i<ids.length;i++){
     b=$(ids[i]);
     if(b && b.classList.contains("is-on")) return true;
@@ -2482,6 +2580,7 @@ function paintDash(){
   else { title=st.veh.reg; sub=st.veh.name; }
   if(t.critDef>0) sub=t.critDef+" critical defect"+(t.critDef>1?"s":"");
   else if(t.def>0) sub=t.def+" defect"+(t.def>1?"s":"")+" noted";
+  else if(t.adv>0) sub=t.adv+" advisory"+(t.adv>1?" notes":" note");
   $("dashTitle").textContent=title;
   $("dashSub").textContent=sub;
 
@@ -2765,12 +2864,12 @@ function btn(label,cls,fn,dis,why){
     var left=s.items.filter(function(it){ return !st.res[it.id]; }).length;
     var blank=s.items.filter(function(it){
       var r=st.res[it.id];
-      return r && r.v==="def" && (!r.note || r.note.trim().length < 3);
+      return needsNote(r) && (!r.note || r.note.trim().length < 3);
     });
     if(left>0) c.textContent = left+" left in this stage";
     else if(blank.length) c.textContent = blank.length===1
-      ? "Describe the defect on " + blank[0].name
-      : blank.length + " defects still need a note";
+      ? "Describe what you found on " + blank[0].name
+      : blank.length + " items still need a note";
     else c.textContent = "Stage complete";
 
     btn("Back","btn-ghost",function(){
@@ -3066,12 +3165,21 @@ function geoRecord(){
 var OPEN_DEFECTS = {};
 
 function openDefectsHTML(reg){
-  var list = OPEN_DEFECTS[reg] || [];
+  /* Critical first, whichever kind, so a critical advisory sits at the top
+     of the list until somebody closes it. Within the same weight a defect
+     comes before an advisory. Six shown, so the order decides what a driver
+     sees when there are more. */
+  var list = (OPEN_DEFECTS[reg] || []).slice().sort(function(a,b){
+    var ca=a.crit?1:0, cb=b.crit?1:0;
+    if(ca!==cb) return cb-ca;
+    return (a.kind==="Advisory"?1:0) - (b.kind==="Advisory"?1:0);
+  });
   if(!list.length) return "";
   return '<div class="openbox"><h4>Still open on this bus</h4><ul>' +
     list.slice(0,6).map(function(d){
       return '<li><b>' + esc(d.item) + '</b>' +
              (d.crit ? ' <span class="crit">critical</span>' : '') +
+             (d.kind==="Advisory" ? ' <span class="adv">advisory</span>' : '') +
              (d.note ? '<br>' + esc(d.note) : '') + '</li>';
     }).join("") +
     (list.length > 6 ? '<li>and ' + (list.length-6) + ' more</li>' : '') +
@@ -3107,9 +3215,6 @@ var FUEL_COLOURS = ["#75201a","#753e1a","#755d1a","#6e751a",
 var FUEL_WORDS = ["1/8 tank","1/4 tank","3/8 tank","1/2 tank",
                   "5/8 tank","3/4 tank","7/8 tank","Full"];
 function fuelText(n){ return (n>=1 && n<=8) ? FUEL_WORDS[n-1] : ""; }
-
-/* Still used for the wording and the low-tank nudge, not for the colour. */
-function fuelBand(n){ return n<=2 ? "low" : n===3 ? "mid" : "high"; }
 
 function paintFuel(){
   var bar=$("fuelBar"); if(!bar) return;
@@ -3255,13 +3360,21 @@ function renderStage(){
     var tags="";
     if(it.crit) tags+='<span class="tag t-crit">Stops the bus</span>';
     if(it.history) tags+='<span class="tag t-watch">Known history</span>';
+    if(it.crit && OVR.advisory && advStops())
+      tags+='<span class="tag t-adv">Advisory needs signing off</span>';
     el.innerHTML =
       '<h3>'+esc(it.name)+'</h3>'+
       (tags?'<div class="tags">'+tags+'</div>':'')+
       '<p class="what">'+esc(it.what)+'</p>'+
       (it.history?'<p class="history"><b>On this bus:</b> '+esc(it.history)+'</p>':'')+
-      '<div class="choose">'+
+      '<div class="choose'+(OVR.advisory?" three":"")+'">'+
         '<button type="button" class="ok'+(r&&r.v==="ok"?" on":"")+'">Fine</button>'+
+        /* Between Fine and Defect on the screen because it is between them in
+           meaning, and a driver reaching for the right hand button under time
+           pressure should not find the softer answer there. */
+        (OVR.advisory
+          ? '<button type="button" class="adv'+(r&&r.v==="adv"?" on":"")+'">Advisory</button>'
+          : '')+
         '<button type="button" class="def'+(r&&r.v==="def"?" on":"")+'">Defect</button>'+
         /* Pre-drive lists are already cut to what this particular bus has,
            so nothing on one can be "not on this bus". Offering it there just
@@ -3271,21 +3384,27 @@ function renderStage(){
           ? '<button type="button" class="na'+(r&&r.v==="na"?" on":"")+'">Not on this bus</button>'
           : '')+
       '</div>'+
-      '<div class="note'+(r&&r.v==="def"?" is-on":"")+'">'+
+      '<div class="note'+(r&&needsNote(r)?" is-on":"")+(r&&r.v==="adv"?" is-adv":"")+'">'+
         '<div class="lbl">What did you find?</div>'+
         '<textarea placeholder="Describe it plainly. A few words is enough."></textarea>'+
       '</div>';
 
-    var bOk=el.querySelector(".ok"), bDef=el.querySelector(".def"), bNa=el.querySelector(".na");
+    var bOk=el.querySelector(".ok"), bDef=el.querySelector(".def"),
+        bNa=el.querySelector(".na"), bAdv=el.querySelector(".adv");
     var note=el.querySelector(".note"), ta=el.querySelector("textarea");
     if(r&&r.note) ta.value=r.note;
 
     function pick(v){
-      st.res[it.id] = v==="def" ? { v:"def", note:ta.value } : { v:v };
+      /* An advisory carries a note for the same reason a defect does: without
+         one the record says somebody looked at a tyre and felt something
+         about it. */
+      st.res[it.id] = (v==="def"||v==="adv") ? { v:v, note:ta.value } : { v:v };
       bOk.classList.toggle("on", v==="ok");
       bDef.classList.toggle("on", v==="def");
+      if(bAdv) bAdv.classList.toggle("on", v==="adv");
       if(bNa) bNa.classList.toggle("on", v==="na");
-      note.classList.toggle("is-on", v==="def");
+      note.classList.toggle("is-on", v==="def"||v==="adv");
+      note.classList.toggle("is-adv", v==="adv");
       el.className=itemClass(it, st.res[it.id]);
       paintDash(); paintFoot();
     }
@@ -3319,8 +3438,16 @@ function renderStage(){
       if(it.crit) toast("Critical defect. The bus does not run. Tap Call at the top.");
       setTimeout(function(){ ta.focus(); },120);
     });
+    /* Advisory does not advance, for the same reason Defect does not: it
+       opens a box he is about to type in. */
+    if(bAdv) bAdv.addEventListener("click",function(){
+      pick("adv");
+      if(it.crit && advStops())
+        toast("Advisory on a critical item. A coordinator has to authorise the run.");
+      setTimeout(function(){ ta.focus(); },120);
+    });
     ta.addEventListener("input",function(){
-      if(st.res[it.id]&&st.res[it.id].v==="def"){
+      if(st.res[it.id]&&needsNote(st.res[it.id])){
         st.res[it.id].note=ta.value;
         /* Without this the footer never re-evaluated while typing, so Next
            stayed dead until something else happened to repaint it. On the
@@ -3336,9 +3463,18 @@ function renderStage(){
 /* Not applicable is a real answer, not a skipped one: it says the driver
    looked and this bus does not have the thing. It is recorded as such. */
 function itemClass(it,r){
-  return "item"+(it.crit?" crit":"")+
-    (!r ? "" : r.v==="ok" ? " is-pass" : r.v==="na" ? " is-na" : " is-def");
+  return "item"+(it.crit?" crit":"")+(advStops()?" adv-stops":"")+
+    (!r ? "" : r.v==="ok" ? " is-pass" : r.v==="na" ? " is-na"
+             : r.v==="adv" ? " is-adv" : " is-def");
 }
+
+/* Whether a bus's check state counts as checked when a run starts. Its own
+   function so the one question has one answer, and so a test can ask it. */
+function checkCounts(state){ return state==="ok" || state==="authorised"; }
+
+/* The two answers that are worth nothing without words. One place, because
+   the renderer, the footer and the sheet all have to agree about it. */
+function needsNote(r){ return !!r && (r.v==="def" || r.v==="adv"); }
 
 /* ---------------- review ---------------- */
 function defectList(){
@@ -3347,6 +3483,13 @@ function defectList(){
 }
 /* Recorded so the sheet shows what was looked at and found not to apply,
    rather than leaving a silent gap that reads like a missed item. */
+/* Kept apart from the defects all the way to the sheet. Folding them in
+   would make the defect count wrong on every screen that shows it, and the
+   count is the number somebody books work against. */
+function advisoryList(){
+  return ALL.filter(function(it){ var r=st.res[it.id]; return r&&r.v==="adv"; })
+    .map(function(it){ return { name:it.name, crit:!!it.crit, note:(st.res[it.id].note||"").trim() }; });
+}
 function naList(){
   return ALL.filter(function(it){ var r=st.res[it.id]; return r&&r.v==="na"; })
     .map(function(it){ return it.name; });
@@ -3354,23 +3497,49 @@ function naList(){
 function defsHTML(defs){
   if(!defs.length) return "";
   return '<ul class="deflist">'+defs.map(function(d){
-    return '<li><b>'+esc(d.name)+(d.crit?" \u2014 critical":"")+'</b>'+(d.note?'<br>'+esc(d.note):'')+'</li>';
+    return '<li><b>'+esc(d.name)+(d.crit?" (critical)":"")+'</b>'+(d.note?'<br>'+esc(d.note):'')+'</li>';
   }).join("")+'</ul>';
 }
-function verdictHTML(lv,defs){
+/* Advisories, listed under their own heading so nobody reads them as faults.
+   Critical ones first, because those are the ones somebody has to decide
+   about, whichever way the setting is turned. */
+function advsHTML(advs){
+  if(!advs.length) return "";
+  var sorted = advs.slice().sort(function(a,b){ return (b.crit?1:0)-(a.crit?1:0); });
+  return '<p class="advhead">Advisory</p><ul class="deflist advlist">'+sorted.map(function(d){
+    return '<li><b>'+esc(d.name)+(d.crit?" (critical)":"")+'</b>'+(d.note?'<br>'+esc(d.note):'')+'</li>';
+  }).join("")+'</ul>';
+}
+function verdictHTML(lv,defs,advs,auth){
   var who=(CFG.coordinator&&CFG.coordinator.name)?CFG.coordinator.name:"the coordinator";
+  advs = advs || [];
+  /* Still the red card. A bus going out with a critical fault on it has not
+     become a green one because somebody signed for it; what changes is the
+     heading, so the screen stops saying the opposite of what just happened. */
+  if(lv==="stop" && auth){
+    return '<div class="verdict v-stop"><h2>Authorised to run</h2><p>'+
+      ((OVR.showWhoAuthorised && auth.by) ? 'By '+esc(auth.by)+'. ' : '')+
+      'The defect stays open.</p>'+defsHTML(defs)+advsHTML(advs)+'</div>';
+  }
   if(lv==="stop"){
     var ph = coordPhone();
     var call = ph ? '<a class="callbtn" href="tel:'+esc(ph)+'">Call '+esc(who)+' \u00B7 '+esc(prettyPhone())+'</a>' : "";
-    return '<div class="verdict v-stop"><h2>The bus does not run</h2><p>A safety critical item has failed. Do not carry passengers. Ring the coordinator and arrange lifts. Nobody will be upset with you for stopping the bus.</p>'+defsHTML(defs)+call+'</div>';
+    return '<div class="verdict v-stop"><h2>The bus does not run</h2><p>A safety critical item has failed. Do not carry passengers. Ring the coordinator and arrange lifts. Nobody will be upset with you for stopping the bus.</p>'+defsHTML(defs)+advsHTML(advs)+call+'</div>';
   }
-  if(lv==="warn") return '<div class="verdict v-warn"><h2>Safe to drive, with defects</h2><p>Nothing critical, but these are on the record now and need booking in.</p>'+defsHTML(defs)+'</div>';
+  if(lv==="warn"){
+    /* Three warn screens, not one, because "Safe to drive, with defects" over
+       a list of advisories is the app calling something a defect that the
+       driver deliberately did not. */
+    if(!defs.length) return '<div class="verdict v-warn"><h2>Safe to drive</h2><p>Nothing to fix. These are on the record to watch.</p>'+advsHTML(advs)+'</div>';
+    return '<div class="verdict v-warn"><h2>Safe to drive, with defects</h2><p>Nothing critical, but these are on the record now and need booking in.</p>'+defsHTML(defs)+advsHTML(advs)+'</div>';
+  }
   return '<div class="verdict v-go"><h2>No defects found</h2><p>Everything checked and clear. Sign below and the bus is good to go.</p></div>';
 }
 function sumHTML(rec){
   var t=tally(), now=new Date();
   var r = rec || { date:ukDate(now), time:ukTime(now), reg:st.veh?st.veh.reg:"", driver:st.driver,
-                   miles:st.miles, checked:t.done, total:TOTAL, defects:defectList(), na:naList(),
+                   miles:st.miles, checked:t.done, total:TOTAL, defects:defectList(),
+                   advisories:advisoryList(), na:naList(),
                    fuel: fuelText(st.fuel), jobs: jobLabels(),
                    kind: st.mode==="full" ? "Full inspection" : "Pre-drive" };
   function row(k,v){ return '<div class="sum-row"><b>'+esc(k)+'</b><span class="v">'+esc(v)+'</span></div>'; }
@@ -3382,6 +3551,9 @@ function sumHTML(rec){
          (r.fuel?row("Fuel", r.fuel):"") +
          row("Items checked", r.checked+" of "+r.total) +
          row("Defects", r.defects.length?String(r.defects.length):"None") +
+         (((r.advisories||[]).length)?row("Advisory", String(r.advisories.length)):"") +
+         ((r.authorisedBy||r.authorisedAt)?row("Authorised to run",
+            (OVR.showWhoAuthorised && r.authorisedBy) ? r.authorisedBy : "Yes"):"") +
          ((r.na&&r.na.length)?row("Not applicable", r.na.join(", ")):"") +
          ((r.jobs&&r.jobs.length)?row("To arrange", r.jobs.join(", ")):"");
 }
@@ -3389,7 +3561,7 @@ function renderReview(){
   /* Pre-tick Needs fuel on a low tank, but only while the driver has not
      answered yet. Once they have, their answer stands. */
   if(st.fuel!==null && st.fuel<=2 && !st.jobs.length) st.jobs.push("fuel");
-  $("verdict").innerHTML = verdictHTML(level(), defectList());
+  $("verdict").innerHTML = verdictHTML(level(), defectList(), advisoryList());
   $("sumBox").innerHTML = sumHTML();
   paintJobs();
   /* Left blank on purpose. A name already typed in for them is not a
@@ -3410,14 +3582,55 @@ function paintBanner(){
   if(n>0) $("bannerText").textContent = n+" check"+(n>1?"s":"")+" not sent yet.";
 }
 
-/* ---------------- send ---------------- */
-function sendRec(rec){
-  if(!LIVE) return Promise.reject(new Error("no endpoint"));
-  return callFetch(CFG.endpoint, {
+/* ---------------- send ----------------
+
+   THE CHECK GOES TO THE LIVE SERVER FIRST. 20 September 2026.
+
+   It used to go straight to Apps Script and wait. On the morning this
+   changed, the send took long enough to time out at the kerb, the check sat
+   in the queue saying "Held on this phone", and it only went through when the
+   driver gave up and moved on to Start trip, which happened to flush it. The
+   record was never at risk. The waiting was the whole complaint.
+
+   So the shape the stop taps have used since v1.5 is used here too: the
+   Worker answers in well under a second and writes its own copy, and Apps
+   Script takes it from there on the five minute drain. The spreadsheet is
+   still the record. It has stopped being the thing a man stands in a car park
+   waiting for.
+
+   ALSO SENT TO APPS SCRIPT, UNAWAITED, on a live submit. That call is what
+   sends the coordinator's email, and a stopped bus is the most urgent message
+   this system produces; holding it for up to five minutes to save one request
+   would be saving the wrong thing. Nothing waits on it, a failure costs
+   nothing because the drain carries the same record anyway, and the sheet
+   takes the two one at a time under its script lock and refuses a Check ID
+   it already has, so the two paths cannot double it up.
+
+   A flush does not do that. Those records were already held by a bad
+   connection, the drain will file them, and firing a browser full of Apps
+   Script calls at once is what the one-at-a-time loop below exists to avoid.
+
+   If the Worker cannot be reached at all, this falls back to exactly what it
+   did before: Apps Script, slowly, correctly. */
+function sendRecTo(url, rec, fresh){
+  /* How long ago the check was made, measured on this phone's own clock at
+     the moment of sending. A duration is right even when the phone's date is
+     wrong, and it is what lets a server place a check held overnight in the
+     queue at the time it was DONE rather than the time it arrived.
+
+     A check sent the moment it is signed goes with no age at all: it was
+     made just now, and a phone whose clock was corrected in between would
+     otherwise date a stop to before midnight and keep it off today's board.
+     Only a check that waited in the queue needs its age. */
+  var made = Date.parse(rec.ts||"");
+  var age = (fresh || isNaN(made)) ? 0 : Math.max(0, Date.now() - made);
+  var sent = {}; for(var k in rec){ if(Object.prototype.hasOwnProperty.call(rec,k)) sent[k]=rec[k]; }
+  sent.age = age;
+  return callFetch(url, {
     method:"POST",
     redirect:"follow",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
-    body: JSON.stringify({ token: CFG.token || "", check: rec })
+    body: JSON.stringify({ token: CFG.token || "", action: "check", check: sent })
   }).then(function(res){
     if(!res.ok) throw new Error("http "+res.status);
     return res.text();
@@ -3427,6 +3640,38 @@ function sendRec(rec){
     if(!out || out.ok !== true) throw new Error(out && out.error ? out.error : "rejected");
     return out;
   });
+}
+
+function sendRec(rec, alsoSheet){
+  if(!LIVE) return Promise.reject(new Error("no endpoint"));
+  /* alsoSheet is set only by the live submit, which is also the one send
+     that is never late. */
+  var fresh = !!alsoSheet;
+  var viaWorker = !!(LIVE_ENDPOINT && LIVE_ENDPOINT !== CFG.endpoint);
+  if(!viaWorker) return sendRecTo(CFG.endpoint, rec, fresh);
+  return sendRecTo(LIVE_ENDPOINT, rec, fresh).then(function(out){
+    noteCheckReached(rec);
+    if(alsoSheet){
+      try{ sendRecTo(CFG.endpoint, rec, fresh).catch(function(){}); }catch(e){}
+    }
+    return out;
+  }, function(){
+    return sendRecTo(CFG.endpoint, rec, fresh);
+  });
+}
+
+/* The live server has this phone's check. From here on, when the board names
+   a DIFFERENT check as this bus's current one, it is the server that put
+   them in order, by the time each was made, and the board is believed over
+   this phone's own copy. Only the live server counts: a check that reached
+   the spreadsheet alone may never have reached the board at all. */
+function noteCheckReached(rec){
+  try{
+    var c=JSON.parse(store.get(CHKKEY)||"null");
+    if(!c || !rec || c.id!==rec.id) return;
+    c.sentAt = Date.now();
+    store.set(CHKKEY, JSON.stringify(c));
+  }catch(e){}
 }
 
 /* True only while a check is actually in flight. Without this, a re-check
@@ -3483,11 +3728,15 @@ function submit(){
        asked for. */
     pinState: st.pinState || "",
     level: level(), checked: t.done, total: TOTAL,
+    /* Empty when the third answer is switched off, never absent: the sheet
+       reads a field it can always find. */
+    critAdv: t.critAdv,
     kind: st.mode==="full" ? "Full inspection" : "Pre-drive",
     loc:g.loc, locAcc:g.locAcc, locDist:g.locDist, locNote:g.locNote,
     fuel: fuelText(st.fuel),
     jobs: jobLabels(),
     defects: defectList(),
+    advisories: advisoryList(),
     na: naList(),
     renewals: dueItems(st.veh).map(function(x){ return x.label+": "+x.words+" ("+prettyDate(x.date)+")"; }).join(" | ")
   };
@@ -3498,8 +3747,9 @@ function submit(){
                           check would call it sent before it has gone */
 
   $("sentTitle").textContent = rec.level==="stop" ? "Bus stopped" : "Check complete";
-  $("sentVerdict").innerHTML = verdictHTML(rec.level, rec.defects);
+  $("sentVerdict").innerHTML = verdictHTML(rec.level, rec.defects, rec.advisories);
   $("sentSum").innerHTML = sumHTML(rec);
+  paintAuthorise(rec);
   show("sent");
 
   if(!LIVE){ sendingNow=false; queueUp(rec); paintSend("practice"); return; }
@@ -3508,7 +3758,7 @@ function submit(){
   store.set(MKEY, JSON.stringify(LASTMILES));
 
   paintSend("sending");
-  sendRec(rec).then(function(){
+  sendRec(rec, true).then(function(){
     sendingNow = false;
     paintSend("ok");
     fetchLastMiles();
@@ -3562,8 +3812,8 @@ function flush(){
   function next(){
     if(i >= q.length){ finish(); return; }
     var rec = q[i++];
-    sendRec(rec).then(function(){ dropFromQ(rec.id); done++; next(); },
-                      function(){ failed++; next(); });
+    sendRec(rec, false).then(function(){ dropFromQ(rec.id); done++; next(); },
+                            function(){ failed++; next(); });
   }
   next();
 }
@@ -3575,8 +3825,11 @@ function renderPending(){
     return;
   }
   box.innerHTML = q.map(function(r){
+    var advN = (r.advisories||[]).length;
     var line = r.level==="stop" ? "Bus stopped, critical defect"
-             : r.level==="warn" ? r.defects.length+" defect"+(r.defects.length>1?"s":"")
+             : r.level==="warn" && r.defects.length
+               ? r.defects.length+" defect"+(r.defects.length>1?"s":"")
+             : advN ? advN+" advisory"+(advN>1?" notes":" note")
              : "No defects";
     return '<article class="pend"><div class="pend-h"><b>'+esc(r.reg)+'</b>'+
       '<span class="d">'+esc(r.date)+" "+esc(r.time)+'</span></div>'+
@@ -3596,11 +3849,25 @@ function recText(r){
   L.push("Checked: "+r.checked+" of "+r.total);
   L.push("");
   if(r.level==="stop") L.push("*** BUS NOT RUNNING \u2014 CRITICAL DEFECT ***");
-  else if(r.level==="warn") L.push("Safe to drive. Defects to report:");
+  else if(r.level==="warn") L.push(r.defects.length ? "Safe to drive. Defects to report:"
+                                                    : "Safe to drive. Nothing to fix.");
   else L.push("NO DEFECTS FOUND.");
   r.defects.forEach(function(d){
     L.push("- "+d.name+(d.crit?" (CRITICAL)":"")+(d.note?": "+d.note:""));
   });
+  if(r.advisories && r.advisories.length){
+    L.push("");
+    L.push("Advisory:");
+    r.advisories.forEach(function(d){
+      L.push("- "+d.name+(d.crit?" (CRITICAL)":"")+(d.note?": "+d.note:""));
+    });
+  }
+  if(r.authorisedBy || r.authorisedAt){
+    L.push("");
+    L.push("AUTHORISED TO RUN" +
+      ((OVR.showWhoAuthorised && r.authorisedBy) ? " by "+r.authorisedBy : "") +
+      ". The defect stays open.");
+  }
   if(r.jobs && r.jobs.length){
     L.push("");
     L.push("To arrange: "+r.jobs.join(", "));
@@ -3740,10 +4007,6 @@ function rotaSeedPrimary(d){
   if(!n) return "";
   var weeks=Math.round((d-rotaAnchorDate())/604800000);
   return ROTA_PRIMARY_PATTERN[((weeks%n)+n)%n];
-}
-function rotaPrimary(d){
-  var key=rotaKey(d); for(var i=0;i<rotaRows.length;i++) if(rotaRows[i].date===key) return rotaRows[i].primary;
-  return rotaSeedPrimary(d);
 }
 function rotaRowFor(key){ for(var i=0;i<rotaRows.length;i++) if(rotaRows[i].date===key) return rotaRows[i]; return null; }
 /* Every request on a Sunday. Two drivers share a Sunday now, so there can be
@@ -3937,7 +4200,10 @@ function noteCheckDone(rec){
       driver: (rec.driver||"").trim(),
       reg: rec.reg||"",
       kind: rec.kind||"",
-      level: rec.level||"ok"
+      level: rec.level||"ok",
+      /* Which walkaround, so the board's copy of this same check can be
+         recognised as the same check rather than raced against it by clock. */
+      id: rec.id||""
     }));
   }catch(e){}
 }
@@ -3954,14 +4220,27 @@ function checkStanding(reg){
      epoch still beats nothing at all, and loses to any dated row off the
      sheet, which is the safe way round for a record we cannot place in time. */
   var at=Number(c.at)||1;
-  if(c.level==="stop") return { state:"stopped", reg:c.reg, at:at };
-  return { state:"ok", reg:c.reg, kind:c.kind, at:at };
+  if(c.level==="stop"){
+    /* A signature this phone holds lifts only the check it names. A second
+       walkaround that stops the bus again is a different check, and this
+       morning's earlier signature must not clear it. Records from before
+       check ids fall back to time: a signature older than the check belongs
+       to a previous one. */
+    var a = authLocal()[c.reg];
+    var names = !!(a && a.checkId && c.id);
+    if(a && (names ? a.checkId === c.id : (Number(a.at)||0) >= at))
+      return { state:"authorised", reg:c.reg, at:Number(a.at), by:a.by||"", id:c.id||"",
+               authAt:Number(a.at)||0, sentAt:Number(c.sentAt)||0 };
+    return { state:"stopped", reg:c.reg, at:at, id:c.id||"", sentAt:Number(c.sentAt)||0 };
+  }
+  return { state:"ok", reg:c.reg, kind:c.kind, at:at, id:c.id||"", sentAt:Number(c.sentAt)||0 };
 }
 
 /* ---- what the sheet says about today's checks ---------------------------
    Filled by the same board request the trip screen already makes every
    thirty seconds, so it costs no extra call. Keyed by registration:
-     { "NH56 FWP": { state:"ok"|"stopped", at:ms, driver:"" }, ... }
+     { "NH56 FWP": { state:"ok"|"stopped"|"authorised", at:ms, driver:"",
+                     by:"who authorised", id:"which walkaround" }, ... }
 
    tripChecksDay is the day the answer was fetched on. An answer fetched this
    morning is still good evidence a check HAPPENED, however long ago it came
@@ -4019,15 +4298,19 @@ function tripChecksLoad(){
   try{
     var c=JSON.parse(store.get(TCKEY)||"null");
     if(c && c.day===new Date().toDateString()){
-      tripChecks=c.checks||{}; tripChecksDay=c.day;
+      tripChecks=c.checks||{}; tripChecksDay=c.day; tripChecksAt=Number(c.at)||0;
     }
   }catch(e){}
 }
 
 function tripChecksSave(){
-  try{ store.set(TCKEY, JSON.stringify({ day:tripChecksDay, checks:tripChecks })); }
+  try{ store.set(TCKEY, JSON.stringify({ day:tripChecksDay, checks:tripChecks, at:tripChecksAt })); }
   catch(e){}
 }
+
+/* When this phone last heard the board's answer about checks, by this
+   phone's own clock. Compared only with other times on this same clock. */
+var tripChecksAt = 0;
 
 function tripChecksFresh(){ return tripChecksDay===new Date().toDateString(); }
 
@@ -4043,14 +4326,310 @@ function checkVerdict(reg){
   var rem=(tripChecksFresh() && reg && tripChecks[reg]) ? tripChecks[reg] : null;
 
   var lOk=loc.state!=="none", rOk=!!rem;
+
+  /* THE SAME WALKAROUND ON BOTH SIDES. Then there is no race to run: the
+     board's copy has simply heard more about it, a signature from the sheet,
+     one withdrawn, an outcome corrected. The one exception is a signature
+     made on this phone after the board last answered, which the board cannot
+     know about yet, so for those few seconds this phone's own word stands.
+     Both of those times are this phone's clock. */
+  if(lOk && rOk && loc.id && rem.id && loc.id===rem.id){
+    if(loc.state==="authorised" && (loc.authAt||0) > tripChecksAt)
+      return { state:loc.state, reg:reg, at:loc.at, kind:loc.kind, by:loc.by||"" };
+    return { state:rem.state, reg:reg, at:rem.at, driver:rem.driver||"", by:rem.by||"" };
+  }
+
+  /* A DIFFERENT walkaround on the board, and the board has answered since
+     the live server took this phone's own. Then the server has already put
+     the two in order by when each was made, and it chose the board's. This
+     phone's clock plays no part, which it did before: a coordinator's phone
+     running two minutes fast kept its own signature standing over a stop
+     made on another phone a minute later. */
+  if(lOk && rOk && loc.id && rem.id && loc.sentAt && tripChecksAt > loc.sentAt){
+    return { state:rem.state, reg:reg, at:rem.at, driver:rem.driver||"", by:rem.by||"" };
+  }
+
   if(lOk && rOk){
     return (Number(rem.at)||0) > (Number(loc.at)||0)
-      ? { state:rem.state, reg:reg, at:rem.at, driver:rem.driver||"" }
-      : { state:loc.state, reg:reg, at:loc.at, kind:loc.kind };
+      ? { state:rem.state, reg:reg, at:rem.at, driver:rem.driver||"", by:rem.by||"" }
+      : { state:loc.state, reg:reg, at:loc.at, kind:loc.kind, by:loc.by||"" };
   }
-  if(lOk) return { state:loc.state, reg:reg, at:loc.at, kind:loc.kind };
-  if(rOk) return { state:rem.state, reg:reg, at:rem.at, driver:rem.driver||"" };
+  if(lOk) return { state:loc.state, reg:reg, at:loc.at, kind:loc.kind, by:loc.by||"" };
+  if(rOk) return { state:rem.state, reg:reg, at:rem.at, driver:rem.driver||"", by:rem.by||"" };
   return { state: tripChecksFresh() ? "none" : "unasked", reg:reg };
+}
+
+/* ==========================================================================
+   AUTHORISING A STOPPED BUS
+   ==========================================================================
+   20 September 2026. A coordinator did his own walkaround, found a tyre
+   wearing faster than the other three, put it down as a defect with a note,
+   and was then refused the Start trip button by his own rule. He went to the
+   spreadsheet, changed the outcome by hand, and nothing happened, because the
+   only thing that ever told the live server about a check was the check
+   itself. The bus sat in the yard with nothing wrong that anybody had
+   disputed, and the morning was held up by the app rather than by the tyre.
+
+   Two ways out, both of which now work, and they write the same record:
+
+     here        a coordinator with the phone in his hand, behind his PIN
+     the sheet   the Outcome column on the Checks tab, which now reaches the
+                 live server the moment it is edited
+
+   THE DEFECT STAYS OPEN. Authorising is not closing. It says a named person
+   decided this bus may run today with that fault on the record, and it leaves
+   the fault where the garage will still see it. Nothing here ever ticks a
+   defect off.
+
+   The PIN is the lock. The role list below decides who is OFFERED the button,
+   which is not the same thing and is not pretending to be: the name is picked
+   from a dropdown anybody can open. What cannot be got round is that the
+   server checks the four digits against that person's hash and writes the
+   name it verified, so an authorisation always has somebody's name on it. */
+
+var AUTHKEY = "fleet.authorised.v1";
+
+/* What this phone has seen authorised today. Kept so a driver who authorises
+   at the kerb is not blocked by his own stopped check while the board catches
+   up, and so a reload does not put the block back. */
+function authLocal(){
+  var a=null;
+  try{ a=JSON.parse(store.get(AUTHKEY)||"null"); }catch(e){ a=null; }
+  if(!a || a.day!==new Date().toDateString()) return {};
+  return a.regs || {};
+}
+function authRemember(reg, by, at, checkId){
+  var regs=authLocal();
+  regs[reg] = { by: by||"", at: Number(at)||Date.now(), checkId: checkId||"" };
+  try{ store.set(AUTHKEY, JSON.stringify({ day:new Date().toDateString(), regs:regs })); }
+  catch(e){}
+}
+
+/* Whether the person signed in may be offered the button at all.
+
+   sameHandBothWays false means the man who did the walkaround cannot sign it
+   off himself. With one coordinator that means nobody can, which is why it
+   ships true and why the comment in config.js says to think before changing
+   it. */
+function mayAuthorise(inspector){
+  if(!pinCoordinator()) return false;
+  if(OVR.sameHandBothWays) return true;
+  return (st.driver||"").trim().toLowerCase() !== String(inspector||"").trim().toLowerCase();
+}
+
+var authFor = null;   /* { reg, inspector } while the sheet is up */
+
+/* The control under a stopped verdict on the Finished screen. Drawn only when
+   there is something to authorise and somebody who may do it. */
+function paintAuthorise(rec){
+  var wrap=$("sentVerdict");
+  if(!wrap || !rec || rec.level!=="stop") return;
+  /* Inside the red card, under the call, where the stop is. Hung off the
+     bottom of the card it sat against the summary below with nothing between
+     them, which read as one more row of the summary. */
+  var box=wrap.querySelector(".v-stop") || wrap;
+  /* Already signed off, this check. A signature this phone holds for an
+     EARLIER walkaround of the same bus is not this one's, and a second stop
+     still needs its own. */
+  var held = authLocal()[rec.reg];
+  if(rec.authorisedBy || rec.authorisedAt || (held && held.checkId && held.checkId===rec.id)) return;
+  if(!mayAuthorise(rec.driver)){
+    if(pinCoordinator() && !OVR.sameHandBothWays){
+      var w=document.createElement("p");
+      w.className="auth-note";
+      w.textContent="Another coordinator has to authorise this bus.";
+      box.appendChild(w);
+    }
+    return;
+  }
+  var b=document.createElement("button");
+  b.type="button";
+  b.className="btn btn-ghost btn-wide auth-btn";
+  b.textContent="Authorise to run";
+  b.addEventListener("click",function(){ authOpen(rec.reg, rec.driver); });
+  box.appendChild(b);
+}
+
+function authOpen(reg, inspector){
+  var box=$("authModal");
+  if(!box) return;
+  authFor = { kind:"authorise", reg:reg, inspector:inspector||"" };
+  $("authTitle").textContent = "Authorise this bus to run";
+  $("authGo").textContent = "Authorise";
+  $("authWhat").textContent = reg + ". The defect stays open.";
+  $("authPin").value="";
+  $("authSay").textContent="";
+  $("authGo").disabled=false;
+  box.classList.add("is-on");
+  box.setAttribute("aria-hidden","false");
+  setTimeout(function(){ try{ $("authPin").focus(); }catch(e){} },120);
+}
+/* THE SAME SHEET, FOR CLOSING SOMEBODY ELSE'S RUN.
+
+   One PIN box, two purposes, on purpose: a coordinator has one gesture for
+   "this is me, and I am taking responsibility for what happens next", and
+   learning it twice in two shapes is how a man ends up tapping through the
+   one that matters.
+
+   The words change because the act does. Nothing here mentions the defect,
+   and nothing in the other mentions the run. */
+function authOpenEnd(route, driver){
+  var box=$("authModal");
+  if(!box) return;
+  authFor = { kind:"endrun", route:route||"", driver:driver||"" };
+  $("authTitle").textContent = "End this run";
+  $("authGo").textContent = "End the run";
+  $("authWhat").textContent =
+    (driver ? driver + "\u2019s " : "") + (route||"") +
+    " run. It closes for everybody, and the record will say you ended it.";
+  $("authPin").value="";
+  $("authSay").textContent="";
+  $("authGo").disabled=false;
+  box.classList.add("is-on");
+  box.setAttribute("aria-hidden","false");
+  setTimeout(function(){ try{ $("authPin").focus(); }catch(e){} },120);
+}
+
+function authClose(){
+  var box=$("authModal");
+  if(!box) return;
+  box.classList.remove("is-on");
+  box.setAttribute("aria-hidden","true");
+  authFor=null;
+}
+
+/* CLOSING ANOTHER MAN'S RUN. Live server only, never queued, for exactly the
+   same reason as an authorisation: a queued end is a run that this phone says
+   is finished and the record says is still out, and the passenger page would
+   go on showing a bus that nobody is driving.
+
+   There is no offline fallback and there should not be one. If this cannot
+   reach the server, the run is still open and the honest thing to say is that
+   it is still open. */
+function authEndSend(pin){
+  if(!LIVE_ENDPOINT || !navigator.onLine){
+    $("authSay").textContent="No connection. The run is still open.";
+    return;
+  }
+  $("authGo").disabled=true;
+  $("authSay").textContent="Checking\u2026";
+  var route=authFor.route||"", who=(st.driver||"").trim();
+  callFetch(LIVE_ENDPOINT, {
+    method:"POST", redirect:"follow",
+    headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: CFG.token||"", action:"endrun",
+                           endrun:{ route:route, who:who, pin:pin } })
+  }, PIN_TIMEOUT)
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      var out=JSON.parse(t);
+      if(out && out.ok===true){
+        authClose();
+        toast(out.already ? "That run was already finished."
+                          : (route+" run ended. The record says you ended it."));
+        try{ rotaCountsFetch(); }catch(e){}
+        tripPaint();
+        return;
+      }
+      $("authGo").disabled=false;
+      if(out && out.locked){
+        $("authSay").textContent="Too many tries. Wait "+(out.minutes||5)+" minutes.";
+      } else if(out && out.error==="bad pin"){
+        $("authSay").textContent = (out.left>0)
+          ? "That PIN is not right. "+out.left+" tr"+(out.left===1?"y":"ies")+" left."
+          : "That PIN is not right.";
+      } else if(out && out.error==="not authorised"){
+        $("authSay").textContent="Only a coordinator can end somebody else's run.";
+      } else if(out && out.error==="no pin"){
+        $("authSay").textContent="There is no PIN against your name in the spreadsheet.";
+      } else if(out && out.error==="your own run"){
+        authClose();
+        toast("That is your own run. Use End trip.");
+      } else if(out && out.error==="no run"){
+        authClose();
+        toast("Nothing is out on "+route+".");
+        try{ rotaCountsFetch(); }catch(e){}
+      } else {
+        $("authSay").textContent="The live server would not do that. The run is still open.";
+      }
+    })
+    .catch(function(){
+      $("authGo").disabled=false;
+      $("authSay").textContent="Could not reach the live server. The run is still open.";
+    });
+}
+
+/* The one call. It goes to the live server and nowhere else, and it is never
+   queued.
+
+   A queued authorisation is a bus running on a promise: the phone would say
+   authorised, the driver would pull off, and the record would learn about it
+   whenever signal came back, which may be after the run. If this cannot reach
+   the server it says so and points at the spreadsheet, which is the other
+   path and is always open. */
+function authSend(){
+  if(!authFor) return;
+  var pin=String($("authPin").value||"").trim();
+  if(pin.length<4){ $("authSay").textContent="Key your PIN."; return; }
+  if(authFor.kind==="endrun") return authEndSend(pin);
+  if(!LIVE_ENDPOINT || !navigator.onLine){
+    $("authSay").textContent="No connection. Authorise it on the Checks tab of the spreadsheet instead.";
+    return;
+  }
+  $("authGo").disabled=true;
+  $("authSay").textContent="Checking\u2026";
+  var reg=authFor.reg, who=(st.driver||"").trim();
+  callFetch(LIVE_ENDPOINT, {
+    method:"POST", redirect:"follow",
+    headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: CFG.token||"", action:"authorise",
+                           authorise:{ reg:reg, who:who, pin:pin,
+                                       inspector:authFor.inspector||"" } })
+  }, PIN_TIMEOUT)
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      var out=JSON.parse(t);
+      if(out && out.ok===true && out.authorised===true){
+        /* This phone's own clock, not the server's. The local copy is only
+           ever compared with the local check, which was stamped by this same
+           clock, and a handset a few minutes fast would otherwise stay
+           blocked by a check that looks newer than the signature lifting it. */
+        authRemember(reg, out.by||who, Date.now(), out.checkId||"");
+        authClose();
+        toast(reg+" authorised to run. The defect stays open.");
+        if(lastRec && lastRec.reg===reg){
+          lastRec.authorisedBy = out.by||who;
+          lastRec.authorisedAt = out.at||Date.now();
+          $("sentTitle").textContent = "Authorised to run";
+          $("sentVerdict").innerHTML = verdictHTML(lastRec.level, lastRec.defects,
+            lastRec.advisories, { by: lastRec.authorisedBy });
+          $("sentSum").innerHTML = sumHTML(lastRec);
+        }
+        /* Pull the board straight away so every other screen agrees with
+           this one, rather than waiting out the poll. */
+        try{ rotaCountsFetch(); }catch(e){}
+        paintFoot();
+        return;
+      }
+      $("authGo").disabled=false;
+      /* Every refusal named for what it is. Anything this app does not
+         recognise, such as a live server that has not been updated yet, sends
+         him to the spreadsheet rather than telling him his PIN is wrong. */
+      var e = out && out.error;
+      $("authSay").textContent =
+        (out && out.locked) ? "Too many wrong tries. Wait "+(out.minutes||10)+" minutes."
+        : e === "bad pin" ? "That PIN is not right." +
+            (out.left > 0 ? " " + out.left + (out.left===1 ? " more try." : " more tries.") : "")
+        : e === "not authorised" ? "That name cannot authorise a bus."
+        : e === "same hand" ? "The person who did the check cannot authorise it."
+        : e === "no check" ? "No stopped check on record for that bus yet. Try again in a minute."
+        : e === "no pin" ? "No PIN on the Drivers tab for that name."
+        : "Could not authorise it here. Use the Checks tab instead.";
+    })
+    .catch(function(){
+      $("authGo").disabled=false;
+      $("authSay").textContent="Could not reach the record. Authorise it on the Checks tab instead.";
+    });
 }
 
 var TQKEY = "fleet.trip.queue.v1";
@@ -4636,17 +5215,86 @@ function tripMayWatch(){
    so it gets a plain Maps address, which opens the app if it is installed and
    the browser if it is not.
 
-   An ADDRESS, not coordinates. Coordinates would mean somebody standing at
-   seventeen kerbs with a phone, and this is volunteer work done from a desk.
-   An address can be typed from the spreadsheet, reads correctly to a human
-   looking at the tab, and is what a driver would have been told over the
-   phone anyway. */
+   THE PIN FIRST, WHEN THERE IS ONE.
+
+   The Lat and Lng columns arrived on the Bus Stops tab in v1.71.0, and where
+   a stop has them they win: a coordinate is the kerb, and an address is a
+   building that a map may put you behind, across a dual carriageway from, or
+   at the far end of. Two hundred metres is nothing on a map and it is a great
+   deal at ten past ten with people waiting.
+
+   THE ADDRESS WHEN THERE IS NOT, which is most stops and stays perfectly
+   good. This tab fills up a stop at a time and was never going to be pinned
+   in one go — that was the reason for preferring an address in the first
+   place, and it is still the reason the fallback exists rather than a blank
+   link. A postcode is the last resort and covers a stretch of road.
+
+   The chooser is unchanged: Android gets a geo: link the handset answers with
+   whatever maps app is installed, iOS gets a plain Maps URL because it has no
+   such chooser. A geo: link with real coordinates in front of the q is the
+   one shape both halves of that understand. */
 function mapHref(where){
-  var q = encodeURIComponent(String(where||"").trim());
+  /* A stop, or the plain string this used to take. Both, because several
+     callers hand it a "where" and there is no reason to make them all change
+     to gain a pin they may not have. */
+  var stop = (where && typeof where === "object") ? where : null;
+  var words = String((stop ? (stop.where || stop.postcode) : where) || "").trim();
+
+  var lat = stop ? Number(stop.lat) : NaN;
+  var lng = stop ? Number(stop.lng) : NaN;
+  var pinned = stop && stop.lat !== "" && stop.lat !== null && stop.lat !== undefined &&
+               stop.lng !== "" && stop.lng !== null && stop.lng !== undefined &&
+               isFinite(lat) && isFinite(lng);
+
+  if(pinned){
+    var at = lat.toFixed(6)+","+lng.toFixed(6);
+    /* The words go in as the label so the driver arrives at a named place
+       rather than at a bare pair of numbers he cannot check against anything. */
+    var label = words ? "("+words+")" : "";
+    return /Android/i.test(navigator.userAgent||"")
+      ? "geo:"+at+"?q="+encodeURIComponent(at+label)
+      : "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(at);
+  }
+
+  var q = encodeURIComponent(words);
   if(!q) return "";
   return /Android/i.test(navigator.userAgent||"")
     ? "geo:0,0?q="+q
     : "https://www.google.com/maps/search/?api=1&query="+q;
+}
+
+/* ---- the time on a stop row -------------------------------------------
+
+   WHILE A RUN IS OUT, THE ESTIMATE LEADS and the timetable goes small behind
+   it. The rest of the week it is the timetable alone, because there is
+   nothing to estimate and a lone number on a quiet Tuesday should be the one
+   on the tab.
+
+   Which way round they sit is the whole of this. The timetable is what the
+   morning was PLANNED to be and the estimate is what it is actually doing,
+   and once the bus is out the second is the one a driver is deciding off. Put
+   the planned time first and he reads it first, every time, however small the
+   other one is — and on a morning where four stops are empty those two
+   numbers are minutes apart.
+
+   A stop already marked keeps its timetable time and nothing else. There is
+   no estimate for a kerb the bus has left, and drawing one would be the
+   screen arguing with a tick the driver put there himself.
+
+   The estimate comes off the board, worked out on the live server, so it is
+   the same arithmetic that words the passenger's alert. If it is missing —
+   an older server, a failed part of the payload, a run not yet projectable —
+   this falls back to the timetable and says nothing about why. A driver does
+   not need to be told which half of a payload was fenced off. */
+function stopTimeHtml(s, done){
+  var plan = esc(s.time);
+  if(done || s.arrival || s.depart) return '<span class="stop-time">'+plan+'</span>';
+  var at = rotaStopEtas ? rotaStopEtas[s.id] : null;
+  if(!at) return '<span class="stop-time">'+plan+'</span>';
+  var eta = tripClock(Number(at));
+  if(eta === s.time) return '<span class="stop-time">'+plan+'</span>';
+  return '<span class="stop-time stop-time-eta">'+esc(eta)+
+         '<small class="stop-time-plan">'+plan+'</small></span>';
 }
 
 /* ---- fetching the route's own state ------------------------------------ */
@@ -4761,8 +5409,13 @@ function tripStart(route, reg, anyway){
     return;
   }
 
-  if(chk.state!=="ok" && !anyway){ tripUncheckedAsked=reg; tripPaint(); return; }
-  tripUnchecked = chk.state==="ok" ? 0 : (chk.state==="unasked" ? 2 : 1);
+  /* An authorised bus WAS checked. The walkaround happened, it stopped the
+     bus, and a coordinator signed it out; asking the driver to do a check
+     first, or filing his run as Unchecked, would put the one bus with the
+     most careful record of the morning down as having none. */
+  var checkedOk = checkCounts(chk.state);
+  if(!checkedOk && !anyway){ tripUncheckedAsked=reg; tripPaint(); return; }
+  tripUnchecked = checkedOk ? 0 : (chk.state==="unasked" ? 2 : 1);
   trip.id = "t"+Math.random().toString(36).slice(2,10)+Date.now().toString(36);
   trip.route = route;
   trip.reg = reg;
@@ -5013,6 +5666,11 @@ function rotaCountsRetry(){
 
    Same fault, same shape, as the one on the passenger page that made
    switching to South show nothing at all. */
+/* Per stop, in milliseconds, as the live server worked it out. Empty when no
+   run is out, when the server is an older one, or when that part of the board
+   answer was fenced off by a failure. Empty is a fact the list can draw. */
+var rotaStopEtas={};
+
 var rotaCountsAgain=null;
 /* Also learned here, because a driver can spend a whole morning on the stops
    screen without the rota ever being fetched. */
@@ -5022,6 +5680,11 @@ function rotaCountsFetch(route,cb){
   if(!LIVE || !navigator.onLine){ if(cb) cb(false); return; }
   if(rotaCountsBusy){ rotaCountsAgain={route:route, cb:cb}; return; }
   rotaCountsBusy=true;
+  /* Dated from when it was ASKED for. An answer can only know about what the
+     server held at or after this moment, and dating it by when it arrived
+     would let an answer worked out before this phone's own check reached the
+     server look as if it had seen it. */
+  var boardAskedAt = Date.now();
   callFetch(LIVE_ENDPOINT+"?board=1&route="+encodeURIComponent(route),
             {method:"GET",redirect:"follow"}, POLL_TIMEOUT)
     .then(function(r){return r.text();})
@@ -5039,6 +5702,12 @@ function rotaCountsFetch(route,cb){
          and leave the rest as it was, rather than blanking good numbers
          because a different part failed. */
       if(out.counts){ rotaStopCounts = out.counts; rotaStopCountsFor = out.date||""; }
+      /* Replaced whole or cleared whole, never merged. A stale estimate for
+         one stop mixed in with fresh ones for the rest is the worst of both:
+         it looks current and it is not, and there is no way to see which is
+         which on the row. An older live server sends nothing here and the
+         list quietly goes back to timetable times. */
+      rotaStopEtas = (out.etas && typeof out.etas === "object") ? out.etas : {};
       rotaCountsAt     = Date.now();
 
       /* Who has checked what today, keyed by reg. The answer to "has anyone
@@ -5046,6 +5715,7 @@ function rotaCountsFetch(route,cb){
       if(out.checks){
         tripChecks    = out.checks;
         tripChecksDay = new Date().toDateString();
+        tripChecksAt  = boardAskedAt;
         tripChecksSave();
       }
       /* Which bus every other route already has out. North starts first, so
@@ -5146,9 +5816,47 @@ function tripMerge(route, tp){
   var sameRun = !!trip.id && (!srvId || srvId===trip.id);
 
   if(!sameRun || !today){
-    /* A different run, or none of ours worth keeping. Take theirs entire:
-       this is how a phone adopts a run after a reinstall, and how last
-       Sunday's leftovers get cleared. */
+    /* IS THIS RUN OURS TO TAKE?
+
+       THIS IS THE 20 SEPTEMBER FAULT. A phone with no run of its own used to
+       take whatever the board reported, entire, and once it held the run
+       every test that asked "is this yours" answered yes — including the one
+       in front of End trip. So the other driver's phone ended the run, and
+       nothing about that phone was misbehaving: it had been told the run was
+       its own by this function.
+
+       Adoption itself is not the bug and must stay. It is how a phone that
+       has been reinstalled, cleared or swapped mid-morning picks its own run
+       back up, and a driver whose phone has forgotten his morning is worse
+       off than one who never had it. What has to change is WHOSE run it will
+       take: his own, and nobody else's.
+
+       An unnamed run is not adopted either. A run the board cannot put a name
+       to cannot be shown to be ours, and "probably mine" is exactly the
+       reasoning that ended somebody else's morning. It is still drawn on the
+       screen from tripSeen, because watching a route was never the problem.
+
+       The server refuses a cross-driver end as well, and that refusal is the
+       one that matters — this page can be a version behind and the record
+       cannot. Both halves exist on purpose. */
+    var theirs = String(tp.driver||"").trim();
+    var me = (st.driver||"").trim();
+    if(srvId && (!theirs || !me || !sameName(me, theirs))){
+      /* Not ours. Never take it. Only let go of what we were holding, and
+         only when it is not today's — a run of our own that is still out
+         stays exactly where it is. */
+      if(trip.id && !today){
+        trip.id=""; trip.route=""; trip.reg=""; trip.started=0; trip.ended=0;
+        trip.served={}; trip.undone={}; trip.lastAt=0; trip.lastStop="";
+        trip.offset=null;
+        tripSaveState();
+      }
+      return;
+    }
+
+    /* A different run of OUR OWN, or none of ours worth keeping. Take it
+       entire: this is how a phone adopts its run after a reinstall, and how
+       last Sunday's leftovers get cleared. */
     trip.route  = route;
     trip.id     = srvId;
     trip.reg    = tp.reg||"";
@@ -6030,7 +6738,7 @@ function rotaPaintStops(){
       else if(nextStop && s.id===nextStop.id) cls+=" trip-next";
     }
     html+='<div class="'+cls+'">'+
-            '<span class="stop-time">'+esc(s.time)+'</span>'+
+            stopTimeHtml(s, done)+
             '<span class="stop-name">'+esc(s.stop)+
               (s.arrival?' <b>(arrive)</b>':'')+
               /* The postcode badge becomes the way into a map, but only on
@@ -6041,9 +6749,11 @@ function rotaPaintStops(){
                  only during his own run, and only for a stop somebody has
                  booked. A stop with nobody waiting is not somewhere he needs
                  directions to. */
+              /* A pin is as good a reason to offer the link as an address,
+                 and better: it is the kerb rather than a building near it. */
               (s.postcode
-                ? ((nextStop && s.id===nextStop.id && s.where)
-                    ? '<a class="stop-go" href="'+esc(mapHref(s.where))+'" '+
+                ? ((nextStop && s.id===nextStop.id && (s.where || mapHref(s)))
+                    ? '<a class="stop-go" href="'+esc(mapHref(s))+'" '+
                       'target="_blank" rel="noopener" '+
                       'aria-label="Open '+esc(s.stop)+' in maps">'+
                       esc(s.postcode)+' \u2197</a>'
@@ -6137,6 +6847,14 @@ function rotaPaintStops(){
     });
   });
   pinGateWire();
+  /* Authorising from the stops screen. Deliberately NOT behind pinGateNeeded:
+     the sheet it opens asks for a PIN itself, and that is the PIN that
+     matters here, the coordinator's rather than the driver's. */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-auth]"),function(b){
+    b.addEventListener("click",function(){
+      authOpen(this.getAttribute("data-auth"), this.getAttribute("data-insp")||"");
+    });
+  });
   Array.prototype.forEach.call(document.querySelectorAll("[data-tripstart]"),function(b){
     b.addEventListener("click",function(){
       if(pinGateNeeded()){ pinGateFocus(); return; }
@@ -6187,6 +6905,10 @@ function rotaPaintStops(){
     tripCoverClaimed=route;
     toast("Covering "+route+". Pick your bus.");
     tripPaint();
+  });
+  if($("tripEndOther")) $("tripEndOther").addEventListener("click",function(){
+    var rt=this.getAttribute("data-endroute")||"";
+    authOpenEnd(rt, tripWhoDrives(rt)||tripOpenBy(rt)||"");
   });
   if($("tripSignIn")) $("tripSignIn").addEventListener("click",toSignIn);
   if($("stopNotMe")) $("stopNotMe").addEventListener("click",toSignIn);
@@ -6385,6 +7107,27 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
        '<button class="btn btn-main" id="tripSignIn">Sign in</button>';
   }
 
+  /* CLOSING SOMEBODY ELSE'S RUN.
+
+     A driver ends his own run and nobody else's — that rule is now enforced
+     on the server as well as here, because on 20 September a run was ended
+     from the wrong phone and the app was the only thing guarding it.
+
+     This is the one deliberate way round it, and it is deliberately not a
+     confirmation dialog in front of the ordinary button. "Are you sure" in
+     front of a destructive act that belongs to another man is a speed bump,
+     and the morning it matters is the morning somebody taps through it. A
+     coordinator, his own PIN, and his name on the row instead.
+
+     Drawn only for a coordinator, only on a route that is out, only when it
+     is not his own run. A driver looking at his colleague's route sees
+     nothing new. */
+  if(!mayTap && !onThis && pinCoordinator() && tripOpenBy(route) &&
+     t.started && !t.ended){
+    h+='<button class="btn btn-ghost btn-wide" id="tripEndOther" '+
+       'data-endroute="'+esc(route)+'">End this run</button>';
+  }
+
   /* COVERING A ROUTE HE IS NOT ON.
 
      The gap this closes: a man turns up to drive because the rostered driver
@@ -6570,6 +7313,24 @@ function tripBusButtonsHtml(){
   stopped.forEach(function(reg){
     h+='<p class="trip-note"><b class="trip-stopme">'+esc(reg)+
        ' was stopped by today\u2019s check.</b> Ring '+esc(coordName())+'.</p>';
+    /* The second way out, offered where the refusal is, to the one person who
+       can take it. A driver never sees this button. */
+    var v=checkVerdict(reg);
+    if(mayAuthorise(v.driver||""))
+      h+='<button class="btn btn-ghost btn-wide trip-auth" data-auth="'+esc(reg)+
+         '" data-insp="'+esc(v.driver||"")+'" type="button">Authorise '+esc(reg)+
+         ' to run</button>';
+  });
+
+  /* Said once, where the bus is chosen, so nobody wonders why a bus that was
+     stopped an hour ago has a button again. */
+  mine.concat(theirs).forEach(function(v){
+    var reg = v && v.reg ? v.reg : v;
+    var av = checkVerdict(reg);
+    if(av.state!=="authorised") return;
+    h+='<p class="trip-note">'+esc(reg)+' is authorised to run'+
+       ((OVR.showWhoAuthorised && av.by) ? ' by '+esc(av.by) : '')+
+       '. The defect stays open.</p>';
   });
 
   if(!shown) return h+'<p class="trip-note"><b>No bus can be started.</b> Ring '+
@@ -7014,8 +7775,18 @@ $("pinModal").addEventListener("click",function(e){ if(e.target===this) pinModal
 document.addEventListener("keydown",function(e){
   if(e.key!=="Escape" && e.keyCode!==27) return;
   if(pinModalUp()) pinModalClose();
+  else if($("authModal").classList.contains("is-on")) authClose();
   else if(alertAskUp()) alertAskClose();
   else if($("howModal").classList.contains("is-on")) howClose();
+});
+
+/* Authorising. Not now, the backdrop and Escape all close it and change
+   nothing; only the PIN going through does anything. */
+$("authNot").addEventListener("click", authClose);
+$("authModal").addEventListener("click",function(e){ if(e.target===this) authClose(); });
+$("authGo").addEventListener("click", authSend);
+$("authPin").addEventListener("keydown",function(e){
+  if(e.key==="Enter" || e.keyCode===13){ e.preventDefault(); authSend(); }
 });
 
 /* Not now, the backdrop and Escape all mean the same thing here, and so does
