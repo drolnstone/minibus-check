@@ -1,1 +1,379 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<!-- BUILD v1.73.0 · this page has no version stamp of its own on screen and
+     wants none: it is opened once, from an email, and closed. The four page
+     stamps that matter are the driver app's and the passenger page's. -->
+<title>Minibus · a decision</title>
+<link rel="icon" href="../icon-driver-180.png" type="image/png" sizes="180x180">
 
+<!--
+  THE PAGE AN EMAIL LINKS TO.
+
+  Deliberately small, deliberately plain, and deliberately NOT part of either
+  app. It is opened once, from a message, on whatever device is to hand — a
+  laptop at work, a phone in a car park — and then closed. It has:
+
+    no service worker      nothing here should ever be served from a cache;
+                           a stale copy of this page is a stale decision
+    no manifest            nobody installs this
+    no config.js           one request, and the endpoint is inlined the same
+                           way both service workers already inline it
+    no external anything    no fonts, no scripts, no analytics
+
+  IT DOES NOT ACT WHEN IT LOADS. Looking costs nothing and burns nothing. A
+  mail scanner, a link preview or a corporate gateway may fetch this as often
+  as it likes and the decision stays unmade. Only the PIN acts. That is the
+  whole reason this is a page and not a one-click link.
+-->
+
+<style>
+:root{
+  --paper:#F4F5F6; --card:#FFFFFF; --ink:#1B222C; --muted:#5B6672;
+  --line:#DCE0E5;
+  --go:#186A3B; --go-bg:#E9F5EE; --go-line:#BEE0CC;
+  --stop:#A8231B; --stop-bg:#FBE9E7; --stop-line:#F3C8C3;
+  --warn:#8A5A00; --warn-bg:#FDF3E2; --warn-line:#EFD9AE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#151A20; --card:#1D242C; --ink:#E8ECF1; --muted:#9BA6B2;
+    --line:#2C353F;
+    --go:#6CC48E; --go-bg:#14261C; --go-line:#24422F;
+    --stop:#D85F55; --stop-bg:#2E1715; --stop-line:#4A2320;
+    --warn:#D9A441; --warn-bg:#2A2013; --warn-line:#463620;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#151A20; --card:#1D242C; --ink:#E8ECF1; --muted:#9BA6B2;
+  --line:#2C353F;
+  --go:#6CC48E; --go-bg:#14261C; --go-line:#24422F;
+  --stop:#D85F55; --stop-bg:#2E1715; --stop-line:#4A2320;
+  --warn:#D9A441; --warn-bg:#2A2013; --warn-line:#463620;
+}
+*{box-sizing:border-box;touch-action:manipulation}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:16px; line-height:1.5;
+  padding:24px 16px 48px;
+}
+.wrap{max-width:460px;margin:0 auto}
+.eyebrow{margin:0 0 2px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+         color:var(--muted)}
+h1{margin:0 0 18px;font-size:24px;line-height:1.2;font-weight:700}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+      padding:16px;margin:0 0 16px}
+.card.go{background:var(--go-bg);border-color:var(--go-line)}
+.card.stop{background:var(--stop-bg);border-color:var(--stop-line)}
+.card.warn{background:var(--warn-bg);border-color:var(--warn-line)}
+.card h2{margin:0 0 6px;font-size:18px;line-height:1.25}
+.card p{margin:0 0 8px}
+.card p:last-child{margin-bottom:0}
+.tiny{font-size:13px;color:var(--muted)}
+.rows{margin:12px 0 0;padding:0;list-style:none;font-size:15px}
+.rows li{display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--line)}
+.rows li:first-child{border-top:0}
+.rows b{flex:0 0 116px;font-weight:600;color:var(--muted)}
+label{display:block;font-size:13px;color:var(--muted);margin:0 0 6px}
+input[type=password]{
+  width:100%;padding:12px 14px;font-size:22px;letter-spacing:.35em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  background:var(--card);color:var(--ink);
+  border:1px solid var(--line);border-radius:10px
+}
+input[type=password]:focus{outline:2px solid var(--go);outline-offset:1px}
+.btns{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+button{
+  width:100%;padding:13px 16px;font:inherit;font-weight:600;
+  border-radius:10px;border:1px solid var(--line);
+  background:var(--card);color:var(--ink);cursor:pointer
+}
+button.go{background:var(--go);border-color:var(--go);color:#fff}
+button.stop{background:var(--stop);border-color:var(--stop);color:#fff}
+button[disabled]{opacity:.5;cursor:default}
+.say{margin:12px 0 0;font-size:14px;min-height:1.2em}
+.say.bad{color:var(--stop)}
+footer{margin-top:22px;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">RCCG Dominion Assembly Liverpool</p>
+  <h1 id="head">Checking the link…</h1>
+  <div id="body">
+    <div class="card"><p class="tiny">One moment.</p></div>
+  </div>
+  <footer id="foot"></footer>
+</div>
+
+<script>
+/* The live server, inlined. Both service workers already do exactly this, for
+   the same reason: a file that must work on its own cannot fetch its settings
+   from another file first. If the Worker is ever moved, this is the third
+   place to change. */
+var LIVE_API = "https://minibus-api.asimbassey.workers.dev";
+
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){
+  return String(s == null ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;");
+}
+
+/* The token, and only the token. Anything else in the query string is
+   ignored: a mail gateway that appends its own tracking parameters must not
+   be able to change what this page is about. */
+function tokenFromUrl(){
+  var m = /[?&]t=([0-9a-f]{32})\b/.exec(location.search || "");
+  return m ? m[1] : "";
+}
+
+var TOKEN = tokenFromUrl();
+var WHAT = null;
+var BUSY = false;
+
+function post(action, extra){
+  var body = { action: action, token: TOKEN };
+  for (var k in extra) if (Object.prototype.hasOwnProperty.call(extra, k)) body[k] = extra[k];
+  return fetch(LIVE_API, {
+    method: "POST", redirect: "follow",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(body)
+  }).then(function(r){ return r.text(); }).then(function(t){ return JSON.parse(t); });
+}
+
+function show(head, html, foot){
+  $("head").textContent = head;
+  $("body").innerHTML = html;
+  $("foot").textContent = foot || "";
+}
+
+function dead(head, words){
+  show(head, '<div class="card warn"><p>' + esc(words) + '</p>' +
+             '<p class="tiny">Open the spreadsheet to deal with it there.</p></div>');
+}
+
+/* ---- what this link is about --------------------------------------------
+   Asked on load. This does NOT use the link up: see the note at the top of
+   the file about what opens a link before a person does. */
+function start(){
+  if (!TOKEN) {
+    dead("That link is not complete",
+         "The address is missing the part that says which decision it is about. " +
+         "Links sometimes get cut in half by an email client.");
+    return;
+  }
+  post("linkwhat", {}).then(function(out){
+    if (!out || !out.ok) {
+      dead("That link is no longer good",
+           "It may have been used already, or it may be from a message older than this server remembers.");
+      return;
+    }
+    WHAT = out;
+    if (out.used) {
+      show("Already decided",
+        '<div class="card"><p><b>' + esc(out.usedBy || "Somebody") + '</b> already ' +
+        (out.kind === "authorise" ? "authorised this bus" : "answered this request") +
+        (out.choice && out.kind === "rota" ? " — " + esc(out.choice.toLowerCase()) : "") +
+        '.</p><p class="tiny">A link is good for one decision only.</p></div>');
+      return;
+    }
+    if (out.expired) {
+      dead("That link has expired",
+           "Links last about an hour, so that a message sitting in a mailbox for months is not " +
+           "still a way into the record.");
+      return;
+    }
+    if (out.kind === "authorise") return paintBus(out);
+    if (out.kind === "rota") return paintRota(out);
+    dead("That link is not one this page knows about", "Nothing has been changed.");
+  }).catch(function(){
+    dead("Could not reach the live server",
+         "Nothing has been changed. Try again in a moment.");
+  });
+}
+
+/* ---- a stopped bus ------------------------------------------------------ */
+function paintBus(out){
+  var s = out.subject || {};
+
+  /* Dealt with since the email went. Say so rather than offering a decision
+     somebody has already made, and do not offer the button. */
+  if (out.state === "authorised") {
+    show("Already authorised",
+      '<div class="card go"><p><b>' + esc(s.reg || "The bus") + '</b> is authorised to run' +
+      (out.stateBy ? ' by <b>' + esc(out.stateBy) + '</b>' : '') + '.</p>' +
+      '<p class="tiny">The defect stays open on the Defects tab.</p></div>');
+    return;
+  }
+  if (out.stale) {
+    dead("There has been another walkaround since",
+         "This message is about an earlier check on " + (s.reg || "that bus") +
+         ". Whatever the bus is doing now, it is not what this link was about.");
+    return;
+  }
+  if (out.state && out.state !== "stopped") {
+    dead("That bus is not stopped",
+         "Nothing here needs authorising. It may have been dealt with from the app or from the " +
+         "Outcome column on the Checks tab.");
+    return;
+  }
+
+  var rows = '';
+  if (s.reg) rows += '<li><b>Bus</b><span>' + esc(s.reg) + '</span></li>';
+  if (s.inspector) rows += '<li><b>Checked by</b><span>' + esc(s.inspector) + '</span></li>';
+  if (s.when) rows += '<li><b>When</b><span>' + esc(s.when) + '</span></li>';
+  if (s.defects) rows += '<li><b>Stopped by</b><span>' + esc(s.defects) + '</span></li>';
+
+  show("Authorise this bus to run?",
+    '<div class="card stop">' +
+      '<h2>' + esc(s.reg || "The bus") + ' does not run</h2>' +
+      '<p>A critical item was marked as a defect on this morning’s walkaround.</p>' +
+      (rows ? '<ul class="rows">' + rows + '</ul>' : '') +
+    '</div>' +
+    '<div class="card">' +
+      '<p><b>Authorising does not close the defect.</b> It stays open on the Defects tab, ' +
+      'with your name against the decision to run.</p>' +
+      '<label for="pin">Your PIN</label>' +
+      '<input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" ' +
+             'pattern="[0-9]*" placeholder="••••">' +
+      '<div class="btns">' +
+        '<button class="stop" id="go" type="button">Authorise to run</button>' +
+      '</div>' +
+      '<p class="say" id="say"></p>' +
+    '</div>',
+    "This link is good for one decision and about " + (out.minutesLeft || 0) + " more minutes.");
+
+  wire("run");
+}
+
+/* ---- a driver's rota request -------------------------------------------- */
+function paintRota(out){
+  var s = out.subject || {};
+  var rows = '';
+  if (s.driver) rows += '<li><b>Driver</b><span>' + esc(s.driver) + '</span></li>';
+  if (s.type) rows += '<li><b>Asking for</b><span>' + esc(s.type) + '</span></li>';
+  if (s.sundayWords || s.sunday) rows += '<li><b>Sunday</b><span>' + esc(s.sundayWords || s.sunday) + '</span></li>';
+  if (s.swapWith) rows += '<li><b>Swap with</b><span>' + esc(s.swapWith) + '</span></li>';
+  if (s.theirSundayWords || s.theirSunday) rows += '<li><b>Their Sunday</b><span>' + esc(s.theirSundayWords || s.theirSunday) + '</span></li>';
+  if (s.bothAgreed) rows += '<li><b>Both agreed</b><span>' + esc(s.bothAgreed) + '</span></li>';
+  if (s.reason) rows += '<li><b>Reason</b><span>' + esc(s.reason) + '</span></li>';
+
+  show("A driver has asked for a change",
+    '<div class="card">' +
+      '<h2>' + esc(s.driver || "A driver") + '</h2>' +
+      (rows ? '<ul class="rows">' + rows + '</ul>' : '') +
+    '</div>' +
+    '<div class="card">' +
+      '<p class="tiny">Approving writes it into the Rota. A swap moves both Sundays.</p>' +
+      '<label for="pin">Your PIN</label>' +
+      '<input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" ' +
+             'pattern="[0-9]*" placeholder="••••">' +
+      '<div class="btns">' +
+        '<button class="go" id="go" type="button">Approve</button>' +
+        '<button id="no" type="button">Turn it down</button>' +
+      '</div>' +
+      '<p class="say" id="say"></p>' +
+    '</div>',
+    "This link is good for one decision and about " + (out.minutesLeft || 0) + " more minutes.");
+
+  wire("Approved", "Rejected");
+}
+
+/* ---- the one thing that acts -------------------------------------------- */
+function wire(yes, no){
+  var pin = $("pin");
+  if (pin) setTimeout(function(){ try{ pin.focus(); }catch(e){} }, 120);
+  if ($("go")) $("go").addEventListener("click", function(){ send(yes); });
+  if ($("no") && no) $("no").addEventListener("click", function(){ send(no); });
+  if (pin) pin.addEventListener("keydown", function(e){
+    if (e.key === "Enter" || e.keyCode === 13) { e.preventDefault(); send(yes); }
+  });
+}
+
+function say(words, bad){
+  var el = $("say");
+  if (!el) return;
+  el.textContent = words || "";
+  el.className = bad ? "say bad" : "say";
+}
+
+function send(choice){
+  if (BUSY) return;
+  var pin = String(($("pin") && $("pin").value) || "").trim();
+  if (pin.length < 4) { say("Key your PIN.", true); return; }
+
+  BUSY = true;
+  if ($("go")) $("go").disabled = true;
+  if ($("no")) $("no").disabled = true;
+  say("Checking…");
+
+  post("linkdo", { pin: pin, choice: choice }).then(function(out){
+    if (out && out.ok) return done(out, choice);
+    BUSY = false;
+    if ($("go")) $("go").disabled = false;
+    if ($("no")) $("no").disabled = false;
+
+    if (out && out.locked) { say("Too many tries. Wait " + (out.minutes || 5) + " minutes.", true); return; }
+    if (out && out.error === "bad pin") {
+      say(out.left > 0
+        ? "That PIN is not right. " + out.left + " tr" + (out.left === 1 ? "y" : "ies") + " left."
+        : "That PIN is not right.", true);
+      return;
+    }
+    if (out && out.error === "no pin") {
+      say("There is no PIN against your name in the spreadsheet.", true); return;
+    }
+    if (out && out.error === "not authorised") {
+      say("Only a coordinator can make this decision.", true); return;
+    }
+    if (out && out.error === "expired") { say("This link has expired. Use the spreadsheet.", true); return; }
+    if (out && out.error === "used") { say("Somebody has already decided this one.", true); return; }
+    if (out && out.error === "no check") {
+      say("That bus is not stopped any more. Nothing has been changed.", true); return;
+    }
+    if (out && out.error === "same hand") {
+      say("The person who did the walkaround cannot authorise it. Another coordinator has to.", true);
+      return;
+    }
+    say("The live server would not do that. Nothing has been changed.", true);
+  }).catch(function(){
+    BUSY = false;
+    if ($("go")) $("go").disabled = false;
+    if ($("no")) $("no").disabled = false;
+    say("Could not reach the live server. Nothing has been changed.", true);
+  });
+}
+
+function done(out, choice){
+  if (out.kind === "authorise") {
+    show("Authorised to run",
+      '<div class="card go">' +
+        '<p><b>' + esc(out.reg || "The bus") + '</b> may run, authorised by <b>' +
+        esc(out.by || "you") + '</b>.</p>' +
+        '<p class="tiny">The drivers’ phones will show it within a few seconds. ' +
+        'The defect stays open on the Defects tab.</p>' +
+      '</div>',
+      "You can close this page.");
+    return;
+  }
+  var ok = (choice === "Approved");
+  show(ok ? "Approved" : "Turned down",
+    '<div class="card ' + (ok ? 'go' : '') + '">' +
+      '<p>Recorded by <b>' + esc(out.by || "you") + '</b>.</p>' +
+      '<p class="tiny">It reaches the Rota Requests tab within five minutes, and ' +
+      (ok ? 'the Rota is written from there — a swap moves both Sundays.'
+          : 'the driver stays where he is.') + '</p>' +
+    '</div>',
+    "You can close this page.");
+}
+
+start();
+</script>
+</body>
+</html>
