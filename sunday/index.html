@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.74.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.74.1 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -735,7 +735,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.74.0";
+var PAGE_VERSION = "v1.74.1";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -2062,8 +2062,18 @@ function paintLive(){
 
        Same test as liveStop's, deliberately, so the two can never drift. */
     /* The stamp moved to the date line in v1.72.0. It is one fact about the
-       whole page, and sitting here it read as a fact about the bus. */
-    '');
+       whole page, and sitting here it read as a fact about the bus.
+
+       WHEN IT MOVED, ITS CLOSING BRACKET STAYED. What was left read
+
+           '</div>' + '');
+
+       on the end of an ASSIGNMENT, so the bracket closed nothing. One stray
+       character, and the whole of this file's script failed to parse: the
+       page rendered its static header, "Loading the stops...", the theme
+       chips, and then nothing, for ever. It shipped in v1.72.0 and every
+       release after it. */
+    '';
   paintStamp();
 
   Array.prototype.forEach.call(box.querySelectorAll("[data-liveroute]"),function(b){
