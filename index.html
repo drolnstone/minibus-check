@@ -1481,7 +1481,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.74.1";
+var APP_VERSION = "v1.74.2";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -3164,12 +3164,53 @@ function geoRecord(){
    Empty until the rota payload arrives, so it never delays the check. */
 var OPEN_DEFECTS = {};
 
+function groupOpenDefects(raw){
+  /* ONE ROW PER ITEM, AND THIS IS NOT TIDINESS.
+
+     Every walkaround that finds the same fault writes another row, so a key
+     remote nobody has fixed appears once per inspection. Six rows are shown
+     and the rest become "and 9 more" — which means duplicates of one fault
+     were PUSHING OTHER FAULTS OUT OF SIGHT. A driver reading the box before
+     he sets off was seeing the same thing twice and something else not at
+     all.
+
+     THE WEIGHT NEVER COMES DOWN. If any report of an item is critical the
+     row is critical, and a defect outranks an advisory, whatever the newest
+     row happens to say. A critical from a fortnight ago must not be hidden
+     behind an advisory raised this morning on the same item.
+
+     THE WORDS COME FROM THE NEWEST. That is the description of the fault as
+     it stands today, and the count says how long it has been saying it. */
+  var byItem = {}, order = [];
+  (raw || []).forEach(function(d){
+    var key = String(d.item || "").trim().toLowerCase();
+    if(!byItem[key]){
+      byItem[key] = { item: d.item || "", crit:false, kind:"Advisory",
+                      note:"", date:"", n:0 };
+      order.push(key);
+    }
+    var g = byItem[key];
+    g.n++;
+    if(d.crit) g.crit = true;
+    if(d.kind !== "Advisory") g.kind = "Defect";
+    var dt = String(d.date || "");
+    /* >= so that rows with no date at all still yield a note rather than an
+       empty line: the last one seen wins when nothing can be compared. */
+    if(!g.date || dt >= g.date){
+      g.date = dt;
+      g.note = d.note || "";
+      if(d.item) g.item = d.item;
+    }
+  });
+  return order.map(function(k){ return byItem[k]; });
+}
+
 function openDefectsHTML(reg){
   /* Critical first, whichever kind, so a critical advisory sits at the top
      of the list until somebody closes it. Within the same weight a defect
      comes before an advisory. Six shown, so the order decides what a driver
      sees when there are more. */
-  var list = (OPEN_DEFECTS[reg] || []).slice().sort(function(a,b){
+  var list = groupOpenDefects(OPEN_DEFECTS[reg]).sort(function(a,b){
     var ca=a.crit?1:0, cb=b.crit?1:0;
     if(ca!==cb) return cb-ca;
     return (a.kind==="Advisory"?1:0) - (b.kind==="Advisory"?1:0);
@@ -3180,6 +3221,7 @@ function openDefectsHTML(reg){
       return '<li><b>' + esc(d.item) + '</b>' +
              (d.crit ? ' <span class="crit">critical</span>' : '') +
              (d.kind==="Advisory" ? ' <span class="adv">advisory</span>' : '') +
+             (d.n > 1 ? ' <span class="adv">' + d.n + ' reports</span>' : '') +
              (d.note ? '<br>' + esc(d.note) : '') + '</li>';
     }).join("") +
     (list.length > 6 ? '<li>and ' + (list.length-6) + ' more</li>' : '') +
