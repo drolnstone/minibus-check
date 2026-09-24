@@ -240,6 +240,7 @@ function paintBus(out){
       '<p><b>Authorising does not close the defect.</b> It stays open on the Defects tab, ' +
       'with your name against the decision to run.</p>' +
       '<label for="pin">Your PIN</label>' +
+      '<p class="tiny">Any coordinator\u2019s PIN will do \u2014 it does not have to be the one this email was sent to.</p>' +
       '<input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" ' +
              'pattern="[0-9]*" placeholder="••••">' +
       '<div class="btns">' +
@@ -272,6 +273,7 @@ function paintRota(out){
     '<div class="card">' +
       '<p class="tiny">Approving writes it into the Rota. A swap moves both Sundays.</p>' +
       '<label for="pin">Your PIN</label>' +
+      '<p class="tiny">Any coordinator\u2019s PIN will do \u2014 it does not have to be the one this email was sent to.</p>' +
       '<input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" ' +
              'pattern="[0-9]*" placeholder="••••">' +
       '<div class="btns">' +
@@ -321,9 +323,15 @@ function send(choice){
 
     if (out && out.locked) { say("Too many tries. Wait " + (out.minutes || 5) + " minutes.", true); return; }
     if (out && out.error === "bad pin") {
-      say(out.left > 0
-        ? "That PIN is not right. " + out.left + " tr" + (out.left === 1 ? "y" : "ies") + " left."
-        : "That PIN is not right.", true);
+      /* NOT "your PIN is wrong", because it may not be yours that was asked
+         for. This used to check ONE named coordinator's — whoever the email
+         had been addressed to — so a second coordinator keying his own
+         perfectly good PIN was told it was not right, with nothing on screen
+         to say whose it wanted. Any coordinator's is accepted now, and the
+         words say what was actually tested. */
+      say("That PIN did not match any coordinator\u2019s." +
+          (out.left > 0 ? " " + out.left + " tr" + (out.left === 1 ? "y" : "ies") + " left." : ""),
+          true);
       return;
     }
     if (out && out.error === "no pin") {
