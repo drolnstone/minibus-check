@@ -189,6 +189,40 @@ Four things worth knowing about how it counts:
   list means it really asked about every driver. An empty list once meant all
   three, so a D1 outage read as "alerts are on for every driver".
 
+### The words: explain the bus, never the app
+
+The two apps have followed this since they were written, without it ever being
+stated. They explain **the bus** at length — what 1mm of tread looks like, why
+a nut weeping rust matters, that a reversing camera is an aid and not a
+substitute for looking. They never explain **themselves**.
+
+| | |
+|---|---|
+| A confirmation | one word. *"Sent."* *"Booked."* *"Done."* *"Thank you."* |
+| A next step | only when there is an urgent one. *"Sent. Now ring the coordinator."* |
+| A wait | only when there is a wait. *"Sent. Give it a few seconds."* |
+| A consequence | one clause. *"This request is sent in your name."* |
+| An error | one short fact. *"It was not saved."* *"No signal right now."* |
+
+The decision page and the emails drifted off it, because both were written
+later and neither had the apps open beside them. By v1.78.0 they were
+explaining link lifetimes, what approving does to a tab, where a decision
+travels and how long it takes to get there, how a calendar attachment works,
+and how often we send a particular alert. **v1.79.0 took all of it out.**
+
+The test is what the sentence is *about*. "Nobody is covering it yet" is about
+his Sunday and stays. "You will get an email as soon as somebody is" is about
+our plumbing and goes. "Authorising does not close the defect" changes what he
+does next and stays; "it stays open on the Defects tab, with your name against
+the decision to run" is the same fact explained twice more and goes.
+
+Two checks hold it now, in `02-elements.mjs`. One is a list of the twenty
+sentences that were cut, each with the reason, failing if any comes back —
+a regression test and nothing grander, since it catches these and not the next
+ones. The other is the general net: no `class="tiny"` on the decision page may
+run past sixty characters, because small print that runs past a line has
+almost always stopped being a fact and started being a lesson.
+
 ### Why the overbooking email stops at the numbers
 
 It used to end: *"Booked is not boarded. Some will not turn up, and some who
@@ -381,10 +415,16 @@ once after a deploy and can be skipped on an ordinary week.**
     you already decided it.
 
 23. **A rota request, from the email.** Ask for a swap from a driver's phone.
-    The email arrives with two buttons. Approve it, then watch the Rota
-    Requests tab: within five minutes the Status reads **Approved**, the cell
-    carries a note saying it came from the email link and who decided it, and
-    the **Rota has moved** — both Sundays, if it was a swap.
+    The email arrives with two buttons and a drop-down of who could cover it.
+    Approve it, then watch the Rota Requests tab: the Status reads
+    **Approved** before you have finished switching windows, the cell carries
+    a note saying it came from the email link and who decided it, the
+    Replacement cell has the name you picked, and the **Rota has moved** —
+    both Sundays, if it was a swap.
+
+    The page tells you which route it took. *"It is on the Rota Requests tab
+    now"* is the push; *"within five minutes"* is the tick underneath it. Both
+    are correct; only one of them is a lie if it says the wrong one.
 
 #### F. Cover, and a cancelled route
 
@@ -450,9 +490,9 @@ already said, and no more.
 
 | | |
 |---|---|
-| Whose PIN | whoever `COORDINATOR_EMAIL` matches in the Drivers tab's Email column, falling back to the first active driver in an authorising role. Not a new setting on purpose |
+| Whose PIN | **any active driver in an authorising role.** The email is addressed to one person; the link is not. It used to compare against whoever `COORDINATOR_EMAIL` matched, falling back to the first authoriser in the tab — so a coordinator keying his own correct PIN was told it did not match, with nothing on screen to say whose it wanted. One rule, in one place: the app lets any authoriser authorise, so this does too, and the record names whoever actually keyed a PIN |
 | A stopped bus | authorised on the spot; the phones see it in seconds. The same act, writing the same record, as the button in the app |
-| A rota request | recorded, then carried back on the drain. The spreadsheet writes the Status cell and calls its own edit handler, so a swap still moves both Sundays and there is no second implementation of what approving means |
+| A rota request | recorded on the Worker, then **handed straight to the spreadsheet** — see *The way back*, below. The spreadsheet writes the Status cell and calls its own edit handlers, so a swap still moves both Sundays and there is no second implementation of what approving means |
 | If the live server is down | the email still goes, without a link, saying "open the spreadsheet" — which is what every one of these messages said before |
 
 The page has **no service worker, no manifest and no `config.js`**. A decision
@@ -480,17 +520,101 @@ nobody.
 **Why two of these used to reach nobody.** The notice hangs off an installed
 edit trigger on the Rota Requests tab — and *Apps Script's own writes do not
 fire installed edit triggers*. A decision arriving from the email link is
-written by the script, so the rota came out right and nothing was sent. The
-drain now calls both handlers by name, in that order, because the notice names
-the bus and the route and both are read off the Rota row the first handler
+written by the script, so the rota came out right and nothing was sent. Both
+handlers are now called by name, in that order, because the notice names the
+bus and the route and both are read off the Rota row the first handler
 writes.
 
 Separately, the branch returned unless the word was `Approved`, so a refusal
-was silent. And an approval made from the email link **never** names a cover —
-that page has two buttons and no box to type one into, deliberately, because
-choosing a replacement is a decision about the whole rota and belongs in front
-of the rota. So every approval from a phone landed in the one case nothing was
+was silent.
+
+### The way back
+
+Everything else the Worker does is downstream of the spreadsheet: it is told
+the timetable, the buses, the drivers and the rota, and it answers phones. It
+had never called back. **From `w2.12.0` it can, and it does so for exactly one
+thing.**
+
+A rota decision is the one act on the Worker that only *means* something once
+the spreadsheet has it. Approving a cover moves two Sundays, writes the Rota
+and sends two emails — all of it on the other side. So the page said *"within
+five minutes"*, which is not a statement about anybody's rota. It is a
+statement about our plumbing: five minutes is how long the sheet takes to
+**ask**.
+
+```
+  the sync        Code.gs  ->  sheetUrl  ->  Worker    (every five minutes)
+  a decision      Worker   ->  POST      ->  doPost    (the moment a PIN lands)
+  the backstop    Code.gs  ->  drain     ->  Worker    (every five minutes)
+```
+
+The address is **sent on every sync rather than set by hand**, because a web
+app gets a new one every time it is deployed and a stale one would fail
+silently for ever. A `/dev` address — what `getUrl()` answers when the script
+is run from the editor — is refused rather than stored: nothing outside that
+Google account can reach it, which is worse than having no address at all. A
+sync that carries none leaves the one already held alone.
+
+**Two ways in, one writer.** `applyRotaDecision` is the body of the drain's
+per-decision loop, lifted out. The push calls it and the drain calls it, so a
+decision cannot mean one thing at two seconds and another at five minutes.
+
+**Nothing is marked done on a guess.** The Worker marks a decision `synced`
+only when the spreadsheet has said it has it. Every other outcome — `ok:false`,
+a 500, a page of Google's HTML because the script is over quota, a refused
+connection, no answer at all inside eight seconds, no address known — leaves
+the row exactly where the drain will find it. Sixteen of this feature's
+seventeen checks are about those cases, because a shortcut that can lose a
+decision is worse than no shortcut: the five minutes it saves are five minutes
+nobody was counting, and the decision it drops is a driver turning up to a bus
+that is not his.
+
+**A second delivery changes nothing.** The first thing `applyRotaDecision`
+does after finding the row is read the Status cell, and a request already
+decided is left alone — by hand, by an earlier drain, or by a push whose
+answer never came back. That guard is what makes it safe for the Worker to
+push, hear nothing, and let the tick carry the same decision round again.
+
+**And the claim is made under a lock**, because that guard cannot hold by
+itself once there are two ways in. Reading the cell and writing it are two
+calls with a gap in the middle, and a drain fetching inside the second or so
+between `burnLink` and `synced=1` gets the same decision: both read `Pending`,
+both write, both drivers are told twice. So the read and the two writes are
+one indivisible act — and *only* those. The Rota and the emails happen after
+the lock is released, by whichever call claimed the row; holding it across the
+mail would block `handleCheck`, which waits on the same script-wide lock for a
+driver standing at a bus. A call that cannot get the lock returns `false`,
+which leaves the decision queued and makes the page read *"within five
+minutes"*. **The shortcut may always decline; the backstop may not.**
+
+**The page says which one happened.** `applied: true` and it reads *"It is on
+the Rota Requests tab now"*; anything else and it reads *"within five
+minutes"*. Unheard is not applied. Telling somebody it is done over a rota
+that has not moved is how you get a phone call at nine on a Sunday morning.
+
+**Only this.** A bus authorised from an email is not pushed: the phones read
+it off the Worker within seconds and the Defects tab is a record, not
+something anybody is standing over.
+
+### Choosing the cover on the phone
+
+An approval from the email link used to **never** name a cover — that page had
+two buttons and no box to type one into, deliberately, because choosing a
+replacement is a decision about the whole rota and belongs in front of the
+rota. So every approval from a phone landed in the one case nothing was
 written for.
+
+That reasoning was half right. The decision belongs in front of *the rota*,
+not in front of *a spreadsheet* — and the page can show the rota. It now
+carries a drop-down of every active driver, each marked with whether he is
+already driving that Sunday and when he last drove, so the choice is made
+with the same two facts you would have looked up yourself.
+
+The name is checked against the register on the way through. A page can send
+anything; only somebody the Drivers tab knows as active may be written into a
+Sunday, and a name that does not match is dropped rather than refused — the
+decision itself is still good, and lands as *approved, cover to be arranged*,
+which is exactly what it was before the page could offer one at all.
 
 **Two things it will not say.** It never tells the other driver in a *refused*
 swap — he was never told it had been proposed, so the note would be the first

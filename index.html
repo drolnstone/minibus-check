@@ -552,6 +552,11 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 /* The route's bus for today. Steel rather than a warning colour: it is not a
    caution, it is the answer to the question the screen is asking. */
 .chip.yours{background:var(--info-bg);color:var(--info-deep);border-color:var(--info-line)}
+/* The personal one, in the same green as the Yours this Sunday badge on
+   Stops and bookings, so one man reads one colour for one fact across both
+   screens. Deliberately NOT the same blue as the route chip beside it: those
+   two say different kinds of thing and must not look like one sentence. */
+.chip.mine{background:var(--pass-bg);color:var(--pass);border-color:var(--pass-line)}
 .chip{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11px;
   letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:4px;margin-top:5px}
 .chip.soon{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
@@ -1481,7 +1486,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.74.2";
+var APP_VERSION = "v1.74.8";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -1593,6 +1598,47 @@ function busTagFor(reg){
   var on = busRoutesFor(reg);
   if(!on.length) return "";
   return on.join(" and ") + (sundayIsToday() ? " today" : " this Sunday");
+}
+
+/* IS THIS THE BUS HE IS DOWN TO DRIVE THIS SUNDAY.
+
+   The chip above is a fact about the BUS and reads the same on every phone.
+   This is the other kind of fact, the one that is only true for the man
+   holding it, and the two sit side by side rather than one replacing the
+   other: the route still has to be on the card for the driver of the other
+   bus, the coordinator doing a Wednesday check, and anybody covering.
+
+   rotaMyRoute, NOT rotaHomeRoute, and that distinction has already cost this
+   project once. Home route is "which route is this man's", which is right for
+   choosing a tab and wrong for a badge: it would tell every driver in North's
+   pattern that the bus was his, so on a Sunday when one of them is actually
+   driving, five men who are not would each be told it was theirs. A badge
+   that says Yours to the wrong man is worse than no badge, because the right
+   one then has no reason to believe it. */
+function busIsMyDuty(reg){
+  var on = rotaMyRoute();
+  return !!on && busRoutesFor(reg).indexOf(on) >= 0;
+}
+
+/* ONE CHIP ON A CARD, NEVER TWO.
+
+   It was two for an evening: the route, and Yours beside it. Both were true
+   and together they were clumsy — two badges saying one thing in different
+   words, and the eye has to read both to learn what one would have said.
+
+   YOURS WINS ON HIS OWN BUS, because it is the more useful of the two facts
+   to the man about to pick one. He is choosing a vehicle; "this is the one"
+   answers that better than the name of a route he already knows he is on.
+
+   NOTHING IS LOST FOR ANYBODY ELSE, which is the whole reason this is safe.
+   The swap happens only on the ONE card belonging to the ONE man reading it.
+   The other bus still carries its route, and a coordinator doing a Wednesday
+   check, a driver who is not on this Sunday, and anybody covering somebody
+   else all see both routes exactly as before. */
+function busChipFor(reg){
+  if(busIsMyDuty(reg)) return '<span class="chip mine">'+esc(yoursWhen())+'</span>';
+  var tag = busTagFor(reg);
+  return tag ? '<span class="chip yours">'+esc(tag)+'</span>' : "";
 }
 
 /* Is this the bus he was given? Unknown counts as yes: nothing to warn about
@@ -3020,8 +3066,7 @@ function renderVehicles(){
        route, and which Sunday. Not "yours" — he may be covering, and the rota
        gives a bus to a ROUTE, never to a man. Which is why it now comes off
        the record and sits on both buses rather than only on his. */
-    var tag = busTagFor(v.reg);
-    var yours = tag ? '<span class="chip yours">'+esc(tag)+'</span>' : "";
+    var yours = busChipFor(v.reg);
     b.innerHTML='<span class="veh-plate">'+esc(v.reg)+'</span>'+
       '<span class="veh-txt"><b>'+esc(v.name)+'</b><span>'+esc(v.detail||"")+'</span>'+
       yours+chip+'</span>';
