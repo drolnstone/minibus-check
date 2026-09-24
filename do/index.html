@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<!-- BUILD v1.73.0 · this page has no version stamp of its own on screen and
+<!-- BUILD v1.74.8 · this page has no version stamp of its own on screen and
      wants none: it is opened once, from an email, and closed. The four page
      stamps that matter are the driver app's and the passenger page's. -->
 <title>Minibus · a decision</title>
@@ -81,12 +81,29 @@ h1{margin:0 0 18px;font-size:24px;line-height:1.2;font-weight:700}
 .rows b{flex:0 0 116px;font-weight:600;color:var(--muted)}
 label{display:block;font-size:13px;color:var(--muted);margin:0 0 6px}
 input[type=password]{
+  /* Centred, like every other PIN box in this project. Four dots hard against
+     the left edge of a full width field read as the start of something longer;
+     centred they read as the whole of a short thing, which is what they are.
+     The right padding matches the left even though the letter-spacing pushes
+     a trailing gap after the last dot, so the group sits true rather than a
+     third of a character off. */
   width:100%;padding:12px 14px;font-size:22px;letter-spacing:.35em;
+  text-align:center;padding-left:calc(14px + .35em);
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
   background:var(--card);color:var(--ink);
   border:1px solid var(--line);border-radius:10px
 }
 input[type=password]:focus{outline:2px solid var(--go);outline-offset:1px}
+/* The one place on this page where something is CHOSEN rather than typed.
+   Full width and the same box as the PIN, so the two read as one form; left
+   aligned because a name is read from its start, unlike four dots. */
+select{
+  width:100%;padding:12px 14px;font:inherit;
+  background:var(--card);color:var(--ink);
+  border:1px solid var(--line);border-radius:10px;
+  margin-bottom:14px
+}
+select:focus{outline:2px solid var(--go);outline-offset:1px}
 .btns{display:flex;flex-direction:column;gap:10px;margin-top:14px}
 button{
   width:100%;padding:13px 16px;font:inherit;font-weight:600;
@@ -153,8 +170,12 @@ function show(head, html, foot){
   $("foot").textContent = foot || "";
 }
 
+/* The heading is usually the whole message. Anything beyond it is optional
+   and often is not needed: "That link has expired" does not want a paragraph
+   underneath explaining how long links last. */
 function dead(head, words){
-  show(head, '<div class="card warn"><p>' + esc(words) + '</p>' +
+  show(head, '<div class="card warn">' +
+             (words ? '<p>' + esc(words) + '</p>' : '') +
              '<p class="tiny">Open the spreadsheet to deal with it there.</p></div>');
 }
 
@@ -163,15 +184,12 @@ function dead(head, words){
    the file about what opens a link before a person does. */
 function start(){
   if (!TOKEN) {
-    dead("That link is not complete",
-         "The address is missing the part that says which decision it is about. " +
-         "Links sometimes get cut in half by an email client.");
+    dead("That link is not complete", "The address has been cut short.");
     return;
   }
   post("linkwhat", {}).then(function(out){
     if (!out || !out.ok) {
-      dead("That link is no longer good",
-           "It may have been used already, or it may be from a message older than this server remembers.");
+      dead("That link is no longer good", "It has been used, or it is too old.");
       return;
     }
     WHAT = out;
@@ -180,21 +198,18 @@ function start(){
         '<div class="card"><p><b>' + esc(out.usedBy || "Somebody") + '</b> already ' +
         (out.kind === "authorise" ? "authorised this bus" : "answered this request") +
         (out.choice && out.kind === "rota" ? " — " + esc(out.choice.toLowerCase()) : "") +
-        '.</p><p class="tiny">A link is good for one decision only.</p></div>');
+        '.</p></div>');
       return;
     }
     if (out.expired) {
-      dead("That link has expired",
-           "Links last about an hour, so that a message sitting in a mailbox for months is not " +
-           "still a way into the record.");
+      dead("That link has expired", "");
       return;
     }
     if (out.kind === "authorise") return paintBus(out);
     if (out.kind === "rota") return paintRota(out);
     dead("That link is not one this page knows about", "Nothing has been changed.");
   }).catch(function(){
-    dead("Could not reach the live server",
-         "Nothing has been changed. Try again in a moment.");
+    dead("Could not reach the live server", "Try again in a moment.");
   });
 }
 
@@ -208,19 +223,16 @@ function paintBus(out){
     show("Already authorised",
       '<div class="card go"><p><b>' + esc(s.reg || "The bus") + '</b> is authorised to run' +
       (out.stateBy ? ' by <b>' + esc(out.stateBy) + '</b>' : '') + '.</p>' +
-      '<p class="tiny">The defect stays open on the Defects tab.</p></div>');
+      '<p class="tiny">The defect stays open.</p></div>');
     return;
   }
   if (out.stale) {
     dead("There has been another walkaround since",
-         "This message is about an earlier check on " + (s.reg || "that bus") +
-         ". Whatever the bus is doing now, it is not what this link was about.");
+         "This is about an earlier check on " + (s.reg || "that bus") + ".");
     return;
   }
   if (out.state && out.state !== "stopped") {
-    dead("That bus is not stopped",
-         "Nothing here needs authorising. It may have been dealt with from the app or from the " +
-         "Outcome column on the Checks tab.");
+    dead("That bus is not stopped", "Nothing here needs authorising.");
     return;
   }
 
@@ -237,10 +249,9 @@ function paintBus(out){
       (rows ? '<ul class="rows">' + rows + '</ul>' : '') +
     '</div>' +
     '<div class="card">' +
-      '<p><b>Authorising does not close the defect.</b> It stays open on the Defects tab, ' +
-      'with your name against the decision to run.</p>' +
+      '<p><b>Authorising does not close the defect.</b></p>' +
       '<label for="pin">Your PIN</label>' +
-      '<p class="tiny">Any coordinator\u2019s PIN will do \u2014 it does not have to be the one this email was sent to.</p>' +
+      '<p class="tiny">Any coordinator\u2019s PIN.</p>' +
       '<input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" ' +
              'pattern="[0-9]*" placeholder="••••">' +
       '<div class="btns">' +
@@ -248,7 +259,7 @@ function paintBus(out){
       '</div>' +
       '<p class="say" id="say"></p>' +
     '</div>',
-    "This link is good for one decision and about " + (out.minutesLeft || 0) + " more minutes.");
+    "");
 
   wire("run");
 }
@@ -271,9 +282,9 @@ function paintRota(out){
       (rows ? '<ul class="rows">' + rows + '</ul>' : '') +
     '</div>' +
     '<div class="card">' +
-      '<p class="tiny">Approving writes it into the Rota. A swap moves both Sundays.</p>' +
+      coverPicker(out) +
       '<label for="pin">Your PIN</label>' +
-      '<p class="tiny">Any coordinator\u2019s PIN will do \u2014 it does not have to be the one this email was sent to.</p>' +
+      '<p class="tiny">Any coordinator\u2019s PIN.</p>' +
       '<input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" ' +
              'pattern="[0-9]*" placeholder="••••">' +
       '<div class="btns">' +
@@ -282,9 +293,58 @@ function paintRota(out){
       '</div>' +
       '<p class="say" id="say"></p>' +
     '</div>',
-    "This link is good for one decision and about " + (out.minutesLeft || 0) + " more minutes.");
+    "");
 
   wire("Approved", "Rejected");
+}
+
+/* WHO TAKES IT, ASKED HERE RATHER THAN ON A LAPTOP LATER.
+
+   Without this, approving from a phone left the Sunday reading "No driver
+   assigned" and the coordinator still had to open the spreadsheet — so the
+   link saved him nothing on the one kind of request it was most wanted for.
+
+   A BARE LIST OF NAMES WOULD HAVE DESERVED THE OBJECTION I ONCE MADE TO IT.
+   What makes this a judgement rather than a guess is the two facts beside
+   each name, both of which the live server already holds:
+
+     already driving South   he cannot be in two places, so the option is
+                             there but plainly spoken for
+     last drove 6 Sep        so "ask the one who has not done it in a while"
+                             is something the eye can do in one pass
+
+   LEAVING IT ALONE IS A REAL ANSWER and is the first option on purpose. An
+   approval with nobody named behaves exactly as it always did: the morning
+   goes to No driver assigned, the man who asked is told it was approved, and
+   the choice waits for somebody with the rota in front of them.
+
+   A SWAP GETS NO PICKER. It names its own partner and moves two Sundays;
+   a third name there would be offering to do something else entirely, and
+   the server does not send candidates for one. */
+function coverPicker(out){
+  var list = out && out.candidates;
+  if (!list || !list.length) return "";
+
+  var opts = '<option value="">Leave it \u2014 arrange cover later</option>';
+  for (var i = 0; i < list.length; i++) {
+    var c = list[i] || {};
+    var note = [];
+    if (c.busy) note.push("already driving " + c.busy);
+    if (c.last) note.push("last drove " + niceDay(c.last));
+    opts += '<option value="' + esc(c.name) + '">' + esc(c.name) +
+            (note.length ? " \u2014 " + esc(note.join(", ")) : "") + "</option>";
+  }
+  return '<label for="cover">Who covers it?</label>' +
+         '<p class="tiny">Only if you are approving.</p>' +
+         '<select id="cover">' + opts + "</select>";
+}
+
+/* 2026-10-18 is not a date to read at a glance. */
+function niceDay(key){
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ""));
+  if (!m) return String(key || "");
+  var MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return Number(m[3]) + " " + (MON[Number(m[2]) - 1] || m[2]);
 }
 
 /* ---- the one thing that acts -------------------------------------------- */
@@ -296,6 +356,36 @@ function wire(yes, no){
   if (pin) pin.addEventListener("keydown", function(e){
     if (e.key === "Enter" || e.keyCode === 13) { e.preventDefault(); send(yes); }
   });
+
+  /* GOES ON ITS OWN WHEN THERE IS ONLY ONE THING IT COULD DO.
+
+     A stopped bus has one button, so a PIN keyed on this page can only mean
+     one thing and there is nothing to guess at. The coordinator types four
+     digits and the bus is released — no reaching for a button with a thumb
+     already busy holding the phone.
+
+     A ROTA REQUEST HAS TWO, AND SO THIS DOES NOT FIRE THERE. Approve and
+     Turn it down are opposite answers to the same question, and a page that
+     picked one of them the moment the last digit landed would be choosing on
+     his behalf. The only one it could sensibly pick is Approve, which is the
+     one that changes the rota. Nobody should be able to approve a holiday by
+     finishing a PIN.
+
+     HALF A SECOND OF QUIET FIRST, because four is the SHORTEST a PIN may be
+     and not the only length: the Drivers tab takes up to eight. Firing on the
+     fourth digit would cut a longer one off mid-word and tell its owner it
+     was wrong. Every keystroke pushes the moment back, so it only goes when
+     somebody has actually stopped typing. */
+  if (pin && !no) {
+    var settle = null;
+    pin.addEventListener("input", function(){
+      clearTimeout(settle);
+      var only = this.value.replace(/\D/g, "");
+      if (this.value !== only) this.value = only;
+      if (only.length < 4) return;
+      settle = setTimeout(function(){ send(yes); }, 500);
+    });
+  }
 }
 
 function say(words, bad){
@@ -315,7 +405,12 @@ function send(choice){
   if ($("no")) $("no").disabled = true;
   say("Checking…");
 
-  post("linkdo", { pin: pin, choice: choice }).then(function(out){
+  /* Sent only with an approval. Turning a request down and naming somebody
+     to cover it in the same breath is two contradictory answers, and the
+     server drops a cover on a refusal for the same reason. */
+  var cover = (choice === "Approved" && $("cover")) ? String($("cover").value || "") : "";
+
+  post("linkdo", { pin: pin, choice: choice, cover: cover }).then(function(out){
     if (out && out.ok) return done(out, choice);
     BUSY = false;
     if ($("go")) $("go").disabled = false;
@@ -364,19 +459,26 @@ function done(out, choice){
       '<div class="card go">' +
         '<p><b>' + esc(out.reg || "The bus") + '</b> may run, authorised by <b>' +
         esc(out.by || "you") + '</b>.</p>' +
-        '<p class="tiny">The drivers’ phones will show it within a few seconds. ' +
-        'The defect stays open on the Defects tab.</p>' +
+        '<p class="tiny">The defect stays open.</p>' +
       '</div>',
       "You can close this page.");
     return;
   }
   var ok = (choice === "Approved");
+  var who = String((out && out.cover) || "");
   show(ok ? "Approved" : "Turned down",
     '<div class="card ' + (ok ? 'go' : '') + '">' +
       '<p>Recorded by <b>' + esc(out.by || "you") + '</b>.</p>' +
-      '<p class="tiny">It reaches the Rota Requests tab within five minutes, and ' +
-      (ok ? 'the Rota is written from there — a swap moves both Sundays.'
-          : 'the driver stays where he is.') + '</p>' +
+      (who ? '<p><b>' + esc(who) + '</b> is down to cover it.</p>'
+           : ok ? '<p>Nobody is covering it yet.</p>' : '') +
+      /* A WAIT LINE ONLY WHEN THERE IS A WAIT.
+
+         The running apps set this: "Sent." on its own when it is done,
+         "Sent. Give it a few seconds." when it is not. The panel above
+         already says what was decided, so when the live server has handed it
+         straight over there is nothing left to tell anybody. */
+      (out && out.applied === true ? '' :
+        '<p class="tiny">On the rota within five minutes.</p>') +
     '</div>',
     "You can close this page.");
 }
