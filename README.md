@@ -1062,6 +1062,212 @@ between them they used to leave one question permanently unanswered: whether
 Google and Apple accept what the Worker signs. A malformed token looked
 exactly like a quiet Sunday.
 
+### Every alert in the app
+
+The complete inventory, by who receives it. **Held** says whether silencing
+that alert makes a check go red — measured by actually silencing each one and
+running the suite, not by reading test names. As of `w2.15.0` every one of them
+is held; thirteen were not, and `21-alerts.mjs` is what closed them.
+
+**The coordinator** — all by email, all to `COORDINATOR_EMAIL`.
+
+| What | When | Why | Held |
+|---|---|---|---|
+| A walkaround came in — stopped / defect but driveable / advisory only / nothing wrong but something to arrange / already authorised | the second a driver signs and sends | it is the record that a bus went out, and the stopped one needs a decision in minutes | yes |
+| Authorised to run | a bus is released, from the app or the email link | says who released it and that the defect is still open | yes |
+| Rota change request | a driver taps Request change | a request is a question and needs an answer before that Sunday | yes |
+| Went out unchecked | Sunday 10:45, once, only buses with no check | both routes are already out — a prompt to inspect on return, not to catch a bus | yes |
+| Overbooked | the 5-minute sync when a booking lands; hourly regardless | a bus can only be moved while there is still time | yes |
+| Weekly summary | Sunday 19:00 | the week in one place, unasked | yes |
+| Test email | the menu, on demand | proves notifications work at all | n/a |
+
+**The drivers** — email for the rota, push for the morning.
+
+| What | When | How | Why | Held |
+|---|---|---|---|---|
+| You are driving | 7 days and 2 days before, 08:00 | email + `.ics` | a week to arrange your life, two days to remember | yes |
+| You are no longer driving | the rota changes inside 7 days | email | so he does not turn up | yes |
+| You are now driving | same | email + `.ics` | so he does — and it names the bus | yes |
+| Approved / not approved | you decide it | email | he asked a question | yes |
+| Your route is not running today | called off on the Rota | push | outranks everything: never say the bus is late when it is not coming | yes |
+| Your bus was stopped | a critical defect stops it | push | do not take it out | yes |
+| Your bus is authorised | you release it | push | otherwise he only finds out by opening a screen he has no reason to open | yes |
+| The bus has not gone out | 10–90 min past departure, no start tap | push | forgotten, or something is wrong | yes |
+| You are driving today | Sunday morning, before departure | push | the morning, said on the morning | yes |
+| End the trip | 15 min after the last timetabled arrival, 10 min idle | push | an open run never closes itself | yes |
+
+**The passengers** — push only.
+
+| What | When | Why | Held |
+|---|---|---|---|
+| Book your seat | Sun 15:00–16:00, Wed 18:00–19:00, Sat 18:00–19:00 | three chances, and the bus needs to know | yes |
+| Last chance to book | those windows, inside 24h of the cutoff | 09:30 Sunday is final | yes |
+| You are booked | a nudge window, already booked | confirms instead of nagging | yes |
+| Your bus today at HH:MM | Sunday 07:30–08:30 | the plan for the morning | yes |
+| No bus to your stop today | route called off | before anything else, and instead of everything else | yes |
+| The bus has left church | the start tap | it is real and it is moving | yes |
+| Be at your stop now | the estimate inside the imminent threshold | the one that matters | yes |
+| The bus is a few minutes away | the estimate moved by more than `resendMinutes` | only when the number actually changed | yes |
+| Picked up | you tap him picked | closes it | not measured |
+| The bus has gone past | it passes his stop | he has been missed and needs to know | yes |
+| Alerts are working | he taps Turn on | proves it | n/a |
+
+Nothing is sent **21:00–08:00**. Every message carries a tag, so one event
+cannot buzz the same pocket twice.
+
+The coordinator's emails are swept across hours too, in `23-coordinator.mjs` —
+not because the risk was equal, but because it was not the same standard. An
+email arrives once and is read once: it carries no live estimate and nothing
+that expires between sending and opening, which is where all five of the phone
+faults were. What is worth checking is the lead time, and that two emails about
+one Sunday do not contradict each other. Three of them are also asserted to read
+**identically at any hour they can be sent**, which is what would catch a clock
+creeping into a message that should not have one.
+
+Nine of twenty-three used to be held. The heaviest of the missing was the
+walkaround email — the single most important message the app sends, and
+deleting the line that sent it broke no check at all. The coordinator emails
+were the weak side throughout, because the suite grew up around the Worker and
+the rota, where the arguments were.
+
+#### The bug that came out of writing those tests
+
+The cancellation test was written, and it failed — with *"You are booked for
+Sunday"*. Not a fixture fault.
+
+`wakeCancelled` runs on every five minute sync, any day of the week, so calling
+a route off on the Friday pushed everybody booked on it there and then. But the
+words are computed when the phone asks, and `tripPayload` returned
+`why: "open"` **before anything had looked at the Rota**. So the cancellation
+push arrived wearing the booking message:
+
+> **You are booked for Sunday**
+> Scarisbrick Dr, 10:03.
+
+The exact opposite of what it was sent to say. And `wake` burns the tag on that
+send, so by the Sunday the sweep considered the phone told and the correct
+message never came. **The only notification he ever received told him his seat
+was fine, on a morning that was not running.** It came out right only if the
+route was called off *after* 09:30 on the day itself.
+
+Two changes in `w2.13.0`, a third in `w2.13.1`, a fourth in `w2.13.2` and the whole thing rewritten in `w2.14.0`. The Rota is now read before the gate — the gate was
+there to hide live *tracking* until bookings close, and a bus that is not
+coming is not tracking. And the message says "today" only when it is today,
+because a sweep that runs all week will say this on a Friday.
+
+Four checks hold it, and reverting either half turns them red.
+
+The first version of that fix read the Sunday's whole bookings table at the
+same time, on the busiest path in the app — every passenger tap all week, to
+answer a question whose answer is no in forty-nine weeks out of fifty. It asks
+the Rota for one indexed row now and looks at the seats only if that row says a
+route is off. Two reads before any of this, five in the first attempt, three
+now. A check counts them, because the cheap version and the expensive one are
+four lines apart and behave identically.
+
+**And the same sweep found two more of the family.** Firing every alert and then
+asking the phone what it says turned up the morning message — sent 07:30–08:30,
+read through the same early return, and therefore saying *"You are booked for
+Sunday"* on a Sunday morning instead of *"Your bus today at 10:15 — be at your
+stop a few minutes early."* The wording it wanted already existed forty lines
+lower and was unreachable before the cutoff. Its test passed because it checked
+the words at 10:05, a time the message is never sent at. Fixed in `w2.13.2`.
+
+The third was **fixed in `w2.14.0`**, along with a fourth that I caused while
+fixing the second: at 15:00 on a Sunday the booking nudge is
+about the week after, and a regular who travelled that morning has no seat for
+it, so nudging him is right — but the record still has his pickup in it, so the
+nudge lands reading *"Picked up at Grace Rd. Have a good service."* Nothing
+false, five hours stale. Fixing it means deciding what the situation IS once a
+run has ended and the next Sunday has opened, which touches picked-up, gone-past
+and the timetable fall-through together. 
+Four faults, one sentence: **right answer, wrong hour.** The cancellation was
+right after 09:30 and wrong before it. The morning push was right after 09:30
+and wrong at 07:45, which is when it is sent. The pickup was right until the bus
+got back and wrong all afternoon. And mine: I fixed the morning push by reading
+the day off the payload — always *this* Sunday — while the seat it described
+came from `seatFor`, which correctly rolls to *next* Sunday once bookings close.
+So a man booked for the 4th was told on the 27th that his bus was today at 10:15
+and to get to his stop. I had finished explaining that exact trap, in writing,
+an hour before walking into it.
+
+### The diary
+
+`22-diary.mjs` is the answer to all four. It walks **one passenger through one
+whole Sunday** — 07:00, 07:45, 09:20, 09:40, 09:53, 10:10, 10:16, 11:05, 13:00,
+15:20, 19:00, Monday, Wednesday — for four people: one who travelled that
+morning, one booked for the week after, one who never books, and one whose route
+was called off. It reads as a table on purpose, so a person can look down the
+column and see whether a sentence belongs at that time of day.
+
+Nothing else in the suite did this. Every other passenger test picks an hour,
+pins the clock and asserts — so each branch came out right at the hour its
+author had in mind, and nobody ever asked what the other hours say. **Each of
+the four faults, reintroduced one at a time, turns the diary red.**
+
+**And then the driver's side, swept the same way**, because "the driver gates
+look tighter to me" is the kind of sentence that had already been wrong four
+times. It gave up a fifth: **the stand-down.** `driverRouteToday` falls back to
+the route a phone *registered* with when the man's name matches nobody on the
+rota — right for a message about a route, wrong for every sentence that says
+*your*. So he is rostered, the sweep wakes him at eight, the coordinator swaps
+him off at ten past, and he opens the notification at twenty past to read *"You
+are driving today. North. Depart 09:52 after vehicle check."* A man sent to a bus
+he had just been taken off, by the one mechanism written to stop stale words
+arriving.
+
+`driverRouteToday` now returns whether it matched *him* or guessed, and the whole
+driver section says nothing at all to a man who is nobody's driver today — which
+is exactly what the sweep would have told him. The one case it must not break:
+a morning driven by somebody the rota never named. That happens, the app records
+it as Cover, and he is as much that run's driver as anybody — so the trip is
+asked before the rota, and the man holding the keys is still asked to close the
+run.
+
+The mechanics that made it possible: `seatFor` now returns the Sunday it
+answered about rather than keeping it private, `seatWords` is the single place
+that turns a seat into a sentence, and `pushWhat` finally reads the `ended` flag
+that `tripPayload` had been setting on every reply since the beginning — grep
+the old file and the word does not appear once below the line that sets it.
+
+#### What is deliberately NOT alerted
+
+Three real gaps, all of them omissions rather than faults, and worth knowing
+before somebody reports them as bugs:
+
+- **A bus swap with the same driver tells nobody.** Change the registration on
+  the Rota and nothing goes out. The duty email covers for it in words —
+  *"buses can change during the week, check the app on the day"* — which is a
+  sentence standing in for an alert.
+- **A passenger cancelling a seat tells nobody.** The booking flips to
+  Cancelled and the count drops. Fine when a full bus empties by one; less
+  fine when twelve drop out on the Saturday night.
+- **Nobody is ever told a bus is running late in words.** Passengers watch the
+  estimate move; a driver hears *the bus has not gone out* only if it never
+  started at all. A run that set off twenty minutes late and stays twenty
+  minutes late is silent all morning.
+
+### Fixtures, and the week they cost
+
+Three faults came from a fixture that agreed with the code instead of with the
+spreadsheet, and a fourth from a stand-in kinder than the thing it stood in for.
+
+| | |
+|---|---|
+| **Bus Stops** | the fixture said `Grace Rd`. The tab says `Grace Road bus stop, Walton Vale`. `fillStopPins` matched on the name with `===`, so nineteen rows came out blank on a live deployment and the guard worked exactly as written |
+| **Checks** | the fixture called the date column `When`. It is `Date`. `colsSoft` resolves by name, so nothing matched, every bus read as unchecked, and two checks passed for the wrong reason |
+| **Bus Bookings** | the fixture said `Passenger` and invented a `Note` column. The tab says `Passenger ID` and has no `Note`. **The correct header already existed in another suite** — a second, wrong one was typed rather than the first reused, which is the worse mistake, because a duplicate drifts and a shared one cannot |
+| **`Utilities.formatDate`** | the fake handed its argument to `Intl`, which reads `undefined` as *now* — and the system clock's now, not the pinned one. A call that had lost its date came back with a confident, plausible, unrelated day |
+
+All nine headers now live in `tests/lib/tabs.mjs`, off a real export, with a
+`row()` builder that throws on a column the tab does not have. `01-stamps.mjs`
+fails if a suite types a header out again, and fails if the fake formats a
+non-date. The header check found *itself* on its first run, which is at least
+evidence that it looks.
+
+The rule underneath all four: **a fixture written from the code agrees with the
+code about everything, including being wrong.**
+
 ### Testing an alert
 
 Once alerts are on, both apps show a **bell icon in the top right of the frozen
