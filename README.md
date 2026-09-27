@@ -1,11 +1,14 @@
 # Minibus
 
-The Sunday bus for RCCG Dominion Assembly, Liverpool. Three screens, one
+The Sunday bus for RCCG Dominion Assembly, Liverpool. Four screens, one
 spreadsheet, one small server.
 
 - **Driver app** — the pre-drive safety check, the driving rota, and the live
   stop list a driver taps his way down on a Sunday morning.
 - **Passenger page** — book a seat, then watch the bus come.
+- **Coordinator's app** — from v1.77.0, the changes a coordinator used to
+  open the spreadsheet for, made on a phone under his PIN. See *The
+  coordinator's app*, below.
 - **The spreadsheet** — the record, the rota, and everything a coordinator
   edits by hand.
 
@@ -34,13 +37,18 @@ spreadsheet is right.
 
 **The Worker owns** what happens *during* a Sunday: bookings as they are made,
 stop taps as they happen, and since v1.70.0 the walkaround itself and any
-authorisation made in the app. All of them are drained back onto the
-spreadsheet every five minutes, so the record still ends up in one place. A
-walkaround is also sent straight to Apps Script without waiting, so the
-coordinator's email is not held for the drain.
+authorisation made in the app. From w2.16.0 each of those knocks on the
+spreadsheet's door as it happens, and Apps Script drains it onto the tab in
+seconds. The five minute drain is still underneath, so the record ends up in
+one place whether or not a knock is answered. See *Both ways in seconds*,
+below.
 
 **The Worker also sends the alerts.** Apps Script cannot: it has no process
 that is ever awake, and no way to sign a push. See *Alerts*, below.
+
+**From w2.18.0 the Worker also takes every change made in the coordinator's
+app first**, and the spreadsheet applies it a few seconds later through its
+own code. The spreadsheet is still the record. See *The coordinator's app*.
 
 **The Worker also keeps a shelf** — a copy of the finished rota and last
 week's mileage, built by Apps Script and posted over. It serves those back
@@ -63,9 +71,13 @@ sunday/sw.js            its offline shell  — separate on purpose, see below
 sunday/manifest.webmanifest
 do/index.html           the page an email links to. No worker, no manifest,
                         no config.js: opened once from a message and closed
+coord/index.html        the coordinator's app. No service worker: every
+                        screen is read from the live server as it opens
+coord/manifest.webmanifest
 Code.gs                 everything on the Apps Script side
-worker.js               everything on the Cloudflare side
-schema.sql              the D1 tables, all of them
+server/worker.js        everything on the Cloudflare side
+server/schema.sql       the D1 tables, all of them
+tests/                  the checks, see Tests below. Not published
 ```
 
 `schema-pin.sql` and `schema-push.sql` were one-off additions to a database
@@ -85,7 +97,7 @@ of a page at two versions and serve whichever answered first.
 
 ## Versions — read this before deploying
 
-There are **six** version stamps and four of them must move together.
+There are **seven** version stamps and five of them must move together.
 
 | Stamp | File |
 |---|---|
@@ -93,11 +105,14 @@ There are **six** version stamps and four of them must move together.
 | `CACHE` | `sw.js` |
 | `PAGE_VERSION` and the `BUILD` comment | `sunday/index.html` |
 | `CACHE` | `sunday/sw.js` |
+| `PAGE_VERSION` and the `BUILD` comment | `coord/index.html` (from v1.77.0) |
 | `SCRIPT_VERSION` | `Code.gs` (moves on its own) |
 | `SCRIPT_VERSION` | `worker.js` (moves on its own) |
 
-**If you change any page and do not bump all four page stamps, phones keep the
-old copy** and it will look as though the deploy failed.
+**If you change any page and do not bump all five page stamps, phones keep the
+old copy** and it will look as though the deploy failed. The coordinator's page
+has no service worker and cannot be kept old by one, but its number moves with
+the others so that the three pages on the site always say which build they are.
 
 **A number that has been handed over is spent.** Once a build has been given to
 whoever deploys it, the next change bumps the number, even if the first one was
@@ -120,7 +135,8 @@ passenger page both read:
 
 That is the page, the Cloudflare Worker and the Apps Script, on one line. On a
 narrow phone it wraps between the three and never through the middle of a
-number.
+number. The coordinator's app has the same line at the foot of its first
+screen, starting `coordinator v1.77.0`.
 
 **A blank `sheet` slot means the sync has not run.** The Worker cannot see the
 spreadsheet, so it is told: every *Send everything to the live server now*
@@ -259,12 +275,15 @@ Order matters, because the pages depend on the two servers being ready.
    it. It builds every table and is safe to run twice. An existing database
    needs nothing: the one table and one column v1.70.0 added are created by
    the Worker itself the first time a check reaches it.
-1. **worker.js** → Cloudflare dashboard → Deploy
+1. **worker.js** → Cloudflare dashboard → Deploy. Once only, from w2.16.0:
+   add a **Cron Trigger** to the Worker that runs every minute
+   (`* * * * *`). It is the Worker's clock. Without it everything still
+   works, on the five minute sync, as before.
 2. **Code.gs** → Apps Script editor → Save → Deploy
 3. Minibus menu → **Send everything to the live server now**
 4. Minibus menu → **Is the live server working?** — it should report the rota
    and mileage copies as a few minutes old
-5. **The pages** → GitHub
+5. **The pages** → GitHub, with the `coord/` folder from v1.77.0
 
 Steps 1–4 need a computer. Step 5 can be done from a phone.
 
@@ -281,7 +300,7 @@ It is longer than it was. Four releases went out together and this is the only
 thing that exercises them, so the checklist grew with them rather than staying
 comfortable — a ten minute check that says the app is fine without having
 touched most of what is new is worse than no check at all. **A, B and C are
-the ones that matter and take about fifteen minutes. D to F are worth doing
+the ones that matter and take about fifteen minutes. D to H are worth doing
 once after a deploy and can be skipped on an ordinary week.**
 
 #### A. Before you touch a phone
@@ -463,6 +482,57 @@ once after a deploy and can be skipped on an ordinary week.**
 - **The booking nudges**, which only fire in their windows: Sunday between
   three and four, Wednesday and Saturday between six and seven.
 
+#### H. The coordinator's app
+
+These are real changes. Each step says how to put it back.
+
+27. **The way in.** On the driver app, signed in as yourself, the first screen
+    has **Coordinator**. Tap it and key your PIN. You get this Sunday and next,
+    and the menu, and the foot reads `coordinator · server · sheet` with the
+    numbers you deployed. Signed in as a driver, the driver app has no
+    Coordinator button.
+
+28. **A stopped bus, from the first screen.** *On a weekday, like step 6.* Do
+    step 6 again and leave the driver app alone. The coordinator's first screen
+    says the bus was stopped at the walkaround, with **Authorise**. Tap it and
+    confirm. Stops and bookings on the driver app has its Start trip button
+    back. Set the defect to **Not a defect** afterwards, on the tab or in the
+    app's Defects.
+
+29. **A note, both ways.** Rota, a Sunday about a month ahead, **Add a note**.
+    It shows at once. Within about ten seconds it is in that Sunday's Notes on
+    the Rota tab, with your name and `(app)` in Updated by, and *What I have
+    done* then says **On the sheet**. A note emails nobody. Delete it on the
+    tab.
+
+30. **A request, decided in the app.** On the driver app, signed in as
+    yourself, ask for a change on a Sunday of yours. The coordinator's first
+    screen says a rota request is waiting. **Rota requests**, **Turn down**.
+    Within about ten seconds the Rota Requests tab says **Rejected**, with a
+    note saying it was decided in the coordinator's app, and the email saying
+    it was turned down comes to you, as the man who asked. Nothing to put
+    back.
+
+31. **A booking for somebody who rings.** **Bookings**, next Sunday, **Book a
+    seat for someone**: any stop, 1 seat, your own number. It is on the
+    driver's Stops and bookings at once, and on the Bus Bookings tab within a
+    minute, noted as booked in the coordinator's app. **Cancel** it from the
+    app, and the tab says Cancelled within a minute.
+
+32. **Over on seats.** The next time you rehearse *over* (step 9), open **Have
+    a look**, **Are we over on seats?** in the app while it runs. It names the
+    route that is over, as step 16's email does, and the first screen says so
+    too.
+
+33. **Is everything working, from the app.** **Have a look**, **Is everything
+    working?** It comes back within about 25 seconds with what step 2 finds
+    on the menu. If it says the spreadsheet did not answer, the deployed
+    Apps Script is not the new version.
+
+34. **The lock.** Leave the app untouched for 15 minutes
+    (`coordApp.idleMinutes`). It asks for the PIN again, and keying it goes
+    back to the screen you were on.
+
 ### Deciding from the email
 
 From v1.73.0 two messages carry a link to a page where the decision can be
@@ -528,12 +598,69 @@ writes.
 Separately, the branch returned unless the word was `Approved`, so a refusal
 was silent.
 
+### Both ways in seconds
+
+From w2.16.0 and v1.80.0.
+
+**Phone to sheet.** Every write a phone makes (a booking, a stop tap, a
+walkaround, an authorisation, a run closed by a coordinator) is followed by a
+knock: one POST from the Worker to the sheet's web app, `drainnow`, sent
+after the phone has had its answer. Apps Script runs the ordinary drain. If a
+drain is already running, the knock leaves a note and that drain goes round
+once more. The clock knocks again within a minute while anything is still
+waiting, and every five minutes if the sheet is not answering.
+
+**What the drain marks done.** Each drain stamps the rows it hands out, and
+the Worker marks a row done only if it still carries that stamp. A booking
+cancelled while Apps Script was writing the Booked copy used to be marked
+done on the strength of that copy and never reached the tab: Sedley Street,
+27 September. New rows are now confirmed only after they are on the tab, and
+the drain writes only its own columns, so a column the coordinator added
+keeps its value.
+
+**Sheet to phone.** `onEditLive` pushes the Rota, Drivers, Buses, Bus Stops,
+Rota Requests and Defects tabs the moment one is edited. A Status or Seats
+edit on a Bus Bookings row with a Live ID goes to the Worker's
+`sheetbookings` action, which applies it and leaves the row pending so the
+next drain writes the Worker's copy back. Only `Booked` and `Cancelled` are
+acted on; any other word in the Status cell is left where it is. The
+passenger page asks every fifteen seconds while bookings are open, down
+from sixty.
+
+**Alerts follow the number.** When a phone gives a number or books with one,
+every alert subscription on that handset is moved to that number.
+
+**Rota requests, from w2.17.0.** A driver's swap or cover request is taken by
+the Worker (`rotaRequest`, the same body Apps Script takes), knocks, and is
+filed on the Rota Requests tab by `handleRotaRequest`, the function a direct
+post has always used. The app falls back to Apps Script if the Worker does not
+answer; the id is made on the phone, so a request both saw is filed once. Until
+the sheet has filed it and rebuilt the shelf, the Worker lays the request onto
+its copy of the rota, so no phone shows the Sunday without it. After this,
+every write a phone makes goes to the live server first. The one Apps Script
+call left is the quiet PIN re-check, which is deliberate: the sheet is the
+authority on a PIN.
+
+A request no longer writes Change requested over a Sunday that has been called
+off. It did, and since the passenger page reads that same Status cell, a
+request on a North cancelled Sunday put the North route back on.
+
+### The clock
+
+A Cron Trigger on the Worker, every minute, calls `scheduled()`. It runs the
+sweeps that used to ride the five minute drain, and looks for anything the
+sheet has not got. The drain runs the sweeps itself only when the clock has
+not ticked for three minutes, so a Worker without its trigger behaves as it
+did before. **Is the live server working?** says whether the clock is
+ticking and when the sheet was last knocked on.
+
 ### The way back
 
 Everything else the Worker does is downstream of the spreadsheet: it is told
 the timetable, the buses, the drivers and the rota, and it answers phones. It
-had never called back. **From `w2.12.0` it can, and it does so for exactly one
-thing.**
+had never called back. **From `w2.12.0` it can.** Until `w2.16.0` it did so
+for exactly one thing, the rota decision below; since then it also knocks
+after every phone write (see *Both ways in seconds*).
 
 A rota decision is the one act on the Worker that only *means* something once
 the spreadsheet has it. Approving a cover moves two Sundays, writes the Rota
@@ -694,6 +821,15 @@ churchBase: { lat: 53.424169, lng: -2.936799, radius: 165 },  // yards
 autoEnd:    { enabled: true, minutes: 3 },
 ```
 
+One governs the coordinator's app:
+
+```js
+coordApp: { idleMinutes: 15, refreshSeconds: 30 },
+```
+
+`idleMinutes` is how long the page keeps the PIN while nobody touches it.
+`refreshSeconds` is how often an open screen asks the live server again.
+
 **At this church the buses park in front of it, so `churchBase` carries the
 `busBase` figures and is already correct.** It stays a setting of its own
 because the next church to use this may keep its buses somewhere else, and a
@@ -739,7 +875,7 @@ Set them.
 | `Defects` | one row per defect and one per advisory, told apart by **Kind**, so they can be chased |
 | `Bus Bookings` | passenger bookings |
 | `Trip Events` | every stop tap. **Ended by** is filled on the end row only, and differs from **Driver** when a coordinator closed somebody else's run |
-| `Rota Requests` | swaps and cover asked for by drivers. **Status** is what approving means; a decision made from an email link writes that same cell and leaves a note saying who decided it and when |
+| `Rota Requests` | swaps and cover asked for by drivers. **Status** is what approving means; a decision made from an email link or in the coordinator's app writes that same cell and leaves a note saying who decided it, where and when |
 
 The Worker's own database holds the same stops, rota, buses and drivers (a
 copy, pushed from here), the bookings and taps as they happen, the shelf, and
@@ -752,7 +888,7 @@ picks up later. **Is everything working?** names anyone missing one.
 
 ### Scheduled jobs
 
-Seven, all installed by **Check scheduled emails, set up any missing**:
+All installed by **Check scheduled emails, set up any missing**:
 
 | When | What |
 |---|---|
@@ -763,6 +899,100 @@ Seven, all installed by **Check scheduled emails, set up any missing**:
 | Sunday evening | the weekly summary |
 | on edit | alerts when a Sunday changes |
 | on edit | the Outcome column on the Checks tab reaches the drivers' phones |
+| on edit | from v1.80.0, `onEditLive`: an edit on the Rota, Drivers, Buses, Bus Stops, Rota Requests or Defects tab is pushed to the live server at once, and Status or Seats edited on a Bus Bookings row the live server owns is sent to it |
+
+Eight from v1.80.0. The Worker has one of its own as well: its Cron Trigger,
+every minute, which sends every timed message (see *The clock*).
+
+---
+
+## The coordinator's app
+
+From v1.77.0, at `coord/` on the same site. The driver app's first screen has
+a **Coordinator** button when the name signed in there has a coordinator's
+role (`fullInspectionRoles` in `config.js`, the same list that may authorise a
+stopped bus). The button carries the name across. The PIN is keyed again on
+the coordinator's page and is never carried.
+
+Each change is made under the coordinator's PIN:
+
+| Screen | What can be done there |
+|---|---|
+| Rota | who drives or covers each route; which bus runs which route (choosing the other route's bus swaps the two); both routes running, North off, South off or all off; a note on the Sunday |
+| Rota requests | the pending ones, approved with a cover chosen from the drivers free that morning, or turned down |
+| Bookings | this Sunday's and next Sunday's, stop by stop, with the numbers to ring. A booking cancelled for somebody who rings; seats booked for somebody without a smartphone |
+| Defects | the open ones, with their status changed, and closed only with what was done |
+| Run record | the last five Sundays. A wrong stop time put right, or a stop nobody tapped given its time; both are marked Corrected |
+| Have a look | bookings this Sunday; are we over on seats; is everything working; who has alerts on; who is carrying the load; which bus is on which route |
+| What I have done | every change, and whether the sheet has it |
+
+The first screen also carries what cannot wait: a bus stopped at the
+walkaround (Authorise), a run still open half an hour after it was due at
+church (End it), a request waiting, a Sunday over on seats, a critical defect,
+and a change the sheet did not take. Authorise and End it use the same calls
+the driver app does.
+
+Left in the spreadsheet on purpose: setting or seeing a PIN, setup, free-form
+editing of any tab, and the rehearsal controls. The app does not work without
+a signal: a change kept on the phone and sent later could land on top of a
+decision somebody else made in the meantime.
+
+### How a change travels
+
+Every change goes to the live server first and is answered there.
+
+**A fact the live server owns**, a booking or a stop time, is changed there
+and reaches the tab by the drain, like a passenger's booking or a driver's tap.
+
+**A fact the spreadsheet owns**, the rota, a request or a defect, is written
+into the live server's `coord_actions` table. From then on every phone sees
+it, the driver app and the passenger page included, because the live server
+lays it over the copy of the rota the sheet last sent. The knock and the drain
+carry it to the sheet within seconds, and Apps Script applies it through the
+same code that runs when a person edits that cell: the Status rule on the Rota
+tab, the stamp saying who changed it, the emails to the drivers affected,
+`applyRotaDecision` for a request, the Closed on date for a defect. The sheet
+then pushes a fresh copy naming the changes it now includes (`coordApplied`),
+and the overlay stops.
+
+A change the sheet refuses, such as a request somebody decided on the tab in
+the meantime, is shown as **Not taken** with the reason, on the first screen
+and in *What I have done*, and is no longer laid over the copy.
+
+Each change carries an id made on the phone when the sheet for it opens, so a
+second tap after a lost answer is the same change and is made once. Apps
+Script keeps the ids it has applied in the `coordApplied` script property, so
+a change drained twice is applied once there too.
+
+**The PIN is checked on every call**, reads included, because the reads carry
+phone numbers and the reasons drivers give. It is the same three tries and five
+minute lockout as everywhere else. The page keeps the PIN in memory only, and
+forgets it after `coordApp.idleMinutes` untouched. Keying it again goes back
+to the same screen.
+
+The page has no service worker, so it never shows a screen from a cache.
+
+### The reports
+
+Four come from the live server's own copy: bookings this Sunday, are we over
+on seats, who has alerts on, and which bus is on which route. Two need the
+spreadsheet, *is everything working* and *who is carrying the load*, and the
+live server asks Apps Script for them and waits up to 25 seconds. If the sheet
+does not answer, *is everything working* still reports on the live server and
+says the sheet did not answer. The spreadsheet's own menu items give the same
+reports as before.
+
+### Two faults fixed on the way
+
+A request decided on a Sunday with a route called off put the route back on.
+Approving or turning it down wrote Confirmed or Change requested into the
+Rota's Status over `North cancelled`, and the passenger page reads that cell.
+The Status is now left alone on a called-off Sunday, whether the request is
+decided by hand on the Rota Requests tab, from an email link, or in the app.
+v1.81.0 fixed the same fault for a request being filed.
+
+The note saying who decided a swap was written, then wiped by the edit
+handler that runs after it. It is now written last.
 
 ---
 
@@ -813,6 +1043,20 @@ counts included.
 Sunday open. Everything drains onto the spreadsheet.
 
 ### The estimate
+
+**Two settings from v1.75.0**, in `eta` in config.js and `ETA_RULES` in
+Code.gs, which must be kept equal:
+
+| | |
+|---|---|
+| `maxBehindMinutes` | how far behind a bus may be and still be given an estimate. `0` is no limit, which is the setting. It was a fixed 45 |
+| `keepMinutes` | how long an estimate stays up once its time has passed with the stop unmarked. `15`, the same as the quiet rule. It was a fixed two |
+
+The passenger page gives the estimate from the moment the bus leaves church,
+in bold, and his own stop's row in the list shows the estimate in place of
+the timetabled time. The driver's list shows the estimate alone, in bold; a
+plain time is the timetable. Both apps say "5 minutes behind schedule" and
+"2 minutes ahead of schedule".
 
 From v1.71.0 a passenger's estimate is worked out over **the stops the bus is
 actually going to make**, not over the whole timetable. Before that it was his
@@ -897,7 +1141,9 @@ out whether the fence is in the right place.
 
 ### Alerts
 
-Passengers who have booked can turn on notifications from the live panel.
+Anybody who opens the passenger page is offered notifications, from
+v1.75.0, booked or not. A phone's alerts follow the number it last gave: see
+*Both ways in seconds*.
 
 **Five things send a passenger a push, and no more.** This matters, because an
 earlier version of this file listed four *wordings* as though each were its own
@@ -1008,7 +1254,9 @@ fails rather than shipping one that sits inside them.
 **booking page itself** would accept, asked of the same cutoff, so a reminder
 can never point at a Sunday nobody can book.
 
-**No new scheduled job.** All of these ride the five minute sync that
+**From w2.16.0 these ride the Worker's own clock** and go at the first minute
+of their window. What follows was true until then, and is what happens if
+the Cron Trigger is missing. All of these ride the five minute sync that
 already exists, the same way the driver nudges do, and each is a WINDOW rather
 than a moment because this Worker has no clock of its own. The tag sees to it
 that the first sweep inside a window is the only one that sends.
@@ -1305,7 +1553,11 @@ lists every sheet the app can put up, and a contract test asserts that list
 against the markup, so adding a sheet later without adding it to that list
 fails the suite rather than producing two backdrops on a Sunday morning.
 
-On the passenger page it is shown only to somebody who has actually booked a
+From v1.75.0 the passenger page offers it to everybody who opens it. The sheet
+carries one line under the question: with a seat, "Booked for Sunday 4
+October: Sedley Street, 2 seats."; with none before the cutoff, "No seat
+booked. Book below."; with none after it, nothing. Before v1.75.0 it was shown
+only to somebody who had actually booked a
 seat for the coming Sunday. A page open on a stranger's phone is asked for
 nothing. It also waits half a second and re-tests, because the install sheet
 opens on a timer of its own.
@@ -1359,11 +1611,12 @@ scheduled jobs, the email allowance, the driver PINs and the row counts.
 | Symptom | Look at |
 |---|---|
 | The app is slow again | **Is the live server working?** — if the shelf is past six hours, run **Send everything to the live server now** |
-| A deploy seems to have done nothing | the version at the foot of the app, and the deployment number in the editor. Then check all four page stamps moved |
+| A deploy seems to have done nothing | the version at the foot of the app, and the deployment number in the editor. Then check all five page stamps moved |
 | A driver has no Start trip | is he in the Rota's *actual / cover* column for that route? |
 | A driver made no entries at all | he was signed out. The app now restores his name and offers a Sign in button wherever it would otherwise go quiet |
 | Passengers waiting for a bus that was called off | the Rota's Status for that Sunday. `North cancelled` or `South cancelled` tells them within five minutes |
 | Bookings will not open for next week | last Sunday's run was never ended |
+| A change made in the coordinator's app is not on the sheet | *What I have done* in the app. **On the way** means the sheet has not reported it yet, and the Worker keeps knocking every minute. **Not taken** gives the sheet's reason |
 | No emails at all | `COORDINATOR_EMAIL` is blank, or the daily allowance is used up |
 
 ---
@@ -1389,15 +1642,19 @@ the D1 client, because half the faults worth catching here are SQL — a column
 that is a keyword, an `ON CONFLICT` that does not fire, a unique index that
 lets a second row through — and none of them show up against a mock.
 
-Three of the suites are about the code rather than the behaviour: the six
+Three of the suites are about the code rather than the behaviour: the seven
 version stamps and the paired settings agree, every element the pages look up
 exists, and every function and constant is used in code rather than only in a
 comment. The last is there because an unused function keeps its comment, and
 the comment keeps describing a feature that is no longer there. It found three
 on its first run.
 
-`tests/screens/` holds harnesses that photograph the pages at phone width in
-every theme. They are for a person to look at, and are not part of the run.
+`tests/browser/` drives the real pages in Chromium and photographs them at
+phone width on the way, for a person to look at. It is not part of the run.
+`driver-app.mjs` and `passenger.mjs` answer from stand-in servers built from
+`real.json`. `coordinator.mjs` runs the coordinator's app against the real
+Worker, in the same process, on a real SQLite database seeded from
+`real.json`. See `tests/browser/README.md`.
 
 ---
 

@@ -852,13 +852,11 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   font-size:15px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
 .trip-mini:active{transform:scale(.98)}
 .is-dead{opacity:.4}
-.stop-time{flex:0 0 52px;font-weight:700;font-variant-numeric:tabular-nums}
-/* The estimate leads and the timetable sits under it, smaller and quieter.
-   Same 52px column, so a list where only some rows have an estimate does not
-   go ragged down the left. */
-.stop-time-eta{display:flex;flex-direction:column;line-height:1.15}
-.stop-time-plan{font-weight:400;font-size:.72em;opacity:.55;
-                font-variant-numeric:tabular-nums}
+/* A plain time is the timetable. A bold one is the estimate. From v1.75.0
+   the timetabled time no longer sits under an estimate, so the weight is
+   what tells the two apart. */
+.stop-time{flex:0 0 52px;font-weight:400;font-variant-numeric:tabular-nums}
+.stop-time-eta{font-weight:700}
 .stop-name{flex:1}
 .stop-pc{display:block;font-size:12px;color:var(--muted);margin-top:2px}
 /* The same badge, on the one stop he is driving to, when the sheet knows the
@@ -1260,7 +1258,11 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
          Waiting to send is hidden except when the queue has something in it,
          and it sits directly above Vehicle check so that appearing never
          pushes Vehicle check off the bottom of the list. -->
+    <!-- The coordinator's app, from v1.77.0, for the two roles that may
+         authorise a bus. First, furthest from the thumb: it is the one a
+         driver never needs. -->
     <div class="linkrow">
+      <button class="btn btn-ghost btn-wide" id="toCoord" type="button" style="display:none">Coordinator</button>
       <button class="btn btn-ghost btn-wide" id="toRota" type="button">Driving rota</button>
       <button class="btn btn-ghost btn-wide" id="toStops" type="button">Stops and bookings</button>
       <button class="btn btn-ghost btn-wide" id="toPending" type="button" style="display:none">Waiting to send</button>
@@ -1493,7 +1495,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.74.10";
+var APP_VERSION = "v1.77.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -1779,9 +1781,9 @@ var VEHICLES = window.VEHICLES || [];
 var LIVE = !!(CFG.endpoint && CFG.endpoint.indexOf("http") === 0);
 
 /* Where the calls that happen DURING a Sunday go: the stop taps, the Stops
-   and bookings screen, and now the check itself. Everything else — the rota,
-   last mileage, a rota change — still goes to CFG.endpoint, where it always
-   did, because nothing on that list has a man standing at a kerb waiting.
+   and bookings screen, and now the check itself. From v1.76.0 a rota request
+   too. The rota and last mileage are read from here and fall back to
+   CFG.endpoint; the quiet PIN re-check goes to CFG.endpoint on purpose.
 
    Submitting a check moved here on 20 September 2026, after a walkaround took
    long enough to fail and only went through once the driver had given up and
@@ -2528,6 +2530,12 @@ function paintLinks(){
      cutoff, or on a Wednesday, the job is a walkaround. Once bookings have
      closed and there are stops to show, the live screen is the one he came
      for, and the check is behind him. Never two primaries at once. */
+  /* Only for a coordinator's name, and only once the register is here.
+     pinCoordinator() answers yes to an empty register on purpose, for the
+     diagnosis line, and nobody is a coordinator of an empty register. */
+  var co=$("toCoord");
+  if(co) co.style.display = (st.driver.trim() && REGISTER.length && pinCoordinator()) ? "" : "none";
+
   var live = tripClosed && !!rotaStops.length;
   var stops=$("toStops"), rota=$("toRota"), check=$("toCheck");
   if(stops) stops.className = "btn btn-wide "+(live?"btn-main":"btn-ghost");
@@ -5438,15 +5446,16 @@ function mapHref(where){
    an older server, a failed part of the payload, a run not yet projectable —
    this falls back to the timetable and says nothing about why. A driver does
    not need to be told which half of a payload was fenced off. */
+/* From v1.75.0 the estimate stands alone, in bold, and the timetabled time
+   is not drawn beside it. Two times on one row was a question about which
+   one to go by. An estimate that happens to equal the timetable is still the
+   estimate, and is bold like any other. */
 function stopTimeHtml(s, done){
   var plan = esc(s.time);
   if(done || s.arrival || s.depart) return '<span class="stop-time">'+plan+'</span>';
   var at = rotaStopEtas ? rotaStopEtas[s.id] : null;
   if(!at) return '<span class="stop-time">'+plan+'</span>';
-  var eta = tripClock(Number(at));
-  if(eta === s.time) return '<span class="stop-time">'+plan+'</span>';
-  return '<span class="stop-time stop-time-eta">'+esc(eta)+
-         '<small class="stop-time-plan">'+plan+'</small></span>';
+  return '<span class="stop-time stop-time-eta">'+esc(tripClock(Number(at)))+'</span>';
 }
 
 /* ---- fetching the route's own state ------------------------------------ */
@@ -7306,10 +7315,10 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
      can put it right. Said where he is already looking, only when it is
      genuinely impossible, and with the one thing to do about it. */
   if(off!==null && off < -MAX_EARLY){
-    bits.push('<b class="trip-stopme">'+(-off)+' min ahead \u2014 check the last '+
+    bits.push('<b class="trip-stopme">'+scheduleWords(off)+'. Check the last '+
               'stop you marked</b>');
   } else if(off!==null && off!==0){
-    bits.push(off>0? off+' min behind' : (-off)+' min ahead');
+    bits.push(scheduleWords(off));
   }
   if(t.lastStop) bits.push('last '+esc(t.lastStop)+' at '+tripClock(t.lastAt));
   h+='<p class="trip-note">'+bits.join(' \u00B7 ')+'</p>';
@@ -7963,12 +7972,33 @@ function rotaSubmitRequest(){
   }};
 
   btn.disabled=true; btn.textContent="Sending\u2026";
-  callFetch(CFG.endpoint,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)})
-    .then(function(r){return r.text();})
-    .then(function(t){
-      var out=JSON.parse(t);
-      if(!out.ok) throw new Error(out.error||"The record would not accept it.");
-      rotaClose(); rotaRender(true,null,true);
+
+  /* THE LIVE SERVER FIRST, from v1.76.0. It answers in a fraction of a second
+     and hands the request to the sheet itself. If it cannot be reached, or
+     refuses, the same body goes to Apps Script as it always did: the id is
+     made here, so a request both servers saw is still one request. */
+  var post=function(base){
+    return callFetch(base,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)})
+      .then(function(r){return r.text();})
+      .then(function(t){
+        var out=JSON.parse(t);
+        if(!out.ok) throw new Error(out.error||"The record would not accept it.");
+        return out;
+      });
+  };
+  var viaLive = !!(LIVE_ENDPOINT && LIVE_ENDPOINT !== CFG.endpoint);
+  (viaLive
+    ? post(LIVE_ENDPOINT).then(function(out){ out.__live=true; return out; },
+                               function(){ return post(CFG.endpoint); })
+    : post(CFG.endpoint))
+    .then(function(out){
+      rotaClose();
+      /* Taken by the live server: the sheet has not filed it yet, so asking
+         the sheet now could answer no. The Sunday is marked here, as the
+         sheet will mark it, and the live server's copy of the rota carries
+         it until the sheet's does. */
+      if(out.__live){ rotaNoteRequest(rotaEditDate, body.request.driver, type); rotaRender(true); }
+      else rotaRender(true,null,true);
       toast(type==="Request a swap"
         ? "Swap sent. The coordinator decides; neither Sunday has changed yet."
         : "Request sent. The coordinator decides; the rota has not changed yet.");
@@ -8007,6 +8037,20 @@ function rotaSubmitRequest(){
       }, true);
     });
 }
+/* A request the live server has taken, put on this phone's copy of the rota
+   the way the sheet will show it once it has filed it. */
+function rotaNoteRequest(date, driver, type){
+  var r=rotaRowFor(date);
+  if(!r) return;
+  var list=(r.requests||[]).slice();
+  for(var i=0;i<list.length;i++){ if(sameName(list[i].driver,driver)) return; }
+  list.push({ driver:driver, type:type, status:"Pending" });
+  r.requests=list;
+  if(!r.request) r.request=list[0];
+  if(!/cancel/i.test(String(r.status||""))) r.status="Change requested";
+  try{ rotaSaveCache(); }catch(e){}
+}
+
 /* Every way out of the request sheet: Cancel, the backdrop, and submitting.
 
    Since v1.13 this sheet does one job again. Stops and bookings outgrew it
@@ -8175,6 +8219,12 @@ $("mileConfirm").addEventListener("click",function(){
 $("sign").addEventListener("input",function(){ st.sign=this.value; paintFoot(); });
 $("toPending").addEventListener("click",function(){ renderPending(); show("pending"); });
 $("toRota").addEventListener("click",rotaOpen);
+/* The coordinator's app is a page of its own, on this site. The name goes
+   with him so the page can put it in the box; the PIN never does. */
+$("toCoord").addEventListener("click",function(){
+  try{ localStorage.setItem("coord.name.v1", st.driver.trim()); }catch(e){}
+  location.href = "coord/";
+});
 
 /* Straight from the home screen to the list a driver actually works from.
    It used to be two levels down, behind the rota, which is a poor place for
@@ -8267,6 +8317,14 @@ window.addEventListener("online",function(){ fetchLastMiles(); if(loadQ().length
 /* True once the Drivers tab itself has answered. Before that, REGISTER is
    config.js's guess, and pinNeeded treats "we have not heard" as "ask". */
 var REGISTER_FROM_SHEET = false;
+
+/* How far off the timetable a run is, in the words of the 27 September
+   ruling. Kept word for word with scheduleWords in sunday/index.html. */
+function scheduleWords(off){
+  var n = Math.abs(Number(off)||0);
+  if(!n) return "on time";
+  return n+(n===1?" minute ":" minutes ")+(off>0 ? "behind schedule" : "ahead of schedule");
+}
 
 /* The same twelve minutes the script bounds an offset by, as one name rather
    than a bare -12 buried in a paint function. The server calls it

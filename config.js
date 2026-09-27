@@ -25,9 +25,9 @@ window.CONFIG = {
      at the kerb. The sheet still gets every check; it just is not the thing
      a driver waits for.
 
-     Everything else, the rota, last mileage, asking for a rota change, still
-     goes to endpoint above, where it always did. None of it has anybody
-     waiting at a kerb.
+     Asking for a rota change comes here first as well, from v1.76.0, and goes
+     to endpoint above only if this does not answer. The rota and last
+     mileage are read from here and fall back to endpoint above.
 
      TO GO BACK: blank this line. Every call returns to Apps Script and the
      app behaves exactly as it did before, slowly but correctly. That is the
@@ -80,10 +80,16 @@ window.CONFIG = {
      It never covers the vehicle check. On the driver app it is only ever
      drawn on the first screen after he has picked his name, never while a
      check is open, and never on top of another sheet. On the passenger page
-     it is only drawn to somebody who has actually booked a seat.
+     it is offered to everybody who opens it, booked or not.
 
      Set false and it goes back to being a line. */
   alertPopup: true,
+
+  /* ---- The coordinator's app, at coord/ ---------------------------------
+     idleMinutes     how long it keeps your PIN while nobody touches it.
+                     Then it locks and asks for the PIN again.
+     refreshSeconds  how often an open screen asks the live server again. */
+  coordApp: { idleMinutes: 15, refreshSeconds: 30 },
 
   /* Where the buses are kept: 3-5 Chester Road, Liverpool L6 4DY.
 
@@ -217,6 +223,10 @@ window.CONFIG = {
                        there are no coordinates to work it out properly
        speedMph        only used to turn a distance into a drive time
        maxSkipMinutes  a cap, so one absurd gap cannot swallow a whole leg
+       maxBehindMinutes  how far behind a bus may be and still be given an
+                       estimate. 0 is no limit
+       keepMinutes     how long an estimate stays up after its time has
+                       passed with the stop still unmarked
 
      KEEP THIS EQUAL TO ETA_RULES IN Code.gs. The driver's list is drawn from
      the live server's copy and the passenger's alert is worded from it too,
@@ -230,7 +240,9 @@ window.CONFIG = {
     dwellSeconds: 75,
     skipSaves: 0.8,
     speedMph: 18,
-    maxSkipMinutes: 6
+    maxSkipMinutes: 6,
+    maxBehindMinutes: 0,
+    keepMinutes: 15
   },
 
   /* ---- When a passenger is told something -------------------------------
