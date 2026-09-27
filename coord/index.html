@@ -1,1 +1,1556 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1B222C">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-title" content="Coordinator">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- BUILD v1.77.0 · THE COORDINATOR'S APP.
 
+     What the coordinator used to open the spreadsheet for, on his phone: the
+     rota, rota requests, bookings, defects, the run record and the "have a
+     look" reports. Every change goes to the live server under his PIN and is
+     answered at once; the spreadsheet applies it a few seconds later with the
+     same code a person editing that cell sets going.
+
+     No service worker, like the page an email links to: a coordinator acting
+     on a copy of the morning served from a cache is acting on a stale picture.
+     The driver app's worker leaves this folder to the network. With no signal
+     it does not open, and that is the right answer for a page that changes
+     the record. -->
+<title>Coordinator · RCCG Dominion Assembly Liverpool</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180"
+      href="https://drolnstone.github.io/minibus-check/icon-driver-180.png">
+<link rel="icon" type="image/png" sizes="180x180"
+      href="https://drolnstone.github.io/minibus-check/icon-driver-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" media="print" onload="this.media='all';this.onload=null"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* The driver app's colours, names and themes, so the two read as one app.
+   Green, amber and red keep their meanings in every theme: done, waiting,
+   refused or stopped. */
+:root{
+  --ink:#16191F;--paper:#F4F5F6;--card:#FFFFFF;
+  --steel:#1B222C;--steel-2:#2A3542;--hair:#D3D7DC;--muted:#5C6672;
+  --pass:#146B41;--pass-bg:#E6F2EB;--pass-line:#B7D8C6;--pass-ink:#0E4A2D;
+  --warn:#9E5F00;--warn-bg:#FDF3E2;--warn-line:#EBD3A8;--warn-ink:#5A4008;
+  --stop:#A8231B;--stop-bg:#FBE9E7;--stop-line:#E8BCB7;--stop-ink:#6B1710;
+  --pass-on:#FFFFFF;--warn-on:#FFFFFF;--stop-on:#FFFFFF;
+  --info:#2C6FA8;--info-deep:#244E72;--info-bg:#EEF5FB;--info-line:#B8D1E6;--info-ring:#9CC4EC;
+  --on-accent:#FFFFFF;--accent-ink:#1B222C;
+  --plate:#F4C11E;--plate-ink:#101010;
+  --ink-2:#2E353D;--faint:#AEB8C4;--press:#EDEFF1;
+  --dash-ink:#EEF1F4;--dash-dim:#ACB7C2;
+  --scrim:rgba(22,25,31,.48);
+  color-scheme:light;
+  --r:10px;--tap:52px;
+  --safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px);
+  --safe-l:env(safe-area-inset-left,0px);--safe-r:env(safe-area-inset-right,0px);
+}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --ink:#E7EBF0;--paper:#0E1216;--card:#181D25;
+  --steel:#31404F;--steel-2:#3D4E60;--hair:#2B333E;--muted:#9EA9B6;
+  --pass:#21A163;--pass-bg:#12291F;--pass-line:#265741;--pass-ink:#7FDCAB;
+  --warn:#BF7A08;--warn-bg:#2B2113;--warn-line:#5C4826;--warn-ink:#EFCB8B;
+  --stop:#D85F55;--stop-bg:#2E1715;--stop-line:#5E2F2A;--stop-ink:#FFB0A4;
+  --pass-on:#16191F;--warn-on:#16191F;--stop-on:#16191F;
+  --info:#5896D6;--info-deep:#9AC6EA;--info-bg:#152431;--info-line:#2E4356;--info-ring:#3E5E79;
+  --accent-ink:#9DB4CC;--ink-2:#CAD1DA;--faint:#7E8996;--press:#232A33;
+  --scrim:rgba(0,0,0,.62);
+}
+html[data-theme="green"]{--steel:#14532D;--steel-2:#1E6B3C;--paper:#F2F6F3;--accent-ink:#14532D}
+html[data-theme="navy"]{--steel:#1E3260;--steel-2:#2C4680;--paper:#F2F4F9;--accent-ink:#1E3260}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
+button{font:inherit;color:inherit;cursor:pointer;border:none;background:none;padding:0}
+input,textarea,select{font:inherit;color:inherit}
+[hidden]{display:none!important}
+
+/* ---- the bar across the top ---- */
+.bar{position:sticky;top:0;z-index:60;background:var(--steel);color:var(--dash-ink);
+  padding-top:var(--safe-t);border-bottom:3px solid rgba(0,0,0,.35)}
+.bar-in{max-width:640px;margin:0 auto;display:flex;align-items:center;gap:8px;min-height:54px;
+  padding:6px calc(12px + var(--safe-r)) 6px calc(12px + var(--safe-l))}
+.bar-back{flex:none;width:40px;height:40px;margin-left:-6px;border-radius:8px;color:var(--dash-ink);
+  display:flex;align-items:center;justify-content:center}
+.bar-back svg{width:22px;height:22px}
+.bar-id{flex:1;min-width:0}
+.bar-id b{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;
+  letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
+.bar-id span{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:500;font-size:12px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--dash-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-btn{flex:none;min-height:36px;padding:0 12px;border:1.5px solid rgba(255,255,255,.35);border-radius:8px;
+  color:var(--dash-ink);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:14px;
+  letter-spacing:.08em;text-transform:uppercase}
+.banner{display:none;background:var(--warn-bg);border-bottom:1px solid var(--warn);color:var(--warn-ink);
+  padding:9px calc(14px + var(--safe-r)) 9px calc(14px + var(--safe-l));font-size:14px;text-align:center}
+.banner.is-on{display:block}
+
+/* ---- the page ---- */
+.wrap{max-width:640px;margin:0 auto;
+  padding:16px calc(14px + var(--safe-r)) calc(48px + var(--safe-b)) calc(14px + var(--safe-l))}
+.screen{display:none}
+.screen.is-on{display:block;animation:fade .2s ease}
+@keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.eyebrow{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+h1{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:30px;line-height:1.06;margin:0 0 12px}
+h2{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:26px;line-height:1.1;margin:0 0 8px}
+h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
+.card{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);padding:12px 13px}
+.card+.card{margin-top:10px}
+.tiny{font-size:13px;color:var(--muted);margin:6px 0 0}
+.center{text-align:center}
+.mono{font-family:"IBM Plex Mono",monospace}
+.empty{text-align:center;padding:28px 12px;color:var(--muted)}
+.say{min-height:1.3em;margin:10px 0 0;font-size:14px;color:var(--muted)}
+.say.bad{color:var(--stop)}
+.version{text-align:center;margin-top:18px;font-family:"Barlow Condensed",sans-serif;font-size:11px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.foot-link{display:block;margin:10px auto 0;font-family:"Barlow Condensed",sans-serif;font-size:13px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:center}
+
+/* ---- fields and buttons ---- */
+.field{margin-bottom:12px}
+.field:last-child{margin-bottom:0}
+.field label{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:14px;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.field input,.field textarea,.field select{width:100%;padding:12px;border:1.5px solid var(--hair);
+  border-radius:8px;background:var(--card);font-size:17px}
+.field textarea{min-height:84px;resize:vertical}
+.field select{appearance:none;-webkit-appearance:none;padding-right:40px;
+  background:var(--card) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9'><path d='M1 1l6 6 6-6' stroke='%235C6672' stroke-width='2' fill='none' stroke-linecap='round'/></svg>") no-repeat right 14px center}
+.field input:focus,.field textarea:focus,.field select:focus{outline:3px solid var(--info-ring);outline-offset:1px;border-color:var(--steel-2)}
+.idrow{display:flex;gap:10px;align-items:end}
+.idrow .field{margin:0}
+.idrow .grow{flex:1 1 auto;min-width:0}
+.idrow .pinf{flex:0 0 108px}
+.pinbox{text-align:center;letter-spacing:.32em}
+.btn{min-height:var(--tap);padding:0 16px;border-radius:9px;font-family:"Barlow Condensed",sans-serif;
+  font-weight:700;font-size:18px;letter-spacing:.05em;text-transform:uppercase;display:inline-flex;
+  align-items:center;justify-content:center;border:1.5px solid transparent;transition:transform .08s,opacity .15s;
+  text-align:center;line-height:1.1}
+.btn:active{transform:scale(.98)}
+.btn[disabled]{opacity:.4;pointer-events:none}
+.btn-main{background:var(--steel);color:var(--on-accent)}
+.btn-ghost{background:var(--card);border-color:var(--hair);color:var(--ink)}
+.btn-stop{background:var(--stop);color:var(--stop-on)}
+.btn-wide{width:100%}
+.mini{min-height:38px;padding:0 11px;border:1.5px solid var(--hair);border-radius:7px;background:var(--card);
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:14px;letter-spacing:.05em;
+  text-transform:uppercase;white-space:nowrap;flex:none;display:inline-flex;align-items:center;justify-content:center}
+.mini.warn{border-color:var(--stop-line);color:var(--stop)}
+.mini:active{transform:scale(.97)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.chips button{min-height:40px;padding:0 14px;border:1.5px solid var(--hair);border-radius:20px;background:var(--card);
+  font-size:14px;font-weight:500}
+.chips button.on{background:var(--steel);border-color:var(--steel);color:var(--on-accent)}
+
+/* ---- small labels ---- */
+.tag{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:11px;
+  letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;border-radius:4px;border:1px solid var(--hair);
+  color:var(--muted);background:var(--card);white-space:nowrap;vertical-align:middle}
+.tag.pass{background:var(--pass-bg);color:var(--pass);border-color:var(--pass-line)}
+.tag.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-line)}
+.tag.stop{background:var(--stop-bg);color:var(--stop);border-color:var(--stop-line)}
+.tag.info{background:var(--info-bg);color:var(--info-deep);border-color:var(--info-line)}
+.plate{display:inline-block;background:var(--plate);color:var(--plate-ink);font-family:"Barlow Condensed",sans-serif;
+  font-weight:700;font-size:14px;letter-spacing:.05em;padding:0 6px;border-radius:3px;border:1.5px solid var(--plate-ink);
+  white-space:nowrap;line-height:1.35}
+
+/* ---- home ---- */
+.need{display:flex;align-items:center;gap:10px;border:1.5px solid var(--warn-line);background:var(--warn-bg);
+  color:var(--warn-ink);border-radius:var(--r);padding:7px 10px 7px 12px;margin:0 0 7px;width:100%;text-align:left;min-height:46px}
+.need.stop{border-color:var(--stop-line);background:var(--stop-bg);color:var(--stop-ink)}
+.need p{margin:0;flex:1;font-size:15px;font-weight:500;line-height:1.3}
+.need .mini{background:var(--card)}
+.need .go{font-size:22px;line-height:1;opacity:.7}
+.menu{list-style:none;margin:12px 0 0;padding:0;border:1px solid var(--hair);border-radius:var(--r);
+  background:var(--card);overflow:hidden}
+.menu button{display:flex;align-items:center;gap:10px;width:100%;min-height:46px;padding:0 12px 0 14px;
+  border-bottom:1px solid var(--hair);text-align:left}
+.menu li:last-child button{border-bottom:none}
+.menu button:active{background:var(--press)}
+.menu .t{flex:1;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:18px;letter-spacing:.03em}
+.menu .n{font-size:14px;color:var(--muted)}
+.menu .n.warn{color:var(--warn);font-weight:600}
+.menu .n.stop{color:var(--stop);font-weight:600}
+.menu .go{color:var(--faint);font-size:20px;line-height:1}
+
+/* ---- a Sunday ---- */
+.sun{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--hair);
+  border-radius:var(--r);padding:8px 12px 5px}
+.sun+.sun{margin-top:8px}
+.sun.now{border:2px solid var(--steel)}
+.sun:active{background:var(--press)}
+.sun-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.sun-date{flex:1;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:18px;letter-spacing:.04em;
+  text-transform:uppercase;white-space:nowrap}
+.leg{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:8px;padding:4px 0;
+  border-top:1px solid var(--hair)}
+.leg-rt{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:12px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted)}
+.leg-who{min-width:0;font-weight:600;font-size:15px;line-height:1.25;overflow-wrap:anywhere}
+.leg-who small{display:block;font-weight:400;font-size:13px;color:var(--muted)}
+.leg-who.off{color:var(--stop)}
+.leg-end{display:flex;align-items:center;gap:6px}
+.seats{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted)}
+.seats.over{color:var(--stop);font-weight:600}
+
+/* ---- editing a Sunday ---- */
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 0 12px}
+.seg button{min-height:46px;border:1.5px solid var(--hair);border-radius:8px;background:var(--card);
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:14px;letter-spacing:.03em;
+  text-transform:uppercase;line-height:1.05;padding:0 4px}
+.seg button.on{background:var(--pass);border-color:var(--pass);color:var(--pass-on)}
+.seg button.on.off{background:var(--stop);border-color:var(--stop);color:var(--stop-on)}
+.route-card{padding-top:9px;padding-bottom:4px}
+.route-card h3{margin:0;font-size:14px}
+.row{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--hair);min-height:50px}
+.route-card .row:first-of-type{border-top:none}
+.row .k{flex:0 0 56px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:13px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.row .v{flex:1;min-width:0;font-weight:600;overflow-wrap:anywhere}
+.row .v small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+.row .v.none{font-weight:400;color:var(--muted)}
+.row .acts{display:flex;gap:6px}
+.notes{margin:0;padding:0;list-style:none}
+.notes li{padding:6px 0;border-top:1px dashed var(--hair);font-size:15px;white-space:pre-line}
+.notes li:first-child{border-top:none}
+
+/* ---- lists to choose from ---- */
+.pick{list-style:none;margin:0;padding:0;border:1px solid var(--hair);border-radius:var(--r);background:var(--card);
+  overflow:auto;max-height:50vh}
+.pick button{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:48px;
+  padding:6px 13px;border-bottom:1px solid var(--hair);text-align:left}
+.pick li:last-child button{border-bottom:none}
+.pick b{font-weight:600}
+.pick small{color:var(--muted);font-size:13px;text-align:right}
+.pick button.on{background:var(--info-bg);box-shadow:inset 4px 0 0 var(--info)}
+.pick button[disabled]{opacity:.45;cursor:default}
+.stepper{display:flex;align-items:center;gap:10px}
+.stepper button{width:52px;height:52px;border:1.5px solid var(--hair);border-radius:9px;background:var(--card);
+  font-size:26px;font-weight:600;line-height:1}
+.stepper output{min-width:48px;text-align:center;font-family:"IBM Plex Mono",monospace;font-size:24px;font-weight:600}
+
+/* ---- requests ---- */
+.req{background:var(--card);border:1px solid var(--hair);border-left:5px solid var(--warn);border-radius:var(--r);
+  padding:11px 12px;margin-bottom:10px}
+.req-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.req-head b{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:21px}
+.req p{margin:4px 0 0;font-size:15px}
+.req .why{color:var(--ink-2);white-space:pre-line}
+.req-acts{display:flex;gap:8px;margin-top:10px}
+.req-acts .btn{flex:1;min-height:46px;font-size:17px}
+.list{list-style:none;margin:0;padding:0;border:1px solid var(--hair);border-radius:var(--r);background:var(--card)}
+.list li{padding:10px 12px;border-top:1px solid var(--hair);font-size:15px}
+.list li:first-child{border-top:none}
+.list small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+
+/* ---- bookings ---- */
+.bk-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bk-head b{flex:1;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:21px}
+.bs{padding:8px 0;border-top:1px solid var(--hair)}
+.bs-h{display:flex;align-items:baseline;gap:8px}
+.bs-h .tm{flex:0 0 44px;font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted)}
+.bs-h .nm{flex:1;min-width:0;font-weight:500}
+.bs-h .ct{font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:15px}
+.bs.nobody .nm,.bs.nobody .ct{color:var(--muted);font-weight:400}
+.bs.passed .nm{color:var(--muted)}
+.bk{display:flex;align-items:center;gap:8px;margin:4px 0 0 52px;font-size:14px;min-height:36px}
+.bk .who{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px}
+.bk .n{font-weight:600;white-space:nowrap}
+.bk a{color:var(--info-deep);font-weight:600;text-decoration:none;white-space:nowrap}
+.bk .mini{min-height:34px;padding:0 9px;font-size:13px}
+.bs-more{display:block;width:100%;min-height:42px;margin-top:2px;padding:0;border-top:1px solid var(--hair);
+  text-align:left;font-size:14px;font-weight:600;color:var(--muted)}
+.bs-more:active{color:var(--ink)}
+.bk-none{margin:6px 0 2px;font-size:14px;color:var(--muted)}
+details.more{margin-top:12px}
+details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8px 0;cursor:pointer}
+
+/* ---- defects ---- */
+.def{background:var(--card);border:1px solid var(--hair);border-left:5px solid var(--warn);border-radius:var(--r);
+  padding:11px 12px;margin-bottom:10px}
+.def.crit{border-left-color:var(--stop)}
+.def.adv{border-left-color:var(--info)}
+.def-head{display:flex;align-items:flex-start;gap:8px}
+.def-head b{flex:1;font-weight:600;font-size:17px;line-height:1.25}
+.def p{margin:5px 0 0;font-size:15px}
+.def .did{white-space:pre-line;color:var(--ink-2)}
+.def-foot{display:flex;align-items:center;gap:8px;margin-top:6px}
+.def-foot .tiny{flex:1;min-width:0;margin:0}
+.def-foot .mini{min-height:36px}
+
+/* ---- the run record ---- */
+.ev{display:grid;grid-template-columns:44px 1fr auto auto;align-items:center;gap:8px;padding:7px 0;
+  border-top:1px solid var(--hair)}
+.ev .tm{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted)}
+.ev .nm{min-width:0;font-weight:500;line-height:1.25}
+.ev .nm small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.ev .at{font-family:"IBM Plex Mono",monospace;font-size:14px;font-weight:600;text-align:right;white-space:nowrap}
+.ev .at small{display:block;font-weight:500;font-size:12px;color:var(--muted)}
+.ev .at.late small{color:var(--warn)}
+.ev.miss .at{color:var(--muted);font-weight:400}
+.ev .mini{min-height:34px;padding:0 10px;font-size:13px}
+
+/* ---- reports ---- */
+.rep h3{display:flex;align-items:center;gap:8px}
+.rep h3::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--faint);flex:none}
+.rep h3.bad::before{background:var(--stop)}
+.rep h3.todo::before{background:var(--warn)}
+.rep h3.good::before{background:var(--pass)}
+.rep ul{list-style:none;margin:0;padding:0;border:1px solid var(--hair);border-radius:var(--r);background:var(--card)}
+.rep li{padding:8px 12px;border-top:1px solid var(--hair);font-size:15px;white-space:pre-line}
+.rep li:first-child{border-top:none}
+.lead{font-size:17px;font-weight:600;margin:0 0 4px}
+.lead.bad{color:var(--stop)}
+
+/* ---- the sheet that rises for every change ---- */
+.sheet-wrap{position:fixed;inset:0;z-index:120;background:var(--scrim);display:none;align-items:flex-end;justify-content:center}
+.sheet-wrap.is-on{display:flex}
+.sheet{width:min(640px,100%);background:var(--paper);border-radius:14px 14px 0 0;
+  padding:16px calc(14px + var(--safe-r)) calc(18px + var(--safe-b)) calc(14px + var(--safe-l));max-height:92vh;overflow:auto}
+@media (min-width:641px){.sheet-wrap{align-items:center}.sheet{border-radius:14px}}
+.sheet p.line{margin:0 0 12px;font-size:15px;color:var(--ink-2)}
+.sheet-acts{display:flex;gap:8px;margin-top:14px}
+.sheet-acts .btn{flex:1 1 0;min-width:0}
+.sheet-acts .btn:last-child{flex-grow:2}
+
+.toast{position:fixed;left:50%;bottom:calc(24px + var(--safe-b));transform:translateX(-50%) translateY(14px);
+  background:var(--steel);color:var(--on-accent);padding:11px 16px;border-radius:8px;font-size:14px;opacity:0;
+  pointer-events:none;transition:.25s;z-index:200;width:max-content;max-width:92vw;text-align:center}
+.toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.bad{background:var(--stop);color:var(--stop-on)}
+.toast.top{top:calc(12px + var(--safe-t));bottom:auto}
+</style>
+<script>
+/* The theme the driver app keeps on this phone, before the first paint. */
+(function(){
+  var t="auto";
+  try{ t=localStorage.getItem("fleet.theme.v1")||"auto"; }catch(e){}
+  var m=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
+  document.documentElement.setAttribute("data-theme", t!=="auto" ? t : ((m&&m.matches)?"dark":"light"));
+})();
+</script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <button class="bar-back" id="barBack" type="button" aria-label="Back" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="bar-id"><b id="barTitle">Coordinator</b><span id="barSub">RCCG Dominion Assembly Liverpool</span></div>
+    <button class="bar-btn" id="barLock" type="button" hidden>Lock</button>
+  </div>
+</header>
+<div class="banner" id="banner"></div>
+
+<main class="wrap">
+
+  <section class="screen" id="s-sign">
+    <h1>Who is it?</h1>
+    <div class="card">
+      <div class="idrow">
+        <div class="field grow">
+          <label for="signName">Name</label>
+          <select id="signName"></select>
+        </div>
+        <div class="field pinf">
+          <label for="signPin">PIN</label>
+          <input id="signPin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"
+                 class="mono pinbox" placeholder="&bull;&bull;&bull;&bull;">
+        </div>
+      </div>
+      <p class="say" id="signSay"></p>
+      <button class="btn btn-main btn-wide" id="signGo" type="button" style="margin-top:6px">Open</button>
+    </div>
+    <a class="foot-link" href="../">Driver app</a>
+    <div class="version" id="signVersion"></div>
+  </section>
+
+  <section class="screen" id="s-home"><div id="homeBody"></div></section>
+  <section class="screen" id="s-rota"><div id="rotaBody"></div></section>
+  <section class="screen" id="s-sunday"><div id="sundayBody"></div></section>
+  <section class="screen" id="s-requests"><div id="requestsBody"></div></section>
+  <section class="screen" id="s-bookings"><div id="bookingsBody"></div></section>
+  <section class="screen" id="s-defects"><div id="defectsBody"></div></section>
+  <section class="screen" id="s-runs"><div id="runsBody"></div></section>
+  <section class="screen" id="s-look"><div id="lookBody"></div></section>
+  <section class="screen" id="s-report"><div id="reportBody"></div></section>
+  <section class="screen" id="s-activity"><div id="activityBody"></div></section>
+</main>
+
+<div class="sheet-wrap" id="sheet" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <p class="eyebrow" id="sheetEyebrow"></p>
+    <h2 id="sheetTitle"></h2>
+    <div id="sheetBody"></div>
+    <p class="say" id="sheetSay"></p>
+    <div class="sheet-acts" id="sheetActs"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="../config.js"></script>
+<script>
+"use strict";
+
+/* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
+   page's two. One number for every page in the release. */
+var PAGE_VERSION = "v1.77.0";
+
+var CFG = window.CONFIG || {};
+var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
+var TOKEN = String(CFG.token || "");
+var SET = { idleMinutes: 15, refreshSeconds: 30 };
+(function(){
+  var c = CFG.coordApp || {};
+  if (Number(c.idleMinutes) > 0) SET.idleMinutes = Number(c.idleMinutes);
+  if (Number(c.refreshSeconds) >= 10) SET.refreshSeconds = Number(c.refreshSeconds);
+})();
+var ROLES = CFG.fullInspectionRoles || ["Coordinator", "Minister in Charge"];
+var NAME_KEY = "coord.name.v1";
+var TZ = "Europe/London";
+
+/* The PIN is held here, in memory, and nowhere else. It goes with every call
+   because the live server checks it on every call. Locking forgets it. */
+var who = "", pin = "";
+var D = null;                               /* the last answer to "load" */
+var BOOK = { sunday: "", data: null };
+var BOOK_ALL = {};
+var RUNS = { sunday: "", data: null };
+var REP = { name: "", data: null, asking: false };
+var ROTA_SHOW = 12;
+var busy = false, touched = Date.now(), seq = 0, lastSeen = { server: "", sheet: "" };
+var SHEET = { id: "", pick: "", onGo: null };
+
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){
+  return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function storeGet(k){ try{ return localStorage.getItem(k) || ""; }catch(e){ return ""; } }
+function storeSet(k,v){ try{ localStorage.setItem(k, v); }catch(e){} }
+function same(a,b){ return String(a||"").trim().toLowerCase() === String(b||"").trim().toLowerCase() && !!String(a||"").trim(); }
+
+/* ---- days and times, in London ------------------------------------------ */
+
+var DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+var DAYL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+var MONS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+var MONL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+function parts(key){
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key||""));
+  if(!m) return null;
+  var y=+m[1], mo=+m[2], d=+m[3];
+  return { y:y, mo:mo, d:d, dow:new Date(Date.UTC(y,mo-1,d)).getUTCDay() };
+}
+function shortDay(key){ var p=parts(key); return p ? DAYS[p.dow]+" "+p.d+" "+MONS[p.mo-1] : String(key||""); }
+function longDay(key){ var p=parts(key); return p ? DAYL[p.dow]+" "+p.d+" "+MONL[p.mo-1] : String(key||""); }
+function plusWeeks(key, n){
+  var p=parts(key); if(!p) return "";
+  var x=new Date(Date.UTC(p.y,p.mo-1,p.d+7*n));
+  return x.getUTCFullYear()+"-"+("0"+(x.getUTCMonth()+1)).slice(-2)+"-"+("0"+x.getUTCDate()).slice(-2);
+}
+var HM = null;
+function hhmm(ms){
+  if(!ms) return "";
+  try{
+    HM = HM || new Intl.DateTimeFormat("en-GB",{ timeZone:TZ, hour:"2-digit", minute:"2-digit", hour12:false });
+    return HM.format(new Date(Number(ms))).replace(/^24/,"00");
+  }catch(e){ var d=new Date(Number(ms)); return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); }
+}
+function dayOf(ms){
+  try{
+    var f = new Intl.DateTimeFormat("en-GB",{ timeZone:TZ, year:"numeric", month:"2-digit", day:"2-digit" });
+    var p = {}; f.formatToParts(new Date(Number(ms))).forEach(function(x){ p[x.type]=x.value; });
+    return p.year+"-"+p.month+"-"+p.day;
+  }catch(e){ return ""; }
+}
+function when(ms){ return ms ? shortDay(dayOf(ms)) + " " + hhmm(ms) : ""; }
+function phoneWords(p){ p=String(p||""); return p.length===11 ? p.slice(0,5)+" "+p.slice(5) : p; }
+function seatWords(n){ return n + (Number(n)===1 ? " seat" : " seats"); }
+function offWords(off){
+  if(off === null || off === undefined || off === "") return "";
+  off = Number(off);
+  return off === 0 ? "on time" : (off > 0 ? "+" + off : "−" + (-off));
+}
+
+/* ---- talking to the live server ---------------------------------------- */
+
+function post(body, ms){
+  return Promise.race([
+    fetch(LIVE, { method:"POST", redirect:"follow",
+                  headers:{ "Content-Type":"text/plain;charset=utf-8" },
+                  body: JSON.stringify(body) })
+      .then(function(r){ return r.text(); })
+      .then(function(t){ return JSON.parse(t); }),
+    new Promise(function(_, no){ setTimeout(function(){ no(new Error("slow")); }, ms || 20000); })
+  ]);
+}
+
+function api(op, extra, ms){
+  var body = { action:"coord", token:TOKEN, who:who, pin:pin, op:op };
+  for(var k in (extra||{})) if(Object.prototype.hasOwnProperty.call(extra,k)) body[k] = extra[k];
+  return post(body, ms).then(function(out){
+    if(out){ lastSeen.server = out.server || lastSeen.server; lastSeen.sheet = out.sheet || lastSeen.sheet; }
+    var t = authWords(out);
+    if(t){ lock(t); throw new Error("locked"); }
+    banner("");
+    return out;
+  }, function(err){
+    banner(navigator.onLine === false ? "No signal. Changes need a connection." : "The live server is not answering.");
+    throw err;
+  });
+}
+
+function authWords(out){
+  if(!out || out.ok) return "";
+  if(out.locked) return "Too many wrong tries. Wait " + (out.minutes || 5) + " minutes.";
+  if(out.error === "bad pin") return "That PIN is not right." +
+    (out.left > 0 ? " " + out.left + (out.left === 1 ? " try" : " tries") + " left." : "");
+  if(out.error === "not authorised") return "Only a coordinator can open this.";
+  if(out.error === "unknown driver") return "That name is not on the Drivers tab.";
+  if(out.error === "no pin") return "There is no PIN against your name on the Drivers tab.";
+  if(out.error === "no driver") return "Choose your name.";
+  return "";
+}
+
+/* The live server's refusals are written as sentences. Anything else is not
+   put in front of anybody. */
+function plain(e){
+  var m = String((e && e.message) || e || "").trim();
+  if(!m || m === "locked") return "";
+  if(m === "slow") return "The live server took too long to answer.";
+  if(/failed to fetch|load failed|networkerror/i.test(m)) return "No signal. Nothing was changed.";
+  if(/^[a-z ]+$/.test(m) && m.split(" ").length < 4) return "The live server did not take that. Nothing was changed.";
+  if(/Error\b|undefined|is not a function/.test(m)) return "Something went wrong at the live server. Nothing was changed.";
+  return m;
+}
+
+function banner(t){
+  var b = $("banner");
+  b.textContent = t || "";
+  b.classList.toggle("is-on", !!t);
+}
+
+var toastT = null;
+function toast(t, bad){
+  var el = $("toast");
+  el.textContent = t;
+  el.classList.toggle("bad", !!bad);
+  el.classList.toggle("top", !!(SHEET && SHEET.open));
+  el.classList.add("is-on");
+  clearTimeout(toastT);
+  toastT = setTimeout(function(){ el.classList.remove("is-on"); }, bad ? 5200 : 3600);
+}
+
+/* A change, once. The id is made when the sheet opens, so a second tap after
+   a lost answer is the same change and the live server does it once. */
+function newId(){
+  var a = new Uint8Array(6);
+  try{ crypto.getRandomValues(a); }catch(e){ for(var i=0;i<a.length;i++) a[i]=Math.floor(Math.random()*256); }
+  return "c" + Date.now().toString(36) + "-" + Array.prototype.map.call(a, function(x){ return ("0"+x.toString(16)).slice(-2); }).join("");
+}
+
+function act(a, after){
+  if(busy) return;
+  busy = true; sheetBusy(true); sheetSay("Sending…");
+  var body = {}; for(var k in a) body[k] = a[k];
+  body.id = SHEET.id || newId();
+  api("act", { act: body }).then(function(out){
+    busy = false; sheetBusy(false);
+    if(!out || !out.ok){ sheetSay(plain(out && out.error) || "The live server did not take that. Nothing was changed.", true); return; }
+    closeSheet();
+    toast((out.action && out.action.words) || "Done.");
+    if(after) after(out);
+    refresh();
+    /* Once more, a little later, for the sheet's answer. */
+    setTimeout(refresh, 8000);
+  }, function(err){
+    busy = false; sheetBusy(false);
+    sheetSay(plain(err) || "The live server did not answer. Nothing was changed.", true);
+  });
+}
+
+/* ---- signing in, locking -------------------------------------------------- */
+
+function signNames(){
+  var sel = $("signName");
+  var list = (CFG.drivers || []).filter(function(d){ return ROLES.indexOf(d.role) !== -1; });
+  /* The name already in the box stays there: a wrong PIN is not a wrong name. */
+  var had = sel.value || who || storeGet(NAME_KEY);
+  sel.innerHTML = '<option value="">Choose your name</option>' + list.map(function(d){
+    return '<option value="'+esc(d.name)+'">'+esc(d.name)+'</option>';
+  }).join("");
+  if(had && list.some(function(d){ return d.name === had; })) sel.value = had;
+  else if(list.length === 1) sel.value = list[0].name;
+}
+
+var signT = null;
+function signIn(){
+  var n = $("signName").value;
+  var p = String($("signPin").value || "").replace(/\D/g,"");
+  if(!n){ say("signSay","Choose your name.",true); return; }
+  if(p.length < 4){ say("signSay","Key your PIN.",true); return; }
+  if(busy) return;
+  who = n; pin = p; busy = true;
+  $("signGo").disabled = true;
+  say("signSay","Checking…");
+  api("load", {}).then(function(out){
+    busy = false; $("signGo").disabled = false;
+    if(!out || !out.ok){ pin = ""; say("signSay", plain(out && out.error) || "The live server did not open it.", true); return; }
+    storeSet(NAME_KEY, who);
+    $("signPin").value = "";
+    say("signSay","");
+    D = out; touched = Date.now();
+    if(!location.hash || location.hash === "#sign") history.replaceState({ n: 0 }, "", "#home");
+    route();
+  }, function(err){
+    busy = false; $("signGo").disabled = false;
+    if(pin) { pin = ""; say("signSay", plain(err) || "The live server did not answer.", true); }
+  });
+}
+
+function lock(words){
+  pin = ""; D = null;
+  $("signPin").value = ""; BOOK = { sunday:"", data:null }; RUNS = { sunday:"", data:null }; REP = { name:"", data:null };
+  closeSheet();
+  say("signSay", words || "", !!words);
+  /* The address is left alone, so keying the PIN again goes back to where
+     he was. */
+  route();
+}
+
+function say(id, t, bad){
+  var el = $(id); if(!el) return;
+  el.textContent = t || "";
+  el.className = bad ? "say bad" : "say";
+}
+
+/* ---- screens ------------------------------------------------------------- */
+
+var TITLES = { home:"Coordinator", rota:"Rota", sunday:"Rota", requests:"Rota requests", bookings:"Bookings",
+               defects:"Defects", runs:"Run record", look:"Have a look", report:"Have a look",
+               activity:"What I have done", sign:"Coordinator" };
+
+/* Each screen is a step in the phone's own history, so its back gesture
+   works. The bar's back arrow never leaves the app: at the first step it
+   goes home. */
+function go(where){ seq++; history.pushState({ n: seq }, "", "#" + where); route(); }
+function back(){
+  if(history.state && history.state.n > 0) history.back();
+  else { history.replaceState({ n: 0 }, "", "#home"); route(); }
+}
+
+function route(){
+  var h = String(location.hash || "").replace(/^#/,"");
+  var name = h.split("/")[0] || "home";
+  var arg = decodeURIComponent(h.split("/").slice(1).join("/"));
+  if(!pin || !D) name = "sign";
+  else if(name === "sign" || !TITLES[name]) name = "home";
+  Array.prototype.forEach.call(document.querySelectorAll(".screen"), function(s){
+    s.classList.toggle("is-on", s.id === "s-" + name);
+  });
+  $("barTitle").textContent = TITLES[name];
+  $("barSub").textContent = (name === "sign" || !who) ? "RCCG Dominion Assembly Liverpool" : who;
+  $("barBack").hidden = (name === "home" || name === "sign");
+  $("barLock").hidden = (name !== "home");
+  paint(name, arg);
+  window.scrollTo(0, 0);
+}
+
+function current(){
+  var h = String(location.hash || "").replace(/^#/,"");
+  return { name: h.split("/")[0] || "home", arg: decodeURIComponent(h.split("/").slice(1).join("/")) };
+}
+
+function paint(name, arg){
+  if(name === "sign"){ signNames(); $("signVersion").textContent = versionLine(); return; }
+  if(name === "home") return paintHome();
+  if(name === "rota") return paintRota();
+  if(name === "sunday") return paintSunday(arg || D.today);
+  if(name === "requests") return paintRequests();
+  if(name === "bookings") return paintBookings(arg || D.today);
+  if(name === "defects") return paintDefects();
+  if(name === "runs") return paintRuns(arg || "");
+  if(name === "look") return paintLook();
+  if(name === "report") return paintReport(arg || "bookings");
+  if(name === "activity") return paintActivity();
+}
+
+function versionLine(){
+  return "coordinator " + PAGE_VERSION + (lastSeen.server ? " · server " + lastSeen.server : "") +
+         (lastSeen.sheet ? " · sheet " + lastSeen.sheet : "");
+}
+
+/* The current screen again, from a fresh answer. */
+function refresh(){
+  if(!pin || !D) return;
+  var c = current();
+  api("load", {}).then(function(out){
+    if(!out || !out.ok) return;
+    D = out;
+    /* These two carry their own data, fetched again in the background and
+       drawn when it lands, so the list does not blank while it does. */
+    if(c.name === "bookings") loadBookings(c.arg || D.today);
+    if(c.name === "runs" && RUNS.sunday) loadRuns(RUNS.sunday);
+    if(SHEET.open) return;              /* a choice half made is not redrawn under him */
+    var now = current();
+    if(now.name === c.name && now.arg === c.arg) paint(c.name, c.arg);
+  }, function(){});
+}
+
+/* ---- the rota, read ------------------------------------------------------- */
+
+function rows(){ return (D && D.rota && D.rota.rows) || []; }
+function rowFor(key){ var r = rows(); for(var i=0;i<r.length;i++) if(r[i].date === key) return r[i]; return null; }
+
+/* The shelf's rows say "actual" for North whether or not anybody is covering.
+   The tab's own two columns, worked out again. */
+function legs(r){
+  var n = String(r.primary||"").trim(), na = String(r.actual||"").trim();
+  var s = String(r.primary2||"").trim(), sa = String(r.actual2||"").trim();
+  return {
+    North: { sched:n, cover:(na && na !== n) ? na : "", bus:r.northBus || "" },
+    South: { sched:s, cover:(sa && sa !== s) ? sa : "", bus:r.southBus || "" }
+  };
+}
+function isOff(status, route){
+  var st = String(status||"").trim();
+  return st === "Cancelled/declined" || st === route + " cancelled";
+}
+function statusTag(st){
+  st = String(st||"").trim();
+  if(!st || st === "Confirmed") return "";
+  var tone = /cancel/i.test(st) || st === "No driver assigned" ? "stop"
+           : st === "Change requested" ? "warn" : st === "Covered" ? "info" : "";
+  return '<span class="tag '+tone+'">'+esc(st === "Cancelled/declined" ? "Called off" : st)+'</span>';
+}
+function pendingFor(key){
+  return ((D && D.requests) || []).filter(function(q){ return q.sunday === key && q.status === "Pending"; });
+}
+function activeDrivers(){ return ((D && D.drivers) || []).filter(function(d){ return d.active; }); }
+
+/* The last Sunday each man drove, from the rota rows already here. */
+function lastDrove(name){
+  var best = "";
+  rows().forEach(function(r){
+    if(r.date >= D.today) return;
+    var l = legs(r);
+    ["North","South"].forEach(function(rt){
+      var drove = l[rt].cover || l[rt].sched;
+      if(same(drove, name) && !isOff(r.status, rt) && r.date > best) best = r.date;
+    });
+  });
+  return best;
+}
+
+function sunCard(key, now){
+  var r = rowFor(key);
+  if(!r) return "";
+  var l = legs(r), seats = (D.seats && D.seats[key]) || {};
+  var h = '<button class="sun'+(now?' now':'')+'" type="button" data-go="sunday/'+esc(key)+'">' +
+          '<div class="sun-head"><span class="sun-date">'+esc(now ? longDay(key) : shortDay(key))+'</span>' +
+          statusTag(r.status) +
+          (pendingFor(key).length && r.status !== "Change requested" ? '<span class="tag warn">Request</span>' : '') +
+          (r.coordPending ? '<span class="tag info">To the sheet</span>' : '') + '</div>';
+  ["North","South"].forEach(function(rt){
+    var g = l[rt], off = isOff(r.status, rt);
+    if(!g.sched && !g.cover && rt === "South" && !off) return;
+    var name = g.cover || g.sched;
+    var s = seats[rt];
+    h += '<div class="leg"><span class="leg-rt">'+rt+'</span>' +
+         '<span class="leg-who'+(off?' off':'')+'">'+(off ? 'Called off' : esc(name || 'Nobody'))+
+           (!off && g.cover ? '<small>covering '+esc(g.sched)+'</small>' : '')+'</span>' +
+         '<span class="leg-end">' +
+           (s && !off && s.seats ? '<span class="seats'+(s.booked > s.seats ? ' over' : '')+'">'+s.booked+'/'+s.seats+'</span>' : '') +
+           (g.bus && !off ? '<span class="plate">'+esc(g.bus)+'</span>' : '') +
+         '</span></div>';
+  });
+  return h + '</button>';
+}
+
+/* ---- home ------------------------------------------------------------------ */
+
+function arrivalOf(route){
+  var s = ((D && D.stops) || []).filter(function(x){ return x.route === route && x.arrival; })[0];
+  return s ? s.time : "";
+}
+function addMin(t, n){
+  var m = /^(\d{1,2}):(\d{2})$/.exec(String(t||"")); if(!m) return "";
+  var x = (+m[1])*60 + (+m[2]) + n;
+  return ("0"+Math.floor(x/60)).slice(-2)+":"+("0"+(x%60)).slice(-2);
+}
+
+function needs(){
+  var out = [];
+  var chk = (D && D.checks) || {};
+  Object.keys(chk).forEach(function(reg){
+    if(chk[reg] && chk[reg].state === "stopped") {
+      out.push({ tone:"stop", text: reg + " was stopped at the walkaround.", btn:"Authorise", data:'data-do="authorise" data-reg="'+esc(reg)+'"' });
+    }
+  });
+  var runs = (D && D.runs) || {};
+  Object.keys(runs).forEach(function(rt){
+    var r = runs[rt];
+    if(!r || !r.started || r.ended) return;
+    var due = addMin(arrivalOf(rt), 30);
+    if(D.londonToday === D.today && due && hhmm(Date.now()) > due) {
+      out.push({ tone:"warn", text:"The " + rt + " run is still open.", btn:"End it", data:'data-do="endrun" data-route="'+esc(rt)+'"' });
+    }
+  });
+  var pend = ((D && D.requests) || []).filter(function(q){ return q.status === "Pending"; }).length;
+  if(pend) out.push({ tone:"warn", text: pend === 1 ? "A rota request is waiting." : pend + " rota requests are waiting.", go:"requests" });
+  Object.keys((D && D.seats) || {}).forEach(function(key){
+    Object.keys(D.seats[key]).forEach(function(rt){
+      var s = D.seats[key][rt];
+      if(s && !s.off && s.seats && s.booked > s.seats) {
+        out.push({ tone:"stop", text: rt + " is over by " + (s.booked - s.seats) + " on " + shortDay(key) + ".", go:"bookings/" + key });
+      }
+    });
+  });
+  var crit = ((D && D.defects) || []).filter(function(d){ return d.crit && d.kind !== "Advisory"; }).length;
+  if(crit) out.push({ tone:"stop", text: crit === 1 ? "A critical defect is open." : crit + " critical defects are open.", go:"defects" });
+  var refused = ((D && D.activity) || []).filter(function(x){ return x.state === "refused" && Date.now() - x.made < 2 * 86400000; }).length;
+  if(refused) out.push({ tone:"stop", text: refused === 1 ? "The sheet did not take a change." : "The sheet did not take " + refused + " changes.", go:"activity" });
+  return out;
+}
+
+function paintHome(){
+  var h = '';
+  needs().forEach(function(n){
+    if(n.go) h += '<button class="need '+n.tone+'" type="button" data-go="'+esc(n.go)+'"><p>'+esc(n.text)+'</p><span class="go">\u203A</span></button>';
+    else h += '<div class="need '+n.tone+'"><p>'+esc(n.text)+'</p><button class="mini" type="button" '+n.data+'>'+esc(n.btn)+'</button></div>';
+  });
+  if(D.rota && D.rota.error){
+    h += '<div class="need stop"><p>The rota has not reached the live server.</p></div>';
+  }
+  h += sunCard(D.today, true) || '<div class="card"><p class="tiny">'+esc(longDay(D.today))+' is not on the live server’s rota.</p></div>';
+  if(D.open && D.open !== D.today) h += sunCard(D.open, false);
+
+  var pend = (D.requests || []).filter(function(q){ return q.status === "Pending"; }).length;
+  var bk = D.open || D.today;
+  var booked = 0, sk = (D.seats && D.seats[bk]) || {};
+  Object.keys(sk).forEach(function(rt){ booked += Number(sk[rt].booked) || 0; });
+  var defs = (D.defects || []).length;
+  var waiting = Number(D.waiting) || 0;
+  var item = function(go, t, n, tone){
+    return '<li><button type="button" data-go="'+go+'"><span class="t">'+t+'</span>' +
+           (n ? '<span class="n '+(tone||'')+'">'+esc(n)+'</span>' : '') + '<span class="go">›</span></button></li>';
+  };
+  h += '<ul class="menu">' +
+       item("rota", "Rota", "") +
+       item("requests", "Rota requests", pend ? pend + " waiting" : "none waiting", pend ? "warn" : "") +
+       item("bookings/" + bk, "Bookings", booked + " booked" + (bk !== D.today ? " for " + shortDay(bk) : ""), "") +
+       item("defects", "Defects", defs ? defs + " open" : "none open", defs ? "warn" : "") +
+       item("runs", "Run record", "") +
+       item("look", "Have a look", "") +
+       item("activity", "What I have done", waiting ? waiting + " on the way" : "", waiting ? "warn" : "") +
+       '</ul>';
+  h += '<a class="foot-link" href="../">Driver app</a><div class="version">'+esc(versionLine())+'</div>';
+  $("homeBody").innerHTML = h;
+}
+
+/* ---- the rota -------------------------------------------------------------- */
+
+function paintRota(){
+  var h = '<h1>Rota</h1>';
+  if(D.rota && D.rota.error) h += '<div class="need stop"><p>The rota has not reached the live server.</p></div>';
+  var ahead = rows().filter(function(r){ return r.date >= D.today; });
+  ahead.slice(0, ROTA_SHOW).forEach(function(r){ h += sunCard(r.date, r.date === D.today); });
+  if(ahead.length > ROTA_SHOW) h += '<button class="btn btn-ghost btn-wide" type="button" data-do="more" style="margin-top:12px">More Sundays</button>';
+  $("rotaBody").innerHTML = h;
+}
+
+function paintSunday(key){
+  var r = rowFor(key);
+  if(!r){ $("sundayBody").innerHTML = '<h1>'+esc(longDay(key))+'</h1><div class="card"><p class="tiny">Not on the live server’s rota.</p></div>'; return; }
+  var l = legs(r), past = key < D.today;
+  var st = String(r.status || "");
+  var mode = st === "Cancelled/declined" ? "all" : st === "North cancelled" ? "North" : st === "South cancelled" ? "South" : "on";
+  var h = '<p class="eyebrow">Rota '+statusTag(st)+(r.coordPending ? ' <span class="tag info">To the sheet</span>' : '')+'</p>' +
+          '<h1>'+esc(longDay(key))+'</h1>';
+  if(!past) pendingFor(key).forEach(function(q){ h += reqCard(q, true); });
+  if(past){
+    h += '<div class="card"><p class="tiny" style="margin:0">Past Sundays are the record. Change them on the sheet.</p></div>';
+  } else {
+    var seg = function(m, t){ return '<button type="button" class="'+(mode === m ? 'on' + (m !== "on" ? ' off' : '') : '')+'" data-do="status" data-key="'+esc(key)+'" data-mode="'+m+'">'+t+'</button>'; };
+    h += '<div class="seg">' + seg("on","Both running") + seg("North","North off") + seg("South","South off") + seg("all","All off") + '</div>';
+  }
+  ["North","South"].forEach(function(rt){
+    var g = l[rt], off = isOff(st, rt), lo = rt.toLowerCase();
+    var btn = function(slot, word){ return past ? '' : '<span class="acts"><button class="mini" type="button" data-do="'+(slot === "bus" ? 'bus' : 'driver')+'" data-key="'+esc(key)+'" '+(slot === "bus" ? 'data-route="'+rt+'"' : 'data-slot="'+slot+'"')+'>'+word+'</button></span>'; };
+    h += '<div class="card route-card"><h3>'+rt+(off ? ' · called off' : '')+'</h3>';
+    h += '<div class="row"><span class="k">Driver</span><span class="v'+(g.sched?'':' none')+'">'+esc(g.sched || 'Nobody')+'</span>' + btn(lo, "Change") + '</div>';
+    h += '<div class="row"><span class="k">Cover</span><span class="v'+(g.cover?'':' none')+'">'+esc(g.cover || 'Nobody')+'</span>' + btn(lo + "Cover", g.cover ? "Change" : "Add") + '</div>';
+    h += '<div class="row"><span class="k">Bus</span><span class="v">'+(g.bus ? '<span class="plate">'+esc(g.bus)+'</span>' : '<span class="none">Not known</span>')+'</span>' + btn("bus", "Change") + '</div>';
+    h += '</div>';
+  });
+  var notes = String(r.notes || "").split("\n").map(function(x){ return x.trim(); }).filter(Boolean);
+  if(notes.length) h += '<div class="card"><h3 style="margin-top:0">Notes</h3><ul class="notes">'+notes.map(function(n){ return '<li>'+esc(n)+'</li>'; }).join("")+'</ul></div>';
+  if(!past) h += '<button class="btn btn-ghost btn-wide" type="button" data-do="note" data-key="'+esc(key)+'" style="margin-top:10px;min-height:46px;font-size:16px">Add a note</button>';
+  $("sundayBody").innerHTML = h;
+}
+
+/* Who could go in a slot, and what the eye needs to choose: already out that
+   morning, and when each last drove. */
+function pickDriver(key, slot){
+  var r = rowFor(key); if(!r) return;
+  var l = legs(r);
+  var rt = slot.indexOf("south") === 0 ? "South" : "North", ot = rt === "North" ? "South" : "North";
+  var cover = /Cover$/.test(slot);
+  var other = l[ot].cover || l[ot].sched;
+  var cur = cover ? l[rt].cover : l[rt].sched;
+  var people = activeDrivers().map(function(d){
+    return { name:d.name, busy: same(d.name, other) && !isOff(r.status, ot), cur: same(d.name, cur),
+             sched: cover && same(d.name, l[rt].sched), last: lastDrove(d.name) };
+  }).filter(function(p){ return !p.sched; });
+  people.sort(function(a,b){
+    if(a.busy !== b.busy) return a.busy ? 1 : -1;
+    if(!!a.last !== !!b.last) return a.last ? -1 : 1;
+    if(a.last !== b.last) return a.last < b.last ? -1 : 1;
+    return a.name < b.name ? -1 : 1;
+  });
+  var list = '<ul class="pick">' +
+    (cover && cur ? '<li><button type="button" data-pick="-"><b>Nobody</b><small>take the cover off</small></button></li>' : '') +
+    people.map(function(p){
+      var hint = p.busy ? "on " + ot + " that morning" : p.cur ? "down now" : p.last ? "last drove " + shortDay(p.last).slice(4) : "";
+      return '<li><button type="button" data-pick="'+esc(p.name)+'"'+(p.busy || p.cur ? ' disabled' : '')+'><b>'+esc(p.name)+'</b><small>'+esc(hint)+'</small></button></li>';
+    }).join("") + '</ul>';
+  var soon = (parts(key) && daysTo(key) <= 7);
+  openSheet({
+    eyebrow: shortDay(key),
+    title: rt + (cover ? " cover" : " driver"),
+    body: list,
+    go: cover ? "Choose who covers" : "Choose who drives",
+    onPick: function(name){
+      if(name === "-") return "Take " + cur + " off";
+      return cover ? name + " covers " + rt : "Put " + name + " on " + rt;
+    },
+    line: soon ? "The drivers are emailed." : "",
+    onGo: function(name){ var set = {}; set[slot] = name === "-" ? "" : name; act({ kind:"rota", sunday:key, set:set }); }
+  });
+}
+
+function daysTo(key){
+  var p = parts(key), t = parts(D.londonToday || D.today);
+  if(!p || !t) return 99;
+  return Math.round((Date.UTC(p.y,p.mo-1,p.d) - Date.UTC(t.y,t.mo-1,t.d)) / 86400000);
+}
+
+function pickBus(key, rt){
+  var r = rowFor(key); if(!r) return;
+  var l = legs(r), ot = rt === "North" ? "South" : "North";
+  var cur = l[rt].bus, other = l[ot].bus;
+  var buses = ((D && D.buses) || []).filter(function(b){ return b.active; });
+  var list = '<ul class="pick">' + buses.map(function(b){
+    var hint = b.reg === cur ? "on " + rt + " now" : b.reg === other ? "on " + ot + ": swap them" : seatWords(b.seats);
+    return '<li><button type="button" data-pick="'+esc(b.reg)+'"'+(b.reg === cur ? ' disabled' : '')+'><b>'+esc(b.reg)+'</b><small>'+esc(hint)+'</small></button></li>';
+  }).join("") +
+  '<li><button type="button" data-pick="-"><b>The monthly bus</b><small>as the rotation has it</small></button></li></ul>';
+  openSheet({ eyebrow: shortDay(key), title: rt + " bus", body: list, go: "Choose a bus",
+    onPick: function(reg){
+      if(reg === "-") return "Back to the monthly bus";
+      return reg === other ? "Swap the two buses" : "Put " + reg + " on " + rt;
+    },
+    onGo: function(reg){
+      var set = {};
+      if(reg === "-"){ set[rt === "North" ? "northBus" : "southBus"] = ""; }
+      else if(reg === other){ set[rt === "North" ? "northBus" : "southBus"] = reg; set[ot === "North" ? "northBus" : "southBus"] = cur; }
+      else { set[rt === "North" ? "northBus" : "southBus"] = reg; }
+      act({ kind:"rota", sunday:key, set:set });
+    } });
+}
+
+function setStatus(key, mode){
+  var r = rowFor(key); if(!r) return;
+  var st = String(r.status || "");
+  var now = st === "Cancelled/declined" ? "all" : st === "North cancelled" ? "North" : st === "South cancelled" ? "South" : "on";
+  if(now === mode) return;
+  var want = mode === "all" ? "Cancelled/declined" : mode === "North" ? "North cancelled" : mode === "South" ? "South cancelled" : "running";
+  var title = mode === "on" ? "Both routes running on " + shortDay(key) + "?"
+            : mode === "all" ? "Call off both routes on " + shortDay(key) + "?"
+            : "Call off " + mode + " on " + shortDay(key) + "?";
+  var line = mode === "on" ? "Anyone already told a route was off is not told it is back on."
+           : mode === "all" ? "Everyone booked is told the bus is not running."
+           : "Anyone booked on " + mode + " is told it is not running." +
+             (now !== "on" ? " " + (mode === "North" ? "South" : "North") + " runs." : "");
+  openSheet({ eyebrow: "Rota", title: title, line: line,
+              go: mode === "on" ? "Both routes running" : mode === "all" ? "Call off both" : "Call off " + mode,
+              stop: mode !== "on",
+              onGo: function(){ act({ kind:"rota", sunday:key, set:{ status: want } }); } });
+}
+
+function addNote(key){
+  openSheet({ eyebrow: shortDay(key), title: "Add a note",
+              body: '<div class="field"><label for="noteText">Note</label><textarea id="noteText" maxlength="300"></textarea></div>',
+              go: "Add the note",
+              onGo: function(){
+                var t = String(($("noteText") || {}).value || "").trim();
+                if(!t){ sheetSay("Write the note first.", true); return; }
+                act({ kind:"rota", sunday:key, note:t });
+              } });
+  setTimeout(function(){ try{ $("noteText").focus(); }catch(e){} }, 150);
+}
+
+/* ---- requests ---------------------------------------------------------------- */
+
+function typeWords(q){
+  var t = String(q.type || "");
+  return t === "Request a swap" ? "Swap" : t === "Request cover" ? "Cover" : t.replace(/^Request /i, "") || "Request";
+}
+function reqCard(q, here){
+  var swap = q.type === "Request a swap";
+  var h = '<div class="req"><div class="req-head"><b>'+esc(q.driver)+'</b><span class="tag warn">'+esc(typeWords(q))+'</span></div>';
+  if(!here) h += '<p>'+esc(longDay(q.sunday))+'</p>';
+  if(swap && q.swapWith) h += '<p>With '+esc(q.swapWith)+(q.theirSunday ? ', who has '+esc(shortDay(q.theirSunday)) : '')+
+                              (q.bothAgreed ? ' · both agreed' : '')+'</p>';
+  if(q.reason) h += '<p class="why">“'+esc(q.reason)+'”</p>';
+  if(q.received && !here) h += '<p class="tiny">Asked '+esc(when(q.received))+'</p>';
+  h += '<div class="req-acts"><button class="btn btn-ghost" type="button" data-do="deny" data-id="'+esc(q.id)+'">Turn down</button>' +
+       '<button class="btn btn-main" type="button" data-do="approve" data-id="'+esc(q.id)+'">Approve</button></div></div>';
+  return h;
+}
+
+function paintRequests(){
+  var all = D.requests || [];
+  var pend = all.filter(function(q){ return q.status === "Pending"; });
+  var done = all.filter(function(q){ return q.status !== "Pending"; });
+  var h = '<h1>Rota requests</h1>';
+  if(!pend.length) h += '<div class="card"><p class="tiny" style="margin:0">None waiting.</p></div>';
+  pend.forEach(function(q){ h += reqCard(q); });
+  if(done.length){
+    h += '<h3>Decided</h3><ul class="list">' + done.map(function(q){
+      var ok = q.status === "Approved";
+      return '<li><span class="tag '+(ok ? 'pass' : 'stop')+'">'+(ok ? 'Approved' : 'Turned down')+'</span> ' +
+             '<b>'+esc(q.driver)+'</b>, '+esc(shortDay(q.sunday)) +
+             (ok && q.replacement ? ', '+esc(q.replacement)+' covering' : '') +
+             (q.waiting ? ' <span class="tag info">To the sheet</span>' : '') +
+             (q.decidedBy ? '<small>'+esc(q.decidedBy)+(q.decidedAt ? ', '+esc(when(q.decidedAt)) : '')+'</small>' :
+               (q.decidedOn ? '<small>'+esc(when(q.decidedOn))+'</small>' : '')) + '</li>';
+    }).join("") + '</ul>';
+  }
+  $("requestsBody").innerHTML = h;
+}
+
+function reqById(id){ var a = (D && D.requests) || []; for(var i=0;i<a.length;i++) if(a[i].id === id) return a[i]; return null; }
+
+function approve(id){
+  var q = reqById(id); if(!q) return;
+  if(q.type === "Request a swap"){
+    openSheet({ eyebrow: q.driver, title: "Approve the swap?",
+                line: q.swapWith ? q.driver + " takes " + (q.theirSunday ? shortDay(q.theirSunday) : "their Sunday") + ". " + q.swapWith + " takes " + shortDay(q.sunday) + "." : "",
+                go: "Approve the swap",
+                onGo: function(){ act({ kind:"decide", requestId:id, choice:"Approved" }); } });
+    return;
+  }
+  var c = (q.candidates || []).slice();
+  c.sort(function(a,b){
+    if(!!a.busy !== !!b.busy) return a.busy ? 1 : -1;
+    if(!!a.last !== !!b.last) return a.last ? -1 : 1;
+    if((a.last||"") !== (b.last||"")) return (a.last||"") < (b.last||"") ? -1 : 1;
+    return a.name < b.name ? -1 : 1;
+  });
+  var list = '<ul class="pick"><li><button type="button" data-pick="-" class="on"><b>Nobody yet</b><small>arrange cover later</small></button></li>' +
+    c.map(function(p){
+      var hint = p.busy ? "on " + p.busy + " that morning" : p.last ? "last drove " + shortDay(p.last).slice(4) : "";
+      return '<li><button type="button" data-pick="'+esc(p.name)+'"'+(p.busy ? ' disabled' : '')+'><b>'+esc(p.name)+'</b><small>'+esc(hint)+'</small></button></li>';
+    }).join("") + '</ul>';
+  openSheet({ eyebrow: q.driver + ", " + shortDay(q.sunday), title: "Who covers it?", body: list,
+              picked: "-", go: "Approve, nobody covering yet",
+              onPick: function(n){ return n === "-" ? "Approve, nobody covering yet" : "Approve, " + n + " covers"; },
+              onGo: function(n){ act({ kind:"decide", requestId:id, choice:"Approved", cover: n === "-" ? "" : n }); } });
+}
+
+function deny(id){
+  var q = reqById(id); if(!q) return;
+  openSheet({ eyebrow: shortDay(q.sunday), title: "Turn down " + q.driver + "’s request?",
+              line: q.driver + " is emailed.", go: "Turn it down", stop: true,
+              onGo: function(){ act({ kind:"decide", requestId:id, choice:"Rejected" }); } });
+}
+
+/* ---- bookings ---------------------------------------------------------------- */
+
+function loadBookings(key){
+  BOOK.loading = key;
+  api("bookings", { sunday:key }).then(function(out){
+    if(BOOK.loading !== key) return;
+    BOOK.loading = "";
+    if(!out || !out.ok){ $("bookingsBody").innerHTML = '<h1>Bookings</h1><div class="card"><p class="say bad">'+esc(plain(out && out.error) || "No answer.")+'</p></div>'; return; }
+    BOOK = { sunday:key, data:out };
+    var c = current();
+    if(c.name === "bookings" && (c.arg || D.today) === key) paintBookings(key);
+  }, function(){ BOOK.loading = ""; });
+}
+
+function paintBookings(key){
+  var chips = [D.today, plusWeeks(D.today, 1)];
+  var h = '<h1>Bookings</h1><div class="chips">' + chips.map(function(k){
+    return '<button type="button" class="'+(k === key ? 'on' : '')+'" data-go="bookings/'+esc(k)+'">'+esc(shortDay(k))+'</button>';
+  }).join("") + '</div>';
+  if(!BOOK.data || BOOK.sunday !== key){
+    $("bookingsBody").innerHTML = h + '<p class="tiny center">Loading…</p>';
+    if(BOOK.loading !== key) loadBookings(key);
+    return;
+  }
+  var b = BOOK.data;
+  if(b.mayAct) h += '<button class="btn btn-main btn-wide" type="button" data-do="book" data-key="'+esc(key)+'" style="margin:0 0 12px">Book a seat for someone</button>';
+  b.routes.forEach(function(rt){
+    var bus = rt.bus || {};
+    var head = rt.off ? '<span class="tag stop">Called off</span>'
+      : (bus.reg ? '<span class="plate">'+esc(bus.reg)+'</span> ' : '') +
+        (bus.seats ? '<span class="seats'+(bus.booked > bus.seats ? ' over' : '')+'">'+bus.booked+'/'+bus.seats+'</span>' : '') +
+        (rt.ended ? ' <span class="tag">Run over</span>' : '');
+    var booked = rt.stops.filter(function(s){ return s.bookings.length; });
+    var empty = rt.stops.length - booked.length, every = !!BOOK_ALL[rt.route];
+    h += '<div class="card"><div class="bk-head"><b>'+esc(rt.route)+'</b>'+head+'</div>';
+    if(!booked.length && !every) h += '<p class="bk-none">Nobody booked.</p>';
+    (every ? rt.stops : booked).forEach(function(s){
+      h += '<div class="bs'+(s.seats ? '' : ' nobody')+(s.passed ? ' passed' : '')+'"><div class="bs-h"><span class="tm">'+esc(s.time)+'</span>' +
+           '<span class="nm">'+esc(s.stop)+(s.passed ? ' <span class="tag">Passed</span>' : '')+'</span><span class="ct">'+(s.seats || '–')+'</span></div>';
+      s.bookings.forEach(function(k){
+        h += '<div class="bk"><span class="who"><span class="n">'+esc(seatWords(k.seats))+'</span>' +
+             (k.phone ? '<a href="tel:'+esc(k.phone)+'">'+esc(phoneWords(k.phone))+'</a>' : '<span>no number</span>') +
+             (k.coord ? '<span class="tag info">By phone</span>' : '') + '</span>' +
+             (b.mayAct && !k.rehearsal ? '<button class="mini warn" type="button" data-do="cancel" data-id="'+k.id+'">Cancel</button>' : '') + '</div>';
+      });
+      h += '</div>';
+    });
+    if(empty) h += '<button class="bs-more" type="button" data-do="empties" data-route="'+esc(rt.route)+'">' +
+                   (every ? 'Booked stops only' : (empty === 1 ? '1 stop' : empty + ' stops') + ' with nobody booked') + '</button>';
+    h += '</div>';
+  });
+  if(!b.mayAct) h += '<p class="tiny center">Past Sundays are for looking only.</p>';
+  if(b.cancelled && b.cancelled.length){
+    h += '<details class="more"><summary>Cancelled ('+b.cancelled.length+')</summary><ul class="list">' + b.cancelled.map(function(k){
+      return '<li>'+esc(seatWords(k.seats))+' at '+esc(k.stop)+(k.phone ? ', '+esc(phoneWords(k.phone)) : '')+
+             '<small>'+esc(k.note || when(k.received))+'</small></li>';
+    }).join("") + '</ul></details>';
+  }
+  $("bookingsBody").innerHTML = h;
+}
+
+function bookingById(id){
+  var b = BOOK.data; if(!b) return null;
+  for(var i=0;i<b.routes.length;i++) for(var j=0;j<b.routes[i].stops.length;j++){
+    var s = b.routes[i].stops[j];
+    for(var k=0;k<s.bookings.length;k++) if(s.bookings[k].id === id) return s.bookings[k];
+  }
+  return null;
+}
+
+function cancelBooking(id){
+  var k = bookingById(id); if(!k) return;
+  openSheet({ eyebrow: shortDay(BOOK.sunday), title: "Cancel " + seatWords(k.seats) + " at " + k.stop + "?",
+              line: k.phone ? phoneWords(k.phone) : "", go: "Cancel the booking", stop: true, keep: "Keep it",
+              onGo: function(){ act({ kind:"booking", op:"cancel", bookingId:id }); } });
+}
+
+function bookFor(key){
+  var b = BOOK.data; if(!b) return;
+  var opts = b.routes.filter(function(r){ return !r.off && !r.ended; }).map(function(r){
+    return '<optgroup label="'+esc(r.route)+'">' + r.stops.filter(function(s){ return !s.passed; }).map(function(s){
+      return '<option value="'+esc(s.id)+'">'+esc(s.time+"  "+s.stop)+'</option>';
+    }).join("") + '</optgroup>';
+  }).join("");
+  if(!opts){ toast("No route is taking seats that Sunday.", true); return; }
+  var n = 1;
+  openSheet({ eyebrow: shortDay(key), title: "Book a seat for someone",
+    body: '<div class="field"><label for="bkStop">Stop</label><select id="bkStop">'+opts+'</select></div>' +
+          '<div class="field"><label>Seats</label><div class="stepper"><button type="button" id="bkLess" aria-label="One fewer">−</button>' +
+          '<output id="bkN">1</output><button type="button" id="bkMore" aria-label="One more">+</button></div></div>' +
+          '<div class="field"><label for="bkPhone">Their number</label><input id="bkPhone" type="tel" inputmode="tel" autocomplete="off" placeholder="07…"></div>',
+    go: "Book",
+    onGo: function(){
+      var stop = $("bkStop").value, phone = String($("bkPhone").value || "").trim();
+      act({ kind:"booking", op:"add", sunday:key, stopId:stop, seats:n, phone:phone }, function(out){
+        var f = out.seatsNow;
+        if(f && f.seats && f.booked > f.seats) setTimeout(function(){ toast(f.route + " is over by " + (f.booked - f.seats) + ".", true); }, 3800);
+      });
+    } });
+  var label = function(){
+    $("bkN").textContent = n;
+    $("sheetGo").textContent = "Book " + seatWords(n);
+  };
+  $("bkLess").onclick = function(){ if(n > 1){ n--; label(); } };
+  $("bkMore").onclick = function(){ if(n < 12){ n++; label(); } };
+  label();
+}
+
+/* ---- defects ------------------------------------------------------------------ */
+
+var DEF_STATES = ["Open", "Booked in", "Parts on order", "Monitoring", "Fixed", "Not a defect"];
+
+function paintDefects(){
+  var list = D.defects || [];
+  var h = '<h1>Defects</h1>';
+  if(!list.length){ $("defectsBody").innerHTML = h + '<div class="card"><p class="tiny" style="margin:0">None open.</p></div>'; return; }
+  var regs = [];
+  list.forEach(function(d){ if(regs.indexOf(d.reg) === -1) regs.push(d.reg); });
+  regs.sort().forEach(function(reg){
+    h += '<h3><span class="plate">'+esc(reg)+'</span></h3>';
+    list.filter(function(d){ return d.reg === reg; }).forEach(function(d){
+      var cls = d.kind === "Advisory" ? " adv" : d.crit ? " crit" : "";
+      h += '<div class="def'+cls+'"><div class="def-head"><b>'+esc(d.item)+'</b>' +
+           (d.kind === "Advisory" ? '<span class="tag info">Advisory</span>' : d.crit ? '<span class="tag stop">Critical</span>' : '') +
+           '<span class="tag '+(d.status === "Open" ? 'warn' : '')+'">'+esc(d.status || "Open")+'</span></div>' +
+           (d.found ? '<p>“'+esc(d.found)+'”</p>' : '') +
+           (d.action ? '<p class="did">'+esc(d.action)+'</p>' : '') +
+           '<div class="def-foot"><p class="tiny">'+esc([d.date ? shortDay(d.date) : "", d.driver].filter(Boolean).join(", "))+'</p>' +
+           (d.waiting ? '<span class="tag info">To the sheet</span>' : '') +
+           '<button class="mini" type="button" data-do="defect" data-key="'+esc(d.key)+'">Update</button></div></div>';
+    });
+  });
+  $("defectsBody").innerHTML = h;
+}
+
+function defectByKey(k){ var a = (D && D.defects) || []; for(var i=0;i<a.length;i++) if(a[i].key === k) return a[i]; return null; }
+
+function updateDefect(key){
+  var d = defectByKey(key); if(!d) return;
+  var chosen = d.status || "Open";
+  openSheet({ eyebrow: d.reg, title: d.item,
+    body: '<div class="chips" id="defStates">' + DEF_STATES.map(function(s){
+            return '<button type="button" data-state="'+esc(s)+'" class="'+(s === chosen ? 'on' : '')+'">'+esc(s)+'</button>';
+          }).join("") + '</div>' +
+          '<div class="field"><label for="defDid">What was done</label><textarea id="defDid" maxlength="500"></textarea></div>',
+    go: "Save",
+    onGo: function(){
+      var did = String($("defDid").value || "").trim();
+      if((chosen === "Fixed" || chosen === "Not a defect") && !did){ sheetSay("Say what was done.", true); return; }
+      if(chosen === (d.status || "Open") && !did){ sheetSay("Nothing has changed.", true); return; }
+      act({ kind:"defect", key:key, status:chosen, action:did });
+    } });
+  var label = function(){ $("sheetGo").textContent = (chosen === "Fixed" || chosen === "Not a defect") ? "Close it" : "Save"; };
+  Array.prototype.forEach.call(document.querySelectorAll("#defStates button"), function(b){
+    b.onclick = function(){
+      chosen = b.getAttribute("data-state");
+      Array.prototype.forEach.call(document.querySelectorAll("#defStates button"), function(x){ x.classList.toggle("on", x === b); });
+      if(!busy) sheetSay("");
+      label();
+    };
+  });
+  label();
+}
+
+/* ---- the run record -------------------------------------------------------------- */
+
+function lastSunday(){
+  var t = D.londonToday || D.today;
+  var p = parts(t);
+  return (p && p.dow === 0) ? t : plusWeeks(D.today, -1);
+}
+
+function loadRuns(key){
+  RUNS.loading = key || "-";
+  api("runs", { sunday:key }).then(function(out){
+    if(RUNS.loading !== (key || "-")) return;
+    RUNS.loading = "";
+    if(!out || !out.ok){ $("runsBody").innerHTML = '<h1>Run record</h1><div class="card"><p class="say bad">'+esc(plain(out && out.error) || "No answer.")+'</p></div>'; return; }
+    RUNS = { sunday:out.sunday, data:out };
+    var c = current();
+    if(c.name === "runs") paintRuns(out.sunday);
+  }, function(){ RUNS.loading = ""; });
+}
+
+function paintRuns(key){
+  key = key || lastSunday();
+  var h = '<h1>Run record</h1>';
+  if(!RUNS.data || RUNS.sunday !== key){
+    $("runsBody").innerHTML = h + '<p class="tiny center">Loading…</p>';
+    if(RUNS.loading !== key) loadRuns(key);
+    return;
+  }
+  var r = RUNS.data;
+  var days = (r.recent || []).slice(0, 5);
+  if(days.indexOf(key) === -1) days.unshift(key);
+  h += '<div class="chips">' + days.map(function(k){
+    return '<button type="button" class="'+(k === key ? 'on' : '')+'" data-go="runs/'+esc(k)+'">'+esc(shortDay(k))+'</button>';
+  }).join("") + '</div>';
+  var any = false;
+  r.routes.forEach(function(rt){
+    rt.runs.forEach(function(run){
+      any = true;
+      h += '<div class="card"><div class="bk-head"><b>'+esc(rt.route)+'</b>' +
+           (run.reg ? '<span class="plate">'+esc(run.reg)+'</span>' : '') + '</div>' +
+           '<p class="tiny" style="margin:2px 0 4px">'+esc(run.driver || "")+
+             (run.endedBy && !same(run.endedBy, run.driver) ? ', ended by ' + esc(run.endedBy) : '')+'</p>';
+      h += evRow("Left church", "", run.start, run, "start");
+      run.stops.forEach(function(s){ h += evRow(s.stop, s.time, s.ev, run, s.id); });
+      h += evRow("Back at church", "", run.end, run, "end");
+      h += '</div>';
+    });
+  });
+  if(!any) h += '<div class="card"><p class="tiny" style="margin:0">No run recorded for '+esc(longDay(key))+'.</p></div>';
+  $("runsBody").innerHTML = h;
+}
+
+function evRow(label, tt, ev, run, stopId){
+  var fixable = !!ev || (stopId !== "start" && stopId !== "end");
+  var late = ev && ev.off !== null && ev.off !== undefined && Number(ev.off) > 2;
+  var btn = !fixable ? '' : '<button class="mini" type="button" data-do="fix" data-trip="'+esc(run.trip)+'" data-stop="'+esc(stopId)+'"' +
+            (ev ? ' data-ev="'+ev.id+'"' : '') + ' data-label="'+esc(label)+'" data-tt="'+esc(tt)+'">'+(ev ? 'Fix' : 'Add')+'</button>';
+  return '<div class="ev'+(ev ? '' : ' miss')+'"><span class="tm">'+esc(tt)+'</span>' +
+         '<span class="nm">'+esc(label)+(ev && ev.corrected ? ' <span class="tag info">Corrected</span>' : '')+
+           (ev && ev.event === "none" ? '<small>nobody there</small>' : '')+(ev ? '' : '<small>not marked</small>')+'</span>' +
+         '<span class="at'+(late ? ' late' : '')+'">'+(ev ? esc(hhmm(ev.at)) + (offWords(ev.off) ? '<small>'+esc(offWords(ev.off))+'</small>' : '') : '–')+'</span>' +
+         '<span>'+btn+'</span></div>';
+}
+
+function fixTime(el){
+  var ev = el.getAttribute("data-ev"), trip = el.getAttribute("data-trip"), stop = el.getAttribute("data-stop");
+  var label = el.getAttribute("data-label"), tt = el.getAttribute("data-tt");
+  var key = RUNS.sunday, rec = null;
+  if(ev){
+    (RUNS.data.routes || []).forEach(function(rt){ rt.runs.forEach(function(run){
+      [run.start, run.end].concat(run.stops.map(function(s){ return s.ev; })).forEach(function(x){ if(x && String(x.id) === ev) rec = x; });
+    }); });
+  }
+  var start = rec ? hhmm(rec.at) : (tt || "");
+  openSheet({ eyebrow: shortDay(key), title: label,
+    line: (rec ? "Recorded " + hhmm(rec.at) + "." : "No time recorded.") + (tt ? " Timetable " + tt + "." : ""),
+    body: '<div class="field"><label for="fixAt">Time</label><input id="fixAt" type="time" value="'+esc(start)+'"></div>',
+    go: rec ? "Correct it" : "Add it",
+    onGo: function(){
+      var t = String($("fixAt").value || "").slice(0,5);
+      if(!/^\d{2}:\d{2}$/.test(t)){ sheetSay("Give a time.", true); return; }
+      var a = { kind:"fix", sunday:key, time:t };
+      if(rec) a.eventId = rec.id; else { a.trip = trip; a.stopId = stop; }
+      act(a);
+    } });
+  var label2 = function(){
+    var t = String($("fixAt").value || "").slice(0,5);
+    $("sheetGo").textContent = /^\d{2}:\d{2}$/.test(t) ? (rec ? "Correct it to " + t : "Add " + t) : (rec ? "Correct it" : "Add it");
+  };
+  $("fixAt").oninput = label2; $("fixAt").onchange = label2;
+  label2();
+}
+
+/* ---- have a look ------------------------------------------------------------------ */
+
+var LOOKS = [["bookings","Bookings this Sunday"], ["seats","Are we over on seats?"],
+             ["health","Is everything working?"], ["alerts","Who has alerts on"],
+             ["load","Who is carrying the load"], ["buses","Which bus is on which route"]];
+
+function paintLook(){
+  $("lookBody").innerHTML = '<h1>Have a look</h1><ul class="menu">' + LOOKS.map(function(l){
+    return '<li><button type="button" data-go="report/'+l[0]+'"><span class="t">'+esc(l[1])+'</span><span class="go">›</span></button></li>';
+  }).join("") + '</ul>';
+}
+
+function loadReport(name){
+  REP = { name:name, data:null, asking:true };
+  api("report", { name:name }, (name === "health" || name === "load") ? 40000 : 20000).then(function(out){
+    if(REP.name !== name) return;
+    REP.asking = false;
+    REP.data = out && out.ok ? out : { title: "Could not get that", lead: plain(out && out.error) || "No answer.", sections: [], tone: "bad" };
+    if(current().name === "report") paintReport(name);
+  }, function(err){
+    if(REP.name !== name) return;
+    REP.asking = false;
+    REP.data = { title: "Could not get that", lead: plain(err) || "No answer.", sections: [], tone: "bad" };
+    if(current().name === "report") paintReport(name);
+  });
+}
+
+function paintReport(name){
+  var label = ""; LOOKS.forEach(function(l){ if(l[0] === name) label = l[1]; });
+  if(REP.name !== name || (!REP.data && !REP.asking)) loadReport(name);
+  if(!REP.data){
+    $("reportBody").innerHTML = '<h1>'+esc(label)+'</h1><p class="tiny center">' +
+      ((name === "health" || name === "load") ? "Asking the spreadsheet…" : "Asking the live server…") + '</p>';
+    return;
+  }
+  var r = REP.data;
+  var h = '<div class="rep"><h1>'+esc(r.title || label)+'</h1>';
+  if(r.lead) h += '<p class="lead'+(r.tone === "bad" ? ' bad' : '')+'">'+esc(r.lead)+'</p>';
+  (r.sections || []).forEach(function(sec){
+    h += '<h3 class="'+esc(sec.tone || "")+'">'+esc(sec.head || "")+'</h3><ul>' +
+         (sec.lines || []).map(function(l){ return '<li>'+esc(String(l).replace(/\n\s+/g, "\n"))+'</li>'; }).join("") + '</ul>';
+  });
+  if(r.foot) h += '<p class="tiny">'+esc(r.foot)+'</p>';
+  h += '<button class="btn btn-ghost btn-wide" type="button" data-do="again" data-name="'+esc(name)+'" style="margin-top:14px">Ask again</button></div>';
+  $("reportBody").innerHTML = h;
+}
+
+/* ---- what I have done ------------------------------------------------------------- */
+
+function paintActivity(){
+  var list = D.activity || [];
+  var h = '<h1>What I have done</h1>';
+  if(!list.length){ $("activityBody").innerHTML = h + '<div class="card"><p class="tiny" style="margin:0">Nothing yet.</p></div>'; return; }
+  h += '<ul class="list">' + list.map(function(x){
+    var tag = x.state === "done" ? '<span class="tag pass">On the sheet</span>'
+            : x.state === "refused" ? '<span class="tag stop">Not taken</span>'
+            : '<span class="tag warn">On the way</span>';
+    return '<li>'+tag+' '+esc(x.words)+'<small>'+esc(x.by)+', '+esc(when(x.made))+
+           (x.state === "refused" && x.result ? '. '+esc(x.result) : '')+'</small></li>';
+  }).join("") + '</ul>';
+  $("activityBody").innerHTML = h;
+}
+
+/* ---- the two things that cannot wait, through the actions that already do them ---- */
+
+function authorise(reg){
+  openSheet({ eyebrow: "Walkaround", title: "Authorise " + reg + " to run?", line: "The defect stays open.",
+    go: "Authorise", stop: true,
+    onGo: function(){
+      if(busy) return; busy = true; sheetBusy(true); sheetSay("Sending…");
+      post({ action:"authorise", token:TOKEN, authorise:{ reg:reg, who:who, pin:pin } }).then(function(out){
+        busy = false; sheetBusy(false);
+        if(out && out.ok){ closeSheet(); toast(reg + " may run."); refresh(); return; }
+        var t = authWords(out); if(t){ lock(t); return; }
+        sheetSay(out && out.error === "no check" ? "That bus is not stopped any more."
+               : out && out.error === "same hand" ? "The person who did the walkaround cannot authorise it."
+               : plain(out && out.error) || "The live server did not take that.", true);
+      }, function(err){ busy = false; sheetBusy(false); sheetSay(plain(err) || "No answer.", true); });
+    } });
+}
+
+function endRun(route){
+  var r = (D.runs || {})[route] || {};
+  openSheet({ eyebrow: "Run", title: "End the " + route + " run?",
+    line: (r.driver ? r.driver + "’s run" : "The run") + (r.started ? ", left church " + hhmm(r.started) : "") + ".",
+    go: "End the run", stop: true,
+    onGo: function(){
+      if(busy) return; busy = true; sheetBusy(true); sheetSay("Sending…");
+      post({ action:"endrun", token:TOKEN, endrun:{ route:route, who:who, pin:pin } }).then(function(out){
+        busy = false; sheetBusy(false);
+        if(out && out.ok){ closeSheet(); toast("The " + route + " run is closed."); refresh(); return; }
+        var t = authWords(out); if(t){ lock(t); return; }
+        sheetSay(out && out.error === "your own run" ? "That is your own run. End it in the driver app."
+               : out && out.error === "no run" ? "There is no open run on " + route + "."
+               : plain(out && out.error) || "The live server did not take that.", true);
+      }, function(err){ busy = false; sheetBusy(false); sheetSay(plain(err) || "No answer.", true); });
+    } });
+}
+
+/* ---- the sheet ----------------------------------------------------------------------- */
+
+/* One sheet for every change: what is about to happen, stated on the button
+   that does it. A list to choose from leaves the button off until a choice
+   is made. */
+function openSheet(o){
+  SHEET = { id: newId(), pick: o.picked || "", onGo: o.onGo, onPick: o.onPick, open: true };
+  clearTimeout(toastT); $("toast").classList.remove("is-on");
+  $("sheetEyebrow").textContent = o.eyebrow || "";
+  $("sheetTitle").textContent = o.title || "";
+  $("sheetBody").innerHTML = (o.line ? '<p class="line">'+esc(o.line)+'</p>' : '') + (o.body || "");
+  sheetSay("");
+  $("sheetBody").oninput = function(){ if(!busy) sheetSay(""); };
+  $("sheetActs").innerHTML = '<button class="btn btn-ghost" type="button" id="sheetNot">'+esc(o.keep || "Not now")+'</button>' +
+    '<button class="btn '+(o.stop ? 'btn-stop' : 'btn-main')+'" type="button" id="sheetGo">'+esc(o.go || "Go")+'</button>';
+  var goBtn = $("sheetGo");
+  if(o.onPick && !SHEET.pick) goBtn.disabled = true;
+  $("sheetNot").onclick = closeSheet;
+  goBtn.onclick = function(){ if(SHEET.onGo) SHEET.onGo(SHEET.pick); };
+  Array.prototype.forEach.call(document.querySelectorAll("#sheetBody [data-pick]"), function(b){
+    b.onclick = function(){
+      if(b.disabled) return;
+      SHEET.pick = b.getAttribute("data-pick");
+      Array.prototype.forEach.call(document.querySelectorAll("#sheetBody [data-pick]"), function(x){ x.classList.toggle("on", x === b); });
+      goBtn.disabled = false;
+      if(SHEET.onPick) goBtn.textContent = SHEET.onPick(SHEET.pick);
+    };
+  });
+  var w = $("sheet");
+  w.classList.add("is-on"); w.setAttribute("aria-hidden","false");
+}
+function closeSheet(){
+  SHEET.open = false;
+  var w = $("sheet");
+  w.classList.remove("is-on"); w.setAttribute("aria-hidden","true");
+}
+function sheetSay(t, bad){ say("sheetSay", t, bad); }
+function sheetBusy(on){
+  var g = $("sheetGo"), n = $("sheetNot");
+  if(g) g.disabled = !!on || (!!SHEET.onPick && !SHEET.pick);
+  if(n) n.disabled = !!on;
+}
+
+/* ---- taps ------------------------------------------------------------------------------ */
+
+document.addEventListener("click", function(e){
+  var t = e.target.closest ? e.target.closest("[data-go],[data-do]") : null;
+  if(!t || t.disabled) return;
+  if(t.closest("#sheet")) return;
+  var g = t.getAttribute("data-go");
+  if(g){ go(g); return; }
+  var d = t.getAttribute("data-do");
+  var key = t.getAttribute("data-key");
+  if(d === "authorise") authorise(t.getAttribute("data-reg"));
+  else if(d === "endrun") endRun(t.getAttribute("data-route"));
+  else if(d === "more"){ ROTA_SHOW += 12; paintRota(); }
+  else if(d === "status") setStatus(key, t.getAttribute("data-mode"));
+  else if(d === "driver") pickDriver(key, t.getAttribute("data-slot"));
+  else if(d === "bus") pickBus(key, t.getAttribute("data-route"));
+  else if(d === "note") addNote(key);
+  else if(d === "approve") approve(t.getAttribute("data-id"));
+  else if(d === "deny") deny(t.getAttribute("data-id"));
+  else if(d === "cancel") cancelBooking(Number(t.getAttribute("data-id")));
+  else if(d === "empties"){ var er = t.getAttribute("data-route"); BOOK_ALL[er] = !BOOK_ALL[er]; paintBookings(BOOK.sunday); }
+  else if(d === "book") bookFor(key);
+  else if(d === "defect") updateDefect(key);
+  else if(d === "fix") fixTime(t);
+  else if(d === "again"){ REP = { name:"", data:null }; paintReport(t.getAttribute("data-name")); }
+});
+
+$("barBack").addEventListener("click", back);
+$("barLock").addEventListener("click", function(){ lock(""); });
+$("sheet").addEventListener("click", function(e){ if(e.target === $("sheet") && !busy) closeSheet(); });
+$("signGo").addEventListener("click", signIn);
+$("signPin").addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); signIn(); } });
+/* Four digits and a pause opens it, as on the page an email links to. */
+$("signPin").addEventListener("input", function(){
+  var only = this.value.replace(/\D/g,"");
+  if(this.value !== only) this.value = only;
+  clearTimeout(signT);
+  if(only.length >= 4 && $("signName").value) signT = setTimeout(signIn, 600);
+});
+window.addEventListener("popstate", route);
+
+/* ---- keeping it current, and locking it -------------------------------------------------- */
+
+["pointerdown","keydown"].forEach(function(ev){
+  document.addEventListener(ev, function(){ touched = Date.now(); }, true);
+});
+setInterval(function(){
+  if(!pin) return;
+  if(Date.now() - touched > SET.idleMinutes * 60000){
+    lock("Locked after " + SET.idleMinutes + " minutes. Key your PIN.");
+  }
+}, 15000);
+setInterval(function(){
+  if(pin && D && !busy && document.visibilityState !== "hidden" && !SHEET.open) refresh();
+}, SET.refreshSeconds * 1000);
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState === "visible" && pin){
+    if(Date.now() - touched > SET.idleMinutes * 60000) lock("Locked after " + SET.idleMinutes + " minutes. Key your PIN.");
+    else refresh();
+  }
+});
+
+if(!LIVE){
+  banner("There is no live server set in config.js, and this page needs one.");
+}
+history.replaceState({ n: 0 }, "", location.hash || "#home");
+route();
+</script>
+</body>
+</html>
