@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.74.10 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.77.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -310,7 +310,11 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   padding:13px;margin-bottom:8px;min-height:var(--tap)}
 .stop.is-on{border-color:var(--pass);background:var(--pass-bg);box-shadow:0 0 0 1px var(--pass) inset}
 .stop:focus-visible{outline:3px solid var(--steel);outline-offset:2px}
-.stop-time{flex:0 0 52px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent-ink)}
+/* A plain time is the timetable. A bold one is the estimate, which from
+   v1.75.0 takes the place of the timetabled time on his own stop's row while
+   the bus is out. Same rule as the driver's list. */
+.stop-time{flex:0 0 52px;font-weight:400;font-variant-numeric:tabular-nums;color:var(--accent-ink)}
+.stop-time-eta{font-weight:700}
 .stop-body{flex:1;min-width:0}
 /* These three stack. As inline spans they ran together into one unreadable
    line, which is what the postcode was doing welded to the stop name. */
@@ -422,6 +426,9 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .ask-say{min-height:19px;margin:9px 0 0;font-size:13px;line-height:1.45;color:var(--muted)}
 .ask-say.is-bad{color:var(--stop);font-weight:600}
 .ask-btns{display:flex;gap:8px;margin-top:14px}
+/* The line on the alerts offer: the booking, or the prompt to make one. */
+.ask-line{margin:-4px 0 0;font-size:15px;line-height:1.45;color:var(--ink)}
+.ask-line:empty{display:none}
 .ask-btns .btn{flex:1}
 @media (min-width:641px){.ask{align-items:center}.ask-sheet{border-radius:14px;max-height:86vh}}
 
@@ -709,12 +716,14 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   </div>
 </div>
 
-<!-- The offer of bus alerts, asked rather than posted. Only ever to somebody
-     who has actually booked a seat: see alertAskMaybe. -->
+<!-- The offer of bus alerts, asked rather than posted. To everybody who opens
+     the page, with a line saying what they have booked or telling them to
+     book: see alertAskMaybe. -->
 <div class="ask" id="alertAsk" aria-hidden="true">
   <div class="ask-sheet" role="dialog" aria-modal="true" aria-labelledby="alertAskTitle">
     <p class="eyebrow" id="alertAskEyebrow">Your seat</p>
     <h2 id="alertAskTitle">Tell you when the bus is near?</h2>
+    <p class="ask-line" id="alertAskLine"></p>
     <div class="ask-btns">
       <button class="btn btn-ghost" id="alertAskNot" type="button">Not now</button>
       <button class="btn btn-main" id="alertAskGo" type="button">Turn on</button>
@@ -735,7 +744,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.74.10";
+var PAGE_VERSION = "v1.77.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -786,8 +795,9 @@ var COORDINATOR = { name: "Bro Asim", phone: "07377634214" };
 /* Whether the offer of bus alerts is asked or posted.
 
    true puts it on the screen as a question over a dimmed page, once each time
-   the page is opened, until they turn alerts on or the phone refuses. It is
-   only ever shown to somebody who has actually booked a seat.
+   the page is opened, until they turn alerts on or the phone refuses. From
+   v1.75.0 it is offered to everybody who opens the page. Somebody with no
+   seat is told to book; somebody with one is told what they have booked.
 
    false leaves it as the line under the bus panel, which is where it was and
    which almost nobody read.
@@ -1375,7 +1385,10 @@ function liveStop(){ if(liveTimer){ clearInterval(liveTimer); liveTimer=null; } 
    So it asks again, slowly, and only from a phone that is actually on screen
    and not already watching. It stops the moment watching starts, which is
    also the moment the passenger most wants the calls spent on the bus. */
-var GATE_POLL = 60000;
+/* Fifteen seconds from v1.75.0, so an edit on the sheet (a route called off,
+   a bus changed) reaches an open page in seconds. It was sixty. Only while
+   the page is on screen and not already watching the bus. */
+var GATE_POLL = 15000;
 var gateTimer = null, gateBusy = false;
 
 function gateCheck(){
@@ -1547,7 +1560,7 @@ function paintAlerts(){
 
      Worded as a check rather than a test, because "send me a test alert" is
      the language of somebody building the thing. */
-  if(!MINE_BOOKED || ROLLED) return;
+  /* Offered to everybody from v1.75.0, booked or not. */
 
   /* Already on. The check moved to the icon in the frozen pane, so this box
      now holds only the two things that need words: the offer to turn alerts
@@ -1565,7 +1578,7 @@ function paintAlerts(){
 
   /* The line stays under the panel whatever ALERT_POPUP is set to. It is the
      way back for anybody who tapped Not now, and it costs one line. */
-  box.innerHTML = line("pushOn", "Tell me when the bus is near");
+  box.innerHTML = line("pushOn", MINE_BOOKED ? "Tell me when the bus is near" : "Turn on bus alerts");
   if($("pushOn")) $("pushOn").addEventListener("click", pushTurnOn);
 }
 
@@ -1749,7 +1762,7 @@ function alertAskMaybe(){
   if(alertAsked) return;
   if(!ALERT_POPUP) return;                     /* the line does the work instead */
   if(!pushChecked) return;                     /* pushOn is not yet known */
-  if(!MINE_BOOKED || ROLLED) return;           /* nobody is expecting a bus */
+  if(!loadedOk) return;                        /* nothing to say about a seat yet */
   if(pushOn) return;                           /* already on */
   if(typeof Notification !== "undefined" && Notification.permission === "denied") return;
 
@@ -1775,15 +1788,31 @@ function alertAskMaybe(){
     /* The eyebrow says what the sheet is about, so it must not be the heading
        again in fewer words. "Bus alerts" over "Tell you when the bus is
        near?" was the same sentence twice. */
-    $("alertAskEyebrow").textContent = needsHome ? "This page" : "Your seat";
+    var seatAt = MINE_BOOKED && booked ? stopById(booked.stopId) : null;
+    $("alertAskEyebrow").textContent = needsHome ? "This page"
+                                     : MINE_BOOKED ? "Your seat" : prettyDate(DATE);
     $("alertAskTitle").textContent = needsHome
       ? "Add this page to your Home Screen"
-      : "Tell you when the bus is near?";
+      : MINE_BOOKED ? "Tell you when the bus is near?" : "Turn on bus alerts?";
+    /* What they hold, or the prompt to book. Nothing after the cutoff for
+       somebody with no seat, because there is nothing left to book. */
+    $("alertAskLine").textContent = alertAskWords(seatAt);
     $("alertAskGo").textContent = needsHome ? "Show me how" : "Turn on";
     box.setAttribute("data-how", needsHome ? "1" : "");
     box.classList.add("is-on");
     box.setAttribute("aria-hidden","false");
   }, 500);
+}
+
+function alertAskWords(seatAt){
+  if(MINE_BOOKED && booked){
+    var n = booked.seats||1;
+    return "Booked for "+prettyDate(DATE)+": "+(seatAt ? seatAt.stop+", " : "")+
+           n+(n===1?" seat.":" seats.");
+  }
+  if(CLOSED) return "";
+  /* The date is in the eyebrow above, so it is not said twice. */
+  return "No seat booked. Book below.";
 }
 
 function liveAgeWords(){
@@ -1851,9 +1880,10 @@ function paintLive(){
             'this Sunday. Sorry for the short notice.</p>'+
           callButton()+
         '</div>';
+      paintStopTimes();
       return;
     }
-    box.innerHTML=""; return;
+    box.innerHTML=""; paintStopTimes(); return;
   }
 
   /* A rehearsal forces the tracking gate open on a weekday, so somebody who
@@ -1947,16 +1977,6 @@ function paintLive(){
   } else if(!live.started){
     head="Not set off yet";
     sub="Timetabled "+esc(live.scheduled)+".";
-  } else if(live.mine==="eta" && !live.lastStop){
-    /* Away from church, and not a stop marked yet.
-
-       The countdown starts when the bus has been somewhere. */
-    head="On its way";
-    sub="Left church"+(live.startedAtWords? " at "+esc(live.startedAtWords) : "")+
-        (live.offset>0 ? ", "+live.offset+" minute"+(live.offset===1?"":"s")+" behind"
-         : live.offset<0 ? ", "+(-live.offset)+" minute"+(live.offset===-1?"":"s")+" early"
-         : ", on time")+
-        ". Yours is timetabled "+esc(live.scheduled)+".";
   } else if(live.mine==="eta"){
     /* BE AT YOUR STOP, AND IN RED.
 
@@ -1971,23 +1991,29 @@ function paintLive(){
        moment on this page where a few seconds of not looking up costs
        somebody the bus, which is the only other thing worth the colour. It
        appears for perhaps ninety seconds a week and never otherwise. */
+    /* FROM THE MOMENT IT LEAVES CHURCH, from v1.75.0. The countdown used to
+       wait for the first stop to be marked, and until then the panel said
+       "On its way" and the timetabled time. The run has an offset from the
+       moment it pulls out, so it has an estimate too.
+
+       The estimated time in bold and no timetabled time beside it: two
+       times on one line is a question about which one to believe. */
     var close = live.imminent || live.minutes<=0;
     cls=close ? "live-go live-now" : "";
     head=close ? "Be at your stop"
        : (live.minutes+" min");
-    sub=(close ? "The bus is a minute or two away. " : "")+
-        "About "+esc(live.etaWords)+" at "+esc(live.stop)+
-        (live.offset>0 ? " · "+live.offset+" min behind"
-         : live.offset<0 ? " · "+(-live.offset)+" min early"
-         : " · on time")+
+    sub=(close && live.minutes>=0 ? "The bus is a minute or two away. " : "")+
+        "About <b>"+esc(live.etaWords)+"</b> at "+esc(live.stop)+
+        " \u00B7 "+scheduleWords(live.offset)+
         /* Where it actually is: the thing people open a map for, answered
            without putting a driver's position on a public page. "Left"
-           rather than "is at", because that is what the tap means — he marks
+           rather than "is at", because that is what the tap means: he marks
            a stop as he pulls away from it. */
         (live.lastStop
           ? ". Left "+esc(live.lastStop)+
             (live.lastAtWords? " "+esc(live.lastAtWords) : "")+"."
-          : ".");
+          : ". Left church"+
+            (live.startedAtWords? " "+esc(live.startedAtWords) : "")+".");
   } else if(live.mine==="ended"){
     head="The bus has finished its run";
     /* The coordinator, and only the coordinator. The bus is parked at church
@@ -2093,6 +2119,7 @@ function paintLive(){
      button would keep a neutral opener through a stop that had been and gone,
      and would still be there after the run ended. */
   paintBar();
+  paintStopTimes();
 
   /* Bring the answer to him rather than making him find it.
 
@@ -2109,6 +2136,35 @@ function paintLive(){
     watchJumped = 0;
     if(waited < 6000) jumpTop();
   }
+}
+
+/* HIS OWN STOP'S ROW CARRIES THE ESTIMATE, NOT THE TIMETABLE.
+
+   The panel said "About 10:41" and the row directly under it, his own stop,
+   said 10:32. Two times for one kerb on one screen, and nothing to say which
+   one the bus is keeping. While there is an estimate it takes the timetabled
+   time's place on that row, in bold. Every other row keeps the timetable.
+
+   Called from paintLive on every answer, because the estimate moves and the
+   list is not redrawn when it does, and from paint, which redraws the list. */
+function paintStopTimes(){
+  var etaId = (live && live.live!==false && live.mine==="eta" && live.etaWords) ? live.stopId : "";
+  Array.prototype.forEach.call(document.querySelectorAll("#body [data-stop], #body [data-watch]"), function(b){
+    var id = b.getAttribute("data-stop") || b.getAttribute("data-watch");
+    var t = b.querySelector(".stop-time");
+    var st = stopById(id);
+    if(!t || !st) return;
+    var est = !!etaId && id===etaId;
+    t.textContent = est ? live.etaWords : st.time;
+    t.classList.toggle("stop-time-eta", est);
+  });
+}
+
+/* How far off the timetable the run is, in the words the ruling asked for. */
+function scheduleWords(off){
+  var n = Math.abs(Number(off)||0);
+  if(!n) return "on time";
+  return n+(n===1?" minute ":" minutes ")+(off>0 ? "behind schedule" : "ahead of schedule");
 }
 
 /* Set the moment a kerb is chosen to watch, and spent by the next paint that
@@ -2559,6 +2615,7 @@ function paint(){
   }
 
   paintBar();
+  paintStopTimes();
 
   /* After the bar, because the page is now its final height and a scroll
      target measured before it would land short. */
