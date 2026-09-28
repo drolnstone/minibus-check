@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.78.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.79.1 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -744,7 +744,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.78.0";
+var PAGE_VERSION = "v1.79.1";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -1035,6 +1035,12 @@ var STOPS=[], ARRIVALS=[], COUNTS={}, CLOSED=false, ROLLED=false, DATE="", CUTOF
 var OFF=[];
 function routeOff(rt){ return OFF.indexOf(String(rt||"")) !== -1; }
 var REHEARSAL=false;
+/* Which rehearsal: the moment the live server started it, 0 for none. A
+   server from before w2.20.0 says only true, which counts as round 1. When
+   the round changes, the rehearsal has ended or been started again, and the
+   page loads again in full. */
+var REHEARSAL_ROUND=0;
+function roundOf(r){ return !r ? 0 : (typeof r==="object" ? (Number(r.round)||1) : 1); }
 /* seats is null until the passenger says. It used to start at 1 and then
    keep whatever the last answer was, which on a phone handed round a family
    or used twice in a morning meant the number already sitting there belonged
@@ -1088,6 +1094,7 @@ function applyBus(out){
   CLOSED=!!out.closed; ROLLED=!!out.rolled; DATE=out.date||""; CUTOFF=out.cutoff||"";
   OFF = (out.off && out.off.length) ? out.off : [];
   REHEARSAL=!!out.rehearsal;
+  REHEARSAL_ROUND=roundOf(out.rehearsal);
 
   /* A WHOLE NUMBER, COERCED HERE AND NOWHERE ELSE.
 
@@ -1172,6 +1179,15 @@ function retryStart(){
     if(!navigator.onLine) return;      /* nothing to be gained by asking */
     load();
   }, RETRY_MS);
+}
+
+/* Loaded again in full, as on opening, retries included. The page counts as
+   not yet loaded until it succeeds, so a reload that meets a gap in the
+   signal keeps trying instead of leaving the "No signal" note up for good. */
+function reloadAll(){
+  loadedOk=false;
+  load();
+  retryStart();
 }
 
 function load(again){
@@ -1344,13 +1360,27 @@ function liveFetch(){
       liveBusy=false;
       if(liveAgain){ liveAgain=false; liveFetch(); }
       if(!out || out.ok!==true) return;
+      /* The rehearsal this page was watching has ended, or was started
+         again. Loaded again in full, so the page goes back to what it shows
+         on an ordinary day, or to the new round's seats, rather than a test
+         morning with nothing moving. Until v1.79.0 it stayed on the test
+         until somebody reloaded it. Only an answer that names the
+         rehearsal decides it. */
+      if(REHEARSAL && ("rehearsal" in out) && roundOf(out.rehearsal)!==REHEARSAL_ROUND){
+        liveStop(); reloadAll(); return;
+      }
       live=out;
       liveAt=Date.now();
       paintLive();
       /* Once your own stop has been served there is nothing left to watch,
          so the polling sheds itself as the run goes on rather than peaking
          at the end when the most phones are open. */
-      if(out.live===false || out.mine==="served" || out.ended) liveStop();
+      if(out.live===false || out.mine==="served" || out.ended){
+        liveStop();
+        /* Nothing left to watch in a rehearsal, but the page still has to
+           hear when it ends: the slow gate poll carries on asking. */
+        if(REHEARSAL) gateStart();
+      }
     })
     .catch(function(){
       liveBusy=false;
@@ -1416,13 +1446,19 @@ function gateCheck(){
          Only the shared facts are taken. Nothing that belongs to the person
          holding the phone: a half-chosen stop, an open cancel question and a
          seat count they have not confirmed all survive untouched. */
+      /* A test morning on screen with nothing left to watch. Only a change
+         of round matters here: the rehearsal ended, or was started again. */
+      if(REHEARSAL){
+        if(roundOf(out.rehearsal)===REHEARSAL_ROUND){ applyShared(out); return; }
+        gateStop(); reloadAll(); return;
+      }
       if(!out.closed && !out.rehearsal){ applyShared(out); return; }
       /* It has just opened. Reload in full rather than patching flags: the
          booking form is closing anyway, the banner above it changes, and the
          stop list becomes the list the driver is working from. Nothing a
          passenger had half-chosen was going to be saved past the cutoff. */
       gateStop();
-      load();
+      reloadAll();
     })
     .catch(function(){ gateBusy=false; });
 }
