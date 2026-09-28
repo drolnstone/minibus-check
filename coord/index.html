@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.77.1 · THE COORDINATOR'S APP.
+<!-- BUILD v1.78.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, the run record and the "have a
@@ -123,8 +123,18 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .empty{text-align:center;padding:28px 12px;color:var(--muted)}
 .say{min-height:1.3em;margin:10px 0 0;font-size:14px;color:var(--muted)}
 .say.bad{color:var(--stop)}
-.version{text-align:center;margin-top:18px;font-family:"Barlow Condensed",sans-serif;font-size:11px;
-  letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.version{display:block;width:100%;text-align:center;margin-top:18px;font-family:"Barlow Condensed",sans-serif;
+  font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding:4px 0}
+.version .vpart{white-space:nowrap}
+/* The same chips as the driver app and the passenger page. */
+.themes{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:10px 0 3px}
+.themes button{min-height:32px;padding:0 11px;border:1.5px solid var(--hair);
+  border-radius:16px;background:var(--card);color:var(--muted);
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:13px;
+  letter-spacing:.06em;text-transform:uppercase}
+.themes button.on{background:var(--steel);border-color:var(--steel);color:var(--on-accent)}
+.diag li b{display:block;font-weight:600}
+.diag li small{font-size:14px;white-space:pre-line}
 .foot-link{display:block;margin:10px auto 0;font-family:"Barlow Condensed",sans-serif;font-size:13px;
   letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:center}
 
@@ -385,7 +395,18 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
       <button class="btn btn-main btn-wide" id="signGo" type="button" style="margin-top:6px">Open</button>
     </div>
     <a class="foot-link" href="../">Driver app</a>
-    <div class="version" id="signVersion"></div>
+    <!-- The three numbers, and under a tap what a coordinator needs when it
+         will not open. On this screen only, as the driver app has them on its
+         sign-in screen. Then the appearance, which is the driver app's own
+         setting: set here or there, it is one setting for both. -->
+    <button class="version" id="signVersion" type="button"></button>
+    <div class="themes" id="themes" role="group" aria-label="Appearance">
+      <button type="button" data-theme-set="auto">Auto</button>
+      <button type="button" data-theme-set="light">Light</button>
+      <button type="button" data-theme-set="dark">Dark</button>
+      <button type="button" data-theme-set="green">Green</button>
+      <button type="button" data-theme-set="navy">Navy</button>
+    </div>
   </section>
 
   <section class="screen" id="s-home"><div id="homeBody"></div></section>
@@ -417,7 +438,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.77.1";
+var PAGE_VERSION = "v1.78.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -430,11 +451,19 @@ var SET = { idleMinutes: 15, refreshSeconds: 30 };
 })();
 var ROLES = CFG.fullInspectionRoles || ["Coordinator", "Minister in Charge"];
 var NAME_KEY = "coord.name.v1";
+/* Where the driver app leaves a checked PIN for this page to take. */
+var HAND_KEY = "coord.hand.v1";
 var TZ = "Europe/London";
 
 /* The PIN is held here, in memory, and nowhere else. It goes with every call
-   because the live server checks it on every call. Locking forgets it. */
-var who = "", pin = "";
+   because the live server checks it on every call. Locking forgets it.
+   HOW says how this visit was opened, for the report under the version line:
+   "carried" from the driver app, "keyed" here, "idle" once it has locked. */
+var who = "", pin = "", HOW = "";
+/* The Drivers tab as the live server last had it, from the public rota: the
+   names that may sign in here come from it, and config.js only until it has
+   answered. PEEK is that answer's time and whether it came. */
+var REGLIVE = null, PEEK = { at: 0, ok: null };
 var D = null;                               /* the last answer to "load" */
 var BOOK = { sunday: "", data: null };
 var BOOK_ALL = {};
@@ -597,7 +626,7 @@ function act(a, after){
 
 function signNames(){
   var sel = $("signName");
-  var list = (CFG.drivers || []).filter(function(d){ return ROLES.indexOf(d.role) !== -1; });
+  var list = (REGLIVE || CFG.drivers || []).filter(function(d){ return d && d.name && ROLES.indexOf(d.role) !== -1; });
   /* The name already in the box stays there: a wrong PIN is not a wrong name. */
   var had = sel.value || who || storeGet(NAME_KEY);
   sel.innerHTML = '<option value="">Choose your name</option>' + list.map(function(d){
@@ -613,13 +642,32 @@ function signIn(){
   var p = String($("signPin").value || "").replace(/\D/g,"");
   if(!n){ say("signSay","Choose your name.",true); return; }
   if(p.length < 4){ say("signSay","Key your PIN.",true); return; }
+  openAs(n, p, "keyed");
+}
+
+/* The PIN the driver app checked, taken once. It is put in this tab's own
+   session storage by the Coordinator button and only when the sheet has
+   checked it there; it is wiped here as it is read, and a copy more than a
+   minute old is not used. Opened any other way, from the home screen or a
+   link, there is nothing to take and the PIN is asked for. */
+function handTake(){
+  var h = null;
+  try{ h = JSON.parse(sessionStorage.getItem(HAND_KEY) || "null"); }catch(e){ h = null; }
+  try{ sessionStorage.removeItem(HAND_KEY); }catch(e){}
+  if(!h || !h.name || !/^\d{4,8}$/.test(String(h.pin || ""))) return null;
+  if(!(Date.now() - Number(h.at || 0) < 60000)) return null;
+  return { name: String(h.name), pin: String(h.pin) };
+}
+
+function openAs(n, p, how){
   if(busy) return;
   who = n; pin = p; busy = true;
   $("signGo").disabled = true;
-  say("signSay","Checking…");
+  say("signSay", how === "carried" ? "Opening…" : "Checking…");
   api("load", {}).then(function(out){
     busy = false; $("signGo").disabled = false;
-    if(!out || !out.ok){ pin = ""; say("signSay", plain(out && out.error) || "The live server did not open it.", true); return; }
+    if(!out || !out.ok){ pin = ""; say("signSay", plain(out && out.error) || "The live server did not open it.", true); focusPin(); return; }
+    HOW = how;
     storeSet(NAME_KEY, who);
     $("signPin").value = "";
     say("signSay","");
@@ -629,11 +677,20 @@ function signIn(){
   }, function(err){
     busy = false; $("signGo").disabled = false;
     if(pin) { pin = ""; say("signSay", plain(err) || "The live server did not answer.", true); }
+    focusPin();
   });
 }
 
+/* The PIN box, whenever a name is in the box and the PIN is not. Called
+   inside the change handler as well, so iOS raises the keypad: a focus from
+   a timer is not one the phone will open the keypad for. */
+function focusPin(){
+  var n = $("signName"), p = $("signPin");
+  if(n && p && n.value && !p.value && !busy && !pin){ try{ p.focus(); }catch(e){} }
+}
+
 function lock(words){
-  pin = ""; D = null;
+  pin = ""; D = null; HOW = /^Locked after/.test(words || "") ? "idle" : "";
   $("signPin").value = ""; BOOK = { sunday:"", data:null }; RUNS = { sunday:"", data:null }; REP = { name:"", data:null };
   closeSheet();
   say("signSay", words || "", !!words);
@@ -686,7 +743,7 @@ function current(){
 }
 
 function paint(name, arg){
-  if(name === "sign"){ signNames(); $("signVersion").textContent = versionLine(); return; }
+  if(name === "sign"){ signNames(); $("signVersion").innerHTML = versionHTML(); focusPin(); return; }
   if(name === "home") return paintHome();
   if(name === "rota") return paintRota();
   if(name === "sunday") return paintSunday(arg || D.today);
@@ -699,9 +756,15 @@ function paint(name, arg){
   if(name === "activity") return paintActivity();
 }
 
-function versionLine(){
-  return "coordinator " + PAGE_VERSION + (lastSeen.server ? " · server " + lastSeen.server : "") +
-         (lastSeen.sheet ? " · sheet " + lastSeen.sheet : "");
+/* Each part kept whole, and the dot goes with the part after it, so a
+   narrow phone breaks the line before a dot and never leaves one hanging. */
+function versionPart(label, v, dot){
+  return '<span class="vpart">' + (dot ? "\u00B7 " : "") + label + ' ' + esc(v) + '</span>';
+}
+function versionHTML(){
+  return versionPart("coordinator", PAGE_VERSION) +
+         (lastSeen.server ? " " + versionPart("server", lastSeen.server, true) : "") +
+         (lastSeen.sheet ? " " + versionPart("sheet", lastSeen.sheet, true) : "");
 }
 
 /* The current screen again, from a fresh answer. */
@@ -868,7 +931,7 @@ function paintHome(){
        item("look", "Have a look", "") +
        item("activity", "What I have done", waiting ? waiting + " on the way" : "", waiting ? "warn" : "") +
        '</ul>';
-  h += '<a class="foot-link" href="../">Driver app</a><div class="version">'+esc(versionLine())+'</div>';
+  h += '<a class="foot-link" href="../">Driver app</a>';
   $("homeBody").innerHTML = h;
 }
 
@@ -1459,9 +1522,11 @@ function openSheet(o){
   $("sheetBody").innerHTML = (o.line ? '<p class="line">'+esc(o.line)+'</p>' : '') + (o.body || "");
   sheetSay("");
   $("sheetBody").oninput = function(){ if(!busy) sheetSay(""); };
-  $("sheetActs").innerHTML = '<button class="btn btn-ghost" type="button" id="sheetNot">'+esc(o.keep || "Not now")+'</button>' +
-    '<button class="btn '+(o.stop ? 'btn-stop' : 'btn-main')+'" type="button" id="sheetGo">'+esc(o.go || "Go")+'</button>';
-  var goBtn = $("sheetGo");
+  $("sheetActs").innerHTML = o.only
+    ? '<button class="btn btn-ghost btn-wide" type="button" id="sheetNot">'+esc(o.only)+'</button>'
+    : '<button class="btn btn-ghost" type="button" id="sheetNot">'+esc(o.keep || "Not now")+'</button>' +
+      '<button class="btn '+(o.stop ? 'btn-stop' : 'btn-main')+'" type="button" id="sheetGo">'+esc(o.go || "Go")+'</button>';
+  var goBtn = $("sheetGo") || { disabled: false };
   if(o.onPick && !SHEET.pick) goBtn.disabled = true;
   $("sheetNot").onclick = closeSheet;
   goBtn.onclick = function(){ if(SHEET.onGo) SHEET.onGo(SHEET.pick); };
@@ -1487,6 +1552,81 @@ function sheetBusy(on){
   var g = $("sheetGo"), n = $("sheetNot");
   if(g) g.disabled = !!on || (!!SHEET.onPick && !SHEET.pick);
   if(n) n.disabled = !!on;
+}
+
+/* ---- under the version line ----------------------------------------------------------- */
+
+/* The live server's public rota: its version, the sheet's, and the Drivers
+   tab, with no PIN. Asked when the page opens, so the landing page has all
+   three numbers and the names from the sheet rather than from config.js. */
+function peek(){
+  if(!LIVE) return;
+  Promise.race([
+    fetch(LIVE + "?rota=1&weeks=1").then(function(r){ return r.json(); }),
+    new Promise(function(_, no){ setTimeout(function(){ no(new Error("slow")); }, 12000); })
+  ]).then(function(out){
+    PEEK = { at: Date.now(), ok: true };
+    if(out){ lastSeen.server = out.server || lastSeen.server; lastSeen.sheet = out.sheet || lastSeen.sheet; }
+    if(out && out.ok && Array.isArray(out.drivers) && out.drivers.length){
+      REGLIVE = out.drivers.map(function(d){ return { name: String(d.name || ""), role: String(d.role || ""), hasPin: !!d.hasPin }; })
+                           .filter(function(d){ return d.name; });
+    }
+    if(current().name === "sign" || !pin) route();
+  }, function(){ PEEK = { at: Date.now(), ok: false }; });
+}
+
+/* The same report the driver app's version line gives: the three numbers to
+   anybody, and to a coordinator what decides whether this page opens. */
+function diagnosis(){
+  var picked = (pin && who) || $("signName").value || "";
+  var host = LIVE.replace(/^https?:\/\//, "");
+  var L = [];
+  var li = function(k, v){ L.push('<li><b>' + esc(k) + '</b><small>' + esc(v) + '</small></li>'); };
+  li("Versions", "Coordinator " + PAGE_VERSION + "\nServer " + (lastSeen.server || "not heard from yet") +
+                 "\nSheet " + (lastSeen.sheet || "not heard from yet"));
+  if(picked){
+    li("The live server", !LIVE ? "None set in config.js."
+      : PEEK.ok === null ? host + ", asked, no answer yet."
+      : host + (PEEK.ok ? ", answered at " : ", did not answer at ") + hhmm(PEEK.at) + ".");
+    var reg = REGLIVE || CFG.drivers || [];
+    var can = reg.filter(function(d){ return d && ROLES.indexOf(d.role) !== -1; });
+    li("Who can open this", ROLES.join(", ") + ".\n" + can.length + (can.length === 1 ? " name" : " names") +
+       (REGLIVE ? " on the Drivers tab." : " in config.js; the Drivers tab has not come."));
+    var me = null; reg.forEach(function(d){ if(d && same(d.name, picked)) me = d; });
+    li("The name picked", !REGLIVE ? picked + "."
+      : !me ? picked + " is not on the Drivers tab."
+      : me.hasPin ? picked + " has a PIN on the Drivers tab." : picked + " has NO PIN on the Drivers tab.");
+    li("This visit", pin ? (HOW === "carried" ? "Opened from the driver app, with the PIN keyed there." : "PIN keyed here.")
+      : HOW === "idle" ? "Locked after " + SET.idleMinutes + " minutes untouched." : "Not open yet.");
+    li("Lock and refresh", "Locks after " + SET.idleMinutes + " minutes untouched. An open screen asks again every " +
+       SET.refreshSeconds + " seconds. coordApp in config.js.");
+    if(D){
+      var w = Number(D.waiting) || 0, c = D.clockAgoSec;
+      li("On the way to the sheet", w + (w === 1 ? " change." : " changes.") +
+         (c === null || c === undefined ? " The live server's clock has not ticked." :
+          " The live server's clock ticked " + (c < 120 ? c + " seconds" : Math.round(c / 60) + " minutes") + " ago."));
+    }
+  }
+  return '<ul class="list diag">' + L.join("") + '</ul>';
+}
+
+/* The appearance, which is the driver app's: one key, one setting, whichever
+   of the two it was set in. */
+var THEME_KEY = "fleet.theme.v1";
+var THEME_BAR = { light:"#1B222C", dark:"#0E1216", green:"#14532D", navy:"#1E3260" };
+function themeChoice(){ try{ return localStorage.getItem(THEME_KEY) || "auto"; }catch(e){ return "auto"; } }
+function themeApply(){
+  var pick = themeChoice(), r = pick;
+  if(pick === "auto"){
+    var m = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+    r = (m && m.matches) ? "dark" : "light";
+  }
+  document.documentElement.setAttribute("data-theme", r);
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute("content", THEME_BAR[r] || THEME_BAR.light);
+  Array.prototype.forEach.call(document.querySelectorAll("#themes [data-theme-set]"), function(b){
+    b.classList.toggle("on", b.getAttribute("data-theme-set") === pick);
+  });
 }
 
 /* ---- taps ------------------------------------------------------------------------------ */
@@ -1520,6 +1660,21 @@ $("barBack").addEventListener("click", back);
 $("barLock").addEventListener("click", function(){ lock(""); });
 $("sheet").addEventListener("click", function(e){ if(e.target === $("sheet") && !busy) closeSheet(); });
 $("signGo").addEventListener("click", signIn);
+/* Straight into the PIN box once a name is chosen, as on the driver app. */
+$("signName").addEventListener("change", function(){ say("signSay", ""); focusPin(); });
+$("signVersion").addEventListener("click", function(){
+  openSheet({ eyebrow: "Coordinator", title: "This page", body: diagnosis(), only: "Close" });
+});
+Array.prototype.forEach.call(document.querySelectorAll("#themes [data-theme-set]"), function(b){
+  b.addEventListener("click", function(){
+    try{ localStorage.setItem(THEME_KEY, b.getAttribute("data-theme-set")); }catch(e){}
+    themeApply();
+  });
+});
+(function(){
+  var m = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+  if(m){ if(m.addEventListener) m.addEventListener("change", themeApply); else if(m.addListener) m.addListener(themeApply); }
+})();
 $("signPin").addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); signIn(); } });
 /* Four digits and a pause opens it, as on the page an email links to. */
 $("signPin").addEventListener("input", function(){
@@ -1554,8 +1709,15 @@ document.addEventListener("visibilitychange", function(){
 if(!LIVE){
   banner("There is no live server set in config.js, and this page needs one.");
 }
+themeApply();
 history.replaceState({ n: 0 }, "", location.hash || "#home");
+var HAND = handTake();
 route();
+if(HAND && LIVE){
+  $("signName").value = HAND.name;
+  openAs(HAND.name, HAND.pin, "carried");
+}
+peek();
 </script>
 </body>
 </html>
