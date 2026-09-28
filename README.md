@@ -93,6 +93,23 @@ The two service workers are deliberately separate and must never cache the
 same file. One phone with both apps installed would otherwise hold two copies
 of a page at two versions and serve whichever answered first.
 
+The home screen icons live in the repo root and are not in a release unless
+one is new. Each app has the church logo on a field of its own:
+
+```
+icon-driver-180.png, icon-192.png,       the driver app, navy (#1B222C)
+  icon-512.png, icon-512-maskable.png
+icon-sunday-180.png, icon-sunday-512.png the passenger page, green (#00923F)
+alt-indigo-180.png, alt-indigo-512.png   the coordinator's app, indigo
+                                         (#28166F), from v1.77.1
+logo.png                                 the logo inside the driver app and
+                                         the passenger page
+```
+
+Each 180 is the 512 scaled down, nothing more. A new icon gets a filename iOS
+has never seen, because iOS reads a home screen icon once, when the page is
+added, and never looks again.
+
 ---
 
 ## Versions — read this before deploying
@@ -912,7 +929,8 @@ From v1.77.0, at `coord/` on the same site. The driver app's first screen has
 a **Coordinator** button when the name signed in there has a coordinator's
 role (`fullInspectionRoles` in `config.js`, the same list that may authorise a
 stopped bus). The button carries the name across. The PIN is keyed again on
-the coordinator's page and is never carried.
+the coordinator's page and is never carried. From v1.77.1 its home screen
+icon is the logo on indigo, so it is not mistaken for the driver app's.
 
 Each change is made under the coordinator's PIN:
 
