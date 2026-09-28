@@ -278,7 +278,8 @@ window.CONFIG = {
   /* ---- Asking people to book --------------------------------------------
      Nudges to anybody whose phone has asked to be told things and who has no
      seat for the Sunday bookings are open for. Anybody who has already booked
-     is dropped from the list the moment he books.
+     is dropped from the list the moment he books, and hears only the
+     reminder of what he booked, on a window marked booked.
 
      Three windows, which are the three moments a seat gets decided:
 
@@ -292,6 +293,8 @@ window.CONFIG = {
        oncePerWeek    true means the first window a man is caught by is the
                       only one he hears that week. False means every window
                       he is still unbooked at reaches him.
+       booked         true on a window means it also tells everybody who has
+                      booked what they booked, once. Saturday evening.
 
      No window may sit inside quiet hours; the test suite fails rather than
      ship one that does.
@@ -303,7 +306,7 @@ window.CONFIG = {
     windows: [
       { day: 0, from: 15, to: 16 },
       { day: 3, from: 18, to: 19 },
-      { day: 6, from: 18, to: 19 }
+      { day: 6, from: 18, to: 19, booked: true }
     ]
   },
 

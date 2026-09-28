@@ -517,6 +517,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .banner button{text-decoration:underline;font-weight:600;color:var(--warn-ink)}
 .linkrow{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap}
 .linkrow .btn{flex:1;min-width:140px;font-size:17px}
+/* A line of its own, as wide as Vehicle check. Beside Driving rota it split
+   the pair a driver reads together and pushed Stops and bookings down beside
+   Vehicle check. */
+.linkrow #toCoord{flex-basis:100%}
 .tiny{font-size:12px;color:var(--muted);text-align:center;margin-top:20px;line-height:1.5}
 .toast{position:fixed;left:50%;bottom:calc(84px + var(--safe-b));transform:translateX(-50%) translateY(14px);
   background:var(--steel);color:var(--on-accent);padding:11px 17px;border-radius:8px;font-size:14px;opacity:0;
@@ -1260,7 +1264,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
          pushes Vehicle check off the bottom of the list. -->
     <!-- The coordinator's app, from v1.77.0, for the two roles that may
          authorise a bus. First, furthest from the thumb: it is the one a
-         driver never needs. -->
+         driver never needs. From v1.78.0 on a line of its own, so Driving
+         rota and Stops and bookings stay a pair and Vehicle check stays the
+         full-width button at the bottom, as a driver's hub has them. -->
     <div class="linkrow">
       <button class="btn btn-ghost btn-wide" id="toCoord" type="button" style="display:none">Coordinator</button>
       <button class="btn btn-ghost btn-wide" id="toRota" type="button">Driving rota</button>
@@ -1495,7 +1501,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.77.1";
+var APP_VERSION = "v1.78.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -8220,9 +8226,23 @@ $("sign").addEventListener("input",function(){ st.sign=this.value; paintFoot(); 
 $("toPending").addEventListener("click",function(){ renderPending(); show("pending"); });
 $("toRota").addEventListener("click",rotaOpen);
 /* The coordinator's app is a page of its own, on this site. The name goes
-   with him so the page can put it in the box; the PIN never does. */
+   with him so the page can put it in the box.
+
+   From v1.78.0 the PIN goes too, when the sheet has checked it here, so a
+   coordinator signed in on this phone is not asked for it a second time.
+   Once, and briefly: it is put in this tab's own session storage, which no
+   other tab and no later visit can read, and the coordinator's page takes it
+   and wipes it as it opens, refusing a copy more than a minute old. Not
+   checked here, or not keyed at all, and only the name goes, so the page
+   asks. Opened any other way, it always asks. */
 $("toCoord").addEventListener("click",function(){
   try{ localStorage.setItem("coord.name.v1", st.driver.trim()); }catch(e){}
+  try{
+    if(st.pinOk && st.pinState === "ok" && /^\d{4,8}$/.test(String(st.pin||"")))
+      sessionStorage.setItem("coord.hand.v1",
+        JSON.stringify({ name: st.driver.trim(), pin: String(st.pin), at: Date.now() }));
+    else sessionStorage.removeItem("coord.hand.v1");
+  }catch(e){}
   location.href = "coord/";
 });
 
@@ -9184,6 +9204,9 @@ if(vEl) try{
 function safely(fn){ try{ fn(); }catch(e){ /* enrichment only, never fatal */ } }
 
 safely(paintBanner);
+/* A PIN left for the coordinator's page and never taken, because that page
+   did not load, goes as soon as this page is back. */
+safely(function(){ sessionStorage.removeItem("coord.hand.v1"); });
 safely(function(){ show("driver"); });
 safely(dashHeightSync);
 safely(pushLook);

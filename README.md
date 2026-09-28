@@ -152,8 +152,8 @@ passenger page both read:
 
 That is the page, the Cloudflare Worker and the Apps Script, on one line. On a
 narrow phone it wraps between the three and never through the middle of a
-number. The coordinator's app has the same line at the foot of its first
-screen, starting `coordinator v1.77.0`.
+number. The coordinator's app has the same line on its sign-in screen,
+starting `coordinator`, and from v1.78.0 nowhere else.
 
 **A blank `sheet` slot means the sync has not run.** The Worker cannot see the
 spreadsheet, so it is told: every *Send everything to the live server now*
@@ -503,11 +503,16 @@ once after a deploy and can be skipped on an ordinary week.**
 
 These are real changes. Each step says how to put it back.
 
-27. **The way in.** On the driver app, signed in as yourself, the first screen
-    has **Coordinator**. Tap it and key your PIN. You get this Sunday and next,
-    and the menu, and the foot reads `coordinator · server · sheet` with the
-    numbers you deployed. Signed in as a driver, the driver app has no
-    Coordinator button.
+27. **The way in.** On the driver app, signed in as yourself with your PIN
+    keyed, the hub has **Coordinator** on a line of its own. Tap it: this
+    Sunday and next, and the menu, with no PIN asked. Signed in as a driver,
+    the driver app has no Coordinator button.
+
+    Then open the coordinator's app from its own home screen icon. It asks
+    for the PIN, and choosing your name puts the cursor in the PIN box. The
+    line under **Driver app** reads `coordinator · server · sheet` with the
+    numbers you deployed. Tap it for the report, and pick a theme from the
+    chips under it: the driver app changes with it.
 
 28. **A stopped bus, from the first screen.** *On a weekday, like step 6.* Do
     step 6 again and leave the driver app alone. The coordinator's first screen
@@ -925,12 +930,35 @@ every minute, which sends every timed message (see *The clock*).
 
 ## The coordinator's app
 
-From v1.77.0, at `coord/` on the same site. The driver app's first screen has
-a **Coordinator** button when the name signed in there has a coordinator's
+From v1.77.0, at `coord/` on the same site. The driver app's hub has a
+**Coordinator** button when the name signed in there has a coordinator's
 role (`fullInspectionRoles` in `config.js`, the same list that may authorise a
-stopped bus). The button carries the name across. The PIN is keyed again on
-the coordinator's page and is never carried. From v1.77.1 its home screen
-icon is the logo on indigo, so it is not mistaken for the driver app's.
+stopped bus). From v1.78.0 it has a line of its own, as wide as Vehicle
+check, so Driving rota and Stops and bookings stay a pair. From v1.77.1 the
+app's home screen icon is the logo on indigo, so it is not mistaken for the
+driver app's.
+
+**The PIN is asked for once.** From v1.78.0, a coordinator whose PIN the
+driver app has checked goes straight to the coordinator's first screen. The
+button leaves the name and the checked PIN in the tab's own session storage,
+which no other tab and no later visit can read, and the coordinator's page
+takes them and wipes them as it opens, refusing a copy more than a minute
+old. With no checked PIN (a name kept from earlier in the day, say) only the
+name goes, and the page asks for the PIN with the cursor already in the box.
+Opened any other way, from its own home screen icon or a link, it always
+asks. The live server still checks the PIN on every call.
+
+**The landing page** is the sign-in screen, as on the driver app. It carries
+the three numbers, `coordinator · server · sheet`, read from the live server
+without a PIN, with the names that may sign in taken from the Drivers tab it
+holds (config.js only until it answers). Tapped, the numbers give the same
+kind of report the driver app's do: the three versions to anybody, and once a
+name is chosen, whether the live server answered, who can open the page, whether
+the name has a PIN on the Drivers tab, how this visit was opened, the lock and
+refresh settings, and after a sign-in what is on the way to the sheet and when
+the live server's clock last ticked. The theme chips sit under the numbers and
+set the driver app's own setting, so the two apps always look the same. The
+first screen after the sign-in has no numbers on it.
 
 Each change is made under the coordinator's PIN:
 
@@ -1266,6 +1294,16 @@ only one he ever hears, whatever else is in the list.
 between. Booking reminders only — a bus that is coming is not a convenience and
 is never held back. The test suite checks every window against those hours and
 fails rather than shipping one that sits inside them.
+
+**And once for a man with a seat, from w2.19.0.** Until then the run skipped
+anybody with a booking every time, so his only reminder was the Sunday morning
+message. A window marked `booked: true` also tells everybody who has booked
+what they booked: **You are booked for Sunday**, then the stop, the time, the
+seats, and "Tap to change or cancel." Saturday evening is the one marked, so
+the last word before the morning is his own booking, while he can still
+change it or give the seat back. It goes once in its window, on a tag of its
+own, so a nudge he had earlier in the week does not stop it. Take `booked` off
+every window and a man with a seat hears nothing until the morning, as before.
 
 **Adding or removing one is a line.** `windows` in `BOOKING_RULES` (Code.gs) and
 `booking` (config.js), which must match. All three point at the Sunday the
