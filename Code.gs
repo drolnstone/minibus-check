@@ -45,9 +45,26 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.85.4";
+var SCRIPT_VERSION = "v1.86.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
+
+/* THE SHEET'S OWN PASSWORD, from v1.86.0. TOKEN above is in config.js, which
+   every phone downloads, so it cannot keep anybody out of what only this
+   spreadsheet and the live server should say to each other. SHEET_TOKEN in
+   Script Properties is a second one: the same value as the Worker's Secret
+   of that name. Every call to the live server carries it, and the three
+   things the live server asks of this sheet (collect now, a decision, a
+   report) are refused without it. Not set, nothing changes. */
+function sheetToken() {
+  try {
+    return String(PropertiesService.getScriptProperties().getProperty("SHEET_TOKEN") || "").trim();
+  } catch (err) { return ""; }
+}
+function sheetTokenOk(body) {
+  var want = sheetToken();
+  return !want || String((body && body.sheetToken) || "") === want;
+}
 
 /* ---- passenger bookings -------------------------------------------------
 
@@ -265,6 +282,34 @@ var COORDINATOR_EMAIL = (function () {
   } catch (err) {}
   return "";                                     // set COORDINATOR_EMAIL instead
 })();
+
+/* WHO THE EMAILS SAY THEY ARE FROM. From v1.86.0.
+
+   Set SENDER_NAME in Script Properties, for example  Dominion Transport ,
+   and every email this sheet sends shows that as the sender rather than the
+   name on the Google account. The ADDRESS is still the account the script
+   runs as: Apps Script cannot send as somebody else. For a church address as
+   well, the spreadsheet and its scheduled jobs belong under a Google account
+   of the church's own; see README.md.
+
+   Replies go to COORDINATOR_EMAIL, so a driver who answers his duty
+   reminder reaches the coordinator whichever account sent it. */
+function senderName() {
+  try {
+    return String(PropertiesService.getScriptProperties().getProperty("SENDER_NAME") || "").trim();
+  } catch (err) { return ""; }
+}
+
+/* Every email goes through here, so the sender name and the reply address
+   are on all of them and cannot be forgotten on the next one written. */
+function sendMail(o) {
+  var m = {};
+  for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) m[k] = o[k];
+  var name = senderName();
+  if (name && !m.name) m.name = name;
+  if (COORDINATOR_EMAIL && !m.replyTo) m.replyTo = COORDINATOR_EMAIL;
+  return MailApp.sendEmail(m);
+}
 
 var CHECKS_SHEET   = "Checks";
 var DEFECTS_SHEET  = "Defects";
@@ -1166,6 +1211,12 @@ function doPost(e) {
     if (String(body.token || "") !== TOKEN) {
       return reply({ ok: false, error: "bad token" });
     }
+    /* Only the live server asks these, so they want the sheet's own password
+       as well as the public one. */
+    var fromServer = ["decision", "report", "drainnow"];
+    if (fromServer.indexOf(String(body.action || "")) !== -1 && !sheetTokenOk(body)) {
+      return reply({ ok: false, error: "bad sheet token" });
+    }
 
     /* Answers yes or no about one PIN and nothing else. Before the token
        test on purpose: it is its own gate, it reveals nothing on a wrong
@@ -1484,8 +1535,9 @@ function handleCheckLocked(c) {
      even on a bus that is otherwise clear. */
   var wantsSomething = (c.jobs || []).length > 0;
   var hasAdvisory = (c.advisories || []).length > 0;
-  if (COORDINATOR_EMAIL && (c.level !== "ok" || wantsSomething || hasAdvisory)) {
-    notifyCheck(c, outcome, defectText);
+  if (c.level !== "ok" || wantsSomething || hasAdvisory) {
+    tellCoordinatorPhones(checkPhoneAlert(c, outcome, defectText));
+    if (COORDINATOR_EMAIL) notifyCheck(c, outcome, defectText);
   }
 
   return reply({ ok: true });
@@ -2349,6 +2401,7 @@ function workerCall(action, body) {
     var payload = body || {};
     payload.action = action;
     payload.token = TOKEN;
+    if (sheetToken()) payload.sheetToken = sheetToken();
     var res = UrlFetchApp.fetch(WORKER_URL, {
       method: "post",
       /* text/plain on purpose, exactly as both pages send it: a JSON content
@@ -3617,10 +3670,26 @@ function fillCoverFromRuns(ss, trips) {
    the editor rather than from the trigger. Neither is any use to the live
    server, and neither is worth failing a sync over. */
 function sheetReturnUrl() {
+  /* WEB_APP_URL in Script Properties wins, from v1.86.0. getUrl() is Google's
+     idea of this script's address, and in a project with more than one
+     deployment it can name one that is not the live one, which leaves the
+     live server knocking on a door nobody answers. Copy the Web app URL from
+     Deploy, Manage deployments into WEB_APP_URL and that is the address sent. */
+  try {
+    var set = String(PropertiesService.getScriptProperties().getProperty("WEB_APP_URL") || "").trim();
+    if (/^https:\/\/script\.google\.com\/.+\/exec$/.test(set)) return set;
+  } catch (err) {}
   try {
     var u = String(ScriptApp.getService().getUrl() || "");
     return u.indexOf("/exec") > -1 ? u : "";
   } catch (err) { return ""; }
+}
+
+/* The last six characters of a web app's id, which is enough to tell two
+   deployments apart on a phone screen without printing the whole address. */
+function webAppTail(u) {
+  var m = /\/s\/([^\/]+)\/exec/.exec(String(u || ""));
+  return m ? "\u2026" + m[1].slice(-6) : "(none)";
 }
 
 function liveSync() {
@@ -3920,10 +3989,36 @@ function liveCheck() {
     } else {
       lines.push("\u2713  The live server's clock is ticking.");
     }
+    /* The sheet's own password: set on both sides, or on neither yet. */
+    if (out.sheetTokenSet === false && sheetToken()) {
+      lines.push("\u2717  SHEET_TOKEN is set here but not on the live server. Add it in Cloudflare, " +
+                 "Worker, Settings, Variables and Secrets, as a Secret, with the same value.");
+    } else if (out.sheetTokenSet === false) {
+      lines.push("\u2717  No SHEET_TOKEN yet. Messages between this sheet and the live server are " +
+                 "guarded only by the public token in config.js. Set the same SHEET_TOKEN here and " +
+                 "in the Worker to close that.");
+    }
     /* Undefined from a live server older than w2.21.1, which had a fallback. */
     if (out.pinSalt === false) {
       lines.push("\u2717  PIN_SALT is not set on the live server, so every PIN is refused. " +
                  "Add it in Cloudflare, Worker, Settings, Variables and Secrets.");
+    }
+    /* Where it knocks, beside where this script says it is. A live server
+       knocking on another deployment is the usual reason for the line below
+       it reading "the sheet did not answer". Undefined from before w2.23.0. */
+    if (typeof out.knockTo === "string") {
+      var here = sheetReturnUrl();
+      if (!out.knockTo) {
+        lines.push("\u2717  The live server has no address for this sheet. Use Send everything to the live server now.");
+      } else if (here && out.knockTo !== here) {
+        lines.push("\u2717  The live server knocks on the web app ending " + webAppTail(out.knockTo) +
+                   ", but this script is deployed at the one ending " + webAppTail(here) +
+                   ". Use Send everything to the live server now.");
+      } else {
+        lines.push("    It knocks on the web app ending " + webAppTail(out.knockTo) +
+                   ". Deploy, Manage deployments should show the same, with Who has access: Anyone." +
+                   " If it does not, put the right Web app URL in the Script Property WEB_APP_URL.");
+      }
     }
     if (out.poke) {
       lines.push((out.poke.ok ? "\u2713  " : "\u2717  ") + "It last asked this sheet to collect " +
@@ -3949,6 +4044,10 @@ function liveCheck() {
       }
     });
   } else {
+    if (out && out.error === "bad sheet token") {
+      lines.push("\u2717  The live server refused this sheet's password. SHEET_TOKEN must be the same " +
+                 "in Script Properties here and in the Worker's Variables and Secrets in Cloudflare.");
+    }
     lines.push("✗  Not answering: " + String((out && out.error) || "no reply"));
     lines.push("    The apps fall back to what they hold. Nothing is lost.");
   }
@@ -4536,6 +4635,12 @@ function handleRotaRequest(rq) {
   }
 
   bumpRotaVersion();
+  tellCoordinatorPhones({ id: "req|" + (rq.id || (rq.driver + "|" + rq.date)), kind: "request",
+    title: "Rota request from " + rq.driver,
+    body: (rq.type || "A change") + " for " +
+          Utilities.formatDate(sunday, Session.getScriptTimeZone(), "EEEE d MMMM") +
+          ". Decide it in the coordinator's app.",
+    not: [rq.driver] });
   if (COORDINATOR_EMAIL) notifyRotaRequest(rq, sunday);
 
   return reply({ ok: true });
@@ -8473,6 +8578,11 @@ function extendRota() {
  * silence is the app working, not failing.
  */
 function sendTestEmail() {
+  /* The phones as well: the same menu item proves both. A fresh id each time,
+     and urgent, so a test at night is not held until the morning. */
+  tellCoordinatorPhones({ id: "test|" + Date.now(), kind: "test", urgent: true,
+    title: "Coordinator alerts are working",
+    body: "A test from the spreadsheet. Nothing has happened to a bus." });
   var msg;
   var left = -1;
   try { left = MailApp.getRemainingDailyQuota(); } catch (err) { left = -1; }
@@ -8484,7 +8594,7 @@ function sendTestEmail() {
           "again about 24 hours after the first one went out. Nothing is wrong " +
           "with the script.";
   } else {
-    MailApp.sendEmail({
+    sendMail({
       to: COORDINATOR_EMAIL,
       subject: "Minibus app test",
       body: "Test from the minibus app. If you can read this, notifications are working.\n\n" +
@@ -8501,6 +8611,11 @@ function sendTestEmail() {
           "to Yahoo often lands there the first time.";
   }
 
+  if (WORKER_URL) {
+    msg += "\n\nA test alert has also gone to the phone of every coordinator who has " +
+           "alerts on in the driver app. Anybody who did not get it: open the driver " +
+           "app on that phone, signed in as themselves, and turn alerts on.";
+  }
   try { SpreadsheetApp.getUi().alert(msg); } catch (err) { Logger.log(msg); }
   return msg;
 }
@@ -8606,7 +8721,7 @@ function openDefectsByReg(ss) {
  * and within a month you would skim them, including the one that mattered.
  */
 function missingCheckAlert() {
-  if (!COORDINATOR_EMAIL) return;
+  if (!COORDINATOR_EMAIL && !WORKER_URL) return;
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var tz = Session.getScriptTimeZone();
@@ -8659,7 +8774,12 @@ function missingCheckAlert() {
   if (south) plain.push("South Liverpool: " + south);
   plain.push("", "Please have " + (many ? "them" : "it") + " inspected on return.");
 
-  MailApp.sendEmail({
+  tellCoordinatorPhones({ id: "unchecked|" + key + "|" + expected.join(","), kind: "unchecked",
+    title: expected.join(", ") + " went out unchecked",
+    body: "No pre-drive check this morning. Please have " + (many ? "them" : "it") +
+          " inspected on return." });
+  if (!COORDINATOR_EMAIL) return;
+  sendMail({
     to: COORDINATOR_EMAIL,
     subject: "Minibus: " + expected.join(", ") + " went out unchecked",
     body: plain.join("\n"),
@@ -8721,7 +8841,7 @@ var OVERBOOK_AGAIN_BY = 2;
 var OVERBOOK_WITHIN_DAYS = 5;
 
 function overbookingAlert(force) {
-  if (!COORDINATOR_EMAIL) return { ran: false, why: "no coordinator address", sent: 0 };
+  if (!COORDINATOR_EMAIL && !WORKER_URL) return { ran: false, why: "no coordinator address", sent: 0 };
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -8915,8 +9035,24 @@ function overbookingAlert(force) {
      permanently: the next tick read the stamp, decided it had already been
      said, and returned. The most consequential alert in the file was the one
      least able to survive a bad minute at Google. If the send throws, nothing
-     is written down and the next tick tries again. */
-  MailApp.sendEmail({
+     is written down and the next tick tries again.
+
+     The phones first: their id is what was worked out, so if the email then
+     throws and the next tick comes round again, the live server has already
+     had this one and refuses it rather than buzzing everybody twice. A test
+     from the menu or a rehearsal gets an id of its own every time. */
+  tellCoordinatorPhones({
+    id: "over|" + key + "|" + (force || rehearsing ? Date.now() + "|" : "") +
+        tell.map(function (t) { return t.route + ":" + t.booked; }).join(","),
+    kind: "overbooked",
+    title: (rehearsing ? "REHEARSAL: " : "") +
+           tell.map(function (t) { return t.route + " overbooked, " + t.booked + " of " + t.seats; }).join("; "),
+    body: "For " + when + ". Move a bus or a booking in the coordinator's app." });
+  if (!COORDINATOR_EMAIL) {
+    if (!rehearsing) overbookRemember(props, sent, stamps);
+    return { ran: true, sent: 0, over: tell, rehearsal: rehearsing, phones: true };
+  }
+  sendMail({
     to: COORDINATOR_EMAIL,
     subject: (rehearsing ? "REHEARSAL \u2014 " : "") + "Minibus: " +
              tell.map(function (t) {
@@ -9077,7 +9213,7 @@ function weeklyDigest() {
     if (watch.length > 15) lines.push("&bull; and " + (watch.length - 15) + " more");
   }
 
-  MailApp.sendEmail({
+  sendMail({
     to: COORDINATOR_EMAIL,
     subject: "Minibus weekly summary \u2014 " + pretty,
     body: title + "\n\n" + lines.join("\n").replace(/<[^>]+>/g, "").replace(/&[a-z]+;/g, " "),
@@ -9355,7 +9491,7 @@ function sendDutyEmail(to, who, sunday, daysAhead, covering, route, bus) {
   rows.push("", "If you cannot make it, ask in the app or ring the coordinator.");
   var plain = rows.join("\n");
 
-  MailApp.sendEmail({
+  sendMail({
     to: to,
     subject: "Minibus duty" + (route ? ": " + route : "") + " " +
              (daysAhead === 1 ? "tomorrow" : "on " + when),
@@ -9729,7 +9865,7 @@ function notifyDutyChange(ss, key, before, after, route) {
       "&nbsp;",
       "Nothing is needed from you."
     ];
-    MailApp.sendEmail({
+    sendMail({
       to: emails[before],
       subject: "Minibus: you are no longer driving on " + when,
       body: "You were down to drive on " + when + onPlain + ".\n\n" +
@@ -9753,7 +9889,7 @@ function notifyDutyChange(ss, key, before, after, route) {
       "If you cannot make it, ask in the app or ring the coordinator."
     ].filter(function (l) { return l !== ""; });
 
-    MailApp.sendEmail({
+    sendMail({
       to: emails[after],
       subject: "Minibus duty" + (route ? ": " + route : "") + " on " + when,
       body: "You are now down to drive the minibus on " + when + onPlain + ".\n\n" +
@@ -9874,7 +10010,7 @@ function notifyRequestDecided(ss, key, who, sh, row, qc, decision) {
     }
   }
 
-  MailApp.sendEmail({
+  sendMail({
     to: emails[who],
     subject: "Minibus: your request for " + when +
              (no ? " was not approved" : " has been approved"),
@@ -10822,7 +10958,7 @@ function onOpen() {
       .addItem("Archive old records now (asks first)", "archiveNow"))
 
     .addSubMenu(ui.createMenu("Send an email now")
-      .addItem("Test email, to you only", "sendTestEmail")
+      .addItem("Test email and coordinators' phones", "sendTestEmail")
       .addItem("Weekly summary, to you only", "sendDigestNow")
       .addItem("Send me a sample duty reminder", "sampleDutyReminder")
       .addSeparator()
@@ -11347,6 +11483,57 @@ function decidePlain(url, minutes) {
   return url ? ["", "Decide from here:", url].join("\n") : "";
 }
 
+/* THE SAME ALERT, TO EVERY COORDINATOR'S PHONE. From v1.86.0.
+
+   Called beside each email the coordinator is sent, and whether or not
+   COORDINATOR_EMAIL is set: the email reaches one inbox, this reaches the
+   phone of everybody holding a coordinator title who has alerts on in the
+   driver app. The live server works out who that is, holds anything that
+   is not urgent through the quiet hours, and refuses the same id twice, so
+   calling this again for something already sent is harmless.
+
+   Short on purpose: what happened and to which bus or Sunday. The detail is
+   in the email and the coordinator's app, behind a PIN.
+
+   Never allowed to fail the thing that called it. */
+function tellCoordinatorPhones(alert) {
+  try {
+    if (!WORKER_URL || !alert || !alert.id || !alert.title) return;
+    workerCall("coordAlert", { alert: alert });
+  } catch (err) {}
+}
+
+/* The phone's version of notifyCheck's subject, for the same five cases. */
+function checkPhoneAlert(c, outcome, defectText) {
+  var authorised = outcome === "Authorised to run";
+  var stopped = c.level === "stop" && !authorised;
+  var defects = defectText ? defectText.split(" | ") : [];
+  var advs = c.advisories || [];
+  var names = function (list) {
+    return list.map(function (d) { return String((d && d.name) || d || "").split(":")[0].trim(); })
+               .filter(function (x) { return x; }).slice(0, 3).join(", ");
+  };
+  var by = c.driver ? " on " + c.driver + "\u2019s check" : "";
+  var a = stopped
+    ? { kind: "stopped", urgent: true, title: "BUS STOPPED: " + c.reg,
+        body: "Critical defect" + by + (names(c.defects || []) ? ": " + names(c.defects || []) : "") +
+              ". Authorise it or arrange another bus." }
+    : authorised
+    ? { kind: "authorised", title: "Authorised to run: " + c.reg,
+        body: "By " + (c.authorisedBy || "a coordinator") + ". The defect stays open." }
+    : defects.length
+    ? { kind: "defect", title: "Defect reported: " + c.reg,
+        body: names(defects) + ". Safe to drive" + (by ? "," + by : "") + "." }
+    : advs.length
+    ? { kind: "advisory", title: "Advisory: " + c.reg, body: "To watch: " + names(advs) + "." }
+    : { kind: "arrange", title: "To arrange: " + c.reg,
+        body: (c.jobs || []).slice(0, 3).join(", ") + "." };
+  a.id = "check|" + (c.id || (c.reg + "|" + c.date + "|" + c.time));
+  a.reg = c.reg;
+  a.not = [c.driver];
+  return a;
+}
+
 function notifyCheck(c, outcome, defectText) {
   var authorised = outcome === "Authorised to run";
   var stopped = c.level === "stop" && !authorised;
@@ -11456,7 +11643,7 @@ function notifyCheck(c, outcome, defectText) {
    .concat(stopped ? [decidePlain(link, LINK_RULES.ttlMinutes)] : [])
    .join("\n");
 
-  MailApp.sendEmail({
+  sendMail({
     to: COORDINATOR_EMAIL,
     subject: subject,
     body: plain,
@@ -11479,8 +11666,12 @@ function notifyCheck(c, outcome, defectText) {
    whoever authorised it, so the same fact reaches the same inbox that
    evening. */
 function notifyAuthorised(a) {
-  if (!COORDINATOR_EMAIL || TELL_COORDINATOR === "summary" || !a) return;
+  if (TELL_COORDINATOR === "summary" || !a) return;
   var who = String(a.by || "a coordinator");
+  tellCoordinatorPhones({ id: "auth|" + a.reg + "|" + (a.at || ""), kind: "authorised",
+    title: "Authorised to run: " + a.reg, body: "By " + who + ". The defect stays open.",
+    reg: a.reg, not: [a.by] });
+  if (!COORDINATOR_EMAIL) return;
   var when = a.at ? Utilities.formatDate(new Date(Number(a.at)),
                       Session.getScriptTimeZone(), "HH:mm") : "";
   var lines = [
@@ -11498,7 +11689,7 @@ function notifyAuthorised(a) {
     "", tabUrl(DEFECTS_SHEET)
   ].join("\n");
   try {
-    MailApp.sendEmail({
+    sendMail({
       to: COORDINATOR_EMAIL,
       subject: "Authorised to run: " + a.reg,
       body: plain,
@@ -11595,7 +11786,7 @@ function notifyRotaRequest(rq, sunday) {
   if (dp) prows.push(dp);
   var plain = prows.join("\n");
 
-  MailApp.sendEmail({
+  sendMail({
     to: COORDINATOR_EMAIL,
     subject: "Rota request: " + rq.driver + " \u2014 " + when,
     body: plain,

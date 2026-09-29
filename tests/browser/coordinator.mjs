@@ -159,6 +159,10 @@ async function page(env, o) {
     await route.fulfill({ status: res.status, contentType: "application/json", body: await res.text(),
                           headers: { "access-control-allow-origin": "*" } });
   });
+  /* The install guide opens by itself on a first visit and would sit over
+     the sign-in screen. Said no to, as a returning coordinator would have,
+     unless a check is about the guide itself. */
+  if (!o.install) await pg.addInitScript(`try { localStorage.setItem("coord.install.v1", "1"); } catch (e) {}`);
   if (o.theme) await pg.addInitScript(`try { localStorage.setItem("fleet.theme.v1", ${JSON.stringify(o.theme)}); } catch (e) {}`);
   if (o.name) await pg.addInitScript(`try { localStorage.setItem("coord.name.v1", ${JSON.stringify(o.name)}); } catch (e) {}`);
   /* What the driver app's Coordinator button leaves in the tab, as it leaves
@@ -573,7 +577,7 @@ if (want("C18")) {
   await p.signIn(PIN);
   const homeLine = await p.pg.evaluate(() => !!document.querySelector("#homeBody .version"));
   check("C18", "the landing page carries all three numbers and, under a tap, what decides whether it opens; the first screen does not",
-        line.indexOf("coordinator " + PAGE_V) !== -1 && line.indexOf("server " + WORKER_V) !== -1 &&
+        line.indexOf("app " + PAGE_V) !== -1 && line.indexOf("server " + WORKER_V) !== -1 &&
         line.indexOf("sheet " + SHEET_V) !== -1 && /Who can open this/.test(report) && /has a PIN/.test(report) &&
         /answered at/.test(report) && !homeLine && !p.errs.length,
         "line '" + line + "', report '" + report.slice(0, 160) + "', on the first screen " + homeLine);
@@ -744,6 +748,32 @@ if (want("C23")) {
         picked === "Bro Asim" && offered.includes("Pst Kehinde") && focus === "signPin" && !errs.length,
         "picked '" + picked + "', offered " + JSON.stringify(offered) + ", focus " + focus + ", errors " + JSON.stringify(errs));
   await ctx.close();
+}
+
+/* C24 — the install guide, as the other two apps have it */
+if (want("C24")) {
+  const p = await page(env, { install: true });
+  await p.wait(1200);
+  const up = await p.pg.$eval("#howModal", (el) => el.classList.contains("is-on"));
+  const said = await p.text("#howModal");
+  const button = await p.text("#howDone");
+  await p.shot("C24-install");
+  await p.pg.click("#howDone");
+  await p.wait(200);
+  const gone = !(await p.pg.$eval("#howModal", (el) => el.classList.contains("is-on")));
+  await p.pg.click("#howLink");
+  await p.wait(200);
+  const again = await p.pg.$eval("#howModal", (el) => el.classList.contains("is-on"));
+  const again2 = await p.text("#howDone");
+  await p.ctx.close();
+  const q = await page(env, { install: true });
+  await q.wait(1200);
+  const second = await q.pg.evaluate(() => { try { return localStorage.getItem("coord.install.v1"); } catch (e) { return "x"; } });
+  await q.ctx.close();
+  check("C24", "a first visit offers Add to your phone with the steps, Not now closes it, and the link under the appearance brings it back as Done",
+        up && /Add to your phone/.test(said) && /Install|Add to Home Screen|Share/.test(said) &&
+        button === "Not now" && gone && again && again2 === "Done" && !p.errs.length,
+        "up " + up + ", button " + button + ", gone " + gone + ", again " + again + " (" + again2 + "), stored " + second);
 }
 
 /* C20b — a PIN handed over that is wrong is still refused by the driver app */

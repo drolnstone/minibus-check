@@ -396,6 +396,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .tag.t-crit{background:var(--stop-bg);color:var(--stop);border:1px solid var(--stop-line)}
 .tag.t-watch{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
 .tag.t-adv{background:var(--info-bg);color:var(--info-deep);border:1px solid var(--info-line)}
+/* Quiet on purpose: it says why an item is here, not that anything is wrong. */
+.tag.t-dvsa{background:transparent;color:var(--muted);border:1px solid var(--hair)}
 .item p.what{margin:0 0 9px;font-size:15px;color:var(--ink-2)}
 .history{font-size:13px;background:var(--warn-bg);border-left:3px solid var(--warn);padding:7px 9px;
   border-radius:0 6px 6px 0;margin:0 0 10px;color:var(--warn-ink)}
@@ -1558,7 +1560,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.82.0";
+var APP_VERSION = "v1.83.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -1897,6 +1899,10 @@ var STAGES = [
     { id:"pipes", name:"Brake pipes and lines", crit:true, what:"Look along the chassis rails and behind each wheel for damp or wet patches, or a pipe that is flaking rather than just dusty." },
     { id:"suspension", name:"Suspension and ride height", what:"Bus sitting level, not down at one corner. Listen for knocking over the first bumps." },
     { id:"exhaust", name:"Exhaust", what:"Present and secure. Nothing cut away underneath. Listen for a change in note at start up." },
+    /* DVSA's walkaround calls this spray suppression. From v1.83.0, with the
+       driver's seat below: the two items on its daily check this list did
+       not have. */
+    { id:"mudflaps", name:"Mudflaps and spray guards", what:"Behind each wheel: present, secure, not torn or hanging by one fixing." },
     { id:"fuel", name:"Fuel and filler cap", what:"Enough for the run and back. Cap present and tight. No smell of diesel or wetness around the filler." },
   ]},
   { title:"Under the bonnet", lede:"Engine cold, before the first start.", items:[
@@ -1932,9 +1938,22 @@ var STAGES = [
     { id:"limiter", full:true, name:"Speed limiter", what:"If this bus has one: no warning lamp, and it is not cutting in below its set speed. If none is fitted, mark it not on this bus." },
     { id:"infotainment", full:true, name:"Radio and dash display", what:"Radio and speakers working front and rear. Dash display readable and not stuck on a warning screen." },
     { id:"cab", name:"Horn, heater, demist", what:"All working. Demist clears the whole screen, not just a patch in front of you." },
+    { id:"dseat", name:"Driver's seat and belt", what:"Seat adjusts and locks in place with no movement on its runners when you brace against it. Your own belt pulls out, locks when jerked, and clicks in and releases." },
     { id:"docs", full:true, name:"Documents on board", what:"Insurance in date. Any permit or paperwork this bus must carry. Breakdown number somewhere you could find it in the dark." }
   ]}
 ];
+
+/* THE ITEMS ON DVSA'S DAILY WALKAROUND CHECK, from v1.83.0, so each carries
+   a quiet tag saying why it is on the list at all. Everything else here is
+   good practice, or this fleet's own history, and says nothing. Matched
+   against DVSA's published walkaround guidance for buses and coaches; check
+   it against the current guide on GOV.UK before changing it. */
+var DVSA_DAILY = {
+  tyres:1, nuts:1, lights:1, doors:1, body:1, clean:1, under:1, pipes:1, exhaust:1, fuel:1, mudflaps:1,
+  wash:1, adblue:1, battery:1,
+  belts_seat:1, anchor:1, step:1, exits:1, gangway:1, intlights:1, extinguisher:1, firstaid:1,
+  abs:1, lamps:1, brakes:1, steering:1, mirrors:1, cab:1, dseat:1
+};
 
 /* ---------------- state ---------------- */
 /* pinState is what the RECORD will say about the PIN: "" when none was
@@ -2032,7 +2051,7 @@ function buildFor(v){
       if(it.full && !full && !(v.watch && v.watch[it.id])) return false;
       return !(v.skip||[]).length || (v.skip||[]).indexOf(it.id) === -1;
     }).map(function(it){
-      var copy = { id:it.id, name:it.name, what:it.what, crit:!!it.crit };
+      var copy = { id:it.id, name:it.name, what:it.what, crit:!!it.crit, dvsa:!!DVSA_DAILY[it.id] };
       var ov = v.override && v.override[it.id];
       if(ov){
         if(ov.name) copy.name = ov.name;
@@ -3549,6 +3568,7 @@ function renderStage(){
     if(it.history) tags+='<span class="tag t-watch">Known history</span>';
     if(it.crit && OVR.advisory && advStops())
       tags+='<span class="tag t-adv">Advisory needs signing off</span>';
+    if(it.dvsa) tags+='<span class="tag t-dvsa">DVSA daily check</span>';
     el.innerHTML =
       '<h3>'+esc(it.name)+'</h3>'+
       (tags?'<div class="tags">'+tags+'</div>':'')+

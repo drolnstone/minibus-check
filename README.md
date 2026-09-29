@@ -929,10 +929,13 @@ itself and one that never does.
 | Key | What it is |
 |---|---|
 | `COORDINATOR_EMAIL` | where every alert goes. Blank means nothing is ever sent |
+| `SENDER_NAME` | optional. The name emails show as sent by, e.g. `Dominion Transport`. The address is still the Google account the script runs as; for a church address, keep the spreadsheet under a church Google account |
+| `WEB_APP_URL` | optional. The sheet's own web app address, copied from **Deploy, Manage deployments**. Only needed when **Is everything working?** says the live server knocks on a different deployment from this one |
 | `COORDINATOR_ROLES` | the titles in the Role column that make somebody a coordinator, separated by commas, the one people should ring first: `Coordinator, Minister in Charge`. Blank uses that default. After changing it, **Send everything to the live server now** |
 | `WORKER_URL` | the Worker's address |
 | `ARCHIVE_SHEET_ID` | optional. Set it to archive into a separate spreadsheet |
 | `PIN_SALT` | salts the PIN hash before it is pushed. **Must match the Worker variable of the same name** |
+| `SHEET_TOKEN` | the sheet's own password for talking to the live server, from v1.86.0. **Must match the Worker Secret of the same name.** `TOKEN` is in `config.js` for the phones, so it cannot guard what only the sheet and the live server say to each other: a sync, the drain, a decision, a report, a coordinator alert. This does. Until it is set on both sides nothing changes, and **Is the live server working?** says it is missing |
 
 **Cloudflare → Worker → Settings → Variables**
 
@@ -941,6 +944,7 @@ itself and one that never does.
 | `TOKEN` | must match `token` in `config.js` |
 | `PHONE_SALT` | salts the phone fingerprint. Changing it orphans every existing booking |
 | `PIN_SALT` | salts the PIN hash. **Must match the Apps Script property of the same name** |
+| `SHEET_TOKEN` | a Secret. **Must match the Apps Script property of the same name**. See above |
 
 `TOKEN` and `PHONE_SALT` have fallbacks in `worker.js`, so a fresh deploy works
 before they are set. **`PIN_SALT` has none, on either side, from w2.21.1 and
@@ -1457,7 +1461,18 @@ that alert makes a check go red — measured by actually silencing each one and
 running the suite, not by reading test names. As of `w2.15.0` every one of them
 is held; thirteen were not, and `21-alerts.mjs` is what closed them.
 
-**The coordinator** — all by email, all to `COORDINATOR_EMAIL`.
+**The coordinator** — by email to `COORDINATOR_EMAIL`, and from v1.86.0 /
+w2.23.0 also to **every coordinator's phone**: everybody whose Role is one of
+the `COORDINATOR_ROLES` titles and who has turned alerts on in the driver app,
+signed in as themselves. There is no other sign-up. The phone alert is short
+(what happened, to which bus or Sunday) and opens the coordinator's app; the
+detail stays in the email and behind the PIN, because a phone joins by typing
+a name. A stopped bus is sent at any hour; the rest wait out the quiet hours
+and go at 08:00. The person an alert is about (the driver who did the check,
+the coordinator who authorised) is not woken by it. Each is sent once, however
+many times Apps Script hands it over. **Send an email now, Test email and
+coordinators' phones** tests both. The weekly summary and the test email are
+the two rows below with no phone alert of their own; the test sends one.
 
 | What | When | Why | Held |
 |---|---|---|---|

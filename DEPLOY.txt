@@ -1,51 +1,144 @@
 MINIBUS
 =======
-  pages v1.82.0 · server w2.22.0 · sheet v1.85.4
+  pages v1.83.0 · server w2.23.0 · sheet v1.86.0
 
-The coordinator's app keeps the last Drivers tab on the phone, so its
-sign-in screen has the names, your remembered name and the cursor in the
-PIN box the moment it opens.
+Coordinator alerts on every coordinator's phone; a private password between
+the sheet and the live server; emails from a name of your choosing; the
+live server's knock address shown and settable; DVSA tags on the check; the
+coordinator's app tidied to match the other two.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.81.0         v1.82.0
-  Worker  w2.22.0         w2.22.0   (no change)
-  Code.gs v1.85.4         v1.85.4   (no change)
+  Pages   v1.82.0         v1.83.0
+  Worker  w2.22.0         w2.23.0
+  Code.gs v1.85.4         v1.86.0
 
-Pages only. Nothing to paste into Cloudflare or Apps Script.
+All three move. No SQL and no new triggers. One new Worker Secret and a
+matching Script Property, SHEET_TOKEN. Two new Script Properties that are
+optional: SENDER_NAME and WEB_APP_URL.
 
 
 IN THIS ORDER
 -------------
 
-1. PAGES. Merge the pull request. GitHub publishes the pages from main.
+1. WORKER. Cloudflare, minibus-api, Edit code. Paste worker.js over the old
+   one. Deploy.
+
+2. CODE.GS. Apps Script editor. Paste Code.gs over the old one. Save.
+   Deploy, Manage deployments, the pencil on the existing deployment,
+   Version: New version, Deploy. Then reload the spreadsheet, so the menu
+   shows the renamed test item.
+
+3. THE SHEET'S PASSWORD, SHEET_TOKEN. Make up a long random string, 30
+   characters or more, letters and numbers, from a password manager or by
+   hand. Keep it somewhere safe. Then, one straight after the other:
+
+     a. Cloudflare, minibus-api, Settings, Variables and Secrets, Add:
+        type Secret, name SHEET_TOKEN, value the string. Deploy.
+     b. Apps Script, Project Settings, Script Properties, Add:
+        SHEET_TOKEN, the same string. Save.
+
+   In the minute or two between a and b the sheet's messages are refused.
+   Nothing is lost: everything phones do waits on the live server and is
+   collected once b is done.
+
+   Optional, in the same place as b:
+       SENDER_NAME    Dominion Transport
+       WEB_APP_URL    only if the report below asks for it
+
+4. Minibus, Rota and setup, Send everything to the live server now.
+
+5. PAGES. Merge the pull request. GitHub publishes the pages from main.
+
+6. EACH COORDINATOR, ON THEIR OWN PHONE. Open the driver app, signed in as
+   themselves, and turn alerts on (the bell at the top of the hub, or the
+   offer under it). A phone that already has alerts on for its owner needs
+   nothing: it is already on the list.
+
+
+THE SHEET NOT ANSWERING THE LIVE SERVER
+---------------------------------------
+
+"Is everything working?" has said the sheet did not answer. After step 4,
+run Minibus, Have a look, Is the live server working? It names the web app the live
+server knocks on, by the last six characters of its id.
+
+- If it says the live server knocks on a DIFFERENT web app from this
+  script's: step 4 again. If it still differs, Deploy, Manage deployments,
+  copy the Web app URL of the deployment in use, put it in the Script
+  Property WEB_APP_URL, and step 4 again.
+
+- If it says they are the SAME, and the sheet still does not answer: in
+  Deploy, Manage deployments, that deployment must say Execute as: Me and
+  Who has access: Anyone. And in Apps Script, Executions, look for doPost:
+  none at all means the knocks are not arriving; Failed means they arrive
+  and something went wrong, and the entry says what.
+
+Nothing is lost while this is wrong: the sheet still collects every five
+minutes by itself. The knock only makes it seconds instead.
 
 
 AFTER IT
 --------
 
-A. The foot of the driver app reads  app v1.82.0 · server w2.22.0 · sheet
-   v1.85.4 . A phone still on v1.81.0: close the app fully and open it
-   again.
+A. The foot of all three apps reads  app v1.83.0 · server w2.23.0 · sheet
+   v1.86.0 .
 
-B. Coordinator's app, locked or freshly opened: your name is already in the
-   box. The first time after this update it still waits a second for the
-   live server, because there is nothing kept yet; from then on it is
-   immediate.
+B. Minibus, Have a look, Is the live server working? No line about
+   SHEET_TOKEN or PIN_SALT. If it says SHEET_TOKEN is set here but not on the
+   live server, or that the live server refused this sheet's password, the
+   two values differ: set them again, the same on both sides.
 
-C. On an iPhone the keyboard still needs one tap on the PIN box. A page is
-   not allowed to open the keyboard by itself. On a computer, and on most
-   Android phones, the cursor is already in the box.
+C. Minibus, Send an email now, Test email and coordinators' phones. The
+   email arrives from SENDER_NAME if you set it, and every coordinator's
+   phone with alerts on shows "Coordinator alerts are working". Tapping it
+   opens the coordinator's app.
+
+D. A vehicle check: items on DVSA's daily walkaround carry a small
+   "DVSA daily check" tag. Two items are new: Mudflaps and spray guards,
+   and Driver's seat and belt. 37 pre-drive items per bus.
+
+E. The coordinator's app: Driver app and Vehicle check side by side at the
+   foot of the first screen; Add to your phone under the appearance on the
+   sign-in screen.
 
 
 WHAT CHANGED
 ------------
 
-1. THE COORDINATOR'S APP KEEPS THE LAST DRIVERS TAB ON THE PHONE.
-   Since config.js stopped carrying names (v1.80.0), the sign-in screen
-   had no names until the live server answered, so the remembered name and
-   the cursor arrived a second late. It now keeps the last list the live
-   server gave it, as the driver app keeps its register, draws it at once
-   and replaces it with every answer. A name added, taken off or given a
-   new role on the Drivers tab still reaches it on the next open with a
-   signal.
+1. COORDINATOR ALERTS ON EVERY COORDINATOR'S PHONE.
+   Beside each email the coordinator is sent, the same alert goes to the
+   phones: a bus stopped, a defect, an advisory or something to arrange on a
+   check, a bus authorised to run, a rota request, a bus that went out
+   unchecked, a route overbooked. It goes even with no COORDINATOR_EMAIL set.
+   Short on purpose: what happened, and to which bus or Sunday. A phone joins
+   the list by typing a name, with no PIN, so the detail stays in the email
+   and in the coordinator's app, which the alert opens. A stopped bus goes at
+   any hour; everything else waits out 21:00 to 08:00. The person an alert is
+   about is not woken by it. Each goes once.
+
+2. A PRIVATE PASSWORD BETWEEN THE SHEET AND THE LIVE SERVER. The token in
+   config.js is public, because every phone needs it, and it was all that
+   guarded the messages only the sheet and the live server should send each
+   other: a sync that replaces the rota, drivers and stops, the drain, a
+   decision, a report, a coordinator alert. SHEET_TOKEN, set on both sides,
+   now guards those. What phones send is unchanged. Your code and the
+   spreadsheet were never editable from outside; this closes the way to feed
+   the live server false data.
+
+2a. EMAILS FROM A NAME. SENDER_NAME sets the name every email shows as sent
+   by. Replies go to COORDINATOR_EMAIL. The address is still the Google
+   account the script runs as.
+
+3. WHERE THE LIVE SERVER KNOCKS. Shown in both reports, settable with
+   WEB_APP_URL. See above.
+
+4. DVSA ON THE CHECK. Items on DVSA's daily walkaround check are tagged, and
+   the two it had that this list did not are added.
+
+5. THE COORDINATOR'S APP, LIKE THE OTHER TWO. Its version line reads "app";
+   it has the Add to your phone guide; Vehicle check is a link beside Driver
+   app rather than a menu item.
+
+6. THE TEST MENU ITEM TESTS BOTH. "Test email, to you only" is now "Test
+   email and coordinators' phones".
