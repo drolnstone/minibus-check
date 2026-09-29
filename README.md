@@ -102,7 +102,7 @@ in `Code.gs` is empty, so a new church starts with nobody in it.
 ```
 index.html              the driver app
 sw.js                   its offline shell  — bump CACHE when index.html changes
-config.js               vehicles, drivers, stops, endpoints
+config.js               vehicles (checklist details only), switches, endpoints
 manifest.webmanifest
 sunday/index.html       the passenger page
 sunday/sw.js            its offline shell  — separate on purpose, see below
@@ -960,7 +960,7 @@ everything working?** names the side that is missing it.
 |---|---|
 | `Rota` | who drives, which route, which bus, per Sunday. **Status** is also where a route is marked not running |
 | `Drivers` | the register — name, role, route, order, active, **PIN**, **Phone**. The row with Role **Coordinator** is who every page tells people to ring, on its Phone |
-| `Buses` | registration, seats, active |
+| `Buses` | registration, seats, active, and from v1.87.0 **MOT due**, **Service due**, **Insurance due**, **Permit due** and **Route in odd months**. The dates are what the driver app warns about (30 days ahead, red once passed; blank is not tracked) and the only place they are kept: a renewal is a cell, not a code change. **Route in odd months** is North or South, the route that bus takes in January, March and so on; even months swap. A Sunday's Rota row naming a bus still wins for that Sunday. Without exactly one active North and one active South, the pairing written in the code is used rather than a guess. The columns were filled once, the first *Set up / refresh rota* after v1.87.0, and never again |
 | `Bus Stops` | route, stop, time, postcode, and from v1.71.0 **Lat** and **Lng** — the kerb itself, used for the driver's map link and for working out what passing a stop saves. *Set up / refresh rota* fills any blank one it recognises from `STOP_PINS` in `Code.gs` and never overwrites one you have typed. A stop it does not recognise stays blank, which everything downstream already handles |
 | `Checks` | every safety check. **Outcome** is a dropdown, and picking **Authorised to run** on today's row lets a stopped bus out |
 | `Defects` | one row per defect and one per advisory, told apart by **Kind**, so they can be chased |

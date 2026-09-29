@@ -180,6 +180,16 @@ class FakeSheet {
     for (let i = 0; i < (how || 1); i++) this.cells.splice(after + i, 0, blank.slice());
     return this;
   }
+  /* Column inserts move the cells right of it along. Notes and validation
+     are keyed by position and are not moved: every insert Code.gs makes today
+     adds a column at the right-hand end, where there are none to move. */
+  insertColumnsAfter(after, how) {
+    this._grow(1, after);
+    for (const r of this.cells) for (let i = 0; i < (how || 1); i++) r.splice(after, 0, EMPTY);
+    return this;
+  }
+  insertColumnAfter(after) { return this.insertColumnsAfter(after, 1); }
+  insertColumnBefore(col) { return this.insertColumnsAfter(col - 1, 1); }
   deleteRow(row) { this.cells.splice(row - 1, 1); return this; }
   deleteRows(row, how) { this.cells.splice(row - 1, how || 1); return this; }
   setFrozenRows(n) { this.frozen = n; return this; }

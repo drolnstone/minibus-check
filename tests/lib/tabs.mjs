@@ -32,7 +32,7 @@ export const TABS = {
                   "Rota bus", "Where started", "Accuracy (yd)",
                   "Distance from base (yd)", "Ended by", "Live ID"],
 
-  "Buses": ["Registration", "Seats for passengers", "Active", "Notes"],
+  "Buses": ["Registration", "Seats for passengers", "Active", "Notes", "MOT due", "Service due", "Insurance due", "Permit due", "Route in odd months"],
 
   "Bus Stops": ["Route", "Stop ID", "Time", "Stop", "Postcode", "Active", "Type",
                 "Where", "Lat", "Lng"],

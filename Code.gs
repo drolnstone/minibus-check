@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.86.0";
+var SCRIPT_VERSION = "v1.87.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -326,7 +326,14 @@ var STOPS_SHEET    = "Bus Stops";
    So: a tab, like the drivers and the stops. Whoever takes this over adds a
    bus by adding a row, not by asking somebody to edit code. */
 var BUSES_SHEET    = "Buses";
-var BUSES_HEADERS  = ["Registration", "Seats for passengers", "Active", "Notes"];
+/* From v1.87.0 the tab also holds what used to be typed into code: each
+   bus's renewal dates, which the driver app warns about, and which route it
+   takes in odd-numbered months, which the monthly rotation is built from.
+   At the END, so nothing a coordinator has sorted or coloured moves. */
+var BUSES_HEADERS  = ["Registration", "Seats for passengers", "Active", "Notes",
+                      "MOT due", "Service due", "Insurance due", "Permit due",
+                      "Route in odd months"];
+var BUS_DATE_KEYS = ["mot", "service", "insurance", "permit"];
 
 /* Seats are PASSENGER seats. The driver's seat is not one of them: a bus
    described as 17 seats carries 16 people plus whoever is driving. Getting
@@ -335,6 +342,17 @@ var BUSES_HEADERS  = ["Registration", "Seats for passengers", "Active", "Notes"]
    September is odd, so this is September's pairing: South on the newer bus.
    Swap the two values to flip the whole cycle. */
 var BUS_ROTATION_ODD = { north: "NH56 FWP", south: "YS70 PWE" };
+
+/* WHAT FILLS THE NEW BUSES COLUMNS, ONCE. From v1.87.0 the renewal dates and
+   the odd-month pairing live on the Buses tab. The first Set up / refresh
+   rota after the columns appear copies these in, and from then on the tab is
+   the only place they are read from: a renewal is a cell, a new bus a row.
+   BUS_ROTATION_ODD above is kept only as the answer for a tab that has no
+   pairing at all. */
+var BUS_DATES_SEED = {
+  "YS70 PWE": { mot: "2027-06-17", service: "2027-06-17", insurance: "2027-06-26", permit: "2027-01-31" },
+  "NH56 FWP": { mot: "2027-04-28", service: "2027-07-01", insurance: "2027-07-08", permit: "2027-01-31" }
+};
 
 var SEED_BUSES = [
   ["YS70 PWE", 16, "YES", "Ford Transit 460 Trend. 17 seats including the driver."],
@@ -882,10 +900,12 @@ function rotaCols(sh) {
 function ensureBuses(ss) {
   var existing = ss.getSheetByName(BUSES_SHEET);
   var sh = sheet(ss, BUSES_SHEET, BUSES_HEADERS);
+  var hadPairing = !!headerMap(sh)["Route in odd months"];
   /* Was: rewrite the whole heading row whenever it was wide enough, which
      relabelled anything a coordinator had put on this tab. */
   ensureCols(sh, BUSES_HEADERS);
   var bc = colsHard(sh, BUSES_SHEET);
+  if (!hadPairing) busColumnsFirstFill(sh, bc);
   if (!existing) {
     sh.setColumnWidth(bc.reg, 130);
     sh.setColumnWidth(bc.seats, 160);
@@ -918,6 +938,73 @@ function readBuses(ss) {
   return memo("buses", function () { return readBusesFresh(ss); });
 }
 
+/* The new columns, the first time they appear: notes on the headings, date
+   formats, a North/South dropdown, and what the code used to hold copied in
+   for any bus it knew. Never run again once the pairing column exists, so
+   nothing typed on the tab is ever written over. */
+function busColumnsFirstFill(sh, bc) {
+  try {
+    sh.getRange(1, bc.mot).setNote(
+      "When each renewal is due. The driver app warns 30 days ahead and says\n" +
+      "when one has passed. Leave blank for anything this bus does not have.");
+    sh.getRange(1, bc.oddRoute).setNote(
+      "North or South: the route this bus takes in odd-numbered months\n" +
+      "(January, March...). Even months are the other way round. Blank for a\n" +
+      "standby bus. A bus typed on a Sunday's Rota row still wins for that Sunday.");
+    BUS_DATE_KEYS.forEach(function (k) {
+      sh.getRange(2, bc[k], Math.max(1, sh.getMaxRows() - 1), 1).setNumberFormat("dd/mm/yyyy");
+    });
+  } catch (err) {}
+  pretty("Buses route dropdown", function () {
+    sh.getRange(2, bc.oddRoute, 199, 1).setDataValidation(listRule(["North", "South"]));
+  });
+  var last = sh.getLastRow();
+  if (last < 2) return;
+  var regs = sh.getRange(2, bc.reg, last - 1, 1).getValues();
+  for (var i = 0; i < regs.length; i++) {
+    var reg = String(regs[i][0] || "").trim().toUpperCase();
+    if (!reg) continue;
+    var row = i + 2;
+    var route = reg === String(BUS_ROTATION_ODD.north).toUpperCase() ? "North"
+              : reg === String(BUS_ROTATION_ODD.south).toUpperCase() ? "South" : "";
+    if (route) sh.getRange(row, bc.oddRoute).setValue(route);
+    var seed = null;
+    Object.keys(BUS_DATES_SEED).forEach(function (k) { if (k.toUpperCase() === reg) seed = BUS_DATES_SEED[k]; });
+    if (seed) BUS_DATE_KEYS.forEach(function (k) {
+      if (seed[k]) sh.getRange(row, bc[k]).setValue(keyToDate(seed[k]));
+    });
+  }
+  memoDrop("buses");
+}
+
+/* A date from a cell, as yyyy-mm-dd, or "". Sheets hands back a Date for a
+   cell it recognises and the typed text for one it does not. */
+function isoDay(v) {
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+  var t = String(v || "").trim();
+  var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
+  if (m) return m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2);
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
+  if (m) return m[3] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[1]).slice(-2);
+  return "";
+}
+
+/* The odd-month pairing, off the Buses tab: the active bus marked North and
+   the one marked South. Either missing, the code's BUS_ROTATION_ODD. */
+function busPairing() {
+  var north = "", south = "";
+  try {
+    readBuses(SpreadsheetApp.getActiveSpreadsheet()).forEach(function (b) {
+      if (!b.active) return;
+      if (b.oddRoute === "North" && !north) north = b.reg;
+      if (b.oddRoute === "South" && !south) south = b.reg;
+    });
+  } catch (err) {}
+  return (north && south) ? { north: north, south: south } : BUS_ROTATION_ODD;
+}
+
 function readBusesFresh(ss) {
   var sh = ss.getSheetByName(BUSES_SHEET);
   if (!sh || sh.getLastRow() < 2) {
@@ -940,7 +1027,11 @@ function readBusesFresh(ss) {
       /* Anything but a clear no counts as yes, so a blank cell on a bus
          somebody has just added does not quietly take it off the road. */
       active: String(at1(r, c.active) || "YES").trim().toUpperCase() !== "NO",
-      notes: String(at1(r, c.notes) || "").trim()
+      notes: String(at1(r, c.notes) || "").trim(),
+      dates: { mot: isoDay(at1(r, c.mot)), service: isoDay(at1(r, c.service)),
+               insurance: isoDay(at1(r, c.insurance)), permit: isoDay(at1(r, c.permit)) },
+      oddRoute: (function (x) { return x === "N" ? "North" : x === "S" ? "South" : ""; })(
+        String(at1(r, c.oddRoute) || "").trim().toUpperCase().charAt(0))
     });
   });
   return out;
@@ -970,9 +1061,8 @@ function busRule(key) {
   var d = keyToDate(key);
   if (!d) return null;
   var odd = ((d.getMonth() + 1) % 2) === 1;
-  var pair = { North: BUS_ROTATION_ODD.north, South: BUS_ROTATION_ODD.south };
-  if (!odd) pair = { North: BUS_ROTATION_ODD.south, South: BUS_ROTATION_ODD.north };
-  return pair;
+  var p = busPairing();
+  return odd ? { North: p.north, South: p.south } : { North: p.south, South: p.north };
 }
 
 /* The bus for one route on one Sunday, and where the answer came from.
@@ -2475,7 +2565,10 @@ function pushToWorker() {
   });
 
   var buses = readBuses(ss).map(function (b) {
-    return { reg: b.reg, seats: b.seats, active: b.active };
+    /* The dates and the pairing too, from v1.87.0: the live server hands the
+       dates to the driver app and builds the rotation from the pairing. */
+    return { reg: b.reg, seats: b.seats, active: b.active,
+             dates: b.dates || {}, oddRoute: b.oddRoute || "" };
   });
 
   var drivers = readDrivers(ss).map(function (d) {
@@ -11926,7 +12019,9 @@ FIELDS[DRIVERS_SHEET] = {
 };
 FIELDS[BUSES_SHEET] = {
   reg: "Registration", seats: "Seats for passengers",
-  active: "Active", notes: "Notes"
+  active: "Active", notes: "Notes",
+  mot: "MOT due", service: "Service due", insurance: "Insurance due", permit: "Permit due",
+  oddRoute: "Route in odd months"
 };
 FIELDS[CHECKS_SHEET] = {
   received: "Received", id: "Check ID", date: "Date", time: "Time",

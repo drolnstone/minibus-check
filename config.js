@@ -342,8 +342,9 @@ window.CONFIG = {
 /* ==========================================================================
    VEHICLES
 
-     dates     renewal dates as YYYY-MM-DD. Within 30 days shows amber,
-               past shows red. Leave one as "" and it is not tracked.
+     (renewal dates: the MOT due, Service due, Insurance due and Permit due
+      columns on the Buses tab, not here. Within 30 days the app shows
+      amber, past shows red, blank is not tracked.)
      watch     per-vehicle fault history from past MOTs, keyed by check id.
                This is what makes the app worth using: it tells a driver what
                has actually gone wrong on this bus before.
@@ -362,12 +363,6 @@ window.VEHICLES = [
     detail: "2020 \u00B7 1,995cc diesel \u00B7 manual \u00B7 17 seats including driver",
     colour: "Silver",
 
-    dates: {
-      mot:       "2027-06-17",
-      service:   "2027-06-17",
-      insurance: "2027-06-26",
-      permit:    "2027-01-31"
-    },
 
     /* Factory fitted: retractable step, reversing camera, head up display,
        electrically folding mirrors. */
@@ -412,12 +407,6 @@ window.VEHICLES = [
     detail: "2007 \u00B7 2,402cc diesel \u00B7 manual \u00B7 15 seats including driver",
     colour: "White",
 
-    dates: {
-      mot:       "2027-04-28",
-      service:   "2027-07-01",
-      insurance: "2027-07-08",
-      permit:    "2027-01-31"
-    },
 
     /* As above: instructions only. The history is in FLEET-HISTORY.md. */
     watch: {

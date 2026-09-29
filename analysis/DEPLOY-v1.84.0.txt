@@ -1,0 +1,51 @@
+MINIBUS
+=======
+  pages v1.84.0 · server w2.23.0 · sheet v1.86.0
+
+A bell in the coordinator's app, to turn coordinator alerts on from there.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.83.0         v1.84.0
+  Worker  w2.23.0         w2.23.0   (no change)
+  Code.gs v1.86.0         v1.86.0   (no change)
+
+Pages only. Nothing to paste into Cloudflare or Apps Script. If v1.83.0's
+steps are not all done yet (the Worker, Code.gs, SHEET_TOKEN), do those
+first: analysis/DEPLOY-v1.83.0.txt.
+
+
+IN THIS ORDER
+-------------
+
+1. PAGES. Merge the pull request. GitHub publishes the pages from main.
+
+2. EACH COORDINATOR, ON THEIR OWN PHONE. Open the coordinator's app, sign
+   in, and tap the bell beside Lock. Allow notifications when the phone
+   asks. On an iPhone the coordinator's app must be on the Home Screen
+   first (Add to your phone, on the sign-in screen); the bell says so if it
+   is not.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.84.0 · server w2.23.0 · sheet
+   v1.86.0 .
+
+B. The bell is filled once alerts are on. Tap it again: "A test alert is on
+   its way to this phone", and the phone shows "Alerts are working".
+
+C. Minibus, Send an email now, Test email and coordinators' phones: every
+   coordinator's phone shows "Coordinator alerts are working".
+
+
+WHAT CHANGED
+------------
+
+1. THE BELL IN THE COORDINATOR'S APP.
+   Coordinator alerts were turned on in the driver app, which on an iPhone
+   meant a coordinator who only used the coordinator's app was never
+   offered them: each Home Screen app is its own. The bell beside Lock does
+   the same sign-up, under the name signed in, behind the PIN. Tapped again
+   once on, it sends that phone a test. The driver app's bell still works.
