@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.88.0";
+var SCRIPT_VERSION = "v1.89.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1276,7 +1276,7 @@ function doPost(e) {
        minute sync runs, so a row reaches the tab one way whichever way it was
        asked for. If a drain is already running, it goes round once more when
        it finishes, and this returns at once. */
-    /* THE TWO REPORTS THE COORDINATOR'S APP ASKS THIS SHEET FOR, by way of
+    /* THE REPORTS THE COORDINATOR'S APP ASKS THIS SHEET FOR, by way of
        the live server, which has checked his PIN. The same code as the
        Minibus menu, handed back as parts instead of shown in a box. */
     if (String(body.action || "") === "report") {
@@ -1284,6 +1284,9 @@ function doPost(e) {
       try {
         if (rname === "health") return reply({ ok: true, report: healthReport() });
         if (rname === "load") return reply({ ok: true, report: coverReport() });
+        if (rname === "tapping") return reply({ ok: true, report: tappingReport() });
+        if (rname === "live") return reply({ ok: true, report: liveReport() });
+        if (rname === "remind") return reply({ ok: true, report: remindReport() });
       } catch (err) { return reply({ ok: false, error: String(err) }); }
       return reply({ ok: false, error: "no such report" });
     }
@@ -3981,11 +3984,41 @@ function liveSendNow() {
 
 function liveCheck() {
   var ui = SpreadsheetApp.getUi();
+  var lines = liveCheckLines();
+  if (lines.length === 1) { ui.alert(lines[0]); return; }
+  ui.alert("The live server", lines.join("\n"), ui.ButtonSet.OK);
+}
+
+/* The same lines as parts, for the coordinator's app: what needs attention,
+   what is fine, and the rest as it stands. */
+function liveReport() {
+  var lines = liveCheckLines();
+  var bad = [], good = [], info = [], cur = null;
+  lines.forEach(function (l) {
+    var t = String(l || "");
+    if (!t.trim()) { cur = null; return; }
+    if (/^\u2717/.test(t)) { bad.push(t.replace(/^\u2717\s*/, "")); cur = bad; }
+    else if (/^\u2713/.test(t)) { good.push(t.replace(/^\u2713\s*/, "")); cur = good; }
+    /* An indented line belongs to the line above it. */
+    else if (/^\s/.test(t) && cur && cur.length) cur[cur.length - 1] += " " + t.trim();
+    else { info.push(t.trim()); cur = info; }
+  });
+  var sections = [];
+  if (bad.length) sections.push({ head: "Needs attention", tone: "bad", lines: bad });
+  if (good.length) sections.push({ head: "Fine", tone: "good", lines: good });
+  if (info.length) sections.push({ head: "As it stands", lines: info });
+  return { title: "Is the live server working?", tone: bad.length ? "bad" : "",
+           lead: bad.length ? bad.length + " thing" + (bad.length === 1 ? " needs" : "s need") + " attention."
+                            : "Everything checked is fine.",
+           sections: sections, text: lines.join("\n") };
+}
+
+function liveCheckLines() {
   var lines = [];
   var props = null;
   try { props = PropertiesService.getScriptProperties(); } catch (err) {}
 
-  if (!WORKER_URL) { ui.alert("No live server address is set."); return; }
+  if (!WORKER_URL) return ["No live server address is set."];
   lines.push("Address: " + WORKER_URL);
 
   var out = workerCall("drain", { limit: 1 });
@@ -4091,7 +4124,7 @@ function liveCheck() {
     }
     if (er) lines.push("Last trouble:   " + er);
   }
-  ui.alert("The live server", lines.join("\n"), ui.ButtonSet.OK);
+  return lines;
 }
 
 function agoWords(ms) {
@@ -7256,13 +7289,22 @@ function handleTripLocked(payload) {
  * does more work than any nudge inside the app.
  */
 function whoIsTapping() {
+  var r = tappingReport();
+  SpreadsheetApp.getUi().alert(r.title, r.text, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/* The report itself, as parts for the coordinator's app and as text for the
+   menu. One piece of code, so the two cannot come to disagree. */
+function tappingReport() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var ui = SpreadsheetApp.getUi();
   var sh = ss.getSheetByName(TRIP_SHEET);
+  var TITLE = "Who is tapping";
+  function only(words, tone) {
+    return { title: TITLE, lead: words, sections: [], tone: tone || "", text: words };
+  }
 
   if (!sh || sh.getLastRow() < 2) {
-    ui.alert("Nothing recorded yet. Trip Events fills up as drivers tap.");
-    return;
+    return only("Nothing recorded yet. Trip Events fills up as drivers tap.");
   }
 
   /* The report needs these four to mean anything at all. Missing any of them
@@ -7271,11 +7313,10 @@ function whoIsTapping() {
   var c = tripColsSoft(sh);
   var needs = ["sunday", "route", "event", "happened"].filter(function (k) { return !c[k]; });
   if (needs.length) {
-    ui.alert("Trip Events is missing its " + needs.join(", ") + " column" +
-             (needs.length > 1 ? "s" : "") +
-             ", so this report cannot be built. " +
-             "Run Minibus > Rota > Set up / refresh rota.");
-    return;
+    return only("Trip Events is missing its " + needs.join(", ") + " column" +
+                (needs.length > 1 ? "s" : "") +
+                ", so this report cannot be built. " +
+                "Run Minibus > Rota > Set up / refresh rota.", "bad");
   }
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
   var runs = {};
@@ -7339,18 +7380,22 @@ function whoIsTapping() {
   });
 
   var unchecked = Object.keys(runs).filter(function (k) { return runs[k].unchecked; }).length;
+  var foot = "Stops tapped counts only stops that had somebody booked. Empty stops need no tap.";
+  var tail = unchecked
+    ? unchecked + " run" + (unchecked > 1 ? "s were" : " was") +
+      " started with no walkaround recorded on that phone. Worth asking " +
+      "about: if that number climbs, the check is being skipped rather " +
+      "than the record being lost."
+    : "Every run had a check recorded first.";
 
-  ui.alert("Who is tapping",
-    "Most recent runs first.\n\n" + lines.join("\n\n") +
-    "\n\nStops tapped counts only stops that had somebody booked. " +
-    "Empty stops need no tap." +
-    (unchecked
-      ? "\n\n" + unchecked + " run" + (unchecked > 1 ? "s were" : " was") +
-        " started with no walkaround recorded on that phone. Worth asking " +
-        "about: if that number climbs, the check is being skipped rather " +
-        "than the record being lost."
-      : "\n\nEvery run had a check recorded first."),
-    ui.ButtonSet.OK);
+  return {
+    title: TITLE,
+    lead: tail,
+    tone: unchecked ? "bad" : "",
+    sections: [{ head: "Most recent runs first", lines: lines }],
+    foot: foot,
+    text: "Most recent runs first.\n\n" + lines.join("\n\n") + "\n\n" + foot + "\n\n" + tail
+  };
 }
 
 /* Counts and trip state together, for the driver's screen. Both halves keep
@@ -9675,13 +9720,20 @@ function installDutyReminders() {
 
 /** Menu item, for testing without waiting for the morning. */
 function sendRemindersNow() {
+  var r = remindReport();
+  SpreadsheetApp.getUi().alert(r.title, r.text, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/* Sends whatever duty reminders are due today and says what happened. The
+   menu shows the words; the coordinator's app shows the same as parts. */
+function remindReport() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var TITLE = "Duty reminders";
   var withEmail = readDrivers(ss).filter(function (d) { return d.active && d.email; }).length;
   if (!withEmail) {
-    SpreadsheetApp.getUi().alert(
-      "Nobody has an email address yet.\n\nFill the Email column on the " +
-      "Drivers tab. Anyone left blank simply gets no reminder.");
-    return;
+    var none = "Nobody has an email address yet.\n\nFill the Email column on the " +
+               "Drivers tab. Anyone left blank simply gets no reminder.";
+    return { title: TITLE, lead: none, sections: [], tone: "bad", text: none };
   }
   /* This used to run and then toast "Reminders checked", which read as "mail
      has gone out" on the six days a week when nothing is due. Nothing was
@@ -9728,7 +9780,24 @@ function sendRemindersNow() {
   }
   msg += "\n\nTo see the email itself, use Send me a sample duty reminder.";
 
-  SpreadsheetApp.getUi().alert("Duty reminders", msg, SpreadsheetApp.getUi().ButtonSet.OK);
+  var sections = [];
+  if (out.sent.length) sections.push({ head: "Sent now", tone: "good", lines: out.sent });
+  if (out.already.length) sections.push({ head: "Already sent earlier, so not sent again", lines: out.already });
+  if (out.off && out.off.length) sections.push({ head: "Not sent: the Rota says the morning is not theirs", lines: out.off });
+  if (noAddress.length) sections.push({ head: "No email address, so never reminded", tone: "bad", lines: noAddress });
+  return {
+    title: TITLE,
+    lead: out.sent.length ? out.sent.length + " sent now." :
+          (!out.already.length && !(out.off && out.off.length)) ?
+            "Nothing was due today. Reminders go out " + remindDaysPhrase() + " a Sunday." :
+            "Nothing new to send.",
+    tone: "",
+    sections: sections,
+    foot: next ? "Next: " + Utilities.formatDate(next.when, tz, "EEEE d MMMM") +
+                 (next.today ? " (today)" : "") + ", for Sunday " +
+                 Utilities.formatDate(next.sunday, tz, "d MMMM") + "." : "",
+    text: msg
+  };
 }
 
 /* ---- when a Sunday changes after people have been told ----------------

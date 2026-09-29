@@ -1,29 +1,20 @@
 MINIBUS
 =======
-  pages v1.86.0 · server w2.25.0 · sheet v1.88.0
+  pages v1.87.0 · server w2.26.0 · sheet v1.89.0
 
-The code no longer carries this church's buses, stops, kerbs, renewal
-dates or bus pairing. The spreadsheet is the only place they live. Plus a
-"Setting up for a new church" checklist in README.md. And two fixes to the
-coordinator's app: it asks to be turned upright, and its top bar no longer
-slides under the clock after a trip to the driver app.
+Four more things from the Minibus menu in the coordinator's app, under
+Have a look.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.85.0         v1.86.0
-  Worker  w2.24.0         w2.25.0
-  Code.gs v1.87.0         v1.88.0
+  Pages   v1.86.0         v1.87.0
+  Worker  w2.25.0         w2.26.0
+  Code.gs v1.88.0         v1.89.0
 
-
-BEFORE ANYTHING: v1.87.0 MUST BE FINISHED
------------------------------------------
-This release removes the values v1.87.0 copied onto the Buses tab. So
-first, on the Buses tab, check that:
-  - the MOT due, Service due, Insurance due and Permit due columns exist
-    and have the dates in them, and
-  - Route in odd months says South for YS70 PWE and North for NH56 FWP.
-If they are not there, do v1.87.0 first: analysis/DEPLOY-v1.85.0.txt,
-steps 1 to 4. Without the Route column filled, NEW Sundays get no bus.
+If v1.86.0's steps are not done yet (the Buses tab check, Worker w2.25.0,
+Code.gs v1.88.0), do those first: analysis/DEPLOY-v1.86.0.txt. This
+release carries them too, so doing this one does both, but the Buses tab
+check at the top of that file still applies.
 
 
 IN THIS ORDER
@@ -38,46 +29,42 @@ IN THIS ORDER
 
 3. Minibus, Send everything to the live server now.
 
-4. Merge the pull request. GitHub publishes the pages from main.
+4. PAGES. Merge the pull request.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.86.0 · server w2.25.0 · sheet
-   v1.88.0 .
+A. The foot of all three apps reads  app v1.87.0 · server w2.26.0 · sheet
+   v1.89.0 .
 
-B. The Rota tab's bus columns for the next few Sundays are unchanged.
-
-C. Is the live server working? shows no ✗.
-
-D. On an iPhone, open the Coordinator app from the Home Screen once, straight
-   away (that is when it measures the status bar). Tap Driver app, then the
-   Coordinator button there: the bar sits below the clock. Turn the phone on
-   its side: "Turn your phone upright."
+B. Coordinator's app, Have a look:
+   - Bus link for this Sunday: Send on WhatsApp opens WhatsApp with the
+     link ready to send. Copy the link copies it.
+   - Is the live server working?: the same lines as the menu item, sorted
+     into Needs attention and Fine. It should have nothing needing
+     attention.
+   - Who is tapping: the last runs, as on the menu.
+   - Send duty reminders now: asks first. Send, and it says what went.
 
 
 WHAT CHANGED
 ------------
 
-1. NOTHING OF THIS CHURCH'S IN THE CODE.
-   SEED_BUSES, SEED_STOPS, STOP_PINS and BUS_DATES_SEED in Code.gs are
-   empty, and the fallback bus pairing in both Code.gs and the Worker is
-   blank. Your tabs already hold all of it, so nothing you see changes.
-   What does change: if the Route in odd months column is ever cleared, a
-   new Sunday gets no bus in its cell rather than a guess, and a cleared
-   Lat or Lng on Bus Stops is not refilled (type it back in).
+1. BUS LINK FOR THIS SUNDAY. The passenger page's address, with a button
+   that opens WhatsApp ready to send it to a person or the group, and one
+   to copy it. Built in the app itself; it needs neither server.
 
-2. SETTING UP FOR A NEW CHURCH.
-   A checklist in README.md of everything another church changes: its
-   copies, its settings, the addresses and details still in config.js and
-   Code.gs, and the four tabs it fills in.
+2. IS THE LIVE SERVER WORKING? and WHO IS TAPPING. Built by the sheet, the
+   same code as the menu items, handed back through the live server after
+   it has checked the PIN. The menu items are unchanged.
 
-3. THE COORDINATOR'S APP, UPRIGHT AND CLEAR OF THE CLOCK.
-   Turned on its side it says "Turn your phone upright", as the driver app
-   always has (iPhones ignore the "portrait only" an app asks for, so this
-   is the only way).
-   On a Home Screen iPhone, going to the driver app and back made Safari
-   report no room for the status bar, and the bar slid under the clock and
-   signal. The app now remembers the room it measured when it opened and
-   puts it back when Safari says none. Nothing to reinstall.
+3. SEND DUTY REMINDERS NOW. The same as the menu item: sends only the
+   reminders due today, and never the same one twice. The app asks
+   "Send the duty reminders due today?" first, and has no Ask again on the
+   answer, so it cannot be sent by a stray tap.
+
+4. A TEST THAT FAILED AFTER NINE AT NIGHT. One coordinator-alert test ran
+   on the real clock and, in the quiet hours, rightly saw a non-urgent
+   alert held for the morning. It now runs at two in the afternoon. The
+   app was never wrong.

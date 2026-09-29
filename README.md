@@ -1105,7 +1105,7 @@ Each change is made under the coordinator's PIN:
 | Bookings | this Sunday's and next Sunday's, stop by stop, with the numbers to ring. A booking cancelled for somebody who rings; seats booked for somebody without a smartphone |
 | Defects | the open ones, with their status changed, and closed only with what was done |
 | Run record | the last five Sundays. A wrong stop time put right, or a stop nobody tapped given its time; both are marked Corrected |
-| Have a look | bookings this Sunday; are we over on seats; is everything working; who has alerts on; who is carrying the load; which bus is on which route |
+| Have a look | the bus link for this Sunday; bookings this Sunday; are we over on seats; is everything working; is the live server working; who has alerts on; who is tapping; who is carrying the load; which bus is on which route; send duty reminders now |
 | What I have done | every change, and whether the sheet has it |
 
 The first screen also carries what cannot wait: a bus stopped at the
@@ -1158,12 +1158,17 @@ The page has no service worker, so it never shows a screen from a cache.
 ### The reports
 
 Four come from the live server's own copy: bookings this Sunday, are we over
-on seats, who has alerts on, and which bus is on which route. Two need the
-spreadsheet, *is everything working* and *who is carrying the load*, and the
-live server asks Apps Script for them and waits up to 25 seconds. If the sheet
+on seats, who has alerts on, and which bus is on which route. Five need the
+spreadsheet: *is everything working*, *is the live server working*, *who is
+tapping*, *who is carrying the load* and, from v1.87.0, *send duty reminders
+now*, which asks before it sends and sends only what is due today. The live
+server asks Apps Script for them and waits up to 25 seconds. If the sheet
 does not answer, *is everything working* still reports on the live server and
 says the sheet did not answer. The spreadsheet's own menu items give the same
-reports as before.
+reports as before, from the same code.
+
+*The bus link for this Sunday* needs neither: it is the passenger page's
+address, with **Send on WhatsApp** and **Copy the link**.
 
 ### Two faults fixed on the way
 

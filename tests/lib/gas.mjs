@@ -330,6 +330,7 @@ export function makeGas(opts) {
         "EEEE d MMMM yyyy": `${p.wdl} ${Number(p.d)} ${p.monl} ${p.y}`,
         "dd/mm/yyyy": `${p.d}/${p.mo}/${p.y}`,
         "d MMM": `${Number(p.d)} ${p.mon}`,
+        "d MMMM": `${Number(p.d)} ${p.monl}`,
         "d MMMM yyyy": `${Number(p.d)} ${p.monl} ${p.y}`,
         "dd/MM/yyyy": `${p.d}/${p.mo}/${p.y}`,
         "yyyyMMdd": `${p.y}${p.mo}${p.d}`,

@@ -95,12 +95,18 @@ export default async function (root) {
 
   s.test("the phone is told the alert, opens the coordinator's app, and then hears the ordinary answer", async (a) => {
     const { env } = await fresh();
-    await post(env, { action: "coordAlert", alert: alert() });
-    await post(env, { action: "coordAlert", alert: alert({ id: "a2", kind: "request", urgent: false,
-      title: "Rota request from Bro Tunde", body: "Cover for Sunday.", reg: "" }) });
-    const one = await W.pushWhat(env, EP("kehinde"));
-    const two = await W.pushWhat(env, EP("kehinde"));
-    const three = await W.pushWhat(env, EP("kehinde"));
+    /* At a daytime hour: the rota request is not urgent, and in the quiet
+       hours it would rightly be held for the morning (the test below). Run
+       on the real clock this passed by day and failed after nine at night. */
+    let one, two, three;
+    await atTime("2026-10-07T14:00:00+01:00", async () => {
+      await post(env, { action: "coordAlert", alert: alert() });
+      await post(env, { action: "coordAlert", alert: alert({ id: "a2", kind: "request", urgent: false,
+        title: "Rota request from Bro Tunde", body: "Cover for Sunday.", reg: "" }) });
+      one = await W.pushWhat(env, EP("kehinde"));
+      two = await W.pushWhat(env, EP("kehinde"));
+      three = await W.pushWhat(env, EP("kehinde"));
+    });
     a.eq(one.title, "BUS STOPPED: " + REG);
     a.eq(one.url, "coord/");
     a.eq(two.title, "Rota request from Bro Tunde", "the second alert was lost behind the first");

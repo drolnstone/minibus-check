@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.25.0";
+const SCRIPT_VERSION = "w2.26.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -6954,6 +6954,10 @@ async function coordReport(env, me, name) {
   if (name === "buses") return reportBuses(env);
   if (name === "health") return reportFromSheet(env, "health", "Is everything working?");
   if (name === "load") return reportFromSheet(env, "load", "Who is carrying the load");
+  /* From w2.26.0: three more off the Minibus menu, built by the same code. */
+  if (name === "tapping") return reportFromSheet(env, "tapping", "Who is tapping");
+  if (name === "live") return reportFromSheet(env, "live", "Is the live server working?");
+  if (name === "remind") return reportFromSheet(env, "remind", "Duty reminders");
   return { ok: false, error: "no such report" };
 }
 
