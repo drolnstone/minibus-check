@@ -25,7 +25,20 @@ export default async function (root) {
   /* The tab as it was before v1.87.0: its first four columns. */
   const oldTab = () => [TABS["Buses"].slice(0, 4),
                         ["YS70 PWE", 16, "YES", ""], ["NH56 FWP", 14, "YES", ""]];
-  const load = (buses) => loadCodeGs(root, { tabs: { "Buses": buses }, props: { PIN_SALT: "salt" } });
+  /* Code.gs ships the seeds and the fallback pairing empty from v1.88.0. The
+     one-time fill is tested with the values this church's v1.87.0 shipped,
+     put back in after loading; the empty ones are tested at the end. */
+  const SEEDS = {
+    BUS_ROTATION_ODD: { north: "NH56 FWP", south: "YS70 PWE" },
+    BUS_DATES_SEED: {
+      "YS70 PWE": { mot: "2027-06-17", service: "2027-06-17", insurance: "2027-06-26", permit: "2027-01-31" },
+      "NH56 FWP": { mot: "2027-04-28", service: "2027-07-01", insurance: "2027-07-08", permit: "2027-01-31" } }
+  };
+  const load = (buses, bare) => {
+    const L = loadCodeGs(root, { tabs: { "Buses": buses }, props: { PIN_SALT: "salt" } });
+    if (!bare) Object.assign(L.ctx, JSON.parse(JSON.stringify(SEEDS)));
+    return L;
+  };
   const ss = (L) => L.ctx.SpreadsheetApp.getActiveSpreadsheet();
   const cells = (L) => ss(L).getSheetByName("Buses").getDataRange().getValues();
 
@@ -83,7 +96,7 @@ export default async function (root) {
     a.eq(even.North, "NH56 FWP"); a.eq(even.South, "YS70 PWE");
   });
 
-  s.test("with only one route marked, the pairing falls back to the old one rather than guess", (a) => {
+  s.test("with only one route marked, the pairing falls back to the code's rather than guess", (a) => {
     const L = load(oldTab());
     call(L, "ensureBuses", ss(L));
     const sh = ss(L).getSheetByName("Buses");
@@ -128,10 +141,10 @@ export default async function (root) {
     a.eq(W.busRule("2026-10-04", buses).North, "NH56 FWP");
   });
 
-  s.test("an inactive bus, or no pairing at all, leaves the old rule", async (a) => {
-    a.eq(W.busRule("2026-11-01").North, "NH56 FWP");
+  s.test("an inactive bus, or no pairing at all, names no bus rather than guess", async (a) => {
+    a.eq(W.busRule("2026-11-01").North, "");
     a.eq(W.busRule("2026-11-01", [{ reg: "YS70 PWE", active: false, oddRoute: "North" },
-                                  { reg: "NH56 FWP", active: true, oddRoute: "South" }]).North, "NH56 FWP");
+                                  { reg: "NH56 FWP", active: true, oddRoute: "South" }]).North, "");
   });
 
   s.test("a sync from an older sheet, with no dates, keeps the last ones", async (a) => {
@@ -148,6 +161,28 @@ export default async function (root) {
     a.not(/dates:\s*\{/.test(cfg), "config.js still has a dates block");
     const app = readFileSync(join(root, "index.html"), "utf8");
     a.has(app, "var dates = busDates(v);");
+  });
+
+  /* ---- a copy for another church ---------------------------------------- */
+
+  s.test("the code ships no church's buses, stops, kerbs, dates or pairing", (a) => {
+    const L = load([TABS["Buses"]], true);
+    a.eq(JSON.stringify(L.ctx.SEED_BUSES), "[]");
+    a.eq(JSON.stringify(L.ctx.SEED_STOPS), "[]");
+    a.eq(JSON.stringify(L.ctx.STOP_PINS), "{}");
+    a.eq(JSON.stringify(L.ctx.BUS_DATES_SEED), "{}");
+    a.eq(L.ctx.BUS_ROTATION_ODD.north + L.ctx.BUS_ROTATION_ODD.south, "");
+    const w = readFileSync(join(root, "server", "worker.js"), "utf8");
+    a.has(w, 'const BUS_ROTATION_ODD = { north: "", south: "" };');
+  });
+
+  s.test("a new spreadsheet sets up with empty Buses and Bus Stops tabs, and no bus on any Sunday", (a) => {
+    const L = loadCodeGs(root, { tabs: {}, props: { PIN_SALT: "salt" } });
+    call(L, "ensureBuses", ss(L));
+    a.eq(ss(L).getSheetByName("Buses").getLastRow(), 1);
+    a.eq(JSON.stringify(call(L, "readBuses", ss(L))), "[]");
+    const r = call(L, "busRule", "2026-11-01");
+    a.eq(r.North, ""); a.eq(r.South, "");
   });
 
   return s;

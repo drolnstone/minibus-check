@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.87.0";
+var SCRIPT_VERSION = "v1.88.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -338,26 +338,25 @@ var BUS_DATE_KEYS = ["mot", "service", "insurance", "permit"];
 /* Seats are PASSENGER seats. The driver's seat is not one of them: a bus
    described as 17 seats carries 16 people plus whoever is driving. Getting
    that wrong by one would show somebody a seat that does not exist. */
-/* Which bus goes where in ODD-numbered months. Even months are the reverse.
-   September is odd, so this is September's pairing: South on the newer bus.
-   Swap the two values to flip the whole cycle. */
-var BUS_ROTATION_ODD = { north: "NH56 FWP", south: "YS70 PWE" };
+/* Which bus goes where in ODD-numbered months, when the Buses tab's "Route in
+   odd months" column does not say. Blank from v1.88.0: the tab is the only
+   place this church's pairing lives, and a copy of this project for another
+   church must not quietly send buses it does not have. Blank means the bus
+   cells stay empty until the tab says, which everything downstream handles. */
+var BUS_ROTATION_ODD = { north: "", south: "" };
 
 /* WHAT FILLS THE NEW BUSES COLUMNS, ONCE. From v1.87.0 the renewal dates and
    the odd-month pairing live on the Buses tab. The first Set up / refresh
    rota after the columns appear copies these in, and from then on the tab is
    the only place they are read from: a renewal is a cell, a new bus a row.
    BUS_ROTATION_ODD above is kept only as the answer for a tab that has no
-   pairing at all. */
-var BUS_DATES_SEED = {
-  "YS70 PWE": { mot: "2027-06-17", service: "2027-06-17", insurance: "2027-06-26", permit: "2027-01-31" },
-  "NH56 FWP": { mot: "2027-04-28", service: "2027-07-01", insurance: "2027-07-08", permit: "2027-01-31" }
-};
+   pairing at all. Empty from v1.88.0, once this church's had been copied in:
+   a new church types its dates straight onto the tab. */
+var BUS_DATES_SEED = {};
 
-var SEED_BUSES = [
-  ["YS70 PWE", 16, "YES", "Ford Transit 460 Trend. 17 seats including the driver."],
-  ["NH56 FWP", 14, "YES", "Ford Transit 100 RWD. 15 seats including the driver."]
-];
+/* What a brand-new Buses tab starts with. Empty from v1.88.0: a new church
+   types its own buses in. See "Setting up for a new church" in README.md. */
+var SEED_BUSES = [];
 
 /* The Sunday timetable, so it stops living only in a WhatsApp message.
 
@@ -631,62 +630,11 @@ var BOOKING_RULES = {
    Two of these were checked against figures measured independently: S03 to
    S04 comes out at 195 metres and N05 through N07 at 556, both exactly as
    reported. */
-var STOP_PINS = {
-  "N01": { stop: "Scarisbrick Drive", postcode: "L11 7DD", at: [53.449234, -2.936301] },
-  "N02": { stop: "Grace Road",        postcode: "L9 2BU",  at: [53.463563, -2.959062] },
-  "N03": { stop: "Litherland Road",   postcode: "L20 3HZ", at: [53.450731, -2.987178] },
-  /* FOUNTAINS ROAD IS MISSING ON PURPOSE, and it is the reason the check
-     below exists.
-
-     It was supplied as 53.432320, -2.984024 and Asim asked whether that was
-     right. It is not. Two things say so and they agree:
-
-       The latitude is Stanley Park's. N08 is 53.432312 — EIGHT METRES away
-       in latitude, for two stops a mile and an eighth apart. That is what a
-       row copied from the wrong line looks like.
-
-       It bends the route by a factor of 3.1. Every other stop on both routes
-       sits between 1.0 and 1.3 — near enough on the line between the one
-       before it and the one after. Fountains Road made the bus travel 3,831
-       metres to cover a 1,221 metre gap, out towards the docks and back.
-
-     The longitude is probably fine: -2.984024 sits neatly between Litherland
-     Road and Bedford Road, which is where that road belongs. It is the
-     latitude that came off the wrong row, and at roughly 53.4455 the detour
-     drops to 1.2 and the route reads straight.
-
-     ROUGHLY IS NOT GOOD ENOUGH TO SHIP. A wrong coordinate is worse than no
-     coordinate: blank is visible and everything downstream handles it, while
-     a plausible wrong number is believed. So it stays out until somebody
-     stands on the kerb or reads it off a map, and the cell waits. */
-  "N05": { stop: "Bedford Road",      postcode: "L4 5PU",  at: [53.446071, -2.970485] },
-  "N06": { stop: "Pym Street",        postcode: "L4 5PH",  at: [53.444062, -2.969688] },
-  "N07": { stop: "Wilburn Street",    postcode: "L4 3QN",  at: [53.441187, -2.970688] },
-  "N08": { stop: "Stanley Park",      postcode: "L4 0TQ",  at: [53.432312, -2.956937] },
-  "S01": { stop: "Dewsbury Road",     postcode: "L4 2XF",  at: [53.434771, -2.955519] },
-  /* VICAR ROAD AND PARTON STREET ARE BOTH OUT, and for one reason between
-     them: they were supplied with THE SAME LONGITUDE, -2.944937, to six
-     decimal places. That is seven centimetres, on two roads a mile and an
-     eighth apart. It is not a coincidence — it is one of the two carrying the
-     other's number — and the same duplicate sits in the Where column of the
-     Bus Stops tab, so it came in with the original survey rather than
-     arriving here.
-
-     Which of the two is wrong cannot be decided from this end. S03 to S04
-     was measured independently at 195 metres and comes out at 195; N05
-     through N07 at 556 and comes out at 556. Neither of these was ever
-     checked against anything.
-
-     So both wait. Twelve stops fill themselves and three want a pair of eyes,
-     which is a better trade than one confident wrong pin: blank is visible
-     and everything downstream handles it, while a plausible wrong number is
-     believed by the estimate and by the driver's map link. */
-  "S03": { stop: "Sedley Street",     postcode: "L4 2RB",  at: [53.425937, -2.952438] },
-  "S04": { stop: "Breck Road",        postcode: "L6 5BJ",  at: [53.424312, -2.953563] },
-  /* Parton Street — see the note on Vicar Road above. */
-  "S06": { stop: "Hannan Road",       postcode: "L6 6AN",  at: [53.414313, -2.949187] },
-  "S07": { stop: "Halsbury Road",     postcode: "L6 6AW",  at: [53.414732, -2.946951] }
-};
+/* Empty from v1.88.0. Kerb positions are typed on the Bus Stops tab, which
+   was always the authority; this only ever filled blanks. A church can list
+   stops here by Stop ID ({ "N01": { stop, postcode, at: [lat, lng] } }) to
+   have Set up fill them, but the tab is quicker. */
+var STOP_PINS = {};
 
 /* ---- IS THIS ROW THE STOP THAT WAS SURVEYED ----------------------------
 
@@ -833,26 +781,9 @@ function ensureRequestColumns(sh) {
   return did;
 }
 
-var SEED_STOPS = [
-  ["North", "N01", "10:05", "Scarisbrick Drive by Ardville Road",               "L11 7DD", "YES", "Pickup"],
-  ["North", "N02", "10:14", "Cedar Road at Walton Vale, by Grace Road bus stop","L9 2BU",  "YES", "Pickup"],
-  ["North", "N03", "10:20", "Church Lane bus stop, County Road",                "L4 5PQ",  "YES", "Pickup"],
-  ["North", "N04", "10:23", "County Road by Ireton Street",                     "L4 5TR",  "YES", "Pickup"],
-  ["North", "N05", "10:29", "Fountains Road by Stanley Close",                  "L4 1QL",  "YES", "Pickup"],
-  ["North", "N06", "10:40", "The Lutine Bell",                                  "L5 6PT",  "YES", "Pickup"],
-  ["North", "N07", "10:41", "Grasmere Street bus stop, in front of the mosque",  "L5 6PU",  "YES", "Pickup"],
-  ["North", "N08", "10:44", "Sedley Street bus stop",                           "L6 5AF",  "YES", "Pickup"],
-  ["North", "N09", "10:50", "Dewsbury Road by Lynholme Road",                   "L4 2XF",  "YES", "Pickup"],
-  ["North", "N10", "10:54", "Townsend Road by Vicar Road bus stop, in front of the GP practice", "L6 0BB", "YES", "Pickup"],
-  ["North", "N11", "11:00", "Church",                                           "L6 4DS",  "YES", "Arrival"],
-
-  ["South", "S01", "10:40", "Parton Street, at the Molyneux Road junction",     "",        "YES", "Pickup"],
-  ["South", "S02", "10:42", "Tudor Street, at the Molyneux Road junction",      "",        "YES", "Pickup"],
-  ["South", "S03", "10:44", "North Cumbria, at the Molyneux Road junction",     "",        "YES", "Pickup"],
-  ["South", "S04", "10:46", "Hannan, at the Molyneux Road junction",            "",        "YES", "Pickup"],
-  ["South", "S05", "10:48", "Halsbury, at the Molyneux Road junction",          "",        "YES", "Pickup"],
-  ["South", "S06", "11:00", "Church",                                           "L6 4DS",  "YES", "Arrival"]
-];
+/* What a brand-new Bus Stops tab starts with. Empty from v1.88.0: a new
+   church types its own timetable in. */
+var SEED_STOPS = [];
 
 /* The script reads this tab by position, never by heading, so renaming these
    is purely cosmetic and cannot break anything. */
@@ -916,7 +847,7 @@ function ensureBuses(ss) {
       "PASSENGER seats. Not counting the driver.\n" +
       "A bus described as 17 seats carries 16 people plus whoever is driving.");
   }
-  if (sh.getLastRow() < 2) {
+  if (sh.getLastRow() < 2 && SEED_BUSES.length) {
     var wide = Math.max(sh.getLastColumn(), BUSES_HEADERS.length);
     sh.getRange(2, 1, SEED_BUSES.length, wide).setValues(SEED_BUSES.map(function (b) {
       var row = [];

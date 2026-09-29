@@ -886,6 +886,62 @@ to Apps Script — slow, and correct. That one line is the whole escape hatch.
 
 ---
 
+## Setting up for a new church
+
+From v1.88.0 the code carries no church's buses, stops, kerbs, renewal dates
+or bus pairing, and from v1.80.0 no people. A copy of this repository for
+another church starts empty and is filled in on the spreadsheet. What is left
+is below, in the order it is easiest to do.
+
+**1. Your own copies.**
+- [ ] Fork or copy this repository and turn on GitHub Pages from `main`.
+- [ ] Make a new Google spreadsheet, open **Extensions, Apps Script**, and
+      paste in `Code.gs`. **Deploy, New deployment, Web app**, run as you,
+      access Anyone. Copy the `/exec` address.
+- [ ] Make a Cloudflare Worker from `server/worker.js`, with a D1 database
+      bound to it under the name `DB`. Paste `server/schema.sql` into the D1 console and run it.
+      Add the every-minute Cron Trigger (see *Deploying*).
+
+**2. Settings.** No secret goes in a file: the repository is public.
+- [ ] Script Properties (see *Configuration*): `COORDINATOR_EMAIL`,
+      `WORKER_URL`, `PIN_SALT`, `SHEET_TOKEN`, and if you want them
+      `SENDER_NAME`, `COORDINATOR_ROLES`.
+- [ ] Worker Variables and Secrets: `PIN_SALT` and `SHEET_TOKEN`, the same
+      values as above; `TOKEN`; a `PHONE_SALT` of your own.
+
+**3. The code's addresses and church details.**
+- [ ] `config.js`: `endpoint` (the `/exec` address), `liveEndpoint` (the
+      Worker), `token`, `busBase` and `churchBase` (measured standing there,
+      not off a map), `fullInspectionRoles`, `rotaAnchor` and
+      `rotaSecondaryAnchor` (the first Sunday of each route's driver pattern),
+      and `VEHICLES`: one entry per bus, with its registration exactly as on
+      the Buses tab, what it skips, and what to watch on it.
+- [ ] `Code.gs`: `TOKEN` (the same as `token`), `BUS_PAGE_URL` (your
+      `sunday/` page), `CHURCH_PIN`, `BUS_ADDRESS`, `PATTERN_ANCHOR` and
+      `PATTERN_ANCHOR_SOUTH` (the same dates as the two anchors above), and
+      `PHONE_SALT`, set once and never changed.
+- [ ] The church's name: search the pages and the two `manifest.webmanifest`
+      files, and `worker.js`, for this church's name and replace it; and
+      `logo.png`.
+
+**4. The spreadsheet.** Minibus, **Set up / refresh rota** builds every tab.
+Then fill in:
+- [ ] **Drivers**: everybody who drives or coordinates, with a PIN each. The
+      coordinator's row, with a Phone, is who every page tells people to ring.
+- [ ] **Buses**: one row per bus. Registration, passenger seats (not counting
+      the driver), Active YES, the MOT, service, insurance and permit dates,
+      and North or South in **Route in odd months** for the two that run.
+- [ ] **Bus Stops**: each route's stops, times and postcodes. **Lat** and
+      **Lng** are the kerb, for the driver's map link and the estimate; blank
+      works, just less well.
+- [ ] **Rota**: who drives when. Each route's drivers take turns in their
+      **Primary order** on the Drivers tab, counted from the two anchor
+      dates; Set up fills the coming Sundays and anything can be typed over.
+
+**5. Go.** Minibus, **Send everything to the live server now**, then **Is the
+live server working?** until it shows no ✗, then the rehearsal in *After the
+deploy*.
+
 ## Configuration
 
 **`config.js`** — the church details, the vehicle list, the checklist, the

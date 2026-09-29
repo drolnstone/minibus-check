@@ -14,7 +14,16 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Suite } from "../lib/t.mjs";
-import { loadCodeGs, call } from "../lib/codegs.mjs";
+import { loadCodeGs as loadBare, call } from "../lib/codegs.mjs";
+import { KERBS } from "../lib/kerbs.mjs";
+
+/* Code.gs ships STOP_PINS empty from v1.88.0. The kerb filling is tested
+   against this church's kerbs, put back in after loading. */
+function loadCodeGs(root, opts) {
+  const L = loadBare(root, opts);
+  L.ctx.STOP_PINS = JSON.parse(JSON.stringify(KERBS));
+  return L;
+}
 import { STOPS } from "../lib/seed.mjs";
 import { atTime } from "../lib/clock.mjs";
 import { loadWorker, installGlobals } from "../lib/worker.mjs";
@@ -214,7 +223,7 @@ export default function (root) {
     a.near(ctx.CHURCH_PIN.at[1], -2.936799, 0.000001);
   });
 
-  s.test("the kerbs in Code.gs and the kerbs the suites test against are the same kerbs", (a) => {
+  s.test("the kerbs fixture and the stops the suites test against are the same kerbs", (a) => {
     /* Two copies of fifteen coordinates is two things to keep in step, and
        the failure if they drift is the nastiest kind: every test goes on
        passing, against a set of coordinates that is no longer what the
@@ -225,7 +234,7 @@ export default function (root) {
     const pins = ctx.STOP_PINS;
     for (const id of Object.keys(pins)) {
       const fixture = STOPS.find((x) => x.id === id);
-      a.ok(fixture, "Code.gs has a kerb for " + id + " and the test fixture has no such stop");
+      a.ok(fixture, "kerbs.mjs has a kerb for " + id + " and the stops fixture has no such stop");
       a.near(fixture.lat, pins[id].at[0], 0.0000001, id + " latitude");
       a.near(fixture.lng, pins[id].at[1], 0.0000001, id + " longitude");
       /* Compared by ROAD, not by string. The fixtures say "Scarisbrick Dr"
@@ -243,7 +252,7 @@ export default function (root) {
     const WITHHELD = ["N04", "S02", "S05"];
     const missing = STOPS.filter((x) => x.kind === "pickup" && !pins[x.id]).map((x) => x.id);
     a.eq(missing.sort().join(","), WITHHELD.sort().join(","),
-         "Code.gs has no kerb for: " + (missing.join(", ") || "none"));
+         "kerbs.mjs has no kerb for: " + (missing.join(", ") || "none"));
   });
 
   /* ---- whose PIN an email link will ask for ------------------------------

@@ -46,7 +46,12 @@ const turn = (key, pat, anchor) => {
   return pat[((w % pat.length) + pat.length) % pat.length];
 };
 const northOf = (k) => turn(k, NP, NA), southOf = (k) => turn(k, SP, SA);
-const busesOf = (k) => W.busRule(k);
+/* The monthly pairing, as the Buses tab's Route in odd months column says it
+   and the sync leaves it on the live server (w2.25.0 has no pairing of its
+   own to fall back on). */
+const ODD_ROUTE = { "NH56 FWP": "North", "YS70 PWE": "South" };
+const PAIRED = REAL.buses.map((b) => ({ reg: b.reg, active: true, oddRoute: ODD_ROUTE[b.reg] || "" }));
+const busesOf = (k) => W.busRule(k, PAIRED);
 
 async function world() {
   const db = makeDB(join(ROOT, "server", "schema.sql"));
@@ -63,6 +68,9 @@ async function world() {
     await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,?,1,?)")
       .bind(d.name, d.role, d.route || "North", d.ord, await W.pinHashOf(env, d.name, PIN)).run();
   }
+  const extra = {};
+  for (const b of PAIRED) extra[b.reg.toUpperCase()] = { dates: {}, oddRoute: b.oddRoute };
+  await W.cachePut(env, "bus_extra", extra).run();
   await W.cachePut(env, "auth_rules", { roles: ["coordinator", "minister in charge"], sameHandBothWays: true }).run();
   await W.cachePut(env, "sheet_url", { url: "https://script.google.com/macros/s/TEST/exec" }).run();
   /* What the sheet's own sync leaves behind, so all three numbers can be read. */
