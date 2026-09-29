@@ -685,6 +685,23 @@ if (want("C20")) {
   await p.ctx.close();
 }
 
+/* C21 — the Driver app link, signed in: to the hub, signed in, PIN taken */
+if (want("C21")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  await p.pg.click('#homeBody [data-do="driverapp"]');
+  await p.pg.waitForURL((u) => !/\/coord\//.test(String(u)), { timeout: 8000 }).catch(() => {});
+  await p.wait(3500);
+  const onHub = await p.pg.$eval("#s-hub", (el) => el.classList.contains("is-on")).catch(() => false);
+  const state = await p.pg.evaluate(() => typeof st !== "undefined" ? { driver: st.driver, pinOk: st.pinOk } : {});
+  const left = await p.pg.evaluate(() => { try { return sessionStorage.getItem("fleet.hand.v1"); } catch (e) { return "unreadable"; } });
+  await p.shot("C21-to-hub");
+  check("C21", "the Driver app link on the first screen lands on the driver app's hub, signed in with the PIN taken, and no copy left",
+        onHub && state.driver === "Bro Asim" && state.pinOk === true && left === null && !p.errs.length,
+        "hub " + onHub + ", state " + JSON.stringify(state) + ", left " + left + ", errors " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
 /* C20b — a PIN handed over that is wrong is still refused by the driver app */
 if (want("C20b")) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });

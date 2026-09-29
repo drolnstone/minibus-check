@@ -1010,12 +1010,14 @@ name goes, and the page asks for the PIN with the cursor already in the box.
 Opened any other way, from its own home screen icon or a link, it always
 asks. The live server still checks the PIN on every call.
 
-**And the other way.** From v1.81.0 the coordinator's first screen ends with
-**Vehicle check**. It leaves the signed-in name and PIN for the driver app in
-the same way, once, in this tab only, refused after a minute, and opens the
-driver app, which checks the PIN exactly as it checks one keyed there. A yes
-goes straight to choosing the bus; a no stays on the name screen, with the PIN
-box saying so.
+**And the other way.** From v1.81.0, once signed in, the coordinator's
+**Driver app** link and the **Vehicle check** at the foot of its menu leave
+the name and PIN for the driver app in the same way: once, in this tab only,
+refused after a minute. The driver app checks the PIN exactly as it checks one
+keyed there. A yes lands on the hub, signed in, from Driver app, or straight on
+choosing the bus from Vehicle check; a no stays on the name screen, with the
+PIN box saying so. The Driver app link on the sign-in screen has no PIN to
+carry and stays a plain link.
 
 **The landing page** is the sign-in screen, as on the driver app. It carries
 the three numbers, `coordinator · server · sheet`, read from the live server

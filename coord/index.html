@@ -649,7 +649,9 @@ function signIn(){
 }
 
 /* TO THE DRIVER APP, WITH THE PIN. The Coordinator button there, the other
-   way round.
+   way round. "hub" for the Driver app link, which lands him signed in on the
+   hub as he would be had he signed in there; "check" for Vehicle check, which
+   goes on to choosing the bus.
 
    A coordinator signed in here has had his PIN checked by the live server on
    every call, so he is not asked for it again to do a walkaround. It goes the
@@ -657,10 +659,10 @@ function signIn(){
    other tab and no later visit can read, taken and wiped by the driver app as
    it opens, and refused there if more than a minute old. The driver app still
    checks it, as it checks one keyed there; it only is not typed twice. */
-function toCheck(){
+function toDriver(to){
   try{
     if(who && /^\d{4,8}$/.test(String(pin || "")))
-      sessionStorage.setItem(DRIVER_HAND_KEY, JSON.stringify({ name: who, pin: String(pin), at: Date.now() }));
+      sessionStorage.setItem(DRIVER_HAND_KEY, JSON.stringify({ name: who, pin: String(pin), to: to, at: Date.now() }));
     else sessionStorage.removeItem(DRIVER_HAND_KEY);
   }catch(e){}
   location.href = "../";
@@ -960,7 +962,10 @@ function paintHome(){
        item("activity", "What I have done", waiting ? waiting + " on the way" : "", waiting ? "warn" : "") +
        '<li><button type="button" data-do="check"><span class="t">Vehicle check</span><span class="go">\u203A</span></button></li>' +
        '</ul>';
-  h += '<a class="foot-link" href="../">Driver app</a>';
+  /* Signed in, so the way back carries him: to the driver app's hub, not its
+     name screen. The link on the sign-in screen has no PIN to carry and stays
+     a plain link. */
+  h += '<a class="foot-link" href="../" data-do="driverapp">Driver app</a>';
   $("homeBody").innerHTML = h;
 }
 
@@ -1749,7 +1754,8 @@ document.addEventListener("click", function(e){
   if(g){ go(g); return; }
   var d = t.getAttribute("data-do");
   var key = t.getAttribute("data-key");
-  if(d === "check") toCheck();
+  if(d === "driverapp"){ e.preventDefault(); toDriver("hub"); return; }
+  if(d === "check") toDriver("check");
   else if(d === "authorise") authorise(t.getAttribute("data-reg"));
   else if(d === "endrun") endRun(t.getAttribute("data-route"));
   else if(d === "more"){ ROTA_SHOW += 12; paintRota(); }
