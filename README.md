@@ -1786,6 +1786,11 @@ services faked, which is not an approximation of how Apps Script works but a
 description of it. It checks that every file parses, runs every suite, and
 ends in one word: READY or NOT READY. Run it before handing a build over.
 
+GitHub runs the same command on every pull request and every push to `main`
+(`.github/workflows/tests.yml`), on London time. A red **Tests** check on a
+pull request means NOT READY. The browser checks in `tests/browser` are not
+part of it; run those by hand before a release.
+
 The Worker's suites run against a **real SQLite database** through a shim of
 the D1 client, because half the faults worth catching here are SQL — a column
 that is a keyword, an `ON CONFLICT` that does not fire, a unique index that
