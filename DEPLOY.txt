@@ -1,86 +1,51 @@
 MINIBUS
 =======
-  pages v1.81.0 · server w2.22.0 · sheet v1.85.4
+  pages v1.82.0 · server w2.22.0 · sheet v1.85.4
 
-Three things: leaving the coordinator's app for the driver app no longer
-asks for the name and PIN again; the coordinator titles are a Script
-Property, COORDINATOR_ROLES, not a line of code; and the person people ring
-is chosen from those titles.
+The coordinator's app keeps the last Drivers tab on the phone, so its
+sign-in screen has the names, your remembered name and the cursor in the
+PIN box the moment it opens.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.80.0         v1.81.0
-  Worker  w2.21.1         w2.22.0
-  Code.gs v1.85.2         v1.85.4
+  Pages   v1.81.0         v1.82.0
+  Worker  w2.22.0         w2.22.0   (no change)
+  Code.gs v1.85.4         v1.85.4   (no change)
 
-No SQL, no new Worker variables or triggers. One new Script Property,
-COORDINATOR_ROLES, and it is optional: left unset, the titles are
-Coordinator, Minister in Charge, exactly as now.
+Pages only. Nothing to paste into Cloudflare or Apps Script.
 
 
 IN THIS ORDER
 -------------
 
-1. WORKER. Cloudflare, minibus-api, Edit code. Paste worker.js over the old
-   one. Deploy.
-
-2. CODE.GS. Apps Script editor. Paste Code.gs over the old one. Save.
-   Deploy, Manage deployments, the pencil on the existing deployment,
-   Version: New version, Deploy.
-
-3. Minibus, Rota and setup, Send everything to the live server now.
-
-4. PAGES. Merge the pull request. GitHub publishes the pages from main.
+1. PAGES. Merge the pull request. GitHub publishes the pages from main.
 
 
 AFTER IT
 --------
 
-A. The foot of the driver app reads  app v1.81.0 · server w2.22.0 · sheet
-   v1.85.4 . A phone still on v1.80.0: close the app fully and open it
+A. The foot of the driver app reads  app v1.82.0 · server w2.22.0 · sheet
+   v1.85.4 . A phone still on v1.81.0: close the app fully and open it
    again.
 
-B. Coordinator's app, signed in, first screen. Tap Driver app at the foot:
-   the driver app opens on its hub, "Signed in as" your name, Vehicle check
-   ready, and no PIN is asked for. Go back, and tap Vehicle check, the last
-   line of the menu: the driver app opens on "Which one today?".
+B. Coordinator's app, locked or freshly opened: your name is already in the
+   box. The first time after this update it still waits a second for the
+   live server, because there is nothing kept yet; from then on it is
+   immediate.
 
-C. The passenger page's Call line still names you, with your number.
-
-D. "Is everything working?", the live server part, has the line
-   "Coordinator titles: Coordinator, Minister in Charge (the default; set
-   COORDINATOR_ROLES to change them)".
+C. On an iPhone the keyboard still needs one tap on the PIN box. A page is
+   not allowed to open the keyboard by itself. On a computer, and on most
+   Android phones, the cursor is already in the box.
 
 
 WHAT CHANGED
 ------------
 
-1. FROM THE COORDINATOR'S APP TO THE DRIVER APP, SIGNED IN.
-   The driver app's Coordinator button already carried a checked PIN to
-   the coordinator's app. Now the coordinator's app does the same the other
-   way, once signed in: the Driver app link lands on the driver app's hub,
-   signed in, and a new Vehicle check at the foot of the menu goes on to
-   choosing the bus. The name and PIN go once, in that tab only, and are
-   refused after a minute. The driver app checks the PIN as it checks one
-   keyed there; a wrong one stays on the name screen.
-
-2. THE COORDINATOR TITLES ARE A SETTING.
-   Apps Script, Project Settings, Script Properties, COORDINATOR_ROLES: the
-   titles as they appear in the Role column, separated by commas, the one
-   people should ring first. For example
-
-       Coordinator, Minister in Charge
-
-   Blank or missing uses exactly that. After changing it, Send everything
-   to the live server now. The live server passes the titles to every page,
-   so config.js is not edited and nothing is redeployed. They decide who may
-   authorise a stopped bus, who is offered the full inspection, who may open
-   the coordinator's app, and who people are told to ring. Capitals and
-   doubled spaces in the Role column no longer matter.
-
-3. WHO PEOPLE RING FOLLOWS THOSE TITLES.
-   It looked for the word Coordinator alone, so a church with other titles
-   showed nobody. It now takes whoever COORDINATOR_EMAIL names among
-   everybody holding one of the titles, and otherwise the first person
-   holding the first title, then the second. Here that changes nothing: the
-   Coordinator comes before the Minister in Charge.
+1. THE COORDINATOR'S APP KEEPS THE LAST DRIVERS TAB ON THE PHONE.
+   Since config.js stopped carrying names (v1.80.0), the sign-in screen
+   had no names until the live server answered, so the remembered name and
+   the cursor arrived a second late. It now keeps the last list the live
+   server gave it, as the driver app keeps its register, draws it at once
+   and replaces it with every answer. A name added, taken off or given a
+   new role on the Drivers tab still reaches it on the next open with a
+   signal.
