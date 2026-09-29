@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.21.0";
+const SCRIPT_VERSION = "w2.21.1";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -3865,7 +3865,7 @@ async function handleDrain(env, body) {
   return json({ ok: true, claim: claim, bookings: b.results || [], trips: t.results || [],
                 requests: requests, coord: coord,
                 checks: checks, auths: auths, decisions: decisions, cacheAgeMin: age,
-                clockAgoSec: clockAgoSec, poke: poke });
+                clockAgoSec: clockAgoSec, poke: poke, pinSalt: !!pinSaltOf(env) });
 }
 
 async function handleDrained(env, body) {
@@ -4129,9 +4129,10 @@ async function handleSheetBookings(env, body) {
    because a bus that was two minutes away is long gone. */
 /* SALTS THE PIN HASH, and must match PIN_SALT in Apps Script exactly.
 
-   Set it as a Worker variable named PIN_SALT. The fallback below exists so a
-   fresh deploy works before the variable is set, and it is in a public file,
-   so it protects nothing on its own. Set the variable.
+   Set it as a Worker variable named PIN_SALT, of type Secret. There is no
+   fallback in this file from w2.21.1: it is public, and a salt printed in it
+   protects nothing. With the variable missing every PIN is refused, never
+   waved through, and "Is everything working?" says so.
 
    What the salt buys: the Drivers tab holds four digit PINs, and four digits
    is ten thousand possibilities. An unsalted SHA-256 of a four digit number
@@ -4140,10 +4141,9 @@ async function handleSheetBookings(env, body) {
 
    Change it and every PIN stops matching until the next sync recomputes them
    from the sheet, which is five minutes. */
-const PIN_SALT_FALLBACK = "W4JKBxSr3GUFO3PR9lmCqawYBdYzD5-sMQ10P2ieukY";
 /* Named apart from saltOf, which salts the phone fingerprint. Two salts,
    two purposes, and they must never be confused for one another. */
-const pinSaltOf = (env) => String((env && env.PIN_SALT) || PIN_SALT_FALLBACK);
+const pinSaltOf = (env) => String((env && env.PIN_SALT) || "");
 
 /* Three, not ten, and five minutes. Copied from Apps Script deliberately so
    the two cannot disagree about what a lockout is. A PIN is four digits a man
@@ -5385,6 +5385,10 @@ async function handleSubscribe(env, body) {
    The answer shape is Apps Script's, field for field, because the app reads
    one shape and must not learn a second. */
 async function pinHashOf(env, name, pin) {
+  /* No salt, no match. A random value, fresh every time, equals no stored
+     fingerprint: not a real one, not the marker the sheet sends when it has
+     no salt either, and not a NULL column, which a constant like null would. */
+  if (!pinSaltOf(env)) return "no PIN_SALT " + crypto.randomUUID();
   const norm = pinSaltOf(env) + ":" + String(name || "").trim().toLowerCase() +
                ":" + String(pin || "").replace(/\D/g, "");
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(norm));
