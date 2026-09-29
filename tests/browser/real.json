@@ -1,0 +1,335 @@
+{
+ "stops": [
+  {
+   "id": "N00",
+   "route": "North",
+   "time": "10:05",
+   "stop": "Church, Chester Road",
+   "postcode": "L6 4DY",
+   "active": true,
+   "kind": "depart",
+   "lat": 53.424169,
+   "lng": -2.936799
+  },
+  {
+   "id": "N01",
+   "route": "North",
+   "time": "10:15",
+   "stop": "Scarisbrick Drive by Ardville Road",
+   "postcode": "L11 7DD",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.449234,
+   "lng": -2.936301
+  },
+  {
+   "id": "N02",
+   "route": "North",
+   "time": "10:23",
+   "stop": "Grace Road bus stop, Walton Vale",
+   "postcode": "L9 2BU",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.463563,
+   "lng": -2.959062
+  },
+  {
+   "id": "N03",
+   "route": "North",
+   "time": "10:30",
+   "stop": "Little Kings & Queens Nursery, Litherland Road",
+   "postcode": "L20 3HZ",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.450731,
+   "lng": -2.987178
+  },
+  {
+   "id": "N04",
+   "route": "North",
+   "time": "10:36",
+   "stop": "Fountains Road by Stanley Close",
+   "postcode": "L4 1QL",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.4329812429012,
+   "lng": -2.98416141977127
+  },
+  {
+   "id": "N05",
+   "route": "North",
+   "time": "10:40",
+   "stop": "Westminster Road by Leighton Street",
+   "postcode": "L4 3TY",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.4397340275322,
+   "lng": -2.9781173468441
+  },
+  {
+   "id": "N06",
+   "route": "North",
+   "time": "10:45",
+   "stop": "Bedford Road by Stuart Hotel",
+   "postcode": "L4 5PU",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.446071,
+   "lng": -2.970485
+  },
+  {
+   "id": "N07",
+   "route": "North",
+   "time": "10:48",
+   "stop": "Pym Street bus stop, County Road",
+   "postcode": "L4 5PH",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.444062,
+   "lng": -2.969688
+  },
+  {
+   "id": "N08",
+   "route": "North",
+   "time": "10:51",
+   "stop": "Wilburn Street bus stop, County Road",
+   "postcode": "L4 3QN",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.441187,
+   "lng": -2.970688
+  },
+  {
+   "id": "N09",
+   "route": "North",
+   "time": "11:00",
+   "stop": "Church, Chester Road",
+   "postcode": "L6 4DY",
+   "active": true,
+   "kind": "arrival",
+   "lat": 53.424169,
+   "lng": -2.936799
+  },
+  {
+   "id": "S00",
+   "route": "South",
+   "time": "10:16",
+   "stop": "Church, Chester Road",
+   "postcode": "L6 4DY",
+   "active": true,
+   "kind": "depart",
+   "lat": 53.424169,
+   "lng": -2.936799
+  },
+  {
+   "id": "S01",
+   "route": "South",
+   "time": "10:24",
+   "stop": "Dewsbury Road by Lynholme Road",
+   "postcode": "L4 2XB",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.4305763177716,
+   "lng": -2.94933634693213
+  },
+  {
+   "id": "S02",
+   "route": "South",
+   "time": "10:28",
+   "stop": "Vicar Road bus stop, Townsend Road",
+   "postcode": "L6 0BB",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.4300718597732,
+   "lng": -2.94450442629319
+  },
+  {
+   "id": "S03",
+   "route": "South",
+   "time": "10:32",
+   "stop": "Pinehurst Avenue bus stop, Utting Avenue",
+   "postcode": "L4 7UR",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.4341755210847,
+   "lng": -2.95196209974738
+  },
+  {
+   "id": "S04",
+   "route": "South",
+   "time": "10:36",
+   "stop": "Sedley Street (St Andrew Road) bus stop, Breck Road",
+   "postcode": "L4 2RB",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.425937,
+   "lng": -2.952438
+  },
+  {
+   "id": "S05",
+   "route": "South",
+   "time": "10:39",
+   "stop": "Breck Road (Sprucewood Close) bus stop, Belmont Road",
+   "postcode": "L6 5BJ",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.424312,
+   "lng": -2.953563
+  },
+  {
+   "id": "S06",
+   "route": "South",
+   "time": "10:45",
+   "stop": "Ottley Street by Sheil Road",
+   "postcode": "L6 3AE",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.4140134990047,
+   "lng": -2.94501918291359
+  },
+  {
+   "id": "S07",
+   "route": "South",
+   "time": "10:48",
+   "stop": "Hannan Road by Molyneux Road (The Molly Cafe)",
+   "postcode": "L6 6AN",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.414313,
+   "lng": -2.949187
+  },
+  {
+   "id": "S08",
+   "route": "South",
+   "time": "10:51",
+   "stop": "Halsbury Road by Molyneux Road",
+   "postcode": "L6 6AW",
+   "active": true,
+   "kind": "pickup",
+   "lat": 53.414732,
+   "lng": -2.946951
+  },
+  {
+   "id": "S09",
+   "route": "South",
+   "time": "11:00",
+   "stop": "Church, Chester Road",
+   "postcode": "L6 4DY",
+   "active": true,
+   "kind": "arrival",
+   "lat": 53.424169,
+   "lng": -2.936799
+  }
+ ],
+ "buses": [
+  {
+   "reg": "YS70 PWE",
+   "seats": 16,
+   "active": true,
+   "notes": "Ford Transit 460 Trend. 17 seats including the driver."
+  },
+  {
+   "reg": "NH56 FWP",
+   "seats": 14,
+   "active": true,
+   "notes": "Ford Transit 100 RWD. 15 seats including the driver."
+  }
+ ],
+ "drivers": [
+  {
+   "name": "Pst Kehinde",
+   "role": "Minister in Charge",
+   "active": true,
+   "route": "",
+   "ord": 99
+  },
+  {
+   "name": "Bro Adebola",
+   "role": "Driver",
+   "active": true,
+   "route": "North",
+   "ord": 1.0
+  },
+  {
+   "name": "Bro Abiodun",
+   "role": "Driver",
+   "active": true,
+   "route": "North",
+   "ord": 2.0
+  },
+  {
+   "name": "Bro Moses",
+   "role": "Driver",
+   "active": true,
+   "route": "North",
+   "ord": 3.0
+  },
+  {
+   "name": "Bro Asim",
+   "role": "Coordinator",
+   "active": true,
+   "route": "North",
+   "ord": 4.0
+  },
+  {
+   "name": "Bro Tunde",
+   "role": "Driver",
+   "active": true,
+   "route": "South",
+   "ord": 1.0
+  },
+  {
+   "name": "Pst Obamakinwa",
+   "role": "Driver",
+   "active": true,
+   "route": "South",
+   "ord": 2.0
+  },
+  {
+   "name": "Bro Adesina",
+   "role": "Driver",
+   "active": true,
+   "route": "South",
+   "ord": 3.0
+  },
+  {
+   "name": "Bro Calvin",
+   "role": "Backup",
+   "active": true,
+   "route": "",
+   "ord": 99
+  }
+ ],
+ "rota": [
+  {
+   "sunday": "2026-09-27",
+   "north": "Bro Adebola",
+   "northCover": "",
+   "northBus": "NH56 FWP",
+   "south": "Bro Tunde",
+   "southCover": "",
+   "southBus": "YS70 PWE",
+   "status": "Confirmed"
+  },
+  {
+   "sunday": "2026-10-04",
+   "north": "Bro Abiodun",
+   "northCover": "",
+   "northBus": "YS70 PWE",
+   "south": "Pst Obamakinwa",
+   "southCover": "",
+   "southBus": "NH56 FWP",
+   "status": "Confirmed"
+  },
+  {
+   "sunday": "2026-10-11",
+   "north": "Bro Moses",
+   "northCover": "",
+   "northBus": "YS70 PWE",
+   "south": "Bro Adesina",
+   "southCover": "",
+   "southBus": "NH56 FWP",
+   "status": "Confirmed"
+  }
+ ]
+}
