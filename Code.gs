@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.85.2";
+var SCRIPT_VERSION = "v1.85.4";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -350,14 +350,43 @@ var DEFECT_HEADERS = [
    Which roles on the Drivers tab may let a bus out with a fault on it, and
    whether the person who did the walkaround may also sign it off.
 
-   Keep AUTHORISER_ROLES in step with fullInspectionRoles in config.js. They
-   are the same people and the two files are checked against each other by a
-   test rather than by anybody remembering.
+   SET IN SCRIPT PROPERTIES AS COORDINATOR_ROLES, from v1.85.4, the way
+   COORDINATOR_EMAIL is: the titles as they appear in the Role column of the
+   Drivers tab, separated by commas, the one people should ring FIRST. For
+   example  Coordinator, Minister in Charge . Blank or missing, the default
+   below is used. A church that calls the job something else changes that one
+   setting, then Send everything to the live server now; no code is edited
+   and nothing is redeployed.
+
+   The same list goes to the live server on every push, and every page takes
+   it from there: who may authorise, who is offered the full inspection, who
+   may open the coordinator's app, and who people are told to ring.
+
+   Keep AUTHORISER_ROLES_DEFAULT in step with fullInspectionRoles in
+   config.js, which is what the pages use before the live server has
+   answered. A test checks the two against each other.
 
    SAME_HAND_BOTH_WAYS false means a second coordinator has to authorise. With
    one coordinator that means nobody can, so think before changing it. */
-var AUTHORISER_ROLES = ["Coordinator", "Minister in Charge"];
+var AUTHORISER_ROLES_DEFAULT = ["Coordinator", "Minister in Charge"];
+var AUTHORISER_ROLES = (function () {
+  try {
+    var p = PropertiesService.getScriptProperties().getProperty("COORDINATOR_ROLES");
+    var list = String(p || "").split(",")
+      .map(function (r) { return r.replace(/\s+/g, " ").trim(); })
+      .filter(function (r) { return r; });
+    if (list.length) return list;
+  } catch (err) {}
+  return AUTHORISER_ROLES_DEFAULT.slice();
+})();
 var SAME_HAND_BOTH_WAYS = true;
+
+/* Whether COORDINATOR_ROLES is set, for the status report. */
+function hasRolesProperty() {
+  try {
+    return !!String(PropertiesService.getScriptProperties().getProperty("COORDINATOR_ROLES") || "").trim();
+  } catch (err) { return false; }
+}
 
 /* When the coordinator is told a bus was authorised to run.
      "now"      an email as it happens
@@ -1807,6 +1836,8 @@ function rotaPayload(fromKey, weeks) {
     /* Who people ring, for the driver app when this file answers it rather
        than the live server. The live server puts its own on every answer. */
     coordinator: coordinatorContact(drivers),
+    /* And whose titles make somebody a coordinator, for the same reason. */
+    leadRoles: AUTHORISER_ROLES,
     /* So the next driver sees what the last one reported and still open. */
     openDefects: openDefectsByReg(ss),
     /* The Sunday timetable. Sent with the rota because that is when a driver
@@ -3929,6 +3960,8 @@ function liveCheck() {
     lines.push("");
     lines.push("Last sent:      " + (at ? agoWords(at) : "never"));
     lines.push("Last brought back: " + (dr ? agoWords(dr) : "never"));
+    lines.push("Coordinator titles: " + AUTHORISER_ROLES.join(", ") +
+               (hasRolesProperty() ? "" : "  (the default; set COORDINATOR_ROLES to change them)"));
     if (!pinSalt()) {
       lines.push("\u2717  PIN_SALT is not set in Script Properties, so every PIN is refused. " +
                  "Add it, the same value as the live server's, then Send everything to the live server now.");
@@ -11230,29 +11263,40 @@ function coordinatorName() {
 
 /* WHO PEOPLE RING, off the Drivers tab.
 
-   The row whose Role is Coordinator, and the number in its Phone column.
-   Until v1.85.0 the name and number were typed into config.js and again into
-   the passenger page, and a change of coordinator meant editing both files
-   and remembering the second. Now it is two cells on the Drivers tab.
+   One of the people AUTHORISER_ROLES names, and the number in their Phone
+   column. Until v1.85.0 the name and number were typed into config.js and
+   again into the passenger page, and a change of coordinator meant editing
+   both files and remembering the second. Now it is cells on the Drivers tab.
 
-   Where more than one active row says Coordinator, the one COORDINATOR_EMAIL
-   names wins, so the person the alerts go to is the person people are told to
-   ring. Otherwise the first. Nobody with the role gives a blank name and a
-   blank number, and every page then says "the bus coordinator" instead.
+   The same list as everything else a coordinator may do, so a church that
+   calls the job something else sets its titles once, there and in
+   fullInspectionRoles, and this follows. Until v1.85.3 this looked for the
+   word Coordinator alone, and a church without one showed nobody.
+
+   Whoever COORDINATOR_EMAIL names wins, so the person the alerts go to is the
+   person people are told to ring. Otherwise the first active person holding
+   the FIRST role in the list, then the second, and so on: here that is the
+   Coordinator before the Minister in Charge. Nobody in any of them gives a
+   blank name and a blank number, and every page then says "the bus
+   coordinator" instead.
 
    Sent to the live server on every push and handed back on every answer it
    gives, which is how the pages learn it. Also carried on the rota, for the
    driver app when it is talking to this file directly. */
 function coordinatorContact(drivers) {
   var want = String(COORDINATOR_EMAIL || "").trim().toLowerCase();
+  var roles = (AUTHORISER_ROLES || []).map(function (r) { return String(r || "").trim().toLowerCase(); });
+  var list = (drivers || []).filter(function (d) {
+    return d && d.active && roles.indexOf(String(d.role || "").trim().toLowerCase()) !== -1;
+  });
   var first = null;
-  var list = drivers || [];
-  for (var i = 0; i < list.length; i++) {
-    var d = list[i];
-    if (!d || !d.active) continue;
-    if (String(d.role || "").trim().toLowerCase() !== "coordinator") continue;
-    if (!first) first = d;
-    if (want && String(d.email || "").trim().toLowerCase() === want) { first = d; break; }
+  for (var i = 0; i < list.length && want && !first; i++) {
+    if (String(list[i].email || "").trim().toLowerCase() === want) first = list[i];
+  }
+  for (var r = 0; r < roles.length && !first; r++) {
+    for (var j = 0; j < list.length; j++) {
+      if (String(list[j].role || "").trim().toLowerCase() === roles[r]) { first = list[j]; break; }
+    }
   }
   if (!first) return { name: "", phone: "" };
   /* Tidied into the 07 form the pages dial and space out. Sheets turns a

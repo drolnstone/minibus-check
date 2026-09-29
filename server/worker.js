@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.21.1";
+const SCRIPT_VERSION = "w2.22.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -55,6 +55,19 @@ let sheetVersionAt = 0;
    so a page keeps whatever it last knew rather than being told "nobody". */
 let coordinator = null;
 
+/* WHOSE TITLES MAKE THEM A COORDINATOR, the same way. From w2.22.0 the list
+   is COORDINATOR_ROLES in the sheet's Script Properties, sent on every sync
+   as authRules and kept in settings for this server's own checks already.
+   Stamped on every reply as leadRoles, so the pages use the sheet's list
+   rather than the one typed into config.js. Null until a sync has sent one. */
+let leadRoles = null;
+
+function rolesOf(v) {
+  if (!Array.isArray(v)) return null;
+  const list = v.map((r) => String(r || "").replace(/\s+/g, " ").trim().slice(0, 60)).filter(Boolean);
+  return list.length ? list.slice(0, 12) : null;
+}
+
 function coordinatorOf(v) {
   if (!v || typeof v !== "object") return null;
   return { name: String(v.name || "").trim().slice(0, 60),
@@ -78,7 +91,7 @@ async function sheetVersionLoad(env) {
   const asked = Date.now();
   try {
     const rows = await env.DB.prepare(
-      "SELECT k, v FROM settings WHERE k IN ('sheet_version','coordinator')").all();
+      "SELECT k, v FROM settings WHERE k IN ('sheet_version','coordinator','auth_rules')").all();
     const got = {};
     for (const r of (rows && rows.results) || []) got[r.k] = r.v;
     if (sheetVersionAt <= asked) {
@@ -86,6 +99,9 @@ async function sheetVersionLoad(env) {
       let c = null;
       try { c = got.coordinator ? JSON.parse(got.coordinator) : null; } catch (e) { c = null; }
       coordinator = coordinatorOf(c);
+      let r = null;
+      try { r = got.auth_rules ? JSON.parse(got.auth_rules) : null; } catch (e) { r = null; }
+      leadRoles = rolesOf(r && r.roles);
     }
   } catch (e) { /* a version stamp is never worth failing a request over */ }
   if (sheetVersionAt <= asked) sheetVersionAt = Date.now();
@@ -1007,6 +1023,9 @@ function json(obj, status) {
      sync, which a Drivers tab edit sends within seconds. */
   if (coordinator && obj && typeof obj === "object" && !Array.isArray(obj)) {
     obj.coordinator = coordinator;
+  }
+  if (leadRoles && obj && typeof obj === "object" && !Array.isArray(obj)) {
+    obj.leadRoles = leadRoles;
   }
   return new Response(JSON.stringify(obj), {
     status: status || 200,
@@ -3244,6 +3263,10 @@ async function handleSync(env, body) {
     sheetVersionAt = Date.now();
   }
   if (coordSent) coordinator = coordSent;
+  if (body.authRules) {
+    const sent = rolesOf(body.authRules.roles);
+    if (sent) leadRoles = sent;
+  }
   return json({ ok: true, applied: stmts.length });
 }
 

@@ -1442,7 +1442,27 @@ try{
   }
 }catch(e){}
 
+/* WHOSE TITLES MAKE THEM A COORDINATOR, from v1.81.0 taken the same way:
+   COORDINATOR_ROLES in the sheet's Script Properties, stamped on every answer
+   as leadRoles, and kept on the phone. config.js's fullInspectionRoles is
+   only what is used before the first answer. */
+var ROLES_KEY = "minibus.leadroles.v1";
+var LEAD_ROLES = null;
+try{
+  var rolesKept = JSON.parse(store.get(ROLES_KEY) || "null");
+  if(Array.isArray(rolesKept) && rolesKept.length) LEAD_ROLES = rolesKept.map(String);
+}catch(e){}
+function leadRoles(){ return LEAD_ROLES || CFG.fullInspectionRoles || ["Coordinator"]; }
+
 function coordinatorSeen(out){
+  var r = out && out.leadRoles;
+  if(Array.isArray(r) && r.length){
+    var next = r.map(function(x){ return String(x||"").trim(); }).filter(Boolean);
+    if(next.length && JSON.stringify(next) !== JSON.stringify(LEAD_ROLES)){
+      LEAD_ROLES = next;
+      store.set(ROLES_KEY, JSON.stringify(next));
+    }
+  }
   var c = out && out.coordinator;
   if(!c || typeof c !== "object") return;
   var next = { name: String(c.name||"").trim(), phone: String(c.phone||"").trim() };
@@ -1538,7 +1558,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.80.0";
+var APP_VERSION = "v1.81.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2042,7 +2062,7 @@ function buildFor(v){
    inspection and Check another bus would quietly disagree about who runs the
    fleet. */
 function roleAllowed(role){
-  var want = CFG.fullInspectionRoles || ["Coordinator"];
+  var want = leadRoles();
   var flat = function(s){ return String(s||"").trim().toLowerCase().replace(/\s+/g," "); };
   var r = flat(role);
   if(!r) return false;                    /* nobody chosen yet is not a coordinator */
@@ -2922,7 +2942,8 @@ function btn(label,cls,fn,dis,why){
            having changed in half a second means he has moved on himself. */
         if(st.screen === "driver" && !pinGateNeeded() && st.driver.trim()){
           try{ if($("pin")) $("pin").blur(); }catch(e){}
-          show("hub");
+          if(handToCheck){ handToCheck = false; renderVehicles(); show("vehicle"); }
+          else show("hub");
         }
       }, 550);
     }
@@ -8493,6 +8514,50 @@ $("toStops").addEventListener("click",rotaOpenStops);
    this is the first thing on the hub that writes anything down. Bounced back
    to the name screen with the box focused rather than refused in place: the
    box lives there, and sending him to it is more use than a toast. */
+/* FROM THE COORDINATOR'S APP, WITH THE PIN. The Coordinator button above,
+   the other way round, from v1.81.0.
+
+   Its Driver app link and its Vehicle check leave the name and the PIN the
+   live server has been checking all along in this tab's own session
+   storage. Taken and wiped here as the page opens, and a copy more than a
+   minute old is not used. The PIN is then checked here exactly as one keyed
+   here is — this phone's own copy, the live server, the sheet — and only a
+   yes takes him on: to the hub, signed in, from the Driver app link, as he
+   would be had he keyed it here; straight to choosing the bus from Vehicle
+   check. A no leaves him on this screen with the name in and the PIN box
+   saying so, which is where he would have been anyway. */
+var DRIVER_HAND_KEY = "fleet.hand.v1";
+var handToCheck = false;
+
+function driverHandTake(){
+  var h = null;
+  try{ h = JSON.parse(sessionStorage.getItem(DRIVER_HAND_KEY) || "null"); }catch(e){ h = null; }
+  try{ sessionStorage.removeItem(DRIVER_HAND_KEY); }catch(e){}
+  if(!h || !h.name || !/^\d{4,8}$/.test(String(h.pin || ""))) return;
+  if(!(Date.now() - Number(h.at || 0) < 60000)) return;
+
+  var e = entryFor(h.name), name = e ? e.name : String(h.name).trim();
+  st.driver = name;
+  st.role = roleOf(name);
+  signSave();
+  var sel = $("driverPick");
+  if(sel && e) sel.value = name;
+  if($("driver")) $("driver").value = name;
+
+  handToCheck = (h.to === "check");
+  st.pin = String(h.pin).replace(/\D/g,"").slice(0,4);
+  if($("pin")) $("pin").value = st.pin;
+  st.pinOk = false;
+  showPinField();
+  checkPin();
+  /* No PIN wanted for this name: nothing to answer, so nothing moves him on
+     above. He is ready now. */
+  if(!pinNeeded() && st.screen === "driver"){
+    if(handToCheck){ handToCheck = false; renderVehicles(); show("vehicle"); }
+    else show("hub");
+  }
+}
+
 $("toCheck").addEventListener("click",function(){
   if(!st.driver.trim()){
     show("driver");
@@ -8633,10 +8698,9 @@ function pinCoordinator(){
      at that point. An empty register describes no one. */
   if(!REGISTER.length) return true;
 
-  var roles = CFG.fullInspectionRoles || [];
-  var mine = st.driver ? roleOf(st.driver) : "";
-  for(var i=0;i<roles.length;i++){ if(roles[i] === mine) return true; }
-  return false;
+  /* roleAllowed, the same test as the full inspection: the sheet's list, and
+     not fooled by a capital letter or a doubled space in the Role column. */
+  return roleAllowed(st.driver ? roleOf(st.driver) : "");
 }
 
 function pinDiagnosis(){
@@ -9454,6 +9518,9 @@ safely(fetchLastMiles);
 /* The stored rota, so opening the rota screen is instant. It refreshes
    itself in the background afterwards. */
 safely(function(){ rotaLoadCache(); paintRotaHint(); });
+
+/* After the stored register, so the name it brings is on the picker. */
+safely(driverHandTake);
 
 if(LIVE && navigator.onLine){
   setTimeout(function(){ safely(function(){ rotaRender(true); }); }, 400);

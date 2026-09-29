@@ -668,6 +668,90 @@ if (want("C19")) {
   }
 }
 
+/* C20 — the other way: from here to the driver app's vehicle check, no second PIN */
+if (want("C20")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  await p.pg.click('#homeBody [data-do="check"]');
+  await p.pg.waitForURL((u) => !/\/coord\//.test(String(u)), { timeout: 8000 }).catch(() => {});
+  await p.wait(3500);
+  const onVehicle = await p.pg.$eval("#s-vehicle", (el) => el.classList.contains("is-on")).catch(() => false);
+  const driver = await p.pg.evaluate(() => (typeof st !== "undefined" && st.driver) || "");
+  const left = await p.pg.evaluate(() => { try { return sessionStorage.getItem("fleet.hand.v1"); } catch (e) { return "unreadable"; } });
+  await p.shot("C20-to-check");
+  check("C20", "Vehicle check on the first screen opens the driver app on choosing the bus, signed in, with no PIN typed and no copy left",
+        onVehicle && driver === "Bro Asim" && left === null && !p.errs.length,
+        "vehicle " + onVehicle + ", driver '" + driver + "', left " + left + ", errors " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
+/* C21 — the Driver app link, signed in: to the hub, signed in, PIN taken */
+if (want("C21")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  await p.pg.click('#homeBody [data-do="driverapp"]');
+  await p.pg.waitForURL((u) => !/\/coord\//.test(String(u)), { timeout: 8000 }).catch(() => {});
+  await p.wait(3500);
+  const onHub = await p.pg.$eval("#s-hub", (el) => el.classList.contains("is-on")).catch(() => false);
+  const state = await p.pg.evaluate(() => typeof st !== "undefined" ? { driver: st.driver, pinOk: st.pinOk } : {});
+  const left = await p.pg.evaluate(() => { try { return sessionStorage.getItem("fleet.hand.v1"); } catch (e) { return "unreadable"; } });
+  await p.shot("C21-to-hub");
+  check("C21", "the Driver app link on the first screen lands on the driver app's hub, signed in with the PIN taken, and no copy left",
+        onHub && state.driver === "Bro Asim" && state.pinOk === true && left === null && !p.errs.length,
+        "hub " + onHub + ", state " + JSON.stringify(state) + ", left " + left + ", errors " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
+/* C22 — the titles are the sheet's: change them there and the sign-in list follows */
+if (want("C22")) {
+  const names = async () => {
+    const p = await page(env);
+    await p.wait(1500);
+    const list = await p.pg.$$eval("#signName option", (os) => os.map((o) => o.value).filter(Boolean));
+    await p.ctx.close();
+    return list;
+  };
+  const before = await names();
+  await W.handleSync(env, { authRules: { roles: ["Coordinator"], sameHandBothWays: true } });
+  const after = await names();
+  await W.handleSync(env, { authRules: { roles: ["Coordinator", "Minister in Charge"], sameHandBothWays: true } });
+  check("C22", "COORDINATOR_ROLES decides who may sign in: with Coordinator alone, the Minister in Charge is no longer offered",
+        before.includes("Pst Kehinde") && before.includes("Bro Asim") &&
+        !after.includes("Pst Kehinde") && after.includes("Bro Asim"),
+        "before " + JSON.stringify(before) + ", after " + JSON.stringify(after));
+}
+
+/* C20b — a PIN handed over that is wrong is still refused by the driver app */
+if (want("C20b")) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  const pg = await ctx.newPage();
+  const errs = [];
+  pg.on("pageerror", (e) => errs.push(String(e.message)));
+  await pg.route("**://fonts.googleapis.com/**", (r) => r.abort());
+  await pg.route("**://fonts.gstatic.com/**", (r) => r.abort());
+  await pg.route("**://script.google.com/**", (r) => r.abort());
+  await pg.route("**://*.workers.dev/**", async (route) => {
+    const req = route.request();
+    if (req.method() === "OPTIONS") return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*" } });
+    const res = await W.default.fetch(new Request(req.url(), { method: req.method(),
+      body: req.method() === "POST" ? req.postData() : undefined }), env, { waitUntil: () => {} });
+    await route.fulfill({ status: res.status, contentType: "application/json", body: await res.text(),
+                          headers: { "access-control-allow-origin": "*" } });
+  });
+  await pg.addInitScript(`try { if (!window.name) { window.name = "handed";
+      sessionStorage.setItem("fleet.hand.v1", JSON.stringify({ name: "Bro Asim", pin: "9999", at: Date.now() })); } } catch (e) {}`);
+  await pg.goto("http://127.0.0.1:" + PORT + "/", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(3500);
+  const onDriver = await pg.$eval("#s-driver", (el) => el.classList.contains("is-on")).catch(() => false);
+  const onVehicle = await pg.$eval("#s-vehicle", (el) => el.classList.contains("is-on")).catch(() => false);
+  const pinOk = await pg.evaluate(() => typeof st !== "undefined" && st.pinOk);
+  await pg.screenshot({ path: OUT + "/C20b-wrong-pin.png" });
+  check("C20b", "a wrong PIN handed over is refused: the driver app stays on the name screen and does not open the check",
+        onDriver && !onVehicle && !pinOk && !errs.length,
+        "driver " + onDriver + ", vehicle " + onVehicle + ", pinOk " + pinOk + ", errors " + JSON.stringify(errs));
+  await ctx.close();
+}
+
 check("C0", "no script error on the page throughout", me && !me.errs.length, JSON.stringify(me && me.errs));
 if (me) await me.ctx.close();
 await done();

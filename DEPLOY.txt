@@ -1,21 +1,21 @@
 MINIBUS
 =======
-  pages v1.80.0 · server w2.21.1 · sheet v1.85.2
+  pages v1.81.0 · server w2.22.0 · sheet v1.85.4
 
-The PIN salt is no longer printed in either file. It comes only from the
-PIN_SALT setting on each side.
+Three things: leaving the coordinator's app for the driver app no longer
+asks for the name and PIN again; the coordinator titles are a Script
+Property, COORDINATOR_ROLES, not a line of code; and the person people ring
+is chosen from those titles.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.80.0         v1.80.0   (no change)
-  Worker  w2.21.0         w2.21.1
-  Code.gs v1.85.1         v1.85.2
+  Pages   v1.80.0         v1.81.0
+  Worker  w2.21.1         w2.22.0
+  Code.gs v1.85.2         v1.85.4
 
-BEFORE ANYTHING: PIN_SALT must be set, the same value, in both places:
-  Apps Script, Project Settings, Script Properties: PIN_SALT
-  Cloudflare, minibus-api, Settings, Variables and Secrets: PIN_SALT
-From this release a missing one refuses every PIN. It never lets anybody
-through, but a driver standing at a bus would be stuck.
+No SQL, no new Worker variables or triggers. One new Script Property,
+COORDINATOR_ROLES, and it is optional: left unset, the titles are
+Coordinator, Minister in Charge, exactly as now.
 
 
 IN THIS ORDER
@@ -30,42 +30,57 @@ IN THIS ORDER
 
 3. Minibus, Rota and setup, Send everything to the live server now.
 
-4. Merge the pull request. Only a comment in sunday/index.html changes on
-   the pages, so nothing a phone sees is different.
+4. PAGES. Merge the pull request. GitHub publishes the pages from main.
 
 
 AFTER IT
 --------
 
-A. The foot of the driver app reads  app v1.80.0 · server w2.21.1 · sheet
-   v1.85.2 .
+A. The foot of the driver app reads  app v1.81.0 · server w2.22.0 · sheet
+   v1.85.4 . A phone still on v1.80.0: close the app fully and open it
+   again.
 
-B. "Is everything working?" has no line about PIN_SALT. If it has one, the
-   line says which side is missing it.
+B. Coordinator's app, signed in, first screen. Tap Driver app at the foot:
+   the driver app opens on its hub, "Signed in as" your name, Vehicle check
+   ready, and no PIN is asked for. Go back, and tap Vehicle check, the last
+   line of the menu: the driver app opens on "Which one today?".
 
-C. A driver signs in with his PIN on the driver app, as usual.
+C. The passenger page's Call line still names you, with your number.
+
+D. "Is everything working?", the live server part, has the line
+   "Coordinator titles: Coordinator, Minister in Charge (the default; set
+   COORDINATOR_ROLES to change them)".
 
 
 WHAT CHANGED
 ------------
 
-1. NO SALT IN A PUBLIC FILE.
-   Code.gs and worker.js each carried a fallback PIN salt, and both are in
-   a public repository. A system that never had PIN_SALT set was salting
-   with a value anybody could read. The fallback is gone from both.
+1. FROM THE COORDINATOR'S APP TO THE DRIVER APP, SIGNED IN.
+   The driver app's Coordinator button already carried a checked PIN to
+   the coordinator's app. Now the coordinator's app does the same the other
+   way, once signed in: the Driver app link lands on the driver app's hub,
+   signed in, and a new Vehicle check at the foot of the menu goes on to
+   choosing the bus. The name and PIN go once, in that tab only, and are
+   refused after a minute. The driver app checks the PIN as it checks one
+   keyed there; a wrong one stays on the name screen.
 
-2. A MISSING SALT REFUSES, NEVER OPENS.
-   With no PIN_SALT on the sheet, a driver who has a PIN is sent to the
-   live server with a fingerprint nothing can match. A blank would have
-   meant "no PIN wanted" and let anybody through. With none on the live
-   server, no PIN matches there either. "Is everything working?" names the
-   side that is missing it.
+2. THE COORDINATOR TITLES ARE A SETTING.
+   Apps Script, Project Settings, Script Properties, COORDINATOR_ROLES: the
+   titles as they appear in the Role column, separated by commas, the one
+   people should ring first. For example
 
-3. THE COORDINATOR'S NUMBER IS OUT OF THE COMMENTS.
-   The code's examples use 07700 900123, a number set aside for drama and
-   never given to anybody.
+       Coordinator, Minister in Charge
 
-The phone salt is unchanged on purpose. It fingerprints passengers' numbers,
-but anybody holding a number can already look up that booking with the
-number itself, so a secret salt adds almost nothing, and changing it would
-cut every current booking off from the phone that made it.
+   Blank or missing uses exactly that. After changing it, Send everything
+   to the live server now. The live server passes the titles to every page,
+   so config.js is not edited and nothing is redeployed. They decide who may
+   authorise a stopped bus, who is offered the full inspection, who may open
+   the coordinator's app, and who people are told to ring. Capitals and
+   doubled spaces in the Role column no longer matter.
+
+3. WHO PEOPLE RING FOLLOWS THOSE TITLES.
+   It looked for the word Coordinator alone, so a church with other titles
+   showed nobody. It now takes whoever COORDINATOR_EMAIL names among
+   everybody holding one of the titles, and otherwise the first person
+   holding the first title, then the second. Here that changes nothing: the
+   Coordinator comes before the Minister in Charge.

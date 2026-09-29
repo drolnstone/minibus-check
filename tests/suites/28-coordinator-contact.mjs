@@ -71,6 +71,74 @@ export default async function (root) {
     a.eq(c.phone, "");
   });
 
+  const MIC = { Name: "Pst Top", Role: "Minister in Charge", Active: "YES", Phone: "07333 333333", Email: "pst@b.c" };
+
+  s.test("the Coordinator comes before the Minister in Charge, whoever is higher on the tab", (a) => {
+    a.eq(contact(sheet([MIC].concat(PEOPLE))).name, "Bro First");
+  });
+
+  s.test("with no Coordinator, the Minister in Charge is who people ring", (a) => {
+    const c = contact(sheet([MIC, PEOPLE[3]]));
+    a.eq(c.name, "Pst Top");
+    a.eq(c.phone, "07333333333");
+  });
+
+  s.test("COORDINATOR_EMAIL wins across every role in the list", (a) => {
+    a.eq(contact(sheet([MIC].concat(PEOPLE), "pst@b.c")).name, "Pst Top");
+  });
+
+  s.test("a church's own titles work once AUTHORISER_ROLES says them", (a) => {
+    const L = sheet([{ Name: "Sis Lead", Role: "Transport Lead", Active: "YES", Phone: "07444 444444" },
+                     PEOPLE[3]]);
+    a.eq(contact(L).name, "", "a title not in the list must not be picked");
+    L.ctx.AUTHORISER_ROLES = ["Transport Lead", "Pastor"];
+    a.eq(contact(L).name, "Sis Lead");
+  });
+
+  /* ---- the titles, as a setting --------------------------------------- */
+
+  const withRoles = (drivers, roles) => loadCodeGs(root, { tabs: tabs(drivers),
+    props: Object.assign({ PIN_SALT: "salt", WORKER_URL: "https://example.invalid" },
+                         roles === undefined ? {} : { COORDINATOR_ROLES: roles }) });
+
+  s.test("COORDINATOR_ROLES in Script Properties sets the titles, in its own order", (a) => {
+    const L = withRoles([PEOPLE[3]], " Transport Lead ,Pastor,, ");
+    a.eq(JSON.stringify(L.ctx.AUTHORISER_ROLES), JSON.stringify(["Transport Lead", "Pastor"]));
+    a.ok(call(L, "hasRolesProperty"));
+  });
+
+  s.test("blank or missing, the default titles are used", (a) => {
+    for (const v of [undefined, "", " , "]) {
+      const L = withRoles([PEOPLE[3]], v);
+      a.eq(JSON.stringify(L.ctx.AUTHORISER_ROLES), JSON.stringify(["Coordinator", "Minister in Charge"]));
+    }
+    a.not(call(withRoles([PEOPLE[3]]), "hasRolesProperty"));
+  });
+
+  s.test("with the setting changed, who to ring follows it, and the push carries it", (a) => {
+    const L = withRoles([{ Name: "Sis Lead", Role: "Transport Lead", Active: "YES", Phone: "07444 444444" }, PEOPLE[2]],
+                        "Transport Lead");
+    a.eq(contact(L).name, "Sis Lead");
+    call(L, "pushToWorker");
+    const sync = L.gas.fetched.map((f) => { try { return JSON.parse(f.opts.payload); } catch (e) { return null; } })
+      .filter((b) => b && b.action === "sync")[0];
+    a.eq(JSON.stringify(sync.authRules.roles), JSON.stringify(["Transport Lead"]));
+    a.eq(JSON.stringify(call(L, "rotaPayload", "2026-10-04", 1).leadRoles), JSON.stringify(["Transport Lead"]));
+  });
+
+  s.test("the live server stamps the sheet's titles on every answer, and a cold isolate still knows them", async (a) => {
+    const { W, env } = await fresh();
+    await W.handleSync(env, { authRules: { roles: ["Transport Lead", "Pastor"], sameHandBothWays: true } });
+    a.eq(JSON.stringify((await J(await ask(W, env))).leadRoles), JSON.stringify(["Transport Lead", "Pastor"]));
+    const { mod: W2 } = await loadWorker(root);
+    a.eq(JSON.stringify((await J(await ask(W2, env))).leadRoles), JSON.stringify(["Transport Lead", "Pastor"]));
+  });
+
+  s.test("before any sheet has sent titles, no answer carries any", async (a) => {
+    const { W, env } = await fresh();
+    a.eq((await J(await ask(W, env))).leadRoles, undefined);
+  });
+
   s.test("a number Sheets has turned into 447... is sent as 07..., so the call button dials", (a) => {
     const rows = PEOPLE.map((r) => Object.assign({}, r));
     rows[1].Phone = 447111111111;

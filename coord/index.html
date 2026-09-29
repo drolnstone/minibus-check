@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.80.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.81.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, the run record and the "have a
@@ -439,7 +439,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.80.0";
+var PAGE_VERSION = "v1.81.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -450,10 +450,36 @@ var SET = { idleMinutes: 15, refreshSeconds: 30 };
   if (Number(c.idleMinutes) > 0) SET.idleMinutes = Number(c.idleMinutes);
   if (Number(c.refreshSeconds) >= 10) SET.refreshSeconds = Number(c.refreshSeconds);
 })();
+/* Whose titles may open this. From v1.81.0 the sheet's COORDINATOR_ROLES,
+   stamped by the live server on every answer as leadRoles and kept on the
+   phone; config.js's fullInspectionRoles only until then. */
+var ROLES_KEY = "coord.leadroles.v1";
 var ROLES = CFG.fullInspectionRoles || ["Coordinator", "Minister in Charge"];
+try{
+  var rolesKept = JSON.parse(localStorage.getItem(ROLES_KEY) || "null");
+  if(Array.isArray(rolesKept) && rolesKept.length) ROLES = rolesKept.map(String);
+}catch(e){}
+function rolesSeen(out){
+  var r = out && out.leadRoles;
+  if(!Array.isArray(r) || !r.length) return;
+  var next = r.map(function(x){ return String(x || "").trim(); }).filter(Boolean);
+  if(!next.length || JSON.stringify(next) === JSON.stringify(ROLES)) return;
+  ROLES = next;
+  try{ localStorage.setItem(ROLES_KEY, JSON.stringify(next)); }catch(e){}
+}
+/* Not fooled by a capital letter or a doubled space in the Role column. */
+function isLead(role){
+  var flat = function(x){ return String(x || "").trim().toLowerCase().replace(/\s+/g, " "); };
+  var r = flat(role);
+  if(!r) return false;
+  for(var i = 0; i < ROLES.length; i++){ if(flat(ROLES[i]) === r) return true; }
+  return false;
+}
 var NAME_KEY = "coord.name.v1";
 /* Where the driver app leaves a checked PIN for this page to take. */
 var HAND_KEY = "coord.hand.v1";
+/* And the other way: where this page leaves one for the driver app. */
+var DRIVER_HAND_KEY = "fleet.hand.v1";
 var TZ = "Europe/London";
 
 /* The PIN is held here, in memory, and nowhere else. It goes with every call
@@ -544,6 +570,7 @@ function api(op, extra, ms){
   for(var k in (extra||{})) if(Object.prototype.hasOwnProperty.call(extra,k)) body[k] = extra[k];
   return post(body, ms).then(function(out){
     if(out){ lastSeen.server = out.server || lastSeen.server; lastSeen.sheet = out.sheet || lastSeen.sheet; }
+    rolesSeen(out);
     var t = authWords(out);
     if(t){ lock(t); throw new Error("locked"); }
     banner("");
@@ -627,7 +654,7 @@ function act(a, after){
 
 function signNames(){
   var sel = $("signName");
-  var list = (REGLIVE || CFG.drivers || []).filter(function(d){ return d && d.name && ROLES.indexOf(d.role) !== -1; });
+  var list = (REGLIVE || CFG.drivers || []).filter(function(d){ return d && d.name && isLead(d.role); });
   /* The name already in the box stays there: a wrong PIN is not a wrong name. */
   var had = sel.value || who || storeGet(NAME_KEY);
   sel.innerHTML = '<option value="">Choose your name</option>' + list.map(function(d){
@@ -644,6 +671,26 @@ function signIn(){
   if(!n){ say("signSay","Choose your name.",true); return; }
   if(p.length < 4){ say("signSay","Key your PIN.",true); return; }
   openAs(n, p, "keyed");
+}
+
+/* TO THE DRIVER APP, WITH THE PIN. The Coordinator button there, the other
+   way round. "hub" for the Driver app link, which lands him signed in on the
+   hub as he would be had he signed in there; "check" for Vehicle check, which
+   goes on to choosing the bus.
+
+   A coordinator signed in here has had his PIN checked by the live server on
+   every call, so he is not asked for it again to do a walkaround. It goes the
+   same way the driver app's comes: this tab's own session storage, which no
+   other tab and no later visit can read, taken and wiped by the driver app as
+   it opens, and refused there if more than a minute old. The driver app still
+   checks it, as it checks one keyed there; it only is not typed twice. */
+function toDriver(to){
+  try{
+    if(who && /^\d{4,8}$/.test(String(pin || "")))
+      sessionStorage.setItem(DRIVER_HAND_KEY, JSON.stringify({ name: who, pin: String(pin), to: to, at: Date.now() }));
+    else sessionStorage.removeItem(DRIVER_HAND_KEY);
+  }catch(e){}
+  location.href = "../";
 }
 
 /* The PIN the driver app checked, taken once. It is put in this tab's own
@@ -938,8 +985,12 @@ function paintHome(){
                                       D.rehearsal ? "warn" : "") : "") +
        item("look", "Have a look", "") +
        item("activity", "What I have done", waiting ? waiting + " on the way" : "", waiting ? "warn" : "") +
+       '<li><button type="button" data-do="check"><span class="t">Vehicle check</span><span class="go">\u203A</span></button></li>' +
        '</ul>';
-  h += '<a class="foot-link" href="../">Driver app</a>';
+  /* Signed in, so the way back carries him: to the driver app's hub, not its
+     name screen. The link on the sign-in screen has no PIN to carry and stays
+     a plain link. */
+  h += '<a class="foot-link" href="../" data-do="driverapp">Driver app</a>';
   $("homeBody").innerHTML = h;
 }
 
@@ -1656,6 +1707,7 @@ function peek(){
   ]).then(function(out){
     PEEK = { at: Date.now(), ok: true };
     if(out){ lastSeen.server = out.server || lastSeen.server; lastSeen.sheet = out.sheet || lastSeen.sheet; }
+    rolesSeen(out);
     if(out && out.ok && Array.isArray(out.drivers) && out.drivers.length){
       REGLIVE = out.drivers.map(function(d){ return { name: String(d.name || ""), role: String(d.role || ""), hasPin: !!d.hasPin }; })
                            .filter(function(d){ return d.name; });
@@ -1678,7 +1730,7 @@ function diagnosis(){
       : PEEK.ok === null ? host + ", asked, no answer yet."
       : host + (PEEK.ok ? ", answered at " : ", did not answer at ") + hhmm(PEEK.at) + ".");
     var reg = REGLIVE || CFG.drivers || [];
-    var can = reg.filter(function(d){ return d && ROLES.indexOf(d.role) !== -1; });
+    var can = reg.filter(function(d){ return d && isLead(d.role); });
     li("Who can open this", ROLES.join(", ") + ".\n" + can.length + (can.length === 1 ? " name" : " names") +
        (REGLIVE ? " on the Drivers tab." : " in config.js; the Drivers tab has not come."));
     var me = null; reg.forEach(function(d){ if(d && same(d.name, picked)) me = d; });
@@ -1728,7 +1780,9 @@ document.addEventListener("click", function(e){
   if(g){ go(g); return; }
   var d = t.getAttribute("data-do");
   var key = t.getAttribute("data-key");
-  if(d === "authorise") authorise(t.getAttribute("data-reg"));
+  if(d === "driverapp"){ e.preventDefault(); toDriver("hub"); return; }
+  if(d === "check") toDriver("check");
+  else if(d === "authorise") authorise(t.getAttribute("data-reg"));
   else if(d === "endrun") endRun(t.getAttribute("data-route"));
   else if(d === "more"){ ROTA_SHOW += 12; paintRota(); }
   else if(d === "status") setStatus(key, t.getAttribute("data-mode"));
@@ -1804,6 +1858,9 @@ if(!LIVE){
 themeApply();
 history.replaceState({ n: 0 }, "", location.hash || "#home");
 var HAND = handTake();
+/* A PIN left for the driver app and never taken, because that page did not
+   load, goes as soon as this page is back. */
+try{ sessionStorage.removeItem(DRIVER_HAND_KEY); }catch(e){}
 route();
 if(HAND && LIVE){
   $("signName").value = HAND.name;

@@ -67,10 +67,17 @@ wrong.
 From v1.80.0 (pages), w2.21.0 (Worker) and v1.85.0 (sheet), no file carries a
 name or a phone number. The Drivers tab is the one place for them:
 
-- **The coordinator** is the active row whose **Role** is `Coordinator`, and
-  the number people are told to ring is in that row's **Phone** column. If
-  two rows say Coordinator, the one whose **Email** matches `COORDINATOR_EMAIL`
-  wins, so the person the alerts go to is the person people ring.
+- **The coordinator** is an active row whose **Role** is one of the titles
+  in the `COORDINATOR_ROLES` Script Property (by default `Coordinator` and
+  `Minister in Charge`), and the number people are told to ring is in that row's **Phone**
+  column. The one whose **Email** matches `COORDINATOR_EMAIL` wins, so the
+  person the alerts go to is the person people ring. Otherwise the first
+  person holding the first role in the list, then the second: here the
+  Coordinator before the Minister in Charge. A church with other titles
+  changes that one setting, spelled as in the Role column, and sends
+  everything to the live server. From v1.81.0 the pages take the titles from
+  the live server too; `fullInspectionRoles` in `config.js` is only what they
+  use before it has answered.
 - **The register** is the rows marked Active, with their roles.
 - **The rota order** is the **Primary order** column, counted separately for
   North and South.
@@ -922,6 +929,7 @@ itself and one that never does.
 | Key | What it is |
 |---|---|
 | `COORDINATOR_EMAIL` | where every alert goes. Blank means nothing is ever sent |
+| `COORDINATOR_ROLES` | the titles in the Role column that make somebody a coordinator, separated by commas, the one people should ring first: `Coordinator, Minister in Charge`. Blank uses that default. After changing it, **Send everything to the live server now** |
 | `WORKER_URL` | the Worker's address |
 | `ARCHIVE_SHEET_ID` | optional. Set it to archive into a separate spreadsheet |
 | `PIN_SALT` | salts the PIN hash before it is pushed. **Must match the Worker variable of the same name** |
@@ -1004,6 +1012,15 @@ old. With no checked PIN (a name kept from earlier in the day, say) only the
 name goes, and the page asks for the PIN with the cursor already in the box.
 Opened any other way, from its own home screen icon or a link, it always
 asks. The live server still checks the PIN on every call.
+
+**And the other way.** From v1.81.0, once signed in, the coordinator's
+**Driver app** link and the **Vehicle check** at the foot of its menu leave
+the name and PIN for the driver app in the same way: once, in this tab only,
+refused after a minute. The driver app checks the PIN exactly as it checks one
+keyed there. A yes lands on the hub, signed in, from Driver app, or straight on
+choosing the bus from Vehicle check; a no stays on the name screen, with the
+PIN box saying so. The Driver app link on the sign-in screen has no PIN to
+carry and stays a plain link.
 
 **The landing page** is the sign-in screen, as on the driver app. It carries
 the three numbers, `coordinator · server · sheet`, read from the live server
@@ -1878,8 +1895,9 @@ produces a morning that went unrecorded.
    column on the Checks tab. **Authorising never closes the defect.** It stays
    Open on the Defects tab with a name against the decision to run.
 
-   Who may authorise is `AUTHORISER_ROLES` in Code.gs, kept equal to
-   `fullInspectionRoles` in config.js. Whether the person who did the
+   Who may authorise is the `COORDINATOR_ROLES` Script Property (by default
+   `Coordinator, Minister in Charge`), which the live server passes to the
+   pages; `fullInspectionRoles` in config.js is only their starting point. Whether the person who did the
    walkaround may also authorise it is `SAME_HAND_BOTH_WAYS` in Code.gs and
    `override.sameHandBothWays` in config.js: the app hides the button, the
    server refuses. When you are emailed is `TELL_COORDINATOR` in Code.gs.
