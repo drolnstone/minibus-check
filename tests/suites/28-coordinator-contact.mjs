@@ -71,6 +71,30 @@ export default async function (root) {
     a.eq(c.phone, "");
   });
 
+  const MIC = { Name: "Pst Top", Role: "Minister in Charge", Active: "YES", Phone: "07333 333333", Email: "pst@b.c" };
+
+  s.test("the Coordinator comes before the Minister in Charge, whoever is higher on the tab", (a) => {
+    a.eq(contact(sheet([MIC].concat(PEOPLE))).name, "Bro First");
+  });
+
+  s.test("with no Coordinator, the Minister in Charge is who people ring", (a) => {
+    const c = contact(sheet([MIC, PEOPLE[3]]));
+    a.eq(c.name, "Pst Top");
+    a.eq(c.phone, "07333333333");
+  });
+
+  s.test("COORDINATOR_EMAIL wins across every role in the list", (a) => {
+    a.eq(contact(sheet([MIC].concat(PEOPLE), "pst@b.c")).name, "Pst Top");
+  });
+
+  s.test("a church's own titles work once AUTHORISER_ROLES says them", (a) => {
+    const L = sheet([{ Name: "Sis Lead", Role: "Transport Lead", Active: "YES", Phone: "07444 444444" },
+                     PEOPLE[3]]);
+    a.eq(contact(L).name, "", "a title not in the list must not be picked");
+    L.ctx.AUTHORISER_ROLES = ["Transport Lead", "Pastor"];
+    a.eq(contact(L).name, "Sis Lead");
+  });
+
   s.test("a number Sheets has turned into 447... is sent as 07..., so the call button dials", (a) => {
     const rows = PEOPLE.map((r) => Object.assign({}, r));
     rows[1].Phone = 447111111111;

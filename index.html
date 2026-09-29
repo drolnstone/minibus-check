@@ -1538,7 +1538,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.80.0";
+var APP_VERSION = "v1.81.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2922,7 +2922,8 @@ function btn(label,cls,fn,dis,why){
            having changed in half a second means he has moved on himself. */
         if(st.screen === "driver" && !pinGateNeeded() && st.driver.trim()){
           try{ if($("pin")) $("pin").blur(); }catch(e){}
-          show("hub");
+          if(handToCheck){ handToCheck = false; renderVehicles(); show("vehicle"); }
+          else show("hub");
         }
       }, 550);
     }
@@ -8493,6 +8494,45 @@ $("toStops").addEventListener("click",rotaOpenStops);
    this is the first thing on the hub that writes anything down. Bounced back
    to the name screen with the box focused rather than refused in place: the
    box lives there, and sending him to it is more use than a toast. */
+/* FROM THE COORDINATOR'S APP, WITH THE PIN. The Coordinator button above,
+   the other way round, from v1.81.0.
+
+   Its Vehicle check leaves the name and the PIN the live server has been
+   checking all along in this tab's own session storage. Taken and wiped here
+   as the page opens, and a copy more than a minute old is not used. The PIN
+   is then checked here exactly as one keyed here is — this phone's own copy,
+   the live server, the sheet — and only a yes takes him on, straight to
+   choosing the bus. A no leaves him on this screen with the name in and the
+   PIN box saying so, which is where he would have been anyway. */
+var DRIVER_HAND_KEY = "fleet.hand.v1";
+var handToCheck = false;
+
+function driverHandTake(){
+  var h = null;
+  try{ h = JSON.parse(sessionStorage.getItem(DRIVER_HAND_KEY) || "null"); }catch(e){ h = null; }
+  try{ sessionStorage.removeItem(DRIVER_HAND_KEY); }catch(e){}
+  if(!h || !h.name || !/^\d{4,8}$/.test(String(h.pin || ""))) return;
+  if(!(Date.now() - Number(h.at || 0) < 60000)) return;
+
+  var e = entryFor(h.name), name = e ? e.name : String(h.name).trim();
+  st.driver = name;
+  st.role = roleOf(name);
+  signSave();
+  var sel = $("driverPick");
+  if(sel && e) sel.value = name;
+  if($("driver")) $("driver").value = name;
+
+  handToCheck = true;
+  st.pin = String(h.pin).replace(/\D/g,"").slice(0,4);
+  if($("pin")) $("pin").value = st.pin;
+  st.pinOk = false;
+  showPinField();
+  checkPin();
+  /* No PIN wanted for this name: nothing to answer, so nothing moves him on
+     above. He is ready now. */
+  if(!pinNeeded() && st.screen === "driver"){ handToCheck = false; renderVehicles(); show("vehicle"); }
+}
+
 $("toCheck").addEventListener("click",function(){
   if(!st.driver.trim()){
     show("driver");
@@ -9454,6 +9494,9 @@ safely(fetchLastMiles);
 /* The stored rota, so opening the rota screen is instant. It refreshes
    itself in the background afterwards. */
 safely(function(){ rotaLoadCache(); paintRotaHint(); });
+
+/* After the stored register, so the name it brings is on the picker. */
+safely(driverHandTake);
 
 if(LIVE && navigator.onLine){
   setTimeout(function(){ safely(function(){ rotaRender(true); }); }, 400);

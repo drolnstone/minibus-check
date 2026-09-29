@@ -67,10 +67,15 @@ wrong.
 From v1.80.0 (pages), w2.21.0 (Worker) and v1.85.0 (sheet), no file carries a
 name or a phone number. The Drivers tab is the one place for them:
 
-- **The coordinator** is the active row whose **Role** is `Coordinator`, and
-  the number people are told to ring is in that row's **Phone** column. If
-  two rows say Coordinator, the one whose **Email** matches `COORDINATOR_EMAIL`
-  wins, so the person the alerts go to is the person people ring.
+- **The coordinator** is an active row whose **Role** is one of
+  `AUTHORISER_ROLES` in `Code.gs` (here `Coordinator` and `Minister in
+  Charge`), and the number people are told to ring is in that row's **Phone**
+  column. The one whose **Email** matches `COORDINATOR_EMAIL` wins, so the
+  person the alerts go to is the person people ring. Otherwise the first
+  person holding the first role in the list, then the second: here the
+  Coordinator before the Minister in Charge. A church with other titles sets
+  them in that list and in `fullInspectionRoles` in `config.js`, spelled as
+  in the Role column.
 - **The register** is the rows marked Active, with their roles.
 - **The rota order** is the **Primary order** column, counted separately for
   North and South.
@@ -1004,6 +1009,13 @@ old. With no checked PIN (a name kept from earlier in the day, say) only the
 name goes, and the page asks for the PIN with the cursor already in the box.
 Opened any other way, from its own home screen icon or a link, it always
 asks. The live server still checks the PIN on every call.
+
+**And the other way.** From v1.81.0 the coordinator's first screen ends with
+**Vehicle check**. It leaves the signed-in name and PIN for the driver app in
+the same way, once, in this tab only, refused after a minute, and opens the
+driver app, which checks the PIN exactly as it checks one keyed there. A yes
+goes straight to choosing the bus; a no stays on the name screen, with the PIN
+box saying so.
 
 **The landing page** is the sign-in screen, as on the driver app. It carries
 the three numbers, `coordinator · server · sheet`, read from the live server
