@@ -776,6 +776,47 @@ if (want("C24")) {
         "up " + up + ", button " + button + ", gone " + gone + ", again " + again + " (" + again2 + "), stored " + second);
 }
 
+/* C25 — the bell: coordinator alerts turned on from here, under the name signed in */
+if (want("C25")) {
+  const p = await page(env);
+  /* A phone that can take alerts, and has never opened the driver app: no
+     service worker yet, so the bell has to register one. */
+  await p.pg.addInitScript(() => {
+    const sub = { endpoint: "https://push.example/coord-phone",
+                  toJSON() { return { endpoint: this.endpoint, keys: { p256dh: "x", auth: "y" } }; } };
+    let have = null;
+    const reg = { active: {}, pushManager: { getSubscription: async () => have, subscribe: async () => { have = sub; return sub; } } };
+    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: {
+      getRegistration: async () => window.__reg || null,
+      register: async (url, o) => { window.__registered = url + " " + (o && o.scope); window.__reg = reg; return reg; } } });
+    if (!window.PushManager) window.PushManager = function () {};
+    try { Object.defineProperty(Notification, "permission", { get: () => window.__perm || "default", configurable: true }); } catch (e) {}
+    Notification.requestPermission = async () => { window.__perm = "granted"; return "granted"; };
+  });
+  await p.pg.reload({ waitUntil: "domcontentloaded" });
+  await p.wait(400);
+  const hiddenSignedOut = await p.pg.$eval("#barBell", (el) => el.hidden);
+  await p.signIn(PIN);
+  const shown = !(await p.pg.$eval("#barBell", (el) => el.hidden));
+  await p.pg.click("#barBell");
+  await p.wait(1500);
+  const first = await p.text("#toast");
+  const row = db._one("SELECT role, driver FROM push_subs WHERE endpoint=?", "https://push.example/coord-phone");
+  const registered = await p.pg.evaluate(() => window.__registered || "");
+  const on = await p.pg.$eval("#barBell", (el) => el.classList.contains("on"));
+  await p.shot("C25-bell-on");
+  await p.pg.click("#barBell");
+  await p.wait(1500);
+  const second = await p.text("#toast");
+  const test = db._one("SELECT v FROM settings WHERE k=?", "test:https://push.example/coord-phone");
+  await p.ctx.close();
+  check("C25", "the bell is there once signed in, turns coordinator alerts on for this phone under the signed-in name, and a second tap sends a test",
+        hiddenSignedOut && shown && /alerts are on/i.test(first) && row && row.role === "driver" && row.driver === "Bro Asim" &&
+        /^\.\.\/sw\.js \.\.\/$/.test(registered) && on && /test alert/i.test(second) && !!test && !p.errs.length,
+        "hidden before sign-in " + hiddenSignedOut + ", shown " + shown + ", first '" + first + "', row " + JSON.stringify(row) +
+        ", registered '" + registered + "', on " + on + ", second '" + second + "', test " + !!test + ", errors " + JSON.stringify(p.errs));
+}
+
 /* C20b — a PIN handed over that is wrong is still refused by the driver app */
 if (want("C20b")) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });

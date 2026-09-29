@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.83.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.84.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, the run record and the "have a
@@ -95,6 +95,12 @@ input,textarea,select{font:inherit;color:inherit}
   letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
 .bar-id span{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:500;font-size:12px;
   letter-spacing:.1em;text-transform:uppercase;color:var(--dash-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-bell{flex:none;width:40px;height:40px;border-radius:8px;border:1.5px solid rgba(255,255,255,.35);
+  color:var(--dash-ink);display:flex;align-items:center;justify-content:center;background:transparent}
+.bar-bell[hidden]{display:none}
+.bar-bell svg{width:20px;height:20px;display:block}
+.bar-bell.on svg{fill:currentColor}
+.bar-bell:disabled{opacity:.5}
 .bar-btn{flex:none;min-height:36px;padding:0 12px;border:1.5px solid rgba(255,255,255,.35);border-radius:8px;
   color:var(--dash-ink);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:14px;
   letter-spacing:.08em;text-transform:uppercase}
@@ -395,6 +401,10 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
     </button>
     <div class="bar-id"><b id="barTitle">Coordinator</b><span id="barSub">RCCG Dominion Assembly Liverpool</span></div>
+    <!-- Coordinator alerts on this phone, from v1.84.0. Hollow until they are on;
+         then filled, and a tap sends a test. -->
+    <button class="bar-bell" id="barBell" type="button" hidden aria-pressed="false"
+            aria-label="Coordinator alerts on this phone" title="Coordinator alerts on this phone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>
     <button class="bar-btn" id="barLock" type="button" hidden>Lock</button>
   </div>
 </header>
@@ -475,7 +485,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.83.0";
+var PAGE_VERSION = "v1.84.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -774,6 +784,7 @@ function openAs(n, p, how){
     $("signPin").value = "";
     say("signSay","");
     D = out; touched = Date.now();
+    bellLook();
     if(!location.hash || location.hash === "#sign") history.replaceState({ n: 0 }, "", "#home");
     route();
   }, function(err){
@@ -835,6 +846,7 @@ function route(){
   $("barSub").textContent = (name === "sign" || !who) ? "RCCG Dominion Assembly Liverpool" : who;
   $("barBack").hidden = (name === "home" || name === "sign");
   $("barLock").hidden = (name !== "home");
+  bellPaint(name);
   paint(name, arg);
   window.scrollTo(0, 0);
 }
@@ -1911,6 +1923,106 @@ document.addEventListener("visibilitychange", function(){
     else refresh();
   }
 });
+
+/* ---- coordinator alerts on this phone, from v1.84.0 ------------------------
+   Until now a coordinator turned these on in the driver app, which was fine
+   in a browser and wrong on an iPhone: each Home Screen app is its own, so a
+   coordinator who only ever opened this one was never offered them. The bell
+   here does the same sign-up the driver app's does, under the name signed in
+   here, behind the PIN. It uses the driver app's service worker, registered
+   from here if this phone has never opened the driver app; that worker leaves
+   this folder to the network, so nothing about this page changes. Tapped
+   when alerts are already on, it sends this phone a test. */
+var BELL = { on: false, busy: false };
+
+function pushAble(){ return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
+/* An iPhone only takes alerts in an app on its Home Screen, never in Safari. */
+function iosBrowser(){ var d = deviceKind(); return (d === "ios" || d === "ios-other") && !standalone(); }
+
+function pushReg(){
+  var sw = navigator.serviceWorker;
+  var got = sw.getRegistration("../").then(function(r){
+    return r || sw.register("../sw.js", { scope: "../" });
+  }).then(function(r){
+    if(r.active) return r;
+    return new Promise(function(done){
+      var w = r.installing || r.waiting;
+      if(!w) return done(r);
+      w.addEventListener("statechange", function(){ if(w.state === "activated") done(r); });
+    });
+  });
+  return Promise.race([got, new Promise(function(_, no){ setTimeout(function(){ no(new Error("slow")); }, 15000); })]);
+}
+function pushKeyBytes(k){
+  var pad = "=".repeat((4 - k.length % 4) % 4);
+  var raw = atob((k + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  var out = new Uint8Array(raw.length);
+  for(var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+function bellPaint(name){
+  var b = $("barBell");
+  if(!b) return;
+  b.hidden = (name || current().name) !== "home" || !pin || !LIVE || !(pushAble() || iosBrowser());
+  b.classList.toggle("on", BELL.on);
+  b.setAttribute("aria-pressed", BELL.on ? "true" : "false");
+  b.disabled = BELL.busy;
+}
+/* On signing in: whether this phone is already signed up. Only looks: it
+   never registers anything just to find out. */
+function bellLook(){
+  if(!pushAble() || !navigator.serviceWorker.getRegistration) return;
+  navigator.serviceWorker.getRegistration("../").then(function(r){
+    return r && r.pushManager ? r.pushManager.getSubscription() : null;
+  }).then(function(sub){
+    BELL.on = !!sub && Notification.permission === "granted";
+    bellPaint();
+  }, function(){});
+}
+function bellTap(){
+  if(BELL.busy || !who) return;
+  if(iosBrowser()){
+    toast("On an iPhone, alerts need this app on your Home Screen first.");
+    howOpen(false);
+    return;
+  }
+  if(!pushAble()){ toast("This phone's browser cannot receive alerts.", true); return; }
+  if(Notification.permission === "denied"){
+    toast("Alerts are blocked for this site in the phone's settings.", true); return;
+  }
+  var was = BELL.on;
+  BELL.busy = true; bellPaint();
+  var endpoint = "";
+  Notification.requestPermission().then(function(p){
+    if(p !== "granted") throw new Error("not granted");
+    return pushReg();
+  }).then(function(reg){
+    return reg.pushManager.getSubscription().then(function(sub){
+      if(sub) return sub;
+      return fetch(LIVE + "?vapid=1").then(function(r){ return r.json(); }).then(function(v){
+        if(!v || !v.ok || !v.key) throw new Error("no key");
+        return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKeyBytes(v.key) });
+      });
+    });
+  }).then(function(sub){
+    var j = sub.toJSON();
+    endpoint = j.endpoint;
+    /* Every time, so the phone is under the name signed in now. */
+    return post({ action: "subscribe", endpoint: j.endpoint, keys: j.keys, role: "driver", driver: who, route: "" });
+  }).then(function(out){
+    if(!out || !out.ok) throw new Error("not taken");
+    if(was) return post({ action: "testpush", endpoint: endpoint });
+    return out;
+  }).then(function(){
+    BELL.on = true; BELL.busy = false; bellPaint();
+    toast(was ? "A test alert is on its way to this phone." : "Coordinator alerts are on for this phone.");
+  }, function(err){
+    BELL.busy = false; bellPaint();
+    toast(String(err && err.message) === "not granted" ? "Not turned on." : "Could not turn alerts on. Try again.", true);
+  });
+}
+$("barBell").addEventListener("click", bellTap);
 
 /* ---- how to put it on a phone, from v1.83.0 ------------------------------
    The driver app's, word for word, so the three apps give one set of steps.
