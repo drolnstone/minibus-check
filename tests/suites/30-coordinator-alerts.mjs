@@ -219,6 +219,24 @@ export default async function (root) {
     void alerts;
   });
 
+  s.test("with SENDER_NAME set, every email says it is from that name, and replies go to the coordinator", (a) => {
+    const { L } = sheet({ COORDINATOR_EMAIL: "coord@b.c", SENDER_NAME: " Dominion Transport " });
+    call(L, "sendTestEmail");
+    call(L, "notifyAuthorised", { reg: REG, by: "Bro Asim", at: 1, inspector: "Bro Tunde" });
+    a.eq(L.gas.mail.length, 2);
+    for (const m of L.gas.mail) {
+      a.eq(m.name, "Dominion Transport");
+      a.eq(m.replyTo, "coord@b.c");
+    }
+  });
+
+  s.test("with no SENDER_NAME, the emails are as they were", (a) => {
+    const { L } = sheet({ COORDINATOR_EMAIL: "coord@b.c" });
+    call(L, "sendTestEmail");
+    a.eq(L.gas.mail[0].name, undefined);
+    a.eq(L.gas.mail[0].to, "coord@b.c");
+  });
+
   s.test("the menu's test email tests the phones too", (a) => {
     const { L, alerts } = sheet({ COORDINATOR_EMAIL: "coord@b.c" });
     call(L, "sendTestEmail");

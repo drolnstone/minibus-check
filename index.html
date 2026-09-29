@@ -1897,6 +1897,10 @@ var STAGES = [
     { id:"pipes", name:"Brake pipes and lines", crit:true, what:"Look along the chassis rails and behind each wheel for damp or wet patches, or a pipe that is flaking rather than just dusty." },
     { id:"suspension", name:"Suspension and ride height", what:"Bus sitting level, not down at one corner. Listen for knocking over the first bumps." },
     { id:"exhaust", name:"Exhaust", what:"Present and secure. Nothing cut away underneath. Listen for a change in note at start up." },
+    /* DVSA's walkaround calls this spray suppression. From v1.83.0, with the
+       driver's seat below: the two items on its daily check this list did
+       not have. */
+    { id:"mudflaps", name:"Mudflaps and spray guards", what:"Behind every wheel that has one: present, secure, not torn or hanging by one fixing. If this bus has none, mark it not on this bus." },
     { id:"fuel", name:"Fuel and filler cap", what:"Enough for the run and back. Cap present and tight. No smell of diesel or wetness around the filler." },
   ]},
   { title:"Under the bonnet", lede:"Engine cold, before the first start.", items:[
@@ -1932,6 +1936,7 @@ var STAGES = [
     { id:"limiter", full:true, name:"Speed limiter", what:"If this bus has one: no warning lamp, and it is not cutting in below its set speed. If none is fitted, mark it not on this bus." },
     { id:"infotainment", full:true, name:"Radio and dash display", what:"Radio and speakers working front and rear. Dash display readable and not stuck on a warning screen." },
     { id:"cab", name:"Horn, heater, demist", what:"All working. Demist clears the whole screen, not just a patch in front of you." },
+    { id:"dseat", name:"Driver's seat and belt", what:"Seat adjusts and locks in place with no movement on its runners when you brace against it. Your own belt pulls out, locks when jerked, and clicks in and releases." },
     { id:"docs", full:true, name:"Documents on board", what:"Insurance in date. Any permit or paperwork this bus must carry. Breakdown number somewhere you could find it in the dark." }
   ]}
 ];

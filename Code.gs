@@ -266,6 +266,34 @@ var COORDINATOR_EMAIL = (function () {
   return "";                                     // set COORDINATOR_EMAIL instead
 })();
 
+/* WHO THE EMAILS SAY THEY ARE FROM. From v1.86.0.
+
+   Set SENDER_NAME in Script Properties, for example  Dominion Transport ,
+   and every email this sheet sends shows that as the sender rather than the
+   name on the Google account. The ADDRESS is still the account the script
+   runs as: Apps Script cannot send as somebody else. For a church address as
+   well, the spreadsheet and its scheduled jobs belong under a Google account
+   of the church's own; see README.md.
+
+   Replies go to COORDINATOR_EMAIL, so a driver who answers his duty
+   reminder reaches the coordinator whichever account sent it. */
+function senderName() {
+  try {
+    return String(PropertiesService.getScriptProperties().getProperty("SENDER_NAME") || "").trim();
+  } catch (err) { return ""; }
+}
+
+/* Every email goes through here, so the sender name and the reply address
+   are on all of them and cannot be forgotten on the next one written. */
+function sendMail(o) {
+  var m = {};
+  for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) m[k] = o[k];
+  var name = senderName();
+  if (name && !m.name) m.name = name;
+  if (COORDINATOR_EMAIL && !m.replyTo) m.replyTo = COORDINATOR_EMAIL;
+  return MailApp.sendEmail(m);
+}
+
 var CHECKS_SHEET   = "Checks";
 var DEFECTS_SHEET  = "Defects";
 var ROTA_SHEET     = "Rota";
@@ -8496,7 +8524,7 @@ function sendTestEmail() {
           "again about 24 hours after the first one went out. Nothing is wrong " +
           "with the script.";
   } else {
-    MailApp.sendEmail({
+    sendMail({
       to: COORDINATOR_EMAIL,
       subject: "Minibus app test",
       body: "Test from the minibus app. If you can read this, notifications are working.\n\n" +
@@ -8681,7 +8709,7 @@ function missingCheckAlert() {
     body: "No pre-drive check this morning. Please have " + (many ? "them" : "it") +
           " inspected on return." });
   if (!COORDINATOR_EMAIL) return;
-  MailApp.sendEmail({
+  sendMail({
     to: COORDINATOR_EMAIL,
     subject: "Minibus: " + expected.join(", ") + " went out unchecked",
     body: plain.join("\n"),
@@ -8954,7 +8982,7 @@ function overbookingAlert(force) {
     if (!rehearsing) overbookRemember(props, sent, stamps);
     return { ran: true, sent: 0, over: tell, rehearsal: rehearsing, phones: true };
   }
-  MailApp.sendEmail({
+  sendMail({
     to: COORDINATOR_EMAIL,
     subject: (rehearsing ? "REHEARSAL \u2014 " : "") + "Minibus: " +
              tell.map(function (t) {
@@ -9115,7 +9143,7 @@ function weeklyDigest() {
     if (watch.length > 15) lines.push("&bull; and " + (watch.length - 15) + " more");
   }
 
-  MailApp.sendEmail({
+  sendMail({
     to: COORDINATOR_EMAIL,
     subject: "Minibus weekly summary \u2014 " + pretty,
     body: title + "\n\n" + lines.join("\n").replace(/<[^>]+>/g, "").replace(/&[a-z]+;/g, " "),
@@ -9393,7 +9421,7 @@ function sendDutyEmail(to, who, sunday, daysAhead, covering, route, bus) {
   rows.push("", "If you cannot make it, ask in the app or ring the coordinator.");
   var plain = rows.join("\n");
 
-  MailApp.sendEmail({
+  sendMail({
     to: to,
     subject: "Minibus duty" + (route ? ": " + route : "") + " " +
              (daysAhead === 1 ? "tomorrow" : "on " + when),
@@ -9767,7 +9795,7 @@ function notifyDutyChange(ss, key, before, after, route) {
       "&nbsp;",
       "Nothing is needed from you."
     ];
-    MailApp.sendEmail({
+    sendMail({
       to: emails[before],
       subject: "Minibus: you are no longer driving on " + when,
       body: "You were down to drive on " + when + onPlain + ".\n\n" +
@@ -9791,7 +9819,7 @@ function notifyDutyChange(ss, key, before, after, route) {
       "If you cannot make it, ask in the app or ring the coordinator."
     ].filter(function (l) { return l !== ""; });
 
-    MailApp.sendEmail({
+    sendMail({
       to: emails[after],
       subject: "Minibus duty" + (route ? ": " + route : "") + " on " + when,
       body: "You are now down to drive the minibus on " + when + onPlain + ".\n\n" +
@@ -9912,7 +9940,7 @@ function notifyRequestDecided(ss, key, who, sh, row, qc, decision) {
     }
   }
 
-  MailApp.sendEmail({
+  sendMail({
     to: emails[who],
     subject: "Minibus: your request for " + when +
              (no ? " was not approved" : " has been approved"),
@@ -11545,7 +11573,7 @@ function notifyCheck(c, outcome, defectText) {
    .concat(stopped ? [decidePlain(link, LINK_RULES.ttlMinutes)] : [])
    .join("\n");
 
-  MailApp.sendEmail({
+  sendMail({
     to: COORDINATOR_EMAIL,
     subject: subject,
     body: plain,
@@ -11591,7 +11619,7 @@ function notifyAuthorised(a) {
     "", tabUrl(DEFECTS_SHEET)
   ].join("\n");
   try {
-    MailApp.sendEmail({
+    sendMail({
       to: COORDINATOR_EMAIL,
       subject: "Authorised to run: " + a.reg,
       body: plain,
@@ -11688,7 +11716,7 @@ function notifyRotaRequest(rq, sunday) {
   if (dp) prows.push(dp);
   var plain = prows.join("\n");
 
-  MailApp.sendEmail({
+  sendMail({
     to: COORDINATOR_EMAIL,
     subject: "Rota request: " + rq.driver + " \u2014 " + when,
     body: plain,
