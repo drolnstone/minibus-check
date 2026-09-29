@@ -856,6 +856,47 @@ if (want("C20b")) {
   await ctx.close();
 }
 
+/* C26 — turned on its side, it asks to be turned upright, as the driver app does */
+if (want("C26")) {
+  const p = await page(env);
+  const shown = () => p.pg.$eval(".upright", (el) => getComputedStyle(el).display !== "none").catch(() => false);
+  const upright = await shown();
+  await p.pg.setViewportSize({ width: 844, height: 390 });
+  await p.wait(300);
+  const side = await shown();
+  await p.shot("C26-sideways");
+  check("C26", "on its side the page says Turn your phone upright; upright it does not",
+        !upright && side && !p.errs.length, "upright " + upright + ", sideways " + side + ", errors " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
+/* C27 — back from the driver app on a Home Screen iPhone, the bar clears the status bar.
+   Safari says the top safe area is nothing on the way back; the page puts back
+   the inset it measured when it was right. Chromium has no inset, so it stands
+   in for the way back, and a page not on the Home Screen is left alone. */
+if (want("C27")) {
+  const run = async (standalone, kept) => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+    const pg = await ctx.newPage();
+    const errs = [];
+    pg.on("pageerror", (e) => errs.push(String(e.message)));
+    await pg.route("**://*.workers.dev/**", (r) => r.abort());
+    await pg.route("**://fonts.g*/**", (r) => r.abort());
+    await pg.addInitScript(`try { localStorage.setItem("coord.install.v1", "1"); } catch (e) {}`);
+    if (standalone) await pg.addInitScript(`Object.defineProperty(Navigator.prototype, "standalone", { get: () => true });`);
+    if (kept) await pg.addInitScript(`try { localStorage.setItem("coord.safeTop.v1", "${kept}"); } catch (e) {}`);
+    await pg.goto("http://127.0.0.1:" + PORT + "/coord/", { waitUntil: "load" });
+    await pg.waitForTimeout(300);
+    const pad = await pg.$eval(".bar", (el) => getComputedStyle(el).paddingTop);
+    await ctx.close();
+    return { pad, errs };
+  };
+  const back = await run(true, 47), browserTab = await run(false, 47), never = await run(true, 0);
+  check("C27", "on the Home Screen with the inset gone, the bar is pushed down by the one last measured; in a browser tab, or with none kept, it is not",
+        back.pad === "47px" && browserTab.pad === "0px" && never.pad === "0px" && ![...back.errs, ...browserTab.errs, ...never.errs].length,
+        "home screen " + back.pad + ", tab " + browserTab.pad + ", none kept " + never.pad);
+}
+
 check("C0", "no script error on the page throughout", me && !me.errs.length, JSON.stringify(me && me.errs));
 if (me) await me.ctx.close();
 await done();

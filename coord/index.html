@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.85.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.86.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, the run record and the "have a
@@ -382,6 +382,20 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.bad{background:var(--stop);color:var(--stop-on)}
 .toast.top{top:calc(12px + var(--safe-t));bottom:auto}
+
+/* ---- turn it upright, as the driver app does ----------------------------
+   iOS ignores the manifest's orientation: portrait, so a phone turned on its
+   side is answered here. Phones only (max-height), never an iPad. */
+.upright{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  .upright{
+    display:flex;position:fixed;inset:0;z-index:9999;
+    align-items:center;justify-content:center;text-align:center;
+    background:var(--paper);color:var(--ink);
+    padding:24px calc(24px + var(--safe-r)) 24px calc(24px + var(--safe-l));
+  }
+  .upright b{font-size:20px;line-height:1.3;letter-spacing:.01em}
+}
 </style>
 <script>
 /* The theme the driver app keeps on this phone, before the first paint. */
@@ -390,6 +404,46 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
   try{ t=localStorage.getItem("fleet.theme.v1")||"auto"; }catch(e){}
   var m=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
   document.documentElement.setAttribute("data-theme", t!=="auto" ? t : ((m&&m.matches)?"dark":"light"));
+})();
+</script>
+<script>
+/* THE STATUS BAR, AFTER A TRIP TO THE DRIVER APP.
+
+   On an iPhone, installed to the Home Screen, going to the driver app and
+   coming back left the bar under the clock and the signal: Safari reports
+   the top safe area as nothing on the way back, although the status bar is
+   still drawn over the page. So the top inset is measured whenever it is
+   right, kept, and put back when Safari says nothing in portrait, which on a
+   Home Screen iPhone is never true. Anywhere else this does nothing. */
+(function(){
+  var KEY = "coord.safeTop.v1", root = document.documentElement;
+  function measure(){
+    var d = document.createElement("div");
+    d.style.cssText = "position:absolute;visibility:hidden;padding-top:env(safe-area-inset-top,0px)";
+    (document.body || root).appendChild(d);
+    var v = parseFloat(getComputedStyle(d).paddingTop) || 0;
+    d.parentNode.removeChild(d);
+    return v;
+  }
+  function fix(){
+    if(navigator.standalone !== true) return;
+    if(window.innerWidth > window.innerHeight) { root.style.removeProperty("--safe-t"); return; }
+    var v = measure();
+    if(v > 0){
+      root.style.removeProperty("--safe-t");
+      try{ localStorage.setItem(KEY, String(v)); }catch(e){}
+      return;
+    }
+    var kept = 0;
+    try{ kept = parseFloat(localStorage.getItem(KEY)) || 0; }catch(e){}
+    if(kept > 0) root.style.setProperty("--safe-t", kept + "px");
+  }
+  window.coordSafeTop = fix;
+  window.addEventListener("pageshow", fix);
+  window.addEventListener("resize", fix);
+  window.addEventListener("orientationchange", function(){ setTimeout(fix, 150); });
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden) fix(); });
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", fix); else fix();
 })();
 </script>
 </head>
@@ -477,6 +531,8 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
     </div>
   </div>
 </div>
+<div class="upright" aria-hidden="true"><b>Turn your phone upright.</b></div>
+
 <div class="toast" id="toast"></div>
 
 <script src="../config.js"></script>
@@ -485,7 +541,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.85.0";
+var PAGE_VERSION = "v1.86.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");

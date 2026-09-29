@@ -1,14 +1,16 @@
 MINIBUS
 =======
-  pages v1.85.0 · server w2.25.0 · sheet v1.88.0
+  pages v1.86.0 · server w2.25.0 · sheet v1.88.0
 
 The code no longer carries this church's buses, stops, kerbs, renewal
 dates or bus pairing. The spreadsheet is the only place they live. Plus a
-"Setting up for a new church" checklist in README.md.
+"Setting up for a new church" checklist in README.md. And two fixes to the
+coordinator's app: it asks to be turned upright, and its top bar no longer
+slides under the clock after a trip to the driver app.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.85.0         v1.85.0   (no change)
+  Pages   v1.85.0         v1.86.0
   Worker  w2.24.0         w2.25.0
   Code.gs v1.87.0         v1.88.0
 
@@ -36,18 +38,23 @@ IN THIS ORDER
 
 3. Minibus, Send everything to the live server now.
 
-4. Merge the pull request (README and tests only on the pages side).
+4. Merge the pull request. GitHub publishes the pages from main.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.85.0 · server w2.25.0 · sheet
+A. The foot of all three apps reads  app v1.86.0 · server w2.25.0 · sheet
    v1.88.0 .
 
 B. The Rota tab's bus columns for the next few Sundays are unchanged.
 
 C. Is the live server working? shows no ✗.
+
+D. On an iPhone, open the Coordinator app from the Home Screen once, straight
+   away (that is when it measures the status bar). Tap Driver app, then the
+   Coordinator button there: the bar sits below the clock. Turn the phone on
+   its side: "Turn your phone upright."
 
 
 WHAT CHANGED
@@ -65,3 +72,12 @@ WHAT CHANGED
    A checklist in README.md of everything another church changes: its
    copies, its settings, the addresses and details still in config.js and
    Code.gs, and the four tabs it fills in.
+
+3. THE COORDINATOR'S APP, UPRIGHT AND CLEAR OF THE CLOCK.
+   Turned on its side it says "Turn your phone upright", as the driver app
+   always has (iPhones ignore the "portrait only" an app asks for, so this
+   is the only way).
+   On a Home Screen iPhone, going to the driver app and back made Safari
+   report no room for the status bar, and the bar slid under the clock and
+   signal. The app now remembers the room it measured when it opened and
+   puts it back when Safari says none. Nothing to reinstall.
