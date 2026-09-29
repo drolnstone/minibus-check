@@ -1,14 +1,16 @@
 MINIBUS
 =======
-  pages v1.87.0 · server w2.26.0 · sheet v1.89.0
+  pages v1.87.0 · server w2.27.0 · sheet v1.89.0
 
 Four more things from the Minibus menu in the coordinator's app, under
-Have a look.
+Have a look. And on a Sunday: the driver is told to set off on the
+departure time, and passengers are told if nothing has recorded the bus
+leaving five minutes after it.
 
 
 YOU ARE ON              GOING TO
   Pages   v1.86.0         v1.87.0
-  Worker  w2.25.0         w2.26.0
+  Worker  w2.25.0         w2.27.0
   Code.gs v1.88.0         v1.89.0
 
 If v1.86.0's steps are not done yet (the Buses tab check, Worker w2.25.0,
@@ -35,7 +37,7 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.87.0 · server w2.26.0 · sheet
+A. The foot of all three apps reads  app v1.87.0 · server w2.27.0 · sheet
    v1.89.0 .
 
 B. Coordinator's app, Have a look:
@@ -68,3 +70,23 @@ WHAT CHANGED
    on the real clock and, in the quiet hours, rightly saw a non-urgent
    alert held for the morning. It now runs at two in the afternoon. The
    app was never wrong.
+
+5. TIME TO SET OFF, AND NO WORD YET.
+   On the departure time (North 09:52 and South 10:21 on today's timetable,
+   whatever the Bus Stops tab says), the rostered driver's phone gets
+   "Time to set off. Your North run is due to leave church at 09:52. Tap
+   Start as you pull away." Before, the first word was ten minutes late.
+   The ten and twenty-five minute reminders are unchanged.
+   Five minutes past, if nobody has tapped Start, everybody booked on that
+   route gets "No word yet that your bus has left church. It was due to
+   leave at 09:52. Yours is timetabled 10:52 at Stanley Pk. We will message
+   you as soon as it sets off." Once, and not on a route called off, during
+   a rehearsal, or more than an hour past.
+   WHY THOSE WORDS. Start is the only thing that tells the live server a bus
+   has gone. A driver who pulls away without tapping it is on the road while
+   the record says he is at church, so "the bus has not left" or "the driver
+   is running behind" could both be untrue, and the second points at a
+   person. "No word yet" is true either way. The moment Start is tapped,
+   they get "The bus has left church" as before.
+   Nothing to set up. It needs the Worker's every-minute Cron Trigger, which
+   you already have.

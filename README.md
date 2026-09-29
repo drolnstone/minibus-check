@@ -1558,6 +1558,7 @@ the two rows below with no phone alert of their own; the test sends one.
 | Your route is not running today | called off on the Rota | push | outranks everything: never say the bus is late when it is not coming | yes |
 | Your bus was stopped | a critical defect stops it | push | do not take it out | yes |
 | Your bus is authorised | you release it | push | otherwise he only finds out by opening a screen he has no reason to open | yes |
+| Time to set off | the departure time, from w2.27.0 | push | on the minute, not ten minutes late | yes |
 | The bus has not gone out | 10–90 min past departure, no start tap | push | forgotten, or something is wrong | yes |
 | You are driving today | Sunday morning, before departure | push | the morning, said on the morning | yes |
 | End the trip | 15 min after the last timetabled arrival, 10 min idle | push | an open run never closes itself | yes |
@@ -1571,6 +1572,7 @@ the two rows below with no phone alert of their own; the test sends one.
 | You are booked | a nudge window, already booked | confirms instead of nagging | yes |
 | Your bus today at HH:MM | Sunday 07:30–08:30 | the plan for the morning | yes |
 | No bus to your stop today | route called off | before anything else, and instead of everything else | yes |
+| No word yet that your bus has left church | 5–60 min past departure, no start tap, from w2.27.0 | says only what is known: Start is the one signal, and a driver who forgot to tap it is already on the road | yes |
 | The bus has left church | the start tap | it is real and it is moving | yes |
 | Be at your stop now | the estimate inside the imminent threshold | the one that matters | yes |
 | The bus is a few minutes away | the estimate moved by more than `resendMinutes` | only when the number actually changed | yes |

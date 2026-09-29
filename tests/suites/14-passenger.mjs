@@ -610,7 +610,7 @@ export default async function (root) {
   });
 
   s.test("before the bus sets off he is told when it comes and to be early", async (a) => {
-    const out = await words(WHEN.sundayRunning, async (db, env, key) => {
+    const out = await words(WHEN.sundayLate, async (db, env, key) => {
       await seedBookings(db, key, [{ route: "North", stopId: "N08" }]);
     });
     a.has(out.title, "10:52", "his own timetabled time: " + out.title);
