@@ -1,7 +1,7 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
 const CACHE_PREFIX = "minibus-check-";
-const CACHE = CACHE_PREFIX + "v1.82.0";
+const CACHE = CACHE_PREFIX + "v1.83.0";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -298,9 +298,15 @@ self.addEventListener("notificationclick", (e) => {
   const want = (e.notification.data && e.notification.data.url) || "./";
   e.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    /* A coordinator's alert opens the coordinator's app. Bringing whatever
+       window was open to the front, which is right for everything the driver
+       app says, would leave him looking at the driver app instead. */
+    const place = new URL(want, self.registration.scope).href;
+    const elsewhere = want !== "./";
     for (const c of all) {
-      if (c.url.indexOf(self.registration.scope) === 0 && "focus" in c) return c.focus();
+      if (c.url.indexOf(self.registration.scope) !== 0 || !("focus" in c)) continue;
+      if (!elsewhere || c.url.indexOf(place) === 0) return c.focus();
     }
-    if (self.clients.openWindow) return self.clients.openWindow(want);
+    if (self.clients.openWindow) return self.clients.openWindow(place);
   })());
 });

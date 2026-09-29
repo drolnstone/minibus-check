@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.85.4";
+var SCRIPT_VERSION = "v1.86.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1484,8 +1484,9 @@ function handleCheckLocked(c) {
      even on a bus that is otherwise clear. */
   var wantsSomething = (c.jobs || []).length > 0;
   var hasAdvisory = (c.advisories || []).length > 0;
-  if (COORDINATOR_EMAIL && (c.level !== "ok" || wantsSomething || hasAdvisory)) {
-    notifyCheck(c, outcome, defectText);
+  if (c.level !== "ok" || wantsSomething || hasAdvisory) {
+    tellCoordinatorPhones(checkPhoneAlert(c, outcome, defectText));
+    if (COORDINATOR_EMAIL) notifyCheck(c, outcome, defectText);
   }
 
   return reply({ ok: true });
@@ -4536,6 +4537,12 @@ function handleRotaRequest(rq) {
   }
 
   bumpRotaVersion();
+  tellCoordinatorPhones({ id: "req|" + (rq.id || (rq.driver + "|" + rq.date)), kind: "request",
+    title: "Rota request from " + rq.driver,
+    body: (rq.type || "A change") + " for " +
+          Utilities.formatDate(sunday, Session.getScriptTimeZone(), "EEEE d MMMM") +
+          ". Decide it in the coordinator's app.",
+    not: [rq.driver] });
   if (COORDINATOR_EMAIL) notifyRotaRequest(rq, sunday);
 
   return reply({ ok: true });
@@ -8473,6 +8480,11 @@ function extendRota() {
  * silence is the app working, not failing.
  */
 function sendTestEmail() {
+  /* The phones as well: the same menu item proves both. A fresh id each time,
+     and urgent, so a test at night is not held until the morning. */
+  tellCoordinatorPhones({ id: "test|" + Date.now(), kind: "test", urgent: true,
+    title: "Coordinator alerts are working",
+    body: "A test from the spreadsheet. Nothing has happened to a bus." });
   var msg;
   var left = -1;
   try { left = MailApp.getRemainingDailyQuota(); } catch (err) { left = -1; }
@@ -8501,6 +8513,11 @@ function sendTestEmail() {
           "to Yahoo often lands there the first time.";
   }
 
+  if (WORKER_URL) {
+    msg += "\n\nA test alert has also gone to the phone of every coordinator who has " +
+           "alerts on in the driver app. Anybody who did not get it: open the driver " +
+           "app on that phone, signed in as themselves, and turn alerts on.";
+  }
   try { SpreadsheetApp.getUi().alert(msg); } catch (err) { Logger.log(msg); }
   return msg;
 }
@@ -8606,7 +8623,7 @@ function openDefectsByReg(ss) {
  * and within a month you would skim them, including the one that mattered.
  */
 function missingCheckAlert() {
-  if (!COORDINATOR_EMAIL) return;
+  if (!COORDINATOR_EMAIL && !WORKER_URL) return;
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var tz = Session.getScriptTimeZone();
@@ -8659,6 +8676,11 @@ function missingCheckAlert() {
   if (south) plain.push("South Liverpool: " + south);
   plain.push("", "Please have " + (many ? "them" : "it") + " inspected on return.");
 
+  tellCoordinatorPhones({ id: "unchecked|" + key + "|" + expected.join(","), kind: "unchecked",
+    title: expected.join(", ") + " went out unchecked",
+    body: "No pre-drive check this morning. Please have " + (many ? "them" : "it") +
+          " inspected on return." });
+  if (!COORDINATOR_EMAIL) return;
   MailApp.sendEmail({
     to: COORDINATOR_EMAIL,
     subject: "Minibus: " + expected.join(", ") + " went out unchecked",
@@ -8721,7 +8743,7 @@ var OVERBOOK_AGAIN_BY = 2;
 var OVERBOOK_WITHIN_DAYS = 5;
 
 function overbookingAlert(force) {
-  if (!COORDINATOR_EMAIL) return { ran: false, why: "no coordinator address", sent: 0 };
+  if (!COORDINATOR_EMAIL && !WORKER_URL) return { ran: false, why: "no coordinator address", sent: 0 };
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -8915,7 +8937,23 @@ function overbookingAlert(force) {
      permanently: the next tick read the stamp, decided it had already been
      said, and returned. The most consequential alert in the file was the one
      least able to survive a bad minute at Google. If the send throws, nothing
-     is written down and the next tick tries again. */
+     is written down and the next tick tries again.
+
+     The phones first: their id is what was worked out, so if the email then
+     throws and the next tick comes round again, the live server has already
+     had this one and refuses it rather than buzzing everybody twice. A test
+     from the menu or a rehearsal gets an id of its own every time. */
+  tellCoordinatorPhones({
+    id: "over|" + key + "|" + (force || rehearsing ? Date.now() + "|" : "") +
+        tell.map(function (t) { return t.route + ":" + t.booked; }).join(","),
+    kind: "overbooked",
+    title: (rehearsing ? "REHEARSAL: " : "") +
+           tell.map(function (t) { return t.route + " overbooked, " + t.booked + " of " + t.seats; }).join("; "),
+    body: "For " + when + ". Move a bus or a booking in the coordinator's app." });
+  if (!COORDINATOR_EMAIL) {
+    if (!rehearsing) overbookRemember(props, sent, stamps);
+    return { ran: true, sent: 0, over: tell, rehearsal: rehearsing, phones: true };
+  }
   MailApp.sendEmail({
     to: COORDINATOR_EMAIL,
     subject: (rehearsing ? "REHEARSAL \u2014 " : "") + "Minibus: " +
@@ -10822,7 +10860,7 @@ function onOpen() {
       .addItem("Archive old records now (asks first)", "archiveNow"))
 
     .addSubMenu(ui.createMenu("Send an email now")
-      .addItem("Test email, to you only", "sendTestEmail")
+      .addItem("Test email and coordinators' phones", "sendTestEmail")
       .addItem("Weekly summary, to you only", "sendDigestNow")
       .addItem("Send me a sample duty reminder", "sampleDutyReminder")
       .addSeparator()
@@ -11347,6 +11385,57 @@ function decidePlain(url, minutes) {
   return url ? ["", "Decide from here:", url].join("\n") : "";
 }
 
+/* THE SAME ALERT, TO EVERY COORDINATOR'S PHONE. From v1.86.0.
+
+   Called beside each email the coordinator is sent, and whether or not
+   COORDINATOR_EMAIL is set: the email reaches one inbox, this reaches the
+   phone of everybody holding a coordinator title who has alerts on in the
+   driver app. The live server works out who that is, holds anything that
+   is not urgent through the quiet hours, and refuses the same id twice, so
+   calling this again for something already sent is harmless.
+
+   Short on purpose: what happened and to which bus or Sunday. The detail is
+   in the email and the coordinator's app, behind a PIN.
+
+   Never allowed to fail the thing that called it. */
+function tellCoordinatorPhones(alert) {
+  try {
+    if (!WORKER_URL || !alert || !alert.id || !alert.title) return;
+    workerCall("coordAlert", { alert: alert });
+  } catch (err) {}
+}
+
+/* The phone's version of notifyCheck's subject, for the same five cases. */
+function checkPhoneAlert(c, outcome, defectText) {
+  var authorised = outcome === "Authorised to run";
+  var stopped = c.level === "stop" && !authorised;
+  var defects = defectText ? defectText.split(" | ") : [];
+  var advs = c.advisories || [];
+  var names = function (list) {
+    return list.map(function (d) { return String((d && d.name) || d || "").split(":")[0].trim(); })
+               .filter(function (x) { return x; }).slice(0, 3).join(", ");
+  };
+  var by = c.driver ? " on " + c.driver + "\u2019s check" : "";
+  var a = stopped
+    ? { kind: "stopped", urgent: true, title: "BUS STOPPED: " + c.reg,
+        body: "Critical defect" + by + (names(c.defects || []) ? ": " + names(c.defects || []) : "") +
+              ". Authorise it or arrange another bus." }
+    : authorised
+    ? { kind: "authorised", title: "Authorised to run: " + c.reg,
+        body: "By " + (c.authorisedBy || "a coordinator") + ". The defect stays open." }
+    : defects.length
+    ? { kind: "defect", title: "Defect reported: " + c.reg,
+        body: names(defects) + ". Safe to drive" + (by ? "," + by : "") + "." }
+    : advs.length
+    ? { kind: "advisory", title: "Advisory: " + c.reg, body: "To watch: " + names(advs) + "." }
+    : { kind: "arrange", title: "To arrange: " + c.reg,
+        body: (c.jobs || []).slice(0, 3).join(", ") + "." };
+  a.id = "check|" + (c.id || (c.reg + "|" + c.date + "|" + c.time));
+  a.reg = c.reg;
+  a.not = [c.driver];
+  return a;
+}
+
 function notifyCheck(c, outcome, defectText) {
   var authorised = outcome === "Authorised to run";
   var stopped = c.level === "stop" && !authorised;
@@ -11479,8 +11568,12 @@ function notifyCheck(c, outcome, defectText) {
    whoever authorised it, so the same fact reaches the same inbox that
    evening. */
 function notifyAuthorised(a) {
-  if (!COORDINATOR_EMAIL || TELL_COORDINATOR === "summary" || !a) return;
+  if (TELL_COORDINATOR === "summary" || !a) return;
   var who = String(a.by || "a coordinator");
+  tellCoordinatorPhones({ id: "auth|" + a.reg + "|" + (a.at || ""), kind: "authorised",
+    title: "Authorised to run: " + a.reg, body: "By " + who + ". The defect stays open.",
+    reg: a.reg, not: [a.by] });
+  if (!COORDINATOR_EMAIL) return;
   var when = a.at ? Utilities.formatDate(new Date(Number(a.at)),
                       Session.getScriptTimeZone(), "HH:mm") : "";
   var lines = [

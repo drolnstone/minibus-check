@@ -1,51 +1,74 @@
 MINIBUS
 =======
-  pages v1.82.0 · server w2.22.0 · sheet v1.85.4
+  pages v1.83.0 · server w2.23.0 · sheet v1.86.0
 
-The coordinator's app keeps the last Drivers tab on the phone, so its
-sign-in screen has the names, your remembered name and the cursor in the
-PIN box the moment it opens.
+Every alert that emails the coordinator now also reaches the phone of every
+coordinator: everybody whose Role is one of the COORDINATOR_ROLES titles and
+who has turned alerts on in the driver app.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.81.0         v1.82.0
-  Worker  w2.22.0         w2.22.0   (no change)
-  Code.gs v1.85.4         v1.85.4   (no change)
+  Pages   v1.82.0         v1.83.0
+  Worker  w2.22.0         w2.23.0
+  Code.gs v1.85.4         v1.86.0
 
-Pages only. Nothing to paste into Cloudflare or Apps Script.
+All three move. No SQL, and nothing new in Script Properties, Worker
+variables or triggers.
 
 
 IN THIS ORDER
 -------------
 
-1. PAGES. Merge the pull request. GitHub publishes the pages from main.
+1. WORKER. Cloudflare, minibus-api, Edit code. Paste worker.js over the old
+   one. Deploy.
+
+2. CODE.GS. Apps Script editor. Paste Code.gs over the old one. Save.
+   Deploy, Manage deployments, the pencil on the existing deployment,
+   Version: New version, Deploy. Then reload the spreadsheet, so the menu
+   shows the renamed test item.
+
+3. PAGES. Merge the pull request. GitHub publishes the pages from main.
+
+4. EACH COORDINATOR, ON THEIR OWN PHONE. Open the driver app, signed in as
+   themselves, and turn alerts on (the bell at the top of the hub, or the
+   offer under it). A phone that already has alerts on for its owner needs
+   nothing: it is already on the list.
 
 
 AFTER IT
 --------
 
-A. The foot of the driver app reads  app v1.82.0 · server w2.22.0 · sheet
-   v1.85.4 . A phone still on v1.81.0: close the app fully and open it
-   again.
+A. The foot of the driver app reads  app v1.83.0 · server w2.23.0 · sheet
+   v1.86.0 .
 
-B. Coordinator's app, locked or freshly opened: your name is already in the
-   box. The first time after this update it still waits a second for the
-   live server, because there is nothing kept yet; from then on it is
-   immediate.
+B. Minibus, Send an email now, Test email and coordinators' phones. The
+   email arrives as before, and every coordinator's phone with alerts on
+   shows "Coordinator alerts are working". Tapping it opens the
+   coordinator's app.
 
-C. On an iPhone the keyboard still needs one tap on the PIN box. A page is
-   not allowed to open the keyboard by itself. On a computer, and on most
-   Android phones, the cursor is already in the box.
+C. A phone that did not get it: the driver app on that phone, signed in as
+   that person, alerts on. Then send the test again.
 
 
 WHAT CHANGED
 ------------
 
-1. THE COORDINATOR'S APP KEEPS THE LAST DRIVERS TAB ON THE PHONE.
-   Since config.js stopped carrying names (v1.80.0), the sign-in screen
-   had no names until the live server answered, so the remembered name and
-   the cursor arrived a second late. It now keeps the last list the live
-   server gave it, as the driver app keeps its register, draws it at once
-   and replaces it with every answer. A name added, taken off or given a
-   new role on the Drivers tab still reaches it on the next open with a
-   signal.
+1. COORDINATOR ALERTS ON EVERY COORDINATOR'S PHONE.
+   Beside each email the coordinator is sent, the same alert goes to the
+   phones: a bus stopped, a defect, an advisory or something to arrange on a
+   check, a bus authorised to run, a rota request, a bus that went out
+   unchecked, a route overbooked. It goes even with no COORDINATOR_EMAIL set.
+
+   Short on purpose: what happened, and to which bus or Sunday. A phone joins
+   the list by typing a name, with no PIN, so the detail stays in the email
+   and in the coordinator's app, which the alert opens.
+
+   A stopped bus goes at any hour. Everything else waits out the quiet
+   hours, 21:00 to 08:00, and goes at 08:00. The person an alert is about is
+   not woken by it. Each alert goes once, however many times it is handed
+   over, and a stopped bus that has been authorised by the time the phone
+   reads it says so.
+
+2. THE TEST MENU ITEM TESTS BOTH.
+   "Test email, to you only" is now "Test email and coordinators' phones",
+   and sends a phone alert beside the email.

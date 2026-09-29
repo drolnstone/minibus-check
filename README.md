@@ -1457,7 +1457,18 @@ that alert makes a check go red — measured by actually silencing each one and
 running the suite, not by reading test names. As of `w2.15.0` every one of them
 is held; thirteen were not, and `21-alerts.mjs` is what closed them.
 
-**The coordinator** — all by email, all to `COORDINATOR_EMAIL`.
+**The coordinator** — by email to `COORDINATOR_EMAIL`, and from v1.86.0 /
+w2.23.0 also to **every coordinator's phone**: everybody whose Role is one of
+the `COORDINATOR_ROLES` titles and who has turned alerts on in the driver app,
+signed in as themselves. There is no other sign-up. The phone alert is short
+(what happened, to which bus or Sunday) and opens the coordinator's app; the
+detail stays in the email and behind the PIN, because a phone joins by typing
+a name. A stopped bus is sent at any hour; the rest wait out the quiet hours
+and go at 08:00. The person an alert is about (the driver who did the check,
+the coordinator who authorised) is not woken by it. Each is sent once, however
+many times Apps Script hands it over. **Send an email now, Test email and
+coordinators' phones** tests both. The weekly summary and the test email are
+the two rows below with no phone alert of their own; the test sends one.
 
 | What | When | Why | Held |
 |---|---|---|---|

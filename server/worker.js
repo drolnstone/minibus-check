@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.22.0";
+const SCRIPT_VERSION = "w2.23.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -4025,6 +4025,7 @@ async function clockTick(env) {
   try { await rehearsalOn(env); } catch (e) {}
   await sweeps(env);
   try { await pokeIfWaiting(env); } catch (e) {}
+  try { await releaseCoordAlerts(env); } catch (e) {}
 }
 
 /* ---- telling the sheet there is something to collect -------------------
@@ -5018,6 +5019,154 @@ async function rehearsalSeatWords(env, sub, seat) {
   return { ok: true, tag: "book", url: "./", title: "Sunday Bus", body: "Open the app for the latest." };
 }
 
+/* ==========================================================================
+   THE COORDINATORS' PHONES
+
+   From w2.23.0 every alert that emails the coordinator also reaches the
+   phone of everybody holding a coordinator title, so a stopped bus on a
+   Sunday morning is not waiting on one person reading one inbox.
+
+   Apps Script decides WHEN, exactly as it decides when to email, and posts
+   the alert here (coordAlert). This server decides WHO: every phone signed
+   into the driver app, with alerts on, under a name on the Drivers tab whose
+   Role is one of the coordinator titles. There is no separate sign-up. The
+   person the alert is about (the driver who did the check, the coordinator
+   who authorised it) is left out: they already know.
+
+   A push carries nothing, so each phone keeps a small box of alerts here
+   (calert:<endpoint>) that pushWhat hands out, oldest first, one per wake.
+   A stopped bus goes at any hour. Anything else that arrives in the quiet
+   hours (passenger_rules, 21:00 to 08:00) is held and goes on the first
+   clock tick after them.
+
+   The words say what happened and to which bus or Sunday, never why: a
+   phone joins this list by typing a name, with no PIN, so the details stay
+   behind the coordinator's app, which is where the alert sends him.
+   ========================================================================== */
+const COORD_HELD_KEY = "calert_held";
+const COORD_SEEN_KEY = "calert_seen";
+const COORD_BOX_MAX = 10;
+const COORD_ALERT_MAX_AGE_MS = 24 * 3600 * 1000;
+const coordBoxKey = (endpoint) => "calert:" + String(endpoint || "");
+
+/* Every coordinator's phone, less whoever the alert is about. */
+async function coordinatorSubs(env, not) {
+  const rules = await authRules(env);
+  if (!rules.roles.length) return [];
+  const marks = rules.roles.map(() => "?").join(",");
+  const { results } = await env.DB.prepare(
+    "SELECT p.* FROM push_subs p JOIN drivers d ON lower(trim(d.name)) = lower(trim(p.driver)) " +
+    "WHERE p.role = 'driver' AND d.active = 1 AND lower(trim(d.role)) IN (" + marks + ")"
+  ).bind(...rules.roles).all();
+  const skip = (Array.isArray(not) ? not : [])
+    .map((n) => String(n || "").trim().toLowerCase()).filter(Boolean);
+  const seen = {};
+  return (results || []).filter((sub) => {
+    if (seen[sub.id]) return false;
+    seen[sub.id] = 1;
+    return skip.indexOf(String(sub.driver || "").trim().toLowerCase()) === -1;
+  });
+}
+
+function coordAlertOf(a) {
+  if (!a || typeof a !== "object") return null;
+  const id = String(a.id || "").trim().slice(0, 120);
+  const title = String(a.title || "").trim().slice(0, 120);
+  if (!id || !title) return null;
+  return {
+    id, title,
+    kind: String(a.kind || "").trim().slice(0, 20),
+    body: String(a.body || "").trim().slice(0, 300),
+    reg: String(a.reg || "").trim().slice(0, 20),
+    urgent: a.urgent === true,
+    not: (Array.isArray(a.not) ? a.not : []).map((n) => String(n || "").slice(0, 60)).slice(0, 5),
+    at: Date.now()
+  };
+}
+
+/* Into each phone's box, and the phone woken. pushOne, not wake(): wake
+   keeps one tag per phone for the driver's own alerts, and a coordinator who
+   is also driving that Sunday would have his driver alert sent twice once
+   this had written over it. Duplicates are refused before this, by id. */
+async function deliverCoordAlert(env, msg) {
+  const subs = await coordinatorSubs(env, msg.not);
+  if (!subs.length) return 0;
+  const keys = await vapidKeys(env);
+  let sent = 0;
+  for (const sub of subs) {
+    const box = ((await cacheGet(env, coordBoxKey(sub.endpoint))) || [])
+      .filter((m) => m && Date.now() - (Number(m.at) || 0) < COORD_ALERT_MAX_AGE_MS);
+    box.push(msg);
+    while (box.length > COORD_BOX_MAX) box.shift();
+    await cachePut(env, coordBoxKey(sub.endpoint), box).run();
+    if (await pushOne(env, sub, keys)) sent++;
+  }
+  return sent;
+}
+
+async function handleCoordAlert(env, body) {
+  const msg = coordAlertOf(body && body.alert);
+  if (!msg) return json({ ok: false, error: "no alert" });
+
+  /* Once each. Apps Script can send the same one twice: a drain that did not
+     hear its answer runs again, and an email that failed is tried again on
+     the next tick with its phone alert in front of it. */
+  const seen = (await cacheGet(env, COORD_SEEN_KEY)) || [];
+  if (seen.indexOf(msg.id) !== -1) return json({ ok: true, duplicate: true });
+  seen.push(msg.id);
+  while (seen.length > 200) seen.shift();
+  await cachePut(env, COORD_SEEN_KEY, seen).run();
+
+  if (!msg.urgent && quietNow(await passengerRules(env))) {
+    const held = ((await cacheGet(env, COORD_HELD_KEY)) || []).slice(-49);
+    held.push(msg);
+    await cachePut(env, COORD_HELD_KEY, held).run();
+    return json({ ok: true, held: true });
+  }
+  return json({ ok: true, sent: await deliverCoordAlert(env, msg) });
+}
+
+/* On the clock: whatever the quiet hours held, once they are over. Taken off
+   the list before it is sent, so two ticks cannot both send it. */
+async function releaseCoordAlerts(env) {
+  if (quietNow(await passengerRules(env))) return 0;
+  const held = (await cacheGet(env, COORD_HELD_KEY)) || [];
+  if (!held.length) return 0;
+  await env.DB.prepare("DELETE FROM settings WHERE k=?").bind(COORD_HELD_KEY).run();
+  let sent = 0;
+  for (const msg of held) {
+    if (Date.now() - (Number(msg.at) || 0) >= COORD_ALERT_MAX_AGE_MS) continue;
+    sent += await deliverCoordAlert(env, msg);
+  }
+  return sent;
+}
+
+/* The oldest alert in this phone's box, taken out, in the words that are true
+   now. A stopped bus that has since been authorised says so, so a phone that
+   was out of signal is not sent to deal with something already dealt with. */
+async function coordAlertNext(env, endpoint) {
+  const k = coordBoxKey(endpoint);
+  const box = ((await cacheGet(env, k)) || [])
+    .filter((m) => m && Date.now() - (Number(m.at) || 0) < COORD_ALERT_MAX_AGE_MS);
+  const m = box.shift();
+  if (box.length) await cachePut(env, k, box).run();
+  else await env.DB.prepare("DELETE FROM settings WHERE k=?").bind(k).run();
+  if (!m) return null;
+
+  let title = m.title, text = m.body;
+  if (m.kind === "stopped" && m.reg) {
+    try {
+      const checks = await checksToday(env);
+      const rec = Object.keys(checks).find((reg) => reg.toUpperCase() === m.reg.toUpperCase());
+      if (rec && checks[rec].state === "authorised") {
+        title = m.reg + " is authorised to run";
+        text = (checks[rec].by ? checks[rec].by + " authorised it. " : "") + "The defect stays open.";
+      }
+    } catch (e) { /* the words as sent */ }
+  }
+  return { ok: true, tag: "c|" + m.id, url: "coord/", title, body: text };
+}
+
 async function pushWhat(env, endpoint) {
   /* A TEST ASKED FOR FROM THE APP, answered before anything about the bus.
 
@@ -5038,6 +5187,14 @@ async function pushWhat(env, endpoint) {
                body: "Nothing has happened to the bus." };
     }
   }
+
+  /* A COORDINATOR ALERT, when this phone has one waiting. Before the driver's
+     own words, because it is the reason this phone was woken: a coordinator
+     who is not driving today would otherwise be told "Nothing outstanding". */
+  try {
+    const c = await coordAlertNext(env, endpoint);
+    if (c) return c;
+  } catch (e) { /* the ordinary answer, below */ }
 
   const sub = await env.DB.prepare(
     "SELECT * FROM push_subs WHERE endpoint=?").bind(String(endpoint || "")).first();
@@ -7210,6 +7367,8 @@ export default {
            sheet clears its own tabs within seconds. */
         if (action === "rehearsal") return knock(json(await handleRehearsal(env, body)), "rehearsal");
         if (action === "sync") return await handleSync(env, body);
+        /* An alert Apps Script has just emailed, for the coordinators' phones. */
+        if (action === "coordAlert") return await handleCoordAlert(env, body);
         if (action === "drain") return await handleDrain(env, body);
         if (action === "drained") return await handleDrained(env, body);
         /* A booking edited by hand on the Bus Bookings tab. Token checked. */
