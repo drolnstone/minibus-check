@@ -1463,8 +1463,10 @@ is held; thirteen were not, and `21-alerts.mjs` is what closed them.
 
 **The coordinator** — by email to `COORDINATOR_EMAIL`, and from v1.86.0 /
 w2.23.0 also to **every coordinator's phone**: everybody whose Role is one of
-the `COORDINATOR_ROLES` titles and who has turned alerts on in the driver app,
-signed in as themselves. There is no other sign-up. The phone alert is short
+the `COORDINATOR_ROLES` titles and who has turned alerts on, with the bell in
+the coordinator's app's header (from v1.84.0) or the one in the driver app,
+signed in as themselves. On an iPhone the app has to be on the Home Screen
+first, and the bell says so. There is no other sign-up. The phone alert is short
 (what happened, to which bus or Sunday) and opens the coordinator's app; the
 detail stays in the email and behind the PIN, because a phone joins by typing
 a name. A stopped bus is sent at any hour; the rest wait out the quiet hours
