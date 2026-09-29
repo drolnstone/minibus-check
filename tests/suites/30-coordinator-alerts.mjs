@@ -237,6 +237,39 @@ export default async function (root) {
     a.eq(L.gas.mail[0].to, "coord@b.c");
   });
 
+  /* ---- where the live server knocks ------------------------------------ */
+
+  const HERE = "https://script.google.com/macros/s/AKfyHEREabc123/exec";
+  const ELSEWHERE = "https://script.google.com/macros/s/AKfyOLDxyz789/exec";
+  const liveReport = (props, knockTo) => {
+    const { L } = sheet(props);
+    L.ctx.UrlFetchApp = { fetch() {
+      return { getResponseCode: () => 200, getAllHeaders: () => ({}),
+        getContentText: () => JSON.stringify({ ok: true, bookings: [], trips: [], clockAgoSec: 10,
+          poke: { agoSec: 60, ok: false }, cacheAgeMin: { rota: 5, last: 5 }, pinSalt: true, knockTo }) };
+    } };
+    call(L, "liveCheck");
+    const al = L.gas.logs.filter((x) => x[0] === "alert").pop();
+    return al ? al.slice(1).join("\n") : "";
+  };
+
+  s.test("WEB_APP_URL is the address the sheet sends, when it is a web app address", (a) => {
+    a.eq(call(sheet({ WEB_APP_URL: HERE }).L, "sheetReturnUrl"), HERE);
+    a.not(call(sheet({ WEB_APP_URL: "https://example.com/x" }).L, "sheetReturnUrl") === "https://example.com/x");
+  });
+
+  s.test("the live-server report says when it is knocking on another deployment", (a) => {
+    const text = liveReport({ WEB_APP_URL: HERE }, ELSEWHERE);
+    a.has(text, "knocks on the web app ending \u2026xyz789");
+    a.has(text, "deployed at the one ending \u2026abc123");
+  });
+
+  s.test("and names the address when it is the same one, so it can be compared by eye", (a) => {
+    const text = liveReport({ WEB_APP_URL: HERE }, HERE);
+    a.has(text, "It knocks on the web app ending \u2026abc123");
+    a.has(text, "Who has access: Anyone");
+  });
+
   s.test("the menu's test email tests the phones too", (a) => {
     const { L, alerts } = sheet({ COORDINATOR_EMAIL: "coord@b.c" });
     call(L, "sendTestEmail");

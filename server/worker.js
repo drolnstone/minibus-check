@@ -3888,7 +3888,15 @@ async function handleDrain(env, body) {
   return json({ ok: true, claim: claim, bookings: b.results || [], trips: t.results || [],
                 requests: requests, coord: coord,
                 checks: checks, auths: auths, decisions: decisions, cacheAgeMin: age,
-                clockAgoSec: clockAgoSec, poke: poke, pinSalt: !!pinSaltOf(env) });
+                clockAgoSec: clockAgoSec, poke: poke, pinSalt: !!pinSaltOf(env),
+                /* Where it knocks, so the sheet can say whether that is its own
+                   address. A web app URL is not a secret: it is in config.js. */
+                knockTo: await sheetUrlKept(env) });
+}
+
+async function sheetUrlKept(env) {
+  try { const u = await cacheGet(env, "sheet_url"); return String((u && u.url) || ""); }
+  catch (e) { return ""; }
 }
 
 async function handleDrained(env, body) {
@@ -6813,7 +6821,16 @@ async function liveHealthLines(env) {
   } catch (e) {}
   try {
     const k = await cacheGet(env, "poke");
-    if (k && k.at && k.ok === false) bad.push("The last time it asked the sheet to collect, the sheet did not answer.");
+    if (k && k.at && k.ok === false) {
+      const u = await sheetUrlKept(env);
+      const m = /\/s\/([^/]+)\/exec/.exec(u);
+      bad.push("The last time it asked the sheet to collect, the sheet did not answer. " +
+               (m ? "It knocks on the web app ending \u2026" + m[1].slice(-6) + ". In Apps Script, " +
+                    "Deploy, Manage deployments must show that one, with Who has access: Anyone; " +
+                    "if it shows another, put that one's Web app URL in the Script Property WEB_APP_URL " +
+                    "and Send everything to the live server now."
+                  : "It has no address for the sheet. Send everything to the live server now."));
+    }
   } catch (e) {}
   const waits = [];
   for (const [label, sql] of [

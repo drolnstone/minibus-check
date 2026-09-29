@@ -3646,10 +3646,26 @@ function fillCoverFromRuns(ss, trips) {
    the editor rather than from the trigger. Neither is any use to the live
    server, and neither is worth failing a sync over. */
 function sheetReturnUrl() {
+  /* WEB_APP_URL in Script Properties wins, from v1.86.0. getUrl() is Google's
+     idea of this script's address, and in a project with more than one
+     deployment it can name one that is not the live one, which leaves the
+     live server knocking on a door nobody answers. Copy the Web app URL from
+     Deploy, Manage deployments into WEB_APP_URL and that is the address sent. */
+  try {
+    var set = String(PropertiesService.getScriptProperties().getProperty("WEB_APP_URL") || "").trim();
+    if (/^https:\/\/script\.google\.com\/.+\/exec$/.test(set)) return set;
+  } catch (err) {}
   try {
     var u = String(ScriptApp.getService().getUrl() || "");
     return u.indexOf("/exec") > -1 ? u : "";
   } catch (err) { return ""; }
+}
+
+/* The last six characters of a web app's id, which is enough to tell two
+   deployments apart on a phone screen without printing the whole address. */
+function webAppTail(u) {
+  var m = /\/s\/([^\/]+)\/exec/.exec(String(u || ""));
+  return m ? "\u2026" + m[1].slice(-6) : "(none)";
 }
 
 function liveSync() {
@@ -3953,6 +3969,23 @@ function liveCheck() {
     if (out.pinSalt === false) {
       lines.push("\u2717  PIN_SALT is not set on the live server, so every PIN is refused. " +
                  "Add it in Cloudflare, Worker, Settings, Variables and Secrets.");
+    }
+    /* Where it knocks, beside where this script says it is. A live server
+       knocking on another deployment is the usual reason for the line below
+       it reading "the sheet did not answer". Undefined from before w2.23.0. */
+    if (typeof out.knockTo === "string") {
+      var here = sheetReturnUrl();
+      if (!out.knockTo) {
+        lines.push("\u2717  The live server has no address for this sheet. Use Send everything to the live server now.");
+      } else if (here && out.knockTo !== here) {
+        lines.push("\u2717  The live server knocks on the web app ending " + webAppTail(out.knockTo) +
+                   ", but this script is deployed at the one ending " + webAppTail(here) +
+                   ". Use Send everything to the live server now.");
+      } else {
+        lines.push("    It knocks on the web app ending " + webAppTail(out.knockTo) +
+                   ". Deploy, Manage deployments should show the same, with Who has access: Anyone." +
+                   " If it does not, put the right Web app URL in the Script Property WEB_APP_URL.");
+      }
     }
     if (out.poke) {
       lines.push((out.poke.ok ? "\u2713  " : "\u2717  ") + "It last asked this sheet to collect " +
