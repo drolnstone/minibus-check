@@ -2,9 +2,9 @@ MINIBUS
 =======
   pages v1.83.0 · server w2.23.0 · sheet v1.86.0
 
-Every alert that emails the coordinator now also reaches the phone of every
-coordinator: everybody whose Role is one of the COORDINATOR_ROLES titles and
-who has turned alerts on in the driver app.
+Coordinator alerts on every coordinator's phone; emails from a name of
+your choosing; the live server's knock address shown and settable; DVSA
+tags on the check; the coordinator's app tidied to match the other two.
 
 
 YOU ARE ON              GOING TO
@@ -12,8 +12,8 @@ YOU ARE ON              GOING TO
   Worker  w2.22.0         w2.23.0
   Code.gs v1.85.4         v1.86.0
 
-All three move. No SQL, and nothing new in Script Properties, Worker
-variables or triggers.
+All three move. No SQL, no new Worker variables or triggers. Two new
+Script Properties, both optional: SENDER_NAME and WEB_APP_URL.
 
 
 IN THIS ORDER
@@ -27,27 +27,59 @@ IN THIS ORDER
    Version: New version, Deploy. Then reload the spreadsheet, so the menu
    shows the renamed test item.
 
-3. PAGES. Merge the pull request. GitHub publishes the pages from main.
+3. SCRIPT PROPERTIES (Apps Script, Project Settings), optional:
+       SENDER_NAME    Dominion Transport
 
-4. EACH COORDINATOR, ON THEIR OWN PHONE. Open the driver app, signed in as
+4. Minibus, Rota and setup, Send everything to the live server now.
+
+5. PAGES. Merge the pull request. GitHub publishes the pages from main.
+
+6. EACH COORDINATOR, ON THEIR OWN PHONE. Open the driver app, signed in as
    themselves, and turn alerts on (the bell at the top of the hub, or the
    offer under it). A phone that already has alerts on for its owner needs
    nothing: it is already on the list.
 
 
+THE SHEET NOT ANSWERING THE LIVE SERVER
+---------------------------------------
+
+"Is everything working?" has said the sheet did not answer. After step 4,
+run Minibus, Have a look, Is the live server working? It names the web app the live
+server knocks on, by the last six characters of its id.
+
+- If it says the live server knocks on a DIFFERENT web app from this
+  script's: step 4 again. If it still differs, Deploy, Manage deployments,
+  copy the Web app URL of the deployment in use, put it in the Script
+  Property WEB_APP_URL, and step 4 again.
+
+- If it says they are the SAME, and the sheet still does not answer: in
+  Deploy, Manage deployments, that deployment must say Execute as: Me and
+  Who has access: Anyone. And in Apps Script, Executions, look for doPost:
+  none at all means the knocks are not arriving; Failed means they arrive
+  and something went wrong, and the entry says what.
+
+Nothing is lost while this is wrong: the sheet still collects every five
+minutes by itself. The knock only makes it seconds instead.
+
+
 AFTER IT
 --------
 
-A. The foot of the driver app reads  app v1.83.0 · server w2.23.0 · sheet
+A. The foot of all three apps reads  app v1.83.0 · server w2.23.0 · sheet
    v1.86.0 .
 
 B. Minibus, Send an email now, Test email and coordinators' phones. The
-   email arrives as before, and every coordinator's phone with alerts on
-   shows "Coordinator alerts are working". Tapping it opens the
-   coordinator's app.
+   email arrives from SENDER_NAME if you set it, and every coordinator's
+   phone with alerts on shows "Coordinator alerts are working". Tapping it
+   opens the coordinator's app.
 
-C. A phone that did not get it: the driver app on that phone, signed in as
-   that person, alerts on. Then send the test again.
+C. A vehicle check: items on DVSA's daily walkaround carry a small
+   "DVSA daily check" tag. Two items are new: Mudflaps and spray guards,
+   and Driver's seat and belt. 37 pre-drive items per bus.
+
+D. The coordinator's app: Driver app and Vehicle check side by side at the
+   foot of the first screen; Add to your phone under the appearance on the
+   sign-in screen.
 
 
 WHAT CHANGED
@@ -58,17 +90,25 @@ WHAT CHANGED
    phones: a bus stopped, a defect, an advisory or something to arrange on a
    check, a bus authorised to run, a rota request, a bus that went out
    unchecked, a route overbooked. It goes even with no COORDINATOR_EMAIL set.
-
    Short on purpose: what happened, and to which bus or Sunday. A phone joins
    the list by typing a name, with no PIN, so the detail stays in the email
-   and in the coordinator's app, which the alert opens.
+   and in the coordinator's app, which the alert opens. A stopped bus goes at
+   any hour; everything else waits out 21:00 to 08:00. The person an alert is
+   about is not woken by it. Each goes once.
 
-   A stopped bus goes at any hour. Everything else waits out the quiet
-   hours, 21:00 to 08:00, and goes at 08:00. The person an alert is about is
-   not woken by it. Each alert goes once, however many times it is handed
-   over, and a stopped bus that has been authorised by the time the phone
-   reads it says so.
+2. EMAILS FROM A NAME. SENDER_NAME sets the name every email shows as sent
+   by. Replies go to COORDINATOR_EMAIL. The address is still the Google
+   account the script runs as.
 
-2. THE TEST MENU ITEM TESTS BOTH.
-   "Test email, to you only" is now "Test email and coordinators' phones",
-   and sends a phone alert beside the email.
+3. WHERE THE LIVE SERVER KNOCKS. Shown in both reports, settable with
+   WEB_APP_URL. See above.
+
+4. DVSA ON THE CHECK. Items on DVSA's daily walkaround check are tagged, and
+   the two it had that this list did not are added.
+
+5. THE COORDINATOR'S APP, LIKE THE OTHER TWO. Its version line reads "app";
+   it has the Add to your phone guide; Vehicle check is a link beside Driver
+   app rather than a menu item.
+
+6. THE TEST MENU ITEM TESTS BOTH. "Test email, to you only" is now "Test
+   email and coordinators' phones".

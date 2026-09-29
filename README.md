@@ -929,6 +929,8 @@ itself and one that never does.
 | Key | What it is |
 |---|---|
 | `COORDINATOR_EMAIL` | where every alert goes. Blank means nothing is ever sent |
+| `SENDER_NAME` | optional. The name emails show as sent by, e.g. `Dominion Transport`. The address is still the Google account the script runs as; for a church address, keep the spreadsheet under a church Google account |
+| `WEB_APP_URL` | optional. The sheet's own web app address, copied from **Deploy, Manage deployments**. Only needed when **Is everything working?** says the live server knocks on a different deployment from this one |
 | `COORDINATOR_ROLES` | the titles in the Role column that make somebody a coordinator, separated by commas, the one people should ring first: `Coordinator, Minister in Charge`. Blank uses that default. After changing it, **Send everything to the live server now** |
 | `WORKER_URL` | the Worker's address |
 | `ARCHIVE_SHEET_ID` | optional. Set it to archive into a separate spreadsheet |
