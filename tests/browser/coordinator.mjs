@@ -721,6 +721,31 @@ if (want("C22")) {
         "before " + JSON.stringify(before) + ", after " + JSON.stringify(after));
 }
 
+/* C23 — the names are kept on the phone: no answer yet, and the name and the cursor are there */
+if (want("C23")) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  const pg = await ctx.newPage();
+  const errs = [];
+  pg.on("pageerror", (e) => errs.push(String(e.message)));
+  await pg.route("**://fonts.googleapis.com/**", (r) => r.abort());
+  await pg.route("**://fonts.gstatic.com/**", (r) => r.abort());
+  await pg.route("**://*.workers.dev/**", () => {});          /* never answers */
+  const reg = REAL.drivers.map((d) => ({ name: d.name, role: d.role, hasPin: true }));
+  await pg.addInitScript(`try {
+      localStorage.setItem("coord.register.v1", ${JSON.stringify(JSON.stringify(reg))});
+      localStorage.setItem("coord.name.v1", "Bro Asim");
+    } catch (e) {}`);
+  await pg.goto("http://127.0.0.1:" + PORT + "/coord/", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(600);
+  const picked = await pg.$eval("#signName", (el) => el.value).catch(() => "");
+  const offered = await pg.$$eval("#signName option", (os) => os.map((o) => o.value).filter(Boolean));
+  const focus = await pg.evaluate(() => document.activeElement && document.activeElement.id);
+  check("C23", "with the live server silent, the kept Drivers tab gives the sign-in list, the remembered name and the cursor in the PIN box at once",
+        picked === "Bro Asim" && offered.includes("Pst Kehinde") && focus === "signPin" && !errs.length,
+        "picked '" + picked + "', offered " + JSON.stringify(offered) + ", focus " + focus + ", errors " + JSON.stringify(errs));
+  await ctx.close();
+}
+
 /* C20b — a PIN handed over that is wrong is still refused by the driver app */
 if (want("C20b")) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });

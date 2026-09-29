@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.81.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.82.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, the run record and the "have a
@@ -439,7 +439,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.81.0";
+var PAGE_VERSION = "v1.82.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -491,6 +491,24 @@ var who = "", pin = "", HOW = "";
    names that may sign in here come from it, and config.js only until it has
    answered. PEEK is that answer's time and whether it came. */
 var REGLIVE = null, PEEK = { at: 0, ok: null };
+
+/* THE LAST DRIVERS TAB, KEPT ON THE PHONE, as the driver app keeps its
+   register. From v1.82.0: config.js carries no names any more, so without
+   this the sign-in screen stood empty until the live server answered, and
+   the remembered name and the cursor in the PIN box arrived a second late,
+   after a network answer, which is when a phone is least willing to move a
+   cursor. The copy is drawn at once and replaced by every answer, so a name
+   added or taken off the Drivers tab still reaches this screen on the next
+   open with a signal. Names and roles only, as the public rota gives them. */
+var REG_KEY = "coord.register.v1";
+try{
+  var regKept = JSON.parse(localStorage.getItem(REG_KEY) || "null");
+  if(Array.isArray(regKept) && regKept.length){
+    REGLIVE = regKept.map(function(d){ return { name: String((d && d.name) || ""), role: String((d && d.role) || ""), hasPin: !!(d && d.hasPin) }; })
+                     .filter(function(d){ return d.name; });
+    if(!REGLIVE.length) REGLIVE = null;
+  }
+}catch(e){ REGLIVE = null; }
 var D = null;                               /* the last answer to "load" */
 var BOOK = { sunday: "", data: null };
 var BOOK_ALL = {};
@@ -1711,6 +1729,7 @@ function peek(){
     if(out && out.ok && Array.isArray(out.drivers) && out.drivers.length){
       REGLIVE = out.drivers.map(function(d){ return { name: String(d.name || ""), role: String(d.role || ""), hasPin: !!d.hasPin }; })
                            .filter(function(d){ return d.name; });
+      try{ localStorage.setItem(REG_KEY, JSON.stringify(REGLIVE)); }catch(e){}
     }
     if(current().name === "sign" || !pin) route();
   }, function(){ PEEK = { at: Date.now(), ok: false }; });

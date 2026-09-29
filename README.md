@@ -1025,7 +1025,9 @@ carry and stays a plain link.
 **The landing page** is the sign-in screen, as on the driver app. It carries
 the three numbers, `coordinator · server · sheet`, read from the live server
 without a PIN, with the names that may sign in taken from the Drivers tab it
-holds (config.js only until it answers). Tapped, the numbers give the same
+holds (config.js only until it answers). From v1.82.0 the last list it was
+given is kept on the phone and drawn at once, so the remembered name and the
+cursor in the PIN box are there before the live server has answered. Tapped, the numbers give the same
 kind of report the driver app's do: the three versions to anybody, and once a
 name is chosen, whether the live server answered, who can open the page, whether
 the name has a PIN on the Drivers tab, how this visit was opened, the lock and
