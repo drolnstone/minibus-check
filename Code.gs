@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.85.0";
+var SCRIPT_VERSION = "v1.85.2";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -3889,6 +3889,11 @@ function liveCheck() {
     } else {
       lines.push("\u2713  The live server's clock is ticking.");
     }
+    /* Undefined from a live server older than w2.21.1, which had a fallback. */
+    if (out.pinSalt === false) {
+      lines.push("\u2717  PIN_SALT is not set on the live server, so every PIN is refused. " +
+                 "Add it in Cloudflare, Worker, Settings, Variables and Secrets.");
+    }
     if (out.poke) {
       lines.push((out.poke.ok ? "\u2713  " : "\u2717  ") + "It last asked this sheet to collect " +
                  agoWords(Date.now() - out.poke.agoSec * 1000) +
@@ -3924,6 +3929,10 @@ function liveCheck() {
     lines.push("");
     lines.push("Last sent:      " + (at ? agoWords(at) : "never"));
     lines.push("Last brought back: " + (dr ? agoWords(dr) : "never"));
+    if (!pinSalt()) {
+      lines.push("\u2717  PIN_SALT is not set in Script Properties, so every PIN is refused. " +
+                 "Add it, the same value as the live server's, then Send everything to the live server now.");
+    }
     if (er) lines.push("Last trouble:   " + er);
   }
   ui.alert("The live server", lines.join("\n"), ui.ButtonSet.OK);
@@ -4344,20 +4353,25 @@ function readDriversFresh(ss) {
    and lowercased, digits only, joined with colons. Change one side and every
    PIN fails until the other is changed to match.
 
-   Set PIN_SALT in Project Settings -> Script Properties. The fallback is here
-   so nothing breaks before it is set, and it is a value shared with a public
-   file, so it protects nothing on its own. Set the property. */
+   Set PIN_SALT in Project Settings -> Script Properties. There is no fallback
+   in this file from v1.85.2: it is public, and a salt printed in it protects
+   nothing. With the property missing every PIN is refused on the live
+   server, never waved through, and "Is everything working?" says so. */
 function pinSalt() {
   try {
     var v = PropertiesService.getScriptProperties().getProperty("PIN_SALT");
     if (v && String(v).trim()) return String(v).trim();
   } catch (err) {}
-  return "W4JKBxSr3GUFO3PR9lmCqawYBdYzD5-sMQ10P2ieukY";
+  return "";
 }
 
 function pinHashLive(name, pin) {
   var digits = String(pin || "").replace(/\D/g, "");
   if (!digits) return "";
+  /* Never "" for a driver who has a PIN: the live server reads "" as "no PIN
+     wanted" and would let anybody through. With no salt to make a real one,
+     this sends a value nothing can match, so his PIN is refused instead. */
+  if (!pinSalt()) return "no PIN_SALT";
   var raw = Utilities.computeDigest(
     Utilities.DigestAlgorithm.SHA_256,
     pinSalt() + ":" + String(name || "").trim().toLowerCase() + ":" + digits,
@@ -5527,8 +5541,8 @@ function ensureBookingColumns(sh) {
 
   ensureCols(sh, BOOKINGS_HEADERS);
 
-  /* Plain text down the Phone column, or Sheets reads 07377634214 as a
-     number, eats the leading zero and shows 7377634214. Every write also
+  /* Plain text down the Phone column, or Sheets reads 07700900123 as a
+     number, eats the leading zero and shows 7700900123. Every write also
      goes in with a leading apostrophe, because a format set here does not
      help a row appended by a passenger before anybody opened the tab. Belt
      and braces on purpose: a number with its first digit missing is not a
@@ -7603,7 +7617,7 @@ function busPayload(key, ref, pid) {
     arrivals: publicStops(readBusStops(ss).filter(function (s) { return s.arrival; })),
     counts: counts,
     driver: driver,
-    /* So the page can say "booked as 07377 634214" rather than leaving
+    /* So the page can say "booked as 07700 900123" rather than leaving
        somebody guessing which number is holding their seat. It is the
        passenger's own number going back to the passenger's own phone, and it
        goes nowhere without the fingerprint that only they have. */
@@ -7781,7 +7795,7 @@ function handleBookingLocked(b) {
 
        getValues strips the apostrophe, because it is a formatting mark and
        not content. Writing the bare digits back into a column that never
-       received its "@" format would let Sheets read 07377634214 as a number
+       received its "@" format would let Sheets read 07700900123 as a number
        and eat the leading zero, and a number missing its first digit is not
        a number anybody can ring. Writing one cell at a time never had this
        exposure. Writing the row does. */
@@ -11240,8 +11254,14 @@ function coordinatorContact(drivers) {
     if (!first) first = d;
     if (want && String(d.email || "").trim().toLowerCase() === want) { first = d; break; }
   }
-  return first ? { name: String(first.name || "").trim(), phone: String(first.phone || "").trim() }
-               : { name: "", phone: "" };
+  if (!first) return { name: "", phone: "" };
+  /* Tidied into the 07 form the pages dial and space out. Sheets turns a
+     number typed as +44 7700 900123 into the plain number 447700900123, and
+     sent like that the call button dialled 447700900123, which from a UK
+     phone goes nowhere. A number that will not tidy (not a UK mobile) goes as
+     typed rather than not at all. */
+  var raw = String(first.phone || "").trim();
+  return { name: String(first.name || "").trim(), phone: normalisePhone(raw) || raw };
 }
 
 function actionLink(kind, subject) {

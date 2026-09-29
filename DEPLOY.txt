@@ -1,22 +1,21 @@
 MINIBUS
 =======
-  pages v1.80.0 · server w2.21.0 · sheet v1.85.0
+  pages v1.80.0 · server w2.21.1 · sheet v1.85.2
 
-The coordinator, the register and the rota order now live on the Drivers
-tab and nowhere else. No file carries a name or a phone number any more.
+The PIN salt is no longer printed in either file. It comes only from the
+PIN_SALT setting on each side.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.79.1         v1.80.0
-  Worker  w2.20.1         w2.21.0
-  Code.gs v1.84.1         v1.85.0
+  Pages   v1.80.0         v1.80.0   (no change)
+  Worker  w2.21.0         w2.21.1
+  Code.gs v1.85.1         v1.85.2
 
-All three move. If v1.79.1 is not up yet, put it up first: its steps are in
-analysis/DEPLOY-v1.79.1.txt. No SQL, and nothing new in Script Properties,
-Worker variables or triggers.
-
-Step 3 matters. Until it is done the pages have no number to give anybody,
-and say "the bus coordinator" instead of a name.
+BEFORE ANYTHING: PIN_SALT must be set, the same value, in both places:
+  Apps Script, Project Settings, Script Properties: PIN_SALT
+  Cloudflare, minibus-api, Settings, Variables and Secrets: PIN_SALT
+From this release a missing one refuses every PIN. It never lets anybody
+through, but a driver standing at a bus would be stuck.
 
 
 IN THIS ORDER
@@ -27,65 +26,46 @@ IN THIS ORDER
 
 2. CODE.GS. Apps Script editor. Paste Code.gs over the old one. Save.
    Deploy, Manage deployments, the pencil on the existing deployment,
-   Version: New version, Deploy. Edit the existing one; do not make a new
-   one.
+   Version: New version, Deploy.
 
-3. THE DRIVERS TAB. On the coordinator's row, Role must read Coordinator
-   and Active YES. Type the number people should ring into that row's
-   Phone column. Only one row should say Coordinator; if two do, the one
-   whose Email matches COORDINATOR_EMAIL is used.
+3. Minibus, Rota and setup, Send everything to the live server now.
 
-4. Minibus, Rota and setup, Send everything to the live server now.
-
-5. PAGES. Upload these six over the old ones:
-
-       config.js
-       index.html
-       sw.js
-       sunday/index.html
-       sunday/sw.js
-       coord/index.html
-
-   The manifests, do/index.html and the icons have not changed.
+4. Merge the pull request. Only a comment in sunday/index.html changes on
+   the pages, so nothing a phone sees is different.
 
 
 AFTER IT
 --------
 
-A. The foot of the driver app reads  app v1.80.0 · server w2.21.0 · sheet
-   v1.85.0 . The coordinator's app reads coordinator v1.80.0 with the same
-   two. A phone still on v1.79.1: close the app fully and open it again.
+A. The foot of the driver app reads  app v1.80.0 · server w2.21.1 · sheet
+   v1.85.2 .
 
-B. Driver app: the name list is the Drivers tab, as before. It is a
-   dropdown within a second of opening, not a box to type in.
+B. "Is everything working?" has no line about PIN_SALT. If it has one, the
+   line says which side is missing it.
 
-C. Passenger page, the "Call ..." line under the bus: the name and number
-   from the Drivers tab.
-
-D. The test that it is really gone from the files: change the Phone cell on
-   the coordinator's row. Reload the passenger page. The new number is
-   there. Put it back.
+C. A driver signs in with his PIN on the driver app, as usual.
 
 
 WHAT CHANGED
 ------------
 
-1. THE COORDINATOR IS A ROW ON THE DRIVERS TAB.
-   Whoever has Role Coordinator is who every page tells people to ring, on
-   the number in that row's Phone column. The sheet sends it to the live
-   server on every push, and an edit to the Drivers tab pushes within
-   seconds. The live server keeps it and puts it on every answer it gives.
-   The driver app and the passenger page take it from whichever answer
-   they get first and keep it on the phone for when there is no signal.
-   Changing coordinator is now two cells on that tab.
+1. NO SALT IN A PUBLIC FILE.
+   Code.gs and worker.js each carried a fallback PIN salt, and both are in
+   a public repository. A system that never had PIN_SALT set was salting
+   with a value anybody could read. The fallback is gone from both.
 
-2. config.js NAMES NOBODY.
-   Its coordinator line is gone, and its driver register and both rota
-   orders are empty. They already came from the Drivers tab with the rota,
-   and still do. config.js keeps only addresses and switches.
+2. A MISSING SALT REFUSES, NEVER OPENS.
+   With no PIN_SALT on the sheet, a driver who has a PIN is sent to the
+   live server with a fingerprint nothing can match. A blank would have
+   meant "no PIN wanted" and let anybody through. With none on the live
+   server, no PIN matches there either. "Is everything working?" names the
+   side that is missing it.
 
-3. THE CODE STARTS BLANK FOR A NEW CHURCH.
-   The list Code.gs wrote into a blank Drivers tab on first setup is empty,
-   and so is the spare North rota order in the driver app. On a brand new
-   sheet the Role and Phone headings carry notes saying what Coordinator
-   and Phone are for.
+3. THE COORDINATOR'S NUMBER IS OUT OF THE COMMENTS.
+   The code's examples use 07700 900123, a number set aside for drama and
+   never given to anybody.
+
+The phone salt is unchanged on purpose. It fingerprints passengers' numbers,
+but anybody holding a number can already look up that booking with the
+number itself, so a secret salt adds almost nothing, and changing it would
+cut every current booking off from the phone that made it.
