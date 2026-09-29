@@ -49,6 +49,23 @@ var SCRIPT_VERSION = "v1.86.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
+/* THE SHEET'S OWN PASSWORD, from v1.86.0. TOKEN above is in config.js, which
+   every phone downloads, so it cannot keep anybody out of what only this
+   spreadsheet and the live server should say to each other. SHEET_TOKEN in
+   Script Properties is a second one: the same value as the Worker's Secret
+   of that name. Every call to the live server carries it, and the three
+   things the live server asks of this sheet (collect now, a decision, a
+   report) are refused without it. Not set, nothing changes. */
+function sheetToken() {
+  try {
+    return String(PropertiesService.getScriptProperties().getProperty("SHEET_TOKEN") || "").trim();
+  } catch (err) { return ""; }
+}
+function sheetTokenOk(body) {
+  var want = sheetToken();
+  return !want || String((body && body.sheetToken) || "") === want;
+}
+
 /* ---- passenger bookings -------------------------------------------------
 
    The driver app's token sits in config.js on a public web host, so anyone
@@ -1193,6 +1210,12 @@ function doPost(e) {
 
     if (String(body.token || "") !== TOKEN) {
       return reply({ ok: false, error: "bad token" });
+    }
+    /* Only the live server asks these, so they want the sheet's own password
+       as well as the public one. */
+    var fromServer = ["decision", "report", "drainnow"];
+    if (fromServer.indexOf(String(body.action || "")) !== -1 && !sheetTokenOk(body)) {
+      return reply({ ok: false, error: "bad sheet token" });
     }
 
     /* Answers yes or no about one PIN and nothing else. Before the token
@@ -2378,6 +2401,7 @@ function workerCall(action, body) {
     var payload = body || {};
     payload.action = action;
     payload.token = TOKEN;
+    if (sheetToken()) payload.sheetToken = sheetToken();
     var res = UrlFetchApp.fetch(WORKER_URL, {
       method: "post",
       /* text/plain on purpose, exactly as both pages send it: a JSON content
@@ -3965,6 +3989,15 @@ function liveCheck() {
     } else {
       lines.push("\u2713  The live server's clock is ticking.");
     }
+    /* The sheet's own password: set on both sides, or on neither yet. */
+    if (out.sheetTokenSet === false && sheetToken()) {
+      lines.push("\u2717  SHEET_TOKEN is set here but not on the live server. Add it in Cloudflare, " +
+                 "Worker, Settings, Variables and Secrets, as a Secret, with the same value.");
+    } else if (out.sheetTokenSet === false) {
+      lines.push("\u2717  No SHEET_TOKEN yet. Messages between this sheet and the live server are " +
+                 "guarded only by the public token in config.js. Set the same SHEET_TOKEN here and " +
+                 "in the Worker to close that.");
+    }
     /* Undefined from a live server older than w2.21.1, which had a fallback. */
     if (out.pinSalt === false) {
       lines.push("\u2717  PIN_SALT is not set on the live server, so every PIN is refused. " +
@@ -4011,6 +4044,10 @@ function liveCheck() {
       }
     });
   } else {
+    if (out && out.error === "bad sheet token") {
+      lines.push("\u2717  The live server refused this sheet's password. SHEET_TOKEN must be the same " +
+                 "in Script Properties here and in the Worker's Variables and Secrets in Cloudflare.");
+    }
     lines.push("✗  Not answering: " + String((out && out.error) || "no reply"));
     lines.push("    The apps fall back to what they hold. Nothing is lost.");
   }

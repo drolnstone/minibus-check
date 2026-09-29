@@ -132,6 +132,26 @@ const TOKEN_FALLBACK = "minibusapp";
 const SALT_FALLBACK = "rccg dominion liverpool minibus v1";
 
 const tokenOf = (env) => (env && env.TOKEN) || TOKEN_FALLBACK;
+
+/* THE SHEET'S OWN PASSWORD, from w2.23.0.
+
+   TOKEN is in config.js, so every phone has it and so does anybody who reads
+   the page source. It is right for what phones send. It was also all that
+   guarded what only the spreadsheet should send: a sync that replaces the
+   rota, drivers and stops, the drain, a coordinator alert. SHEET_TOKEN is a
+   second password that only the spreadsheet and this Worker know: a Secret
+   here, a Script Property there, the same value in both. Those messages need
+   it, and so does everything this Worker sends to the sheet.
+
+   Not set, nothing changes, so a Worker deployed before the Secret is added
+   keeps working. "Is the live server working?" says when it is missing. */
+const sheetTokenOf = (env) => String((env && env.SHEET_TOKEN) || "");
+const SHEET_ONLY_ACTIONS = ["ping", "mint", "outcome", "cleartrips", "rehearsal", "sync",
+                            "coordAlert", "drain", "drained", "sheetbookings"];
+function sheetTokenOk(env, body) {
+  const want = sheetTokenOf(env);
+  return !want || String((body && body.sheetToken) || "") === want;
+}
 const saltOf = (env) => (env && env.PHONE_SALT) || SALT_FALLBACK;
 
 const TZ = "Europe/London";
@@ -3891,7 +3911,10 @@ async function handleDrain(env, body) {
                 clockAgoSec: clockAgoSec, poke: poke, pinSalt: !!pinSaltOf(env),
                 /* Where it knocks, so the sheet can say whether that is its own
                    address. A web app URL is not a secret: it is in config.js. */
-                knockTo: await sheetUrlKept(env) });
+                knockTo: await sheetUrlKept(env),
+                /* Whether the sheet's own password is set here, so the sheet
+                   can say which side is missing it. */
+                sheetTokenSet: !!sheetTokenOf(env) });
 }
 
 async function sheetUrlKept(env) {
@@ -6706,7 +6729,8 @@ async function sheetAsk(env, payload, capMs) {
   const set = await cacheGet(env, "sheet_url");
   const url = set && String(set.url || "");
   if (!url) return null;
-  const body = JSON.stringify(Object.assign({ token: tokenOf(env) }, payload));
+  const body = JSON.stringify(Object.assign({ token: tokenOf(env) },
+    sheetTokenOf(env) ? { sheetToken: sheetTokenOf(env) } : {}, payload));
   const go = fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: body })
     .then(async (r) => {
       if (!r || !r.ok) return null;
@@ -7356,6 +7380,9 @@ export default {
         if (action === "testpush")    return await handleTestPush(env, body);
 
         if (String(body.token || "") !== tokenOf(env)) return json({ ok: false, error: "bad token" });
+        if (SHEET_ONLY_ACTIONS.indexOf(action) !== -1 && !sheetTokenOk(env, body)) {
+          return json({ ok: false, error: "bad sheet token" });
+        }
 
         /* Answers which copy this Worker is, which json() has already
            attached, and WHO HAS NOT GOT ALERTS ON. Used by the spreadsheet's

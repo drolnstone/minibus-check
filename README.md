@@ -935,6 +935,7 @@ itself and one that never does.
 | `WORKER_URL` | the Worker's address |
 | `ARCHIVE_SHEET_ID` | optional. Set it to archive into a separate spreadsheet |
 | `PIN_SALT` | salts the PIN hash before it is pushed. **Must match the Worker variable of the same name** |
+| `SHEET_TOKEN` | the sheet's own password for talking to the live server, from v1.86.0. **Must match the Worker Secret of the same name.** `TOKEN` is in `config.js` for the phones, so it cannot guard what only the sheet and the live server say to each other: a sync, the drain, a decision, a report, a coordinator alert. This does. Until it is set on both sides nothing changes, and **Is the live server working?** says it is missing |
 
 **Cloudflare → Worker → Settings → Variables**
 
@@ -943,6 +944,7 @@ itself and one that never does.
 | `TOKEN` | must match `token` in `config.js` |
 | `PHONE_SALT` | salts the phone fingerprint. Changing it orphans every existing booking |
 | `PIN_SALT` | salts the PIN hash. **Must match the Apps Script property of the same name** |
+| `SHEET_TOKEN` | a Secret. **Must match the Apps Script property of the same name**. See above |
 
 `TOKEN` and `PHONE_SALT` have fallbacks in `worker.js`, so a fresh deploy works
 before they are set. **`PIN_SALT` has none, on either side, from w2.21.1 and

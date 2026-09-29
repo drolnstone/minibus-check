@@ -2,9 +2,10 @@ MINIBUS
 =======
   pages v1.83.0 · server w2.23.0 · sheet v1.86.0
 
-Coordinator alerts on every coordinator's phone; emails from a name of
-your choosing; the live server's knock address shown and settable; DVSA
-tags on the check; the coordinator's app tidied to match the other two.
+Coordinator alerts on every coordinator's phone; a private password between
+the sheet and the live server; emails from a name of your choosing; the
+live server's knock address shown and settable; DVSA tags on the check; the
+coordinator's app tidied to match the other two.
 
 
 YOU ARE ON              GOING TO
@@ -12,8 +13,9 @@ YOU ARE ON              GOING TO
   Worker  w2.22.0         w2.23.0
   Code.gs v1.85.4         v1.86.0
 
-All three move. No SQL, no new Worker variables or triggers. Two new
-Script Properties, both optional: SENDER_NAME and WEB_APP_URL.
+All three move. No SQL and no new triggers. One new Worker Secret and a
+matching Script Property, SHEET_TOKEN. Two new Script Properties that are
+optional: SENDER_NAME and WEB_APP_URL.
 
 
 IN THIS ORDER
@@ -27,8 +29,22 @@ IN THIS ORDER
    Version: New version, Deploy. Then reload the spreadsheet, so the menu
    shows the renamed test item.
 
-3. SCRIPT PROPERTIES (Apps Script, Project Settings), optional:
+3. THE SHEET'S PASSWORD, SHEET_TOKEN. Make up a long random string, 30
+   characters or more, letters and numbers, from a password manager or by
+   hand. Keep it somewhere safe. Then, one straight after the other:
+
+     a. Cloudflare, minibus-api, Settings, Variables and Secrets, Add:
+        type Secret, name SHEET_TOKEN, value the string. Deploy.
+     b. Apps Script, Project Settings, Script Properties, Add:
+        SHEET_TOKEN, the same string. Save.
+
+   In the minute or two between a and b the sheet's messages are refused.
+   Nothing is lost: everything phones do waits on the live server and is
+   collected once b is done.
+
+   Optional, in the same place as b:
        SENDER_NAME    Dominion Transport
+       WEB_APP_URL    only if the report below asks for it
 
 4. Minibus, Rota and setup, Send everything to the live server now.
 
@@ -68,16 +84,21 @@ AFTER IT
 A. The foot of all three apps reads  app v1.83.0 · server w2.23.0 · sheet
    v1.86.0 .
 
-B. Minibus, Send an email now, Test email and coordinators' phones. The
+B. Minibus, Have a look, Is the live server working? No line about
+   SHEET_TOKEN or PIN_SALT. If it says SHEET_TOKEN is set here but not on the
+   live server, or that the live server refused this sheet's password, the
+   two values differ: set them again, the same on both sides.
+
+C. Minibus, Send an email now, Test email and coordinators' phones. The
    email arrives from SENDER_NAME if you set it, and every coordinator's
    phone with alerts on shows "Coordinator alerts are working". Tapping it
    opens the coordinator's app.
 
-C. A vehicle check: items on DVSA's daily walkaround carry a small
+D. A vehicle check: items on DVSA's daily walkaround carry a small
    "DVSA daily check" tag. Two items are new: Mudflaps and spray guards,
    and Driver's seat and belt. 37 pre-drive items per bus.
 
-D. The coordinator's app: Driver app and Vehicle check side by side at the
+E. The coordinator's app: Driver app and Vehicle check side by side at the
    foot of the first screen; Add to your phone under the appearance on the
    sign-in screen.
 
@@ -96,7 +117,16 @@ WHAT CHANGED
    any hour; everything else waits out 21:00 to 08:00. The person an alert is
    about is not woken by it. Each goes once.
 
-2. EMAILS FROM A NAME. SENDER_NAME sets the name every email shows as sent
+2. A PRIVATE PASSWORD BETWEEN THE SHEET AND THE LIVE SERVER. The token in
+   config.js is public, because every phone needs it, and it was all that
+   guarded the messages only the sheet and the live server should send each
+   other: a sync that replaces the rota, drivers and stops, the drain, a
+   decision, a report, a coordinator alert. SHEET_TOKEN, set on both sides,
+   now guards those. What phones send is unchanged. Your code and the
+   spreadsheet were never editable from outside; this closes the way to feed
+   the live server false data.
+
+2a. EMAILS FROM A NAME. SENDER_NAME sets the name every email shows as sent
    by. Replies go to COORDINATOR_EMAIL. The address is still the Google
    account the script runs as.
 
