@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.85.3";
+var SCRIPT_VERSION = "v1.85.4";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -350,14 +350,43 @@ var DEFECT_HEADERS = [
    Which roles on the Drivers tab may let a bus out with a fault on it, and
    whether the person who did the walkaround may also sign it off.
 
-   Keep AUTHORISER_ROLES in step with fullInspectionRoles in config.js. They
-   are the same people and the two files are checked against each other by a
-   test rather than by anybody remembering.
+   SET IN SCRIPT PROPERTIES AS COORDINATOR_ROLES, from v1.85.4, the way
+   COORDINATOR_EMAIL is: the titles as they appear in the Role column of the
+   Drivers tab, separated by commas, the one people should ring FIRST. For
+   example  Coordinator, Minister in Charge . Blank or missing, the default
+   below is used. A church that calls the job something else changes that one
+   setting, then Send everything to the live server now; no code is edited
+   and nothing is redeployed.
+
+   The same list goes to the live server on every push, and every page takes
+   it from there: who may authorise, who is offered the full inspection, who
+   may open the coordinator's app, and who people are told to ring.
+
+   Keep AUTHORISER_ROLES_DEFAULT in step with fullInspectionRoles in
+   config.js, which is what the pages use before the live server has
+   answered. A test checks the two against each other.
 
    SAME_HAND_BOTH_WAYS false means a second coordinator has to authorise. With
    one coordinator that means nobody can, so think before changing it. */
-var AUTHORISER_ROLES = ["Coordinator", "Minister in Charge"];
+var AUTHORISER_ROLES_DEFAULT = ["Coordinator", "Minister in Charge"];
+var AUTHORISER_ROLES = (function () {
+  try {
+    var p = PropertiesService.getScriptProperties().getProperty("COORDINATOR_ROLES");
+    var list = String(p || "").split(",")
+      .map(function (r) { return r.replace(/\s+/g, " ").trim(); })
+      .filter(function (r) { return r; });
+    if (list.length) return list;
+  } catch (err) {}
+  return AUTHORISER_ROLES_DEFAULT.slice();
+})();
 var SAME_HAND_BOTH_WAYS = true;
+
+/* Whether COORDINATOR_ROLES is set, for the status report. */
+function hasRolesProperty() {
+  try {
+    return !!String(PropertiesService.getScriptProperties().getProperty("COORDINATOR_ROLES") || "").trim();
+  } catch (err) { return false; }
+}
 
 /* When the coordinator is told a bus was authorised to run.
      "now"      an email as it happens
@@ -1807,6 +1836,8 @@ function rotaPayload(fromKey, weeks) {
     /* Who people ring, for the driver app when this file answers it rather
        than the live server. The live server puts its own on every answer. */
     coordinator: coordinatorContact(drivers),
+    /* And whose titles make somebody a coordinator, for the same reason. */
+    leadRoles: AUTHORISER_ROLES,
     /* So the next driver sees what the last one reported and still open. */
     openDefects: openDefectsByReg(ss),
     /* The Sunday timetable. Sent with the rota because that is when a driver
@@ -3929,6 +3960,8 @@ function liveCheck() {
     lines.push("");
     lines.push("Last sent:      " + (at ? agoWords(at) : "never"));
     lines.push("Last brought back: " + (dr ? agoWords(dr) : "never"));
+    lines.push("Coordinator titles: " + AUTHORISER_ROLES.join(", ") +
+               (hasRolesProperty() ? "" : "  (the default; set COORDINATOR_ROLES to change them)"));
     if (!pinSalt()) {
       lines.push("\u2717  PIN_SALT is not set in Script Properties, so every PIN is refused. " +
                  "Add it, the same value as the live server's, then Send everything to the live server now.");

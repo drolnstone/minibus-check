@@ -1442,7 +1442,27 @@ try{
   }
 }catch(e){}
 
+/* WHOSE TITLES MAKE THEM A COORDINATOR, from v1.81.0 taken the same way:
+   COORDINATOR_ROLES in the sheet's Script Properties, stamped on every answer
+   as leadRoles, and kept on the phone. config.js's fullInspectionRoles is
+   only what is used before the first answer. */
+var ROLES_KEY = "minibus.leadroles.v1";
+var LEAD_ROLES = null;
+try{
+  var rolesKept = JSON.parse(store.get(ROLES_KEY) || "null");
+  if(Array.isArray(rolesKept) && rolesKept.length) LEAD_ROLES = rolesKept.map(String);
+}catch(e){}
+function leadRoles(){ return LEAD_ROLES || CFG.fullInspectionRoles || ["Coordinator"]; }
+
 function coordinatorSeen(out){
+  var r = out && out.leadRoles;
+  if(Array.isArray(r) && r.length){
+    var next = r.map(function(x){ return String(x||"").trim(); }).filter(Boolean);
+    if(next.length && JSON.stringify(next) !== JSON.stringify(LEAD_ROLES)){
+      LEAD_ROLES = next;
+      store.set(ROLES_KEY, JSON.stringify(next));
+    }
+  }
   var c = out && out.coordinator;
   if(!c || typeof c !== "object") return;
   var next = { name: String(c.name||"").trim(), phone: String(c.phone||"").trim() };
@@ -2042,7 +2062,7 @@ function buildFor(v){
    inspection and Check another bus would quietly disagree about who runs the
    fleet. */
 function roleAllowed(role){
-  var want = CFG.fullInspectionRoles || ["Coordinator"];
+  var want = leadRoles();
   var flat = function(s){ return String(s||"").trim().toLowerCase().replace(/\s+/g," "); };
   var r = flat(role);
   if(!r) return false;                    /* nobody chosen yet is not a coordinator */
@@ -8678,10 +8698,9 @@ function pinCoordinator(){
      at that point. An empty register describes no one. */
   if(!REGISTER.length) return true;
 
-  var roles = CFG.fullInspectionRoles || [];
-  var mine = st.driver ? roleOf(st.driver) : "";
-  for(var i=0;i<roles.length;i++){ if(roles[i] === mine) return true; }
-  return false;
+  /* roleAllowed, the same test as the full inspection: the sheet's list, and
+     not fooled by a capital letter or a doubled space in the Role column. */
+  return roleAllowed(st.driver ? roleOf(st.driver) : "");
 }
 
 function pinDiagnosis(){

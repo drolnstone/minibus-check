@@ -190,9 +190,9 @@ export default function (root) {
     a.eq(c, g, "the app hides the button and the server refuses; if these differ one of them is lying");
   });
 
-  s.test("AUTHORISER_ROLES matches fullInspectionRoles", (a) => {
+  s.test("AUTHORISER_ROLES_DEFAULT matches fullInspectionRoles", (a) => {
     const c = grab(config, /fullInspectionRoles:\s*(\[[^\]]*\])/, "fullInspectionRoles in config.js");
-    const g = grab(code, /AUTHORISER_ROLES\s*=\s*(\[[^\]]*\])/, "AUTHORISER_ROLES in Code.gs");
+    const g = grab(code, /AUTHORISER_ROLES_DEFAULT\s*=\s*(\[[^\]]*\])/, "AUTHORISER_ROLES_DEFAULT in Code.gs");
     const norm = (s) => JSON.parse(s.replace(/'/g, '"')).map((x) => String(x).trim().toLowerCase()).sort();
     a.same(norm(c), norm(g));
   });

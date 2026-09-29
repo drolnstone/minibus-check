@@ -702,6 +702,25 @@ if (want("C21")) {
   await p.ctx.close();
 }
 
+/* C22 — the titles are the sheet's: change them there and the sign-in list follows */
+if (want("C22")) {
+  const names = async () => {
+    const p = await page(env);
+    await p.wait(1500);
+    const list = await p.pg.$$eval("#signName option", (os) => os.map((o) => o.value).filter(Boolean));
+    await p.ctx.close();
+    return list;
+  };
+  const before = await names();
+  await W.handleSync(env, { authRules: { roles: ["Coordinator"], sameHandBothWays: true } });
+  const after = await names();
+  await W.handleSync(env, { authRules: { roles: ["Coordinator", "Minister in Charge"], sameHandBothWays: true } });
+  check("C22", "COORDINATOR_ROLES decides who may sign in: with Coordinator alone, the Minister in Charge is no longer offered",
+        before.includes("Pst Kehinde") && before.includes("Bro Asim") &&
+        !after.includes("Pst Kehinde") && after.includes("Bro Asim"),
+        "before " + JSON.stringify(before) + ", after " + JSON.stringify(after));
+}
+
 /* C20b — a PIN handed over that is wrong is still refused by the driver app */
 if (want("C20b")) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });

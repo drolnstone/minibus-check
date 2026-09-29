@@ -155,10 +155,14 @@ window.CONFIG = {
      somebody never locks them out. Set false to turn the whole thing off. */
   requirePin: true,
 
-  /* Who is offered the full inspection as well as the pre-drive check.
-     Matched against the role in the register below, so adding a second
-     coordinator is a one word change. Everyone else only ever sees the
-     pre-drive check and is not shown a choice. */
+  /* Who is offered the full inspection as well as the pre-drive check, and
+     who may open the coordinator's app. Everyone else only ever sees the
+     pre-drive check and is not shown a choice.
+
+     From v1.81.0 this is only the starting point. The real list is
+     COORDINATOR_ROLES in the sheet's Script Properties, and every page uses
+     that once the live server has answered. Change the titles there, not
+     here. Keep this equal to AUTHORISER_ROLES_DEFAULT in Code.gs. */
   fullInspectionRoles: ["Coordinator", "Minister in Charge"],
 
   /* ---- When a check stops the bus ---------------------------------------

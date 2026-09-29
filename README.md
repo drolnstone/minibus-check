@@ -67,15 +67,17 @@ wrong.
 From v1.80.0 (pages), w2.21.0 (Worker) and v1.85.0 (sheet), no file carries a
 name or a phone number. The Drivers tab is the one place for them:
 
-- **The coordinator** is an active row whose **Role** is one of
-  `AUTHORISER_ROLES` in `Code.gs` (here `Coordinator` and `Minister in
-  Charge`), and the number people are told to ring is in that row's **Phone**
+- **The coordinator** is an active row whose **Role** is one of the titles
+  in the `COORDINATOR_ROLES` Script Property (by default `Coordinator` and
+  `Minister in Charge`), and the number people are told to ring is in that row's **Phone**
   column. The one whose **Email** matches `COORDINATOR_EMAIL` wins, so the
   person the alerts go to is the person people ring. Otherwise the first
   person holding the first role in the list, then the second: here the
-  Coordinator before the Minister in Charge. A church with other titles sets
-  them in that list and in `fullInspectionRoles` in `config.js`, spelled as
-  in the Role column.
+  Coordinator before the Minister in Charge. A church with other titles
+  changes that one setting, spelled as in the Role column, and sends
+  everything to the live server. From v1.81.0 the pages take the titles from
+  the live server too; `fullInspectionRoles` in `config.js` is only what they
+  use before it has answered.
 - **The register** is the rows marked Active, with their roles.
 - **The rota order** is the **Primary order** column, counted separately for
   North and South.
@@ -927,6 +929,7 @@ itself and one that never does.
 | Key | What it is |
 |---|---|
 | `COORDINATOR_EMAIL` | where every alert goes. Blank means nothing is ever sent |
+| `COORDINATOR_ROLES` | the titles in the Role column that make somebody a coordinator, separated by commas, the one people should ring first: `Coordinator, Minister in Charge`. Blank uses that default. After changing it, **Send everything to the live server now** |
 | `WORKER_URL` | the Worker's address |
 | `ARCHIVE_SHEET_ID` | optional. Set it to archive into a separate spreadsheet |
 | `PIN_SALT` | salts the PIN hash before it is pushed. **Must match the Worker variable of the same name** |
@@ -1892,8 +1895,9 @@ produces a morning that went unrecorded.
    column on the Checks tab. **Authorising never closes the defect.** It stays
    Open on the Defects tab with a name against the decision to run.
 
-   Who may authorise is `AUTHORISER_ROLES` in Code.gs, kept equal to
-   `fullInspectionRoles` in config.js. Whether the person who did the
+   Who may authorise is the `COORDINATOR_ROLES` Script Property (by default
+   `Coordinator, Minister in Charge`), which the live server passes to the
+   pages; `fullInspectionRoles` in config.js is only their starting point. Whether the person who did the
    walkaround may also authorise it is `SAME_HAND_BOTH_WAYS` in Code.gs and
    `override.sameHandBothWays` in config.js: the app hides the button, the
    server refuses. When you are emailed is `TELL_COORDINATOR` in Code.gs.
