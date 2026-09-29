@@ -1,0 +1,238 @@
+MINIBUS
+=======
+  pages v1.79.1 · server w2.20.1 · sheet v1.84.1
+
+This replaces the v1.79.0 zip I sent earlier, which had the faults listed
+under FOUND IN v1.79.0. Put none of v1.79.0 up. If some of it is up already,
+the steps are the same: this goes over it.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.78.0         v1.79.1
+  Worker  w2.18.0         w2.20.1
+  Code.gs v1.82.0         v1.84.1
+
+All three move. This takes in the server half of v1.78.0 as well (w2.19.0
+and v1.83.0, the Saturday reminder of what was booked), which had not gone
+in at the last check. If it has since, the steps are the same. No SQL, and
+nothing new in Script Properties, Worker variables or triggers.
+
+Not on a Sunday morning. The Worker goes first: from v1.84.1 the sheet's
+rehearsal menu items ask the live server to do the work, and with the
+Worker you have now they say so and change nothing.
+
+
+IN THIS ORDER
+-------------
+
+0. No rehearsal running. On the sheet as it is now, Minibus, Stop
+   rehearsing, before anything else.
+
+1. WORKER. Cloudflare, minibus-api, Edit code. Paste worker.js over the old
+   one. Deploy.
+
+2. CODE.GS. Apps Script editor. Paste Code.gs over the old one. Save.
+   Deploy, Manage deployments, the pencil on the existing deployment,
+   Version: New version, Deploy. Edit the existing one; do not make a new
+   one.
+
+3. Minibus, Rota and setup, Send everything to the live server now.
+   It carries the Saturday setting from v1.83.0 to the live server straight
+   away.
+
+4. PAGES. Upload these five over the old ones:
+
+       index.html
+       sw.js
+       sunday/index.html
+       sunday/sw.js
+       coord/index.html
+
+   config.js is the same as v1.78.0's. Upload it again as well if you are
+   not sure it went in with v1.78.0. The manifests, do/index.html and the
+   icon have not changed.
+
+
+AFTER IT
+--------
+
+A. The foot of the driver app reads  app v1.79.1 · server w2.20.1 · sheet
+   v1.84.1 . The coordinator's app reads coordinator v1.79.1 with the same
+   two. A phone still on v1.78.0: close the app fully and open it again.
+
+B. Coordinator's app. The first screen has Rehearsal between Run record and
+   Have a look. Tap it: "None running." Start a rehearsal, More booked than
+   seats, then the Start button. The first screen then leads with "A
+   rehearsal is running until" and the time. Within a minute the test seats
+   are on the Bus Bookings tab, with Status Rehearsal.
+
+C. Driver phone, signed in, Stops and bookings. The REHEARSAL banner ends
+   "It ends at" and the time. Start trip and tap a stop. The Rehearsal
+   screen shows the test run: who, when it left church, 1 stop marked.
+
+D. Coordinator's app, Rehearsal, Start over, A quiet morning. Within about
+   five seconds the driver phone says "The rehearsal was started again.
+   Your test run was cleared." and offers Start trip again. Start a second
+   run if you want one.
+
+E. Rehearsal, End it. The driver phone says "The rehearsal has ended. Your
+   test run was cleared." and the banner goes. A passenger phone open on
+   the rehearsal loads again by itself. Within a minute the Rehearsal rows
+   are off the Trip Events and Bus Bookings tabs.
+
+F. The sheet does the same. Minibus, Rehearse this Sunday, leave the word
+   blank, OK: the box is headed "Rehearsal running", with the seats for
+   each route. Minibus, Stop rehearsing: "Rehearsal ended."
+
+G. The reminder of what was booked goes on Saturday between 18:00 and
+   19:00. A phone with alerts on and a seat for Sunday gets "You are booked
+   for Sunday" with the stop, the time and the seats.
+
+
+WHAT CHANGED
+------------
+
+1. A REHEARSAL RUNS ON THE LIVE SERVER, FROM THE COORDINATOR'S APP.
+   Rehearsal, on the coordinator's first screen: Start a rehearsal (a quiet
+   morning, an ordinary one, a nearly full bus, or more booked than seats),
+   Start over, and End it. While one runs, the screen shows when it ends,
+   the test seats on each route against the bus, and each route's test run:
+   who, when it left, how many stops marked. The first screen leads with
+   it. The live server holds the flag and draws the test seats, and the
+   seats reach the Bus Bookings tab on the drain like any booking. The sheet
+   keeps a copy of the flag for the parts of Code.gs that read it.
+
+2. AS MANY AS YOU LIKE. EACH START IS A ROUND, AND A PHONE LETS GO WHEN IT
+   IS OVER.
+   Until now a phone that made a run in a rehearsal kept it for the rest of
+   the day: the live server stopped naming the run the moment the rehearsal
+   ended, the phone read that as nothing new, and Start trip never came
+   back. That was the limit on how many you could run. Now a run keeps the
+   round it was started in, and every tap says which round it was made in.
+   When the round is over, ended, started over or run out, the phone drops
+   its test run and any taps still waiting, says so, and offers Start trip
+   again. The phone knows when the round ends, so it does this by its own
+   clock too, with no signal: a test run left open on Saturday night is gone
+   on Sunday morning, and a run started then is real.
+
+3. A LATE TEST IS NEVER REAL.
+   A tap from a round that is over is taken and thrown away, and so is a
+   whole test run that reaches the live server after its round ended, from
+   a phone that was out of signal. A run started while a rehearsal runs is
+   a test, whatever the phone says. Until now a phone coming back into
+   signal after a rehearsal put its taps on the record as a real morning.
+
+4. A REAL RUN IS NEVER TAKEN FOR A TEST.
+   A run is a test when its start was one. A real run keeps all its rows,
+   even one that an older version stored as a test. A test row made on its
+   own Sunday between the 09:30 cutoff and 12:00 is never cleared away
+   either: none can be made there now, and one from before may be a real
+   morning that an older version tagged. Any such row stays for you to look
+   at, and to delete by hand if it was a test.
+
+5. ENDING ONE CLEARS IT, EVERYWHERE.
+   End it, Stop rehearsing, Start over, or the clock: the test seats and
+   test taps come off the live server at once, and off the Bus Bookings and
+   Trip Events tabs within a minute, a taken-back tap included. Until now
+   the taps stayed on the Trip Events tab on purpose. The sheet takes rows
+   off a tab only while no drain is filing into it, so no booking or tap is
+   written onto the wrong row.
+
+   The first time one starts or ends, and at 3am on any night none is
+   running, the Rehearsal rows that earlier rehearsals left are taken off
+   too, on any Sunday, apart from the ones kept in 4. Real rows are not
+   touched.
+
+6. HOW LONG ONE LASTS, AND WHEN IT CANNOT START.
+   Two hours, or to the booking cutoff, or to midnight if it reaches
+   Sunday, whichever comes first, all reckoned from when it started. Until
+   now the cutoff was reckoned from the moment of asking, so one started at
+   08:30 on a Sunday ran on to 10:30, through the real morning, holding
+   back the passengers' alerts and tagging the real taps as a test. It will
+   not start while a real bus is out, or on a Sunday before 12:00; the
+   Rehearsal screen says why and Start is off. A real run the phone has
+   ended is put aside while a rehearsal runs, so the same phone can
+   rehearse on a Sunday afternoon. A real run nobody ended stops holding
+   one up once its last stop is well past and it has gone quiet.
+
+7. WHAT A PASSENGER HEARS WHILE ONE RUNS.
+   Nothing about a bus: the stop alerts, the morning message and a route
+   called off are held back, and a route still off is told the minute the
+   rehearsal ends. The booking reminders still go, because they say nothing
+   about a bus, and a phone woken during one is told only what it has
+   booked. Held back, a rehearsal on a Saturday evening would swallow the
+   one reminder a booked passenger gets before Sunday. A seat on a route
+   the Rota has off is the exception, because that route may be off for
+   the checklist or for real: its Saturday reminder waits until the
+   rehearsal is over. The driver's nudges are about the real run only.
+
+8. THE SHEET'S MENU ITEMS ASK THE LIVE SERVER.
+   Rehearse this Sunday starts one, or starts it over if one is running,
+   and Stop rehearsing ends it. Each asks the live server, applies the
+   answer to the tabs at once and shows it. The sync no longer carries a
+   rehearsal either way, so a sheet a version behind can no longer end one
+   started on a phone. Clear a Sunday's test run refuses a Sunday whose
+   09:30 cutoff has passed, so the Sunday just driven cannot be cleared.
+
+9. THE PASSENGER PAGE LOADS AGAIN BY ITSELF WHEN ONE ENDS OR STARTS OVER.
+   Until now it showed the test morning until somebody reloaded it.
+
+10. A TAP MADE DURING A SLOW SEND REACHES THE RECORD. THIS FAULT IS LIVE.
+    On v1.78.0, when a send takes a few seconds on a weak signal, a tap made
+    in those seconds shows on the phone and never reaches the record: the
+    phone writes its queue back as it was when the send went out. Now it
+    takes off only what was sent. It can happen on any real Sunday.
+
+11. FROM v1.78.0, NOW ON THE SERVERS: the Saturday reminder of what was
+    booked (w2.19.0, v1.83.0). A passenger with alerts on and a seat for
+    Sunday is told once, Saturday between 18:00 and 19:00.
+
+
+FOUND IN v1.79.0
+----------------
+
+Each is fixed here, and each has a check that fails on v1.79.0.
+
+- One started at 08:30 on a Sunday ran through the real morning to 10:30,
+  and one started late on Saturday ran past midnight.
+- A phone left open after a Saturday rehearsal started the real Sunday run
+  as a test when it had no signal, and the live server threw the morning
+  away.
+- A test run left open overnight stayed on the phone on Sunday morning and
+  took the real morning's taps.
+- A board answer from a moment before the end gave the test run back to
+  the phone as a real one.
+- The End of a real run nobody closed, tapped during an afternoon
+  rehearsal, was stored as a test, and ending the rehearsal then deleted
+  the whole real run, on the live server and on the tab.
+- A run started during a rehearsal by a phone that said real was stored as
+  real, and so were a whole test run that arrived after its round and a
+  tap of a test run already cleared away.
+- Clearing took rows off the tabs while a drain was filing into them, and
+  Stop rehearsing could clear the sheet's copy of a round the coordinator's
+  app had started a moment later.
+- The booking reminders were held back, so a Saturday evening rehearsal
+  swallowed the Saturday reminder.
+- A passenger woken during a rehearsal was told about the test bus, and a
+  route called off was announced during it.
+- The rostered driver was woken about somebody's test run.
+- Clear a Sunday's test run offered to clear the Sunday just driven, and a
+  clear-up could delete a Sunday morning's rows that might be real.
+- The lost tap in 10 was still there.
+
+
+HOW IT WAS PROVED
+-----------------
+
+THE SUITE. node tests/run-tests.mjs: 1513 checks, all passed, READY. 64
+checks are on the rehearsal: 48 on the live server and 16 on the sheet.
+22 of them fail on v1.79.0 and 53 on v1.78.0 / w2.19.0 / v1.83.0.
+
+IN A BROWSER. Driver app: 29 checks, all pass. T16, T16b and T16c (the
+rounds) fail on v1.78.0. T16d, T17, T18 and T18b fail on v1.79.0, and T17
+(the lost tap) fails on v1.78.0 as well. Taking each fix back out, one at a
+time, makes its check fail: 26 of 26 caught. Coordinator: 26 checks, all
+pass; on v1.78.0 the rehearsal checks C19 to C19c (start, the first screen,
+start over, end) fail at the first screen, which has no Rehearsal.
+Passenger: 7 checks, all pass; P6 (the page loading again when the
+rehearsal ends) fails on v1.78.0.

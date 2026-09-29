@@ -37,14 +37,11 @@ window.CONFIG = {
   /* Must match the token in Code.gs. */
   token: "minibusapp",
 
-  /* Who drivers and passengers ring when something has gone wrong. Keep the
-     number dialable.
-
-     The name is shown WHOLE, on a call button and in a sentence: "Call Bro
-     Asim", "ring Bro Asim on 07377634214". Write it the way people say it.
-     Both apps used to take the first word of this to shorten it, which turned
-     every name in this church into "Bro". They do not any more. */
-  coordinator: { name: "Bro Asim", phone: "07377634214" },
+  /* Who drivers and passengers ring when something has gone wrong is NOT set
+     here. From v1.80.0 it is whoever has Role Coordinator on the Drivers tab,
+     with the number in the Phone column beside him. The sheet sends it to the
+     live server, which stamps it on every answer, and every page reads it from
+     there. A change of coordinator is two cells on the Drivers tab. */
 
   /* ---- Where the check was done ----------------------------------------
      Records one location when an inspection starts, so a walkaround can be
@@ -311,21 +308,11 @@ window.CONFIG = {
   },
 
   /* ---- Authorised driver register --------------------------------------
-     Only names here can be selected. Add someone before their first Sunday.
-     Remove them and they disappear from every phone at the next refresh.
-     The rota uses the Drivers tab in the spreadsheet, so add new people to
-     both. Optional per driver: pin: "1234" */
-  drivers: [
-    { name: "Pst Kehinde",    role: "Minister in Charge" },
-    { name: "Bro Asim",       role: "Coordinator" },
-    { name: "Bro Adebola",    role: "Driver" },
-    { name: "Bro Abiodun",    role: "Driver" },
-    { name: "Bro Moses",      role: "Driver" },
-    { name: "Pst Obamakinwa", role: "Driver" },
-    { name: "Bro Tunde",      role: "Driver" },
-    { name: "Bro Adesina",    role: "Driver" },
-    { name: "Bro Calvin",     role: "Backup" }
-  ],
+     The Drivers tab in the spreadsheet is the register, and from v1.80.0 it
+     is the only one. It reaches every phone with the rota and is kept there
+     for when there is no signal. Left empty on purpose, so a new church starts
+     with nobody in it rather than with this one's. */
+  drivers: [],
 
   /* ---- Driving rota ----------------------------------------------------
      One name per Sunday, repeating. The spreadsheet is the official rota;
@@ -333,31 +320,12 @@ window.CONFIG = {
      rotaAnchor must be a Sunday and must match PATTERN_ANCHOR in Code.gs. */
   rotaAnchor: "2026-08-02",
 
-  /* North Liverpool. Four names, so it turns over every four Sundays.
-     Counts from rotaAnchor above. */
-  rotaPrimaryPattern: [
-    "Bro Adebola",
-    "Bro Abiodun",
-    "Bro Moses",
-    "Bro Asim"
-  ],
-
-  /* South Liverpool. Three names, so it turns over every three Sundays.
-
-     Bro Tunde is first because he already knows the road. The other two
-     shadow him on the opening Sunday and then take their turns.
-
-     The two routes count from different Sundays and are not meant to line
-     up: four and three only meet every twelve weeks, and nothing here needs
-     them to meet at all. Each route simply takes its next turn.
-
-     Leave this out entirely and the app shows North only, which is what it
-     did before the South route started. */
-  rotaSecondaryPattern: [
-    "Bro Tunde",
-    "Pst Obamakinwa",
-    "Bro Adesina"
-  ],
+  /* The order each route's drivers take their turn is NOT set here. It is the
+     Primary order column on the Drivers tab, one number per driver, counted
+     separately for North and South, and it reaches the app with the rota.
+     These stay empty so a new church starts with nobody in the pattern. */
+  rotaPrimaryPattern: [],
+  rotaSecondaryPattern: [],
 
   /* The first Sunday the South route actually ran. It counts from here, not
      from rotaAnchor, and the South line stays blank before this date because

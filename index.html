@@ -1422,9 +1422,46 @@ var store = {
 var CALL_TIMEOUT = 25000;
 var POLL_TIMEOUT = 12000;
 
+/* WHO A DRIVER RINGS, from the Drivers tab and nowhere else.
+
+   Until v1.80.0 this was coordinator in config.js, typed by hand. Now it is
+   whoever has Role Coordinator on the Drivers tab, with the number in the
+   Phone column, stamped on every answer the live server gives and on the
+   rota Apps Script gives. Taken off each answer in callFetch below and kept on
+   the phone, because a bus that has failed its check is exactly when there
+   may be no signal to ask again.
+
+   Blank on a phone that has never had an answer, and every sentence that
+   uses it already reads "the bus coordinator" for that. */
+var COORD_KEY = "minibus.coordinator.v1";
+var COORDINATOR = { name: "", phone: "" };
+try{
+  var coordKept = JSON.parse(store.get(COORD_KEY) || "null");
+  if(coordKept && typeof coordKept === "object"){
+    COORDINATOR = { name: String(coordKept.name||""), phone: String(coordKept.phone||"") };
+  }
+}catch(e){}
+
+function coordinatorSeen(out){
+  var c = out && out.coordinator;
+  if(!c || typeof c !== "object") return;
+  var next = { name: String(c.name||"").trim(), phone: String(c.phone||"").trim() };
+  if(next.name === COORDINATOR.name && next.phone === COORDINATOR.phone) return;
+  COORDINATOR = next;
+  store.set(COORD_KEY, JSON.stringify(next));
+}
+
 function callFetch(url, opts, ms){
   return Promise.race([
-    fetch(url, opts || {}),
+    fetch(url, opts || {}).then(function(r){
+      /* Read off a copy, so the caller still has the body to itself, and
+         before the caller gets it, so the screen it paints has the name.
+         Never allowed to fail the call it rode in on. */
+      var copy;
+      try{ copy = r.clone(); }catch(e){ return r; }
+      return copy.json().then(function(out){ coordinatorSeen(out); return r; },
+                              function(){ return r; });
+    }),
     new Promise(function(_, reject){
       setTimeout(function(){ reject(new Error("took too long to answer")); },
                  ms || CALL_TIMEOUT);
@@ -1501,7 +1538,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.79.1";
+var APP_VERSION = "v1.80.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2210,7 +2247,7 @@ function level(){
   return (t.def>0 || t.adv>0) ? "warn" : "ok";
 }
 function coordPhone(){
-  var p = CFG.coordinator && CFG.coordinator.phone;
+  var p = COORDINATOR.phone;
   return p ? String(p).replace(/[^0-9+]/g,"") : "";
 }
 
@@ -2218,8 +2255,7 @@ function coordPhone(){
    of step. Whole, never shortened: taking the first word of it turned every
    name in this church into "Bro". */
 function coordName(){
-  return (CFG.coordinator && CFG.coordinator.name) ? CFG.coordinator.name
-                                                   : "the bus coordinator";
+  return COORDINATOR.name || "the bus coordinator";
 }
 function prettyPhone(){
   var p = coordPhone();
@@ -2653,7 +2689,7 @@ function paintDash(){
 
   /* The number belongs on the button you press, not in the sentence as well.
      Saying it twice made the banner longer and no clearer. */
-  var who = (CFG.coordinator && CFG.coordinator.name) ? CFG.coordinator.name : "the bus coordinator";
+  var who = coordName();
   var ph  = coordPhone();
   $("alertText").textContent = critNames().join(", ") +
     ". Ring the coordinator before anyone boards.";
@@ -3641,7 +3677,7 @@ function advsHTML(advs){
   }).join("")+'</ul>';
 }
 function verdictHTML(lv,defs,advs,auth){
-  var who=(CFG.coordinator&&CFG.coordinator.name)?CFG.coordinator.name:"the coordinator";
+  var who=COORDINATOR.name||"the coordinator";
   advs = advs || [];
   /* Still the red card. A bus going out with a critical fault on it has not
      become a green one because somebody signed for it; what changes is the
@@ -4012,7 +4048,10 @@ function recText(r){
 }
 
 /* ---------------- rolling driving rota ---------------- */
-var ROTA_PRIMARY_PATTERN = (CFG.rotaPrimaryPattern || ["Bro Adebola", "Bro Abiodun", "Bro Moses", "Bro Asim"]).slice();
+/* North. From v1.80.0 there is no list typed here: the order comes from the
+   Drivers tab with the rota, and is kept with the rota for when there is no
+   signal. Empty until then, which shows no name rather than a wrong one. */
+var ROTA_PRIMARY_PATTERN = (CFG.rotaPrimaryPattern || []).slice();
 
 /* South Liverpool. Empty means the second route is not running yet, and the
    rota screen simply shows North, exactly as it did before. */
@@ -6497,6 +6536,17 @@ function rotaSyncRegister(list){
     });
     if(chosen && entryFor(chosen)) sel.value=chosen;
   }
+
+  /* A phone that opened before any register reached it was given a box to
+     type a name into. From v1.80.0 config.js carries no register, so that is
+     every phone for the moment before the cached rota is read. Swap to the
+     picker as soon as there is one to pick from, unless a name has already
+     been typed that is not on it. */
+  var typeF=$("typeField"), idRow=$("idRow");
+  if(typeF && idRow && typeF.style.display!=="none" && (!st.driver || entryFor(st.driver))){
+    typeF.style.display="none";
+    idRow.style.display="";
+  }
   if(st.driver) st.role = roleOf(st.driver);
 
   /* The register usually lands a second or two after the screen is drawn.
@@ -7802,7 +7852,7 @@ function tripBusButtonsHtml(){
   });
 
   if(!shown) return h+'<p class="trip-note"><b>No bus can be started.</b> Ring '+
-    esc((CFG.coordinator&&CFG.coordinator.name)||"the bus coordinator")+'.</p>';
+    esc(coordName())+'.</p>';
 
   /* Stated, not reasoned at him: where the other bus is. It is the fact that
      makes the order of the buttons obvious, and he can check it against what
