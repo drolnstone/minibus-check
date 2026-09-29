@@ -1105,7 +1105,7 @@ Each change is made under the coordinator's PIN:
 | Bookings | this Sunday's and next Sunday's, stop by stop, with the numbers to ring. A booking cancelled for somebody who rings; seats booked for somebody without a smartphone |
 | Defects | the open ones, with their status changed, and closed only with what was done |
 | Run record | the last five Sundays. A wrong stop time put right, or a stop nobody tapped given its time; both are marked Corrected |
-| Have a look | bookings this Sunday; are we over on seats; is everything working; who has alerts on; who is carrying the load; which bus is on which route |
+| Have a look | the bus link for this Sunday; bookings this Sunday; are we over on seats; is everything working; is the live server working; who has alerts on; who is tapping; who is carrying the load; which bus is on which route; send duty reminders now |
 | What I have done | every change, and whether the sheet has it |
 
 The first screen also carries what cannot wait: a bus stopped at the
@@ -1158,12 +1158,17 @@ The page has no service worker, so it never shows a screen from a cache.
 ### The reports
 
 Four come from the live server's own copy: bookings this Sunday, are we over
-on seats, who has alerts on, and which bus is on which route. Two need the
-spreadsheet, *is everything working* and *who is carrying the load*, and the
-live server asks Apps Script for them and waits up to 25 seconds. If the sheet
+on seats, who has alerts on, and which bus is on which route. Five need the
+spreadsheet: *is everything working*, *is the live server working*, *who is
+tapping*, *who is carrying the load* and, from v1.87.0, *send duty reminders
+now*, which asks before it sends and sends only what is due today. The live
+server asks Apps Script for them and waits up to 25 seconds. If the sheet
 does not answer, *is everything working* still reports on the live server and
 says the sheet did not answer. The spreadsheet's own menu items give the same
-reports as before.
+reports as before, from the same code.
+
+*The bus link for this Sunday* needs neither: it is the passenger page's
+address, with **Send on WhatsApp** and **Copy the link**.
 
 ### Two faults fixed on the way
 
@@ -1553,6 +1558,7 @@ the two rows below with no phone alert of their own; the test sends one.
 | Your route is not running today | called off on the Rota | push | outranks everything: never say the bus is late when it is not coming | yes |
 | Your bus was stopped | a critical defect stops it | push | do not take it out | yes |
 | Your bus is authorised | you release it | push | otherwise he only finds out by opening a screen he has no reason to open | yes |
+| Time to set off | the departure time, from w2.27.0 | push | on the minute, not ten minutes late | yes |
 | The bus has not gone out | 10–90 min past departure, no start tap | push | forgotten, or something is wrong | yes |
 | You are driving today | Sunday morning, before departure | push | the morning, said on the morning | yes |
 | End the trip | 15 min after the last timetabled arrival, 10 min idle | push | an open run never closes itself | yes |
@@ -1566,6 +1572,7 @@ the two rows below with no phone alert of their own; the test sends one.
 | You are booked | a nudge window, already booked | confirms instead of nagging | yes |
 | Your bus today at HH:MM | Sunday 07:30–08:30 | the plan for the morning | yes |
 | No bus to your stop today | route called off | before anything else, and instead of everything else | yes |
+| No word yet that your bus has left church | 5–60 min past departure, no start tap, from w2.27.0 | says only what is known: Start is the one signal, and a driver who forgot to tap it is already on the road | yes |
 | The bus has left church | the start tap | it is real and it is moving | yes |
 | Be at your stop now | the estimate inside the imminent threshold | the one that matters | yes |
 | The bus is a few minutes away | the estimate moved by more than `resendMinutes` | only when the number actually changed | yes |

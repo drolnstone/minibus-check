@@ -759,5 +759,70 @@ export default async function (root) {
     });
   });
 
+  /* ---- three more off the Minibus menu, from v1.89.0 / w2.26.0 ---------- */
+
+  const rep = (L, name) => JSON.parse(call(L, "doPost", { postData: { contents:
+    JSON.stringify({ token: "minibusapp", action: "report", name: name }) } }).getContent());
+
+  s.test("Who is tapping comes back as parts, and the menu still shows it as words", async (a) => {
+    await atTime(THU, async () => {
+      const L = sheet();
+      worker(L, {});
+      const r = rep(L, "tapping");
+      a.ok(r.ok, JSON.stringify(r).slice(0, 300));
+      a.eq(r.report.title, "Who is tapping");
+      a.has(r.report.lead, "Nothing recorded yet");
+      call(L, "whoIsTapping");
+      a.has(JSON.stringify(L.gas.logs.filter((x) => x[0] === "alert")), "Nothing recorded yet");
+    });
+  });
+
+  s.test("Is the live server working? sorts its lines into needs attention and fine", async (a) => {
+    await atTime(THU, async () => {
+      const L = sheet();
+      worker(L, { drain: { ok: true, script: "w2.26.0", bookings: [], trips: [], clockAgoSec: 20,
+                           cacheAgeMin: { rota: 5, last: 5 }, sheetTokenSet: false, pinSalt: true } });
+      const r = rep(L, "live").report;
+      const bad = (r.sections.find((x) => x.head === "Needs attention") || {}).lines || [];
+      const good = (r.sections.find((x) => x.head === "Fine") || {}).lines || [];
+      a.has(bad.join("|"), "No SHEET_TOKEN yet");
+      a.has(good.join("|"), "The live server's clock is ticking.");
+      a.has(good.join("|"), "Its version: w2.26.0", "an indented line did not stay with the line above it");
+      a.eq(r.tone, "bad");
+      call(L, "liveCheck");
+      a.has(JSON.stringify(L.gas.logs.filter((x) => x[0] === "alert")), "No SHEET_TOKEN yet");
+    });
+  });
+
+  s.test("Send duty reminders now says what it did, as parts", async (a) => {
+    await atTime(THU, async () => {
+      const L = sheet();
+      worker(L, {});
+      const r = rep(L, "remind");
+      a.ok(r.ok, JSON.stringify(r).slice(0, 300));
+      a.eq(r.report.title, "Duty reminders");
+      a.ok(r.report.lead, "no lead");
+      a.ok(typeof r.report.text === "string" && r.report.text.length, "the menu's words are missing");
+    });
+  });
+
+  s.test("the live server hands the three to the sheet under their own names", async (a) => {
+    await atTime(THU, async () => {
+      const { env } = await fresh();
+      env.SHEET_PUSH_MS = 200;
+      for (const name of ["tapping", "live", "remind"]) {
+        net.reset();
+        net.reply(new Response(JSON.stringify({ ok: true, report: { title: "T-" + name, sections: [] } }), { status: 200 }));
+        const out = await coord(env, { op: "report", name: name });
+        a.eq(out.title, "T-" + name);
+        const asked = net.calls.find((c) => String(c.url) === SHEET);
+        a.eq(asked && JSON.parse(asked.opts.body).name, name);
+      }
+      net.reset();
+      const not = await coord(env, { op: "report", name: "remind" }, "Bro Tunde", PIN);
+      a.not(not.title === "T-remind", "a driver who is not a coordinator reached the reminders");
+    });
+  });
+
   return s;
 }

@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.86.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.87.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, the run record and the "have a
@@ -541,7 +541,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.86.0";
+var PAGE_VERSION = "v1.87.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1598,19 +1598,66 @@ function fixTime(el){
 
 /* ---- have a look ------------------------------------------------------------------ */
 
-var LOOKS = [["bookings","Bookings this Sunday"], ["seats","Are we over on seats?"],
-             ["health","Is everything working?"], ["alerts","Who has alerts on"],
-             ["load","Who is carrying the load"], ["buses","Which bus is on which route"]];
+var LOOKS = [["link","Bus link for this Sunday"],
+             ["bookings","Bookings this Sunday"], ["seats","Are we over on seats?"],
+             ["health","Is everything working?"], ["live","Is the live server working?"],
+             ["alerts","Who has alerts on"], ["tapping","Who is tapping"],
+             ["load","Who is carrying the load"], ["buses","Which bus is on which route"],
+             ["remind","Send duty reminders now"]];
+/* The ones the spreadsheet builds, by way of the live server: slower. */
+var SHEET_LOOKS = { health:1, load:1, tapping:1, live:1, remind:1 };
+
+/* The passenger page, beside this one. The same address every week: it
+   works out which Sunday it is by itself, so it can be pinned in the group. */
+function busLink(){ try { return new URL("../sunday/", location.href).href; } catch(e){ return "../sunday/"; } }
+function busLinkWords(){ return "Book your seat on the Sunday bus: " + busLink(); }
+
+function paintLink(){
+  var url = busLink();
+  $("reportBody").innerHTML = '<div class="rep"><h1>Bus link for this Sunday</h1>' +
+    '<p class="lead">The same link every week: the page works out which Sunday it is by itself, ' +
+    'so it can be pinned in the group once.</p>' +
+    '<ul><li>'+esc(url)+'</li></ul>' +
+    '<a class="btn btn-main btn-wide" style="margin-top:14px;text-decoration:none" href="https://wa.me/?text=' +
+      encodeURIComponent(busLinkWords()) + '" target="_blank" rel="noopener">Send on WhatsApp</a>' +
+    (navigator.share ? '<button class="btn btn-ghost btn-wide" type="button" data-do="sharelink" style="margin-top:10px">Share another way</button>' : '') +
+    '<button class="btn btn-ghost btn-wide" type="button" data-do="copylink" style="margin-top:10px">Copy the link</button></div>';
+}
+function shareLink(){
+  try {
+    navigator.share({ title: "The Sunday bus", text: "Book your seat on the Sunday bus:", url: busLink() }).catch(function(){});
+  } catch(e){}
+}
+function copyLink(){
+  var url = busLink();
+  var done = function(){ toast("Link copied."); };
+  try {
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(url).then(done, function(){ toast("Could not copy. Press and hold the link above.", true); });
+      return;
+    }
+  } catch(e){}
+  toast("Could not copy. Press and hold the link above.", true);
+}
+/* Asks first: this sends email to drivers. Whatever is due today goes; a
+   reminder already sent is never sent twice, so asking again is safe. */
+function remindAsk(){
+  openSheet({ eyebrow: "Duty reminders", title: "Send the duty reminders due today?",
+    line: "Only the ones due today go out, and nobody is sent the same reminder twice.",
+    go: "Send",
+    onGo: function(){ closeSheet(); REP = { name:"", data:null }; go("report/remind"); } });
+}
 
 function paintLook(){
   $("lookBody").innerHTML = '<h1>Have a look</h1><ul class="menu">' + LOOKS.map(function(l){
-    return '<li><button type="button" data-go="report/'+l[0]+'"><span class="t">'+esc(l[1])+'</span><span class="go">›</span></button></li>';
+    var how = l[0] === "remind" ? 'data-do="remind"' : 'data-go="report/'+l[0]+'"';
+    return '<li><button type="button" '+how+'><span class="t">'+esc(l[1])+'</span><span class="go">›</span></button></li>';
   }).join("") + '</ul>';
 }
 
 function loadReport(name){
   REP = { name:name, data:null, asking:true };
-  api("report", { name:name }, (name === "health" || name === "load") ? 40000 : 20000).then(function(out){
+  api("report", { name:name }, SHEET_LOOKS[name] ? 40000 : 20000).then(function(out){
     if(REP.name !== name) return;
     REP.asking = false;
     REP.data = out && out.ok ? out : { title: "Could not get that", lead: plain(out && out.error) || "No answer.", sections: [], tone: "bad" };
@@ -1625,10 +1672,11 @@ function loadReport(name){
 
 function paintReport(name){
   var label = ""; LOOKS.forEach(function(l){ if(l[0] === name) label = l[1]; });
+  if(name === "link") return paintLink();
   if(REP.name !== name || (!REP.data && !REP.asking)) loadReport(name);
   if(!REP.data){
     $("reportBody").innerHTML = '<h1>'+esc(label)+'</h1><p class="tiny center">' +
-      ((name === "health" || name === "load") ? "Asking the spreadsheet…" : "Asking the live server…") + '</p>';
+      (name === "remind" ? "Sending what is due…" : SHEET_LOOKS[name] ? "Asking the spreadsheet…" : "Asking the live server…") + '</p>';
     return;
   }
   var r = REP.data;
@@ -1639,7 +1687,9 @@ function paintReport(name){
          (sec.lines || []).map(function(l){ return '<li>'+esc(String(l).replace(/\n\s+/g, "\n"))+'</li>'; }).join("") + '</ul>';
   });
   if(r.foot) h += '<p class="tiny">'+esc(r.foot)+'</p>';
-  h += '<button class="btn btn-ghost btn-wide" type="button" data-do="again" data-name="'+esc(name)+'" style="margin-top:14px">Ask again</button></div>';
+  if(name !== "remind")
+    h += '<button class="btn btn-ghost btn-wide" type="button" data-do="again" data-name="'+esc(name)+'" style="margin-top:14px">Ask again</button>';
+  h += '</div>';
   $("reportBody").innerHTML = h;
 }
 
@@ -1925,6 +1975,9 @@ document.addEventListener("click", function(e){
   else if(d === "defect") updateDefect(key);
   else if(d === "fix") fixTime(t);
   else if(d === "again"){ REP = { name:"", data:null }; paintReport(t.getAttribute("data-name")); }
+  else if(d === "remind") remindAsk();
+  else if(d === "sharelink") shareLink();
+  else if(d === "copylink") copyLink();
   else if(d === "rehstart") rehearsalStart(false);
   else if(d === "rehover") rehearsalStart(true);
   else if(d === "rehend") rehearsalEnd();

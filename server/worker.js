@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.25.0";
+const SCRIPT_VERSION = "w2.27.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -4085,6 +4085,7 @@ async function clockAlive(env) {
 async function sweeps(env) {
   try { await wakeCancelled(env); } catch (e) {}
   try { await wakeDrivers(env); } catch (e) {}
+  try { await wakeNotLeft(env); } catch (e) {}
   try { await wakeMorning(env); } catch (e) {}
   try { await wakeBookingReminders(env); } catch (e) {}
   try { await sweepLinks(env); } catch (e) {}
@@ -4432,6 +4433,57 @@ async function wakeCancelled(env) {
         if (seen[sub.id]) continue;
         seen[sub.id] = 1;
         n += await wake(env, [sub], "off|" + key + "|" + route);
+      }
+    }
+  }
+  return n;
+}
+
+/* NO WORD YET THAT THE BUS HAS LEFT, from w2.27.0.
+
+   Five minutes past the departure time with no Start tapped, everybody
+   booked on that route is told, once. The words say only what this server
+   knows: that nothing has recorded the bus leaving. They do not say it is
+   late or why, because Start is the only thing that tells this server a bus
+   has gone, and a driver who pulled away without tapping it is on the road
+   while the record says he is at church. "The bus has left church" follows
+   the moment he taps it.
+
+   Not on a route called off (that has its own words, and they come first),
+   not during a rehearsal, and not past an hour, when a stale buzz helps
+   nobody and the coordinator is already on it. */
+const NOT_LEFT_AFTER_MS = 5 * 60000;
+const NOT_LEFT_UNTIL_MS = 60 * 60000;
+
+function notLeftDue(all, key, route, now) {
+  const d = departStopFor(all, route);
+  const due = d && d.time ? londonMoment(key, d.time) : null;
+  if (!due) return null;
+  const late = now - due.getTime();
+  return (late >= NOT_LEFT_AFTER_MS && late <= NOT_LEFT_UNTIL_MS) ? d.time : null;
+}
+
+async function wakeNotLeft(env) {
+  if (await rehearsalOn(env)) return 0;
+  const key = runSunday();
+  const all = await getStops(env);
+  const stops = pickupsAndArrivals(all);
+  let rotaRow = null;
+  try { rotaRow = await getRotaRow(env, key); } catch (e) { return 0; }
+  const now = Date.now();
+  let n = 0;
+  for (const route of routeNames(stops)) {
+    if (routeCancelled(rotaRow, route)) continue;
+    if (!notLeftDue(all, key, route, now)) continue;
+    let state = null;
+    try { state = await tripState(env, key, route, "real"); } catch (e) { continue; }
+    if (state && state.started) continue;
+    const seen = {};
+    for (const s of stops.filter((x) => x.route === route && !x.arrival)) {
+      for (const sub of await subsAtStop(env, key, s.id)) {
+        if (seen[sub.id]) continue;
+        seen[sub.id] = 1;
+        n += await wake(env, [sub], "late|" + key + "|" + route);
       }
     }
   }
@@ -4835,6 +4887,11 @@ async function driverNudgeFor(env, key, route, all, stops, rotaRow, buses) {
          and a third buzz helps nobody. */
       if (late >= 10 * 60000 && late <= 90 * 60000) {
         return { who, tag: "start" + (late > 25 * 60000 ? "b" : "a") + "|" + key + "|" + route };
+      }
+      /* ON THE MINUTE, from w2.27.0: the departure time has come. Before
+         this the first word was ten minutes late. Once, by its tag. */
+      if (late >= 0 && late < 10 * 60000) {
+        return { who, tag: "go|" + key + "|" + route };
       }
     }
   }
@@ -5366,6 +5423,12 @@ async function pushWhat(env, endpoint) {
         }
       } catch (e) { /* fall through to whatever else is true */ }
 
+      if (due && now >= due.getTime() && now - due.getTime() < 10 * 60000) {
+        return { ok: true, tag: "start", url: "./",
+                 title: "Time to set off",
+                 body: "Your " + route + " run is due to leave church" + (when ? " at " + when : " now") +
+                       ". Tap Start as you pull away." };
+      }
       if (due && now - due.getTime() >= 10 * 60000) {
         return { ok: true, tag: "start", url: "./",
                  title: "The bus has not gone out",
@@ -5520,6 +5583,20 @@ async function pushWhat(env, endpoint) {
     return { ok: true, tag: "bus", url: "./",
              title: "The bus has left church",
              body: "Yours is timetabled " + (p.scheduled || "shortly") + " at " + stop + "." };
+  }
+
+  /* NOTHING HAS RECORDED THE BUS LEAVING, and it was due five minutes ago.
+     See wakeNotLeft for why the words go no further than that. */
+  if (!p.started && p.route) {
+    let dueAt = null;
+    try { dueAt = notLeftDue(await getStops(env), runSunday(), p.route, Date.now()); } catch (e) {}
+    if (dueAt) {
+      return { ok: true, tag: "bus", url: "./",
+               title: "No word yet that your bus has left church",
+               body: "It was due to leave at " + dueAt + "." +
+                     (p.scheduled ? " Yours is timetabled " + p.scheduled + " at " + String(p.stop || "your stop") + "." : "") +
+                     " We will message you as soon as it sets off." };
+    }
   }
 
   /* THE FIRST MESSAGE OF THE MORNING. The bus has not started, and he has a
@@ -6954,6 +7031,10 @@ async function coordReport(env, me, name) {
   if (name === "buses") return reportBuses(env);
   if (name === "health") return reportFromSheet(env, "health", "Is everything working?");
   if (name === "load") return reportFromSheet(env, "load", "Who is carrying the load");
+  /* From w2.26.0: three more off the Minibus menu, built by the same code. */
+  if (name === "tapping") return reportFromSheet(env, "tapping", "Who is tapping");
+  if (name === "live") return reportFromSheet(env, "live", "Is the live server working?");
+  if (name === "remind") return reportFromSheet(env, "remind", "Duty reminders");
   return { ok: false, error: "no such report" };
 }
 

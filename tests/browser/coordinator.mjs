@@ -897,6 +897,36 @@ if (want("C27")) {
         "home screen " + back.pad + ", tab " + browserTab.pad + ", none kept " + never.pad);
 }
 
+/* C28 — Have a look: the bus link to send on WhatsApp, and reminders only after asking */
+if (want("C28")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  await p.pg.click('#homeBody [data-go="look"]');
+  await p.wait(300);
+  await p.pg.click('#lookBody [data-go="report/link"]');
+  await p.wait(300);
+  const wa = await p.pg.$eval('#reportBody a[href^="https://wa.me/"]', (el) => el.getAttribute("href")).catch(() => "");
+  const shown = await p.pg.$eval("#reportBody", (el) => el.textContent).catch(() => "");
+  await p.shot("C28-bus-link");
+  const text = decodeURIComponent(wa.replace("https://wa.me/?text=", ""));
+  await p.pg.goBack();
+  await p.wait(300);
+  const asked = [];
+  p.pg.on("request", (r) => { if (/workers\.dev/.test(r.url()) && /"report"/.test(r.postData() || "")) asked.push(r.postData()); });
+  await p.pg.click('#lookBody [data-do="remind"]');
+  await p.wait(300);
+  const title = await p.pg.$eval("#sheetTitle", (el) => el.textContent).catch(() => "");
+  const beforeSend = asked.length;
+  await p.shot("C28-remind-asks");
+  await p.pg.click("#sheetNot");
+  await p.wait(200);
+  check("C28", "Bus link for this Sunday gives the passenger page to send on WhatsApp; Send duty reminders asks before anything is sent",
+        /\/sunday\/$/.test(text.split(" ").pop()) && /Book your seat/.test(text) && shown.indexOf("/sunday/") !== -1 &&
+        title === "Send the duty reminders due today?" && beforeSend === 0 && !p.errs.length,
+        "whatsapp '" + text + "', sheet '" + title + "', asked " + beforeSend + ", errors " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
 check("C0", "no script error on the page throughout", me && !me.errs.length, JSON.stringify(me && me.errs));
 if (me) await me.ctx.close();
 await done();
