@@ -1560,7 +1560,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.84.0";
+var APP_VERSION = "v1.85.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2230,9 +2230,22 @@ function prettyDate(iso){
   var p = String(iso).split("-");
   return p.length===3 ? p[2]+"/"+p[1]+"/"+p[0] : iso;
 }
+/* The dates are the Buses tab's, by way of the board (app v1.85.0 on). A bus
+   the board has not described yet, or an older live server, falls back to
+   any dates config.js still carries for it. */
+function busDates(v){
+  var reg = String((v && v.reg) || "").toUpperCase();
+  for(var i = 0; i < BUSES.length; i++){
+    var b = BUSES[i];
+    if(b && String(b.reg || "").toUpperCase() === reg && b.dates){
+      for(var k in b.dates) if(b.dates[k]) return b.dates;
+    }
+  }
+  return (v && v.dates) || {};
+}
 function dueItems(v){
   var out = [];
-  var dates = (v && v.dates) || {};
+  var dates = busDates(v);
   DUE_ORDER.forEach(function(k){
     var iso = dates[k];
     if(!iso) return;

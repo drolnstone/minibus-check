@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.23.0";
+const SCRIPT_VERSION = "w2.24.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1120,10 +1120,21 @@ function departStopFor(all, route) {
   return null;
 }
 
+/* From w2.24.0 each bus also carries its renewal dates and the route it takes
+   in odd months, from the Buses tab. Kept beside the table in settings
+   (bus_extra, by registration) rather than as new columns, so an older
+   database answers exactly as before and a sync from an older sheet, which
+   sends neither, leaves the last ones alone. */
 async function getBuses(env) {
   const { results } = await env.DB.prepare(
     "SELECT reg, seats, active FROM buses").all();
-  return (results || []).map((b) => ({ reg: b.reg, seats: Number(b.seats) || 0, active: !!b.active }));
+  let extra = {};
+  try { extra = (await cacheGet(env, "bus_extra")) || {}; } catch (e) {}
+  return (results || []).map((b) => {
+    const x = extra[String(b.reg || "").toUpperCase()] || {};
+    return { reg: b.reg, seats: Number(b.seats) || 0, active: !!b.active,
+             dates: x.dates || {}, oddRoute: x.oddRoute || "" };
+  });
 }
 
 async function getRotaRow(env, key) {
@@ -1138,13 +1149,25 @@ async function getRotaRow(env, key) {
    An entry in the rota's own bus column beats all of it, for that Sunday. */
 const BUS_ROTATION_ODD = { north: "NH56 FWP", south: "YS70 PWE" };
 
-function busRule(key) {
+/* The pairing is the Buses tab's from w2.24.0: the active bus marked North in
+   its "Route in odd months" column and the one marked South. Either missing,
+   or no buses given, the constant above, as before. */
+function busPairing(buses) {
+  let north = "", south = "";
+  for (const b of buses || []) {
+    if (!b || !b.active) continue;
+    if (b.oddRoute === "North" && !north) north = b.reg;
+    if (b.oddRoute === "South" && !south) south = b.reg;
+  }
+  return (north && south) ? { north, south } : BUS_ROTATION_ODD;
+}
+
+function busRule(key, buses) {
   const m = Number(String(key).split("-")[1]);
   if (!m) return null;
   const odd = m % 2 === 1;
-  return odd
-    ? { North: BUS_ROTATION_ODD.north, South: BUS_ROTATION_ODD.south }
-    : { North: BUS_ROTATION_ODD.south, South: BUS_ROTATION_ODD.north };
+  const p = busPairing(buses);
+  return odd ? { North: p.north, South: p.south } : { North: p.south, South: p.north };
 }
 
 async function busFor(env, key, route, buses, rotaRow) {
@@ -1159,7 +1182,7 @@ async function busFor(env, key, route, buses, rotaRow) {
        to the rotation than to price a bus that does not exist. */
     if (hit) return { reg: hit.reg, from: "rota", seats: hit.seats };
   }
-  const pair = busRule(key);
+  const pair = busRule(key, buses);
   if (!pair) return { reg: "", from: "", seats: 0 };
   const hit = known[String(pair[want] || "").toUpperCase()];
   return hit ? { reg: hit.reg, from: "rotation", seats: hit.seats }
@@ -2314,7 +2337,7 @@ async function boardPayload(env, route) {
       seats[rt] = await seatsFor(env, key, rt, stops, buses, rotaRow, rows);
     }
     out.seats = seats;
-    out.buses = buses.map((b) => ({ reg: b.reg, seats: b.seats }));
+    out.buses = buses.map((b) => ({ reg: b.reg, seats: b.seats, dates: b.dates || {} }));
   } catch (e) { out.seatsError = String(e); }
 
   try { out.trip = await tripDriverPayload(env, r); }
@@ -3088,6 +3111,21 @@ async function handleSync(env, body) {
      said "no rehearsal" whenever its own copy said so. */
 
   if (Array.isArray(body.buses)) {
+    /* The dates and the pairing, when this sheet sends them (v1.87.0 on). */
+    if (body.buses.some((b) => b && (b.dates || b.oddRoute !== undefined))) {
+      const extra = {};
+      for (const b of body.buses) {
+        if (!b || !b.reg) continue;
+        const d = b.dates || {};
+        const day = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? String(v) : "";
+        const r = String(b.oddRoute || "");
+        extra[String(b.reg).toUpperCase()] = {
+          dates: { mot: day(d.mot), service: day(d.service), insurance: day(d.insurance), permit: day(d.permit) },
+          oddRoute: r === "North" || r === "South" ? r : ""
+        };
+      }
+      stmts.push(cachePut(env, "bus_extra", extra));
+    }
     stmts.push(env.DB.prepare("DELETE FROM buses"));
     for (const b of body.buses) stmts.push(env.DB.prepare(
       "INSERT INTO buses (reg, seats, active) VALUES (?,?,?)"
@@ -3443,7 +3481,7 @@ async function cachedLast(env) {
       seats[rt] = await seatsFor(env, key, rt, stops, buses, rotaRow, rows);
     }
     out.seats = seats;
-    out.buses = buses.map((b) => ({ reg: b.reg, seats: b.seats }));
+    out.buses = buses.map((b) => ({ reg: b.reg, seats: b.seats, dates: b.dates || {} }));
   } catch (e) { out.seatsError = String(e); }
 
   out.ok = true;
@@ -6223,7 +6261,7 @@ function busResolve(key, route, over, buses) {
   for (const b of buses || []) known[String(b.reg || "").toUpperCase()] = b.reg;
   const o = String(over || "").trim();
   if (o && known[o.toUpperCase()]) return known[o.toUpperCase()];
-  const pair = busRule(key);
+  const pair = busRule(key, buses);
   if (!pair) return "";
   return known[String(pair[route] || "").toUpperCase()] || "";
 }
@@ -6577,7 +6615,7 @@ async function coordLoad(env, me) {
   } catch (e) { out.drivers = []; }
 
   const buses = await getBuses(env);
-  out.buses = buses.map((b) => ({ reg: b.reg, seats: b.seats, active: b.active }));
+  out.buses = buses.map((b) => ({ reg: b.reg, seats: b.seats, active: b.active, dates: b.dates || {} }));
 
   out.requests = await coordRequestsView(env);
   out.defects = await coordDefectsView(env);
