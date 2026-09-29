@@ -18,7 +18,7 @@ import { loadWorker, env as makeEnv, installGlobals } from "../lib/worker.mjs";
 import { loadCodeGs, call } from "../lib/codegs.mjs";
 import { tab } from "../lib/tabs.mjs";
 
-const ADA = { name: "Sis Ada", phone: "07700 900123" };
+const ADA = { name: "Sis Ada", phone: "07700900123" };
 
 function tabs(drivers) {
   return {
@@ -56,19 +56,27 @@ export default async function (root) {
   s.test("the coordinator is the active row with Role Coordinator, and its Phone", (a) => {
     const c = contact(sheet(PEOPLE));
     a.eq(c.name, "Bro First", "the first active coordinator, and never the inactive one above him");
-    a.eq(c.phone, "07111 111111");
+    a.eq(c.phone, "07111111111");
   });
 
   s.test("with two, the one COORDINATOR_EMAIL names is the one people ring", (a) => {
     const c = contact(sheet(PEOPLE, "ADA@b.c"));
     a.eq(c.name, "Sis Ada");
-    a.eq(c.phone, "07700 900123");
+    a.eq(c.phone, "07700900123");
   });
 
   s.test("nobody with the role is a blank answer, not somebody else", (a) => {
     const c = contact(sheet([PEOPLE[3]]));
     a.eq(c.name, "");
     a.eq(c.phone, "");
+  });
+
+  s.test("a number Sheets has turned into 447... is sent as 07..., so the call button dials", (a) => {
+    const rows = PEOPLE.map((r) => Object.assign({}, r));
+    rows[1].Phone = 447111111111;
+    rows[2].Phone = "+44 7700 900123";
+    a.eq(contact(sheet(rows)).phone, "07111111111");
+    a.eq(contact(sheet(rows, "ada@b.c")).phone, "07700900123");
   });
 
   s.test("the push to the live server carries it", (a) => {

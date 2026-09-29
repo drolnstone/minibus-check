@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.85.0";
+var SCRIPT_VERSION = "v1.85.1";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -11240,8 +11240,14 @@ function coordinatorContact(drivers) {
     if (!first) first = d;
     if (want && String(d.email || "").trim().toLowerCase() === want) { first = d; break; }
   }
-  return first ? { name: String(first.name || "").trim(), phone: String(first.phone || "").trim() }
-               : { name: "", phone: "" };
+  if (!first) return { name: "", phone: "" };
+  /* Tidied into the 07 form the pages dial and space out. Sheets turns a
+     number typed as +44 7377 634214 into the plain number 447377634214, and
+     sent like that the call button dialled 447377634214, which from a UK
+     phone goes nowhere. A number that will not tidy (not a UK mobile) goes as
+     typed rather than not at all. */
+  var raw = String(first.phone || "").trim();
+  return { name: String(first.name || "").trim(), phone: normalisePhone(raw) || raw };
 }
 
 function actionLink(kind, subject) {

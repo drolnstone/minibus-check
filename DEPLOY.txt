@@ -1,6 +1,6 @@
 MINIBUS
 =======
-  pages v1.80.0 · server w2.21.0 · sheet v1.85.0
+  pages v1.80.0 · server w2.21.0 · sheet v1.85.1
 
 The coordinator, the register and the rota order now live on the Drivers
 tab and nowhere else. No file carries a name or a phone number any more.
@@ -9,7 +9,7 @@ tab and nowhere else. No file carries a name or a phone number any more.
 YOU ARE ON              GOING TO
   Pages   v1.79.1         v1.80.0
   Worker  w2.20.1         w2.21.0
-  Code.gs v1.84.1         v1.85.0
+  Code.gs v1.84.1         v1.85.1
 
 All three move. If v1.79.1 is not up yet, put it up first: its steps are in
 analysis/DEPLOY-v1.79.1.txt. No SQL, and nothing new in Script Properties,
@@ -53,7 +53,7 @@ AFTER IT
 --------
 
 A. The foot of the driver app reads  app v1.80.0 · server w2.21.0 · sheet
-   v1.85.0 . The coordinator's app reads coordinator v1.80.0 with the same
+   v1.85.1 . The coordinator's app reads coordinator v1.80.0 with the same
    two. A phone still on v1.79.1: close the app fully and open it again.
 
 B. Driver app: the name list is the Drivers tab, as before. It is a
@@ -89,3 +89,11 @@ WHAT CHANGED
    and so is the spare North rota order in the driver app. On a brand new
    sheet the Role and Phone headings carry notes saying what Coordinator
    and Phone are for.
+
+4. v1.85.1: THE COORDINATOR'S NUMBER IS TIDIED BEFORE IT IS SENT.
+   Sheets stores a number typed as +44 7377 634214 as the plain number
+   447377634214, and v1.85.0 sent it like that, so the call button dialled
+   447377634214, which goes nowhere from a UK phone. It is now sent as
+   07377634214, the same tidying the bookings already use. Only Code.gs
+   changes: paste it and deploy a new version, then Send everything to the
+   live server now.
