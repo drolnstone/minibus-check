@@ -1,0 +1,261 @@
+MINIBUS
+=======
+  pages v1.77.0 · server w2.18.0 · sheet v1.82.0
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.74.10        v1.77.0
+  Worker  w2.15.0         w2.18.0
+  Code.gs v1.79.0         v1.82.0
+
+One deploy, straight from v1.74.10. It carries v1.75.0 and v1.76.0 as well,
+so their DEPLOY.txt files are not needed. No SQL: the Worker makes every new
+table and column itself the first time it needs them. One new setting in
+Cloudflare, the clock, added once.
+
+
+IN THIS ORDER
+-------------
+
+1. WORKER. Cloudflare, minibus-api, Edit code. Paste worker.js over the old
+   one. Deploy.
+
+2. THE CLOCK. Still in Cloudflare, on the same Worker: Settings, then
+   Trigger events (or Triggers), Add, Cron Triggers. Schedule: every minute,
+   which is  * * * * *  . Add it.
+
+   This is once only. If the labels in the dashboard differ, the thing to add
+   is a Cron Trigger on minibus-api with the schedule * * * * * .
+
+3. CODE.GS. Apps Script editor. Paste Code.gs over the old one. Save.
+   Then Deploy, Manage deployments, the pencil on the existing deployment,
+   Version: New version, Deploy.
+
+   Edit the existing deployment. Do not make a new one: a new deployment gets
+   a new address, and config.js and the Worker both use the old one. The new
+   version matters because the Worker's knock and the coordinator's app's two
+   sheet reports are answered by the deployed copy, not the saved one.
+
+4. Minibus, Rota and setup, Check scheduled emails, set up any missing.
+   It should list "Sheet edits reach the live server  (was missing, now set
+   up)". If Google asks for permission, allow it.
+
+5. Minibus, Rota and setup, Send everything to the live server now.
+
+6. PAGES. Upload these five to the GitHub repo over the old ones:
+
+       index.html
+       sw.js
+       config.js
+       sunday/index.html
+       sunday/sw.js
+
+   and the new folder, with its two files:
+
+       coord/index.html
+       coord/manifest.webmanifest
+
+   On github.com: Add file, Upload files, and drag the coord folder from the
+   zip onto the page. GitHub keeps the folder. Commit.
+
+
+AFTER IT
+--------
+
+A. The foot of the driver app reads  app v1.77.0 · server w2.18.0 · sheet
+   v1.82.0 . A phone still on v1.74.10: close the app fully and open it
+   again.
+
+B. Minibus, Have a look, Is the live server working? It says "The live
+   server's clock is ticking." If it says the clock has never ticked, step 2
+   did not land. Give it a minute after adding the trigger.
+
+C. Open the passenger page on a phone with no booking and no alerts. It
+   offers alerts with "No seat booked. Book below." Book a seat. The row is
+   on the Bus Bookings tab within about ten seconds. Cancel it and watch the
+   row change to Cancelled.
+
+D. Change a stop time on the Bus Stops tab. Stops and bookings on the driver
+   app has the new time within about fifteen seconds. Put it back.
+
+E. On the driver app, signed in as yourself, ask for a change on a Sunday of
+   yours. "Request sent" comes straight back. The row is on the Rota Requests
+   tab and the email in your inbox within about ten seconds. Leave it Pending
+   for F.
+
+F. Tap Coordinator on the driver app's first screen and key your PIN. The
+   first screen says a rota request is waiting, and its foot reads
+   coordinator v1.77.0 · server w2.18.0 · sheet v1.82.0 . Rota requests,
+   Turn down. Within about ten seconds the Rota Requests tab says Rejected,
+   with a note saying it was decided in the coordinator's app, and the email
+   saying it was turned down comes to you.
+
+G. Have a look, Is everything working? The sheet's report comes back within
+   about 25 seconds. If it says the spreadsheet did not answer, step 3 did
+   not make a new version.
+
+H. Rota, a Sunday about a month ahead, Add a note: Test from the app. Within
+   about ten seconds the note is in that Sunday's Notes on the Rota tab, with
+   your name and (app) in Updated by. What I have done then says On the
+   sheet. A note emails nobody. Delete it on the tab afterwards.
+
+I. Bookings, next Sunday, Book a seat for someone: any stop, 1 seat, your
+   own number. It is on the driver app's list at once and on the Bus
+   Bookings tab within a minute, noted as booked in the coordinator's app.
+   Cancel it from the app, and the tab says Cancelled within a minute.
+
+Then, on an evening before a Sunday, the rehearsal in the README: After the
+deploy, rehearse it. Part H there is the coordinator's app.
+
+
+WHAT CHANGED IN v1.77.0
+-----------------------
+
+1. THE COORDINATOR'S APP.
+   At coord/ on the same site, reached from the Coordinator button on the
+   driver app's first screen. The button shows only for a name with a
+   coordinator's role, the same roles that may authorise a stopped bus. It
+   carries the name across. The PIN is keyed again and never carried.
+
+   Every change is made under your PIN:
+     Rota          who drives or covers each route, which bus runs which
+                   route (choosing the other route's bus swaps the two),
+                   either route or the whole Sunday called off and put back,
+                   a note on the Sunday.
+     Requests      the pending ones, approved with a cover chosen from the
+                   drivers free that morning, or turned down.
+     Bookings      this Sunday and next, stop by stop, with the numbers to
+                   ring. A booking cancelled for somebody who rings, or seats
+                   booked for somebody without a smartphone.
+     Defects       the open ones. Status changed, and closed only with what
+                   was done.
+     Run record    the last five Sundays. A wrong stop time put right, or a
+                   stop nobody tapped given its time. Both are marked
+                   Corrected, on the app and on the Trip Events tab, with the
+                   time first recorded kept in a note on the cell.
+     Have a look   bookings this Sunday, are we over on seats, is everything
+                   working, who has alerts on, who is carrying the load,
+                   which bus is on which route.
+
+   The first screen also shows what cannot wait: a bus stopped at the
+   walkaround, with Authorise; a run still open half an hour after it was due
+   at church, with End it; a request waiting; a Sunday over on seats; a
+   critical defect; and a change the sheet did not take.
+
+   Each change goes to the live server first and is answered there. Every
+   phone sees it at once, the driver app and the passenger page included.
+   Within seconds the sheet applies it through the same code a person editing
+   that cell sets going: the Status rule, Updated by, the emails to the
+   drivers affected. What I have done says On the way, On the sheet, or Not
+   taken with the sheet's reason.
+
+   The PIN is checked on every call, reads included, with the same three
+   tries and five minute lockout as everywhere else. The page keeps it in
+   memory only and locks after 15 minutes untouched (coordApp.idleMinutes in
+   config.js). It has no service worker, so it never shows an old screen.
+
+   Left in the spreadsheet: setting or seeing PINs, setup, free-form editing,
+   and the rehearsal controls. The app needs a signal.
+
+2. A DECISION ON A CALLED-OFF SUNDAY NO LONGER PUTS THE ROUTE BACK ON.
+   Approving or turning down a request wrote Confirmed or Change requested
+   into the Rota's Status over North cancelled or South cancelled, and the
+   passenger page reads that cell. The Status is now left alone on a
+   called-off Sunday, whether the request is decided on the Rota Requests
+   tab, from an email link, or in the app.
+
+3. THE NOTE ON A DECIDED SWAP STAYS.
+   The note saying who decided a swap was written and then wiped by the edit
+   handler that runs after it. It is now written last. A decision made in the
+   app says so: Decided in the coordinator's app by ...
+
+4. THE SPREADSHEET'S TWO REPORTS ANSWER THE APP TOO.
+   Is everything working? and Who is carrying the load, on the Minibus menu,
+   are unchanged. The app asks the sheet for the same reports.
+
+
+WHAT CHANGED IN v1.76.0
+-----------------------
+
+1. ROTA REQUESTS GO TO THE LIVE SERVER FIRST.
+   "Request sent" comes straight back, and the sheet files the request a few
+   seconds later with the same row, the same Change requested and the same
+   email as before. If the Worker does not answer, the app sends it to Apps
+   Script as it always did, and a request both saw is filed once. With this,
+   every write a phone makes goes to the live server first.
+
+2. A REQUEST FILED ON A CALLED-OFF SUNDAY NO LONGER PUTS THE ROUTE BACK ON.
+   The Status is left alone on a Sunday marked North or South cancelled. The
+   request is still filed and emailed.
+
+
+WHAT CHANGED IN v1.75.0
+-----------------------
+
+1. ALERTS FOLLOW THE NUMBER TO ANY PHONE.
+   Everyone who opens the passenger page is offered alerts, with or without
+   a seat. When a phone gives a number or books with one, its alerts move to
+   that number, so a booking made on a laptop reaches the phone that has
+   alerts on.
+
+2. THE SEDLEY STREET CANCELLATION.
+   A race in the drain could leave a cancelled booking saying Booked on the
+   sheet for good. Each drain now stamps what it copies, and the Worker marks
+   a row done only if it still carries that stamp. The same fix covers stop
+   taps, Undo and authorisations. The drain also no longer confirms new rows
+   before they are appended, or empties columns you have added to a tab.
+
+   To check Sedley Street on your data, in the D1 console:
+     SELECT id, stop, seats, status, received, synced FROM bookings
+     WHERE stop LIKE 'Sedley%' ORDER BY id DESC LIMIT 5;
+   Cancelled with synced 1, while the sheet says Booked, is this fault.
+   After the deploy, set Status to Cancelled on the tab and it reaches the
+   Worker.
+
+3. ESTIMATES FROM THE MOMENT THE BUS LEAVES CHURCH.
+   The passenger panel gives the minutes and the time straight away.
+
+4. NO LIMIT ON HOW FAR BEHIND AN ESTIMATE CAN BE.
+   It used to stop at 45 minutes. maxBehindMinutes in ETA_RULES (Code.gs)
+   and eta (config.js) brings a limit back; 0 is no limit.
+
+5. THE ESTIMATE IS KEPT FOR 15 MINUTES PAST ITS TIME.
+   keepMinutes. The panel keeps saying "Be at your stop".
+
+6. NO TIMETABLED TIME BESIDE AN ESTIMATE, IN EITHER APP.
+
+7. A BOLD TIME IS AN ESTIMATE, A PLAIN TIME IS THE TIMETABLE, IN BOTH APPS.
+
+8. "MINUTES BEHIND SCHEDULE" AND "MINUTES AHEAD OF SCHEDULE".
+   On the passenger panel and on the driver's trip strip.
+
+9. YOUR SHEET EDITS REACH PHONES IN SECONDS.
+   The edit trigger from step 4 pushes the Rota, Drivers, Buses, Bus Stops,
+   Rota Requests and Defects tabs the moment one is edited. Status or Seats
+   changed by hand on a Bus Bookings row now reaches the driver's list. The
+   passenger page checks every 15 seconds while bookings are open.
+
+10. PHONE ACTIVITY REACHES THE SHEET IN SECONDS.
+   After every booking, stop tap, walkaround and authorisation, the Worker
+   asks the sheet to collect. The five minute drain is still underneath.
+
+11. THE LIVE SERVER HAS ITS OWN CLOCK.
+   The Cron Trigger from step 2. Every timed message goes at the first minute
+   of its window. Without the trigger they go on the five minute sync.
+
+
+HOW IT WAS PROVED
+-----------------
+
+THE SUITE. node tests/run-tests.mjs: 1428 checks, all passed, READY. Three
+suites are new since v1.74.10. Run against v1.74.10 / w2.15.0 / v1.79.0:
+
+    25-rulings.mjs           v1.75.0   29 checks, 24 fail. The other five
+                                       check that nothing went too far.
+    26-requests-live.mjs     v1.76.0    8 checks, all fail.
+    27-coordinator-app.mjs   v1.77.0   43 checks, all fail.
+
+IN A BROWSER. On v1.77.0, all twenty driver checks, all six passenger checks
+and all seventeen coordinator checks pass. On v1.74.10, the six passenger
+checks and T10 to T13 on the driver app fail, and the coordinator checks
+cannot start.

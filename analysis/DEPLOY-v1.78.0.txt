@@ -1,0 +1,125 @@
+MINIBUS
+=======
+  pages v1.78.0 · server w2.19.0 · sheet v1.83.0
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.77.1         v1.78.0
+  Worker  w2.18.0         w2.19.0
+  Code.gs v1.82.0         v1.83.0
+
+All three move. No SQL, and nothing new in Script Properties, Worker
+variables or triggers.
+
+
+IN THIS ORDER
+-------------
+
+1. WORKER. Cloudflare, minibus-api, Edit code. Paste worker.js over the old
+   one. Deploy.
+
+2. CODE.GS. Apps Script editor. Paste Code.gs over the old one. Save.
+   Deploy, Manage deployments, the pencil on the existing deployment,
+   Version: New version, Deploy. Edit the existing one; do not make a new one.
+
+3. Minibus, Rota and setup, Send everything to the live server now.
+   It carries the new Saturday setting to the live server straight away.
+
+4. PAGES. Upload these six over the old ones:
+
+       index.html
+       sw.js
+       config.js
+       sunday/index.html
+       sunday/sw.js
+       coord/index.html
+
+   coord/manifest.webmanifest and the icons have not changed.
+
+
+AFTER IT
+--------
+
+A. The foot of the driver app reads  app v1.78.0 · server w2.19.0 · sheet
+   v1.83.0 . A phone still on v1.77.1: close the app fully and open it
+   again.
+
+B. Signed in on the driver app as yourself, the hub has Coordinator on a line
+   of its own, Driving rota and Stops and bookings side by side under it, and
+   Vehicle check under them.
+
+C. Key your PIN on the driver app, then tap Coordinator. The coordinator's
+   first screen opens with no PIN asked.
+
+D. Open the coordinator's app from its own home screen icon. It asks for the
+   PIN, and choosing your name puts the cursor in the PIN box. Under Driver
+   app the line reads  coordinator v1.78.0 · server w2.19.0 · sheet v1.83.0 .
+   Tap it for the report. The theme chips are under it. The first screen
+   after you open the app has no version line.
+
+E. The reminder of what was booked goes on Saturday between 18:00 and 19:00.
+   To see it, book a seat for Sunday on the passenger page from a phone with
+   alerts on. That evening it gets "You are booked for Sunday" with the stop,
+   the time and the seats. Cancel the seat afterwards if you are not
+   travelling.
+
+
+WHAT CHANGED
+------------
+
+1. A PASSENGER WITH A SEAT IS REMINDED WHAT HE BOOKED.
+   The reminder run skipped anyone with a booking, so his only reminder was
+   the Sunday morning message. Now, on Saturday between 18:00 and 19:00, every
+   phone with alerts on and a seat for Sunday is told, once:
+
+       You are booked for Sunday
+       Grace Road bus stop, Walton Vale, 10:23. 2 seats. Tap to change or
+       cancel.
+
+   People with no seat still get the three nudges as before.
+
+   It is a setting: booked: true on the Saturday window in BOOKING_RULES
+   (Code.gs) and booking (config.js), which must match. Put it on another
+   window as well and that window reminds too. Take it off and it stops.
+
+2. THE HUB, FOR A COORDINATOR.
+   Coordinator has a line of its own, as wide as Vehicle check. Driving rota
+   and Stops and bookings stay together, and Vehicle check stays the
+   full-width button at the bottom. A driver's hub is unchanged.
+
+3. NO SECOND PIN FROM THE HUB.
+   A coordinator whose PIN the driver app has checked goes straight to the
+   coordinator's first screen when he taps Coordinator. The PIN goes once, in
+   that tab's own session storage, and the coordinator's page takes it and
+   wipes it as it opens; a copy more than a minute old is not used. With no
+   checked PIN, only the name goes and the page asks. Opened from its own
+   icon or a link, it always asks. It still locks after 15 minutes untouched,
+   and the live server still checks the PIN on every call.
+
+4. THE PIN BOX IS FOCUSED ONCE A NAME IS CHOSEN, as on the driver app.
+
+5. THE COORDINATOR'S LANDING PAGE.
+   The sign-in screen carries the three numbers, read from the live server
+   before anyone signs in, and the names that may sign in now come from the
+   Drivers tab the live server holds, with config.js only until it answers.
+   Tapping the numbers gives the driver app's kind of report: the versions,
+   whether the live server answered, who can open the page, whether the
+   chosen name has a PIN, how this visit was opened, the lock and refresh
+   settings, and after a sign-in the changes on their way to the sheet and
+   when the clock last ticked. The theme chips are under the numbers and are
+   the driver app's own setting, so a theme set in either app is set in both.
+   The first screen after signing in no longer carries the numbers.
+
+
+HOW IT WAS PROVED
+-----------------
+
+THE SUITE. node tests/run-tests.mjs: 1435 checks, all passed, READY. Six new
+checks on the reminder of what was booked. Four of them fail on v1.77.1 /
+w2.18.0 / v1.82.0; the other two check it does not go where it should not.
+
+IN A BROWSER. Coordinator: 22 checks, all pass. The five new ones (the PIN
+taken from the driver app, a stale one refused, the PIN box focused, the
+landing page's numbers and report, the theme chips) fail on v1.77.1. Driver
+app: 22 checks, all pass. T14 (the hub) and T15 (the PIN going once, and not
+going with only the name) fail on v1.77.1. Passenger: 6 checks, all pass.

@@ -1,0 +1,820 @@
+MINIBUS
+=======
+  pages v1.74.6 · server w2.11.0 · sheet v1.77.0
+
+YOU ARE ON              GOING TO
+  Pages   v1.69.0         v1.74.6
+  Worker  w2.1.0          w2.11.0
+  Code.gs v1.61.0         v1.77.0
+  Cloudflare variables    NOT TOUCHED. PIN_SALT and the rest stay as they are.
+
+The left column was read off the live system, not assumed.
+
+ALL THREE MOVED THIS TIME. config.js carries the booking nudge windows and
+they changed, so the page stamp moved with it — a second config.js under the
+same version number is exactly the confusion the stamps exist to prevent.
+
+THIS REPLACES EVERY SHEET SENT SO FAR. v1.70.1, v1.71.0, v1.72.0 and v1.73.0
+were all handed over and none was deployed. Everything in all four is in this
+one. Deploy this and skip them.
+
+No SQL. Nothing to paste. PIN_SALT is untouched.
+
+All three move, and there is ONE NEW PAGE FILE this time.
+
+The Worker adds five columns and one table to its own database the first time
+it needs them. There is nothing to do by hand, and NO NEW SCHEDULED JOB:
+everything new rides the five minute sync that already exists. It should
+still say "All 7 scheduled jobs are installed."
+
+
+IF YOU ARE PART WAY THROUGH ALREADY
+-----------------------------------
+
+  "D1_ERROR: table stops has no column named lat" is MY FAULT and this zip is
+  the fix. Nothing is damaged: the sync writes stops, buses and rota as one
+  batch, and a batch that fails writes nothing at all, so your D1 still holds
+  the last good copy. That is why the apps carried on and the rota copy was
+  only minutes old.
+
+  If steps 2 to 5 are already done, YOU ONLY NEED STEP 1. Paste the new
+  worker.js over the old one and Deploy. The next sync inside five minutes
+  will add the two columns and go through. Nothing else changes: Code.gs and
+  the seven page files in this zip are the same bytes you already uploaded.
+
+  What was wrong: ensureTripCols adds stops.lat and stops.lng, and every call
+  to it sat inside handleTrip, guarded on a run ENDING. The sync reached those
+  columns first — every five minutes, before any driver had ended anything —
+  so on a database that had never run this version there was no path by which
+  they could exist yet.
+
+  Why no test caught it: every test database is built from schema.sql, which
+  already HAS the columns, so the migration had nothing to migrate. There is
+  now a database built without them, and the sync that failed on your
+  deployment is run against it. Eight checks fail if the fix is removed.
+
+
+AND THE BLANK LAT/LNG CELLS, WHICH WERE A SECOND FAULT OF MINE
+--------------------------------------------------------------
+
+  Every row came out blank because fillStopPins compared the Stop name with
+  `===`, and the names in its table were the SHORT ones out of my test
+  fixtures. A real tab does not say "Grace Rd". It says
+
+    Grace Road bus stop, Walton Vale
+
+  Not one of the fifteen could ever have matched, and the church rows say
+  "Church, Chester Road" rather than "Church", so those failed too. Nineteen
+  rows, nineteen blanks, and the guard was working exactly as written.
+
+  IT NOW MATCHES ON THE POSTCODE, which is a better signal than the name ever
+  was: it is already on the tab, it sits beside the stop, and it is the thing
+  that CHANGES WHEN A STOP MOVES — which is the only reason a check is here.
+  A row whose postcode nobody has filled in falls back to comparing the road,
+  ignoring everything after the first comma, bracket, "by", "off" or "bus
+  stop". The church is matched on being a Depart or an Arrival at L6 4DY, with
+  the name not consulted at all, because its Stop IDs have been renumbered
+  twice already.
+
+  WHAT CHANGED IN BEHAVIOUR, and it is worth knowing: renaming a stop no
+  longer blanks its kerb. If the Molly Cafe closes and you retype that row,
+  Hannan Road keeps its coordinate. Only a NEW POSTCODE stops the fill. A stop
+  that moves within its own postcode has gone a few doors down, and a pin a
+  few doors down is still the right street.
+
+  ONE THING WORTH SEEING. Nine of your Where cells already held coordinates,
+  typed in before Lat and Lng existed. They agree with the fifteen in Code.gs
+  to six decimal places, every one — which is the only outside check this
+  project has on those numbers, and there is now a test that says so.
+
+  After Code.gs is in, run "Set up / refresh rota" again. It only fills blanks,
+  so running it a second time is safe and changes nothing else.
+
+  TWELVE OF THE FIFTEEN WILL FILL. THREE WANT YOUR EYES.
+
+    N04  Fountains Road     53.432320  <- Stanley Park's latitude is 53.432312.
+                                          Eight metres apart, for two stops a
+                                          mile and an eighth apart. The
+                                          longitude, -2.984024, sits right
+                                          between Litherland Road and Bedford
+                                          Road and is probably fine; it is the
+                                          latitude that came off the wrong row.
+                                          At about 53.4455 the route reads
+                                          straight instead of going out towards
+                                          the docks and back.
+
+    S02  Vicar Road         -2.944937  \  the SAME longitude, to six decimal
+    S05  Parton Street      -2.944937  /   places. That is seven centimetres,
+                                          on two roads a mile apart. One of
+                                          them is carrying the other's number.
+
+  THE DUPLICATE IS IN YOUR WHERE COLUMN TOO, so it came in with the original
+  survey rather than from me. Which of the two is wrong cannot be worked out
+  from here.
+
+  TO FIX ANY OF THEM: open Google Maps, right-click the kerb, and the
+  coordinates appear at the top of the menu — click to copy. Paste the
+  latitude into Lat and the longitude into Lng. Typed by hand, they are never
+  overwritten, and nothing else has to change.
+
+  WHY NOT JUST SHIP THEM. A wrong coordinate is worse than no coordinate. A
+  blank cell is visible and every part of this handles it — the map link falls
+  back to the postcode, the estimate leans early, which is the safe direction.
+  A plausible wrong number is believed: it sends a driver to the wrong street
+  and it quietly bends every estimate on that stretch.
+
+  THE SIX THAT WERE CHECKED ARE FINE. S03 to S04 was measured independently at
+  195 metres and comes out at 195. N05 through N07 at 556, and comes out at
+  556. Nine of your Where cells hold coordinates and the seven still shipped
+  agree with Code.gs to six decimal places.
+
+
+THE PASSENGER PAGE DID NOT RUN AT ALL, AND THAT WAS ONE BRACKET
+---------------------------------------------------------------
+
+  Header, "Loading the stops...", the theme chips, and then nothing, for
+  ever. The script in sunday/index.html did not PARSE, so not a line of it
+  ran. When the stamp moved to the date line in v1.72.0 its closing bracket
+  stayed behind, and what was left read
+
+      '</div>' + '');
+
+  on the end of an assignment, where the bracket closed nothing.
+
+  It shipped in v1.72.0 and in every release since. Fixed in PAGES v1.74.1 —
+  upload the four page files again (index.html, sunday/index.html, and both
+  sw.js). worker.js and Code.gs are untouched.
+
+  WHY A THOUSAND GREEN CHECKS MISSED IT. "Every file parses" parsed Code.gs,
+  worker.js and the two service workers — every .js file in the release. For
+  the two PAGES it counted <script> tags against </script> tags and called
+  that parsing. The logic of both apps lives inside those tags, 121 kilobytes
+  of it on the passenger page alone, and nothing had ever read a line of it.
+
+  It does now, and the page was also run in a real browser to see it paint.
+  Put the bracket back and the suite fails:
+
+    sunday/index.html: the script starting at line 730 does not parse
+    — Unexpected token ')'
+
+
+A REHEARSAL NOW REACHES THE PHONES. IT DID NOT BEFORE.
+------------------------------------------------------
+
+  You started one and watched nothing happen for five minutes. Two separate
+  faults, and the second is the one that would have wasted the evening.
+
+  ONE — IT WAITED UP TO AN HOUR. liveSync pushes only when rotaVersion has
+  moved, or once an hour as a backstop. Starting a rehearsal moves neither, so
+  every tick skipped the push and the flag sat in the spreadsheet. Stopping one
+  was worse: the banner would have stayed up long after it was over.
+
+  Now both ends push the moment you press the button, and the alert tells you
+  which happened — "The apps have it now", or that the server could not be
+  reached and they will catch up. The version is bumped as well, so if that
+  one call cannot get out, the next tick carries it anyway.
+
+  TWO — THE TEST SEATS NEVER LEFT THE SPREADSHEET. A rehearsal draws its seats
+  and writes them onto the Bus Bookings tab. Bookings travel the OTHER way in
+  the ordinary course of things — the live server takes them and the drain
+  brings them here — so the sync had never carried one.
+
+  That was harmless until the driver's Stops and bookings screen moved to the
+  live server for speed. From that day a rehearsal put the banner up over a
+  route on which nobody had booked anything. Nothing to walk through, and no
+  sign of why.
+
+  The sync now carries the seeded rows while one is running, and an empty list
+  when it is not, which is how the server is told to sweep the last lot away.
+  A real booking is never touched: the clear-out is fenced to the rehearsal
+  tag, and there is a test with a paying passenger sat in the middle of it.
+
+  WHAT TO DO: worker.js and Code.gs. The page files are unchanged.
+
+
+CLEARING A SUNDAY, WITHOUT A SQL CONSOLE
+----------------------------------------
+
+  Minibus -> Rehearse this Sunday -> "Clear a Sunday's test run (asks first)"
+
+  You needed this at three in the morning and it did not exist. It does now.
+
+  It asks which Sunday, defaulting to the coming one, and before it touches
+  anything it tells you what it found:
+
+    14 rows on the Trip Events tab, and 9 of them are NOT tagged
+    Rehearsal - those are being read as a real morning.
+
+  That second number is the useful one. A count on its own says nothing; what
+  matters is how much of it is pretending to be real, because those are the
+  rows Who is tapping, the weekly summary and anybody reading the tab in
+  November will take at face value.
+
+  On yes it clears the taps from the live server AND the tab, plus any seats a
+  rehearsal drew for that Sunday, and tells you how many of each.
+
+  TWO THINGS IT WILL NOT DO.
+
+  IT WILL NOT TOUCH A SUNDAY THAT HAS BEEN AND GONE. A morning that has been
+  driven is the record of people who were actually carried. Refused in the
+  spreadsheet and refused again on the live server, because the spreadsheet is
+  not the only thing that can hold that token. There is a test that hands it a
+  driven Sunday and checks that every row is still there afterwards.
+
+  IT WILL NOT CLEAR A RUN THAT IS STILL OPEN. Taking the morning out from
+  under a driver between two stops would leave him tapping into nothing.
+
+  AND THE LIVE SERVER GOES FIRST. If that call fails, nothing is deleted
+  anywhere and it says so. A Sunday cleared here but not there is worse than
+  one nobody touched: the next sync puts it all back, and the tidying looks
+  like it failed for no reason.
+
+
+THE LINK REFUSED A COORDINATOR'S OWN PIN
+----------------------------------------
+
+  You opened your own email link, keyed your own PIN, and were told it was not
+  right. It was not right FOR THE MAN THE EMAIL HAD BEEN ADDRESSED TO.
+
+  coordinatorName() picks whoever COORDINATOR_EMAIL matches in the Email
+  column of the Drivers tab, and FALLS BACK to the first active driver in an
+  authorising role when nothing matches. Your tab has Pst Kehinde (Minister in
+  Charge) above Bro Asim (Coordinator), so if that property does not match
+  your Email cell exactly, the link was asking for HIS PIN and comparing yours
+  against his hash. Nothing on the page said whose it wanted, and the only
+  message it had was the one that sounds like your own mistake.
+
+  THE APP HAS ALWAYS LET ANY AUTHORISER RELEASE A BUS. The link did not. One
+  rule now: any active driver in an authorising role, PIN checked against
+  every one of them, and the record names whoever actually decided rather than
+  whoever the email was addressed to. The page says so under the box — "any
+  coordinator's PIN will do" — and a refusal now reads "that PIN did not match
+  any coordinator's" instead of blaming the person holding the phone.
+
+  Tries are counted PER LINK rather than per name, which is the only thing
+  that makes sense when no name has been claimed yet. Three, then it locks.
+
+  WORTH CHECKING ANYWAY: COORDINATOR_EMAIL against the Email column on the
+  Drivers tab. It decides who GETS the emails, and that is still worth having
+  right even now that it no longer decides who can act on them.
+
+  NOTHING HERE LOOSENS ANYTHING. An ordinary driver's PIN is still refused —
+  there is a test that keys Bro Tunde's own PIN on a link addressed to Bro
+  Tunde and checks it gets nowhere. An empty PIN is refused. A coordinator
+  with no PIN against their name is not a way in. And the person who signed
+  the walkaround still cannot authorise it.
+
+
+ONE LINE PER FAULT ON "BEFORE YOU START"
+----------------------------------------
+
+  Keys and remote twice, first aid kit twice, and then "and 9 more".
+
+  Every walkaround that finds the same fault writes another row, so one key
+  remote nobody has fixed appears once per inspection. Six lines are shown.
+  Which means duplicates of ONE fault were pushing OTHER faults out of sight
+  — an untidy list that was quietly costing a driver things he needed to know
+  before he set off.
+
+  One line per item now. The words come from the NEWEST report, because that
+  is the fault as it stands today, and the line says "2 reports" so nothing
+  is silently swallowed.
+
+  THE WEIGHT NEVER COMES DOWN. If any report of an item is critical, the line
+  is critical, and a defect outranks an advisory — whatever the newest row
+  happens to say. A critical from a fortnight ago cannot hide behind an
+  advisory raised this morning on the same item. There is a test that tries
+  exactly that.
+
+
+"YOURS THIS SUNDAY" ON THE VEHICLE CHOOSER
+------------------------------------------
+
+  One chip on a card, never two. On the bus the man reading is down to drive
+  it says Yours, in the same green and the same words as the badge on Stops
+  and bookings. Every other card keeps its route:
+
+    NH56 FWP   YOURS THIS SUNDAY
+    YS70 PWE   SOUTH THIS SUNDAY
+
+  Yours WINS on his own card, because he is choosing a vehicle and "this is
+  the one" answers that better than the name of a route he already knows he
+  is on.
+
+  NOTHING IS LOST FOR ANYBODY ELSE, which is what makes the swap safe. It
+  happens on the ONE card belonging to the ONE man reading it. A driver who
+  is not on this Sunday, a coordinator doing a Wednesday check, and anybody
+  covering somebody else all see both routes exactly as before.
+
+  IT IS DRIVEN BY WHOSE TURN IT IS, NOT BY WHOSE ROUTE IT IS, and that
+  distinction has already cost this project once. "Which route is this man's"
+  is right for choosing which tab opens and wrong for a badge: it would tell
+  every driver in North's pattern that the bus was his, so on a Sunday when
+  one of them is actually driving, the other five are each told it is theirs
+  — and the one man it is aimed at then has no reason to believe it.
+
+  The check is the same one the Stops and bookings badge uses, so the two
+  screens cannot say different things about one Sunday. Six tests, including
+  one that hands it a man who is not driving and checks that neither bus
+  lights up. Point it at the home route instead and that one fails.
+
+  PAGE FILES ONLY. worker.js and Code.gs are untouched.
+
+
+THREE SMALL ONES ON THE DECISION PAGE AND ITS EMAIL
+---------------------------------------------------
+
+  THE PIN SITS IN THE MIDDLE NOW, like every other PIN box in the project.
+  Four dots hard against the left edge of a full width field read as the
+  start of something longer.
+
+  A STOPPED BUS RELEASES ITSELF ON THE LAST DIGIT. One button on that page,
+  so a PIN keyed there can only mean one thing and there is nothing to guess.
+  Half a second of quiet first: four is the SHORTEST a PIN may be, not the
+  only length, and firing on the fourth digit would cut a longer one off and
+  tell its owner it was wrong.
+
+  A ROTA REQUEST DOES NOT, AND THAT IS ON PURPOSE. It has two buttons.
+  Approve and Turn it down are opposite answers to one question, and the only
+  one a page could sensibly pick by itself is Approve — the one that changes
+  the rota. Nobody should be able to approve a holiday by finishing a PIN.
+  Say the word if you would rather it did and I will change it.
+
+  THE BUTTON IN THE EMAIL WEARS ITS OWN SUBJECT'S COLOUR. Deep red for a
+  stopped bus, amber for a rota request, taken from the band at the top of
+  the same message. It was the same near-black as the two beside it that only
+  open a tab, and three grey rectangles in one email means reading all three
+  to find the one that acts. Opening the spreadsheet stays quiet, because it
+  is the way round rather than the way.
+
+
+PICKING THE COVER FROM THE PHONE
+--------------------------------
+
+  Approving a holiday from the email used to leave the morning reading "No
+  driver assigned" and you still had to open the spreadsheet. A decision link
+  that still needs a laptop is half a link, and that is the thing that
+  changed my mind.
+
+  The page now asks WHO COVERS IT, under the PIN box:
+
+    Leave it - arrange cover later
+    Bro Asim - last drove 20 Sep
+    Pst Kehinde - already driving South, last drove 6 Sep
+    Bro Tunde - last drove 13 Sep
+
+  A BARE LIST OF NAMES IS WHAT I ONCE OBJECTED TO, and the objection was
+  right about the list. What turns it into a judgement is the two facts
+  beside each name, and the live server holds both already: who is out that
+  morning on the other route, and when each man last drove. "Ask the one who
+  has not done it in a while" is now something the eye can do in one pass.
+
+  LEAVING IT ALONE IS A REAL ANSWER and is the first option on purpose. An
+  approval with nobody named behaves exactly as it always did.
+
+  A SWAP IS OFFERED NOBODY. It names its own partner and moves two Sundays; a
+  third name there would be offering to do something else entirely.
+
+  NOTHING TRUSTS THE PAGE. The name is checked against the register on the
+  live server before it is written anywhere, and a name the register does not
+  know is DROPPED while the decision still stands — landing as "approved,
+  cover to be arranged", which is exactly what it was before. A cover sent
+  with a refusal is ignored at both ends.
+
+  WHEN IT WORKS, NOBODY OPENS THE SPREADSHEET AT ALL. The Rota is written,
+  the man coming off gets "you are no longer driving", and the man coming on
+  gets the duty email with the bus and a calendar file.
+
+  The Worker adds one column to its own links table on first use. Nothing to
+  paste.
+
+
+THE ORDER
+---------
+
+  1.  worker.js        ->  Cloudflare -> the Worker -> Edit code
+                           Paste over everything, Deploy.
+
+  2.  Code.gs          ->  Apps Script -> paste, Save
+                           Deploy > Manage deployments > edit >
+                           Version: New version > Deploy
+
+  3.  Minibus menu     ->  Rota and setup -> Set up / refresh rota
+
+      Google will ask for ONE NEW PERMISSION, to see your email address.
+      Allow it. It is how the sheet puts your name on a bus you authorise
+      from the Checks tab. Refuse it and the menu will not run.
+
+      This step adds the Outcome dropdown and the new columns to Checks and
+      Defects, adds Lat and Lng to Bus Stops AND FILLS THEM IN, and adds
+      Ended by to Trip Events.
+
+  4.  Minibus menu     ->  Rota and setup
+                           -> Send everything to the live server now
+
+  5.  SEVEN page files ->  GitHub
+        index.html
+        sunday/index.html
+        sw.js
+        sunday/sw.js
+        manifest.webmanifest
+        config.js
+        do/index.html       <-- NEW FILE, IN A NEW FOLDER
+
+      do/ is a new folder at the top level, beside sunday/. There is nothing
+      else in it and nothing else goes in it.
+
+Steps 1 to 4 need a computer. Step 5 can be done from a phone.
+
+>>> BEFORE YOU START, CHECK ONE LINE. <<<
+
+    Code.gs, LINK_RULES.pagesUrl
+
+It is set to https://drolnstone.github.io/minibus-check/ — the address the
+pages are published at today. The email links are built from it. If that is
+right, nothing to do. If the site ever moves, this is the line that follows
+it.
+
+
+WHAT IS NEW IN v1.74.0
+----------------------
+
+  1.  A BUS CAN BE AUTHORISED FROM THE EMAIL.
+
+      The "BUS STOPPED" message now carries a button. It opens a page, the
+      page shows the check, and it asks for your PIN. The same three tries and
+      the same five minute lockout as the app.
+
+      Authorising this way is the SAME ACT as authorising in the app, writing
+      the same record. The defect stays open on the Defects tab with your name
+      against the decision to run.
+
+  2.  A ROTA REQUEST CAN BE APPROVED OR TURNED DOWN FROM THE EMAIL.
+
+      Same page, same PIN, two buttons.
+
+      It does NOT write the Rota directly. It records your answer, the next
+      five minute sync carries it to the Rota Requests tab, and the tab's own
+      handler writes the Rota — the very code path you go through by typing in
+      the Status cell. So a swap still moves both Sundays, a protected Sunday
+      is still refused, and the route still comes from the requester. There is
+      no second version of "what approving means" to drift out of step.
+
+      The row gets a note saying it was decided from the email link, by whom,
+      and when.
+
+      PICKING A REPLACEMENT IS STILL BY HAND, deliberately. Choosing who
+      covers a Sunday is a judgement about people made looking at the rota,
+      and a dropdown in an email is not where it belongs.
+
+  3.  IT IS NEVER A ONE-CLICK LINK, AND THAT IS THE POINT.
+
+      A link that acts when it is opened is acted on by whatever opens it.
+      Your mail provider scans links for malware. Phones fetch them to build
+      previews. Corporate gateways rewrite them and follow them to see where
+      they go. Any of those would have authorised a bus with a fault on it
+      while the email was still unread.
+
+      So opening the link changes nothing at all. It shows you the decision.
+      Only the PIN acts. A scanner may open it fifty times and the bus stays
+      off the road — there is a test that does exactly that.
+
+  4.  ONE USE, AND ABOUT AN HOUR.
+
+      A mailbox is kept for years. A link that still works in March is a way
+      into the record that nobody is watching. After it is used, or after
+      LINK_RULES.ttlMinutes, the page says so and offers nothing.
+
+      A wrong PIN does NOT use the link up, so a mistyped one is just a
+      mistyped one.
+
+  5.  THE PAGE ITSELF.
+
+      New file, do/index.html. No service worker, no manifest, no config.js,
+      nothing loaded from anywhere but the live server. It is opened once,
+      from a message, and closed.
+
+      Nothing caches it, on purpose: a decision served from a cache is a
+      decision made against a stale picture of the morning. If there is no
+      signal it does not load, and a page that does not load is a better
+      answer here than one that loads and is wrong.
+
+  WHOSE PIN IT ASKS FOR is whoever COORDINATOR_EMAIL matches in the Email
+  column of the Drivers tab. Not a new setting: change who gets the emails and
+  the link follows, with nothing to keep in step. If no Email is filled in it
+  falls back to the first active coordinator.
+
+  TO TURN IT ALL OFF: LINK_RULES.on = false in Code.gs. Every email goes back
+  to saying "open the spreadsheet" and nothing else changes.
+
+  IF THE LIVE SERVER IS DOWN when an email is built, the email still goes,
+  without a link, saying to use the spreadsheet. A convenience must never be
+  able to stop you finding out that a bus is off the road.
+
+
+ALSO IN HERE, FROM THE THREE UNDEPLOYED RELEASES
+------------------------------------------------
+
+  *  v1.70.1  Advisory as a third answer; a stopped bus can be authorised in
+              the app or from the Outcome column; an authorisation lifts only
+              the check it names; the check goes to the live server first; the
+              driver app is called Dominion Transport.
+  *  v1.71.0  A driver ends his own run and nobody else's, with a
+              coordinator's PIN as the deliberate way round it and an Ended by
+              column; the estimate works over booked stops only and leads on
+              the driver's list; Lat and Lng on Bus Stops, filled in.
+  *  v1.72.0  A passenger hears at every booked stop before his own, with a
+              threshold so he is not buzzed three times in four minutes;
+              "Be at your stop" as the bold line, red on the page when close;
+              one Updated stamp beside the date; the booking nudges (now
+              three a week — see below).
+
+Their sheets have the detail. Nothing in them has changed.
+
+
+AFTER DEPLOYING
+---------------
+
+  *  The foot of both apps should read
+     app v1.74.6 · server w2.11.0 · sheet v1.77.0
+
+  *  Minibus -> Have a look -> Is everything working?
+     "Script is v1.77.0.", "Live server is w2.11.0.", and
+     "All 7 scheduled jobs are installed."
+
+  *  OPEN https://drolnstone.github.io/minibus-check/do/ WITH NO LINK ON IT.
+     It should say the link is not complete. That is the page being reachable,
+     which is the only thing step 5 can get wrong.
+
+  *  TRY THE WHOLE THING, ON A WEEKDAY.
+
+     Mark a critical item Defect on a check, sign, send. You get the BUS
+     STOPPED email with a button on it.
+
+     OPEN IT TWICE FIRST, without keying anything, and close it. Then open the
+     driver app: the bus should still be stopped. That is the property the
+     whole design rests on.
+
+     Then key your PIN. The page says authorised, and Stops and bookings has
+     its Start trip button back within a few seconds.
+
+     Open the link a third time: it should say you already decided it.
+
+     Set the defect to "Not a defect" afterwards.
+
+  *  TRY A ROTA REQUEST. Ask for a swap from a driver's phone. The email
+     arrives with two buttons. Approve it, then watch the Rota Requests tab:
+     within five minutes the Status reads Approved, the cell has a note saying
+     it came from the email link, and the Rota has moved.
+
+
+IF ANYTHING IS WRONG ON SUNDAY
+------------------------------
+
+Blank liveEndpoint in config.js and redeploy the pages. Every call returns to
+Apps Script: slow, and correct. That one line is still the whole escape hatch.
+The email links stop working on that path, and the emails go on saying to use
+the spreadsheet.
+
+To turn off just the links without rolling anything back: LINK_RULES.on =
+false in Code.gs, Save, Deploy a new version.
+
+
+SIX YOU HAVE ALREADY DECIDED, NOW BUILT
+---------------------------------------
+
+  *  A CANCELLED SUNDAY NO LONGER TELLS ITS DRIVERS TO TURN UP.
+
+     This one is not from this week's work. It is old, it is in what you are
+     running today, and I only found it because you asked whether approving a
+     cover should clear a man's name off the rota.
+
+     dutyReminders read the driver's name out of the Rota and NEVER ASKED THE
+     STATUS COLUMN. Run against each status with a driver named, every one of
+     them sent:
+
+       Confirmed              -> 1 email
+       Covered                -> 1 email
+       No driver assigned     -> 1 email
+       Cancelled/declined     -> 1 email
+
+     So a morning you had cancelled still emailed its driver "You are down to
+     drive", a week out and again on the Friday, with a calendar file that
+     alarmed him on the Saturday morning. The passenger side has always read
+     that column — a cancelled route tells the people who booked it and
+     refuses further seats. The one man who has to physically turn up was the
+     one nobody told.
+
+     Now:
+
+       Confirmed, Covered, Change requested   sent, both routes
+       Cancelled/declined                     neither route
+       North cancelled / South cancelled      that route only
+       No driver assigned                     not sent
+
+     AND THEY ARE LISTED BY NAME in Is everything working?, under "Not sent,
+     because the Rota says the morning is not theirs". A reminder deliberately
+     withheld looks exactly like one that failed, and the answer belongs on
+     the screen you would check.
+
+     ON YOUR ACTUAL QUESTION: NO, APPROVING SHOULD NOT CLEAR HIS NAME. That
+     name is how you know whose Sunday you are covering, and how you put it
+     back if the request is reversed. Clearing it would destroy the record in
+     order to silence a reminder. Reading the status silences the reminder and
+     keeps the record.
+
+     ONE CARE TAKEN. The duty CHANGE alert asks a narrower question — only
+     whether the route was called off, never whether anybody is assigned —
+     because "No driver assigned" is a state a row sits in for the second
+     between clearing one name and typing the next, and that alert runs inside
+     the edit. Reading it there would swallow the email telling the new driver
+     he is on. There is a test either side of that line.
+
+     The spreadsheet and the Worker are now compared BY BEHAVIOUR on what
+     "cancelled" means, across every value in ROTA_STATUS. Drift there would
+     mean a Sunday off for the passengers and on for the driver.
+
+
+  *  EVERY ANSWER TO A ROTA REQUEST NOW REACHES THE DRIVER WHO ASKED.
+
+     You asked whether these drivers get told anything. Two of the three
+     shapes of answer got told nothing, and I described the shape of it
+     wrongly the first time — the correction is below.
+
+       Swap approved           both drivers, as before. This one always
+                               worked, because the email is sent from inside
+                               applySwap rather than from the edit trigger.
+       Approved, cover named   the man coming off and the man coming on, as
+                               before, from the spreadsheet. NOT from the
+                               email link, until now.
+       Approved, no cover yet  nobody, ever. NOW: the man who asked.
+       Turned down             nobody, ever, on either path. NOW: the man who
+                               asked, and only him.
+
+     WHY THE LINK WAS SILENT. The notice hangs off an installed edit trigger
+     on the Rota Requests tab, and Apps Script's own writes do not fire
+     installed edit triggers. A decision from the email is written by the
+     script, so the rota came out right and nothing was sent. The drain now
+     calls both handlers by name, in that order — the notice names the bus and
+     the route, and both are read off the Rota row the first handler writes.
+
+     WHERE I HAD IT WRONG. I told you approving a cover from your phone would
+     email nobody while the same decision on the laptop emailed two. The first
+     half was right and the reason was not: that page has two buttons and no
+     box to name a cover in, on purpose, so an approval from an email NEVER
+     has a replacement in it. It was landing in the "approved, no cover yet"
+     case — the row I had said I would leave alone. Leaving it alone would
+     have meant approving from your phone still told the man nothing, which is
+     the thing you actually asked about. So it is built.
+
+     TWO THINGS IT WILL NOT SAY. It never tells the other driver in a REFUSED
+     swap — he was never told it had been proposed, so the note would be the
+     first he heard of the whole thing. And it says "you are still down to
+     drive" only when the Rota still has his name: a request can be refused on
+     a Sunday somebody else has since picked up, and sending a man to a
+     morning he is not on is worse than sending him nothing.
+
+     NO SEVEN DAY HORIZON ON THESE. A duty CHANGE stays quiet about a Sunday
+     more than a week out, because nobody has been told who is driving it yet
+     and the ordinary reminder will carry the right name. An ANSWER is
+     something he is waiting for whether the Sunday is next week or in ten.
+
+     ONE MORE THING THE TESTS FOUND. The fake spreadsheet could not tell a
+     range which sheet it was on, so onRotaEditNotify returned at its first
+     line and NO TEST IN THIS PROJECT HAD EVER REACHED IT — not the requests
+     half and not the rota half. Fixed, and there is now a test that swapping
+     a name straight into a Sunday on the Rota tells both men, on South as
+     well as North.
+
+  *  THE BOOKING NUDGES ARE SUNDAY, WEDNESDAY AND SATURDAY, AND EVERY ONE OF
+     THEM SAYS WHEN BOOKINGS CLOSE.
+
+       Sunday    3-4pm    the run is over and next Sunday has just opened
+       Wednesday 6-7pm    the middle of the week
+       Saturday  6-7pm    the last one that can do anything
+
+     YOU WERE RIGHT THAT THERE WAS NOTHING ON A SATURDAY, and you have found
+     something worse than that while looking. It was Sunday and Thursday, and
+     it was really ONLY SUNDAY. oncePerWeek was true, which tags every window
+     in a week the same; the Sunday window runs first; so the Thursday one
+     reached nobody except people who had subscribed in between. Three
+     windows with that left on would have been the same single nudge with two
+     more chances to be the one that got skipped. oncePerWeek is now false.
+
+     What that means in practice: a man who never books hears three times a
+     week. A man who books on Sunday night hears once and is dropped the
+     moment he books. If three is too many, oncePerWeek back to true gives
+     you one — but it will be the SUNDAY one, not the Saturday one, and the
+     Saturday one is the only one that can still change anything.
+
+     EVERY ONE OF THEM NOW CARRIES THE CUTOFF: "There is room on the bus.
+     Bookings close Sunday 09:30." Built from the cutoff the server actually
+     keeps rather than typed beside it, so the phone cannot promise a
+     deadline the server does not hold.
+
+     AND THE SATURDAY ONE IS A DEADLINE. Inside the last day the title
+     becomes "Last chance to book for Sunday" and the body "Bookings close at
+     09:30 tomorrow." Worked out from the clock when the phone asks, never
+     from the tag: a push that sat in a tunnel until eight on Sunday morning
+     arrives saying TODAY.
+
+     windows in BOOKING_RULES (Code.gs) and booking (config.js). They have to
+     match and the suite fails if they do not. No window may sit inside quiet
+     hours; the suite fails on that too.
+
+  *  THE DUTY CALENDAR ENTRY IS TIMED, AND THE ALARM IS 24 HOURS.
+
+     It was an all-day entry, which is what put the reminder at a useless
+     hour. It is now timed at the real departure off the Bus Stops tab, in
+     UTC with a Z on it so no calendar has to guess what Britain was doing
+     that week.
+
+     YOU WERE RIGHT ABOUT THE ALARM AND I WAS NOT. I argued for twelve hours
+     because late is the last moment to ring somebody. Twelve hours before
+     09:52 is ten o'clock on Saturday NIGHT, which is when a man is least able
+     to act on a notice and most likely to silence it. Twenty-four lands it on
+     Saturday morning at the hour he would be leaving, with a whole waking day
+     to find cover.
+
+     The argument for twelve does not survive one fact I had in front of me:
+     SUNDAY MORNING IS ALREADY COVERED, by the "You are driving today" push
+     between half seven and half eight. The calendar alarm never had to be the
+     reminder on the day.
+
+     DUTY_ALARM_HOURS in Code.gs, if you ever want it different. A second
+     alarm nearer the time is one line.
+
+     A route with no Depart row keeps the all-day entry: a departure nobody
+     has written down is not a time to put in somebody's diary.
+
+  *  THE SECOND DUTY EMAIL MOVED FROM ONE DAY BEFORE TO TWO. Friday, not
+     Saturday.
+
+     This falls out of the alarm change and you called it. The calendar alarm
+     now lands Saturday morning, and a Saturday email would have landed about
+     two hours before it. Two notices about the same duty inside two hours is
+     one of them being ignored, and it is always the second one.
+
+     He is now warned on four separate days, none within two hours of another:
+
+       Sunday, a week out    email, with the calendar file
+       Friday                email
+       Saturday morning      the calendar alarm, on his own phone, no signal
+                             needed
+       Sunday, half seven    the "You are driving today" push
+
+     Friday also buys back something Saturday never had: it is a working day,
+     with the whole weekend still in front of him to find cover.
+
+     REMIND_DAYS in Code.gs, if you ever want it different. The Is everything
+     working? report now builds its own sentence out of that array rather than
+     having one typed beside it, so it cannot go on describing a cadence the
+     code has stopped keeping — which is exactly what it did this morning.
+
+  *  A DRIVER IS TOLD WHEN HIS STOPPED BUS IS LET OUT. "<reg> is authorised
+     to run", with who signed it and a reminder that the defect stays open.
+
+     It sits directly under "your bus was stopped" in the priority ladder,
+     because it is the same subject and it is the newer fact. Tagged by the
+     CHECK rather than by the day, so a second walkaround that stops the bus
+     and is authorised again tells him again. And the words come from the
+     record, never from the tag: if the bus has been stopped a second time
+     while the push sat in a tunnel, what he reads says stopped.
+
+
+STILL YOURS TO DECIDE
+---------------------
+
+  *  The late-bus wording. You said leave it, so it is left.
+  *  Whether to rely on the auto-end at all.
+  *  THE TIMETABLE. Now checked properly against the tab you sent, and it is
+     not what either of us thought. Every long leg on North is TIGHT before
+     the bus stops for anybody: the timetable implies about 18 mph between
+     districts and the record says the bus does about 12. Church to
+     Scarisbrick allows 11 minutes for 11.5 minutes of driving.
+
+     So it is impossible and far too loose at the same time. Call at every
+     stop and the bus cannot keep it, which is why 20 September ran eight
+     minutes late to Grace Road. Skip two and it hands back seventeen minutes,
+     which is why the same bus was eight minutes EARLY at Bedford Road.
+
+     The long legs want two or three minutes each. The clusters do not — three
+     minutes for 230 metres is right, because that time is the stopping.
+
+     analysis/README.md has the whole table. Nothing in the code changes for
+     it; this is a decision about the tab.
+
+AND THE ONE I WOULD PRESS ON: FOUR RELEASES ARE NOW STACKED UP UNDEPLOYED.
+Every one of them has been tested here and none has met a Sunday. The
+passenger messaging and the estimate in particular have never met a real
+phone, and analysis/calibrate.mjs wants one Sunday of Trip Events before
+dwellSeconds and resendMinutes are anything better than my best guess.
+
+
+THE REHEARSAL CHECKLIST IN README.md HAS BEEN REWRITTEN. The old one was
+fourteen steps from before any of these four releases and covered none of
+them: no Advisory, no authorising a stopped bus, no cross-driver end, nothing
+about the estimate, the passenger page or the email links. Run it once, whole,
+after this deploy. A, B and C are the parts worth repeating every week.
+
+README.md has the rest.

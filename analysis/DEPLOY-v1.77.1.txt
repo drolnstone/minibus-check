@@ -1,0 +1,90 @@
+MINIBUS
+=======
+  pages v1.77.1 · server w2.18.0 · sheet v1.82.0
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.77.0         v1.77.1
+  Worker  w2.18.0         w2.18.0   no change
+  Code.gs v1.82.0         v1.82.0   no change
+
+Pages only. Nothing in Cloudflare or Apps Script. If you are not on v1.77.0
+yet, do analysis/DEPLOY-v1.77.0.txt first; it goes straight from v1.74.10.
+
+
+IN THIS ORDER
+-------------
+
+1. THE ICON. Upload to the root of the GitHub repo, beside
+   alt-indigo-512.png:
+
+       alt-indigo-180.png
+
+2. PAGES. Upload these six over the old ones:
+
+       coord/index.html
+       coord/manifest.webmanifest
+       index.html
+       sw.js
+       sunday/index.html
+       sunday/sw.js
+
+   The icon goes first so the pages never point at a file that is not
+   there yet.
+
+
+AFTER IT
+--------
+
+A. The foot of the driver app reads  app v1.77.1 · server w2.18.0 · sheet
+   v1.82.0 . A phone still on v1.77.0: close the app fully and open it
+   again.
+
+B. The foot of the coordinator's app reads  coordinator v1.77.1 · server
+   w2.18.0 · sheet v1.82.0 .
+
+C. Add the coordinator's app to a phone's home screen. The tile is the logo
+   on indigo. A phone that added it before this update keeps the navy tile,
+   because a home screen icon is read once, when it is added: remove it and
+   add it again.
+     iPhone: open it in Safari, Share, Add to Home Screen.
+     Android: open it in Chrome, the menu, Add to Home screen or Install app.
+
+If checks A to I from v1.77.0 are not done yet, do them now. They read the
+same with v1.77.1 in place of v1.77.0.
+
+
+WHAT CHANGED
+------------
+
+1. THE COORDINATOR'S APP HAS ITS OWN ICON.
+   The logo on indigo, #28166F, the colour of the logo's own centre.
+   alt-indigo-180.png is alt-indigo-512.png scaled down, the same way the
+   other two apps' 180s are made from their 512s. The driver app stays navy
+   and the passenger page green, so a phone with all three can tell them
+   apart.
+
+2. THE PAGE NUMBERS MOVE TO v1.77.1.
+   index.html, sw.js, sunday/index.html and sunday/sw.js carry nothing new
+   apart from the number, which moves with the coordinator's page so all
+   three pages say the same build.
+
+
+HOW IT WAS PROVED
+-----------------
+
+THE SUITE. node tests/run-tests.mjs: 1429 checks, all passed, READY. The new
+one checks the coordinator's page and manifest name no icon the driver app or
+the passenger page uses, and it fails on v1.77.0.
+
+THE MORNING CHECKS PUT RIGHT. At midnight three checks on the passenger's
+morning message began to fail, on v1.77.0 as well. They seeded this Sunday by
+the real clock and ran the morning sweep on a clock fixed at 27 September, so
+from Monday they were looking at two different Sundays, and three others were
+passing for the wrong reason. They now take the Sunday from the fixed clock.
+The app itself was fine. With the time window taken out of a scratch copy of
+the Worker, the check that nothing goes outside the window fails, as it
+should.
+
+IN A BROWSER. All seventeen coordinator checks, all twenty driver checks and
+all six passenger checks pass on v1.77.1.
