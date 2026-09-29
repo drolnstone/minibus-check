@@ -934,8 +934,11 @@ itself and one that never does.
 | `PHONE_SALT` | salts the phone fingerprint. Changing it orphans every existing booking |
 | `PIN_SALT` | salts the PIN hash. **Must match the Apps Script property of the same name** |
 
-Both have fallbacks in `worker.js` so a fresh deploy works before they are set.
-Set them.
+`TOKEN` and `PHONE_SALT` have fallbacks in `worker.js`, so a fresh deploy works
+before they are set. **`PIN_SALT` has none, on either side, from w2.21.1 and
+v1.85.2**: this repository is public, and a salt printed in it protects
+nothing. With it missing every PIN is refused, never waved through, and **Is
+everything working?** names the side that is missing it.
 
 ---
 
