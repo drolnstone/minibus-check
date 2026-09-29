@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.79.1 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.80.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -744,7 +744,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.79.1";
+var PAGE_VERSION = "v1.80.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -787,10 +787,32 @@ var ENDPOINT = "https://minibus-api.asimbassey.workers.dev";
    that from the other end. The coordinator can answer, and can ring the
    driver himself if it is worth stopping the bus for.
 
-   Held here rather than fetched, because the message that needs it most is
-   the one shown when the server cannot be reached at all. Keep it in step
-   with coordinator in config.js, which is the same person for the drivers. */
-var COORDINATOR = { name: "Bro Asim", phone: "07377634214" };
+   From v1.80.0 it is not typed here. It is whoever has Role Coordinator on
+   the Drivers tab, with the number in the Phone column beside him, and it
+   comes stamped on every answer the live server gives (see callFetch). It is
+   kept on the phone as well, because the message that needs it most is the
+   one shown when the server cannot be reached at all.
+
+   Blank until the first answer on a phone that has never had one, and every
+   sentence below already reads "the bus coordinator" for that. */
+var COORD_KEY = "bus.coordinator.v1";
+var COORDINATOR = { name: "", phone: "" };
+try{
+  var coordKept = JSON.parse(localStorage.getItem(COORD_KEY) || "null");
+  if(coordKept && typeof coordKept === "object"){
+    COORDINATOR = { name: String(coordKept.name||""), phone: String(coordKept.phone||"") };
+  }
+}catch(e){}
+
+/* Taken off any answer that carries one, and kept only when it changed. */
+function coordinatorSeen(out){
+  var c = out && out.coordinator;
+  if(!c || typeof c !== "object") return;
+  var next = { name: String(c.name||"").trim(), phone: String(c.phone||"").trim() };
+  if(next.name === COORDINATOR.name && next.phone === COORDINATOR.phone) return;
+  COORDINATOR = next;
+  try{ localStorage.setItem(COORD_KEY, JSON.stringify(next)); }catch(e){}
+}
 
 /* Whether the offer of bus alerts is asked or posted.
 
@@ -901,7 +923,16 @@ var CALL_TIMEOUT = 25000;
 
 function callFetch(url, opts){
   return Promise.race([
-    fetch(url, opts || {}),
+    fetch(url, opts || {}).then(function(r){
+      /* Every answer the live server gives says who to ring. Read off a copy,
+         so the caller still has the body to itself, and before the caller
+         gets it, so the screen it paints already has the name. Never allowed
+         to fail the call it rode in on. */
+      var copy;
+      try{ copy = r.clone(); }catch(e){ return r; }
+      return copy.json().then(function(out){ coordinatorSeen(out); return r; },
+                              function(){ return r; });
+    }),
     new Promise(function(_, reject){
       setTimeout(function(){ reject(new Error("took too long to answer")); }, CALL_TIMEOUT);
     })

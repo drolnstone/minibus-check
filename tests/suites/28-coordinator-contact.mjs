@@ -1,0 +1,163 @@
+/* WHO PEOPLE RING, FROM THE DRIVERS TAB AND NOWHERE ELSE.
+
+   Until v1.80.0 the coordinator's name and number were typed into config.js
+   and again into the passenger page, and the register and North rota order
+   were typed into config.js, Code.gs and the driver app as well. From v1.80.0
+   (pages), w2.21.0 (Worker) and v1.85.0 (sheet) the coordinator is the row
+   with Role Coordinator on the Drivers tab, its Phone column is the number,
+   the sheet sends it on every push, and the Worker stamps it on every answer.
+
+   Every check here fails on w2.20.1 / v1.84.1 / v1.79.1. */
+
+import { join } from "node:path";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+import { Suite } from "../lib/t.mjs";
+import { makeDB } from "../lib/d1.mjs";
+import { loadWorker, env as makeEnv, installGlobals } from "../lib/worker.mjs";
+import { loadCodeGs, call } from "../lib/codegs.mjs";
+import { tab } from "../lib/tabs.mjs";
+
+const ADA = { name: "Sis Ada", phone: "07700 900123" };
+
+function tabs(drivers) {
+  return {
+    "Bus Stops": tab("Bus Stops", [
+      { Route: "North", "Stop ID": "N00", Time: "09:52", Stop: "Church", Active: "YES", Type: "Depart" }]),
+    "Drivers": tab("Drivers", drivers),
+    "Buses": tab("Buses", [{ Registration: "YS70 PWE", "Seats for passengers": 16, Active: "YES" }]),
+    "Rota": [["Date"]],
+    "Checks": [["When"]],
+    "Defects": [["When"]],
+    "Bus Bookings": [["Received"]],
+    "Trip Events": [["Logged"]],
+    "Rota Requests": [["When"]]
+  };
+}
+
+const PEOPLE = [
+  { Name: "Bro Old", Role: "Coordinator", Active: "NO", Phone: "07000 000000", Email: "old@b.c" },
+  { Name: "Bro First", Role: "Coordinator", Active: "YES", Phone: "07111 111111", Email: "first@b.c" },
+  { Name: "Sis Ada", Role: "Coordinator", Active: "YES", Phone: "07700 900123", Email: "ada@b.c" },
+  { Name: "Bro Driver", Role: "Driver", Active: "YES", "Primary order": 1, Route: "North", Phone: "07222 222222" }
+];
+
+export default async function (root) {
+  const s = new Suite("who people ring comes from the Drivers tab");
+  const G = installGlobals();
+  const J = async (r) => JSON.parse(await r.text());
+
+  /* ---- the sheet ------------------------------------------------------- */
+
+  const sheet = (drivers, email) => loadCodeGs(root, { tabs: tabs(drivers),
+    props: { COORDINATOR_EMAIL: email || "", PIN_SALT: "salt", WORKER_URL: "https://example.invalid" } });
+  const contact = (L) => call(L, "coordinatorContact", call(L, "readDrivers", L.ctx.SpreadsheetApp.getActive()));
+
+  s.test("the coordinator is the active row with Role Coordinator, and its Phone", (a) => {
+    const c = contact(sheet(PEOPLE));
+    a.eq(c.name, "Bro First", "the first active coordinator, and never the inactive one above him");
+    a.eq(c.phone, "07111 111111");
+  });
+
+  s.test("with two, the one COORDINATOR_EMAIL names is the one people ring", (a) => {
+    const c = contact(sheet(PEOPLE, "ADA@b.c"));
+    a.eq(c.name, "Sis Ada");
+    a.eq(c.phone, "07700 900123");
+  });
+
+  s.test("nobody with the role is a blank answer, not somebody else", (a) => {
+    const c = contact(sheet([PEOPLE[3]]));
+    a.eq(c.name, "");
+    a.eq(c.phone, "");
+  });
+
+  s.test("the push to the live server carries it", (a) => {
+    const L = sheet(PEOPLE, "ada@b.c");
+    call(L, "pushToWorker");
+    const sync = L.gas.fetched.map((f) => { try { return JSON.parse(f.opts.payload); } catch (e) { return null; } })
+      .filter((b) => b && b.action === "sync")[0];
+    a.ok(sync, "no sync was sent");
+    a.eq(JSON.stringify(sync.coordinator), JSON.stringify(ADA));
+  });
+
+  s.test("the rota the sheet answers the driver app with carries it too", (a) => {
+    const L = sheet(PEOPLE, "ada@b.c");
+    const out = call(L, "rotaPayload", "2026-10-04", 1);
+    a.eq(JSON.stringify(out.coordinator), JSON.stringify(ADA));
+  });
+
+  s.test("a new church's Drivers tab starts empty", (a) => {
+    const L = sheet(PEOPLE);
+    a.eq(L.ctx.SEED_DRIVERS.length, 0, "SEED_DRIVERS still names people");
+  });
+
+  /* ---- the live server ------------------------------------------------- */
+
+  async function fresh() {
+    G.reset();
+    const { mod: W } = await loadWorker(root);     /* a cold isolate each time */
+    const db = makeDB(join(root, "server", "schema.sql"));
+    return { W, db, env: makeEnv(db) };
+  }
+  const ask = (W, env) => W.default.fetch(new Request("https://worker.test/?rota=1&weeks=1"), env, {});
+
+  s.test("a sync that carries it is stamped on every answer after it", async (a) => {
+    const { W, env } = await fresh();
+    await W.handleSync(env, { coordinator: ADA });
+    a.eq(JSON.stringify((await J(await ask(W, env))).coordinator), JSON.stringify(ADA));
+    a.eq(JSON.stringify(await W.cacheGet(env, "coordinator")), JSON.stringify(ADA), "not kept in settings");
+  });
+
+  s.test("a cold isolate reads it back from settings", async (a) => {
+    const one = await fresh();
+    await one.W.handleSync(one.env, { coordinator: ADA });
+    const { mod: W2 } = await loadWorker(root);
+    a.eq(JSON.stringify((await J(await ask(W2, one.env))).coordinator), JSON.stringify(ADA));
+  });
+
+  s.test("a sync from an older sheet that does not send it leaves it alone", async (a) => {
+    const { W, env } = await fresh();
+    await W.handleSync(env, { coordinator: ADA });
+    await W.handleSync(env, {});
+    a.eq(JSON.stringify(await W.cacheGet(env, "coordinator")), JSON.stringify(ADA));
+  });
+
+  s.test("nobody in the role is told as a blank name, so the pages say 'the bus coordinator'", async (a) => {
+    const { W, env } = await fresh();
+    await W.handleSync(env, { coordinator: ADA });
+    await W.handleSync(env, { coordinator: { name: "", phone: "" } });
+    const out = await J(await ask(W, env));
+    a.eq(out.coordinator.name, "");
+    a.eq(out.coordinator.phone, "");
+  });
+
+  s.test("before any sheet has sent one, no answer invents one", async (a) => {
+    const { W, env } = await fresh();
+    a.eq((await J(await ask(W, env))).coordinator, undefined);
+  });
+
+  /* ---- the files ------------------------------------------------------- */
+
+  s.test("config.js names nobody", (a) => {
+    const box = { window: {} };
+    vm.runInNewContext(readFileSync(join(root, "config.js"), "utf8"), box);
+    const C = box.window.CONFIG;
+    a.eq(C.coordinator, undefined, "config.js still has a coordinator");
+    a.eq((C.drivers || []).length, 0, "config.js still has a driver register");
+    a.eq((C.rotaPrimaryPattern || []).length, 0, "config.js still has a North rota order");
+    a.eq((C.rotaSecondaryPattern || []).length, 0, "config.js still has a South rota order");
+  });
+
+  s.test("the passenger page types no coordinator of its own", (a) => {
+    const src = readFileSync(join(root, "sunday", "index.html"), "utf8");
+    a.ok(/var COORDINATOR = \{ name: "", phone: "" \};/.test(src), "COORDINATOR is typed in");
+  });
+
+  s.test("the driver app types no North rota order of its own", (a) => {
+    const src = readFileSync(join(root, "index.html"), "utf8");
+    a.ok(/var ROTA_PRIMARY_PATTERN = \(CFG\.rotaPrimaryPattern \|\| \[\]\)\.slice\(\);/.test(src));
+    a.not(/CFG\.coordinator/.test(src), "the driver app still reads coordinator from config.js");
+  });
+
+  return s;
+}

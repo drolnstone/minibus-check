@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.20.1";
+const SCRIPT_VERSION = "w2.21.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -44,6 +44,23 @@ const SHEET_VERSION_TTL = 5 * 60 * 1000;
 let sheetVersion = "";
 let sheetVersionAt = 0;
 
+/* WHO PEOPLE RING, and it rides the same way as the version above.
+
+   From w2.21.0 it is the row with Role Coordinator on the Drivers tab, told
+   on every sync, parked in settings and stamped on every reply by json(). No
+   page carries a name or a number of its own any more; each takes this from
+   whatever answer it gets first and keeps it for when there is no signal.
+
+   Null until a sheet that sends it has synced, and then nothing is stamped,
+   so a page keeps whatever it last knew rather than being told "nobody". */
+let coordinator = null;
+
+function coordinatorOf(v) {
+  if (!v || typeof v !== "object") return null;
+  return { name: String(v.name || "").trim().slice(0, 60),
+           phone: String(v.phone || "").trim().slice(0, 24) };
+}
+
 async function sheetVersionLoad(env) {
   /* Gated on WHEN it was last looked for, never on what was found. Gated on
      the value, an isolate that found nothing — which is every isolate until
@@ -60,8 +77,16 @@ async function sheetVersionLoad(env) {
      what is already in hand is thrown away. */
   const asked = Date.now();
   try {
-    const row = await env.DB.prepare("SELECT v FROM settings WHERE k='sheet_version'").first();
-    if (sheetVersionAt <= asked) sheetVersion = String((row && row.v) || "");
+    const rows = await env.DB.prepare(
+      "SELECT k, v FROM settings WHERE k IN ('sheet_version','coordinator')").all();
+    const got = {};
+    for (const r of (rows && rows.results) || []) got[r.k] = r.v;
+    if (sheetVersionAt <= asked) {
+      sheetVersion = String(got.sheet_version || "");
+      let c = null;
+      try { c = got.coordinator ? JSON.parse(got.coordinator) : null; } catch (e) { c = null; }
+      coordinator = coordinatorOf(c);
+    }
   } catch (e) { /* a version stamp is never worth failing a request over */ }
   if (sheetVersionAt <= asked) sheetVersionAt = Date.now();
 }
@@ -976,6 +1001,12 @@ function json(obj, status) {
     obj.script = SCRIPT_VERSION;
     obj.server = SCRIPT_VERSION;
     if (sheetVersion) obj.sheet = sheetVersion;
+  }
+  /* Over the top of anything already there, including a copy on the shelved
+     rota: that was built up to an hour ago, and this was told on the last
+     sync, which a Drivers tab edit sends within seconds. */
+  if (coordinator && obj && typeof obj === "object" && !Array.isArray(obj)) {
+    obj.coordinator = coordinator;
   }
   return new Response(JSON.stringify(obj), {
     status: status || 200,
@@ -3110,6 +3141,15 @@ async function handleSync(env, body) {
     }));
   }
 
+  /* Who people ring. Same rule as the version below: an older sheet that does
+     not send it leaves the last one alone. A sheet with nobody in the role
+     sends a blank name, and that is stored, because it is an answer. */
+  let coordSent = null;
+  if (body.coordinator && typeof body.coordinator === "object") {
+    coordSent = coordinatorOf(body.coordinator);
+    stmts.push(cachePut(env, "coordinator", coordSent));
+  }
+
   /* Told, never guessed. An older Apps Script that does not send it leaves
      whatever was last stored alone, so a partial deploy blanks nothing.
 
@@ -3203,6 +3243,7 @@ async function handleSync(env, body) {
     sheetVersion = sheetSent;
     sheetVersionAt = Date.now();
   }
+  if (coordSent) coordinator = coordSent;
   return json({ ok: true, applied: stmts.length });
 }
 

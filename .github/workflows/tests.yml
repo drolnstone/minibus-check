@@ -1,0 +1,24 @@
+# Runs the checks in tests/ on every pull request and every push to main.
+# The browser checks in tests/browser are not run here: they need Chromium
+# and take several minutes. Run those by hand before a release.
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22        # node:sqlite, which the Worker tests use, needs 22.5+
+      # London time: the calendar check reads the clock the way the church does,
+      # and fails on a runner left at UTC during British Summer Time.
+      - run: node tests/run-tests.mjs
+        env:
+          TZ: Europe/London

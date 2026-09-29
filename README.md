@@ -62,6 +62,32 @@ to build them again. It refuses anything on the shelf older than six hours, and
 a refusal makes the app ask Apps Script directly. Slow and right beats fast and
 wrong.
 
+### The people live on the Drivers tab, and nowhere else
+
+From v1.80.0 (pages), w2.21.0 (Worker) and v1.85.0 (sheet), no file carries a
+name or a phone number. The Drivers tab is the one place for them:
+
+- **The coordinator** is the active row whose **Role** is `Coordinator`, and
+  the number people are told to ring is in that row's **Phone** column. If
+  two rows say Coordinator, the one whose **Email** matches `COORDINATOR_EMAIL`
+  wins, so the person the alerts go to is the person people ring.
+- **The register** is the rows marked Active, with their roles.
+- **The rota order** is the **Primary order** column, counted separately for
+  North and South.
+
+The sheet sends the coordinator with everything else on every push (a Drivers
+tab edit pushes within seconds), the Worker keeps it in `settings` and stamps
+it on every answer it gives, and each page takes it from whichever answer it
+gets first and keeps it on the phone for when there is no signal. The register
+and rota order already came with the rota and still do.
+
+**Changing coordinator is two cells:** clear `Coordinator` from the old row's
+Role and type it on the new one, and put the new number in Phone.
+
+`config.js` keeps only addresses and switches. Its `drivers`,
+`rotaPrimaryPattern` and `rotaSecondaryPattern` are empty, and `SEED_DRIVERS`
+in `Code.gs` is empty, so a new church starts with nobody in it.
+
 ---
 
 ## The files
@@ -856,7 +882,8 @@ to Apps Script — slow, and correct. That one line is the whole escape hatch.
 ## Configuration
 
 **`config.js`** — the church details, the vehicle list, the checklist, the
-driver register (a fallback until the sheet answers), and two addresses:
+switches, and two addresses. No people: see *The people live on the Drivers
+tab*, above.
 
 ```js
 endpoint:     "https://script.google.com/macros/s/.../exec"   // Apps Script
@@ -917,7 +944,7 @@ Set them.
 | Tab | Holds |
 |---|---|
 | `Rota` | who drives, which route, which bus, per Sunday. **Status** is also where a route is marked not running |
-| `Drivers` | the register — name, role, route, order, active, **PIN** |
+| `Drivers` | the register — name, role, route, order, active, **PIN**, **Phone**. The row with Role **Coordinator** is who every page tells people to ring, on its Phone |
 | `Buses` | registration, seats, active |
 | `Bus Stops` | route, stop, time, postcode, and from v1.71.0 **Lat** and **Lng** — the kerb itself, used for the driver's map link and for working out what passing a stop saves. *Set up / refresh rota* fills any blank one it recognises from `STOP_PINS` in `Code.gs` and never overwrites one you have typed. A stop it does not recognise stays blank, which everything downstream already handles |
 | `Checks` | every safety check. **Outcome** is a dropdown, and picking **Authorised to run** on today's row lets a stopped bus out |
@@ -1668,7 +1695,7 @@ both apps either way: it is the way back for anybody who tapped Not now.
 
 The passenger page keeps its own copy of the setting because **it loads no
 `config.js`**. It is opened from a WhatsApp link by members and has no business
-downloading the driver register to do it. Keep the two in step.
+downloading anything else to do it. Keep the two in step.
 
 - A notification saying **Alerts are working** means the whole chain is good:
   the signing, the push service, the wake, and the service worker asking the
@@ -1758,6 +1785,11 @@ questions, and `Code.gs` is loaded into a sandbox with the Apps Script
 services faked, which is not an approximation of how Apps Script works but a
 description of it. It checks that every file parses, runs every suite, and
 ends in one word: READY or NOT READY. Run it before handing a build over.
+
+GitHub runs the same command on every pull request and every push to `main`
+(`.github/workflows/tests.yml`), on London time. A red **Tests** check on a
+pull request means NOT READY. The browser checks in `tests/browser` are not
+part of it; run those by hand before a release.
 
 The Worker's suites run against a **real SQLite database** through a shim of
 the D1 client, because half the faults worth catching here are SQL — a column

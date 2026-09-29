@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.84.1";
+var SCRIPT_VERSION = "v1.85.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1071,28 +1071,14 @@ var PATTERN_ANCHOR_SOUTH = "2026-08-16";
 var ROTA_FILL_WEEKS = 16;
 
 /* The register the sheet starts from if the Drivers tab is empty. After the
-   first run the Drivers tab IS the register, not this list. */
-var SEED_DRIVERS = [
-  { name: "Pst Kehinde",     role: "Minister in Charge", route: "",      order: "" },
+   first run the Drivers tab IS the register, not this list.
 
-  /* North Liverpool, the established route. Four in the pattern. */
-  { name: "Bro Adebola",     role: "Driver",      route: "North", order: 1 },
-  { name: "Bro Abiodun",     role: "Driver",      route: "North", order: 2 },
-  { name: "Bro Moses",       role: "Driver",      route: "North", order: 3 },
-  { name: "Bro Asim",        role: "Coordinator", route: "North", order: 4 },
-
-  /* South Liverpool, the new route. Three in the pattern, so it turns over
-     every three Sundays where North turns over every four. The two patterns
-     run independently and are not meant to line up.
-
-     Bro Tunde is first because he already knows the road. The other two
-     shadow him on the opening Sunday and then take their turns. */
-  { name: "Bro Tunde",       role: "Driver",      route: "South", order: 1 },
-  { name: "Pst Obamakinwa",  role: "Driver",      route: "South", order: 2 },
-  { name: "Bro Adesina",     role: "Driver",      route: "South", order: 3 },
-
-  { name: "Bro Calvin",      role: "Backup",      route: "",      order: "" }
-];
+   Blank from v1.85.0, so a new church starts with nobody in it rather than
+   with this one's. Type the people straight onto the Drivers tab: Name,
+   Role, Route, Primary order, Active, and a Phone for whoever has the role
+   Coordinator, which is the number every page tells people to ring. Each
+   entry here, if ever used, is { name, role, route, order }. */
+var SEED_DRIVERS = [];
 
 /* ---- entry points ------------------------------------------------------ */
 
@@ -1818,6 +1804,9 @@ function rotaPayload(fromKey, weeks) {
                      .map(function (d) {
                        return { name: d.name, role: d.role, hasPin: !!d.pin };
                      }),
+    /* Who people ring, for the driver app when this file answers it rather
+       than the live server. The live server puts its own on every answer. */
+    coordinator: coordinatorContact(drivers),
     /* So the next driver sees what the last one reported and still open. */
     openDefects: openDefectsByReg(ss),
     /* The Sunday timetable. Sent with the rota because that is when a driver
@@ -2479,6 +2468,9 @@ function pushToWorker() {
 
   var out = workerCall("sync", {
     stops: stops, buses: buses, drivers: drivers, rota: rota,
+    /* Who people ring. The live server stamps it on every answer, so the
+       pages take it from there rather than from a file. */
+    coordinator: coordinatorContact(readDrivers(ss)),
     cache: cache,
     coordShelf: coordShelf || undefined,
     coordApplied: coordApplied,
@@ -7921,6 +7913,19 @@ function busLinkForSunday() {
     ui.ButtonSet.OK);
 }
 
+/* What the Phone column on the Drivers tab is for, written on its heading. */
+var DRIVERS_PHONE_NOTE =
+  "Mobile number.\n\n" +
+  "FOR THE COORDINATOR it is the number every page tells drivers and\n" +
+  "passengers to ring, shown on the public passenger page at all times.\n\n" +
+  "FOR A DRIVER it is the WhatsApp button a passenger sees on Sunday\n" +
+  "morning once bookings have closed. READ THIS BEFORE FILLING IT IN. The\n" +
+  "number of whoever is driving that Sunday is sent to the passenger page,\n" +
+  "which is public and has no login. It goes out only on the day, only\n" +
+  "after 09:30, only to a passenger holding a booking, and only for that\n" +
+  "one route — but it does go out. Ask the driver first.\n\n" +
+  "Leave blank and that driver simply has no button. Nothing breaks.";
+
 function ensureDrivers(ss) {
   var existing = ss.getSheetByName(DRIVERS_SHEET);
   var sh = sheet(ss, DRIVERS_SHEET, DRIVERS_HEADERS);
@@ -7945,17 +7950,7 @@ function ensureDrivers(ss) {
       pretty("Drivers Route dropdown", function () {
         sh.getRange(2, dc.route, 199, 1).setDataValidation(listRule(["North", "South"])); });
     }
-    if (!hadPhone) {
-      sh.getRange(1, dc.phone).setNote(
-        "Mobile number, for the WhatsApp button a passenger sees on Sunday\n" +
-        "morning once bookings have closed.\n\n" +
-        "READ THIS BEFORE FILLING IT IN. The number of whoever is driving\n" +
-        "that Sunday is sent to the passenger page, which is public and has\n" +
-        "no login. It goes out only on the day, only after 09:30, only to a\n" +
-        "passenger holding a booking, and only for that one route — but it\n" +
-        "does go out. Ask the driver first.\n\n" +
-        "Leave blank and that driver simply has no button. Nothing breaks.");
-    }
+    if (!hadPhone) sh.getRange(1, dc.phone).setNote(DRIVERS_PHONE_NOTE);
   }
 
   if (!existing) {
@@ -7976,6 +7971,11 @@ function ensureDrivers(ss) {
     sh.getRange(1, dc.active).setNote(
       "NO removes someone from the app and from every dropdown.\n" +
       "Sundays they have already driven are left alone.");
+    sh.getRange(1, dc.role).setNote(
+      "Coordinator is the person every page tells drivers and passengers\n" +
+      "to ring, on the number in Phone. Change who has it here and the\n" +
+      "apps follow within seconds.");
+    sh.getRange(1, dc.phone).setNote(DRIVERS_PHONE_NOTE);
   }
   memoDrop("drivers");                   /* seeded, backfilled, or both */
   return sh;
@@ -11212,6 +11212,36 @@ function coordinatorName() {
     if (want && String(d.email || "").trim().toLowerCase() === want) return d.name;
   }
   return fallback;
+}
+
+/* WHO PEOPLE RING, off the Drivers tab.
+
+   The row whose Role is Coordinator, and the number in its Phone column.
+   Until v1.85.0 the name and number were typed into config.js and again into
+   the passenger page, and a change of coordinator meant editing both files
+   and remembering the second. Now it is two cells on the Drivers tab.
+
+   Where more than one active row says Coordinator, the one COORDINATOR_EMAIL
+   names wins, so the person the alerts go to is the person people are told to
+   ring. Otherwise the first. Nobody with the role gives a blank name and a
+   blank number, and every page then says "the bus coordinator" instead.
+
+   Sent to the live server on every push and handed back on every answer it
+   gives, which is how the pages learn it. Also carried on the rota, for the
+   driver app when it is talking to this file directly. */
+function coordinatorContact(drivers) {
+  var want = String(COORDINATOR_EMAIL || "").trim().toLowerCase();
+  var first = null;
+  var list = drivers || [];
+  for (var i = 0; i < list.length; i++) {
+    var d = list[i];
+    if (!d || !d.active) continue;
+    if (String(d.role || "").trim().toLowerCase() !== "coordinator") continue;
+    if (!first) first = d;
+    if (want && String(d.email || "").trim().toLowerCase() === want) { first = d; break; }
+  }
+  return first ? { name: String(first.name || "").trim(), phone: String(first.phone || "").trim() }
+               : { name: "", phone: "" };
 }
 
 function actionLink(kind, subject) {
