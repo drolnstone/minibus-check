@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.24.0";
+const SCRIPT_VERSION = "w2.25.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1147,7 +1147,9 @@ async function getRotaRow(env, key) {
    reverse. A month is four or five Sundays, so the swap never falls into
    step with a three or four driver rota and nobody stays in one bus.
    An entry in the rota's own bus column beats all of it, for that Sunday. */
-const BUS_ROTATION_ODD = { north: "NH56 FWP", south: "YS70 PWE" };
+/* Blank from w2.25.0: the pairing is the Buses tab's, and a Sunday with no
+   pairing there gets no bus rather than another church's registration. */
+const BUS_ROTATION_ODD = { north: "", south: "" };
 
 /* The pairing is the Buses tab's from w2.24.0: the active bus marked North in
    its "Route in odd months" column and the one marked South. Either missing,

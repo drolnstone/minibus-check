@@ -1,0 +1,78 @@
+MINIBUS
+=======
+  pages v1.85.0 · server w2.24.0 · sheet v1.87.0
+
+Bus renewal dates and the monthly North/South pairing move off the code and
+onto the Buses tab.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.84.0         v1.85.0
+  Worker  w2.23.0         w2.24.0
+  Code.gs v1.86.0         v1.87.0
+
+If v1.84.0's step is not done yet (the bell), see analysis/DEPLOY-v1.84.0.txt.
+It can be done after this just as well.
+
+
+IN THIS ORDER
+-------------
+
+1. WORKER. Cloudflare, the minibus Worker, Edit code. Replace everything
+   with server/worker.js. Deploy. No database change, no new secret.
+
+2. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
+   Save. Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy. (Same URL, so WEB_APP_URL does not change.)
+
+3. THE SPREADSHEET. Minibus, Set up / refresh rota. The Buses tab gains
+   five columns: MOT due, Service due, Insurance due, Permit due, Route in
+   odd months. They are filled ONCE, the first time, from what the code
+   said:
+     YS70 PWE   MOT 17/06/2027  Service 17/06/2027  Insurance 26/06/2027
+                Permit 31/01/2027  Route in odd months: South
+     NH56 FWP   MOT 28/04/2027  Service 01/07/2027  Insurance 08/07/2027
+                Permit 31/01/2027  Route in odd months: North
+   Check them against the paperwork. From now on these cells are the only
+   place they are read from.
+
+4. Minibus, Send everything to the live server now.
+
+5. PAGES. Merge the pull request. GitHub publishes the pages from main.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.85.0 · server w2.24.0 · sheet
+   v1.87.0 .
+
+B. The next few Sundays on the Rota tab show the same buses as before (the
+   pairing on the tab is the one the code had).
+
+C. To try a warning: put a Permit due date two weeks away on one bus, Send
+   everything, open the driver app and pick that bus. "Renewal coming up"
+   shows. Put the real date back and Send everything again.
+
+
+WHAT CHANGED
+------------
+
+1. RENEWAL DATES ARE CELLS.
+   An MOT or insurance renewal used to mean editing config.js and
+   publishing the pages. Now it is typing a date on the Buses tab and Send
+   everything (or waiting for the next automatic send). Leave a cell blank
+   for anything a bus does not have. The driver app warns 30 days ahead, red
+   once passed, exactly as before.
+
+2. THE MONTHLY PAIRING IS A CELL.
+   "Route in odd months" says which bus takes North and which South in
+   January, March and so on; even months are the other way round. Swap the
+   two words to swap the rotation. A bus typed on a Sunday's Rota row still
+   wins for that Sunday. A standby bus is left blank. If the column does not
+   have exactly one active North and one active South, the old pairing is
+   used rather than a guess.
+
+3. A new bus is now a row: registration, seats, Active YES, its dates and,
+   if it takes a route, North or South. Its checklist details (name, what
+   it skips) are still in config.js.

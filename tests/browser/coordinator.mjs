@@ -46,7 +46,12 @@ const turn = (key, pat, anchor) => {
   return pat[((w % pat.length) + pat.length) % pat.length];
 };
 const northOf = (k) => turn(k, NP, NA), southOf = (k) => turn(k, SP, SA);
-const busesOf = (k) => W.busRule(k);
+/* The monthly pairing, as the Buses tab's Route in odd months column says it
+   and the sync leaves it on the live server (w2.25.0 has no pairing of its
+   own to fall back on). */
+const ODD_ROUTE = { "NH56 FWP": "North", "YS70 PWE": "South" };
+const PAIRED = REAL.buses.map((b) => ({ reg: b.reg, active: true, oddRoute: ODD_ROUTE[b.reg] || "" }));
+const busesOf = (k) => W.busRule(k, PAIRED);
 
 async function world() {
   const db = makeDB(join(ROOT, "server", "schema.sql"));
@@ -63,6 +68,9 @@ async function world() {
     await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,?,1,?)")
       .bind(d.name, d.role, d.route || "North", d.ord, await W.pinHashOf(env, d.name, PIN)).run();
   }
+  const extra = {};
+  for (const b of PAIRED) extra[b.reg.toUpperCase()] = { dates: {}, oddRoute: b.oddRoute };
+  await W.cachePut(env, "bus_extra", extra).run();
   await W.cachePut(env, "auth_rules", { roles: ["coordinator", "minister in charge"], sameHandBothWays: true }).run();
   await W.cachePut(env, "sheet_url", { url: "https://script.google.com/macros/s/TEST/exec" }).run();
   /* What the sheet's own sync leaves behind, so all three numbers can be read. */
@@ -846,6 +854,47 @@ if (want("C20b")) {
         onDriver && !onVehicle && !pinOk && !errs.length,
         "driver " + onDriver + ", vehicle " + onVehicle + ", pinOk " + pinOk + ", errors " + JSON.stringify(errs));
   await ctx.close();
+}
+
+/* C26 — turned on its side, it asks to be turned upright, as the driver app does */
+if (want("C26")) {
+  const p = await page(env);
+  const shown = () => p.pg.$eval(".upright", (el) => getComputedStyle(el).display !== "none").catch(() => false);
+  const upright = await shown();
+  await p.pg.setViewportSize({ width: 844, height: 390 });
+  await p.wait(300);
+  const side = await shown();
+  await p.shot("C26-sideways");
+  check("C26", "on its side the page says Turn your phone upright; upright it does not",
+        !upright && side && !p.errs.length, "upright " + upright + ", sideways " + side + ", errors " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
+/* C27 — back from the driver app on a Home Screen iPhone, the bar clears the status bar.
+   Safari says the top safe area is nothing on the way back; the page puts back
+   the inset it measured when it was right. Chromium has no inset, so it stands
+   in for the way back, and a page not on the Home Screen is left alone. */
+if (want("C27")) {
+  const run = async (standalone, kept) => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+    const pg = await ctx.newPage();
+    const errs = [];
+    pg.on("pageerror", (e) => errs.push(String(e.message)));
+    await pg.route("**://*.workers.dev/**", (r) => r.abort());
+    await pg.route("**://fonts.g*/**", (r) => r.abort());
+    await pg.addInitScript(`try { localStorage.setItem("coord.install.v1", "1"); } catch (e) {}`);
+    if (standalone) await pg.addInitScript(`Object.defineProperty(Navigator.prototype, "standalone", { get: () => true });`);
+    if (kept) await pg.addInitScript(`try { localStorage.setItem("coord.safeTop.v1", "${kept}"); } catch (e) {}`);
+    await pg.goto("http://127.0.0.1:" + PORT + "/coord/", { waitUntil: "load" });
+    await pg.waitForTimeout(300);
+    const pad = await pg.$eval(".bar", (el) => getComputedStyle(el).paddingTop);
+    await ctx.close();
+    return { pad, errs };
+  };
+  const back = await run(true, 47), browserTab = await run(false, 47), never = await run(true, 0);
+  check("C27", "on the Home Screen with the inset gone, the bar is pushed down by the one last measured; in a browser tab, or with none kept, it is not",
+        back.pad === "47px" && browserTab.pad === "0px" && never.pad === "0px" && ![...back.errs, ...browserTab.errs, ...never.errs].length,
+        "home screen " + back.pad + ", tab " + browserTab.pad + ", none kept " + never.pad);
 }
 
 check("C0", "no script error on the page throughout", me && !me.errs.length, JSON.stringify(me && me.errs));
