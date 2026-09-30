@@ -1811,6 +1811,15 @@ beside **Not coming**, with a message that says where the passenger is
 booked, and drops it once the run has ended. Everybody else, all week, is
 given nothing. A driver with no number on the Drivers tab has no button.
 
+**Checked every time**, from w2.29.0 and sheet v1.91.0, because it was dark
+for weeks with nothing saying so: only a booked passenger ever sees it, and a
+missing button looks like a driver who gave no number. *Is everything
+working?* asks the live server whose numbers it holds (names only) and holds
+that against the coming Sunday's two drivers, cover first. None held at all,
+or a rostered driver's number on the tab but not on the live server, is
+**Needs attention**; a rostered driver with no Phone is **To do**; both
+reachable is **Fine**, by name.
+
 **On an iPhone in a tab it asks the other question**, because that phone cannot
 be given an alert at all until the app is on the Home Screen. The button opens
 the steps instead.
