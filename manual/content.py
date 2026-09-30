@@ -1113,6 +1113,8 @@ AZ = [
 ]
 import re as _re
 def _az_key(t):
+    # By the words the page will show, so {NORTH3} sorts as the name it becomes.
+    for k, v in FILL.items(): t = t.replace(k, v)
     t = _re.sub(r"^[\d\s]+", "", t).lower()
     return t
 AZ.sort(key=lambda r: _az_key(r[0]))
