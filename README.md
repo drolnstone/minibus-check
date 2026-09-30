@@ -115,19 +115,27 @@ coord/manifest.webmanifest
 Code.gs                 everything on the Apps Script side
 server/worker.js        everything on the Cloudflare side
 server/schema.sql       the D1 tables, all of them
-tests/                  the checks, see Tests below. Not published
+tests/                  the checks, see Tests below. Not part of the apps
 manual/                 builds the driver's manual PDF from a download of the
-                        spreadsheet, see manual/README.md. Not published
+                        spreadsheet, see manual/README.md. Not part of the apps
 ```
 
 `schema-pin.sql` and `schema-push.sql` were one-off additions to a database
 that already existed. `schema.sql` has carried both since, so they were
 retired in v1.70.1.
 
-They were never in the repository and there is nothing to delete there: the
-repo rule is that only what a browser downloads goes in it, so `Code.gs`,
-`worker.js` and `schema.sql` have never been published. v1.70.1's deploy
-sheet said otherwise and was wrong.
+They were never in the repository, so there is nothing to delete there.
+
+**Everything else in the list above is public.** The repository is public and
+GitHub Pages serves it from its root, so `Code.gs`, `worker.js`,
+`schema.sql`, `tests/` and `manual/` can be read by anybody, on GitHub and at
+the Pages address. So no secret ever goes in a file here: `PIN_SALT`,
+`SHEET_TOKEN` and the rest live in Script Properties and Worker variables.
+And a value committed once stays readable in the history after it is taken
+out, so a secret that was ever in a file is changed, not just deleted. (This
+file used to say that only what a browser downloads was in the repository.
+That stopped being true on 29 September 2026, when the server code and the
+tests were added.)
 
 The two service workers are deliberately separate and must never cache the
 same file. One phone with both apps installed would otherwise hold two copies
@@ -1876,8 +1884,8 @@ scheduled jobs, the email allowance, the driver PINs and the row counts.
 
 ## Tests
 
-Kept beside the releases, not in this repository: `tests/`. They check the
-code as it ships, not a copy of it.
+In this repository, beside the release files: `tests/`. They check the code
+as it ships, not a copy of it.
 
     node tests/run-tests.mjs                  everything
     node tests/run-tests.mjs authorise trip   only matching suites
