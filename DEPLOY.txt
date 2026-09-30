@@ -72,16 +72,16 @@ WHAT CHANGED
    app was never wrong.
 
 5. TIME TO SET OFF, AND NO WORD YET.
-   On the departure time (North 09:52 and South 10:21 on today's timetable,
-   whatever the Bus Stops tab says), the rostered driver's phone gets
-   "Time to set off. Your North run is due to leave church at 09:52. Tap
-   Start as you pull away." Before, the first word was ten minutes late.
+   On the departure time (North 10:05 and South 10:16 on today's Bus Stops
+   tab, and whatever it says after a change), the rostered driver's phone
+   gets "Time to set off. Your North run is due to leave church at 10:05.
+   Tap Start as you pull away." Before, the first word was ten minutes late.
    The ten and twenty-five minute reminders are unchanged.
    Five minutes past, if nobody has tapped Start, everybody booked on that
    route gets "No word yet that your bus has left church. It was due to
-   leave at 09:52. Yours is timetabled 10:52 at Stanley Pk. We will message
-   you as soon as it sets off." Once, and not on a route called off, during
-   a rehearsal, or more than an hour past.
+   leave at 10:05. Yours is timetabled 10:36 at Fountains Road by Stanley
+   Close. We will message you as soon as it sets off." Once, and not on a
+   route called off, during a rehearsal, or more than an hour past.
    WHY THOSE WORDS. Start is the only thing that tells the live server a bus
    has gone. A driver who pulls away without tapping it is on the road while
    the record says he is at church, so "the bus has not left" or "the driver
