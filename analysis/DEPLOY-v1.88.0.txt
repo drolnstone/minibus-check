@@ -1,25 +1,21 @@
 MINIBUS
 =======
-  pages v1.88.0 · server w2.29.0 · sheet v1.91.0
+  pages v1.88.0 · server w2.28.0 · sheet v1.90.0
 
 Two things on the passenger page. On a first visit it offers "Add to your
 phone" before asking about alerts, instead of the alerts question sometimes
 winning and the offer never coming. And on a Sunday morning a booked
 passenger can WhatsApp the driver on his route, with the Message button that
-has been dark since the page moved to the live server. And Is everything
-working? now says whether this Sunday's passengers can message their driver,
-so the button cannot go dark again without anybody noticing.
+has been dark since the page moved to the live server.
 
 
 YOU ARE ON              GOING TO
   Pages   v1.87.0         v1.88.0
-  Worker  w2.27.0         w2.29.0
-  Code.gs v1.89.0         v1.91.0
+  Worker  w2.27.0         w2.28.0
+  Code.gs v1.89.0         v1.90.0
 
 If v1.87.0's steps are not done yet, do those first:
-analysis/DEPLOY-v1.87.0.txt. If you already deployed w2.28.0 and v1.90.0,
-do steps 1 to 3 below again with these newer copies; nothing else changes.
-(This file as it was for w2.28.0: analysis/DEPLOY-v1.88.0.txt.)
+analysis/DEPLOY-v1.87.0.txt.
 
 
 BEFORE YOU START
@@ -46,29 +42,21 @@ IN THIS ORDER
 3. Minibus, Send everything to the live server now. This is what carries
    the drivers' numbers across; until it runs there is no button.
 
-4. PAGES. Already merged for v1.88.0. Merge this release's pull request
-   too; it changes no page.
+4. PAGES. Merge the pull request.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.88.0 · server w2.29.0 · sheet
-   v1.91.0 .
+A. The foot of all three apps reads  app v1.88.0 · server w2.28.0 · sheet
+   v1.90.0 .
 
 B. A phone that has never opened the passenger page (or one whose site data
    has been cleared): open the link. "Add to your phone" comes up first. Tap
    Not now, and "Turn on bus alerts?" comes up after it. On an iPhone the
    steps come up, and it is not asked a second time on that visit.
 
-C. Minibus, Have a look, Is everything working? (or the same in the
-   coordinator's app) has a line starting "Message the driver". With every
-   driver's number on the Drivers tab it reads, under Fine:
-     Message the driver: passengers can message Bro X (North) and Bro Y
-     (South) on 4 October.
-   If it says the live server holds no numbers, step 3 has not run.
-
-D. On a Sunday after 09:30, a phone booked on a route: the bar at the foot
+C. On a Sunday after 09:30, a phone booked on a route: the bar at the foot
    shows Not coming and Message with the driver's name. It opens WhatsApp to
    him with a message saying where the passenger is booked. A phone with no
    seat shows no Message button.
@@ -93,15 +81,3 @@ WHAT CHANGED
    real, or none at all, gives no button. (Code.gs driverWhatsApp and
    waNumber; worker.js driverForPassenger; tests/suites/34-message-driver.mjs
    and browser check P8.)
-
-3. THE CHECK THAT WOULD HAVE CAUGHT IT. Is everything working? asks the
-   live server whose numbers it holds (names only; the numbers never come
-   back) and holds that against the coming Sunday's two drivers, cover
-   first, as the passenger page does:
-     holds none at all                    Needs attention
-     a rostered driver's number is on
-       the tab but not on the live server Needs attention: Send everything
-     a rostered driver has no Phone       To do: his route has no button
-     both can be messaged                 Fine, by name
-   A route called off is not checked. (Code.gs messageDriverHealth;
-   worker.js alertRoll's waHeld; tests/suites/35-message-health.mjs.)

@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.28.0";
+const SCRIPT_VERSION = "w2.29.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5726,6 +5726,16 @@ async function alertRoll(env) {
        looking like an answer. */
     out.driversOff = null;
     out.rollError = String((err && err.message) || err);
+  }
+  /* WHOSE NUMBERS IT HOLDS, for the passenger's Message button. From
+     w2.29.0. Names only: the sheet already has the numbers, and asks this
+     only to find out whether they arrived. null when it could not tell,
+     [] when it holds none, which is the fault the check is for. */
+  try {
+    const book = await cacheGet(env, "driver_wa");
+    out.waHeld = (book && typeof book === "object") ? Object.keys(book) : [];
+  } catch (err) {
+    out.waHeld = null;
   }
   return out;
 }

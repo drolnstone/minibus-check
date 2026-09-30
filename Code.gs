@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.90.0";
+var SCRIPT_VERSION = "v1.91.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -7750,6 +7750,86 @@ function driverOnDuty(ss, key, route) {
   return { name: hit.name, wa: digits, route: route };
 }
 
+/* CAN THIS SUNDAY'S PASSENGERS MESSAGE THEIR DRIVER? From v1.91.0.
+
+   The Message button went dark for weeks when the passenger page moved to
+   the live server, and nothing said so: only a booked passenger sees it,
+   only on a Sunday morning, and a missing button looks exactly like a driver
+   who gave no number. So this asks the live server whose numbers it holds
+   and holds that against the two drivers the Rota has for the coming Sunday,
+   cover first, as the passenger page does.
+
+     live server holds none            bad: nobody can message anybody
+     rostered, number here, not there  bad: it has not arrived; send again
+     rostered, no number on the tab    todo: a choice, the button just is not shown
+     all rostered can be reached       good, and named
+
+   Silent before w2.29.0 said whose numbers it held (lv.waHeld undefined)
+   only in the sense that it says so, once, as a bad line: the button needs
+   w2.28.0 at least, and an older live server is the fault. */
+function messageDriverHealth(ss, lv, good, bad, todo) {
+  try {
+    if (!lv || typeof lv.waHeld === "undefined") {
+      bad.push("Message the driver: the live server is older than w2.29.0, so this cannot be checked " +
+               "and passengers may see no Message button. Deploy the Worker from the repository.");
+      return;
+    }
+    if (lv.waHeld === null) {
+      bad.push("Message the driver: could not read which drivers' numbers the live server holds.");
+      return;
+    }
+    var flat = function (x) { return String(x || "").trim().toLowerCase().replace(/\s+/g, " "); };
+    var held = {};
+    lv.waHeld.forEach(function (n) { held[flat(n)] = true; });
+    var tab = driverWhatsApp(readDrivers(ss));
+    var onTab = {};
+    Object.keys(tab).forEach(function (n) { onTab[flat(n)] = true; });
+
+    if (!lv.waHeld.length) {
+      if (Object.keys(tab).length) {
+        bad.push("Message the driver: the live server holds no drivers' numbers, so no passenger " +
+                 "sees the Message button. Use Send everything to the live server now.");
+      } else {
+        todo.push("Message the driver: no driver has a Phone on the Drivers tab, so passengers " +
+                  "see no Message button. Leave it that way unless the drivers have agreed.");
+      }
+      return;
+    }
+
+    var key = busCurrentSunday();
+    var row = null;
+    readRotaRows(ss).forEach(function (r) { if (r.date === key) row = r; });
+    var when = Utilities.formatDate(keyToDate(key), Session.getScriptTimeZone(), "d MMMM");
+    if (!row) {
+      good.push("Message the driver: the live server holds " + lv.waHeld.length + " driver" +
+                (lv.waHeld.length === 1 ? "'s number" : "s' numbers") + ". No Rota row for " + when + " to check.");
+      return;
+    }
+    var ok = [], notArrived = [], noNumber = [];
+    [["North", row.actual || row.primary], ["South", row.actual2 || row.primary2]].forEach(function (x) {
+      var route = x[0], who = String(x[1] || "").trim();
+      if (!who || routeCalledOff(row.status, route)) return;
+      var label = who + " (" + route + ")";
+      if (held[flat(who)]) ok.push(label);
+      else if (onTab[flat(who)]) notArrived.push(label);
+      else noNumber.push(label);
+    });
+    if (notArrived.length) {
+      bad.push("Message the driver: the live server has no number yet for " + notArrived.join(" and ") +
+               ", driving " + when + ". Use Send everything to the live server now.");
+    }
+    if (noNumber.length) {
+      todo.push("Message the driver: " + noNumber.join(" and ") + " has no Phone on the Drivers tab, " +
+                "so passengers on that route will see no Message button on " + when + ".");
+    }
+    if (ok.length) {
+      good.push("Message the driver: passengers can message " + ok.join(" and ") + " on " + when + ".");
+    }
+  } catch (err) {
+    bad.push("Message the driver: could not be checked: " + ((err && err.message) || err));
+  }
+}
+
 /* A phone number as wa.me wants it: digits only, in international form. A UK
    mobile written the way anybody actually writes it starts 07, so the leading
    nought becomes 44. Anything already carrying a country code is left alone.
@@ -10620,6 +10700,8 @@ function healthReport() {
                     (lv.passengers === 1 ? "" : "s") + ".");
         }
       }
+
+      messageDriverHealth(ss, lv, good, bad, todo);
     }
   } catch (err) {
     bad.push("Live server did not answer: " + ((err && err.message) || err));
