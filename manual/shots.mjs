@@ -672,8 +672,8 @@ scene("rota-sent", async () => {
   await tapSel(me, '[data-rota-request="2026-09-27"]'); await me.wait(600);
   await me.pg.selectOption("#rotaReqType", { label: "Holiday / planned leave" }).catch(() => {});
   await me.setInput("rotaReqReason", "Away at a family wedding in Manchester");
-  await me.clickId("rotaSubmitRequest"); await me.wait(300);
-  await me.wait(1500);
+  /* Long enough for "Request sent." to have gone, so it does not cover the card. */
+  await me.clickId("rotaSubmitRequest"); await me.wait(4500);
   await me.shot("rota-after-ask", { marks: [ { n: 1, sel: "#rota-2026-09-27 .rota-leg" } ] });
   return me;
 });
