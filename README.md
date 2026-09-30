@@ -116,6 +116,8 @@ Code.gs                 everything on the Apps Script side
 server/worker.js        everything on the Cloudflare side
 server/schema.sql       the D1 tables, all of them
 tests/                  the checks, see Tests below. Not published
+manual/                 builds the driver's manual PDF from a download of the
+                        spreadsheet, see manual/README.md. Not published
 ```
 
 `schema-pin.sql` and `schema-push.sql` were one-off additions to a database

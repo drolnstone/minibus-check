@@ -15,8 +15,10 @@ import { fileURLToPath } from "node:url";
 
 export const ROOT = process.env.MINIBUS_ROOT || fileURLToPath(new URL("../..", import.meta.url));
 /* The spreadsheet export the stand-in servers answer from: real stops, buses,
-   drivers and rota. Names only; no PINs, emails or phone numbers. */
-export const REAL = JSON.parse(readFileSync(new URL("./real.json", import.meta.url), "utf8"));
+   drivers and rota. Names only; no PINs, emails or phone numbers. MINIBUS_REAL
+   names another, as manual/ does with a fresh download of the spreadsheet that
+   is never committed. */
+export const REAL = JSON.parse(readFileSync(process.env.MINIBUS_REAL || new URL("./real.json", import.meta.url), "utf8"));
 export const KEY = "2026-09-27";
 export const SAMPLE = "Bro Sample";
 export const OUT = process.env.SHOTS || join(tmpdir(), "minibus-shots");
@@ -99,6 +101,8 @@ export async function phone(opts = {}) {
 
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
+    /* Unset leaves this machine's own zone and language, as before. */
+    timezoneId: opts.timezoneId, locale: opts.locale,
     permissions: opts.permissions || [],
     userAgent: opts.ua || undefined,
     hasTouch: true, isMobile: true
@@ -122,6 +126,10 @@ export async function phone(opts = {}) {
        from before w2.20.0, round 1) or { round, ends, shape }. */
     const roundNow = () => !world.rehearsal ? 0
       : (typeof world.rehearsal === "object" ? (Number(world.rehearsal.round) || 1) : 1);
+    /* The versions the stand-in claims, and each bus's renewal dates as the
+       Buses tab gives them from w2.24.0. */
+    const stamp = Object.assign({ sheet: "v1.79.0", server: "w2.15.0" }, world.stamps || {});
+    const datesOf = b => (world.dates || {})[b.reg] || b.dates || {};
     const seatsOf = reg => (REAL.buses.find(b => b.reg === reg) || {}).seats || 0;
     const booked = rt => Object.values(world.counts[rt] || {}).reduce((a, b) => a + b, 0);
     const seats = {
@@ -189,8 +197,8 @@ export async function phone(opts = {}) {
     else if (p.get("vapid")) body = { ok: true, key: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" };
     else if (p.get("last")) {
       body = {
-        ok: true, cache: "fresh", ageMin: 1, sheet: "v1.79.0", server: "w2.15.0",
-        buses: REAL.buses.map(b => ({ reg: b.reg, seats: b.seats, active: b.active,
+        ok: true, cache: "fresh", ageMin: 1, sheet: stamp.sheet, server: stamp.server,
+        buses: REAL.buses.map(b => ({ reg: b.reg, seats: b.seats, active: b.active, dates: datesOf(b),
           miles: world.lastMiles[b.reg], date: "20/09/2026", time: "09:41",
           driver: b.reg === "NH56 FWP" ? "Bro Moses" : "Bro Adesina" })),
         last: Object.fromEntries(REAL.buses.map(b => [b.reg, { miles: world.lastMiles[b.reg],
@@ -203,21 +211,29 @@ export async function phone(opts = {}) {
       /* The rehearsal's run while one is on, the real one otherwise. */
       const t = roundNow() ? (world.rehTrips || {})[r] : world.trips[r];
       body = {
-        ok: true, date: KEY, sheet: "v1.79.0", server: "w2.15.0",
+        ok: true, date: KEY, sheet: stamp.sheet, server: stamp.server,
         counts: world.counts[r] || {}, etas: world.etas[r] || {},
         checks: world.checks, others: world.others, seats,
-        buses: REAL.buses.map(b => ({ reg: b.reg, seats: b.seats, active: true })),
+        buses: REAL.buses.map(b => ({ reg: b.reg, seats: b.seats, active: true, dates: datesOf(b) })),
         trip: Object.assign({ ok: true, now: sNow(), closed: world.closed, cutoff: world.cutoff,
           rehearsal: world.rehearsal, departWords: world.departWords[r] || "",
           trip: "", route: r, reg: "", driver: "", started: 0, ended: 0, served: {},
           lastAt: 0, lastStop: "", offset: null }, t || {})
       };
     }
+    /* A phone that has never had the rota: the name list has not come. */
+    else if (p.get("rota") && world.noRota) return route.abort();
     else if (p.get("rota")) {
-      body = { ok: true, sheet: "v1.79.0", server: "w2.15.0", rows: world.rows,
+      body = { ok: true, sheet: stamp.sheet, server: stamp.server, rows: world.rows,
                pattern: { north: ["Bro Adebola", "Bro Abiodun", "Bro Moses", "Bro Asim"],
                           south: ["Bro Tunde", "Pst Obamakinwa", "Bro Adesina"] },
                drivers: register(), stops, openDefects: world.openDefects };
+    }
+    /* Who to ring and whose titles make a coordinator, as a live server from
+       w2.21.0 stamps them on every answer. Only when a scenario gives them. */
+    if (body && typeof body === "object" && !Array.isArray(body)) {
+      if (world.coordinator) body.coordinator = world.coordinator;
+      if (world.leadRoles) body.leadRoles = world.leadRoles;
     }
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   }
