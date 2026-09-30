@@ -46,9 +46,9 @@ export default async function (root) {
     const env = makeEnv(db, over);
     const key = W.runSunday();
     await seedSunday(db, key);
-    for (const d of [["Bro Asim", "Coordinator", "1234"],
-                     ["Bro Tunde", "Driver", "9876"],
-                     ["Bro Kayode", "Driver", "5555"]]) {
+    for (const d of [["Bro Arthur", "Coordinator", "1234"],
+                     ["Bro Trevor", "Driver", "9876"],
+                     ["Bro Keith", "Driver", "5555"]]) {
       await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,1,1,?)")
         .bind(d[0], d[1], "North", await W.pinHashOf(env, d[0], d[2])).run();
     }
@@ -61,10 +61,10 @@ export default async function (root) {
   /* A rota link, minted and then decided with a coordinator's PIN. */
   async function decide(env, over) {
     const mint = await body(await W.handleMintLink(env, { link: { kind: "rota", subject:
-      Object.assign({ id: "REQ-9", sunday: "2026-10-04", driver: "Bro Tunde",
-                      type: "Cover", to: "Bro Asim" }, (over && over.subject) || {}) } }));
+      Object.assign({ id: "REQ-9", sunday: "2026-10-04", driver: "Bro Trevor",
+                      type: "Cover", to: "Bro Arthur" }, (over && over.subject) || {}) } }));
     const out = await body(await W.handleLinkDo(env, Object.assign(
-      { token: mint.token, pin: "1234", choice: "Approved", cover: "Bro Kayode" },
+      { token: mint.token, pin: "1234", choice: "Approved", cover: "Bro Keith" },
       (over && over.doing) || {})));
     return { token: mint.token, out };
   }
@@ -121,14 +121,14 @@ export default async function (root) {
        knocking. */
     const { env } = await fresh();
     G.reply(new Response(JSON.stringify({ ok: true }), { status: 200 }));
-    await decide(env, { doing: { cover: "bro kayode" } });
+    await decide(env, { doing: { cover: "bro keith" } });
     const sent = JSON.parse(G.calls.filter((c) => c.url === EXEC)[0].opts.body);
     a.eq(sent.token, "minibusapp");
     a.eq(sent.action, "decision");
     a.eq(sent.decision.id, "REQ-9");
     a.eq(sent.decision.choice, "Approved");
-    a.eq(sent.decision.cover, "Bro Kayode", "it sent the page's spelling, not the register's");
-    a.eq(sent.decision.by, "Bro Asim");
+    a.eq(sent.decision.cover, "Bro Keith", "it sent the page's spelling, not the register's");
+    a.eq(sent.decision.by, "Bro Arthur");
   });
 
   s.test("a name the register does not know travels as no cover at all", async (a) => {
@@ -174,8 +174,8 @@ export default async function (root) {
     const left = await queued(env);
     a.eq(left.length, 1, "THE DECISION IS GONE. " + JSON.stringify(left));
     a.eq(left[0].choice, "Approved");
-    a.eq(left[0].cover, "Bro Kayode", "the drain would apply it without the cover");
-    a.eq(left[0].by, "Bro Asim");
+    a.eq(left[0].cover, "Bro Keith", "the drain would apply it without the cover");
+    a.eq(left[0].by, "Bro Arthur");
   }
 
   s.test("the sheet saying no leaves it for the drain", (a) =>
@@ -224,9 +224,9 @@ export default async function (root) {
        outbound call per fault for no one's benefit. */
     const { env } = await fresh();
     await W.handleCheck(env, { id: "chk-1", reg: "YS70 PWE", level: "stop",
-                               driver: "Bro Tunde", age: 0 });
+                               driver: "Bro Trevor", age: 0 });
     const mint = await body(await W.handleMintLink(env, { link: { kind: "authorise", subject:
-      { reg: "YS70 PWE", checkId: "chk-1", inspector: "Bro Tunde", to: "Bro Asim" } } }));
+      { reg: "YS70 PWE", checkId: "chk-1", inspector: "Bro Trevor", to: "Bro Arthur" } } }));
     const out = await body(await W.handleLinkDo(env, { token: mint.token, pin: "1234", choice: "run" }));
     a.eq(out.ok, true, JSON.stringify(out));
     a.eq(G.calls.filter((c) => c.url === EXEC).length, 0);
@@ -238,7 +238,7 @@ export default async function (root) {
        previews open links before a person does, and looking must stay free. */
     const { env } = await fresh();
     const mint = await body(await W.handleMintLink(env, { link: { kind: "rota",
-      subject: { id: "REQ-9", sunday: "2026-10-04", driver: "Bro Tunde", to: "Bro Asim" } } }));
+      subject: { id: "REQ-9", sunday: "2026-10-04", driver: "Bro Trevor", to: "Bro Arthur" } } }));
     await W.handleLinkWhat(env, { token: mint.token });
     a.eq(G.calls.filter((c) => c.url === EXEC).length, 0);
   });

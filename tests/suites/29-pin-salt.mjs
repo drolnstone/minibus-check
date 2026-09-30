@@ -35,21 +35,21 @@ export default async function (root) {
   const sheet = (props) => loadCodeGs(root, { tabs: {}, props: props || {} });
 
   s.test("with no PIN_SALT, a driver with a PIN is sent a fingerprint nothing matches, never a blank", (a) => {
-    const got = call(sheet(), "pinHashLive", "Bro Tunde", "1234");
+    const got = call(sheet(), "pinHashLive", "Bro Trevor", "1234");
     a.ok(got, "a blank fingerprint is read by the live server as 'no PIN wanted'");
     a.not(/^[0-9a-f]{64}$/.test(got), "it looks like a real fingerprint");
   });
 
   s.test("a driver with no PIN is still sent a blank, with or without the salt", (a) => {
-    a.eq(call(sheet(), "pinHashLive", "Bro Tunde", ""), "");
-    a.eq(call(sheet({ PIN_SALT: "salt" }), "pinHashLive", "Bro Tunde", ""), "");
+    a.eq(call(sheet(), "pinHashLive", "Bro Trevor", ""), "");
+    a.eq(call(sheet({ PIN_SALT: "salt" }), "pinHashLive", "Bro Trevor", ""), "");
   });
 
   /* Not compared with the live server's: the fake Utilities digest is a
      stand-in, not SHA-256 (see tests/lib/gas.mjs). */
   s.test("with PIN_SALT set, the sheet sends a real fingerprint, and the salt changes it", (a) => {
-    const one = call(sheet({ PIN_SALT: "salt-one" }), "pinHashLive", "Bro Tunde", "1234");
-    const two = call(sheet({ PIN_SALT: "salt-two" }), "pinHashLive", "Bro Tunde", "1234");
+    const one = call(sheet({ PIN_SALT: "salt-one" }), "pinHashLive", "Bro Trevor", "1234");
+    const two = call(sheet({ PIN_SALT: "salt-two" }), "pinHashLive", "Bro Trevor", "1234");
     a.ok(/^[0-9a-f]{64}$/.test(one), "got " + one);
     a.ok(one !== two, "the salt made no difference");
   });
@@ -60,31 +60,31 @@ export default async function (root) {
     const db = makeDB(join(root, "server", "schema.sql"));
     const env = makeEnv(db, over);
     await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,?,1,?)")
-      .bind("Bro Tunde", "Driver", "North", 1, pinHash).run();
+      .bind("Bro Trevor", "Driver", "North", 1, pinHash).run();
     return env;
   }
   const noSalt = { PIN_SALT: undefined };
 
   s.test("with no PIN_SALT on the live server, the right PIN is refused", async (a) => {
-    const real = await W.pinHashOf(makeEnv(null, { PIN_SALT: "salt" }), "Bro Tunde", "1234");
+    const real = await W.pinHashOf(makeEnv(null, { PIN_SALT: "salt" }), "Bro Trevor", "1234");
     const env = await withDriver(real, noSalt);
-    const out = await J(await W.handlePin(env, { driver: "Bro Tunde", pin: "1234" }));
+    const out = await J(await W.handlePin(env, { driver: "Bro Trevor", pin: "1234" }));
     a.not(out.valid, "a PIN was accepted with no salt set: " + JSON.stringify(out));
   });
 
   s.test("with no salt on either side, no PIN gets through", async (a) => {
-    const marker = call(sheet(), "pinHashLive", "Bro Tunde", "1234");
+    const marker = call(sheet(), "pinHashLive", "Bro Trevor", "1234");
     const env = await withDriver(marker, noSalt);
     for (const pin of ["1234", "0000", "9999"]) {
-      const out = await J(await W.handlePin(env, { driver: "Bro Tunde", pin }));
+      const out = await J(await W.handlePin(env, { driver: "Bro Trevor", pin }));
       a.not(out.valid, "PIN " + pin + " was accepted: " + JSON.stringify(out));
     }
   });
 
   s.test("an unsalted fingerprint never equals itself, or a NULL", async (a) => {
     const env = makeEnv(null, noSalt);
-    const one = await W.pinHashOf(env, "Bro Tunde", "1234");
-    const two = await W.pinHashOf(env, "Bro Tunde", "1234");
+    const one = await W.pinHashOf(env, "Bro Trevor", "1234");
+    const two = await W.pinHashOf(env, "Bro Trevor", "1234");
     a.ok(one !== two && one !== null && two !== null);
   });
 

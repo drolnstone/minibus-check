@@ -228,7 +228,7 @@ p("You can go on to the home screen without keying your PIN. You can read the ro
   "stays faded until the PIN is in (section 3.2), and starting the run or marking a stop will ask for it (section 5.4).")
 sec("2.3", "The line under your name")
 p("Sometimes a second line appears under your name on the first screen:")
-bl("**Rota has Bro Adebola on North and Bro Tunde on South this Sunday.** You are not on the rota for this Sunday. If "
+bl("**Rota has {NORTH} on North and {SOUTH} on South this Sunday.** You are not on the rota for this Sunday. If "
    "you think you should be, ring the coordinator.",
    "**Your North run is still open. End trip when you are back.** You started a run on this phone today and have not "
    "ended it. It shows when you come back to this screen from **Stops and bookings** (section 5.7).")
@@ -354,7 +354,7 @@ p("The box needs one download from the record since the app was opened. With no 
   "does not stop the check.")
 sub("Mileage")
 p("Read the odometer and type the whole number, no commas. The line under the box shows the last reading, for example "
-  "**Last recorded: 48,213 on 20/09/2026 at 09:41 by Bro Moses · 49 since**. The **since** figure is how far the bus "
+  "**Last recorded: 48,213 on 20/09/2026 at 09:41 by {NORTH3} · 49 since**. The **since** figure is how far the bus "
   "has gone since then.")
 p("If the line ends **this phone’s last copy, not just checked**, the phone could not reach the record and is showing "
   "the last reading it kept. That is fine.")
@@ -614,7 +614,7 @@ add(figure("authorised", "A bus the coordinator has authorised", [
 sub("Other things Start can say")
 add(table(["Message", "Why", "What to do"], [
     ["**Bookings close 09:30. You can start the run then.**", "Too early.", "Wait until after 09:30."],
-    ["**Bro Moses is already out on North.**", "Somebody else has started this route.", "Ring the coordinator. Two buses cannot run one route."],
+    ["**{NORTH3} is already out on North.**", "Somebody else has started this route.", "Ring the coordinator. Two buses cannot run one route."],
     ["**NH56 FWP was stopped by today’s check.** **Ring {COORD}.**", "See section 4.8.", "Ring the coordinator."]],
     [1.6, 1.1, 1.2]))
 p("If you tap the bus the rota did not give you, the same question as in section 4.2 appears: **Stay with …** or "
@@ -720,7 +720,7 @@ p("If the app ends the run while you are still out, open **Stops and bookings** 
   "trip** comes back, and the app says **Run reopened.**")
 p("A run you ended yourself with **End trip** cannot be reopened. If that happens by mistake, ring the coordinator and "
   "carry on driving the route.")
-p("**End trip** can refuse: **Not while the bus is moving.**, or **That is Bro Moses’s run. Only he can end it.** on "
+p("**End trip** can refuse: **Not while the bus is moving.**, or **That is {NORTH3}’s run. Only he can end it.** on "
   "somebody else’s run.")
 sec("5.7", "If the app reloads mid-run")
 p("A phone short of memory, or an update arriving, can reload the app in the middle of the run. Your run is safe: it is "
@@ -734,11 +734,11 @@ add(figure("run-noname", "If the phone has lost your name as well", [
       "screen reminds you: **Your North run is still open. End trip when you are back.**")]))
 sec("5.8", "Looking at the other route")
 add(figure("other-route", "The other route, read only", [
-    "**Bro Tunde is out since 10:16 · 1 minute behind schedule · last Dewsbury Road by Lynholme Road at "
+    "**{SOUTH} is out since 10:16 · 1 minute behind schedule · last Dewsbury Road by Lynholme Road at "
       "10:25.**",
     P("Tap the other route’s tab to see where its bus is. You see its stops, its bookings and what its driver has "
       "marked, but no buttons."),
-    P("When it has finished: **Bro Tunde has finished. 10:16 to 11:02, 46 minutes.**"),
+    P("When it has finished: **{SOUTH} has finished. 10:16 to 11:02, 46 minutes.**"),
     P("Before a route’s bus sets off, with nobody signed in, the screen says **Nobody is signed in.** with **Sign in**. "
       "The board is still there to read.")]))
 sec("5.9", "Covering a route")
@@ -750,12 +750,12 @@ p("If you are covering and the rota does not have your name yet, open **Stops an
   "route’s tab. As long as you are not on the rota for either route that morning and nobody is out on this one, the app "
   "offers you the run:")
 add(figures([("cover-offer", "The offer"), ("cover-confirm", "Tap again to confirm"), ("cover-bus", "Then your bus")]))
-nl("**You are not on the rota for North.** **Bro Adebola is. Nobody is out.** Tap **I am covering this run**. If your PIN "
+nl("**You are not on the rota for North.** **{NORTH} is. Nobody is out.** Tap **I am covering this run**. If your PIN "
    "is not keyed, the app asks for it first.",
    "The button turns amber: **Confirm: you are covering North**. Tap it again.",
    "The app says **Covering North. Pick your bus.** and the Start buttons appear.")
 p("From here it is an ordinary run (section 5.4), and the record marks it as cover. If somebody sets off on that route "
-  "in the meantime, the app says **Bro Adebola is already out on North.** and the offer goes. Either way, tell the "
+  "in the meantime, the app says **{NORTH} is already out on North.** and the offer goes. Either way, tell the "
   "coordinator you covered, so the rota can be put right.")
 sec("5.10", "What your phone may tell you")
 p("With reminders on (section 1.5), the rostered driver’s phone can be sent these, mostly on a Sunday morning. Each is "
@@ -807,8 +807,8 @@ p("Each Sunday is a card: the date on the left, then one line per route with the
 add(figures([("rota-cards", "Covering, and a protected Sunday"), ("rota-swap", "A swap")]))
 p("What the cards can say:")
 add(table(["On the card", "Means"], [
-    ["**Covering for Bro Adesina**", "The name shown is covering that Sunday for the driver named in the line."],
-    ["**Swapped with Bro Abiodun**", "The driver shown has swapped Sundays with that driver."],
+    ["**Covering for {SOUTH3}**", "The name shown is covering that Sunday for the driver named in the line."],
+    ["**Swapped with {NORTH2}**", "The driver shown has swapped Sundays with that driver."],
     ["**Protected Sunday.** **Harvest Sunday.** **This one cannot be swapped. If you cannot make it, ask for a cover.**", "The coordinator has fixed this Sunday. You can still say you cannot come."],
     ["**Holiday / planned leave** **Pending** · **Asked by Bro Sample**", "A request, with its answer: **Pending**, **Approved** (green) or **Rejected** (red)."],
     ["**No driver assigned** (red)", "Nobody is down to drive that Sunday."]], [1.5, 1.3]))
@@ -823,7 +823,7 @@ p("Tap **Request change** on one of your own Sundays. It is there on every Sunda
   "from this Sunday on, until you have asked about it.")
 add(figure("rota-request", "Request a change", [
     P("The sheet opens with the date and your part in it: **Sunday 27 September 2026 · You are scheduled on North "
-      "Liverpool this Sunday.** or … **You are covering South Liverpool this Sunday for Bro Adesina.**"),
+      "Liverpool this Sunday.** or … **You are covering South Liverpool this Sunday for {SOUTH3}.**"),
     P("**Request type**: **Holiday / planned leave**, **Unavailable**, **Request a swap** or **Other**."),
     P("**Reason**: **Tell the coordinator what they need to know.**"),
     P("**Send request** sends it. **Cancel** closes the sheet and sends nothing.")]))
@@ -833,8 +833,8 @@ add(figure("rota-swap-sheet", "Request a swap", [
     P("**Swap with**: choose the driver."),
     P("**Take their Sunday**: choose which of their Sundays you will drive. It lists up to six coming up, with the route: "
       "**11 Oct (North)**."),
-    P("Tick **Bro Moses and I have already agreed this swap.**")]))
-bl("If the driver you choose is already driving on your Sunday, the app says so: **Bro Tunde is already driving on this "
+    P("Tick **{NORTH3} and I have already agreed this swap.**")]))
+bl("If the driver you choose is already driving on your Sunday, the app says so: **{SOUTH} is already driving on this "
    "Sunday, so he cannot take yours as well. Pick somebody else, or ask for a cover instead.**",
    "If he has no Sundays of his own coming up: **… has no Sundays of his own coming up, so there is nothing to swap. Ask "
    "for a cover instead and he can be put down for this Sunday.**",
@@ -989,7 +989,7 @@ AZ = [
  ("Alerts are working · Nothing has happened to the bus.", "Phone notification", "The bell test worked. §1.5"),
  ("Anything to arrange?", "Before you sign", "Tap what the bus needs, or **Nothing needed**, before signing."),
  ("Bookings close 09:30. You can start the run then.", "Stops and bookings", "Too early to start. After 09:30, with signal, the Start buttons appear. §5.3"),
- ("Bro Moses is already out on North.", "Start trip, covering", "Somebody else has started this route. Ring the coordinator."),
+ ("{NORTH3} is already out on North.", "Start trip, covering", "Somebody else has started this route. Ring the coordinator."),
  ("Call {COORD} · {PHONE}", "Top bar, stopped bus", "Rings the coordinator. §4.8"),
  ("1 check not sent yet. Send now", "Banner, every screen", "A check is held on this phone. It sends itself with signal. §4.9"),
  ("Check the mileage", "Before you start", "A mileage warning has not been ticked. §4.3"),
@@ -1026,7 +1026,7 @@ AZ = [
  ("Held on this phone", "Finished check", "Not sent yet. It sends itself. Do not clear the app. §4.9"),
  ("2 items still need a note", "Bottom of a checklist stage", "Write what you found on each **Defect** or **Advisory**."),
  ("Key your PIN first.", "Vehicle check, Do the check, Check another bus", "Key your PIN on the first screen, tap **Continue**, then **Vehicle check**."),
- ("Last recorded: 48,213 on 20/09/2026 at 09:41 by Bro Moses · 49 since", "Mileage", "The last reading on the record."),
+ ("Last recorded: 48,213 on 20/09/2026 at 09:41 by {NORTH3} · 49 since", "Mileage", "The last reading on the record."),
  ("Last updated 10:36, 12 minutes ago.", "Stops and bookings (amber)", "The numbers are old. Find signal."),
  ("15 left in this stage", "Bottom of a checklist stage", "Items still to answer before **Next stage**."),
  ("Location turned off for this app. The check still counts, and the record will show it was not given.", "Before you start", "Allow location in the phone’s settings next time."),
@@ -1060,7 +1060,7 @@ AZ = [
  ("Renewal due soon / Renewal overdue", "Bus cards", "As above."),
  ("Request sent. The coordinator decides; the rota has not changed yet.", "Rota request", "Wait for his answer. §6.3"),
  ("Rota had NH56 FWP for North. YS70 PWE seats 16 and 9 are booked.", "Start buttons", "You are taking a bus the rota did not give, or it has too few seats."),
- ("Rota has Bro Adebola on North and Bro Tunde on South this Sunday.", "Sign in", "You are not on the rota this Sunday."),
+ ("Rota has {NORTH} on North and {SOUTH} on South this Sunday.", "Sign in", "You are not on the rota this Sunday."),
  ("Run reopened.", "Stops and bookings", "The run carries on where it was. §5.6"),
  ("Running since 10:05 · 2 minutes behind schedule · last … at 10:17", "Stops, during the run", "Your run is going."),
  ("Sending", "Finished check", "Wait."),
@@ -1080,7 +1080,7 @@ AZ = [
  ("2 taps waiting to send.", "Stops, during the run", "Taps kept for lack of signal. Keep **Stops and bookings** open. §5.5"),
  ("Thank you.", "PIN sheet", "The PIN is right."),
  ("That is 1,687 miles since 20/09/2026. That is a long way for this bus. Check you have not added a digit.", "Mileage", "Read it again. §4.3"),
- ("That is Bro Moses’s run. Only he can end it.", "End trip", "Only the run’s driver can end it."),
+ ("That is {NORTH3}’s run. Only he can end it.", "End trip", "Only the run’s driver can end it."),
  ("That is LOWER than the last reading of …", "Mileage", "Read it again. §4.3"),
  ("That PIN has been changed. Key the new one.", "PIN", "Key your new PIN."),
  ("That PIN is not right. (… 2 more tries before it pauses.)", "PIN", "Check the number and try again."),
@@ -1104,7 +1104,7 @@ AZ = [
  ("1 waiting to send", "Home screen button", "Opens the list of held checks. §4.9"),
  ("Works with no signal. Checks send themselves when you are back in range.", "Home screen", "A reminder, not a problem."),
  ("You are driving today · North. Depart 10:05 after vehicle check.", "Phone notification", "Your run this morning. §5.10"),
- ("You are not on the rota for North. Bro Adebola is. Nobody is out. / I am covering this run", "Stops and bookings, after 09:30", "Covering at short notice: tap it, then confirm. §5.9"),
+ ("You are not on the rota for North. {NORTH} is. Nobody is out. / I am covering this run", "Stops and bookings, after 09:30", "Covering at short notice: tap it, then confirm. §5.9"),
  ("You are on North today.", "Finished check", "The rota has you driving. **Start your run** goes to the stops."),
  ("You set off less than a minute ago. Tap again if you are really at …", "Stops, during the run", "Tap again if you are there."),
  ("Your North run is still open. End trip when you are back.", "Sign in", "You have not ended today’s run. §5.6"),
@@ -1113,6 +1113,8 @@ AZ = [
 ]
 import re as _re
 def _az_key(t):
+    # By the words the page will show, so {NORTH3} sorts as the name it becomes.
+    for k, v in FILL.items(): t = t.replace(k, v)
     t = _re.sub(r"^[\d\s]+", "", t).lower()
     return t
 AZ.sort(key=lambda r: _az_key(r[0]))

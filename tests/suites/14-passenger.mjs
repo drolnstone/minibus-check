@@ -54,7 +54,7 @@ export default async function (root) {
 
   async function aRunIsOut(env, key, at) {
     await W.handleTrip(env, {
-      trip: "t1", route: "North", driver: "Bro Adebola", reg: "YS70 PWE", sunday: key,
+      trip: "t1", route: "North", driver: "Bro Adrian", reg: "YS70 PWE", sunday: key,
       events: [{ event: "start", at: at || (Date.now() - 900000) }]
     });
   }
@@ -400,7 +400,7 @@ export default async function (root) {
     const { db, env } = await fresh();
     await db.prepare(
       "INSERT INTO push_subs (endpoint, p256dh, auth, role, ref, pid, driver, route, made, seen, fails, last) " +
-      "VALUES ('https://push.example/drv','p','a','driver','','','Bro Adebola','North',?,0,0,'')"
+      "VALUES ('https://push.example/drv','p','a','driver','','','Bro Adrian','North',?,0,0,'')"
     ).bind(Date.now()).run();
     net.reset();
     for (const day of THREE) await atTime(WHEN[day], () => W.wakeBookingReminders(env));
@@ -526,7 +526,7 @@ export default async function (root) {
     const out = await words(WHEN.sundayRunning, async (db, env, key) => {
       await seedBookings(db, key, [{ route: "North", stopId: "N08" }]);
       await aRunIsOut(env, key, Date.now() - 900000);
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "YS70 PWE", sunday: key,
         /* At five past ten the bus has just marked N01, which is timetabled
            for ten. A tap on a stop further down the line at this hour would
@@ -542,7 +542,7 @@ export default async function (root) {
     const out = await words(WHEN.sundayRunning, async (db, env, key) => {
       await seedBookings(db, key, [{ route: "North", stopId: "N08" }]);
       await aRunIsOut(env, key, Date.now() - 900000);
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "YS70 PWE", sunday: key,
         events: [{ event: "picked", stopId: "N01", at: Date.now() - 60000 }] });
     });

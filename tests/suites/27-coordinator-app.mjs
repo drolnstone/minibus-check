@@ -35,8 +35,8 @@ export default async function (root) {
   const J = async (r) => JSON.parse(await r.text());
 
   const shelfRow = (date, o) => Object.assign({
-    date: date, primary: "Bro Adebola", actual: "Bro Adebola", status: "Confirmed",
-    primary2: "Bro Tunde", actual2: "", notes: "", northBus: "YS70 PWE", southBus: "NH56 FWP",
+    date: date, primary: "Bro Adrian", actual: "Bro Adrian", status: "Confirmed",
+    primary2: "Bro Trevor", actual2: "", notes: "", northBus: "YS70 PWE", southBus: "NH56 FWP",
     swaps: [], locked: false, lockNote: "", requests: []
   }, o || {});
 
@@ -50,10 +50,10 @@ export default async function (root) {
     await seedSunday(db, KEY);
     await db.prepare(
       "INSERT OR REPLACE INTO rota (sunday, north, north_cover, north_bus, south, south_cover, south_bus, status, notes) " +
-      "VALUES (?,?,?,?,?,?,?,?,?)").bind(NEXT, "Bro Moses", "", "NH56 FWP", "Bro Adesina", "", "YS70 PWE", "Confirmed", "").run();
-    for (const d of [["Bro Asim", "Coordinator", "North", 1], ["Pst Kehinde", "Minister in Charge", "North", 2],
-                     ["Bro Adebola", "Driver", "North", 3], ["Bro Moses", "Driver", "North", 4],
-                     ["Bro Tunde", "Driver", "South", 5], ["Bro Adesina", "Driver", "South", 6]]) {
+      "VALUES (?,?,?,?,?,?,?,?,?)").bind(NEXT, "Bro Martin", "", "NH56 FWP", "Bro Alfred", "", "YS70 PWE", "Confirmed", "").run();
+    for (const d of [["Bro Arthur", "Coordinator", "North", 1], ["Pst Kenneth", "Minister in Charge", "North", 2],
+                     ["Bro Adrian", "Driver", "North", 3], ["Bro Martin", "Driver", "North", 4],
+                     ["Bro Trevor", "Driver", "South", 5], ["Bro Alfred", "Driver", "South", 6]]) {
       await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,?,1,?)")
         .bind(d[0], d[1], d[2], d[3], await W.pinHashOf(env, d[0], PIN)).run();
     }
@@ -62,20 +62,20 @@ export default async function (root) {
     await W.cachePut(env, "cache_rota", {
       builtAt: Date.now() - 60000, from: "2026-07-12", to: "2028-09-24",
       payload: { ok: true, rows: [shelfRow(LAST), shelfRow(KEY),
-                                  shelfRow(NEXT, { primary: "Bro Moses", actual: "Bro Moses", primary2: "Bro Adesina",
+                                  shelfRow(NEXT, { primary: "Bro Martin", actual: "Bro Martin", primary2: "Bro Alfred",
                                                    northBus: "NH56 FWP", southBus: "YS70 PWE",
-                                                   requests: [{ driver: "Bro Moses", type: "Request cover", status: "Pending" }],
+                                                   requests: [{ driver: "Bro Martin", type: "Request cover", status: "Pending" }],
                                                    status: "Change requested" })],
                  openDefects: { "YS70 PWE": [{ reg: "YS70 PWE", item: "Nearside rear tyre", crit: false, note: "Worn edge",
                                                kind: "Defect", date: LAST, checkId: "chk-1", status: "Open" }] } }
     }).run();
     await W.cachePut(env, "coord_shelf", {
       builtAt: Date.now() - 60000, readAt: Date.now() - 60000,
-      requests: [{ id: "rq-moses", sunday: NEXT, driver: "Bro Moses", type: "Request cover",
+      requests: [{ id: "rq-martin", sunday: NEXT, driver: "Bro Martin", type: "Request cover",
                    reason: "Away at a wedding", swapWith: "", theirSunday: "", bothAgreed: "",
                    status: "Pending", received: Date.now() - 86400000, decidedOn: 0, replacement: "" }],
       defects: [{ key: "chk-1|YS70 PWE|Nearside rear tyre|" + LAST, checkId: "chk-1", reg: "YS70 PWE", date: LAST,
-                  driver: "Bro Tunde", item: "Nearside rear tyre", crit: false, found: "Worn edge",
+                  driver: "Bro Trevor", item: "Nearside rear tyre", crit: false, found: "Worn edge",
                   status: "Open", action: "", kind: "Defect", received: Date.now() - 4 * 86400000 }]
     }).run();
     return { db, env };
@@ -83,7 +83,7 @@ export default async function (root) {
   const post = (env, ctx, body) => W.default.fetch(new Request("https://worker.test/", {
     method: "POST", body: JSON.stringify(Object.assign({ token: "minibusapp" }, body)) }), env, ctx || {});
   const coord = async (env, body, who, pin, ctx) =>
-    J(await post(env, ctx, Object.assign({ action: "coord", who: who || "Bro Asim", pin: pin || PIN }, body)));
+    J(await post(env, ctx, Object.assign({ action: "coord", who: who || "Bro Arthur", pin: pin || PIN }, body)));
   let n = 0;
   const act = (env, a, ctx) => coord(env, { op: "act", act: Object.assign({ id: "act-" + (++n) + "-test" }, a) }, null, null, ctx);
   const rowOf = async (env, key) => (await W.cachedRota(env, key, 1)).rows.find((r) => r.date === key);
@@ -95,7 +95,7 @@ export default async function (root) {
       const { env } = await fresh();
       const out = await coord(env, { op: "load" });
       a.ok(out.ok, JSON.stringify(out).slice(0, 300));
-      a.eq(out.me.name, "Bro Asim");
+      a.eq(out.me.name, "Bro Arthur");
       a.eq(out.today, KEY);
       a.ok(out.rota.rows.some((r) => r.date === KEY), "no rota rows");
       a.eq(out.requests[0].reason, "Away at a wedding", "the reason is what he decides on");
@@ -108,7 +108,7 @@ export default async function (root) {
   s.test("a driver's own PIN does not open it", async (a) => {
     await atTime(THU, async () => {
       const { env } = await fresh();
-      const out = await coord(env, { op: "load" }, "Bro Tunde", PIN);
+      const out = await coord(env, { op: "load" }, "Bro Trevor", PIN);
       a.not(out.ok);
       a.eq(out.error, "not authorised");
       a.eq(out.requests, undefined, "a refusal carried the reasons anyway");
@@ -118,12 +118,12 @@ export default async function (root) {
   s.test("a wrong PIN is refused and counts towards the same lockout as everywhere else", async (a) => {
     await atTime(THU, async () => {
       const { env } = await fresh();
-      const one = await coord(env, { op: "load" }, "Bro Asim", "9999");
+      const one = await coord(env, { op: "load" }, "Bro Arthur", "9999");
       a.eq(one.error, "bad pin");
       a.eq(one.left, 2);
-      await coord(env, { op: "load" }, "Bro Asim", "9999");
-      await coord(env, { op: "load" }, "Bro Asim", "9999");
-      const locked = await coord(env, { op: "load" }, "Bro Asim", PIN);
+      await coord(env, { op: "load" }, "Bro Arthur", "9999");
+      await coord(env, { op: "load" }, "Bro Arthur", "9999");
+      const locked = await coord(env, { op: "load" }, "Bro Arthur", PIN);
       a.ok(locked.locked, "three wrong and the right one still opened it");
     });
   });
@@ -133,7 +133,7 @@ export default async function (root) {
       const { db, env } = await fresh();
       await db.prepare("INSERT INTO bookings (sunday, route, stop_id, stop, seats, device, pid, phone, status, received) " +
                        "VALUES (?,?,?,?,?,?,?,?,?,?)").bind(KEY, "South", "S03", "Sedley St", 2, "dev", "pid", "07700900123", "Booked", Date.now()).run();
-      const no = await coord(env, { op: "bookings", sunday: KEY }, "Bro Asim", "0000");
+      const no = await coord(env, { op: "bookings", sunday: KEY }, "Bro Arthur", "0000");
       a.not(no.ok);
       a.hasnt(JSON.stringify(no), "07700900123");
       const yes = await coord(env, { op: "bookings", sunday: KEY });
@@ -148,42 +148,42 @@ export default async function (root) {
   s.test("a cover put on a Sunday shows on every phone at once, before the sheet has it", async (a) => {
     await atTime(THU, async () => {
       const { env } = await fresh();
-      const out = await act(env, { kind: "rota", sunday: KEY, set: { northCover: "Bro Moses" } });
+      const out = await act(env, { kind: "rota", sunday: KEY, set: { northCover: "Bro Martin" } });
       a.ok(out.ok, JSON.stringify(out));
       a.eq(out.action.state, "waiting");
       const row = await rowOf(env, KEY);
-      a.eq(row.actual, "Bro Moses", "the driver app's rota does not show the cover");
+      a.eq(row.actual, "Bro Martin", "the driver app's rota does not show the cover");
       a.eq(row.status, "Covered", "the status rule the sheet runs was not followed");
       a.ok(row.coordPending);
       const raw = await W.getRotaRow(env, KEY);
-      a.eq(raw.north_cover, "Bro Moses", "the live server's own rota table was not changed");
-      a.eq(W.rotaDriverFor(raw, "North"), "Bro Moses", "the morning reminder would go to the wrong man");
+      a.eq(raw.north_cover, "Bro Martin", "the live server's own rota table was not changed");
+      a.eq(W.rotaDriverFor(raw, "North"), "Bro Martin", "the morning reminder would go to the wrong man");
     });
   });
 
   s.test("the change survives a push from the sheet that does not include it yet", async (a) => {
     await atTime(THU, async () => {
       const { env } = await fresh();
-      await act(env, { kind: "rota", sunday: KEY, set: { northCover: "Bro Moses" } });
+      await act(env, { kind: "rota", sunday: KEY, set: { northCover: "Bro Martin" } });
       /* An hourly push that started before the sheet had it. */
-      await W.handleSync(env, { rota: [{ date: KEY, primary: "Bro Adebola", actual: "", northBus: "YS70 PWE",
-                                         primary2: "Bro Tunde", actual2: "", southBus: "NH56 FWP", status: "Confirmed", notes: "" }],
+      await W.handleSync(env, { rota: [{ date: KEY, primary: "Bro Adrian", actual: "", northBus: "YS70 PWE",
+                                         primary2: "Bro Trevor", actual2: "", southBus: "NH56 FWP", status: "Confirmed", notes: "" }],
                                 coordApplied: [] });
       const raw = await W.getRotaRow(env, KEY);
-      a.eq(raw.north_cover, "Bro Moses", "the push put the old rota back over the coordinator's change");
-      a.eq((await rowOf(env, KEY)).actual, "Bro Moses");
+      a.eq(raw.north_cover, "Bro Martin", "the push put the old rota back over the coordinator's change");
+      a.eq((await rowOf(env, KEY)).actual, "Bro Martin");
     });
   });
 
   s.test("once a push names the change, the sheet's own copy speaks for itself", async (a) => {
     await atTime(THU, async () => {
       const { env } = await fresh();
-      const out = await act(env, { kind: "rota", sunday: KEY, set: { northCover: "Bro Moses" } });
+      const out = await act(env, { kind: "rota", sunday: KEY, set: { northCover: "Bro Martin" } });
       await W.handleSync(env, { coordApplied: [out.action.id],
                                 cache: { builtAt: Date.now(), from: "2026-07-12", to: "2028-09-24",
-                                         rota: { ok: true, rows: [shelfRow(KEY, { actual: "Bro Abiodun", status: "Covered" })] } } });
+                                         rota: { ok: true, rows: [shelfRow(KEY, { actual: "Bro Abel", status: "Covered" })] } } });
       const row = await rowOf(env, KEY);
-      a.eq(row.actual, "Bro Abiodun", "the overlay went on after the sheet had sent its own answer");
+      a.eq(row.actual, "Bro Abel", "the overlay went on after the sheet had sent its own answer");
       a.not(row.coordPending);
     });
   });
@@ -191,7 +191,7 @@ export default async function (root) {
   s.test("one man cannot be put on both routes the same morning", async (a) => {
     await atTime(THU, async () => {
       const { env } = await fresh();
-      const out = await act(env, { kind: "rota", sunday: KEY, set: { northCover: "Bro Tunde" } });
+      const out = await act(env, { kind: "rota", sunday: KEY, set: { northCover: "Bro Trevor" } });
       a.not(out.ok);
       a.has(out.error, "both routes");
     });
@@ -201,8 +201,8 @@ export default async function (root) {
     await atTime(THU, async () => {
       const { env } = await fresh();
       a.has((await act(env, { kind: "rota", sunday: KEY, set: { north: "Bro Nobody" } })).error, "not an active driver");
-      a.has((await act(env, { kind: "rota", sunday: LAST, set: { north: "Bro Moses" } })).error, "been and gone");
-      a.has((await act(env, { kind: "rota", sunday: "2026-10-05", set: { north: "Bro Moses" } })).error, "not a Sunday");
+      a.has((await act(env, { kind: "rota", sunday: LAST, set: { north: "Bro Martin" } })).error, "been and gone");
+      a.has((await act(env, { kind: "rota", sunday: "2026-10-05", set: { north: "Bro Martin" } })).error, "not a Sunday");
     });
   });
 
@@ -251,12 +251,12 @@ export default async function (root) {
   s.test("a note is added once, however many times the change is laid over", async (a) => {
     await atTime(THU, async () => {
       const { env } = await fresh();
-      await act(env, { kind: "rota", sunday: KEY, note: "North ran without a vehicle check, authorised by Bro Asim." });
+      await act(env, { kind: "rota", sunday: KEY, note: "North ran without a vehicle check, authorised by Bro Arthur." });
       await W.reapplyRawRota(env);
       await W.reapplyRawRota(env);
       const raw = await W.getRotaRow(env, KEY);
       a.eq(raw.notes.split("\n").length, 1, "got: " + raw.notes);
-      a.has((await rowOf(env, KEY)).notes, "authorised by Bro Asim");
+      a.has((await rowOf(env, KEY)).notes, "authorised by Bro Arthur");
     });
   });
 
@@ -265,11 +265,11 @@ export default async function (root) {
   s.test("a request approved with a cover shows covered at once, and its email link is spent", async (a) => {
     await atTime(THU, async () => {
       const { db, env } = await fresh();
-      const link = await J(await W.handleMintLink(env, { link: { kind: "rota", subject: { id: "rq-moses", sunday: NEXT, driver: "Bro Moses" } } }));
-      const out = await act(env, { kind: "decide", requestId: "rq-moses", choice: "Approved", cover: "Bro Adebola" });
+      const link = await J(await W.handleMintLink(env, { link: { kind: "rota", subject: { id: "rq-martin", sunday: NEXT, driver: "Bro Martin" } } }));
+      const out = await act(env, { kind: "decide", requestId: "rq-martin", choice: "Approved", cover: "Bro Adrian" });
       a.ok(out.ok, JSON.stringify(out));
       const row = await rowOf(env, NEXT);
-      a.eq(row.actual, "Bro Adebola");
+      a.eq(row.actual, "Bro Adrian");
       a.eq(row.status, "Covered");
       a.eq(row.requests[0].status, "Approved", "the driver's own screen still says Pending");
       const what = await J(await W.handleLinkWhat(env, { token: link.token }));
@@ -277,15 +277,15 @@ export default async function (root) {
       const l = db._one("SELECT synced FROM links WHERE token=?", link.token);
       a.eq(l.synced, 1, "the spent link would be carried to the sheet as a second decision");
       const load = await coord(env, { op: "load" });
-      a.eq(load.requests.find((r) => r.id === "rq-moses").status, "Approved");
+      a.eq(load.requests.find((r) => r.id === "rq-martin").status, "Approved");
     });
   });
 
   s.test("a request cannot be decided twice", async (a) => {
     await atTime(THU, async () => {
       const { env } = await fresh();
-      await act(env, { kind: "decide", requestId: "rq-moses", choice: "Rejected" });
-      const again = await act(env, { kind: "decide", requestId: "rq-moses", choice: "Approved" });
+      await act(env, { kind: "decide", requestId: "rq-martin", choice: "Rejected" });
+      const again = await act(env, { kind: "decide", requestId: "rq-martin", choice: "Approved" });
       a.not(again.ok);
       a.has(again.error, "already");
     });
@@ -294,7 +294,7 @@ export default async function (root) {
   s.test("the cover cannot be somebody already driving the other route that morning", async (a) => {
     await atTime(THU, async () => {
       const { env } = await fresh();
-      const out = await act(env, { kind: "decide", requestId: "rq-moses", choice: "Approved", cover: "Bro Adesina" });
+      const out = await act(env, { kind: "decide", requestId: "rq-martin", choice: "Approved", cover: "Bro Alfred" });
       a.not(out.ok);
       a.has(out.error, "already driving South");
     });
@@ -304,7 +304,7 @@ export default async function (root) {
     await atTime(THU, async () => {
       const { env } = await fresh();
       await act(env, { kind: "rota", sunday: NEXT, set: { status: "Cancelled/declined" } });
-      await act(env, { kind: "decide", requestId: "rq-moses", choice: "Rejected" });
+      await act(env, { kind: "decide", requestId: "rq-martin", choice: "Rejected" });
       a.eq((await rowOf(env, NEXT)).status, "Cancelled/declined");
       a.eq((await W.getRotaRow(env, NEXT)).status, "Cancelled/declined");
     });
@@ -323,7 +323,7 @@ export default async function (root) {
       a.eq(W.bookingCounts(rows).S03, 2);
       const d = await J(await W.handleDrain(env, { limit: 300 }));
       a.eq(d.bookings.length, 1, "the booking is not on its way to the sheet");
-      a.has(d.bookings[0].note, "Bro Asim");
+      a.has(d.bookings[0].note, "Bro Arthur");
       a.eq(d.coord.length, 1, "the action is not on its way to the sheet");
       a.eq(d.coord[0].body.bookingId, d.bookings[0].id);
     });
@@ -357,7 +357,7 @@ export default async function (root) {
   s.test("no seat is booked at a stop the bus has already been to", async (a) => {
     await atTime("2026-10-04T10:30:00+01:00", async () => {
       const { env } = await fresh();
-      await W.handleTrip(env, { trip: "t1", route: "South", driver: "Bro Tunde", reg: "NH56 FWP", sunday: KEY,
+      await W.handleTrip(env, { trip: "t1", route: "South", driver: "Bro Trevor", reg: "NH56 FWP", sunday: KEY,
                                 events: [{ event: "start", at: Date.now() - 900000 },
                                          { event: "picked", stopId: "S03", at: Date.now() - 300000 }] });
       const out = await act(env, { kind: "booking", op: "add", sunday: KEY, stopId: "S03", seats: 1 });
@@ -398,7 +398,7 @@ export default async function (root) {
 
   async function morning(env) {
     const t0 = new Date("2026-10-04T10:21:00+01:00").getTime();
-    await W.handleTrip(env, { trip: "t1", route: "South", driver: "Bro Tunde", reg: "NH56 FWP", sunday: KEY,
+    await W.handleTrip(env, { trip: "t1", route: "South", driver: "Bro Trevor", reg: "NH56 FWP", sunday: KEY,
                               events: [{ event: "start", at: t0 },
                                        { event: "picked", stopId: "S03", at: t0 + 30 * 60000 },
                                        { event: "end", at: t0 + 45 * 60000 }] });
@@ -450,15 +450,15 @@ export default async function (root) {
     await atTime(SUN, async () => {
       const { mod: W2 } = await loadWorker(root);
       const { db, env } = await fresh({ old: true });
-      await W2.handleTrip(env, { trip: "t1", route: "South", driver: "Bro Tunde", reg: "NH56 FWP", sunday: KEY,
+      await W2.handleTrip(env, { trip: "t1", route: "South", driver: "Bro Trevor", reg: "NH56 FWP", sunday: KEY,
                                  events: [{ event: "start", at: new Date("2026-10-04T10:21:00+01:00").getTime() },
                                           { event: "picked", stopId: "S03", at: new Date("2026-10-04T10:51:00+01:00").getTime() }] });
       const ev = db._one("SELECT id FROM trip_events WHERE stop_id='S03'");
       const out = await J(await W2.default.fetch(new Request("https://worker.test/", { method: "POST",
-        body: JSON.stringify({ token: "minibusapp", action: "coord", who: "Bro Asim", pin: PIN,
+        body: JSON.stringify({ token: "minibusapp", action: "coord", who: "Bro Arthur", pin: PIN,
                                op: "act", act: { id: "old-fix-1", kind: "fix", sunday: KEY, eventId: ev.id, time: "10:39" } }) }), env, {}));
       a.ok(out.ok, JSON.stringify(out));
-      a.has(db._one("SELECT fix_note FROM trip_events WHERE id=?", ev.id).fix_note, "Corrected by Bro Asim");
+      a.has(db._one("SELECT fix_note FROM trip_events WHERE id=?", ev.id).fix_note, "Corrected by Bro Arthur");
     });
   });
 
@@ -470,7 +470,7 @@ export default async function (root) {
       const waits = [];
       await coord(env, { op: "load" }, null, null, { waitUntil: (p) => waits.push(p) });
       a.eq(waits.length, 0, "opening the app knocked on the sheet");
-      await coord(env, { op: "act", act: { id: "knock-test-1", kind: "rota", sunday: KEY, set: { northCover: "Bro Moses" } } },
+      await coord(env, { op: "act", act: { id: "knock-test-1", kind: "rota", sunday: KEY, set: { northCover: "Bro Martin" } } },
                   null, null, { waitUntil: (p) => waits.push(p) });
       a.eq(waits.length, 1);
       await Promise.all(waits);
@@ -492,7 +492,7 @@ export default async function (root) {
   s.test("what the sheet says about each change is what he is shown", async (a) => {
     await atTime(THU, async () => {
       const { env } = await fresh();
-      const ok = await act(env, { kind: "rota", sunday: KEY, set: { northCover: "Bro Moses" } });
+      const ok = await act(env, { kind: "rota", sunday: KEY, set: { northCover: "Bro Martin" } });
       const no = await act(env, { kind: "rota", sunday: NEXT, note: "a note" });
       const d = await J(await W.handleDrain(env, { limit: 300 }));
       await W.handleDrained(env, { claim: d.claim, coord: [
@@ -512,7 +512,7 @@ export default async function (root) {
     await atTime(THU, async () => {
       const { env } = await fresh();
       a.not(await W.anythingWaiting(env));
-      await act(env, { kind: "rota", sunday: KEY, set: { northCover: "Bro Moses" } });
+      await act(env, { kind: "rota", sunday: KEY, set: { northCover: "Bro Martin" } });
       a.ok(await W.anythingWaiting(env));
     });
   });
@@ -522,8 +522,8 @@ export default async function (root) {
       const { mod: W2 } = await loadWorker(root);
       const { env } = await fresh({ old: true });
       const out = await J(await W2.default.fetch(new Request("https://worker.test/", { method: "POST",
-        body: JSON.stringify({ token: "minibusapp", action: "coord", who: "Bro Asim", pin: PIN,
-                               op: "act", act: { id: "old-rota-1", kind: "rota", sunday: KEY, set: { northCover: "Bro Moses" } } }) }), env, {}));
+        body: JSON.stringify({ token: "minibusapp", action: "coord", who: "Bro Arthur", pin: PIN,
+                               op: "act", act: { id: "old-rota-1", kind: "rota", sunday: KEY, set: { northCover: "Bro Martin" } } }) }), env, {}));
       a.ok(out.ok, JSON.stringify(out));
       const d = await J(await W2.handleDrain(env, { limit: 300 }));
       a.eq(d.coord.length, 1);
@@ -581,26 +581,26 @@ export default async function (root) {
         { Route: "North", "Stop ID": "N02", Time: "10:15", Stop: "Grace Rd", Active: "YES", Type: "Pickup" },
         { Route: "South", "Stop ID": "S03", Time: "10:37", Stop: "Sedley St", Active: "YES", Type: "Pickup" }]),
       "Drivers": tab("Drivers", [
-        { Name: "Bro Asim", Role: "Coordinator", Active: "YES", "Primary order": 1, PIN: "1234", Email: "asim@b.c", Route: "North" },
-        { Name: "Bro Adebola", Role: "Driver", Active: "YES", "Primary order": 2, PIN: "1234", Email: "ade@b.c", Route: "North" },
-        { Name: "Bro Moses", Role: "Driver", Active: "YES", "Primary order": 3, PIN: "1234", Email: "moses@b.c", Route: "North" },
-        { Name: "Bro Tunde", Role: "Driver", Active: "YES", "Primary order": 1, PIN: "1234", Email: "tunde@b.c", Route: "South" }]),
+        { Name: "Bro Arthur", Role: "Coordinator", Active: "YES", "Primary order": 1, PIN: "1234", Email: "arthur@b.c", Route: "North" },
+        { Name: "Bro Adrian", Role: "Driver", Active: "YES", "Primary order": 2, PIN: "1234", Email: "ade@b.c", Route: "North" },
+        { Name: "Bro Martin", Role: "Driver", Active: "YES", "Primary order": 3, PIN: "1234", Email: "martin@b.c", Route: "North" },
+        { Name: "Bro Trevor", Role: "Driver", Active: "YES", "Primary order": 1, PIN: "1234", Email: "trevor@b.c", Route: "South" }]),
       "Buses": tab("Buses", [{ Registration: "YS70 PWE", "Seats for passengers": 16, Active: "YES" },
                              { Registration: "NH56 FWP", "Seats for passengers": 14, Active: "YES" }]),
-      "Rota": tab("Rota", [{ Sunday: SOON, "North Liverpool scheduled": "Bro Adebola", "North bus": "YS70 PWE",
-                             Status: o.status || "Confirmed", "South Liverpool scheduled": "Bro Tunde", "South bus": "NH56 FWP" }]),
+      "Rota": tab("Rota", [{ Sunday: SOON, "North Liverpool scheduled": "Bro Adrian", "North bus": "YS70 PWE",
+                             Status: o.status || "Confirmed", "South Liverpool scheduled": "Bro Trevor", "South bus": "NH56 FWP" }]),
       "Rota Requests": tab("Rota Requests", o.requests || [
-        { Received: new Date(2026, 8, 30), "Request ID": "rq-ade", Sunday: SOON, Driver: "Bro Adebola",
+        { Received: new Date(2026, 8, 30), "Request ID": "rq-ade", Sunday: SOON, Driver: "Bro Adrian",
           Type: "Request cover", Reason: "Away", Status: "Pending" }]),
       "Checks": [TABS["Checks"]],
       "Defects": tab("Defects", [
         { Received: new Date(2026, 8, 27), "Check ID": "chk-1", Date: new Date(2026, 8, 27), Registration: "YS70 PWE",
-          Driver: "Bro Tunde", Item: "Nearside rear tyre", Critical: "", "What the driver found": "Worn edge",
+          Driver: "Bro Trevor", Item: "Nearside rear tyre", Critical: "", "What the driver found": "Worn edge",
           Status: "Open", Kind: "Defect" }]),
       "Trip Events": tab("Trip Events", o.trips || []),
       "Bus Bookings": tab("Bus Bookings", o.bookings || [])
     };
-    return loadCodeGs(root, { tabs, props: { COORDINATOR_EMAIL: "asim@b.c", PIN_SALT: "salt",
+    return loadCodeGs(root, { tabs, props: { COORDINATOR_EMAIL: "arthur@b.c", PIN_SALT: "salt",
                                              WORKER_URL: "https://worker.test" } });
   }
   function worker(L, answers) {
@@ -618,20 +618,20 @@ export default async function (root) {
     const sh = L.gas.ss.getSheetByName(tabName);
     return sh.getRange(row, TABS[tabName].indexOf(heading) + 1);
   };
-  const A = (id, kind, body, extra) => Object.assign({ id: id, kind: kind, sunday: body.sunday || "", by: "Bro Asim",
+  const A = (id, kind, body, extra) => Object.assign({ id: id, kind: kind, sunday: body.sunday || "", by: "Bro Arthur",
                                                       made: Date.now(), body: body }, extra || {});
 
   s.test("the sheet writes a cover the way a person's edit would: status, stamp and both emails", async (a) => {
     await atTime(THU, async () => {
       const L = sheet();
       worker(L, {});
-      const out = call(L, "applyCoordAction", L.gas.ss, A("c1", "rota", { sunday: KEY, set: { northCover: "Bro Moses" } }), {});
+      const out = call(L, "applyCoordAction", L.gas.ss, A("c1", "rota", { sunday: KEY, set: { northCover: "Bro Martin" } }), {});
       a.ok(out.done && out.ok, JSON.stringify(out));
-      a.eq(cell(L, "Rota", 2, "North Liverpool actual / cover").getValue(), "Bro Moses");
+      a.eq(cell(L, "Rota", 2, "North Liverpool actual / cover").getValue(), "Bro Martin");
       a.eq(cell(L, "Rota", 2, "Status").getValue(), "Covered");
-      a.eq(cell(L, "Rota", 2, "Updated by").getValue(), "Bro Asim (app)");
+      a.eq(cell(L, "Rota", 2, "Updated by").getValue(), "Bro Arthur (app)");
       const to = L.gas.mail.map((m) => String(m.to));
-      a.ok(to.indexOf("moses@b.c") !== -1, "the man now covering was not told: " + to.join());
+      a.ok(to.indexOf("martin@b.c") !== -1, "the man now covering was not told: " + to.join());
       a.ok(to.indexOf("ade@b.c") !== -1, "the man coming off was not told: " + to.join());
     });
   });
@@ -659,11 +659,11 @@ export default async function (root) {
       const L = sheet();
       worker(L, {});
       const out = call(L, "applyCoordAction", L.gas.ss,
-        A("c2", "decide", { requestId: "rq-ade", choice: "Approved", cover: "Bro Moses", sunday: KEY, driver: "Bro Adebola" }), {});
+        A("c2", "decide", { requestId: "rq-ade", choice: "Approved", cover: "Bro Martin", sunday: KEY, driver: "Bro Adrian" }), {});
       a.ok(out.ok, JSON.stringify(out));
       a.eq(cell(L, "Rota Requests", 2, "Status").getValue(), "Approved");
-      a.eq(cell(L, "Rota", 2, "North Liverpool actual / cover").getValue(), "Bro Moses");
-      a.has(cell(L, "Rota Requests", 2, "Status").getNote(), "Decided in the coordinator's app by Bro Asim");
+      a.eq(cell(L, "Rota", 2, "North Liverpool actual / cover").getValue(), "Bro Martin");
+      a.has(cell(L, "Rota Requests", 2, "Status").getNote(), "Decided in the coordinator's app by Bro Arthur");
     });
   });
 
@@ -697,7 +697,7 @@ export default async function (root) {
       a.eq(cell(L, "Defects", 2, "Status").getValue(), "Fixed");
       a.eq(cell(L, "Defects", 2, "Action taken").getValue(), "Tyre replaced");
       a.ok(cell(L, "Defects", 2, "Closed on").getValue(), "Closed on was not filled");
-      a.has(cell(L, "Defects", 2, "Status").getNote(), "Bro Asim");
+      a.has(cell(L, "Defects", 2, "Status").getNote(), "Bro Arthur");
     });
   });
 
@@ -719,10 +719,10 @@ export default async function (root) {
       const L = sheet({ trips: [{ Trip: "t1", Sunday: "2026-10-04", Route: "South", Event: "picked", "Stop ID": "S03",
                                   Status: "Logged", "Live ID": 7 }] });
       const sent = worker(L, { drain: () => ({ ok: true, claim: -6, bookings: [], checks: [], auths: [], decisions: [], requests: [],
-        trips: [{ id: 7, trip: "t1", sunday: KEY, route: "South", driver: "Bro Tunde", event: "picked", stop_id: "S03",
+        trips: [{ id: 7, trip: "t1", sunday: KEY, route: "South", driver: "Bro Trevor", event: "picked", stop_id: "S03",
                   stop: "Sedley St", scheduled: "10:37", happened: new Date("2026-10-04T10:39:00+01:00").getTime(),
                   off_min: 2, status: "Logged, Corrected", logged: Date.now(),
-                  fix_note: "Corrected by Bro Asim, Sun 4 Oct 11:40. Recorded as 10:51." }],
+                  fix_note: "Corrected by Bro Arthur, Sun 4 Oct 11:40. Recorded as 10:51." }],
         coord: [A("c6", "fix", { eventId: 7, sunday: KEY })] }) });
       call(L, "drainFromWorker");
       a.has(cell(L, "Trip Events", 2, "Happened").getNote(), "Recorded as 10:51");
@@ -819,7 +819,7 @@ export default async function (root) {
         a.eq(asked && JSON.parse(asked.opts.body).name, name);
       }
       net.reset();
-      const not = await coord(env, { op: "report", name: "remind" }, "Bro Tunde", PIN);
+      const not = await coord(env, { op: "report", name: "remind" }, "Bro Trevor", PIN);
       a.not(not.title === "T-remind", "a driver who is not a coordinator reached the reminders");
     });
   });

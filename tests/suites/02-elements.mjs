@@ -260,11 +260,11 @@ export default function (root) {
        done, "Sent. Give it a few seconds." only when there is something to
        wait for. The panel already says Approved and who is covering; a line
        explaining where it went is the app talking about itself. */
-    const said = decisionWords({ kind: "rota", choice: "Approved", by: "Bro Asim",
-                                 cover: "Bro Tunde", applied: true });
+    const said = decisionWords({ kind: "rota", choice: "Approved", by: "Bro Arthur",
+                                 cover: "Bro Trevor", applied: true });
     a.hasnt(said, "five minutes", "it told him to wait for something already done");
     a.hasnt(said, "Rota Requests", "the tab is where it lives, not news");
-    a.has(said, "Bro Tunde", "and it still says who is covering");
+    a.has(said, "Bro Trevor", "and it still says who is covering");
     a.has(said, "Approved");
   });
 
@@ -273,8 +273,8 @@ export default function (root) {
        by any of those — the drain carries it — but the page must not claim
        otherwise. Tested for BOTH the missing field and an explicit false,
        because an older Worker sends no such field at all. */
-    for (const out of [{ kind: "rota", choice: "Approved", by: "Bro Asim", cover: "", applied: false },
-                       { kind: "rota", choice: "Approved", by: "Bro Asim", cover: "" }]) {
+    for (const out of [{ kind: "rota", choice: "Approved", by: "Bro Arthur", cover: "", applied: false },
+                       { kind: "rota", choice: "Approved", by: "Bro Arthur", cover: "" }]) {
       const said = decisionWords(out);
       a.has(said, "within five minutes", JSON.stringify(out));
     }
@@ -284,14 +284,14 @@ export default function (root) {
     /* It used to explain the consequence in a sentence and a half — the
        morning will read "No driver assigned" until you pick somebody. The
        consequence is worth four words; the mechanism is not. */
-    const said = decisionWords({ kind: "rota", choice: "Approved", by: "Bro Asim",
+    const said = decisionWords({ kind: "rota", choice: "Approved", by: "Bro Arthur",
                                  cover: "", applied: true });
     a.has(said, "Nobody is covering it yet");
     a.hasnt(said, "No driver assigned", "it named a cell on a tab he cannot see");
   });
 
   s.test("turning one down adds nothing at all", (a) => {
-    const said = decisionWords({ kind: "rota", choice: "Rejected", by: "Bro Asim",
+    const said = decisionWords({ kind: "rota", choice: "Rejected", by: "Bro Arthur",
                                  cover: "", applied: true });
     a.has(said, "Turned down");
     a.hasnt(said, "Nobody is covering", "nobody was going to cover a refusal");

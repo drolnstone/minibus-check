@@ -40,14 +40,14 @@ export default async function (root) {
     }
     await db.prepare(
       "INSERT INTO push_subs (endpoint, p256dh, auth, role, ref, pid, driver, route, made, seen, fails, last) " +
-      "VALUES ('https://push.example/drv','p','a','driver','d-ade','','Bro Adebola','North',?,0,0,'')"
+      "VALUES ('https://push.example/drv','p','a','driver','d-ade','','Bro Adrian','North',?,0,0,'')"
     ).bind(Date.now()).run();
     return { db, env, key };
   }
   const lastOf = (db, ep) => (db._rows("SELECT last FROM push_subs WHERE endpoint = '" + ep + "'")[0] || {}).last || "";
   const PAX_N = "https://push.example/pax-N08", PAX_S = "https://push.example/pax-S03";
   const DRV = "https://push.example/drv";
-  const start = (env, key, route) => W.handleTrip(env, { trip: "t-" + route, route, driver: "Bro Adebola",
+  const start = (env, key, route) => W.handleTrip(env, { trip: "t-" + route, route, driver: "Bro Adrian",
     reg: "YS70 PWE", sunday: key, events: [{ event: "start", at: Date.now() }] });
 
   /* ---- the driver ------------------------------------------------------- */

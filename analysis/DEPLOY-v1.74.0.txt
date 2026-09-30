@@ -238,8 +238,8 @@ THE LINK REFUSED A COORDINATOR'S OWN PIN
 
   coordinatorName() picks whoever COORDINATOR_EMAIL matches in the Email
   column of the Drivers tab, and FALLS BACK to the first active driver in an
-  authorising role when nothing matches. Your tab has Pst Kehinde (Minister in
-  Charge) above Bro Asim (Coordinator), so if that property does not match
+  authorising role when nothing matches. Your tab has Pst Kenneth (Minister in
+  Charge) above Bro Arthur (Coordinator), so if that property does not match
   your Email cell exactly, the link was asking for HIS PIN and comparing yours
   against his hash. Nothing on the page said whose it wanted, and the only
   message it had was the one that sounds like your own mistake.
@@ -259,8 +259,8 @@ THE LINK REFUSED A COORDINATOR'S OWN PIN
   right even now that it no longer decides who can act on them.
 
   NOTHING HERE LOOSENS ANYTHING. An ordinary driver's PIN is still refused —
-  there is a test that keys Bro Tunde's own PIN on a link addressed to Bro
-  Tunde and checks it gets nowhere. An empty PIN is refused. A coordinator
+  there is a test that keys Bro Trevor's own PIN on a link addressed to Bro
+  Trevor and checks it gets nowhere. An empty PIN is refused. A coordinator
   with no PIN against their name is not a way in. And the person who signed
   the walkaround still cannot authorise it.
 
@@ -359,9 +359,9 @@ PICKING THE COVER FROM THE PHONE
   The page now asks WHO COVERS IT, under the PIN box:
 
     Leave it - arrange cover later
-    Bro Asim - last drove 20 Sep
-    Pst Kehinde - already driving South, last drove 6 Sep
-    Bro Tunde - last drove 13 Sep
+    Bro Arthur - last drove 20 Sep
+    Pst Kenneth - already driving South, last drove 6 Sep
+    Bro Trevor - last drove 13 Sep
 
   A BARE LIST OF NAMES IS WHAT I ONCE OBJECTED TO, and the objection was
   right about the list. What turns it into a judgement is the two facts

@@ -52,18 +52,18 @@ export default async function (root) {
         { Route: "North", "Stop ID": "N99", Time: "10:40", Stop: "Church, Chester Road",
           Postcode: "L6 4DY", Active: "YES", Type: "Arrival" }]),
       "Drivers": tab("Drivers", [
-        { Name: "Bro Asim", Role: "Coordinator", Active: "YES", "Primary order": 1,
-          PIN: "1234", Email: "asim@b.c", Route: "North" },
-        { Name: "Bro Adebola", Role: "Driver", Active: "YES", "Primary order": 2,
+        { Name: "Bro Arthur", Role: "Coordinator", Active: "YES", "Primary order": 1,
+          PIN: "1234", Email: "arthur@b.c", Route: "North" },
+        { Name: "Bro Adrian", Role: "Driver", Active: "YES", "Primary order": 2,
           PIN: "4321", Email: "ade@b.c", Route: "North" },
-        { Name: "Bro Kayode", Role: "Driver", Active: "YES", "Primary order": 3,
-          PIN: "8765", Email: "kayode@b.c", Route: "South" }]),
+        { Name: "Bro Keith", Role: "Driver", Active: "YES", "Primary order": 3,
+          PIN: "8765", Email: "keith@b.c", Route: "South" }]),
       "Buses": tab("Buses", [
         { Registration: "YS70 PWE", "Seats for passengers": 16, Active: "YES" },
         { Registration: "NH56 FWP", "Seats for passengers": 14, Active: "YES" }]),
       "Rota": tab("Rota", [
-        { Sunday: SUN, "North Liverpool scheduled": "Bro Adebola", "North bus": "YS70 PWE",
-          Status: "Confirmed", "South Liverpool scheduled": "Bro Kayode",
+        { Sunday: SUN, "North Liverpool scheduled": "Bro Adrian", "North bus": "YS70 PWE",
+          Status: "Confirmed", "South Liverpool scheduled": "Bro Keith",
           "South bus": "NH56 FWP" }]),
       "Checks": [CHK_H], "Defects": [["When"]], "Trip Events": [["When"]],
       "Bus Bookings": [BOOK_H], "Rota Requests": [["When"]]
@@ -86,9 +86,9 @@ export default async function (root) {
                                String(m.body || "").indexOf(text) > -1;
 
   const CHECK = {
-    id: "chk-1", reg: "YS70 PWE", vehicle: "Ford Transit", driver: "Bro Adebola",
+    id: "chk-1", reg: "YS70 PWE", vehicle: "Ford Transit", driver: "Bro Adrian",
     role: "Driver", date: "4 October 2026", time: "09:40", miles: 48213,
-    sign: "Bro Adebola", advisories: [], jobs: []
+    sign: "Bro Adrian", advisories: [], jobs: []
   };
 
   /* ---- 1. A BUS IS OFF THE ROAD ----------------------------------------
@@ -105,7 +105,7 @@ export default async function (root) {
     a.has(got[0].subject, "YS70 PWE", "the subject does not say which bus");
     a.ok(bothSay(got[0], "YS70 PWE"), "one of the two bodies omits the bus");
     a.ok(bothSay(got[0], "Nearside mirror cracked"), "it does not say what stopped it");
-    a.ok(bothSay(got[0], "Bro Adebola"), "it does not say who found it");
+    a.ok(bothSay(got[0], "Bro Adrian"), "it does not say who found it");
   });
 
   s.test("and a driveable defect is told apart from a stopped bus", (a) => {
@@ -148,21 +148,21 @@ export default async function (root) {
        back on it, and the record of who decided it may run is the whole
        point of the authorisation. */
     const L = sheet();
-    call(L, "notifyAuthorised", { reg: "YS70 PWE", by: "Bro Asim",
-      inspector: "Bro Adebola", at: Date.now(), via: "app" });
+    call(L, "notifyAuthorised", { reg: "YS70 PWE", by: "Bro Arthur",
+      inspector: "Bro Adrian", at: Date.now(), via: "app" });
     const got = toCoord(L);
     a.eq(got.length, 1, "a bus was let back out and nothing was recorded by email");
     a.has(got[0].subject, "YS70 PWE");
-    a.ok(bothSay(got[0], "Bro Asim"), "it does not say who authorised it");
-    a.ok(bothSay(got[0], "Bro Adebola"), "it does not say who did the walkaround");
+    a.ok(bothSay(got[0], "Bro Arthur"), "it does not say who authorised it");
+    a.ok(bothSay(got[0], "Bro Adrian"), "it does not say who did the walkaround");
     a.ok(bothSay(got[0], "The defect stays open"),
          "the one sentence that stops a fault being forgotten");
   });
 
   s.test("and it says whether it came from the app or the spreadsheet", (a) => {
     const L = sheet();
-    call(L, "notifyAuthorised", { reg: "YS70 PWE", by: "Bro Asim",
-      inspector: "Bro Adebola", at: Date.now(), via: "sheet" });
+    call(L, "notifyAuthorised", { reg: "YS70 PWE", by: "Bro Arthur",
+      inspector: "Bro Adrian", at: Date.now(), via: "sheet" });
     a.has(String(toCoord(L)[0].htmlBody), "on the spreadsheet");
   });
 
@@ -170,12 +170,12 @@ export default async function (root) {
 
   s.test("A ROTA REQUEST EMAILS THE COORDINATOR, WITH WHAT WAS ASKED", (a) => {
     const L = sheet();
-    call(L, "notifyRotaRequest", { id: "REQ-1", date: SUN, driver: "Bro Adebola",
+    call(L, "notifyRotaRequest", { id: "REQ-1", date: SUN, driver: "Bro Adrian",
       type: "Request cover", reason: "away that weekend", swapWith: "", swapDate: "",
       agreed: false }, SUN);
     const got = toCoord(L);
     a.eq(got.length, 1, "a driver asked a question and nobody was told");
-    a.has(got[0].subject, "Bro Adebola");
+    a.has(got[0].subject, "Bro Adrian");
     a.ok(bothSay(got[0], "Request cover"));
     a.ok(bothSay(got[0], "away that weekend"), "the reason is the whole of the decision");
     a.ok(bothSay(got[0], "The rota has not changed"),
@@ -184,11 +184,11 @@ export default async function (root) {
 
   s.test("a swap names its partner and the Sunday being taken", (a) => {
     const L = sheet();
-    call(L, "notifyRotaRequest", { id: "REQ-2", date: SUN, driver: "Bro Adebola",
-      type: "Request a swap", reason: "family visiting", swapWith: "Bro Kayode",
+    call(L, "notifyRotaRequest", { id: "REQ-2", date: SUN, driver: "Bro Adrian",
+      type: "Request a swap", reason: "family visiting", swapWith: "Bro Keith",
       swapDate: "2026-10-11", agreed: true }, SUN);
     const m = toCoord(L)[0];
-    a.ok(bothSay(m, "Bro Kayode"), "a swap that does not say with whom");
+    a.ok(bothSay(m, "Bro Keith"), "a swap that does not say with whom");
     a.ok(bothSay(m, "2026-10-11"), "or which Sunday is being taken");
   });
 
@@ -207,10 +207,10 @@ export default async function (root) {
     return sheet(Object.assign({
       "Checks": tab("Checks", [
         { Received: new Date(2026, 8, 27, 9, 30), Date: new Date(2026, 8, 27), Time: "09:30",
-          "Check ID": "old-1", Registration: "YS70 PWE", Driver: "Bro Adebola", Role: "Driver",
+          "Check ID": "old-1", Registration: "YS70 PWE", Driver: "Bro Adrian", Role: "Driver",
           Mileage: 48000, Outcome: "Cleared" },
         { Received: new Date(2026, 8, 27, 9, 35), Date: new Date(2026, 8, 27), Time: "09:35",
-          "Check ID": "old-2", Registration: "NH56 FWP", Driver: "Bro Kayode", Role: "Driver",
+          "Check ID": "old-2", Registration: "NH56 FWP", Driver: "Bro Keith", Role: "Driver",
           Mileage: 31000, Outcome: "Cleared" }])
     }, over || {}));
   }
@@ -233,8 +233,8 @@ export default async function (root) {
       const L = withHistory();
       call(L, "missingCheckAlert");
       const m = toCoord(L)[0];
-      a.ok(bothSay(m, "Bro Adebola"), "it leaves him to work out whose morning it was");
-      a.ok(bothSay(m, "Bro Kayode"));
+      a.ok(bothSay(m, "Bro Adrian"), "it leaves him to work out whose morning it was");
+      a.ok(bothSay(m, "Bro Keith"));
     });
   });
 
@@ -245,11 +245,11 @@ export default async function (root) {
       const L = withHistory({
         "Checks": tab("Checks", [
           { Received: new Date(2026, 8, 27, 9, 30), Date: new Date(2026, 8, 27), Time: "09:30",
-            "Check ID": "old-1", Registration: "YS70 PWE", Driver: "Bro Adebola", Mileage: 48000, Outcome: "Cleared" },
+            "Check ID": "old-1", Registration: "YS70 PWE", Driver: "Bro Adrian", Mileage: 48000, Outcome: "Cleared" },
           { Received: new Date(2026, 8, 27, 9, 35), Date: new Date(2026, 8, 27), Time: "09:35",
-            "Check ID": "old-2", Registration: "NH56 FWP", Driver: "Bro Kayode", Mileage: 31000, Outcome: "Cleared" },
+            "Check ID": "old-2", Registration: "NH56 FWP", Driver: "Bro Keith", Mileage: 31000, Outcome: "Cleared" },
           { Received: new Date(2026, 9, 4, 9, 30), Date: new Date(2026, 9, 4), Time: "09:30",
-            "Check ID": "today-1", Registration: "YS70 PWE", Driver: "Bro Adebola", Mileage: 48200, Outcome: "Cleared" }])
+            "Check ID": "today-1", Registration: "YS70 PWE", Driver: "Bro Adrian", Mileage: 48200, Outcome: "Cleared" }])
       });
       call(L, "missingCheckAlert");
       const got = toCoord(L);
@@ -265,13 +265,13 @@ export default async function (root) {
       const L = withHistory({
         "Checks": tab("Checks", [
           { Received: new Date(2026, 8, 27, 9, 30), Date: new Date(2026, 8, 27), Time: "09:30",
-            "Check ID": "old-1", Registration: "YS70 PWE", Driver: "Bro Adebola", Mileage: 48000, Outcome: "Cleared" },
+            "Check ID": "old-1", Registration: "YS70 PWE", Driver: "Bro Adrian", Mileage: 48000, Outcome: "Cleared" },
           { Received: new Date(2026, 8, 27, 9, 35), Date: new Date(2026, 8, 27), Time: "09:35",
-            "Check ID": "old-2", Registration: "NH56 FWP", Driver: "Bro Kayode", Mileage: 31000, Outcome: "Cleared" },
+            "Check ID": "old-2", Registration: "NH56 FWP", Driver: "Bro Keith", Mileage: 31000, Outcome: "Cleared" },
           { Received: new Date(2026, 9, 4, 9, 30), Date: new Date(2026, 9, 4), Time: "09:30",
-            "Check ID": "t1", Registration: "YS70 PWE", Driver: "Bro Adebola", Mileage: 48200, Outcome: "Cleared" },
+            "Check ID": "t1", Registration: "YS70 PWE", Driver: "Bro Adrian", Mileage: 48200, Outcome: "Cleared" },
           { Received: new Date(2026, 9, 4, 9, 35), Date: new Date(2026, 9, 4), Time: "09:35",
-            "Check ID": "t2", Registration: "NH56 FWP", Driver: "Bro Kayode", Mileage: 31200, Outcome: "Cleared" }])
+            "Check ID": "t2", Registration: "NH56 FWP", Driver: "Bro Keith", Mileage: 31200, Outcome: "Cleared" }])
       });
       call(L, "missingCheckAlert");
       a.eq(toCoord(L).length, 0, "it wrote to say nothing was wrong");
@@ -394,7 +394,7 @@ export default async function (root) {
        reason, and nothing was proving it fired at all. */
     await atTime(SUN_0800, async () => {
       const { db, env } = await live({ rota: { status: "North cancelled" } });
-      await driverPhone(db, "Bro Adebola", "North");
+      await driverPhone(db, "Bro Adrian", "North");
       await W.wakeDrivers(env);
       const got = woken(db);
       a.eq(got.length, 1, "his route was called off and his phone stayed silent");
@@ -405,7 +405,7 @@ export default async function (root) {
   s.test("and the words say the route by name, not just that something is off", async (a) => {
     await atTime(SUN_0800, async () => {
       const { db, env } = await live({ rota: { status: "North cancelled" } });
-      const ep = await driverPhone(db, "Bro Adebola", "North");
+      const ep = await driverPhone(db, "Bro Adrian", "North");
       const out = await W.pushWhat(env, ep);
       a.has(out.title + " " + out.body, "North", "it does not say which route: " + out.title);
       a.has(out.title, "not running");
@@ -417,7 +417,7 @@ export default async function (root) {
        stay at home is the same fault in the other direction. */
     await atTime(SUN_0800, async () => {
       const { db, env } = await live({ rota: { status: "North cancelled" } });
-      const ep = await driverPhone(db, "Bro Tunde", "South");
+      const ep = await driverPhone(db, "Bro Trevor", "South");
       const out = await W.pushWhat(env, ep);
       a.hasnt(out.title, "not running",
               "the South driver was told his route was cancelled: " + out.title);
@@ -432,7 +432,7 @@ export default async function (root) {
        waiting at a kerb for something that is not coming. */
     await atTime(SUN_1010, async () => {
       const { db, env } = await live();
-      await driverPhone(db, "Bro Adebola", "North");
+      await driverPhone(db, "Bro Adrian", "North");
       await W.wakeDrivers(env);
       const got = woken(db);
       a.eq(got.length, 1, "eighteen minutes late and nobody asked him anything");
@@ -443,8 +443,8 @@ export default async function (root) {
   s.test("and a run already out wakes nobody about starting", async (a) => {
     await atTime(SUN_1010, async () => {
       const { db, env, key } = await live();
-      await driverPhone(db, "Bro Adebola", "North");
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await driverPhone(db, "Bro Adrian", "North");
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "YS70 PWE", sunday: key, events: [{ event: "start", at: Date.now() - 1200000 }] });
       await W.wakeDrivers(env);
       const got = woken(db).filter((r) => String(r.last).indexOf("start") === 0);
@@ -457,7 +457,7 @@ export default async function (root) {
   s.test("THE ROSTERED DRIVER IS TOLD HE IS DRIVING TODAY", async (a) => {
     await atTime(SUN_0800, async () => {
       const { db, env } = await live();
-      const ep = await driverPhone(db, "Bro Adebola", "North");
+      const ep = await driverPhone(db, "Bro Adrian", "North");
       await W.wakeDrivers(env);
       const got = woken(db);
       a.eq(got.length, 1, "nobody told the man it was his morning");
@@ -486,8 +486,8 @@ export default async function (root) {
        driver and leaves the morning unfinished in the record. */
     await atTime(SUN_1230, async () => {
       const { db, env, key } = await live();
-      await driverPhone(db, "Bro Adebola", "North");
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await driverPhone(db, "Bro Adrian", "North");
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "YS70 PWE", sunday: key,
         events: [{ event: "start", at: Date.parse("2026-09-27T09:52:00+01:00") }] });
       await W.wakeDrivers(env);
@@ -500,11 +500,11 @@ export default async function (root) {
   s.test("a run he has already ended asks him nothing", async (a) => {
     await atTime(SUN_1230, async () => {
       const { db, env, key } = await live();
-      await driverPhone(db, "Bro Adebola", "North");
+      await driverPhone(db, "Bro Adrian", "North");
       const t0 = Date.parse("2026-09-27T09:52:00+01:00");
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "YS70 PWE", sunday: key, events: [{ event: "start", at: t0 }] });
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "YS70 PWE", sunday: key, events: [{ event: "end", at: t0 + 3600000 }] });
       await W.wakeDrivers(env);
       const got = woken(db).filter((r) => String(r.last).indexOf("end") === 0);
@@ -590,7 +590,7 @@ export default async function (root) {
       await withSeat(db, key, "N02");
       const ep = await passengerPhone(db, "N01");
       await passengerPhone(db, "N02");
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "YS70 PWE", sunday: key, events: [{ event: "start", at: Date.now() }] });
       const got = db._rows("SELECT ref, last FROM push_subs WHERE last <> ''");
       a.eq(got.length, 2, "the bus set off and " + got.length + " of 2 stops heard");
@@ -604,7 +604,7 @@ export default async function (root) {
     await atTime("2026-09-27T09:52:00+01:00", async () => {
       const { db, env, key } = await live();
       await passengerPhone(db, "N03");        /* a phone, but no seat */
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "YS70 PWE", sunday: key, events: [{ event: "start", at: Date.now() }] });
       a.eq(db._rows("SELECT id FROM push_subs WHERE last <> ''").length, 0,
            "somebody with no seat was told his bus had left");
@@ -626,11 +626,11 @@ export default async function (root) {
       await passengerPhone(db, "N03");
 
       const t0 = Date.parse("2026-09-27T09:52:00+01:00");
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "YS70 PWE", sunday: key, events: [{ event: "start", at: t0 }] });
       db.prepare("UPDATE push_subs SET last=''").run();   /* clear the departure */
 
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "YS70 PWE", sunday: key,
         events: [{ event: "picked", stopId: "N03", at: Date.now() }] });
 
@@ -647,9 +647,9 @@ export default async function (root) {
       await withSeat(db, key, "N03");
       const ep = await passengerPhone(db, "N03");
       const t0 = Date.parse("2026-09-27T09:52:00+01:00");
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "YS70 PWE", sunday: key, events: [{ event: "start", at: t0 }] });
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "YS70 PWE", sunday: key,
         events: [{ event: "picked", stopId: "N03", at: Date.now() }] });
       const out = await W.pushWhat(env, ep);
@@ -807,7 +807,7 @@ export default async function (root) {
       await withSeat(db, key, "N02");
       const ep = await passengerPhone(db, "N02");
       const t0 = Date.parse("2026-09-27T09:52:00+01:00");
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "YS70 PWE", sunday: key,
         events: [{ event: "start", at: t0 },
                  { event: "picked", stopId: "N02", at: t0 + 1380000 },

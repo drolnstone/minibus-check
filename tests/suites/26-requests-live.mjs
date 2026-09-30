@@ -35,7 +35,7 @@ export default async function (root) {
   const setting = (db, k, v) =>
     db.prepare("INSERT INTO settings (k,v) VALUES (?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v")
       .bind(k, JSON.stringify(v)).run();
-  const ask = (over) => Object.assign({ id: "rq1", date: KEY, driver: "Bro Tunde",
+  const ask = (over) => Object.assign({ id: "rq1", date: KEY, driver: "Bro Trevor",
     type: "Request cover", reason: "Away that weekend", swapWith: "", swapDate: "", agreed: false }, over || {});
   const post = (env, ctx, body) => mod.default.fetch(new Request("https://worker.test/", {
     method: "POST", body: JSON.stringify(Object.assign({ token: "minibusapp" }, body)) }), env, ctx);
@@ -93,15 +93,15 @@ export default async function (root) {
       const { db, env } = await fresh();
       await setting(db, "cache_rota", { builtAt: Date.now() - 60000, from: "2026-09-20", to: "2027-09-20",
         payload: { ok: true, rows: [
-          { date: KEY, primary: "Bro Adebola", actual: "Bro Adebola", status: "Confirmed",
-            primary2: "Bro Tunde", actual2: "Bro Tunde" },
-          { date: "2026-10-11", primary: "Bro Moses", status: "North cancelled", primary2: "Bro Adesina" }] } });
+          { date: KEY, primary: "Bro Adrian", actual: "Bro Adrian", status: "Confirmed",
+            primary2: "Bro Trevor", actual2: "Bro Trevor" },
+          { date: "2026-10-11", primary: "Bro Martin", status: "North cancelled", primary2: "Bro Alfred" }] } });
       await mod.handleRotaRequest(env, ask());
-      await mod.handleRotaRequest(env, ask({ id: "rq2", date: "2026-10-11", driver: "Bro Adesina" }));
+      await mod.handleRotaRequest(env, ask({ id: "rq2", date: "2026-10-11", driver: "Bro Alfred" }));
       const r = await mod.cachedRota(env, "2026-09-27", 4);
       a.ok(r.ok);
       const row = r.rows.find((x) => x.date === KEY);
-      a.ok((row.requests || []).some((x) => x.driver === "Bro Tunde" && x.status === "Pending"),
+      a.ok((row.requests || []).some((x) => x.driver === "Bro Trevor" && x.status === "Pending"),
            "the driver's own rota screen would show no request, and he could ask twice");
       a.eq(row.status, "Change requested");
       const off = r.rows.find((x) => x.date === "2026-10-11");
@@ -117,11 +117,11 @@ export default async function (root) {
       "Bus Stops": tab("Bus Stops", [
         { Route: "South", "Stop ID": "S03", Time: "10:37", Stop: "Sedley Street", Postcode: "L4 2RB", Active: "YES", Type: "Pickup" }]),
       "Drivers": tab("Drivers", [
-        { Name: "Bro Asim", Role: "Coordinator", Active: "YES", "Primary order": 1, PIN: "1234", Email: "asim@b.c", Route: "North" },
-        { Name: "Bro Tunde", Role: "Driver", Active: "YES", "Primary order": 2, PIN: "4321", Email: "t@b.c", Route: "South" }]),
+        { Name: "Bro Arthur", Role: "Coordinator", Active: "YES", "Primary order": 1, PIN: "1234", Email: "arthur@b.c", Route: "North" },
+        { Name: "Bro Trevor", Role: "Driver", Active: "YES", "Primary order": 2, PIN: "4321", Email: "t@b.c", Route: "South" }]),
       "Buses": tab("Buses", [{ Registration: "YS70 PWE", "Seats for passengers": 16, Active: "YES" }]),
-      "Rota": tab("Rota", [{ Sunday: SUN, "North Liverpool scheduled": "Bro Asim", Status: status || "Confirmed",
-        "South Liverpool scheduled": "Bro Tunde" }]),
+      "Rota": tab("Rota", [{ Sunday: SUN, "North Liverpool scheduled": "Bro Arthur", Status: status || "Confirmed",
+        "South Liverpool scheduled": "Bro Trevor" }]),
       "Rota Requests": [TABS["Rota Requests"]],
       "Checks": [TABS["Checks"]], "Defects": [TABS["Defects"]], "Trip Events": [TABS["Trip Events"]],
       "Bus Bookings": [TABS["Bus Bookings"]]

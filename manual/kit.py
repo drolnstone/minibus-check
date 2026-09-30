@@ -39,6 +39,9 @@ def _names(ns):
 # shots.mjs. The text says {COORD} and the page says his name.
 FILL = {"{COORD}": CAST["coordinator"]["name"], "{PHONE}": _pretty(CAST["coordinator"]["phone"]),
         "{OTHER}": CAST["other"], "{LEADS}": _names(CAST["leads"])}
+# The example drivers, the same way: {NORTH}, {SOUTH}, {NORTH2}, {NORTH3},
+# {SOUTH3}. See NAMES in shots.mjs for who each is.
+FILL.update({"{%s}" % k: v for k, v in CAST["names"].items()})
 
 VERSION = "app %s · server %s · sheet %s" % (CAST["app"], CAST["server"], CAST["sheet"])
 

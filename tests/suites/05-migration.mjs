@@ -2,7 +2,7 @@
 
    Every other suite builds its database from schema.sql, so every other suite
    starts with a database that already has everything the current Worker
-   wants. That is not what is out there. Asim's D1 was built months ago and
+   wants. That is not what is out there. The live D1 was built months ago and
    has been ALTERed since, one column at a time, on first use — and the whole
    on-demand migration idea only works if the FIRST thing to touch a new
    column is also the thing that adds it.
@@ -50,7 +50,7 @@ export default async function (root) {
   const SYNC = {
     stops: STOPS,
     buses: [{ reg: "YS70 PWE", seats: 16, active: true }],
-    rota: [{ sunday: KEY, north: "Bro Adebola", northCover: "", status: "Confirmed" }]
+    rota: [{ sunday: KEY, north: "Bro Adrian", northCover: "", status: "Confirmed" }]
   };
 
   const cols = (db, table) =>
@@ -148,9 +148,9 @@ export default async function (root) {
     const env = makeEnv(db);
     await W.handleSync(env, SYNC);
     const at = Date.now() - 900000;
-    await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+    await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
       reg: "YS70 PWE", sunday: KEY, events: [{ event: "start", at: at }] });
-    const out = await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+    const out = await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
       reg: "YS70 PWE", sunday: KEY, events: [{ event: "end", at: Date.now() }] })
       .then((r) => r.json());
     a.ok(out && out.ok !== false, JSON.stringify(out));

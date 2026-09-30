@@ -279,8 +279,8 @@ export function makeGas(opts) {
   };
 
   const Session = {
-    getActiveUser: () => ({ getEmail: () => opts.userEmail || "asim@example.org" }),
-    getEffectiveUser: () => ({ getEmail: () => opts.userEmail || "asim@example.org" }),
+    getActiveUser: () => ({ getEmail: () => opts.userEmail || "arthur@example.org" }),
+    getEffectiveUser: () => ({ getEmail: () => opts.userEmail || "arthur@example.org" }),
     getScriptTimeZone: () => "Europe/London",
     getTemporaryActiveUserKey: () => "tmpkey"
   };

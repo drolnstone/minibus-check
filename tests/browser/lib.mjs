@@ -2,8 +2,8 @@
 
    Serves the deployed release byte for byte, stands in for the Worker and the
    spreadsheet with answers built from the live export, and hands back a phone
-   to drive. The only invented person is Bro Sample. Every stop, time, bus and
-   registration is the real one. */
+   to drive. Every stop, time, bus and registration is the real one; the
+   people are not. */
 /* playwright-core and a Chromium: PLAYWRIGHT_CORE may name the module file,
    CHROMIUM the browser binary. */
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE || "playwright-core");
@@ -14,13 +14,23 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 export const ROOT = process.env.MINIBUS_ROOT || fileURLToPath(new URL("../..", import.meta.url));
-/* The spreadsheet export the stand-in servers answer from: real stops, buses,
-   drivers and rota. Names only; no PINs, emails or phone numbers. MINIBUS_REAL
-   names another, as manual/ does with a fresh download of the spreadsheet that
-   is never committed. */
+/* The spreadsheet export the stand-in servers answer from: the real stops and
+   buses, and the drivers and rota with invented names in place of the real
+   ones, because this repository is public. No PINs, emails or phone numbers
+   either. MINIBUS_REAL names another, as manual/ does with a fresh download of
+   the spreadsheet that is never committed. */
 export const REAL = JSON.parse(readFileSync(process.env.MINIBUS_REAL || new URL("./real.json", import.meta.url), "utf8"));
 export const KEY = "2026-09-27";
 export const SAMPLE = "Bro Sample";
+/* Everybody the stand-in names comes out of REAL, never from here, so a
+   picture shows whoever the export has: the invented cast in the tests, the
+   real drivers when manual/ builds from a download. onRoute is the people
+   on a route in the Drivers tab's order. */
+export const onRoute = (r) => REAL.drivers.filter((d) => d.route === r && d.active !== false)
+  .sort((a, b) => (Number(a.ord) || 99) - (Number(b.ord) || 99)).map((d) => d.name);
+const COORDINATOR = (REAL.drivers.find((d) => d.role === "Coordinator") || { name: SAMPLE }).name;
+/* Who took each bus's last mileage reading: the third driver on its route. */
+const lastBy = (reg) => reg === "NH56 FWP" ? onRoute("North")[2] : onRoute("South")[2];
 export const OUT = process.env.SHOTS || join(tmpdir(), "minibus-shots");
 const marks = existsSync(OUT + "/marks.json") ? JSON.parse(readFileSync(OUT + "/marks.json", "utf8")) : {};
 
@@ -41,8 +51,8 @@ const srv = createServer((req, res) => {
   let out = readFileSync(f);
   if (rel === "config.js") {
     out = Buffer.from(String(out).replace(
-      '{ name: "Bro Calvin",     role: "Backup" }',
-      '{ name: "Bro Calvin",     role: "Backup" },\n    { name: "Bro Sample",     role: "' + sampleRole + '" }'));
+      '{ name: "Bro Cedric",     role: "Backup" }',
+      '{ name: "Bro Cedric",     role: "Backup" },\n    { name: "Bro Sample",     role: "' + sampleRole + '" }'));
   }
   res.end(out);
 });
@@ -181,7 +191,7 @@ export async function phone(opts = {}) {
       if (world.tripDelayMs) await new Promise((r) => setTimeout(r, world.tripDelayMs));
     }
     else if (post.action === "authorise") body = world.authorise ? world.authorise(post)
-      : { ok: true, authorised: true, by: (post.authorise || {}).who || "Bro Asim", checkId: "", at: sNow() };
+      : { ok: true, authorised: true, by: (post.authorise || {}).who || COORDINATOR, checkId: "", at: sNow() };
     else if (post.action === "endrun") body = world.endrun ? world.endrun(post) : { ok: true };
     else if (post.action === "rotaRequest" || post.request) {
       if (world.requestOk) {
@@ -200,9 +210,9 @@ export async function phone(opts = {}) {
         ok: true, cache: "fresh", ageMin: 1, sheet: stamp.sheet, server: stamp.server,
         buses: REAL.buses.map(b => ({ reg: b.reg, seats: b.seats, active: b.active, dates: datesOf(b),
           miles: world.lastMiles[b.reg], date: "20/09/2026", time: "09:41",
-          driver: b.reg === "NH56 FWP" ? "Bro Moses" : "Bro Adesina" })),
+          driver: lastBy(b.reg) })),
         last: Object.fromEntries(REAL.buses.map(b => [b.reg, { miles: world.lastMiles[b.reg],
-          date: "20/09/2026", time: "09:41", driver: b.reg === "NH56 FWP" ? "Bro Moses" : "Bro Adesina" }])),
+          date: "20/09/2026", time: "09:41", driver: lastBy(b.reg) }])),
         seats
       };
     }
@@ -225,8 +235,7 @@ export async function phone(opts = {}) {
     else if (p.get("rota") && world.noRota) return route.abort();
     else if (p.get("rota")) {
       body = { ok: true, sheet: stamp.sheet, server: stamp.server, rows: world.rows,
-               pattern: { north: ["Bro Adebola", "Bro Abiodun", "Bro Moses", "Bro Asim"],
-                          south: ["Bro Tunde", "Pst Obamakinwa", "Bro Adesina"] },
+               pattern: { north: onRoute("North"), south: onRoute("South") },
                drivers: register(), stops, openDefects: world.openDefects };
     }
     /* Who to ring and whose titles make a coordinator, as a live server from

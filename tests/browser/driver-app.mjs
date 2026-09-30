@@ -106,7 +106,7 @@ if (want("T2b")) {
    through a reload, by design, and the rota does not name him, so once the
    run had ended nothing on the phone said it was his. */
 if (want("T2c")) {
-  const rows = realRows(rs => { rs.find(r => r.date === KEY).primary = "Bro Adebola"; return rs; });
+  const rows = realRows(rs => { rs.find(r => r.date === KEY).primary = "Bro Adrian"; return rs; });
   const me = await phone({ clock: "2026-09-27T09:52:00+01:00", world: { rows, checks: okCheck() } });
   await me.load(); await me.close(["howDone"]);
   await me.signIn(); await me.toStops(); await me.close();
@@ -122,7 +122,7 @@ if (want("T2c")) {
   await me.load(); await me.close(["howDone"]);
   await me.toStops(); await me.close();
   const strip = await me.text("#stopsBody");
-  const own = /Trip finished/.test(strip) && !/Adebola has finished/.test(strip);
+  const own = /Trip finished/.test(strip) && !/Adrian has finished/.test(strip);
   const offered = (await buttons(me)).includes("It has not finished, reopen it");
   let reopened = false;
   if (offered) {
@@ -139,7 +139,7 @@ if (want("T2c")) {
 
 /* T3 — a driver who is not on the rota can cover, start and run */
 if (want("T3")) {
-  const rows = realRows(rs => { rs.find(r => r.date === KEY).primary = "Bro Adebola"; return rs; });
+  const rows = realRows(rs => { rs.find(r => r.date === KEY).primary = "Bro Adrian"; return rs; });
   const me = await phone({ clock: "2026-09-27T09:52:00+01:00", world: { rows, checks: okCheck() } });
   await me.load(); await me.close(["howDone"]);
   await me.signIn(); await me.toStops(); await me.close();
@@ -214,7 +214,7 @@ if (want("T6")) {
   const checks = STOPPED;
   const me = await phone({ clock: "2026-09-27T09:12:00+01:00", world: { checks, closed: false } });
   await me.load(); await me.close(["howDone"]);
-  await me.signIn("Bro Asim"); await me.toStops(); await me.close();
+  await me.signIn("Bro Arthur"); await me.toStops(); await me.close();
   const txt = await me.text("#stopsBody");
   const bs = await buttons(me);
   let sheet = false;
@@ -323,8 +323,8 @@ if (want("T9")) {
 
   const me2 = await phone({ clock: "2026-09-27T08:50:00+01:00" });
   await me2.load(); await me2.close(["howDone"]);
-  await me2.signIn("Bro Asim");
-  await me2.fullCheck({ bus: "NH56 FWP", sign: "Bro Asim" });
+  await me2.signIn("Bro Arthur");
+  await me2.fullCheck({ bus: "NH56 FWP", sign: "Bro Arthur" });
   const hasAnother = (await me2.foot()).includes("Check another bus");
   if (hasAnother) { await me2.click("Check another bus", "#footbar"); await me2.wait(150); }
   const where2 = await me2.where(), toast2 = await me2.toast();
@@ -398,7 +398,7 @@ if (want("T13")) {
   };
   const me = await phone({ clock: "2026-09-26T19:00:00+01:00" });
   await me.load(); await me.close(["howDone"]);
-  await me.signIn("Bro Asim"); await me.close();
+  await me.signIn("Bro Arthur"); await me.close();
   const coordSees = await hub(me);
   let went = "";
   if (coordSees) {
@@ -421,7 +421,7 @@ if (want("T13")) {
 
   const pinCarried = Object.keys(carried).some((k) => /coord/i.test(k) && /1234/.test(String(carried[k])));
   check("T13", "the hub has «Coordinator» for a coordinator's name and takes him to the coordinator's page with his name; a driver has no such button",
-        coordSees && /\/coord\/(#.*)?$/.test(went) && carried["coord.name.v1"] === "Bro Asim" && !pinCarried && !driverSees,
+        coordSees && /\/coord\/(#.*)?$/.test(went) && carried["coord.name.v1"] === "Bro Arthur" && !pinCarried && !driverSees,
         "coordinator sees " + coordSees + ", went '" + went + "', name '" + carried["coord.name.v1"] + "', pin carried " + pinCarried +
         ", driver sees " + driverSees);
 }
@@ -434,7 +434,7 @@ const toHub = async (m) => {
 if (want("T14")) {
   const me = await phone({ clock: "2026-09-26T19:00:00+01:00" });
   await me.load(); await me.close(["howDone"]);
-  await me.signIn("Bro Asim"); await me.close();
+  await me.signIn("Bro Arthur"); await me.close();
   await toHub(me);
   const box = await me.pg.evaluate(() => {
     const r = (id) => { const e = document.getElementById(id); if (!e || !e.offsetParent) return null;
@@ -468,14 +468,14 @@ if (want("T15")) {
     return me.pg.evaluate(() => localStorage.getItem("t15.hand")).catch(() => null);
   };
   await me.load(); await me.close(["howDone"]);
-  await me.signIn("Bro Asim"); await me.close();
+  await me.signIn("Bro Arthur"); await me.close();
   const first = await toCoord();
   const pageNow = await me.pg.evaluate(() => Date.now());       /* the phone's clock, which is the test's */
   /* Back on the driver app: the name is kept for the day, the PIN is not. */
   await me.load(); await me.close(["howDone", "alertAskNot", "pinModalNot"]);
   const second = await toCoord();
   let h = null; try { h = JSON.parse(first); } catch (e) {}
-  const fresh = h && h.name === "Bro Asim" && h.pin === "1234" && Math.abs(pageNow - Number(h.at)) < 5 * 60000;
+  const fresh = h && h.name === "Bro Arthur" && h.pin === "1234" && Math.abs(pageNow - Number(h.at)) < 5 * 60000;
   check("T15", "with the PIN checked on the driver app, «Coordinator» hands it to the coordinator's page once; with only the name kept from earlier, no PIN goes",
         fresh && second === "none", "first " + first + ", second " + second);
   await me.ctx.close();

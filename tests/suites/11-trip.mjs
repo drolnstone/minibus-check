@@ -25,7 +25,7 @@ export default async function (root) {
   }
 
   const post = (over) => Object.assign({
-    trip: "t1", route: "North", driver: "Bro Adebola", reg: "YS70 PWE", sunday: null, events: []
+    trip: "t1", route: "North", driver: "Bro Adrian", reg: "YS70 PWE", sunday: null, events: []
   }, over || {});
 
   s.test("a start is written, with the bus and the departure time on it", async (a) => {
@@ -42,11 +42,11 @@ export default async function (root) {
     const { env, key } = await fresh();
     await W.handleTrip(env, post({ sunday: key, events: [{ event: "start", at: Date.now() }] }));
     const r = await body(await W.handleTrip(env, post({
-      trip: "t2", driver: "Bro Moses", sunday: key, events: [{ event: "start", at: Date.now() }]
+      trip: "t2", driver: "Bro Martin", sunday: key, events: [{ event: "start", at: Date.now() }]
     })));
     a.not(r.ok);
     a.eq(r.error, "route busy");
-    a.eq(r.busy.driver, "Bro Adebola");
+    a.eq(r.busy.driver, "Bro Adrian");
   });
 
   s.test("a phone retrying its OWN start is never refused", async (a) => {
@@ -61,7 +61,7 @@ export default async function (root) {
     const { env, key } = await fresh();
     await W.handleTrip(env, post({ sunday: key, events: [{ event: "start", at: Date.now() }] }));
     const r = await body(await W.handleTrip(env, post({
-      trip: "s1", route: "South", driver: "Bro Tunde", reg: "NH56 FWP",
+      trip: "s1", route: "South", driver: "Bro Trevor", reg: "NH56 FWP",
       sunday: key, events: [{ event: "start", at: Date.now() }]
     })));
     a.ok(r.ok);
@@ -115,13 +115,13 @@ export default async function (root) {
 
   s.test("a run driven by somebody the rota does not name is marked Cover", async (a) => {
     const { db, env, key } = await fresh();
-    await W.handleTrip(env, post({ sunday: key, driver: "Bro Calvin", events: [{ event: "start", at: Date.now() }] }));
+    await W.handleTrip(env, post({ sunday: key, driver: "Bro Cedric", events: [{ event: "start", at: Date.now() }] }));
     a.has(db._one("SELECT * FROM trip_events WHERE event='start'").status, "Cover");
   });
 
   s.test("a run that went out unchecked says so, and says Cover too when it is both", async (a) => {
     const { db, env, key } = await fresh();
-    await W.handleTrip(env, post({ sunday: key, driver: "Bro Calvin",
+    await W.handleTrip(env, post({ sunday: key, driver: "Bro Cedric",
       events: [{ event: "start", at: Date.now(), unchecked: 1 }] }));
     const st = db._one("SELECT * FROM trip_events WHERE event='start'").status;
     a.has(st, "Unchecked");

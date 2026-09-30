@@ -35,16 +35,16 @@ export default async function (root) {
     await seedSunday(db, key);
     /* THE ORDINARY DRIVER HAS A PIN OF HIS OWN, and that matters now. The
        link accepts ANY coordinator's PIN, so a fixture where everybody shares
-       1234 could not tell "Bro Tunde is not allowed" from "1234 happens to be
+       1234 could not tell "Bro Trevor is not allowed" from "1234 happens to be
        a coordinator's". His is 9876 and nobody else's. */
-    for (const d of [["Bro Asim", "Coordinator", "1234"],
-                     ["Bro Tunde", "Driver", "9876"],
-                     ["Pst Kehinde", "Minister in Charge", "4321"]]) {
+    for (const d of [["Bro Arthur", "Coordinator", "1234"],
+                     ["Bro Trevor", "Driver", "9876"],
+                     ["Pst Kenneth", "Minister in Charge", "4321"]]) {
       await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,1,1,?)")
         .bind(d[0], d[1], "North", await W.pinHashOf(env, d[0], d[2])).run();
     }
     await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,1,1,'')")
-      .bind("Bro Calvin", "Coordinator", "North").run();
+      .bind("Bro Cedric", "Coordinator", "North").run();
     await W.cachePut(env, "auth_rules",
       { roles: ["coordinator", "minister in charge"], sameHandBothWays: true }).run();
     if (rules) await W.cachePut(env, "link_rules", rules).run();
@@ -52,7 +52,7 @@ export default async function (root) {
   }
 
   const stopTheBus = (env, id) => W.handleCheck(env, {
-    id: id || "chk-1", reg: REG, level: "stop", driver: "Bro Tunde", age: 0
+    id: id || "chk-1", reg: REG, level: "stop", driver: "Bro Trevor", age: 0
   });
 
   async function mint(env, kind, subject) {
@@ -61,11 +61,11 @@ export default async function (root) {
   }
 
   const busLink = (env, over) => mint(env, "authorise",
-    Object.assign({ reg: REG, checkId: "chk-1", inspector: "Bro Tunde", to: "Bro Asim" }, over || {}));
+    Object.assign({ reg: REG, checkId: "chk-1", inspector: "Bro Trevor", to: "Bro Arthur" }, over || {}));
 
   const rotaLink = (env, over) => mint(env, "rota",
-    Object.assign({ id: "REQ-9", sunday: "2026-10-04", driver: "Bro Tunde",
-                    type: "Cover", to: "Bro Asim" }, over || {}));
+    Object.assign({ id: "REQ-9", sunday: "2026-10-04", driver: "Bro Trevor",
+                    type: "Cover", to: "Bro Arthur" }, over || {}));
 
   /* ---- minting ---------------------------------------------------------- */
 
@@ -148,7 +148,7 @@ export default async function (root) {
     const { token } = await busLink(env);
     const out = await body(await W.handleLinkDo(env, { token, pin: "1234", choice: "run" }));
     a.ok(out.ok, JSON.stringify(out));
-    a.eq(out.by, "Bro Asim");
+    a.eq(out.by, "Bro Arthur");
     a.eq((await W.checksToday(env))[REG].state, "authorised");
   });
 
@@ -188,7 +188,7 @@ export default async function (root) {
        refused even on a link addressed to him. */
     const { env } = await fresh();
     await stopTheBus(env);
-    const { token } = await busLink(env, { to: "Bro Tunde" });
+    const { token } = await busLink(env, { to: "Bro Trevor" });
     const out = await body(await W.handleLinkDo(env, { token, pin: "9876", choice: "run" }));
     a.not(out.ok);
     a.eq(out.error, "bad pin");
@@ -205,23 +205,23 @@ export default async function (root) {
        the record names whoever actually keyed a PIN. */
     const { env } = await fresh();
     await stopTheBus(env);
-    const { token } = await busLink(env, { to: "Pst Kehinde" });
+    const { token } = await busLink(env, { to: "Pst Kenneth" });
     const out = await body(await W.handleLinkDo(env, { token, pin: "1234", choice: "run" }));
     a.ok(out.ok, JSON.stringify(out));
-    a.eq(out.by, "Bro Asim", "and it is filed against the man who actually decided");
+    a.eq(out.by, "Bro Arthur", "and it is filed against the man who actually decided");
   });
 
   s.test("an empty PIN is never a way in", async (a) => {
     const { env } = await fresh();
     await stopTheBus(env);
-    const { token } = await busLink(env, { to: "Bro Calvin" });
+    const { token } = await busLink(env, { to: "Bro Cedric" });
     const out = await body(await W.handleLinkDo(env, { token, pin: "", choice: "run" }));
     a.not(out.ok);
     a.eq(out.error, "bad pin");
   });
 
   s.test("a coordinator with no PIN against their name is not one of the matches", async (a) => {
-    /* Bro Calvin is a coordinator with an empty hash. Everywhere else in this
+    /* Bro Cedric is a coordinator with an empty hash. Everywhere else in this
        system a driver without a PIN is simply not asked for one; here it lets
        a bus out with a fault on it, so a name with nothing to check against
        cannot do it. With no hash anywhere, the page is told so plainly rather
@@ -242,9 +242,9 @@ export default async function (root) {
        against. */
     const { env } = await fresh();
     await stopTheBus(env);
-    const { token } = await busLink(env, { to: "Bro Tunde" });
+    const { token } = await busLink(env, { to: "Bro Trevor" });
     const out = await body(await W.handleLinkDo(env,
-      { token, who: "Bro Tunde", pin: "9876", choice: "run" }));
+      { token, who: "Bro Trevor", pin: "9876", choice: "run" }));
     a.not(out.ok);
     a.eq(out.error, "bad pin");
   });
@@ -267,13 +267,13 @@ export default async function (root) {
   s.test("the page is offered names, and not the man who asked", (a) => {
     return (async () => {
       const { env } = await fresh();
-      const { token } = await rotaLink(env, { sunday: "2026-10-18", driver: "Bro Tunde",
+      const { token } = await rotaLink(env, { sunday: "2026-10-18", driver: "Bro Trevor",
                                               type: "Holiday / planned leave" });
       const out = await body(await W.handleLinkWhat(env, { token }));
       a.ok(Array.isArray(out.candidates), "no candidates at all: " + JSON.stringify(out.candidates));
       const names = out.candidates.map((c) => c.name);
-      a.ok(names.indexOf("Bro Asim") !== -1, "got " + names.join(", "));
-      a.eq(names.indexOf("Bro Tunde"), -1, "the man asking to be excused was offered it");
+      a.ok(names.indexOf("Bro Arthur") !== -1, "got " + names.join(", "));
+      a.eq(names.indexOf("Bro Trevor"), -1, "the man asking to be excused was offered it");
     })();
   });
 
@@ -282,23 +282,23 @@ export default async function (root) {
        right about the list. Already-driving and last-drove are what turn it
        into a decision. */
     const { env } = await fresh();
-    await withRota(env, "2026-10-18", { south: "Pst Kehinde" });
-    await withRota(env, W.keyAddWeeks(W.runSunday(), -1), { north: "Bro Asim" });
-    const { token } = await rotaLink(env, { sunday: "2026-10-18", driver: "Bro Tunde",
+    await withRota(env, "2026-10-18", { south: "Pst Kenneth" });
+    await withRota(env, W.keyAddWeeks(W.runSunday(), -1), { north: "Bro Arthur" });
+    const { token } = await rotaLink(env, { sunday: "2026-10-18", driver: "Bro Trevor",
                                             type: "Holiday / planned leave" });
     const out = await body(await W.handleLinkWhat(env, { token }));
     const by = {};
     out.candidates.forEach((c) => { by[c.name] = c; });
-    a.eq(by["Pst Kehinde"].busy, "South", "he is already out that morning and it does not say so");
-    a.eq(by["Bro Asim"].busy, "", "he is free and it says otherwise");
-    a.eq(by["Bro Asim"].last, W.keyAddWeeks(W.runSunday(), -1), "when he last drove");
+    a.eq(by["Pst Kenneth"].busy, "South", "he is already out that morning and it does not say so");
+    a.eq(by["Bro Arthur"].busy, "", "he is free and it says otherwise");
+    a.eq(by["Bro Arthur"].last, W.keyAddWeeks(W.runSunday(), -1), "when he last drove");
   });
 
   s.test("A SWAP IS OFFERED NOBODY, because it names its own partner", async (a) => {
     /* It moves two Sundays between two men. A third name there would be
        offering to do something else entirely. */
     const { env } = await fresh();
-    const { token } = await rotaLink(env, { type: "Request a swap", swapWith: "Bro Asim" });
+    const { token } = await rotaLink(env, { type: "Request a swap", swapWith: "Bro Arthur" });
     const out = await body(await W.handleLinkWhat(env, { token }));
     a.eq(out.candidates, undefined, "got " + JSON.stringify(out.candidates));
   });
@@ -307,12 +307,12 @@ export default async function (root) {
     const { env } = await fresh();
     const { token } = await rotaLink(env, { type: "Holiday / planned leave" });
     const out = await body(await W.handleLinkDo(env,
-      { token, pin: "1234", choice: "Approved", cover: "Pst Kehinde" }));
+      { token, pin: "1234", choice: "Approved", cover: "Pst Kenneth" }));
     a.ok(out.ok, JSON.stringify(out));
-    a.eq(out.cover, "Pst Kehinde");
+    a.eq(out.cover, "Pst Kenneth");
     const drain = await body(await W.handleDrain(env, { limit: 50 }));
     a.eq(drain.decisions.length, 1);
-    a.eq(drain.decisions[0].cover, "Pst Kehinde");
+    a.eq(drain.decisions[0].cover, "Pst Kenneth");
   });
 
   s.test("A NAME THE REGISTER DOES NOT KNOW IS DROPPED, NOT WRITTEN", async (a) => {
@@ -336,7 +336,7 @@ export default async function (root) {
     const { env } = await fresh();
     const { token } = await rotaLink(env, { type: "Holiday / planned leave" });
     const out = await body(await W.handleLinkDo(env,
-      { token, pin: "1234", choice: "Rejected", cover: "Pst Kehinde" }));
+      { token, pin: "1234", choice: "Rejected", cover: "Pst Kenneth" }));
     a.ok(out.ok);
     a.eq(out.cover, "");
   });
@@ -351,10 +351,10 @@ export default async function (root) {
 
   s.test("an inactive driver is never offered", async (a) => {
     const { db, env } = await fresh();
-    await db.prepare("UPDATE drivers SET active = 0 WHERE name = 'Pst Kehinde'").run();
+    await db.prepare("UPDATE drivers SET active = 0 WHERE name = 'Pst Kenneth'").run();
     const { token } = await rotaLink(env, { type: "Holiday / planned leave" });
     const out = await body(await W.handleLinkWhat(env, { token }));
-    a.eq(out.candidates.map((c) => c.name).indexOf("Pst Kehinde"), -1);
+    a.eq(out.candidates.map((c) => c.name).indexOf("Pst Kenneth"), -1);
   });
 
   /* ---- one use, and it expires ------------------------------------------ */
@@ -367,7 +367,7 @@ export default async function (root) {
     const again = await body(await W.handleLinkDo(env, { token, pin: "1234", choice: "run" }));
     a.not(again.ok);
     a.eq(again.error, "used");
-    a.eq(again.by, "Bro Asim", "and it says who already decided it");
+    a.eq(again.by, "Bro Arthur", "and it says who already decided it");
   });
 
   s.test("a used link says so when it is looked at", async (a) => {
@@ -377,7 +377,7 @@ export default async function (root) {
     await W.handleLinkDo(env, { token, pin: "1234", choice: "run" });
     const out = await body(await W.handleLinkWhat(env, { token }));
     a.ok(out.used);
-    a.eq(out.usedBy, "Bro Asim");
+    a.eq(out.usedBy, "Bro Arthur");
   });
 
   s.test("an expired link decides nothing", async (a) => {
@@ -413,10 +413,10 @@ export default async function (root) {
     const { env } = await fresh();
     await stopTheBus(env);
     const { token } = await busLink(env);
-    await W.handleAuthorise(env, { authorise: { reg: REG, who: "Pst Kehinde", pin: "4321" } });
+    await W.handleAuthorise(env, { authorise: { reg: REG, who: "Pst Kenneth", pin: "4321" } });
     const out = await body(await W.handleLinkWhat(env, { token }));
     a.eq(out.state, "authorised");
-    a.eq(out.stateBy, "Pst Kehinde", "the page says who, instead of offering the button again");
+    a.eq(out.stateBy, "Pst Kenneth", "the page says who, instead of offering the button again");
   });
 
   s.test("a second walkaround since the email makes the link stale", async (a) => {
@@ -441,7 +441,7 @@ export default async function (root) {
   s.test("the app and the email write the same authorisation", async (a) => {
     const viaApp = await fresh();
     await stopTheBus(viaApp.env);
-    await W.handleAuthorise(viaApp.env, { authorise: { reg: REG, who: "Bro Asim", pin: "1234" } });
+    await W.handleAuthorise(viaApp.env, { authorise: { reg: REG, who: "Bro Arthur", pin: "1234" } });
 
     const viaMail = await fresh();
     await stopTheBus(viaMail.env);
@@ -512,7 +512,7 @@ export default async function (root) {
     a.eq(drain.decisions.length, 1);
     a.eq(drain.decisions[0].id, "REQ-9");
     a.eq(drain.decisions[0].choice, "Approved");
-    a.eq(drain.decisions[0].by, "Bro Asim");
+    a.eq(drain.decisions[0].by, "Bro Arthur");
   });
 
   s.test("an undecided request is not carried anywhere", async (a) => {

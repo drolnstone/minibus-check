@@ -50,9 +50,9 @@ function tabs() {
       ["South", "S07", "10:03", "Halsbury Road by Molyneux Road", "L6 6AW", "NO", "Pickup", "", "", ""]
     ],
     "Drivers": [TABS["Drivers"],
-                ["Pst Kehinde", "Minister in Charge", "YES", 1, "1111", "", "North", ""],
-                ["Bro Asim", "Coordinator", "YES", 2, "1234", "a@b.c", "North", ""],
-                ["Bro Adebola", "Driver", "YES", 3, "4321", "", "North", ""],
+                ["Pst Kenneth", "Minister in Charge", "YES", 1, "1111", "", "North", ""],
+                ["Bro Arthur", "Coordinator", "YES", 2, "1234", "a@b.c", "North", ""],
+                ["Bro Adrian", "Driver", "YES", 3, "4321", "", "North", ""],
                 ["Bro Retired", "Coordinator", "NO", 9, "9999", "old@b.c", "North", ""]],
     "Buses": [TABS["Buses"],
               ["YS70 PWE", 16, "YES", ""], ["NH56 FWP", 14, "YES", ""]],
@@ -263,13 +263,13 @@ export default function (root) {
      changes whose PIN the link wants, with nothing to keep in step by hand. */
 
   s.test("the link asks for the PIN of whoever the emails go to", (a) => {
-    a.eq(call(L, "coordinatorName"), "Bro Asim",
+    a.eq(call(L, "coordinatorName"), "Bro Arthur",
          "matched on the Email column against COORDINATOR_EMAIL");
   });
 
   s.test("with no Email filled in, it falls back to the first active coordinator", (a) => {
     const L2 = loadCodeGs(root, { tabs: tabs(), props: { COORDINATOR_EMAIL: "nobody@nowhere" } });
-    a.eq(call(L2, "coordinatorName"), "Pst Kehinde",
+    a.eq(call(L2, "coordinatorName"), "Pst Kenneth",
          "a tab nobody has filled in should still produce a working link");
   });
 
@@ -281,7 +281,7 @@ export default function (root) {
 
   s.test("an ordinary driver is never the one asked", (a) => {
     const t = tabs();
-    t.Drivers = [t.Drivers[0], ["Bro Adebola", "Driver", "YES", 1, "4321", "a@b.c", "North", ""]];
+    t.Drivers = [t.Drivers[0], ["Bro Adrian", "Driver", "YES", 1, "4321", "a@b.c", "North", ""]];
     const L2 = loadCodeGs(root, { tabs: t, props: { COORDINATOR_EMAIL: "a@b.c" } });
     a.eq(call(L2, "coordinatorName"), "",
          "and an empty name makes actionLink hand back no link, which puts the "
@@ -428,7 +428,7 @@ export default function (root) {
   function ics(tabsOver) {
     const L2 = loadCodeGs(root, { tabs: tabsOver || tabs(),
                                   props: { COORDINATOR_EMAIL: "a@b.c" } });
-    return call(L2, "dutyIcs", new Date(2026, 8, 27), "Bro Adebola", "", "North", "YS70 PWE");
+    return call(L2, "dutyIcs", new Date(2026, 8, 27), "Bro Adrian", "", "North", "YS70 PWE");
   }
 
   s.test("the duty entry is timed to the real departure", (a) => {
@@ -564,15 +564,15 @@ export default function (root) {
     const day = c.sunday || SUN;
     const t = tabs();
     t["Drivers"] = [TABS["Drivers"],
-                    ["Bro Asim", "Coordinator", "YES", 1, "1234", "asim@b.c", "North", ""],
-                    ["Bro Adebola", "Driver", "YES", 2, "4321", "ade@b.c", "North", ""],
-                    ["Bro Tunde", "Driver", "YES", 3, "5678", "tunde@b.c", "North", ""],
-                    ["Bro Kayode", "Driver", "YES", 4, "8765", "kayode@b.c", "South", ""]];
+                    ["Bro Arthur", "Coordinator", "YES", 1, "1234", "arthur@b.c", "North", ""],
+                    ["Bro Adrian", "Driver", "YES", 2, "4321", "ade@b.c", "North", ""],
+                    ["Bro Trevor", "Driver", "YES", 3, "5678", "trevor@b.c", "North", ""],
+                    ["Bro Keith", "Driver", "YES", 4, "8765", "keith@b.c", "South", ""]];
     t["Rota"] = [ROTA_H,
-                 [day, "on" in c ? c.on : "Bro Adebola", "", "YS70 PWE", "Confirmed",
-                  "Bro Kayode", "", "NH56 FWP", "", "", ""]];
+                 [day, "on" in c ? c.on : "Bro Adrian", "", "YS70 PWE", "Confirmed",
+                  "Bro Keith", "", "NH56 FWP", "", "", ""]];
     t["Rota Requests"] = [REQ_H,
-                          [new Date(), "REQ-1", day, "Bro Adebola",
+                          [new Date(), "REQ-1", day, "Bro Adrian",
                            c.type || "Request cover", "away that weekend", c.swapWith || "",
                            c.status || "Pending", "", c.replacement || "",
                            c.theirSunday || "", ""]];
@@ -598,7 +598,7 @@ export default function (root) {
     L2.gas.setFetchReply({ code: 200, body: JSON.stringify({
       ok: true, bookings: [], trips: [], checks: [], auths: [],
       decisions: [{ token: "t".repeat(32), id: "REQ-1", choice: choice,
-                    cover: cover || "", by: "Bro Asim", at: Date.now() }] }) });
+                    cover: cover || "", by: "Bro Arthur", at: Date.now() }] }) });
     call(L2, "drainFromWorker");
     return L2.gas.mail;
   }
@@ -610,7 +610,7 @@ export default function (root) {
     const out = JSON.parse(call(L2, "doPost", { postData: { contents: JSON.stringify(
       Object.assign({ token: "minibusapp", action: "decision", decision: {
         id: "REQ-1", choice: choice, cover: cover || "",
-        by: "Bro Asim", at: Date.now() } }, over || {})) } }).getContent());
+        by: "Bro Arthur", at: Date.now() } }, over || {})) } }).getContent());
     return { out: out, mail: L2.gas.mail };
   }
 
@@ -655,12 +655,12 @@ export default function (root) {
        from the real today so this cannot rot into passing for the wrong
        reason next month. */
     for (const how of ["the sheet", "the link"]) {
-      const L2 = deciding({ sunday: SOON, replacement: "Bro Tunde" });
+      const L2 = deciding({ sunday: SOON, replacement: "Bro Trevor" });
       const mail = how === "the sheet"
-        ? byHand(L2, "Approved", "Bro Tunde")
+        ? byHand(L2, "Approved", "Bro Trevor")
         : byLink(L2, "Approved");
       a.eq(to(mail, "ade@b.c").length, 1, how + ": the man coming off");
-      a.eq(to(mail, "tunde@b.c").length, 1, how + ": the man coming on");
+      a.eq(to(mail, "trevor@b.c").length, 1, how + ": the man coming on");
     }
   });
 
@@ -673,24 +673,24 @@ export default function (root) {
        The answer to the REQUEST is a different thing and has no horizon: the
        driver who asked is waiting for it however far off the Sunday is. This
        pair of tests is the line between the two. */
-    const L2 = deciding({ sunday: FAR, replacement: "Bro Tunde" });
-    const mail = byHand(L2, "Approved", "Bro Tunde");
-    a.eq(to(mail, "tunde@b.c").length, 0, "ten weeks out, nobody has been told anything yet");
+    const L2 = deciding({ sunday: FAR, replacement: "Bro Trevor" });
+    const mail = byHand(L2, "Approved", "Bro Trevor");
+    a.eq(to(mail, "trevor@b.c").length, 0, "ten weeks out, nobody has been told anything yet");
   });
 
   s.test("a rejection does not tell the other driver in a swap", (a) => {
     /* He was never told it had been proposed, so a note saying it had been
        refused would be the first he heard of the whole thing. */
-    const mail = byHand(deciding({ type: "Request a swap", swapWith: "Bro Tunde",
+    const mail = byHand(deciding({ type: "Request a swap", swapWith: "Bro Trevor",
                                    theirSunday: new Date(2026, 9, 18) }), "Rejected");
-    a.eq(to(mail, "tunde@b.c").length, 0, "got " + JSON.stringify(mail.map((m) => m.to)));
+    a.eq(to(mail, "trevor@b.c").length, 0, "got " + JSON.stringify(mail.map((m) => m.to)));
     a.eq(to(mail, "ade@b.c").length, 1);
   });
 
   s.test("an approved swap is not also told cover is being arranged", (a) => {
     /* A swap has no replacement either, and applySwap has already emailed
        both men. A second note would contradict the first. */
-    const mail = byHand(deciding({ type: "Request a swap", swapWith: "Bro Tunde",
+    const mail = byHand(deciding({ type: "Request a swap", swapWith: "Bro Trevor",
                                    theirSunday: new Date(2026, 9, 18) }), "Approved");
     a.not(mail.some((m) => String(m.subject || "").indexOf("has been approved") !== -1),
           "got " + JSON.stringify(mail.map((m) => m.subject)));
@@ -699,7 +699,7 @@ export default function (root) {
   s.test("it does not say he is still driving when the rota says otherwise", (a) => {
     /* Refused on a Sunday somebody else has since picked up. Telling him to
        turn up to a morning he is not on is worse than sending nothing. */
-    const his = to(byHand(deciding({ on: "Bro Tunde" }), "Rejected"), "ade@b.c");
+    const his = to(byHand(deciding({ on: "Bro Trevor" }), "Rejected"), "ade@b.c");
     a.eq(his.length, 1);
     a.hasnt(his[0].body, "still down to drive", "got: " + his[0].body);
     a.has(his[0].body, "Open the app");
@@ -726,7 +726,7 @@ export default function (root) {
 
     const sh = L2.ctx.SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Rota Requests");
     const qc = call(L2, "requestCols", sh);
-    sh.getRange(2, qc.replacement).setValue("Bro Tunde");
+    sh.getRange(2, qc.replacement).setValue("Bro Trevor");
     call(L2, "onRotaEditNotify", { range: sh.getRange(2, qc.replacement) });
 
     a.eq(to(L2.gas.mail, "ade@b.c").length, before,
@@ -747,14 +747,14 @@ export default function (root) {
       const rota = ss.getSheetByName("Rota");
       const rc = call(L2, "rotaCols", rota);
       const col = side === "North" ? rc.north : rc.south;
-      const was = side === "North" ? "Bro Adebola" : "Bro Kayode";
+      const was = side === "North" ? "Bro Adrian" : "Bro Keith";
 
-      rota.getRange(2, col).setValue("Bro Tunde");
+      rota.getRange(2, col).setValue("Bro Trevor");
       call(L2, "onRotaEditNotify",
-           { range: rota.getRange(2, col), oldValue: was, value: "Bro Tunde" });
+           { range: rota.getRange(2, col), oldValue: was, value: "Bro Trevor" });
 
       const subs = L2.gas.mail.map((m) => String(m.to));
-      a.ok(subs.indexOf("tunde@b.c") !== -1, side + ": the man coming on, got " + subs.join());
+      a.ok(subs.indexOf("trevor@b.c") !== -1, side + ": the man coming on, got " + subs.join());
       if (side === "North") {
         a.ok(subs.indexOf("ade@b.c") !== -1, side + ": the man coming off, got " + subs.join());
       }
@@ -768,10 +768,10 @@ export default function (root) {
   s.test("a driver with no email address costs nobody an error", (a) => {
     const t = tabs();
     t["Drivers"] = [TABS["Drivers"],
-                    ["Bro Adebola", "Driver", "YES", 2, "4321", "", "North", ""]];
-    t["Rota"] = [ROTA_H, [SUN, "Bro Adebola", "", "YS70 PWE", "Confirmed",
-                          "Bro Kayode", "", "NH56 FWP", "", "", ""]];
-    t["Rota Requests"] = [REQ_H, [new Date(), "REQ-1", SUN, "Bro Adebola",
+                    ["Bro Adrian", "Driver", "YES", 2, "4321", "", "North", ""]];
+    t["Rota"] = [ROTA_H, [SUN, "Bro Adrian", "", "YS70 PWE", "Confirmed",
+                          "Bro Keith", "", "NH56 FWP", "", "", ""]];
+    t["Rota Requests"] = [REQ_H, [new Date(), "REQ-1", SUN, "Bro Adrian",
                                   "Request cover", "away", "", "Pending", "", "", "", ""]];
     const L2 = loadCodeGs(root, { tabs: t, props: { COORDINATOR_EMAIL: "a@b.c" } });
     const sh = L2.ctx.SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Rota Requests");
@@ -803,10 +803,10 @@ export default function (root) {
   function remindWith(status) {
     const t = tabs();
     t["Drivers"] = [TABS["Drivers"],
-                    ["Bro Adebola", "Driver", "YES", 2, "4321", "ade@b.c", "North", ""],
-                    ["Bro Kayode", "Driver", "YES", 3, "8765", "kayode@b.c", "South", ""]];
-    t["Rota"] = [ROTA_H, [REMIND_FOR, "Bro Adebola", "", "YS70 PWE", status,
-                          "Bro Kayode", "", "NH56 FWP", "", "", ""]];
+                    ["Bro Adrian", "Driver", "YES", 2, "4321", "ade@b.c", "North", ""],
+                    ["Bro Keith", "Driver", "YES", 3, "8765", "keith@b.c", "South", ""]];
+    t["Rota"] = [ROTA_H, [REMIND_FOR, "Bro Adrian", "", "YS70 PWE", status,
+                          "Bro Keith", "", "NH56 FWP", "", "", ""]];
     const L2 = loadCodeGs(root, { tabs: t, props: { COORDINATOR_EMAIL: "a@b.c" } });
     const out = call(L2, "dutyReminders");
     return { mail: L2.gas.mail, out: out };
@@ -829,11 +829,11 @@ export default function (root) {
 
   s.test("a decision pushed straight here lands exactly as the drain's does", (a) => {
     const pushedL2 = deciding({ sunday: SOON });
-    const pushed = byPush(pushedL2, "Approved", "Bro Tunde");
+    const pushed = byPush(pushedL2, "Approved", "Bro Trevor");
     a.eq(pushed.out.ok, true, JSON.stringify(pushed.out));
 
     const drained = deciding({ sunday: SOON });
-    byLink(drained, "Approved", "Bro Tunde");
+    byLink(drained, "Approved", "Bro Trevor");
 
     /* Read both tabs and compare the cells that matter: the request's own
        status and cover, and the two cells on the Rota that approving one is
@@ -855,8 +855,8 @@ export default function (root) {
        no installed trigger, so both handlers have to be called by name. The
        push path goes through the same function, and this is what proves it
        rather than assuming it. */
-    const pushed = byPush(deciding({ sunday: SOON }), "Approved", "Bro Tunde");
-    const drained = byLink(deciding({ sunday: SOON }), "Approved", "Bro Tunde");
+    const pushed = byPush(deciding({ sunday: SOON }), "Approved", "Bro Trevor");
+    const drained = byLink(deciding({ sunday: SOON }), "Approved", "Bro Trevor");
     const sort = (m) => m.map((x) => String(x.to) + " :: " + String(x.subject)).sort();
     a.eq(sort(pushed.mail).join("\n"), sort(drained).join("\n"),
          "a decision made on a phone reached different people depending on the route");
@@ -869,7 +869,7 @@ export default function (root) {
        the same decision arriving twice must be a no-op on the second — not
        two emails, not a second Sunday moved, not a note rewritten. */
     const L2 = deciding({ sunday: SOON });
-    byPush(L2, "Approved", "Bro Tunde");
+    byPush(L2, "Approved", "Bro Trevor");
     const after = L2.gas.mail.length;
     const sh = L2.ctx.SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Rota Requests");
     const qc = call(L2, "requestCols", sh);
@@ -884,7 +884,7 @@ export default function (root) {
 
   s.test("a push with no token is not a push", (a) => {
     const L2 = deciding({ sunday: SOON });
-    const out = byPush(L2, "Approved", "Bro Tunde", { token: "wrong" });
+    const out = byPush(L2, "Approved", "Bro Trevor", { token: "wrong" });
     a.eq(out.out.ok, false, "anybody who found the address could move the rota");
     const sh = L2.ctx.SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Rota Requests");
     const qc = call(L2, "requestCols", sh);
@@ -897,7 +897,7 @@ export default function (root) {
        the queue open for it would mean carrying it for ever. */
     const L2 = deciding({ sunday: SOON });
     const out = byPush(L2, "Approved", "", { decision: {
-      id: "REQ-NOPE", choice: "Approved", cover: "", by: "Bro Asim", at: Date.now() } });
+      id: "REQ-NOPE", choice: "Approved", cover: "", by: "Bro Arthur", at: Date.now() } });
     a.eq(out.out.ok, true, JSON.stringify(out.out));
   });
 
@@ -940,7 +940,7 @@ export default function (root) {
     const L2 = deciding({ sunday: SOON });
     L2.gas.holdTheLock(true);
 
-    const out = byPush(L2, "Approved", "Bro Tunde");
+    const out = byPush(L2, "Approved", "Bro Trevor");
     a.eq(out.out.ok, false, "it claimed a row it never touched");
 
     const sh = L2.ctx.SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Rota Requests");
@@ -952,7 +952,7 @@ export default function (root) {
     /* And the drain, finding the same thing, keeps it rather than dropping
        it — which is what makes the tick a backstop and not a bin. */
     L2.gas.holdTheLock(false);
-    byLink(L2, "Approved", "Bro Tunde");
+    byLink(L2, "Approved", "Bro Trevor");
     a.eq(String(cellOf(L2, "Rota Requests", 2, qc.status)), "Approved",
          "the decision was lost between the two of them");
     a.ok(L2.gas.mail.length > 0, "and nobody was told even then");
@@ -976,11 +976,11 @@ export default function (root) {
 
     const held = deciding({ sunday: SOON });
     held.gas.holdTheLock(true);
-    byLink(held, "Approved", "Bro Tunde");
+    byLink(held, "Approved", "Bro Trevor");
     a.eq(forgotten(held).length, 0, "it told the server to forget one it had not applied");
 
     const free = deciding({ sunday: SOON });
-    byLink(free, "Approved", "Bro Tunde");
+    byLink(free, "Approved", "Bro Trevor");
     a.eq(forgotten(free).length, 1, "and it never reports one it DID apply, so this proves nothing");
   });
 
@@ -988,10 +988,10 @@ export default function (root) {
 
   s.test("a cover picked from the email lands in the Replacement cell", async (a) => {
     const L2 = deciding({ sunday: SOON });
-    byLink(L2, "Approved", "Bro Tunde");
+    byLink(L2, "Approved", "Bro Trevor");
     const sh = L2.ctx.SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Rota Requests");
     const qc = call(L2, "requestCols", sh);
-    a.eq(String(cellOf(L2, "Rota Requests", 2, qc.replacement)), "Bro Tunde");
+    a.eq(String(cellOf(L2, "Rota Requests", 2, qc.replacement)), "Bro Trevor");
     a.eq(String(cellOf(L2, "Rota Requests", 2, qc.status)), "Approved");
   });
 
@@ -1008,19 +1008,19 @@ export default function (root) {
        that is the order a person would use, not because anything depends on
        it. What this test is actually for is the outcome below. */
     const L2 = deciding({ sunday: SOON });
-    byLink(L2, "Approved", "Bro Tunde");
+    byLink(L2, "Approved", "Bro Trevor");
     const rota = L2.ctx.SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Rota");
     const rc = call(L2, "rotaCols", rota);
-    a.eq(String(rota.getRange(2, rc.northCover).getValue()), "Bro Tunde",
+    a.eq(String(rota.getRange(2, rc.northCover).getValue()), "Bro Trevor",
          "the Sunday was not covered");
     a.eq(String(rota.getRange(2, rc.status).getValue()), "Covered");
   });
 
   s.test("and both men are told, without anybody opening the spreadsheet", async (a) => {
     const L2 = deciding({ sunday: SOON });
-    const mail = byLink(L2, "Approved", "Bro Tunde").map((m) => String(m.to));
+    const mail = byLink(L2, "Approved", "Bro Trevor").map((m) => String(m.to));
     a.ok(mail.indexOf("ade@b.c") !== -1, "the man coming off: " + mail.join());
-    a.ok(mail.indexOf("tunde@b.c") !== -1, "the man coming on: " + mail.join());
+    a.ok(mail.indexOf("trevor@b.c") !== -1, "the man coming on: " + mail.join());
   });
 
   s.test("with no cover it behaves exactly as it always did", async (a) => {
@@ -1039,7 +1039,7 @@ export default function (root) {
     /* The live server drops it, and this end does not act on one either:
        two implementations of the same rule is one of them drifting. */
     const L2 = deciding({ sunday: SOON });
-    byLink(L2, "Rejected", "Bro Tunde");
+    byLink(L2, "Rejected", "Bro Trevor");
     const sh = L2.ctx.SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Rota Requests");
     const qc = call(L2, "requestCols", sh);
     a.eq(String(cellOf(L2, "Rota Requests", 2, qc.replacement)), "");
@@ -1047,12 +1047,12 @@ export default function (root) {
 
   s.test("the note on the cell says who decided and who is covering", async (a) => {
     const L2 = deciding({ sunday: SOON });
-    byLink(L2, "Approved", "Bro Tunde");
+    byLink(L2, "Approved", "Bro Trevor");
     const sh = L2.ctx.SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Rota Requests");
     const qc = call(L2, "requestCols", sh);
     const note = String(sh.getRange(2, qc.status).getNote() || "");
-    a.has(note, "Bro Asim");
-    a.has(note, "cover Bro Tunde", "got: " + note);
+    a.has(note, "Bro Arthur");
+    a.has(note, "cover Bro Trevor", "got: " + note);
   });
 
   s.test("a cancelled Sunday does not tell its drivers to turn up", async (a) => {
@@ -1068,11 +1068,11 @@ export default function (root) {
     await atTime(REMIND_FROM, () => {
       const north = remindWith("North cancelled").mail.map((m) => String(m.to));
       a.eq(north.indexOf("ade@b.c"), -1, "North is off: " + north.join());
-      a.ok(north.indexOf("kayode@b.c") !== -1, "South still runs: " + north.join());
+      a.ok(north.indexOf("keith@b.c") !== -1, "South still runs: " + north.join());
 
       const south = remindWith("South cancelled").mail.map((m) => String(m.to));
       a.ok(south.indexOf("ade@b.c") !== -1, "North still runs: " + south.join());
-      a.eq(south.indexOf("kayode@b.c"), -1, "South is off: " + south.join());
+      a.eq(south.indexOf("keith@b.c"), -1, "South is off: " + south.join());
     });
   });
 
@@ -1093,7 +1093,7 @@ export default function (root) {
     await atTime(REMIND_FROM, () => {
       for (const st of ["Confirmed", "Covered", "Change requested"]) {
         const who = remindWith(st).mail.map((m) => String(m.to)).sort();
-        a.eq(who.join(), "ade@b.c,kayode@b.c", st + " sent to " + who.join());
+        a.eq(who.join(), "ade@b.c,keith@b.c", st + " sent to " + who.join());
       }
     });
   });
@@ -1141,9 +1141,9 @@ export default function (root) {
     const rota = ss.getSheetByName("Rota");
     const rc = call(L2, "rotaCols", rota);
     rota.getRange(2, rc.status).setValue("Cancelled/declined");
-    rota.getRange(2, rc.north).setValue("Bro Tunde");
+    rota.getRange(2, rc.north).setValue("Bro Trevor");
     call(L2, "onRotaEditNotify",
-         { range: rota.getRange(2, rc.north), oldValue: "Bro Adebola", value: "Bro Tunde" });
+         { range: rota.getRange(2, rc.north), oldValue: "Bro Adrian", value: "Bro Trevor" });
     a.eq(L2.gas.mail.length, 0, "got " + JSON.stringify(L2.gas.mail.map((m) => m.subject)));
   });
 
@@ -1160,17 +1160,17 @@ export default function (root) {
     const rota = ss.getSheetByName("Rota");
     const rc = call(L2, "rotaCols", rota);
     rota.getRange(2, rc.status).setValue("No driver assigned");
-    rota.getRange(2, rc.north).setValue("Bro Tunde");
+    rota.getRange(2, rc.north).setValue("Bro Trevor");
     call(L2, "onRotaEditNotify",
-         { range: rota.getRange(2, rc.north), oldValue: "Bro Adebola", value: "Bro Tunde" });
+         { range: rota.getRange(2, rc.north), oldValue: "Bro Adrian", value: "Bro Trevor" });
     const to = L2.gas.mail.map((m) => String(m.to));
-    a.ok(to.indexOf("tunde@b.c") !== -1, "the new driver must still be told: " + to.join());
+    a.ok(to.indexOf("trevor@b.c") !== -1, "the new driver must still be told: " + to.join());
   });
 
 
   /* ---- the real Bus Stops tab --------------------------------------------
 
-     Pasted off Asim's spreadsheet on 22 September 2026, after "Set up /
+     Pasted off the live spreadsheet on 22 September 2026, after "Set up /
      refresh rota" had been run and every Lat and Lng on all nineteen rows
      came out blank.
 
@@ -1259,7 +1259,7 @@ export default function (root) {
     const key = "2026-10-04";
     const t = tabs();
     const trip = (logged, id, status, live) =>
-      [new Date(logged), id, key, "North", "Bro Adebola", "picked", "N02", "Grace Road bus stop, Walton Vale",
+      [new Date(logged), id, key, "North", "Bro Adrian", "picked", "N02", "Grace Road bus stop, Walton Vale",
        "", new Date(logged), 0, status, "YS70 PWE", "", "", "", "", "", live];
     t["Trip Events"] = [TRIP_H,
       trip(OLD + 1000, "t-old", "Rehearsal", "1"),
@@ -1310,7 +1310,7 @@ export default function (root) {
   s.test("starting over takes the last round's rows off both tabs and keeps the new round's", (a) => {
     const { L2, NEW, key } = withRehearsalRows(true);
     const res = call(L2, "applyCoordAction", ssOf(L2), { id: "act-1-over", kind: "rehearsal", made: NEW,
-      by: "Bro Asim", body: { op: "over", sunday: key, round: NEW, ends: NEW + 7200000, shape: "full", trips: ["t-old"] } }, {});
+      by: "Bro Arthur", body: { op: "over", sunday: key, round: NEW, ends: NEW + 7200000, shape: "full", trips: ["t-old"] } }, {});
     a.ok(res.done && res.ok !== false, JSON.stringify(res));
     a.same(liveIds(L2, "Trip Events"), ["3", "4"], "the taken-back tap is found by its trip, and the new round's is kept");
     a.same(liveIds(L2, "Bus Bookings"), ["12", "13"]);
@@ -1431,7 +1431,7 @@ export default function (root) {
     const { L2, key } = withRehearsalRows(false);
     const sh = ssOf(L2).getSheetByName("Trip Events");
     const t0 = Date.now() - 3 * 3600000;
-    const row = (ev, off, status, live) => [new Date(t0 + off), "REAL-1", key, "North", "Bro Adebola", ev, ev === "picked" ? "N01" : "",
+    const row = (ev, off, status, live) => [new Date(t0 + off), "REAL-1", key, "North", "Bro Adrian", ev, ev === "picked" ? "N01" : "",
       "", "", new Date(t0 + off), 0, status, "YS70 PWE", "", "", "", "", "", live];
     sh.appendRow(row("start", 0, "Logged", "21"));
     sh.appendRow(row("picked", 60000, "Logged", "22"));
@@ -1470,7 +1470,7 @@ export default function (root) {
     const { L2, key } = withRehearsalRows(false);
     const sh = ssOf(L2).getSheetByName("Trip Events");
     const when = new Date(2026, 8, 27, 10, 12);
-    sh.appendRow([when, "t-then", "2026-09-27", "North", "Bro Adebola", "picked", "N02", "Grace Road bus stop, Walton Vale",
+    sh.appendRow([when, "t-then", "2026-09-27", "North", "Bro Adrian", "picked", "N02", "Grace Road bus stop, Walton Vale",
                   "", when, 0, "Rehearsal", "YS70 PWE", "", "", "", "", "", "9"]);
     call(L2, "applyCoordAction", ssOf(L2), { id: "act-4-end", kind: "rehearsal", made: Date.now(),
       by: "the clock", body: { op: "end", sunday: key, round: 0, trips: ["t-old"] } }, {});
@@ -1512,7 +1512,7 @@ export default function (root) {
 
   s.test("a tap from a round that is over is not written here either", (a) => {
     const { L2, OLD, key } = withRehearsalRows(true);
-    const out = JSON.parse(call(L2, "handleTrip", { trip: "t-late", route: "North", driver: "Bro Adebola",
+    const out = JSON.parse(call(L2, "handleTrip", { trip: "t-late", route: "North", driver: "Bro Adrian",
       sunday: key, rehearsal: OLD - 60000, events: [{ event: "picked", stopId: "N02", at: Date.now() }] }).getContent());
     a.ok(out.ok && out.rehearsalOver, JSON.stringify(out));
     a.eq(liveIds(L2, "Trip Events").length, 4, "it was written");

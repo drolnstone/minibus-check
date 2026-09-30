@@ -90,11 +90,11 @@ export default async function (root) {
     await atTime("2026-09-27T10:10:00+01:00", async () => {
       const { env } = await fresh();
       const at = Date.now();
-      await mod.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola", reg: "YS70 PWE",
+      await mod.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian", reg: "YS70 PWE",
         sunday: KEY, events: [{ event: "start", at: at - 600000 }, { event: "picked", stopId: "N01", at: at - 60000 }] });
       const d = await J(await mod.handleDrain(env, { limit: 300 }));
       a.eq(d.trips.length, 2);
-      await mod.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola", sunday: KEY,
+      await mod.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian", sunday: KEY,
         events: [{ event: "undo", undoes: "picked", stopId: "N01", at: at }] });
       await mod.handleDrained(env, { claim: d.claim, trips: d.trips.map((t) => t.id) });
       const again = await J(await mod.handleDrain(env, { limit: 300 }));
@@ -173,9 +173,9 @@ export default async function (root) {
       const ctx = { waitUntil: (p) => waits.push(p) };
       const post = (body) => mod.default.fetch(new Request("https://worker.test/", {
         method: "POST", body: JSON.stringify(Object.assign({ token: "minibusapp" }, body)) }), env, ctx);
-      await post({ action: "trip", trip: { trip: "t1", route: "North", driver: "Bro Adebola", sunday: KEY,
+      await post({ action: "trip", trip: { trip: "t1", route: "North", driver: "Bro Adrian", sunday: KEY,
         events: [{ event: "start", at: Date.now() - 60000 }] } });
-      await post({ action: "check", check: { id: "chk1", reg: "YS70 PWE", level: "ok", driver: "Bro Adebola" } });
+      await post({ action: "check", check: { id: "chk1", reg: "YS70 PWE", level: "ok", driver: "Bro Adrian" } });
       a.eq(waits.length, 2);
       await Promise.all(waits);
     });
@@ -272,7 +272,7 @@ export default async function (root) {
       const { db, env } = await fresh();
       await passengerAt(db, "N02");
       /* Timetabled out of church at 09:52, out at 10:42. */
-      await mod.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola", sunday: KEY,
+      await mod.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian", sunday: KEY,
         events: [{ event: "start", at: Date.parse("2026-09-27T10:42:00+01:00") }] });
       const p = await mod.tripPayload(env, "me", "", "", "pid-me");
       a.eq(p.mine, "eta", "no estimate for a bus fifty minutes behind, got " + p.mine);
@@ -286,7 +286,7 @@ export default async function (root) {
       await passengerAt(db, "N02");
       await setting(db, "eta_rules", { dwellSeconds: 75, skipSaves: 0.8, speedMph: 18, maxSkipMinutes: 6,
                                        maxBehindMinutes: 45, keepMinutes: 15 });
-      await mod.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola", sunday: KEY,
+      await mod.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian", sunday: KEY,
         events: [{ event: "start", at: Date.parse("2026-09-27T10:42:00+01:00") }] });
       const p = await mod.tripPayload(env, "me", "", "", "pid-me");
       a.eq(p.mine, "wild");
@@ -299,7 +299,7 @@ export default async function (root) {
     await atTime("2026-09-27T10:34:00+01:00", async () => {
       const { db, env } = await fresh();
       await passengerAt(db, "N03");
-      await mod.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola", sunday: KEY,
+      await mod.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian", sunday: KEY,
         events: [{ event: "start", at: Date.parse("2026-09-27T09:55:00+01:00") },
                  { event: "picked", stopId: "N02", at: Date.parse("2026-09-27T10:20:00+01:00") }] });
       const p = await mod.tripPayload(env, "me", "", "", "pid-me");
@@ -348,13 +348,13 @@ export default async function (root) {
         { Route: "South", "Stop ID": "S03", Time: "10:37", Stop: "Sedley Street (St Andrew Road) bus stop, Breck Road", Postcode: "L4 2RB", Active: "YES", Type: "Pickup" },
         { Route: "South", "Stop ID": "S08", Time: "11:00", Stop: "Church, Chester Road", Postcode: "L6 4DY", Active: "YES", Type: "Arrival" }]),
       "Drivers": tab("Drivers", [
-        { Name: "Bro Asim", Role: "Coordinator", Active: "YES", "Primary order": 1, PIN: "1234", Email: "asim@b.c", Route: "North" },
-        { Name: "Bro Tunde", Role: "Driver", Active: "YES", "Primary order": 2, PIN: "4321", Email: "t@b.c", Route: "South" }]),
+        { Name: "Bro Arthur", Role: "Coordinator", Active: "YES", "Primary order": 1, PIN: "1234", Email: "arthur@b.c", Route: "North" },
+        { Name: "Bro Trevor", Role: "Driver", Active: "YES", "Primary order": 2, PIN: "4321", Email: "t@b.c", Route: "South" }]),
       "Buses": tab("Buses", [
         { Registration: "YS70 PWE", "Seats for passengers": 16, Active: "YES" },
         { Registration: "NH56 FWP", "Seats for passengers": 14, Active: "YES" }]),
-      "Rota": tab("Rota", [{ Sunday: SUN, "North Liverpool scheduled": "Bro Asim", "North bus": "YS70 PWE",
-        Status: "Confirmed", "South Liverpool scheduled": "Bro Tunde", "South bus": "NH56 FWP" }]),
+      "Rota": tab("Rota", [{ Sunday: SUN, "North Liverpool scheduled": "Bro Arthur", "North bus": "YS70 PWE",
+        Status: "Confirmed", "South Liverpool scheduled": "Bro Trevor", "South bus": "NH56 FWP" }]),
       "Checks": [TABS["Checks"]], "Defects": [TABS["Defects"]], "Trip Events": [TABS["Trip Events"]],
       "Bus Bookings": [TABS["Bus Bookings"]], "Rota Requests": [TABS["Rota Requests"]]
     };

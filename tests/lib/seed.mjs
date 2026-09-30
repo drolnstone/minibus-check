@@ -67,8 +67,8 @@ export async function seedSunday(db, key, over) {
   await db.prepare(
     "INSERT OR REPLACE INTO rota (sunday, north, north_cover, north_bus, south, south_cover, south_bus, status, notes) " +
     "VALUES (?,?,?,?,?,?,?,?,?)"
-  ).bind(key, o.north || "Bro Adebola", o.northCover || "", o.northBus || "YS70 PWE",
-         o.south || "Bro Tunde", o.southCover || "", o.southBus || "NH56 FWP",
+  ).bind(key, o.north || "Bro Adrian", o.northCover || "", o.northBus || "YS70 PWE",
+         o.south || "Bro Trevor", o.southCover || "", o.southBus || "NH56 FWP",
          o.status || "Confirmed", "").run();
 }
 

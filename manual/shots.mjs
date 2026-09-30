@@ -9,7 +9,7 @@
      MINIBUS_REAL=manual/build/real.json SHOTS=manual/build/shots \
        node manual/shots.mjs [scene,scene,prefix*]                          */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { phone as base, done, SAMPLE, realRows, KEY, REAL, ROOT, OUT } from "../tests/browser/lib.mjs";
+import { phone as base, done, SAMPLE, realRows, KEY, REAL, ROOT, OUT, onRoute } from "../tests/browser/lib.mjs";
 
 /* What the live server stamps on every answer: who to ring, from the Drivers
    tab, and whose titles make a coordinator, COORDINATOR_ROLES in the sheet's
@@ -25,7 +25,21 @@ const grab = (f, re) => (readFileSync(ROOT + "/" + f, "utf8").match(re) || [])[1
 const STAMPS = { sheet: grab("Code.gs", /SCRIPT_VERSION = "([^"]+)"/), server: grab("server/worker.js", /SCRIPT_VERSION = "([^"]+)"/) };
 mkdirSync(OUT, { recursive: true });
 const LEADS = [COORD.name].concat(REAL.drivers.filter(d => d.name !== COORD.name && LEAD.includes(d.role)).map(d => d.name));
-writeFileSync(OUT + "/cast.json", JSON.stringify({ coordinator: COORD, other: OTHER, leadRoles: LEAD, leads: LEADS,
+/* The drivers the text uses in its examples, from the download, so that this
+   repository names nobody: the Sunday's rota for North and South, and after
+   them the second and third on North and the third on South in the Drivers
+   tab's order (the third on each route is who took the last mileage reading,
+   in tests/browser/lib.mjs). kit.py puts them where the text says {NORTH},
+   {SOUTH}, {NORTH2}, {NORTH3} and {SOUTH3}. */
+const ON_KEY = REAL.rota.find(r => r.sunday === KEY) || {};
+const NAMES = { NORTH: ON_KEY.north || onRoute("North")[0], SOUTH: ON_KEY.south || onRoute("South")[0],
+                NORTH2: onRoute("North")[1], NORTH3: onRoute("North")[2], SOUTH3: onRoute("South")[2] };
+if (Object.values(NAMES).some(n => !n) || new Set(Object.values(NAMES)).size < 5) {
+  console.log("The manual's examples need five different drivers: the " + KEY + " rota for North and South, "
+    + "and three on each route in the Drivers tab. Got " + JSON.stringify(NAMES));
+  process.exit(1);
+}
+writeFileSync(OUT + "/cast.json", JSON.stringify({ coordinator: COORD, other: OTHER, leadRoles: LEAD, leads: LEADS, names: NAMES,
   app: grab("index.html", /APP_VERSION = "([^"]+)"/), server: STAMPS.server, sheet: STAMPS.sheet }, null, 1));
 
 /* London time and English dates whatever this machine is set to, and a live
@@ -583,19 +597,19 @@ scene("run-noname", async () => {
 });
 
 scene("other-route", async () => {
-  const south = { trip: "t-s", route: "South", reg: "YS70 PWE", driver: "Bro Tunde", started: T("10:16"), ended: 0,
+  const south = { trip: "t-s", route: "South", reg: "YS70 PWE", driver: NAMES.SOUTH, started: T("10:16"), ended: 0,
     served: { S01: { at: T("10:25"), event: "pickup" } }, lastStop: "Dewsbury Road by Lynholme Road", lastAt: T("10:25"), offset: 1 };
   const me = await phone({ world: RUN({ trips: { North: null, South: south },
     etas: { North: {}, South: { S02: T("10:29"), S03: T("10:33"), S04: T("10:36"), S05: T("10:39"), S06: T("10:45"), S07: T("10:48"), S08: T("10:51") } } }),
     clock: "2026-09-27T10:27:00+01:00", pushOn: true });
   await hub(me); await me.toStops(); await me.close();
   await route(me, "South"); await me.wait(1500);
-  await me.shot("other-route", { marks: [ { n: 1, sel: TXT, text: "Bro Tunde is out" } ] });
+  await me.shot("other-route", { marks: [ { n: 1, sel: TXT, text: NAMES.SOUTH + " is out" } ] });
   return me;
 });
 
 scene("cover", async () => {
-  const rows = realRows(rs => { rs.find(r => r.date === KEY).primary = "Bro Adebola"; return rs; });
+  const rows = realRows(rs => { rs.find(r => r.date === KEY).primary = NAMES.NORTH; return rs; });
   const me = await phone({ world: RUN({ rows }), clock: "2026-09-27T09:52:00+01:00", pushOn: true });
   await hub(me); await me.toStops(); await me.close();
   await me.shot("cover-offer", { scrollTo: "#tripCover", top: false, marks: [ { n: 1, sel: "#tripCover" } ] });
@@ -620,9 +634,9 @@ scene("rehearsal", async () => {
    to show what a card can say. Only the Sundays he is on are invented. */
 const ROTA = () => realRows(rs => {
   const at = (d) => rs.find(r => r.date === d);
-  let r = at("2026-10-11"); r.primary2 = "Bro Adesina"; r.actual2 = SAMPLE;
+  let r = at("2026-10-11"); r.primary2 = NAMES.SOUTH3; r.actual2 = SAMPLE;
   r = at("2026-10-25"); r.primary = SAMPLE; r.locked = true; r.lockNote = "Harvest Sunday";
-  r = at("2026-11-01"); r.actual = SAMPLE; r.swaps = [{ a: SAMPLE, b: "Bro Abiodun" }];
+  r = at("2026-11-01"); r.actual = SAMPLE; r.swaps = [{ a: SAMPLE, b: NAMES.NORTH2 }];
   r = at("2026-11-22"); r.primary = SAMPLE;
   r.requests = [{ driver: SAMPLE, type: "Holiday / planned leave", status: "Pending" }]; r.request = r.requests[0]; r.status = "Change requested";
   return rs;
@@ -650,7 +664,7 @@ scene("rota-request", async () => {
   await tapSel(me, '[data-rota-request="2026-09-27"]'); await me.wait(600);
   await me.shot("rota-request");
   await me.pg.selectOption("#rotaReqType", { label: "Request a swap" }).catch(() => {}); await me.wait(400);
-  await me.pg.selectOption("#rotaSwapWith", { label: "Bro Moses" }).catch(() => {}); await me.wait(400);
+  await me.pg.selectOption("#rotaSwapWith", { label: NAMES.NORTH3 }).catch(() => {}); await me.wait(400);
   await me.pg.evaluate(() => { const s = document.getElementById("rotaSwapDate"); if (s && s.options.length > 1) { s.selectedIndex = 1; s.dispatchEvent(new Event("change", { bubbles: true })); } });
   await me.wait(300);
   await me.pg.evaluate(() => { const c = document.getElementById("rotaSwapAgreed"); if (c && !c.checked) c.click(); }); await me.wait(300);
