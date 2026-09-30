@@ -256,7 +256,7 @@ export default async function (root) {
     const env = makeEnv(db);
     await seedSunday(db, key);
     await W.handleTrip(env, {
-      trip: "t1", route: "North", driver: "Bro Adebola", reg: "YS70 PWE", sunday: key,
+      trip: "t1", route: "North", driver: "Bro Adrian", reg: "YS70 PWE", sunday: key,
       events: [{ event: "start", at: Date.now() - 600000 },
                { event: "picked", stopId: "N03", at: Date.now() - 60000 }]
     });

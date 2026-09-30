@@ -105,7 +105,7 @@ function wrap(db) {
 /* THE DATABASE AS IT ACTUALLY IS ON THE DAY, which is not what schema.sql
    describes.
 
-   schema.sql is what you get building a database from nothing. Asim's D1 was
+   schema.sql is what you get building a database from nothing. The live D1 was
    built months ago and has been ALTERed by the Worker ever since, one column
    at a time, on first use. Every test here was built from the file, so every
    test had the new columns already and the migration path had nothing to

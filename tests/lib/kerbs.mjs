@@ -37,7 +37,7 @@ export const KERBS = {
   /* FOUNTAINS ROAD IS MISSING ON PURPOSE, and it is the reason the check
      below exists.
 
-     It was supplied as 53.432320, -2.984024 and Asim asked whether that was
+     It was supplied as 53.432320, -2.984024 and the coordinator asked whether that was
      right. It is not. Two things say so and they agree:
 
        The latitude is Stanley Park's. N08 is 53.432312 — EIGHT METRES away

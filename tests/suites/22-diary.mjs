@@ -89,7 +89,7 @@ export default async function (root) {
       if (stage >= 2) ev.push({ event: "picked", stopId: "N02", at: t0 + 1380000 });
       if (stage >= 3) ev.push({ event: "end", at: t0 + 4080000 });
       if (ev.length) await W.handleTrip(env, { trip: "t1", route: "North",
-        driver: "Bro Adebola", reg: "YS70 PWE", sunday: TODAY, events: ev });
+        driver: "Bro Adrian", reg: "YS70 PWE", sunday: TODAY, events: ev });
 
       const out = await W.pushWhat(env, "https://push.example/p");
       return { title: String(out.title || ""), body: String(out.body || ""),
@@ -278,12 +278,12 @@ export default async function (root) {
     return await atTime(when, async () => {
       const db = makeDB(join(root, "server", "schema.sql"));
       const env = makeEnv(db);
-      /* SOUTH IS NAMED EXPLICITLY. seedSunday defaults it to Bro Tunde, so the
+      /* SOUTH IS NAMED EXPLICITLY. seedSunday defaults it to Bro Trevor, so the
          "not on the rota" and "unnamed cover" columns had him rostered on the
          other route without meaning to — and the app was quite right to tell
          him he was driving. Two of my own assertions failed on that before I
          looked at what the fixture actually said. */
-      await seedSunday(db, TODAY, { north: "Bro Adebola", south: o.south || "Bro Kayode" });
+      await seedSunday(db, TODAY, { north: "Bro Adrian", south: o.south || "Bro Keith" });
       await W.cachePut(env, "passenger_rules",
         { resendMinutes: 3, morningMessage: true, quietFrom: 21, quietTo: 8 }).run();
       const ep = "https://push.example/drv";
@@ -295,10 +295,10 @@ export default async function (root) {
       if (stage >= 1) ev.push({ event: "start", at: t0 });
       if (stage >= 2) ev.push({ event: "end", at: t0 + 4080000 });
       if (ev.length) await W.handleTrip(env, { trip: "t1", route: "North",
-        driver: o.drove || "Bro Adebola", reg: "YS70 PWE", sunday: TODAY, events: ev });
+        driver: o.drove || "Bro Adrian", reg: "YS70 PWE", sunday: TODAY, events: ev });
       if (o.standDown) {
         await db.prepare("UPDATE rota SET north=?, north_cover='' WHERE sunday=?")
-          .bind("Bro Tunde", TODAY).run();
+          .bind("Bro Trevor", TODAY).run();
       }
       const out = await W.pushWhat(env, ep);
       return { title: String(out.title || ""), body: String(out.body || ""),
@@ -312,7 +312,7 @@ export default async function (root) {
   };
 
   s.test("the rostered driver is told his morning, and only on the morning", async (a) => {
-    const d = await drvDay({ who: "Bro Adebola" });
+    const d = await drvDay({ who: "Bro Adrian" });
     for (const h of ["Fri 14:00", "Sat 20:00"]) {
       a.hasnt(d[h].title, "driving today", h + " woke him two days early: " + d[h].title);
     }
@@ -334,7 +334,7 @@ export default async function (root) {
        fixture have him out on the road, where "your run is running" is simply
        true — my first version asserted across all of them and failed on a
        sentence that was correct. */
-    const d = await drvDay({ who: "Bro Adebola", standDown: true });
+    const d = await drvDay({ who: "Bro Adrian", standDown: true });
     for (const h of ["Fri 14:00", "Sat 20:00", "07:00", "08:00 duty window",
                      "09:45", "10:05 13 min late"]) {
       const r = d[h];
@@ -357,7 +357,7 @@ export default async function (root) {
        Sunday. He is as much that run's driver as anybody, and the one who has
        to close it. Gating on the rota alone would have silenced exactly the man
        holding the keys. */
-    const d = await drvDay({ who: "Bro Tunde", drove: "Bro Tunde" });
+    const d = await drvDay({ who: "Bro Trevor", drove: "Bro Trevor" });
     a.has(d["11:20 past due"].title, "End the trip",
           "the man driving was told nothing: " + d["11:20 past due"].title);
     a.hasnt(d["08:00 duty window"].title, "driving today",

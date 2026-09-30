@@ -228,7 +228,7 @@ Drivers tab's Order column:
 
     Still to do:
 
-      •  No alerts yet for: Bro Moses, Bro Adesina.
+      •  No alerts yet for: Bro Martin, Bro Alfred.
          Open the app on that phone and tap Turn on.
 
     Fine:
@@ -248,7 +248,7 @@ tab, and `push_subs` is written when somebody taps Turn on.
 `worker.js` is one SQL fragment used by both `wakeDrivers`, which sends the
 alert, and `alertRoll`, which reports on it. For one afternoon the report had a
 clever join of its own and the two disagreed on both the comparison and the
-column: a handset registered as `bro asim` satisfied the report and was
+column: a handset registered as `bro arthur` satisfied the report and was
 invisible to the only query that would ever have woken it, so the report
 certified the exact silence it was built to catch. It now loops one driver at a
 time. Nine small indexed lookups off a menu nobody runs in a loop, and being
@@ -2061,7 +2061,7 @@ itself**. A blank rota line counts as cover too.
 
 It fills the cell **only when the cell is blank**, and that rule is the whole
 of it. A name a person typed is a decision; an observation is not. If you wrote
-Bro Moses and Bro Calvin actually drove, the useful fact is that the two
+Bro Martin and Bro Cedric actually drove, the useful fact is that the two
 disagree, and an app that rewrote the column to match itself would destroy the
 only evidence of it. So a filled cell is never touched, whoever filled it and
 whoever drove. The Rota keeps saying one name, Trip Events keeps saying the

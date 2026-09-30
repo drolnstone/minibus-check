@@ -59,8 +59,10 @@ The PDF is `manual/build/minibus-driver-manual-<app version>.pdf`, about
   sentence from parts, so read the code and add an `ACCEPT` line saying where.
 - **The pictures are staged on Sunday 27 September 2026**, the `KEY` in
   `tests/browser/lib.mjs`. `export.py` stops if the Rota tab no longer has
-  that Sunday. The example names in the text (Bro Adebola on North, Bro Tunde
-  on South) are that Sunday's rota.
+  that Sunday. The example drivers in the text are `{NORTH}` and `{SOUTH}`
+  (that Sunday's rota) and `{NORTH2}`, `{NORTH3}` and `{SOUTH3}` (by the
+  Drivers tab's order), filled in from the download like `{COORD}`, so the
+  repository names nobody. `shots.mjs` says who each is.
 - **The coordinator titles** are `COORDINATOR_ROLES` in the sheet's Script
   Properties, which are not in the download. `shots.mjs` assumes Coordinator,
   Minister in Charge and Assistant Coordinator; set `COORDINATOR_ROLES` in the

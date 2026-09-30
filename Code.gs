@@ -3612,7 +3612,7 @@ function todaysCheckRow(sh, c, reg) {
    FILLED ONLY WHEN THE CELL IS BLANK, and that is the rule that matters.
 
    A name a person typed is a decision. An observation is not. If the
-   coordinator wrote Bro Moses and Bro Calvin actually drove, the useful fact
+   coordinator wrote Bro Martin and Bro Cedric actually drove, the useful fact
    is that the two disagree, and an app that quietly rewrote the column to
    match itself would destroy the only evidence of it. So a filled cell is
    never touched, whoever filled it and whoever drove. The disagreement stays
@@ -4172,15 +4172,15 @@ function bumpRotaVersion() {
 /**
  * Pulls swap pairings out of a Notes cell.
  *
- * applySwap writes "Swapped: Bro Moses in for Bro Tunde (with 2026-09-06)".
- * This reads them back so a card can say "Swapped with Bro Moses" under the
+ * applySwap writes "Swapped: Bro Martin in for Bro Trevor (with 2026-09-06)".
+ * This reads them back so a card can say "Swapped with Bro Martin" under the
  * right name. Anything else in Notes is left alone.
  */
 /**
  * Whether a Sunday is protected, and why.
  *
  * Written by the coordinator in the Notes column as
- *   PROTECTED: first South run, Tunde leads
+ *   PROTECTED: first South run, Trevor leads
  * The reason after the colon is optional but worth writing, because it is
  * shown to a driver who tries to swap and would otherwise just be refused.
  *

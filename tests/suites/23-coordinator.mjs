@@ -57,25 +57,25 @@ export default async function (root) {
         { Route: "North", "Stop ID": "N09", Time: "11:00", Stop: "Church, Chester Road",
           Postcode: "L6 4DY", Active: "YES", Type: "Arrival" }]),
       "Drivers": tab("Drivers", [
-        { Name: "Bro Asim", Role: "Coordinator", Active: "YES", "Primary order": 1,
+        { Name: "Bro Arthur", Role: "Coordinator", Active: "YES", "Primary order": 1,
           PIN: "1234", Email: "coord@b.c", Route: "North" },
-        { Name: "Bro Adebola", Role: "Driver", Active: "YES", "Primary order": 2,
+        { Name: "Bro Adrian", Role: "Driver", Active: "YES", "Primary order": 2,
           PIN: "4321", Email: "ade@b.c", Route: "North" },
-        { Name: "Bro Tunde", Role: "Driver", Active: "YES", "Primary order": 3,
-          PIN: "8765", Email: "tunde@b.c", Route: "South" }]),
+        { Name: "Bro Trevor", Role: "Driver", Active: "YES", "Primary order": 3,
+          PIN: "8765", Email: "trevor@b.c", Route: "South" }]),
       "Buses": tab("Buses", [
         { Registration: "YS70 PWE", "Seats for passengers": 16, Active: "YES" },
         { Registration: "NH56 FWP", "Seats for passengers": 14, Active: "YES" }]),
       "Rota": tab("Rota", [
-        { Sunday: SUN, "North Liverpool scheduled": "Bro Adebola", "North bus": "NH56 FWP",
-          Status: "Confirmed", "South Liverpool scheduled": "Bro Tunde",
+        { Sunday: SUN, "North Liverpool scheduled": "Bro Adrian", "North bus": "NH56 FWP",
+          Status: "Confirmed", "South Liverpool scheduled": "Bro Trevor",
           "South bus": "YS70 PWE" }]),
       "Checks": tab("Checks", [
         { Received: new Date(2026, 8, 27, 9, 30), Date: new Date(2026, 8, 27), Time: "09:30",
-          "Check ID": "old-1", Registration: "YS70 PWE", Driver: "Bro Adebola",
+          "Check ID": "old-1", Registration: "YS70 PWE", Driver: "Bro Adrian",
           Mileage: 48000, Outcome: "Cleared" },
         { Received: new Date(2026, 8, 27, 9, 35), Date: new Date(2026, 8, 27), Time: "09:35",
-          "Check ID": "old-2", Registration: "NH56 FWP", Driver: "Bro Tunde",
+          "Check ID": "old-2", Registration: "NH56 FWP", Driver: "Bro Trevor",
           Mileage: 31000, Outcome: "Cleared" }]),
       "Defects": [TABS["Defects"]],
       "Trip Events": [TABS["Trip Events"]],
@@ -104,9 +104,9 @@ export default async function (root) {
     .replace(/\s+/g, " ").trim();
 
   const CHECK = {
-    id: "chk-1", reg: "YS70 PWE", vehicle: "Ford Transit", driver: "Bro Adebola",
+    id: "chk-1", reg: "YS70 PWE", vehicle: "Ford Transit", driver: "Bro Adrian",
     role: "Driver", date: "4 October 2026", time: "09:35", miles: 48213,
-    sign: "Bro Adebola", advisories: [], jobs: []
+    sign: "Bro Adrian", advisories: [], jobs: []
   };
 
   /* ---- the ones with a clock in them ----------------------------------- */
@@ -119,7 +119,7 @@ export default async function (root) {
        trigger actually fires, which is eight in the morning. */
     const week = await atTime(WHEN.weekBefore, () => {
       const L = sheet();
-      call(L, "sendDutyEmail", "ade@b.c", "Bro Adebola", SUN, 7, "", "North Liverpool", "NH56 FWP");
+      call(L, "sendDutyEmail", "ade@b.c", "Bro Adrian", SUN, 7, "", "North Liverpool", "NH56 FWP");
       return L.gas.mail[0];
     });
     a.has(both(week), "in a week", "seven days out: " + both(week).slice(0, 90));
@@ -127,7 +127,7 @@ export default async function (root) {
 
     const two = await atTime(WHEN.twoDays, () => {
       const L = sheet();
-      call(L, "sendDutyEmail", "ade@b.c", "Bro Adebola", SUN, 2, "", "North Liverpool", "NH56 FWP");
+      call(L, "sendDutyEmail", "ade@b.c", "Bro Adrian", SUN, 2, "", "North Liverpool", "NH56 FWP");
       return L.gas.mail[0];
     });
     a.has(both(two), "in 2 days", "two days out: " + both(two).slice(0, 90));
@@ -139,7 +139,7 @@ export default async function (root) {
        man who reads it on the wrong day arrives on the wrong day. */
     const m = await atTime(WHEN.weekBefore, () => {
       const L = sheet();
-      call(L, "sendDutyEmail", "ade@b.c", "Bro Adebola", SUN, 7, "", "North Liverpool", "NH56 FWP");
+      call(L, "sendDutyEmail", "ade@b.c", "Bro Adrian", SUN, 7, "", "North Liverpool", "NH56 FWP");
       return L.gas.mail[0];
     });
     a.has(both(m), "4 October 2026", "no date at all: " + both(m).slice(0, 120));
@@ -213,10 +213,10 @@ export default async function (root) {
   s.test("and so does the rota request, and the authorisation", async (a) => {
     for (const [what, fire] of [
       ["a rota request", (L) => call(L, "notifyRotaRequest",
-        { id: "REQ-1", date: SUN, driver: "Bro Adebola", type: "Request cover",
+        { id: "REQ-1", date: SUN, driver: "Bro Adrian", type: "Request cover",
           reason: "away that weekend", swapWith: "", swapDate: "", agreed: false }, SUN)],
       ["an authorisation", (L) => call(L, "notifyAuthorised",
-        { reg: "YS70 PWE", by: "Bro Asim", inspector: "Bro Adebola",
+        { reg: "YS70 PWE", by: "Bro Arthur", inspector: "Bro Adrian",
           at: Date.parse("2026-10-04T09:40:00+01:00"), via: "app" })]
     ]) {
       const seen = [];
@@ -244,7 +244,7 @@ export default async function (root) {
     await atTime(WHEN.twoDays, () => {
       const L = sheet({
         "Rota Requests": tab("Rota Requests", [
-          { Received: new Date(), "Request ID": "REQ-1", Sunday: SUN, Driver: "Bro Adebola",
+          { Received: new Date(), "Request ID": "REQ-1", Sunday: SUN, Driver: "Bro Adrian",
             Type: "Request cover", Reason: "away", Status: "Pending" }])
       });
       const sh = L.ctx.SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Rota Requests");
@@ -264,9 +264,9 @@ export default async function (root) {
     await atTime(WHEN.twoDays, () => {
       const L = sheet({
         "Rota Requests": tab("Rota Requests", [
-          { Received: new Date(), "Request ID": "REQ-1", Sunday: SUN, Driver: "Bro Adebola",
+          { Received: new Date(), "Request ID": "REQ-1", Sunday: SUN, Driver: "Bro Adrian",
             Type: "Request cover", Reason: "away", Status: "Pending",
-            "Replacement assigned": "Bro Tunde" }])
+            "Replacement assigned": "Bro Trevor" }])
       });
       const sh = L.ctx.SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Rota Requests");
       const qc = call(L, "requestCols", sh);

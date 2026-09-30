@@ -51,8 +51,8 @@ export default async function (root) {
       "INSERT INTO bookings (sunday, route, stop_id, stop, seats, device, pid, phone, status, received, synced) " +
       "VALUES (?, 'North', 'N01', 'Scarisbrick Dr', 2, 'd-real', 'p1', '07700900001', 'Booked', ?, 1)"
     ).bind(KEY, ms(WED) - 86400000).run();
-    for (const d of [["Bro Asim", "Coordinator", "North", 1], ["Bro Adebola", "Driver", "North", 2],
-                     ["Bro Tunde", "Driver", "South", 3]]) {
+    for (const d of [["Bro Arthur", "Coordinator", "North", 1], ["Bro Adrian", "Driver", "North", 2],
+                     ["Bro Trevor", "Driver", "South", 3]]) {
       await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,?,1,?)")
         .bind(d[0], d[1], d[2], d[3], await W.pinHashOf(env, d[0], PIN)).run();
     }
@@ -64,11 +64,11 @@ export default async function (root) {
     method: "POST", body: JSON.stringify(Object.assign({ token: "minibusapp" }, body)) }), env, {});
   let n = 0;
   const act = async (env, a, who, pin) => J(await post(env, {
-    action: "coord", who: who || "Bro Asim", pin: pin || PIN, op: "act",
+    action: "coord", who: who || "Bro Arthur", pin: pin || PIN, op: "act",
     act: Object.assign({ id: "act-" + (++n) + "-reh", kind: "rehearsal" }, a) }));
-  const load = async (env) => J(await post(env, { action: "coord", who: "Bro Asim", pin: PIN, op: "load" }));
+  const load = async (env) => J(await post(env, { action: "coord", who: "Bro Arthur", pin: PIN, op: "load" }));
   const tap = async (env, o) => J(await W.handleTrip(env, Object.assign(
-    { route: "North", driver: "Bro Adebola", reg: "YS70 PWE", sunday: KEY }, o)));
+    { route: "North", driver: "Bro Adrian", reg: "YS70 PWE", sunday: KEY }, o)));
 
   const seeds = (db) => db._rows("SELECT route, stop_id, seats, device FROM bookings WHERE status='Rehearsal' ORDER BY id");
   const flag = (db) => db._rows("SELECT v FROM settings WHERE k='rehearsal'");
@@ -311,7 +311,7 @@ export default async function (root) {
     const { db, env } = await fresh();
     const put = (trip, event, stop, at, status) => db.prepare(
       "INSERT INTO trip_events (trip, sunday, route, driver, event, stop_id, happened, status, logged, synced) " +
-      "VALUES (?, ?, 'North', 'Bro Adebola', ?, ?, ?, ?, ?, 1)").bind(trip, KEY, event, stop, at, status, at).run();
+      "VALUES (?, ?, 'North', 'Bro Adrian', ?, ?, ?, ?, ?, 1)").bind(trip, KEY, event, stop, at, status, at).run();
     await put("REAL-1", "start", "", ms("2026-09-30T19:00:00+01:00"), "Logged");
     await put("REAL-1", "picked", "N01", ms("2026-09-30T19:10:00+01:00"), "Logged");
     await put("REAL-1", "end", "", ms("2026-09-30T20:30:00+01:00"), "Rehearsal");
@@ -387,7 +387,7 @@ export default async function (root) {
     const { db, env } = await fresh();
     /* A real run on the same Sunday, over before the rehearsal began, which
        must survive everything. */
-    await atTime(WED, () => tap(env, { trip: "real-9", rehearsal: 0, route: "South", driver: "Bro Tunde",
+    await atTime(WED, () => tap(env, { trip: "real-9", rehearsal: 0, route: "South", driver: "Bro Trevor",
       events: [{ event: "start", at: ms(WED) - 1200000 }, { event: "end", at: ms(WED) - 600000 }] }));
     await atTime(WED, () => act(env, { op: "start", shape: "normal" }));
     await atTime(WED_ON, () => tap(env, { trip: "reh-9", rehearsal: ms(WED), events: [
@@ -420,7 +420,7 @@ export default async function (root) {
     const end = notes(db).filter((x) => x.body.op === "end");
     a.eq(end.length, 1, "got " + JSON.stringify(notes(db).map((x) => x.body.op)));
     a.same(end[0].body.trips, ["reh-9"]);
-    a.eq(end[0].by_name, "Bro Asim");
+    a.eq(end[0].by_name, "Bro Arthur");
     a.ok(Number(end[0].synced) < 1, "it is not waiting for the sheet");
   });
 
@@ -533,7 +533,7 @@ export default async function (root) {
     await atTime(WED_ON, () => act(env, { op: "end" }));
     await atTime(SUN_RUN, () => tap(env, { trip: "sun-new", rehearsal: 0, events: [
       { event: "start", at: ms("2026-10-04T09:52:00+01:00") }, { event: "picked", stopId: "N01", at: ms(SUN_RUN) }] }));
-    await atTime(SUN_RUN, () => tap(env, { trip: "sun-old", route: "South", driver: "Bro Tunde", events: [
+    await atTime(SUN_RUN, () => tap(env, { trip: "sun-old", route: "South", driver: "Bro Trevor", events: [
       { event: "start", at: ms("2026-10-04T10:16:00+01:00") }] }));
     const rows = db._rows("SELECT trip, status FROM trip_events WHERE trip IN ('sun-new','sun-old')");
     a.eq(rows.length, 3, "a real tap was thrown away: " + JSON.stringify(rows));
@@ -547,12 +547,12 @@ export default async function (root) {
     const { db, env } = await fresh();
     await db.prepare(
       "INSERT INTO push_subs (endpoint, p256dh, auth, role, ref, pid, driver, route, made, seen, fails, last) " +
-      "VALUES ('https://push.example/d','p','a','driver','','','Bro Adebola','North',?,0,0,'')").bind(Date.now()).run();
+      "VALUES ('https://push.example/d','p','a','driver','','','Bro Adrian','North',?,0,0,'')").bind(Date.now()).run();
     await atTime(SUN_RUN, () => tap(env, { trip: "real-sun", rehearsal: 0, events: [
       { event: "start", at: ms("2026-10-04T09:52:00+01:00") },
       { event: "end", at: ms("2026-10-04T11:05:00+01:00") }] }));
     await atTime("2026-10-04T12:30:00+01:00", () => act(env, { op: "start", shape: "normal" }));
-    await atTime("2026-10-04T12:40:00+01:00", () => tap(env, { trip: "reh-sun", driver: "Bro Asim",
+    await atTime("2026-10-04T12:40:00+01:00", () => tap(env, { trip: "reh-sun", driver: "Bro Arthur",
       rehearsal: ms("2026-10-04T12:30:00+01:00"), events: [{ event: "start", at: ms("2026-10-04T12:40:00+01:00") }] }));
     net.reset();
     const sent = await atTime("2026-10-04T13:20:00+01:00", () => W.wakeDrivers(env));
@@ -565,7 +565,7 @@ export default async function (root) {
     const { db, env } = await fresh();
     const put = (trip, sunday, at) => db.prepare(
       "INSERT INTO trip_events (trip, sunday, route, driver, event, stop_id, happened, status, logged, synced) " +
-      "VALUES (?, ?, 'North', 'Bro Adebola', 'picked', 'N02', ?, 'Rehearsal', ?, 1)").bind(trip, sunday, at, at).run();
+      "VALUES (?, ?, 'North', 'Bro Adrian', 'picked', 'N02', ?, 'Rehearsal', ?, 1)").bind(trip, sunday, at, at).run();
     await put("then-real", "2026-09-27", ms("2026-09-27T10:12:00+01:00"));
     await put("then-test", "2026-09-27", ms("2026-09-23T21:40:00+01:00"));
     await atTime(WED, () => act(env, { op: "start", shape: "normal" }));
@@ -582,7 +582,7 @@ export default async function (root) {
     await db.prepare("INSERT INTO bookings (sunday, route, stop_id, stop, seats, device, status, received, synced) " +
       "VALUES (?, 'North', 'N02', 'Grace Rd', 3, 'rehearsal-north-0-x', 'Rehearsal', 1, 1)").bind(KEY).run();
     await db.prepare("INSERT INTO trip_events (trip, sunday, route, driver, event, happened, status, logged, synced) " +
-      "VALUES ('old-reh', ?, 'North', 'Bro Adebola', 'start', 1, 'Rehearsal', 1, 1)").bind("2026-09-20").run();
+      "VALUES ('old-reh', ?, 'North', 'Bro Adrian', 'start', 1, 'Rehearsal', 1, 1)").bind("2026-09-20").run();
     const out = await atTime(WED, () => act(env, { op: "end" }));
     a.ok(out.ok, JSON.stringify(out));
     a.eq(out.action.words, "No rehearsal was running. Anything left from one was cleared.");
@@ -625,10 +625,10 @@ export default async function (root) {
 
   s.test("only a coordinator, with his PIN, can start or end one", async (a) => {
     const { db, env } = await fresh();
-    const driver = await atTime(WED, () => act(env, { op: "start" }, "Bro Adebola"));
+    const driver = await atTime(WED, () => act(env, { op: "start" }, "Bro Adrian"));
     a.eq(driver.ok, false);
     a.eq(driver.error, "not authorised");
-    const bad = await atTime(WED, () => act(env, { op: "start" }, "Bro Asim", "9999"));
+    const bad = await atTime(WED, () => act(env, { op: "start" }, "Bro Arthur", "9999"));
     a.eq(bad.ok, false);
     a.eq(bad.error, "bad pin");
     a.eq(flag(db).length, 0);
@@ -637,7 +637,7 @@ export default async function (root) {
   s.test("the same tap of Start sent twice starts one rehearsal", async (a) => {
     const { db, env } = await fresh();
     const one = { id: "act-twice-reh", kind: "rehearsal", op: "start", shape: "normal" };
-    const send = () => post(env, { action: "coord", who: "Bro Asim", pin: PIN, op: "act", act: one }).then(J);
+    const send = () => post(env, { action: "coord", who: "Bro Arthur", pin: PIN, op: "act", act: one }).then(J);
     await atTime(WED, send);
     const first = seeds(db).map((r) => r.device).join();
     const again = await atTime(WED_ON, send);
@@ -721,9 +721,9 @@ export default async function (root) {
        night: this server did not know a rehearsal was on. */
     await atTime(when || WED, async () => {
       const at = Date.now() - 3600000;
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "NH56 FWP", sunday: key, events: [{ event: "start", at: at }] });
-      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adebola",
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
         reg: "NH56 FWP", sunday: key,
         events: [{ event: "picked", stopId: "N02", at: at + 600000 },
                  { event: "end", at: at + 1500000 }] });
@@ -788,7 +788,7 @@ export default async function (root) {
     /* Clearing the morning out from under a driver between two stops would
        leave him tapping into nothing. */
     const { db, env } = await fresh();
-    await atTime(WED, () => W.handleTrip(env, { trip: "t9", route: "North", driver: "Bro Adebola",
+    await atTime(WED, () => W.handleTrip(env, { trip: "t9", route: "North", driver: "Bro Adrian",
       reg: "NH56 FWP", sunday: THIS, events: [{ event: "start", at: Date.now() - 600000 }] }));
 
     const out = await clear(env, { sunday: THIS });

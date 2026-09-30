@@ -39,8 +39,8 @@ const TODAY = W.runSunday();
 const NEXT = W.keyAddWeeks(TODAY, 1);
 const LAST = W.keyAddWeeks(TODAY, -1);
 const PIN = "1234";
-const NP = ["Bro Adebola", "Bro Abiodun", "Bro Moses", "Bro Asim"], NA = "2026-08-02";
-const SP = ["Bro Tunde", "Pst Obamakinwa", "Bro Adesina"], SA = "2026-08-16";
+const NP = ["Bro Adrian", "Bro Abel", "Bro Martin", "Bro Arthur"], NA = "2026-08-02";
+const SP = ["Bro Trevor", "Pst Oliver", "Bro Alfred"], SA = "2026-08-16";
 const turn = (key, pat, anchor) => {
   const w = Math.round((Date.parse(key + "T12:00:00Z") - Date.parse(anchor + "T12:00:00Z")) / (7 * 86400000));
   return pat[((w % pat.length) + pat.length) % pat.length];
@@ -112,7 +112,7 @@ async function world() {
                  status: "Pending", received: Date.now() - 2 * 86400000, decidedOn: 0, replacement: "" },
                { id: "rq-real-0", sunday: TODAY, driver: southOf(TODAY), type: "Request cover", reason: "Working",
                  status: "Approved", received: Date.now() - 9 * 86400000, decidedOn: Date.now() - 6 * 86400000,
-                 replacement: "Bro Adesina" }],
+                 replacement: "Bro Alfred" }],
     defects }).run();
 
   const book = async (key, stopId, seats, phone) => {
@@ -198,7 +198,7 @@ async function page(env, o) {
     await loc.click(); await pg.waitForTimeout(250);
   };
   me.signIn = async (pin) => {
-    await pg.selectOption("#signName", "Bro Asim");
+    await pg.selectOption("#signName", "Bro Arthur");
     await pg.fill("#signPin", "");
     await pg.type("#signPin", pin || PIN, { delay: 30 });
     await pg.waitForTimeout(1300);
@@ -366,7 +366,7 @@ if (want("C7")) {
   await me.shot("C7-bookings-after");
   check("C7", "bookings show the numbers to ring; one is cancelled and one made for somebody who rang",
         tel.indexOf("tel:07700900123") !== -1 && left === 1 && made && made.seats === 2 && made.phone === "07700900999" &&
-        /Bro Asim/.test(made.note) && /By phone/i.test(after) && label === "Book 2 seats" && oneLine,
+        /Bro Arthur/.test(made.note) && /By phone/i.test(after) && label === "Book 2 seats" && oneLine,
         "tel " + JSON.stringify(tel) + ", cancelled " + left + ", made " + JSON.stringify(made) + ", label '" + label + "'");
   check("C7a", "the booked stops come first, the empty ones a tap away, and the book button at the top",
         layout.bookFirst && layout.empty === 0 && layout.shown === 4 && /stops with nobody booked/.test(layout.more) &&
@@ -494,7 +494,7 @@ if (want("C12")) {
 if (want("C13")) {
   const day = W.londonKey(new Date());
   await db.prepare("INSERT OR REPLACE INTO checks_today (reg, day, state, at, driver, check_id) VALUES (?,?,?,?,?,?)")
-    .bind("YS70 PWE", day, "stopped", Date.now() - 600000, "Bro Tunde", "chk-today").run();
+    .bind("YS70 PWE", day, "stopped", Date.now() - 600000, "Bro Trevor", "chk-today").run();
   await me.pg.evaluate(() => { location.hash = "home"; refresh(); });
   await me.wait(900);
   const home = await me.text("#homeBody");
@@ -525,21 +525,21 @@ if (want("C14")) {
 
 /* C15 — from the driver app with the PIN it checked: no second PIN */
 if (want("C15")) {
-  const p = await page(env, { hand: { name: "Bro Asim", pin: PIN } });
+  const p = await page(env, { hand: { name: "Bro Arthur", pin: PIN } });
   await p.wait(1500);
   const home = await p.on("home");
   const left = await p.pg.evaluate(() => { try { return sessionStorage.getItem("coord.hand.v1"); } catch (e) { return "unreadable"; } });
   const who = await p.text("#barSub");
   await p.shot("C15-carried");
   check("C15", "opened from the driver app with the PIN checked there, it goes straight to the first screen and keeps no copy",
-        home && left === null && who === "Bro Asim" && !p.errs.length,
+        home && left === null && who === "Bro Arthur" && !p.errs.length,
         "home " + home + ", left " + left + ", bar '" + who + "', errors " + JSON.stringify(p.errs));
   await p.ctx.close();
 }
 
 /* C16 — a stale copy is not used; the PIN box is where the cursor is */
 if (want("C16")) {
-  const p = await page(env, { name: "Bro Asim", hand: { name: "Bro Asim", pin: PIN, ageMs: 120000 } });
+  const p = await page(env, { name: "Bro Arthur", hand: { name: "Bro Arthur", pin: PIN, ageMs: 120000 } });
   await p.wait(900);
   const sign = await p.on("sign");
   const picked = await p.pg.$eval("#signName", (el) => el.value);
@@ -547,7 +547,7 @@ if (want("C16")) {
   const left = await p.pg.evaluate(() => { try { return sessionStorage.getItem("coord.hand.v1"); } catch (e) { return "unreadable"; } });
   await p.shot("C16-asks");
   check("C16", "a PIN left more than a minute ago is not used: it asks, with his name in the box and the cursor in the PIN box",
-        sign && picked === "Bro Asim" && focus === "signPin" && left === null && !p.errs.length,
+        sign && picked === "Bro Arthur" && focus === "signPin" && left === null && !p.errs.length,
         "sign " + sign + ", name '" + picked + "', focus " + focus + ", left " + left);
   await p.ctx.close();
 }
@@ -556,7 +556,7 @@ if (want("C16")) {
 if (want("C17")) {
   const p = await page(env);
   await p.wait(700);
-  await p.pg.selectOption("#signName", "Bro Asim");
+  await p.pg.selectOption("#signName", "Bro Arthur");
   const focus = await p.pg.evaluate(() => document.activeElement && document.activeElement.id);
   check("C17", "choosing a name puts the cursor in the PIN box, as on the driver app",
         focus === "signPin" && !p.errs.length, "focus " + focus);
@@ -565,7 +565,7 @@ if (want("C17")) {
 
 /* C18 — the landing page: all three numbers, the report under them, the theme chips */
 if (want("C18")) {
-  const p = await page(env, { name: "Bro Asim" });
+  const p = await page(env, { name: "Bro Arthur" });
   await p.wait(1200);
   const line = await p.text("#signVersion");
   const order = await p.pg.evaluate(() => {
@@ -692,7 +692,7 @@ if (want("C20")) {
   const left = await p.pg.evaluate(() => { try { return sessionStorage.getItem("fleet.hand.v1"); } catch (e) { return "unreadable"; } });
   await p.shot("C20-to-check");
   check("C20", "Vehicle check on the first screen opens the driver app on choosing the bus, signed in, with no PIN typed and no copy left",
-        onVehicle && driver === "Bro Asim" && left === null && !p.errs.length,
+        onVehicle && driver === "Bro Arthur" && left === null && !p.errs.length,
         "vehicle " + onVehicle + ", driver '" + driver + "', left " + left + ", errors " + JSON.stringify(p.errs));
   await p.ctx.close();
 }
@@ -709,7 +709,7 @@ if (want("C21")) {
   const left = await p.pg.evaluate(() => { try { return sessionStorage.getItem("fleet.hand.v1"); } catch (e) { return "unreadable"; } });
   await p.shot("C21-to-hub");
   check("C21", "the Driver app link on the first screen lands on the driver app's hub, signed in with the PIN taken, and no copy left",
-        onHub && state.driver === "Bro Asim" && state.pinOk === true && left === null && !p.errs.length,
+        onHub && state.driver === "Bro Arthur" && state.pinOk === true && left === null && !p.errs.length,
         "hub " + onHub + ", state " + JSON.stringify(state) + ", left " + left + ", errors " + JSON.stringify(p.errs));
   await p.ctx.close();
 }
@@ -728,8 +728,8 @@ if (want("C22")) {
   const after = await names();
   await W.handleSync(env, { authRules: { roles: ["Coordinator", "Minister in Charge"], sameHandBothWays: true } });
   check("C22", "COORDINATOR_ROLES decides who may sign in: with Coordinator alone, the Minister in Charge is no longer offered",
-        before.includes("Pst Kehinde") && before.includes("Bro Asim") &&
-        !after.includes("Pst Kehinde") && after.includes("Bro Asim"),
+        before.includes("Pst Kenneth") && before.includes("Bro Arthur") &&
+        !after.includes("Pst Kenneth") && after.includes("Bro Arthur"),
         "before " + JSON.stringify(before) + ", after " + JSON.stringify(after));
 }
 
@@ -745,7 +745,7 @@ if (want("C23")) {
   const reg = REAL.drivers.map((d) => ({ name: d.name, role: d.role, hasPin: true }));
   await pg.addInitScript(`try {
       localStorage.setItem("coord.register.v1", ${JSON.stringify(JSON.stringify(reg))});
-      localStorage.setItem("coord.name.v1", "Bro Asim");
+      localStorage.setItem("coord.name.v1", "Bro Arthur");
     } catch (e) {}`);
   await pg.goto("http://127.0.0.1:" + PORT + "/coord/", { waitUntil: "domcontentloaded" });
   await pg.waitForTimeout(600);
@@ -753,7 +753,7 @@ if (want("C23")) {
   const offered = await pg.$$eval("#signName option", (os) => os.map((o) => o.value).filter(Boolean));
   const focus = await pg.evaluate(() => document.activeElement && document.activeElement.id);
   check("C23", "with the live server silent, the kept Drivers tab gives the sign-in list, the remembered name and the cursor in the PIN box at once",
-        picked === "Bro Asim" && offered.includes("Pst Kehinde") && focus === "signPin" && !errs.length,
+        picked === "Bro Arthur" && offered.includes("Pst Kenneth") && focus === "signPin" && !errs.length,
         "picked '" + picked + "', offered " + JSON.stringify(offered) + ", focus " + focus + ", errors " + JSON.stringify(errs));
   await ctx.close();
 }
@@ -819,7 +819,7 @@ if (want("C25")) {
   const test = db._one("SELECT v FROM settings WHERE k=?", "test:https://push.example/coord-phone");
   await p.ctx.close();
   check("C25", "the bell is there once signed in, turns coordinator alerts on for this phone under the signed-in name, and a second tap sends a test",
-        hiddenSignedOut && shown && /alerts are on/i.test(first) && row && row.role === "driver" && row.driver === "Bro Asim" &&
+        hiddenSignedOut && shown && /alerts are on/i.test(first) && row && row.role === "driver" && row.driver === "Bro Arthur" &&
         /^\.\.\/sw\.js \.\.\/$/.test(registered) && on && /test alert/i.test(second) && !!test && !p.errs.length,
         "hidden before sign-in " + hiddenSignedOut + ", shown " + shown + ", first '" + first + "', row " + JSON.stringify(row) +
         ", registered '" + registered + "', on " + on + ", second '" + second + "', test " + !!test + ", errors " + JSON.stringify(p.errs));
@@ -843,7 +843,7 @@ if (want("C20b")) {
                           headers: { "access-control-allow-origin": "*" } });
   });
   await pg.addInitScript(`try { if (!window.name) { window.name = "handed";
-      sessionStorage.setItem("fleet.hand.v1", JSON.stringify({ name: "Bro Asim", pin: "9999", at: Date.now() })); } } catch (e) {}`);
+      sessionStorage.setItem("fleet.hand.v1", JSON.stringify({ name: "Bro Arthur", pin: "9999", at: Date.now() })); } } catch (e) {}`);
   await pg.goto("http://127.0.0.1:" + PORT + "/", { waitUntil: "domcontentloaded" });
   await pg.waitForTimeout(3500);
   const onDriver = await pg.$eval("#s-driver", (el) => el.classList.contains("is-on")).catch(() => false);

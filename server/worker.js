@@ -876,7 +876,7 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
    the Rota cell, the name a phone signs in with — so an exact match is not a
    test of whether two people are the same person, it is a test of whether two
    people typed the same spaces. The sweep that wakes a driver already learned
-   this the hard way: a handset registered as "bro asim" was invisible to the
+   this the hard way: a handset registered as "bro arthur" was invisible to the
    only query that would ever have woken it.
 
    The same looseness, and no looser. It does not guess at nicknames. */
@@ -4360,7 +4360,7 @@ async function wake(env, subs, tag) {
 
    The report asked lower(trim()) against the Drivers tab. The sweep asked a
    bare = against the name in the Rota cell. So a handset registered as
-   "bro asim" answered the report — "alerts are on for every driver" — and was
+   "bro arthur" answered the report — "alerts are on for every driver" — and was
    invisible to the only query that would ever have woken it. The report was
    built to catch exactly that silence and instead it certified it.
 

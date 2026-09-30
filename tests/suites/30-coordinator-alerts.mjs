@@ -32,8 +32,8 @@ export default async function (root) {
     G.reset();
     const db = makeDB(join(root, "server", "schema.sql"));
     const env = makeEnv(db);
-    for (const d of [["Bro Asim", "Coordinator"], ["Pst Kehinde", "Minister in Charge"],
-                     ["Bro Tunde", "Driver"], ["Sis Lead", "Transport Lead"]]) {
+    for (const d of [["Bro Arthur", "Coordinator"], ["Pst Kenneth", "Minister in Charge"],
+                     ["Bro Trevor", "Driver"], ["Sis Lead", "Transport Lead"]]) {
       await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,1,1,?)")
         .bind(d[0], d[1], "North", await W.pinHashOf(env, d[0], "1234")).run();
     }
@@ -42,9 +42,9 @@ export default async function (root) {
     const sub = (endpoint, role, driver) => db.prepare(
       "INSERT INTO push_subs (endpoint, p256dh, auth, role, driver, made) VALUES (?,?,?,?,?,?)")
       .bind(endpoint, "p", "a", role, driver, Date.now()).run();
-    await sub(EP("asim"), "driver", "Bro Asim");
-    await sub(EP("kehinde"), "driver", "pst kehinde ");          /* typed loosely, still his */
-    await sub(EP("tunde"), "driver", "Bro Tunde");
+    await sub(EP("arthur"), "driver", "Bro Arthur");
+    await sub(EP("kenneth"), "driver", "pst kenneth ");          /* typed loosely, still his */
+    await sub(EP("trevor"), "driver", "Bro Trevor");
     await sub(EP("lead"), "driver", "Sis Lead");
     await sub(EP("passenger"), "passenger", "");
     return { db, env };
@@ -61,13 +61,13 @@ export default async function (root) {
     const { env } = await fresh();
     const out = await J(await post(env, { action: "coordAlert", alert: alert() }));
     a.ok(out.ok, JSON.stringify(out));
-    a.eq(JSON.stringify(pushedTo()), JSON.stringify([EP("asim"), EP("kehinde")].sort()));
+    a.eq(JSON.stringify(pushedTo()), JSON.stringify([EP("arthur"), EP("kenneth")].sort()));
   });
 
   s.test("whoever the alert is about is left out", async (a) => {
     const { env } = await fresh();
-    await J(await post(env, { action: "coordAlert", alert: alert({ not: ["BRO ASIM"] }) }));
-    a.eq(JSON.stringify(pushedTo()), JSON.stringify([EP("kehinde")]));
+    await J(await post(env, { action: "coordAlert", alert: alert({ not: ["BRO ARTHUR"] }) }));
+    a.eq(JSON.stringify(pushedTo()), JSON.stringify([EP("kenneth")]));
   });
 
   s.test("the titles are COORDINATOR_ROLES: a church's own title is who is woken", async (a) => {
@@ -102,33 +102,33 @@ export default async function (root) {
     await atTime("2026-10-07T14:00:00+01:00", async () => {
       await post(env, { action: "coordAlert", alert: alert() });
       await post(env, { action: "coordAlert", alert: alert({ id: "a2", kind: "request", urgent: false,
-        title: "Rota request from Bro Tunde", body: "Cover for Sunday.", reg: "" }) });
-      one = await W.pushWhat(env, EP("kehinde"));
-      two = await W.pushWhat(env, EP("kehinde"));
-      three = await W.pushWhat(env, EP("kehinde"));
+        title: "Rota request from Bro Trevor", body: "Cover for Sunday.", reg: "" }) });
+      one = await W.pushWhat(env, EP("kenneth"));
+      two = await W.pushWhat(env, EP("kenneth"));
+      three = await W.pushWhat(env, EP("kenneth"));
     });
     a.eq(one.title, "BUS STOPPED: " + REG);
     a.eq(one.url, "coord/");
-    a.eq(two.title, "Rota request from Bro Tunde", "the second alert was lost behind the first");
+    a.eq(two.title, "Rota request from Bro Trevor", "the second alert was lost behind the first");
     a.ok(three.title !== one.title && three.title !== two.title, "an alert was handed out twice");
   });
 
   s.test("a stopped bus authorised since says so when the phone reads it", async (a) => {
     const { env } = await fresh();
-    await W.handleCheck(env, { id: "chk-9", reg: REG, level: "stop", driver: "Bro Tunde", age: 0 });
+    await W.handleCheck(env, { id: "chk-9", reg: REG, level: "stop", driver: "Bro Trevor", age: 0 });
     await post(env, { action: "coordAlert", alert: alert() });
-    const r = await J(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Asim", pin: "1234" } }));
+    const r = await J(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Arthur", pin: "1234" } }));
     a.ok(r.ok, JSON.stringify(r));
-    const told = await W.pushWhat(env, EP("kehinde"));
+    const told = await W.pushWhat(env, EP("kenneth"));
     a.eq(told.title, REG + " is authorised to run");
-    a.has(told.body, "Bro Asim");
+    a.has(told.body, "Bro Arthur");
   });
 
   s.test("a coordinator alert does not touch the driver's own alert record", async (a) => {
     const { db, env } = await fresh();
-    await db.prepare("UPDATE push_subs SET last='stopped|x|y' WHERE endpoint=?").bind(EP("asim")).run();
+    await db.prepare("UPDATE push_subs SET last='stopped|x|y' WHERE endpoint=?").bind(EP("arthur")).run();
     await post(env, { action: "coordAlert", alert: alert() });
-    a.eq(db._one("SELECT last FROM push_subs WHERE endpoint=?", EP("asim")).last, "stopped|x|y",
+    a.eq(db._one("SELECT last FROM push_subs WHERE endpoint=?", EP("arthur")).last, "stopped|x|y",
          "his driver alert would be sent again on the next sweep");
   });
 
@@ -136,19 +136,19 @@ export default async function (root) {
     const { env } = await fresh();
     await atTime("2026-10-07T23:10:00+01:00", async () => {
       await post(env, { action: "coordAlert", alert: alert({ id: "night-req", kind: "request", urgent: false,
-        title: "Rota request from Bro Tunde", reg: "" }) });
+        title: "Rota request from Bro Trevor", reg: "" }) });
       a.eq(pushedTo().length, 0, "a rota request woke a coordinator at ten past eleven at night");
       await post(env, { action: "coordAlert", alert: alert({ id: "night-stop" }) });
       a.eq(pushedTo().length, 2, "a stopped bus was held until the morning");
     });
     G.reset();
     await atTime("2026-10-08T07:30:00+01:00", () => W.clockTick(env));
-    a.eq(pushedTo().filter((u) => u !== EP("tunde")).length, 0, "released before 08:00");
+    a.eq(pushedTo().filter((u) => u !== EP("trevor")).length, 0, "released before 08:00");
     await atTime("2026-10-08T08:01:00+01:00", () => W.clockTick(env));
-    a.eq(JSON.stringify(pushedTo().filter((u) => u !== EP("tunde"))), JSON.stringify([EP("asim"), EP("kehinde")].sort()));
+    a.eq(JSON.stringify(pushedTo().filter((u) => u !== EP("trevor"))), JSON.stringify([EP("arthur"), EP("kenneth")].sort()));
     G.reset();
     await atTime("2026-10-08T08:02:00+01:00", () => W.clockTick(env));
-    a.eq(pushedTo().filter((u) => u !== EP("tunde")).length, 0, "the held alert went twice");
+    a.eq(pushedTo().filter((u) => u !== EP("trevor")).length, 0, "the held alert went twice");
   });
 
   /* ---- the sheet -------------------------------------------------------- */
@@ -159,11 +159,11 @@ export default async function (root) {
       "Bus Stops": tab("Bus Stops", [
         { Route: "North", "Stop ID": "N00", Time: "09:52", Stop: "Church", Postcode: "L6 4DY", Active: "YES", Type: "Depart" }]),
       "Drivers": tab("Drivers", [
-        { Name: "Bro Asim", Role: "Coordinator", Active: "YES", "Primary order": 1, PIN: "1234", Email: "asim@b.c", Route: "North" },
-        { Name: "Bro Tunde", Role: "Driver", Active: "YES", "Primary order": 2, PIN: "4321", Email: "t@b.c", Route: "South" }]),
+        { Name: "Bro Arthur", Role: "Coordinator", Active: "YES", "Primary order": 1, PIN: "1234", Email: "arthur@b.c", Route: "North" },
+        { Name: "Bro Trevor", Role: "Driver", Active: "YES", "Primary order": 2, PIN: "4321", Email: "t@b.c", Route: "South" }]),
       "Buses": tab("Buses", [{ Registration: REG, "Seats for passengers": 16, Active: "YES" }]),
-      "Rota": tab("Rota", [{ Sunday: SUN, "North Liverpool scheduled": "Bro Asim", Status: "Confirmed",
-        "South Liverpool scheduled": "Bro Tunde" }]),
+      "Rota": tab("Rota", [{ Sunday: SUN, "North Liverpool scheduled": "Bro Arthur", Status: "Confirmed",
+        "South Liverpool scheduled": "Bro Trevor" }]),
       "Rota Requests": [TABS["Rota Requests"]],
       "Checks": [TABS["Checks"]], "Defects": [TABS["Defects"]], "Trip Events": [TABS["Trip Events"]],
       "Bus Bookings": [TABS["Bus Bookings"]]
@@ -177,8 +177,8 @@ export default async function (root) {
     } };
     return { L, alerts: () => sent.filter((b) => b.action === "coordAlert").map((b) => b.alert) };
   }
-  const CHECK = { id: "chk-1", reg: REG, vehicle: "Ford Transit", driver: "Bro Tunde", role: "Driver",
-                  date: "4 October 2026", time: "09:40", miles: 48213, sign: "Bro Tunde",
+  const CHECK = { id: "chk-1", reg: REG, vehicle: "Ford Transit", driver: "Bro Trevor", role: "Driver",
+                  date: "4 October 2026", time: "09:40", miles: 48213, sign: "Bro Trevor",
                   advisories: [], jobs: [] };
 
   s.test("the sheet's five cases each become a short phone alert, a stopped bus the only urgent one", (a) => {
@@ -186,8 +186,8 @@ export default async function (root) {
     const one = (c, outcome, text) => call(L, "checkPhoneAlert", Object.assign({}, CHECK, c), outcome, text);
     const stop = one({ level: "stop", defects: [{ name: "Tyres", crit: true }] }, "Stopped", "Tyres: bald");
     a.eq(stop.kind, "stopped"); a.ok(stop.urgent); a.has(stop.title, REG); a.has(stop.body, "Tyres");
-    a.eq(JSON.stringify(stop.not), JSON.stringify(["Bro Tunde"]));
-    const auth = one({ level: "stop", authorisedBy: "Bro Asim" }, "Authorised to run", "Tyres");
+    a.eq(JSON.stringify(stop.not), JSON.stringify(["Bro Trevor"]));
+    const auth = one({ level: "stop", authorisedBy: "Bro Arthur" }, "Authorised to run", "Tyres");
     a.eq(auth.kind, "authorised"); a.not(auth.urgent);
     a.eq(one({ level: "warn" }, "Defects", "Wiper split").kind, "defect");
     a.eq(one({ level: "ok", advisories: [{ name: "Tyres" }] }, "Advisory", "").kind, "advisory");
@@ -196,11 +196,11 @@ export default async function (root) {
 
   s.test("with no COORDINATOR_EMAIL at all, the phones are still told", (a) => {
     const { L, alerts } = sheet();
-    call(L, "notifyAuthorised", { reg: REG, by: "Bro Asim", at: 123, inspector: "Bro Tunde" });
+    call(L, "notifyAuthorised", { reg: REG, by: "Bro Arthur", at: 123, inspector: "Bro Trevor" });
     a.eq(L.gas.mail.length, 0);
     a.eq(alerts().length, 1);
     a.eq(alerts()[0].kind, "authorised");
-    a.eq(JSON.stringify(alerts()[0].not), JSON.stringify(["Bro Asim"]));
+    a.eq(JSON.stringify(alerts()[0].not), JSON.stringify(["Bro Arthur"]));
   });
 
   s.test("a rota request from the drain tells the phones as well as the inbox", (a) => {
@@ -210,7 +210,7 @@ export default async function (root) {
       (L._sent = L._sent || []).push(body);
       const out = body.action === "drain"
         ? { ok: true, claim: -9, bookings: [], trips: [], checks: [], auths: [], decisions: [],
-            requests: [{ id: "rq1", date: "2026-10-04", driver: "Bro Tunde", type: "Request cover",
+            requests: [{ id: "rq1", date: "2026-10-04", driver: "Bro Trevor", type: "Request cover",
                          reason: "Away", swapWith: "", swapDate: "", agreed: false }] }
         : { ok: true };
       return { getResponseCode: () => 200, getContentText: () => JSON.stringify(out), getAllHeaders: () => ({}) };
@@ -219,7 +219,7 @@ export default async function (root) {
     const got = (L._sent || []).filter((b) => b.action === "coordAlert").map((b) => b.alert);
     a.eq(got.length, 1, "no phone alert for the request");
     a.eq(got[0].kind, "request");
-    a.has(got[0].title, "Bro Tunde");
+    a.has(got[0].title, "Bro Trevor");
     a.hasnt(got[0].body, "Away", "the reason went to a phone that joined the list without a PIN");
     a.ok(L.gas.mail.some((m) => String(m.to).indexOf("coord@") === 0), "the email stopped");
     void alerts;
@@ -228,7 +228,7 @@ export default async function (root) {
   s.test("with SENDER_NAME set, every email says it is from that name, and replies go to the coordinator", (a) => {
     const { L } = sheet({ COORDINATOR_EMAIL: "coord@b.c", SENDER_NAME: " Dominion Transport " });
     call(L, "sendTestEmail");
-    call(L, "notifyAuthorised", { reg: REG, by: "Bro Asim", at: 1, inspector: "Bro Tunde" });
+    call(L, "notifyAuthorised", { reg: REG, by: "Bro Arthur", at: 1, inspector: "Bro Trevor" });
     a.eq(L.gas.mail.length, 2);
     for (const m of L.gas.mail) {
       a.eq(m.name, "Dominion Transport");

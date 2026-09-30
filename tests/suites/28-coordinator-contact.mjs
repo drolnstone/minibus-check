@@ -18,7 +18,7 @@ import { loadWorker, env as makeEnv, installGlobals } from "../lib/worker.mjs";
 import { loadCodeGs, call } from "../lib/codegs.mjs";
 import { tab } from "../lib/tabs.mjs";
 
-const ADA = { name: "Sis Ada", phone: "07700900123" };
+const ADELE = { name: "Sis Adele", phone: "07700900123" };
 
 function tabs(drivers) {
   return {
@@ -38,7 +38,7 @@ function tabs(drivers) {
 const PEOPLE = [
   { Name: "Bro Old", Role: "Coordinator", Active: "NO", Phone: "07000 000000", Email: "old@b.c" },
   { Name: "Bro First", Role: "Coordinator", Active: "YES", Phone: "07111 111111", Email: "first@b.c" },
-  { Name: "Sis Ada", Role: "Coordinator", Active: "YES", Phone: "07700 900123", Email: "ada@b.c" },
+  { Name: "Sis Adele", Role: "Coordinator", Active: "YES", Phone: "07700 900123", Email: "adele@b.c" },
   { Name: "Bro Driver", Role: "Driver", Active: "YES", "Primary order": 1, Route: "North", Phone: "07222 222222" }
 ];
 
@@ -60,8 +60,8 @@ export default async function (root) {
   });
 
   s.test("with two, the one COORDINATOR_EMAIL names is the one people ring", (a) => {
-    const c = contact(sheet(PEOPLE, "ADA@b.c"));
-    a.eq(c.name, "Sis Ada");
+    const c = contact(sheet(PEOPLE, "ADELE@b.c"));
+    a.eq(c.name, "Sis Adele");
     a.eq(c.phone, "07700900123");
   });
 
@@ -144,22 +144,22 @@ export default async function (root) {
     rows[1].Phone = 447111111111;
     rows[2].Phone = "+44 7700 900123";
     a.eq(contact(sheet(rows)).phone, "07111111111");
-    a.eq(contact(sheet(rows, "ada@b.c")).phone, "07700900123");
+    a.eq(contact(sheet(rows, "adele@b.c")).phone, "07700900123");
   });
 
   s.test("the push to the live server carries it", (a) => {
-    const L = sheet(PEOPLE, "ada@b.c");
+    const L = sheet(PEOPLE, "adele@b.c");
     call(L, "pushToWorker");
     const sync = L.gas.fetched.map((f) => { try { return JSON.parse(f.opts.payload); } catch (e) { return null; } })
       .filter((b) => b && b.action === "sync")[0];
     a.ok(sync, "no sync was sent");
-    a.eq(JSON.stringify(sync.coordinator), JSON.stringify(ADA));
+    a.eq(JSON.stringify(sync.coordinator), JSON.stringify(ADELE));
   });
 
   s.test("the rota the sheet answers the driver app with carries it too", (a) => {
-    const L = sheet(PEOPLE, "ada@b.c");
+    const L = sheet(PEOPLE, "adele@b.c");
     const out = call(L, "rotaPayload", "2026-10-04", 1);
-    a.eq(JSON.stringify(out.coordinator), JSON.stringify(ADA));
+    a.eq(JSON.stringify(out.coordinator), JSON.stringify(ADELE));
   });
 
   s.test("a new church's Drivers tab starts empty", (a) => {
@@ -179,28 +179,28 @@ export default async function (root) {
 
   s.test("a sync that carries it is stamped on every answer after it", async (a) => {
     const { W, env } = await fresh();
-    await W.handleSync(env, { coordinator: ADA });
-    a.eq(JSON.stringify((await J(await ask(W, env))).coordinator), JSON.stringify(ADA));
-    a.eq(JSON.stringify(await W.cacheGet(env, "coordinator")), JSON.stringify(ADA), "not kept in settings");
+    await W.handleSync(env, { coordinator: ADELE });
+    a.eq(JSON.stringify((await J(await ask(W, env))).coordinator), JSON.stringify(ADELE));
+    a.eq(JSON.stringify(await W.cacheGet(env, "coordinator")), JSON.stringify(ADELE), "not kept in settings");
   });
 
   s.test("a cold isolate reads it back from settings", async (a) => {
     const one = await fresh();
-    await one.W.handleSync(one.env, { coordinator: ADA });
+    await one.W.handleSync(one.env, { coordinator: ADELE });
     const { mod: W2 } = await loadWorker(root);
-    a.eq(JSON.stringify((await J(await ask(W2, one.env))).coordinator), JSON.stringify(ADA));
+    a.eq(JSON.stringify((await J(await ask(W2, one.env))).coordinator), JSON.stringify(ADELE));
   });
 
   s.test("a sync from an older sheet that does not send it leaves it alone", async (a) => {
     const { W, env } = await fresh();
-    await W.handleSync(env, { coordinator: ADA });
+    await W.handleSync(env, { coordinator: ADELE });
     await W.handleSync(env, {});
-    a.eq(JSON.stringify(await W.cacheGet(env, "coordinator")), JSON.stringify(ADA));
+    a.eq(JSON.stringify(await W.cacheGet(env, "coordinator")), JSON.stringify(ADELE));
   });
 
   s.test("nobody in the role is told as a blank name, so the pages say 'the bus coordinator'", async (a) => {
     const { W, env } = await fresh();
-    await W.handleSync(env, { coordinator: ADA });
+    await W.handleSync(env, { coordinator: ADELE });
     await W.handleSync(env, { coordinator: { name: "", phone: "" } });
     const out = await J(await ask(W, env));
     a.eq(out.coordinator.name, "");

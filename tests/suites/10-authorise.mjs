@@ -39,16 +39,16 @@ export default async function (root) {
     const db = makeDB(join(root, "server", "schema.sql"));
     const env = makeEnv(db);
     for (const d of [
-      ["Bro Asim", "Coordinator", "North", 1],
-      ["Pst Kehinde", "Minister in Charge", "North", 2],
-      ["Bro Tunde", "Driver", "South", 3]
+      ["Bro Arthur", "Coordinator", "North", 1],
+      ["Pst Kenneth", "Minister in Charge", "North", 2],
+      ["Bro Trevor", "Driver", "South", 3]
     ]) {
       await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,?,1,?)")
         .bind(d[0], d[1], d[2], d[3], await W.pinHashOf(env, d[0], "1234")).run();
     }
     /* No PIN at all, which must not be allowed to sign a bus out. */
     await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,?,1,'')")
-      .bind("Bro Calvin", "Coordinator", "North", 4).run();
+      .bind("Bro Cedric", "Coordinator", "North", 4).run();
 
     await W.cachePut(env, "auth_rules", Object.assign(
       { roles: ["coordinator", "minister in charge"], sameHandBothWays: true }, rules || {})).run();
@@ -57,7 +57,7 @@ export default async function (root) {
 
   const check = (over) => Object.assign({
     id: "chk-" + Math.random().toString(36).slice(2),
-    reg: REG, level: "stop", driver: "Bro Tunde", age: 0
+    reg: REG, level: "stop", driver: "Bro Trevor", age: 0
   }, over || {});
 
   const body = async (res) => JSON.parse(await res.text());
@@ -123,15 +123,15 @@ export default async function (root) {
   s.test("a coordinator with the right PIN authorises the bus", async (a) => {
     const { env } = await fresh();
     await W.handleCheck(env, check());
-    const r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Asim", pin: "1234" } }));
+    const r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Arthur", pin: "1234" } }));
     a.ok(r.ok, JSON.stringify(r));
-    a.eq(r.by, "Bro Asim");
+    a.eq(r.by, "Bro Arthur");
   });
 
   s.test("an ordinary driver is refused, whatever his PIN", async (a) => {
     const { env } = await fresh();
     await W.handleCheck(env, check());
-    const r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Tunde", pin: "1234" } }));
+    const r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Trevor", pin: "1234" } }));
     a.not(r.ok);
     a.eq(r.error, "not authorised");
   });
@@ -139,7 +139,7 @@ export default async function (root) {
   s.test("a coordinator with no PIN on the register cannot sign a bus out", async (a) => {
     const { env } = await fresh();
     await W.handleCheck(env, check());
-    const r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Calvin", pin: "" } }));
+    const r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Cedric", pin: "" } }));
     a.not(r.ok);
     a.eq(r.error, "no pin",
          "a driver without a PIN is waved through every other gate; this one lets a bus out with a fault on it");
@@ -148,14 +148,14 @@ export default async function (root) {
   s.test("a bus nobody has stopped cannot be authorised", async (a) => {
     const { env } = await fresh();
     await W.handleCheck(env, check({ level: "ok" }));
-    const r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Asim", pin: "1234" } }));
+    const r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Arthur", pin: "1234" } }));
     a.not(r.ok);
     a.eq(r.error, "no check");
   });
 
   s.test("a bus with no walkaround at all cannot be authorised", async (a) => {
     const { env } = await fresh();
-    const r = await body(await W.handleAuthorise(env, { authorise: { reg: OTHER, who: "Bro Asim", pin: "1234" } }));
+    const r = await body(await W.handleAuthorise(env, { authorise: { reg: OTHER, who: "Bro Arthur", pin: "1234" } }));
     a.not(r.ok);
     a.eq(r.error, "no check", "signing off a walkaround that never happened is the worst record of all");
   });
@@ -165,26 +165,26 @@ export default async function (root) {
     await W.handleCheck(env, check());
     let r;
     for (let i = 0; i < 3; i++) {
-      r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Asim", pin: "9999" } }));
+      r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Arthur", pin: "9999" } }));
       a.not(r.ok);
     }
-    r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Asim", pin: "1234" } }));
+    r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Arthur", pin: "1234" } }));
     a.ok(r.locked, "the fourth try must be refused even with the right PIN");
     a.eq(r.minutes, 5);
   });
 
   s.test("with sameHandBothWays off, the man who did the walkaround cannot authorise it", async (a) => {
     const { env } = await fresh({ sameHandBothWays: false });
-    await W.handleCheck(env, check({ driver: "Bro Asim" }));
-    const r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Asim", pin: "1234" } }));
+    await W.handleCheck(env, check({ driver: "Bro Arthur" }));
+    const r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Arthur", pin: "1234" } }));
     a.not(r.ok);
     a.eq(r.error, "same hand");
   });
 
   s.test("with sameHandBothWays on, he can", async (a) => {
     const { env } = await fresh({ sameHandBothWays: true });
-    await W.handleCheck(env, check({ driver: "Bro Asim" }));
-    const r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Asim", pin: "1234" } }));
+    await W.handleCheck(env, check({ driver: "Bro Arthur" }));
+    const r = await body(await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Arthur", pin: "1234" } }));
     a.ok(r.ok, JSON.stringify(r));
   });
 
@@ -193,16 +193,16 @@ export default async function (root) {
   s.test("RULE 2 · an authorised bus reads as authorised on the board", async (a) => {
     const { env } = await fresh();
     await W.handleCheck(env, check());
-    await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Asim", pin: "1234" } });
+    await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Arthur", pin: "1234" } });
     const now = await W.checksToday(env);
     a.eq(now[REG].state, "authorised");
-    a.eq(now[REG].by, "Bro Asim");
+    a.eq(now[REG].by, "Bro Arthur");
   });
 
   s.test("RULE 2 · a second walkaround that stops the bus again is NOT waved through", async (a) => {
     const { env } = await fresh();
     await W.handleCheck(env, check({ id: "first" }));
-    await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Asim", pin: "1234" } });
+    await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Arthur", pin: "1234" } });
     a.eq((await W.checksToday(env))[REG].state, "authorised");
 
     await new Promise((r) => setTimeout(r, 12));
@@ -214,10 +214,10 @@ export default async function (root) {
   s.test("RULE 2 · the second check can be authorised in its own right", async (a) => {
     const { env } = await fresh();
     await W.handleCheck(env, check({ id: "first" }));
-    await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Asim", pin: "1234" } });
+    await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Arthur", pin: "1234" } });
     await new Promise((r) => setTimeout(r, 12));
     await W.handleCheck(env, check({ id: "second" }));
-    await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Asim", pin: "1234" } });
+    await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Arthur", pin: "1234" } });
     a.eq((await W.checksToday(env))[REG].state, "authorised");
   });
 
@@ -225,7 +225,7 @@ export default async function (root) {
     const { env } = await fresh();
     await W.handleCheck(env, check({ id: "a", reg: REG }));
     await W.handleCheck(env, check({ id: "b", reg: OTHER }));
-    await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Asim", pin: "1234" } });
+    await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Arthur", pin: "1234" } });
     const now = await W.checksToday(env);
     a.eq(now[REG].state, "authorised");
     a.eq(now[OTHER].state, "stopped");
@@ -260,7 +260,7 @@ export default async function (root) {
     const { env } = await fresh();
     await W.handleCheck(env, check({ id: "c1" }));
     const r = await body(await W.handleOutcome(env, { edits: [
-      { reg: REG, day, checkId: "c1", outcome: "Authorised to run", by: "Bro Asim", madeAt: Date.now() }
+      { reg: REG, day, checkId: "c1", outcome: "Authorised to run", by: "Bro Arthur", madeAt: Date.now() }
     ] }));
     a.ok(r.ok !== false);
     a.eq((await W.checksToday(env))[REG].state, "authorised");
@@ -270,8 +270,8 @@ export default async function (root) {
     const { env } = await fresh();
     await W.handleCheck(env, check({ id: "c1" }));
     const t = Date.now();
-    await W.handleOutcome(env, { edits: [{ reg: REG, day, checkId: "c1", outcome: "Authorised to run", by: "Bro Asim", madeAt: t }] });
-    await W.handleOutcome(env, { edits: [{ reg: REG, day, checkId: "c1", outcome: "STOPPED", by: "Bro Asim", madeAt: t + 1000 }] });
+    await W.handleOutcome(env, { edits: [{ reg: REG, day, checkId: "c1", outcome: "Authorised to run", by: "Bro Arthur", madeAt: t }] });
+    await W.handleOutcome(env, { edits: [{ reg: REG, day, checkId: "c1", outcome: "STOPPED", by: "Bro Arthur", madeAt: t + 1000 }] });
     a.eq((await W.checksToday(env))[REG].state, "stopped");
   });
 
@@ -279,9 +279,9 @@ export default async function (root) {
     const { env } = await fresh();
     await W.handleCheck(env, check({ id: "c1" }));
     const t = Date.now();
-    await W.handleOutcome(env, { edits: [{ reg: REG, day, checkId: "c1", outcome: "STOPPED", by: "Bro Asim", madeAt: t }] });
+    await W.handleOutcome(env, { edits: [{ reg: REG, day, checkId: "c1", outcome: "STOPPED", by: "Bro Arthur", madeAt: t }] });
     const r = await body(await W.handleOutcome(env, { edits: [
-      { reg: REG, day, checkId: "c1", outcome: "Authorised to run", by: "Bro Asim", madeAt: t - 60000 }
+      { reg: REG, day, checkId: "c1", outcome: "Authorised to run", by: "Bro Arthur", madeAt: t - 60000 }
     ] }));
     a.eq(r.results[0].applied, false);
     a.eq(r.results[0].why, "superseded",
@@ -294,7 +294,7 @@ export default async function (root) {
     await new Promise((r) => setTimeout(r, 12));
     await W.handleCheck(env, check({ id: "second" }));
     const r = await body(await W.handleOutcome(env, { edits: [
-      { reg: REG, day, checkId: "first", outcome: "Authorised to run", by: "Bro Asim", madeAt: Date.now() }
+      { reg: REG, day, checkId: "first", outcome: "Authorised to run", by: "Bro Arthur", madeAt: Date.now() }
     ] }));
     a.eq(r.results[0].applied, false);
     a.eq(r.results[0].why, "not current");
@@ -304,7 +304,7 @@ export default async function (root) {
     const { env } = await fresh();
     await W.handleCheck(env, check({ id: "c1" }));
     const r = await body(await W.handleOutcome(env, { edits: [
-      { reg: REG, day, checkId: "c1", outcome: "", by: "Bro Asim", madeAt: Date.now() }
+      { reg: REG, day, checkId: "c1", outcome: "", by: "Bro Arthur", madeAt: Date.now() }
     ] }));
     a.eq(r.results[0].applied, false);
     a.eq(r.results[0].why, "empty");
@@ -314,7 +314,7 @@ export default async function (root) {
   s.test("RULE 4 · an Outcome edit for a bus with no check is refused", async (a) => {
     const { env } = await fresh();
     const r = await body(await W.handleOutcome(env, { edits: [
-      { reg: OTHER, day, outcome: "Authorised to run", by: "Bro Asim", madeAt: Date.now() }
+      { reg: OTHER, day, outcome: "Authorised to run", by: "Bro Arthur", madeAt: Date.now() }
     ] }));
     a.eq(r.results[0].applied, false);
     a.eq(r.results[0].why, "no check");
@@ -325,12 +325,12 @@ export default async function (root) {
   s.test("the app and the sheet write the same authorisation", async (a) => {
     const viaApp = await fresh();
     await W.handleCheck(viaApp.env, check({ id: "c1" }));
-    await W.handleAuthorise(viaApp.env, { authorise: { reg: REG, who: "Bro Asim", pin: "1234" } });
+    await W.handleAuthorise(viaApp.env, { authorise: { reg: REG, who: "Bro Arthur", pin: "1234" } });
 
     const viaSheet = await fresh();
     await W.handleCheck(viaSheet.env, check({ id: "c1" }));
     await W.handleOutcome(viaSheet.env, { edits: [
-      { reg: REG, day, checkId: "c1", outcome: "Authorised to run", by: "Bro Asim", madeAt: Date.now() }
+      { reg: REG, day, checkId: "c1", outcome: "Authorised to run", by: "Bro Arthur", madeAt: Date.now() }
     ] });
 
     const one = (await W.checksToday(viaApp.env))[REG];
@@ -343,7 +343,7 @@ export default async function (root) {
   s.test("authorising never closes the defect", async (a) => {
     const { db, env } = await fresh();
     await W.handleCheck(env, check({ id: "c1" }));
-    await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Asim", pin: "1234" } });
+    await W.handleAuthorise(env, { authorise: { reg: REG, who: "Bro Arthur", pin: "1234" } });
     /* The walkaround itself is untouched: the Defects tab is written from
        checks_in by Apps Script, and a signature must not edit the record of
        what was found. */

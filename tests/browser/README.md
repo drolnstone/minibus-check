@@ -2,7 +2,8 @@
 
 The rest of `tests/` calls the Worker and the spreadsheet script directly.
 These drive the driver app itself, in Chromium, with stand-in servers
-answering from `real.json` (the real stops, buses, drivers and rota). Each
+answering from `real.json` (the real stops and buses; the drivers and rota
+with invented names, because this repository is public). Each
 check is one of the faults fixed in v1.74.9 and v1.74.10, asserted the way
 a driver would meet it.
 

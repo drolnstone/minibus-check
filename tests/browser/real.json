@@ -237,63 +237,63 @@
  ],
  "drivers": [
   {
-   "name": "Pst Kehinde",
+   "name": "Pst Kenneth",
    "role": "Minister in Charge",
    "active": true,
    "route": "",
    "ord": 99
   },
   {
-   "name": "Bro Adebola",
+   "name": "Bro Adrian",
    "role": "Driver",
    "active": true,
    "route": "North",
    "ord": 1.0
   },
   {
-   "name": "Bro Abiodun",
+   "name": "Bro Abel",
    "role": "Driver",
    "active": true,
    "route": "North",
    "ord": 2.0
   },
   {
-   "name": "Bro Moses",
+   "name": "Bro Martin",
    "role": "Driver",
    "active": true,
    "route": "North",
    "ord": 3.0
   },
   {
-   "name": "Bro Asim",
+   "name": "Bro Arthur",
    "role": "Coordinator",
    "active": true,
    "route": "North",
    "ord": 4.0
   },
   {
-   "name": "Bro Tunde",
+   "name": "Bro Trevor",
    "role": "Driver",
    "active": true,
    "route": "South",
    "ord": 1.0
   },
   {
-   "name": "Pst Obamakinwa",
+   "name": "Pst Oliver",
    "role": "Driver",
    "active": true,
    "route": "South",
    "ord": 2.0
   },
   {
-   "name": "Bro Adesina",
+   "name": "Bro Alfred",
    "role": "Driver",
    "active": true,
    "route": "South",
    "ord": 3.0
   },
   {
-   "name": "Bro Calvin",
+   "name": "Bro Cedric",
    "role": "Backup",
    "active": true,
    "route": "",
@@ -303,30 +303,30 @@
  "rota": [
   {
    "sunday": "2026-09-27",
-   "north": "Bro Adebola",
+   "north": "Bro Adrian",
    "northCover": "",
    "northBus": "NH56 FWP",
-   "south": "Bro Tunde",
+   "south": "Bro Trevor",
    "southCover": "",
    "southBus": "YS70 PWE",
    "status": "Confirmed"
   },
   {
    "sunday": "2026-10-04",
-   "north": "Bro Abiodun",
+   "north": "Bro Abel",
    "northCover": "",
    "northBus": "YS70 PWE",
-   "south": "Pst Obamakinwa",
+   "south": "Pst Oliver",
    "southCover": "",
    "southBus": "NH56 FWP",
    "status": "Confirmed"
   },
   {
    "sunday": "2026-10-11",
-   "north": "Bro Moses",
+   "north": "Bro Martin",
    "northCover": "",
    "northBus": "YS70 PWE",
-   "south": "Bro Adesina",
+   "south": "Bro Alfred",
    "southCover": "",
    "southBus": "NH56 FWP",
    "status": "Confirmed"
