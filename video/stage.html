@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- The stage the videos are drawn on: 540 x 960, photographed at twice that.
+     render.mjs opens this from disk. rough.js, the fonts, the photographs and
+     marks.js are in build/, fetched or made by build.sh; the icons are the
+     app's own, at the top of the repo. -->
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: "Patrick Hand"; src: url(build/fonts/patrick-hand-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Barlow"; font-weight: 300; src: url(build/fonts/barlow-latin-300-normal.woff2) format("woff2"); }
+@font-face { font-family: "Barlow"; font-weight: 400; src: url(build/fonts/barlow-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Barlow"; font-weight: 700; src: url(build/fonts/barlow-latin-700-normal.woff2) format("woff2"); }
+html, body { margin: 0; padding: 0; background: #fbf8f1; overflow: hidden; }
+svg { display: block; }
+</style></head>
+<body>
+<svg id="stage" xmlns="http://www.w3.org/2000/svg" width="540" height="960" viewBox="0 0 540 960">
+  <defs>
+    <pattern id="paper" width="24" height="24" patternUnits="userSpaceOnUse">
+      <rect width="24" height="24" fill="#fbf8f1"/>
+      <circle cx="3" cy="5" r="0.6" fill="#ece5d6"/><circle cx="15" cy="17" r="0.5" fill="#ece5d6"/>
+    </pattern>
+  </defs>
+  <rect width="540" height="960" fill="url(#paper)"/>
+</svg>
+<script src="build/rough.js"></script>
+<script src="build/marks.js"></script>
+<script>
+  /* Measured text needs the real fonts, so nothing is built until they are in. */
+  Promise.all([
+    document.fonts.load('36px "Patrick Hand"'),
+    document.fonts.load('300 36px Barlow'), document.fonts.load('16px Barlow'), document.fonts.load('700 18px Barlow')
+  ]).then(() => document.fonts.ready).then(() => {
+    const add = (src) => new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => no(new Error("could not load " + src)); document.body.appendChild(s); });
+    return add("engine.js").then(() => add("clips.js"));
+  }).then(() => { window.READY = true; }, (e) => { window.FAILED = String(e && e.message || e); });
+  window.addEventListener("error", (e) => { window.FAILED = String(e.message); });
+</script>
+</body></html>
