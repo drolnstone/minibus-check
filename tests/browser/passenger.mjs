@@ -30,14 +30,22 @@ const S03 = STOPS.find((s) => s.id === "S03");
 async function passenger(o) {
   o = o || {};
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
-    isMobile: true, hasTouch: true, serviceWorkers: "block" });
+    isMobile: true, hasTouch: true, serviceWorkers: "block", userAgent: o.ua || undefined });
   const pg = await ctx.newPage();
   const errs = [], asked = [];
   pg.on("pageerror", (e) => errs.push(String(e.message)));
   /* A phone that has never been asked about notifications, and has already
-     seen the install sheet, so the alerts offer is the one that comes up. */
+     seen the install sheet, so the alerts offer is the one that comes up.
+     firstVisit: it has not seen the install sheet either. lookupNow: the
+     subscription lookup answers at once, as it does on any visit after a
+     service worker is installed, instead of after the four second wait. */
   await pg.addInitScript(`(() => {
-    try { localStorage.setItem("bus.install.v1", "1"); } catch (e) {}
+    ${o.firstVisit ? "" : 'try { localStorage.setItem("bus.install.v1", "1"); } catch (e) {}'}
+    ${o.lookupNow ? `try {
+      const pm = { getSubscription: async () => null, subscribe: async () => { throw new Error("no"); } };
+      Object.defineProperty(navigator.serviceWorker, "ready", { get: () => Promise.resolve({ pushManager: pm }), configurable: true });
+      navigator.serviceWorker.register = async () => ({ pushManager: pm });
+    } catch (e) {}` : ""}
     ${o.pid ? 'try { localStorage.setItem("bus.pid.v1", "pid-me"); localStorage.setItem("bus.phone.v1", "07700900123"); } catch (e) {}' : ""}
     try { Object.defineProperty(Notification, "permission", { get: () => "default", configurable: true }); } catch (e) {}
     if (window.PushManager) PushManager.prototype.getSubscription = async function () { return null; };
@@ -50,7 +58,7 @@ async function passenger(o) {
     if (p.get("bus")) {
       body = Object.assign(body, { date: KEY, closed: !!o.closed, rehearsal: o.rehearsal || false, rolled: false,
         cutoff: "Sunday 09:30", stops: STOPS, arrivals: ARRIVALS, off: [], counts: { S03: 3, N02: 2 },
-        driver: null, phone: o.booked ? "07700900123" : "", stopGone: "",
+        driver: o.driver || null, phone: o.booked ? "07700900123" : "", stopGone: "",
         mine: o.booked ? { stopId: "S03", seats: 2 } : null, seats: {} });
     } else if (p.get("trip")) {
       body = Object.assign(body, o.trip || { live: false, why: "open", date: KEY });
@@ -65,6 +73,7 @@ async function passenger(o) {
   const me = { pg, ctx, errs, asked };
   me.text = (sel) => pg.$eval(sel, (n) => (n.innerText || n.textContent || "").trim()).catch(() => "");
   me.up = () => pg.$eval("#alertAsk", (n) => n.classList.contains("is-on")).catch(() => false);
+  me.howUp = () => pg.$eval("#how", (n) => n.classList.contains("is-on")).catch(() => false);
   me.shot = (name) => pg.screenshot({ path: OUT + "/" + name + ".png" });
   return me;
 }
@@ -175,6 +184,65 @@ if (want("P6")) {
         "during '" + during.slice(0, 60) + "', loads " + before + " then " + loads() + ", after '" + after.slice(0, 60) +
         "', stops on screen " + form);
   await me.ctx.close();
+}
+
+/* P7, P7b: from v1.88.0. On a first visit the install offer and the alerts
+   question rose on timers of their own, and whenever the subscription lookup
+   answered before the stops landed the alerts question won and "Add to your
+   phone" was never offered. The install offer now comes first, then the
+   alerts question as it closes; an iPhone just shown the Home Screen steps is
+   not asked the same thing again on the same visit. */
+const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+if (want("P7")) {
+  const me = await passenger({ firstVisit: true, lookupNow: true, wait: 2500 });
+  const howFirst = await me.howUp(), askFirst = await me.up();
+  await me.shot("P7-install-first");
+  await me.pg.evaluate(() => document.getElementById("howDone").click());
+  await me.pg.waitForTimeout(1500);
+  const askAfter = await me.up(), howAfter = await me.howUp();
+  await me.shot("P7-then-alerts");
+  check("P7", "a first visit is offered Add to your phone first, then alerts as it closes",
+        howFirst && !askFirst && askAfter && !howAfter,
+        "install sheet " + howFirst + ", alerts " + askFirst + " at first; then alerts " + askAfter + ", install " + howAfter);
+  await me.ctx.close();
+}
+if (want("P7b")) {
+  const me = await passenger({ firstVisit: true, lookupNow: true, ua: IPHONE, wait: 2500 });
+  const howFirst = await me.howUp(), askFirst = await me.up();
+  await me.pg.evaluate(() => document.getElementById("howDone").click());
+  await me.pg.waitForTimeout(1500);
+  const askAfter = await me.up();
+  const title = await me.text("#alertAskTitle");
+  await me.shot("P7b-iphone");
+  check("P7b", "an iPhone shown the Home Screen steps is not asked to add it again on the same visit",
+        howFirst && !askFirst && !askAfter,
+        "install sheet " + howFirst + ", alerts " + askFirst + " at first; alerts after " + askAfter + " ('" + title + "')");
+  await me.ctx.close();
+}
+
+/* P8: from w2.28.0 the live server names the driver to a booked phone on the
+   morning, and the page's Message button, dark since the page left the
+   sheet, shows with his name and a WhatsApp link that says where the
+   passenger is booked. Once the run has ended it goes. */
+if (want("P8")) {
+  const DRIVER = { name: "Bro Trevor", wa: "447700900222", route: "South" };
+  const me = await passenger({ booked: true, pid: true, closed: true, driver: DRIVER, trip: leftChurch() });
+  await me.pg.evaluate(() => { const b = document.getElementById("alertAskNot"); if (b) b.click(); });
+  await me.pg.waitForTimeout(300);
+  const btn = await me.pg.$eval("#wa", (n) => ({ shown: n.style.display !== "none" && !!n.offsetParent,
+    text: (n.textContent || "").trim(), href: n.getAttribute("href") || "" })).catch(() => ({}));
+  await me.shot("P8-message-driver");
+  await me.ctx.close();
+  const ended = await passenger({ booked: true, pid: true, closed: true, driver: DRIVER,
+    trip: leftChurch({ ended: true, mine: "served", servedAt: "10:41" }) });
+  const gone = await ended.pg.$eval("#wa", (n) => n.style.display === "none" || !n.offsetParent).catch(() => true);
+  await ended.ctx.close();
+  const text = decodeURIComponent((btn.href || "").split("?text=")[1] || "");
+  check("P8", "a booked passenger on the morning can message the driver, until the run ends",
+        btn.shown && btn.text === "Message Bro Trevor" && btn.href.indexOf("https://wa.me/447700900222?text=") === 0 &&
+        text.indexOf(S03.stop) > -1 && gone,
+        "shown " + btn.shown + ", '" + btn.text + "', " + (btn.href || "").slice(0, 40) + ", says stop " +
+        (text.indexOf(S03.stop) > -1) + ", gone after the run " + gone);
 }
 
 const bad = results.filter((r) => !r.ok);

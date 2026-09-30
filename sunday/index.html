@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.87.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.88.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -744,7 +744,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.87.0";
+var PAGE_VERSION = "v1.88.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -1836,6 +1836,20 @@ function alertAskMaybe(){
   var needsHome = isApple() && !standalone();
   if(!pushCanAsk() && !needsHome) return;      /* this phone cannot do it at all */
   if(anySheetUp()) return;
+
+  /* THE INSTALL OFFER FIRST, ON A FIRST VISIT. Both used to rise on timers
+     of their own, this one half a second after it was asked and the install
+     sheet 600 ms after the stops landed. Whenever the subscription lookup had
+     answered before the stops came in, which is every visit after a service
+     worker has been installed and some first visits too, this one won, the
+     install sheet found it up and stood down, and "Add to your phone" was
+     never offered. It now waits while that offer is still coming on this
+     visit; the install sheet asks for it on its way out (howClose), and
+     howAuto does when it decides not to open. */
+  if(howComing()) return;
+  /* An iPhone that has just been shown the Home Screen steps is not asked the
+     same thing again on the same visit. */
+  if(needsHome && howShown) return;
 
   var box=$("alertAsk");
   if(!box) return;
@@ -3296,6 +3310,7 @@ function howHtml(){
 }
 
 function howOpen(auto){
+  howShown=true;
   $("howBody").innerHTML=howHtml();
   /* "Done" is the wrong word on a sheet nobody asked for: nothing has been
      done yet. Same button, saying the true thing in each case. */
@@ -3341,6 +3356,17 @@ function howClose(){
    and it costs one line under the closing time. */
 var HOWKEY="bus.install.v1";
 var howTried=false;
+var howTimer=null;   /* the offer is on its way: see howAuto */
+var howShown=false;  /* the steps have been on screen this visit */
+
+/* Is the install offer still to come on this visit? True until howAuto has
+   decided, and while its timer runs. The alerts question waits on it. */
+function howComing(){
+  if(howTried && !howTimer) return false;
+  if(standalone()) return false;
+  try{ return localStorage.getItem(HOWKEY)!=="1"; }
+  catch(e){ return false; }
+}
 
 function howBlocked(){
   return standalone() || $("ask").classList.contains("is-on") || alertAskUp();
@@ -3348,13 +3374,18 @@ function howBlocked(){
 function howAuto(){
   if(howTried) return;
   howTried=true;
-  if(howBlocked()) return;
-  try{ if(localStorage.getItem(HOWKEY)==="1") return; }
-  catch(e){ return; }   /* no storage means no memory of having asked: do not ask */
+  var offer = !howBlocked();
+  if(offer){
+    try{ offer = localStorage.getItem(HOWKEY)!=="1"; }
+    catch(e){ offer = false; }   /* no storage means no memory of having asked: do not ask */
+  }
+  /* Not offering this time, so the alerts question, which waited, goes now. */
+  if(!offer){ try{ alertAskMaybe(); }catch(e){} return; }
   /* A beat after the stops land, so the sheet rises over a page with
      something on it rather than over "Loading the stops…". */
-  setTimeout(function(){
-    if(howBlocked()) return;
+  howTimer = setTimeout(function(){
+    howTimer = null;
+    if(howBlocked()){ try{ alertAskMaybe(); }catch(e){} return; }
     try{ localStorage.setItem(HOWKEY,"1"); }catch(e){}
     howOpen(true);
   },600);

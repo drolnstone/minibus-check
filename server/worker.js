@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.27.0";
+const SCRIPT_VERSION = "w2.28.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -66,6 +66,19 @@ function rolesOf(v) {
   if (!Array.isArray(v)) return null;
   const list = v.map((r) => String(r || "").replace(/\s+/g, " ").trim().slice(0, 60)).filter(Boolean);
   return list.length ? list.slice(0, 12) : null;
+}
+
+/* The drivers' WhatsApp numbers as the sheet sends them, cleaned: a name of
+   sixty characters at most, and a number of 11 to 15 digits or nothing. */
+function driverWaOf(v) {
+  const out = {};
+  if (!v || typeof v !== "object") return out;
+  for (const k of Object.keys(v).slice(0, 200)) {
+    const name = String(k || "").trim().slice(0, 60);
+    const wa = String(v[k] == null ? "" : v[k]).replace(/\D/g, "");
+    if (name && wa.length >= 11 && wa.length <= 15) out[name] = wa;
+  }
+  return out;
 }
 
 function coordinatorOf(v) {
@@ -1977,15 +1990,46 @@ async function busPayload(env, keyIn, ref, pid) {
        rather than cosmetic. */
     off: cancelledRoutes(await getRotaRow(env, key).catch(() => null), stops),
     counts: bookingCounts(rows),
-    /* The WhatsApp button is dormant by decision — no numbers in the Drivers
-       tab means no button — so this is always null and the page draws
-       nothing. Kept in the shape so the payload stays identical. */
-    driver: null,
+    /* Who is driving this phone's route, with a WhatsApp number, for the
+       Message button. From w2.28.0; null for everybody else, which is most
+       phones most of the week. See driverForPassenger. */
+    driver: await driverForPassenger(env, key, stops, mine),
     phone: mine && mine.phone ? mine.phone : "",
     mine: mine ? { stopId: mine.stopId, seats: mine.seats } : null,
     stopGone,
     seats
   };
+}
+
+/* THE DRIVER A BOOKED PASSENGER MAY MESSAGE. From w2.28.0.
+
+   Handed to one phone only: one with a seat on this Sunday, once bookings
+   have closed, for the route that seat is on, with the route running. The
+   name is the rota's for that route, cover first, as every phone sees the
+   rota now, so a cover the coordinator has just typed is the man the
+   passenger reaches. His number comes from the Drivers tab by way of the
+   sync; no number, no button. Any fault here is no button, never a broken
+   page: this is a convenience, and it must not be able to take Sunday
+   morning down with it. */
+async function driverForPassenger(env, key, stops, mine) {
+  try {
+    if (!mine || !bookingsClosed(key)) return null;
+    const st = stops.find((s) => s.id === mine.stopId);
+    if (!st || !st.route) return null;
+    const row = await currentRota(env, key);
+    if (!row || routeCancelled(row, st.route)) return null;
+    const who = st.route === "South" ? (row.southCover || row.south) : (row.northCover || row.north);
+    if (!who) return null;
+    const book = await cacheGet(env, "driver_wa");
+    if (!book || typeof book !== "object") return null;
+    const flat = (x) => String(x || "").trim().toLowerCase().replace(/\s+/g, " ");
+    for (const name of Object.keys(book)) {
+      if (flat(name) === flat(who) && book[name]) return { name: name, wa: String(book[name]), route: st.route };
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
 }
 
 async function tripPayload(env, ref, want, askedStop, pid) {
@@ -3227,6 +3271,14 @@ async function handleSync(env, body) {
   if (body.coordinator && typeof body.coordinator === "object") {
     coordSent = coordinatorOf(body.coordinator);
     stmts.push(cachePut(env, "coordinator", coordSent));
+  }
+
+  /* The drivers' WhatsApp numbers, from w2.28.0, for the passenger's Message
+     button. Same rule again: an older sheet that does not send them leaves
+     the last ones alone, and an empty list is an answer and is stored, so a
+     number taken off the Drivers tab stops being handed out. */
+  if (body.driverWa && typeof body.driverWa === "object") {
+    stmts.push(cachePut(env, "driver_wa", driverWaOf(body.driverWa)));
   }
 
   /* Told, never guessed. An older Apps Script that does not send it leaves
