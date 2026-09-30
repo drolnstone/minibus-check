@@ -118,6 +118,8 @@ server/schema.sql       the D1 tables, all of them
 tests/                  the checks, see Tests below. Not part of the apps
 manual/                 builds the driver's manual PDF from a download of the
                         spreadsheet, see manual/README.md. Not part of the apps
+video/                  builds the three passenger videos, see video/README.md.
+                        Not part of the apps
 ```
 
 `schema-pin.sql` and `schema-push.sql` were one-off additions to a database
@@ -128,7 +130,7 @@ They were never in the repository, so there is nothing to delete there.
 
 **Everything else in the list above is public.** The repository is public and
 GitHub Pages serves it from its root, so `Code.gs`, `worker.js`,
-`schema.sql`, `tests/` and `manual/` can be read by anybody, on GitHub and at
+`schema.sql`, `tests/`, `manual/` and `video/` can be read by anybody, on GitHub and at
 the Pages address. So no secret ever goes in a file here: `PIN_SALT`,
 `SHEET_TOKEN` and the rest live in Script Properties and Worker variables.
 And a value committed once stays readable in the history after it is taken
