@@ -76,7 +76,14 @@ const S = [
   { id: "S18c the board's word from a finished round goes", tests: "T18b", swaps: [
     ["    if(r && r!==round){ delete tripSeen[k]; seenGone=true; }\n", ""] ] },
   { id: "S16d no test run taken back at the end", tests: "T16d", swaps: [
-    ["    if(Number(tripRehearsal) && !tripRoundNow()) return;\n", ""] ] }
+    ["    if(Number(tripRehearsal) && !tripRoundNow()) return;\n", ""] ] },
+  /* v1.88.0, the passenger page: "Add to your phone" before the alerts
+     question on a first visit. file and runner name where the sabotage goes
+     and which checks run; the driver app and driver-app.mjs otherwise. */
+  { id: "S19 install offer first", tests: "P7", file: "sunday/index.html", runner: "passenger.mjs", swaps: [
+    ["  if(howComing()) return;\n", ""] ] },
+  { id: "S19b no second Home Screen ask", tests: "P7b", file: "sunday/index.html", runner: "passenger.mjs", swaps: [
+    ["  if(needsHome && howShown) return;\n", ""] ] }
 ];
 
 const summary = [];
@@ -86,16 +93,18 @@ const PICK = (process.argv[2] || "").split(",").filter(Boolean);
 for (const m of S.filter(m => !PICK.length || PICK.some(p => m.id.split(" ")[0] === p))) {
   rmSync(TMP, { recursive: true, force: true });
   cpSync(SRC, TMP, { recursive: true });
-  let html = readFileSync(TMP + "/index.html", "utf8");
+  const file = m.file || "index.html";
+  let html = readFileSync(TMP + "/" + file, "utf8");
   for (const [a, b] of m.swaps) {
     const n = html.split(a).length - 1;
     if (n !== 1) { console.log("  !! " + m.id + ": sabotage text found " + n + " times, not once — stopping"); process.exit(2); }
     html = html.replace(a, b);
   }
-  writeFileSync(TMP + "/index.html", html);
+  writeFileSync(TMP + "/" + file, html);
+  const runner = m.runner ? fileURLToPath(new URL("./" + m.runner, import.meta.url)) : TESTS;
   let out = "";
   try {
-    out = execFileSync("node", [TESTS, m.tests], { env: Object.assign({}, process.env, { MINIBUS_ROOT: TMP, MINIBUS_PORT: String(port++) }), encoding: "utf8", timeout: 600000 });
+    out = execFileSync("node", [runner, m.tests], { env: Object.assign({}, process.env, { MINIBUS_ROOT: TMP, MINIBUS_PORT: String(port++) }), encoding: "utf8", timeout: 600000 });
   } catch (e) { out = String(e.stdout || ""); }
   const failed = (out.match(/✗ [A-Za-z0-9]+/g) || []).map(x => x.slice(2));
   const ran = (out.match(/[✓✗] [A-Za-z0-9]+/g) || []).map(x => x.slice(2));

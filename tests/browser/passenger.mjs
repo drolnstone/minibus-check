@@ -30,14 +30,22 @@ const S03 = STOPS.find((s) => s.id === "S03");
 async function passenger(o) {
   o = o || {};
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
-    isMobile: true, hasTouch: true, serviceWorkers: "block" });
+    isMobile: true, hasTouch: true, serviceWorkers: "block", userAgent: o.ua || undefined });
   const pg = await ctx.newPage();
   const errs = [], asked = [];
   pg.on("pageerror", (e) => errs.push(String(e.message)));
   /* A phone that has never been asked about notifications, and has already
-     seen the install sheet, so the alerts offer is the one that comes up. */
+     seen the install sheet, so the alerts offer is the one that comes up.
+     firstVisit: it has not seen the install sheet either. lookupNow: the
+     subscription lookup answers at once, as it does on any visit after a
+     service worker is installed, instead of after the four second wait. */
   await pg.addInitScript(`(() => {
-    try { localStorage.setItem("bus.install.v1", "1"); } catch (e) {}
+    ${o.firstVisit ? "" : 'try { localStorage.setItem("bus.install.v1", "1"); } catch (e) {}'}
+    ${o.lookupNow ? `try {
+      const pm = { getSubscription: async () => null, subscribe: async () => { throw new Error("no"); } };
+      Object.defineProperty(navigator.serviceWorker, "ready", { get: () => Promise.resolve({ pushManager: pm }), configurable: true });
+      navigator.serviceWorker.register = async () => ({ pushManager: pm });
+    } catch (e) {}` : ""}
     ${o.pid ? 'try { localStorage.setItem("bus.pid.v1", "pid-me"); localStorage.setItem("bus.phone.v1", "07700900123"); } catch (e) {}' : ""}
     try { Object.defineProperty(Notification, "permission", { get: () => "default", configurable: true }); } catch (e) {}
     if (window.PushManager) PushManager.prototype.getSubscription = async function () { return null; };
@@ -65,6 +73,7 @@ async function passenger(o) {
   const me = { pg, ctx, errs, asked };
   me.text = (sel) => pg.$eval(sel, (n) => (n.innerText || n.textContent || "").trim()).catch(() => "");
   me.up = () => pg.$eval("#alertAsk", (n) => n.classList.contains("is-on")).catch(() => false);
+  me.howUp = () => pg.$eval("#how", (n) => n.classList.contains("is-on")).catch(() => false);
   me.shot = (name) => pg.screenshot({ path: OUT + "/" + name + ".png" });
   return me;
 }
@@ -174,6 +183,40 @@ if (want("P6")) {
         /Rehearsal/i.test(during) && loads() > before && !/Rehearsal/i.test(after) && form > 0,
         "during '" + during.slice(0, 60) + "', loads " + before + " then " + loads() + ", after '" + after.slice(0, 60) +
         "', stops on screen " + form);
+  await me.ctx.close();
+}
+
+/* P7, P7b: from v1.88.0. On a first visit the install offer and the alerts
+   question rose on timers of their own, and whenever the subscription lookup
+   answered before the stops landed the alerts question won and "Add to your
+   phone" was never offered. The install offer now comes first, then the
+   alerts question as it closes; an iPhone just shown the Home Screen steps is
+   not asked the same thing again on the same visit. */
+const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+if (want("P7")) {
+  const me = await passenger({ firstVisit: true, lookupNow: true, wait: 2500 });
+  const howFirst = await me.howUp(), askFirst = await me.up();
+  await me.shot("P7-install-first");
+  await me.pg.evaluate(() => document.getElementById("howDone").click());
+  await me.pg.waitForTimeout(1500);
+  const askAfter = await me.up(), howAfter = await me.howUp();
+  await me.shot("P7-then-alerts");
+  check("P7", "a first visit is offered Add to your phone first, then alerts as it closes",
+        howFirst && !askFirst && askAfter && !howAfter,
+        "install sheet " + howFirst + ", alerts " + askFirst + " at first; then alerts " + askAfter + ", install " + howAfter);
+  await me.ctx.close();
+}
+if (want("P7b")) {
+  const me = await passenger({ firstVisit: true, lookupNow: true, ua: IPHONE, wait: 2500 });
+  const howFirst = await me.howUp(), askFirst = await me.up();
+  await me.pg.evaluate(() => document.getElementById("howDone").click());
+  await me.pg.waitForTimeout(1500);
+  const askAfter = await me.up();
+  const title = await me.text("#alertAskTitle");
+  await me.shot("P7b-iphone");
+  check("P7b", "an iPhone shown the Home Screen steps is not asked to add it again on the same visit",
+        howFirst && !askFirst && !askAfter,
+        "install sheet " + howFirst + ", alerts " + askFirst + " at first; alerts after " + askAfter + " ('" + title + "')");
   await me.ctx.close();
 }
 
