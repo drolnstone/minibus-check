@@ -1,0 +1,92 @@
+MINIBUS
+=======
+  pages v1.87.0 · server w2.27.0 · sheet v1.89.0
+
+Four more things from the Minibus menu in the coordinator's app, under
+Have a look. And on a Sunday: the driver is told to set off on the
+departure time, and passengers are told if nothing has recorded the bus
+leaving five minutes after it.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.86.0         v1.87.0
+  Worker  w2.25.0         w2.27.0
+  Code.gs v1.88.0         v1.89.0
+
+If v1.86.0's steps are not done yet (the Buses tab check, Worker w2.25.0,
+Code.gs v1.88.0), do those first: analysis/DEPLOY-v1.86.0.txt. This
+release carries them too, so doing this one does both, but the Buses tab
+check at the top of that file still applies.
+
+
+IN THIS ORDER
+-------------
+
+1. WORKER. Cloudflare, the minibus Worker, Edit code. Replace everything
+   with server/worker.js. Deploy.
+
+2. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
+   Save. Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy.
+
+3. Minibus, Send everything to the live server now.
+
+4. PAGES. Merge the pull request.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.87.0 · server w2.27.0 · sheet
+   v1.89.0 .
+
+B. Coordinator's app, Have a look:
+   - Bus link for this Sunday: Send on WhatsApp opens WhatsApp with the
+     link ready to send. Copy the link copies it.
+   - Is the live server working?: the same lines as the menu item, sorted
+     into Needs attention and Fine. It should have nothing needing
+     attention.
+   - Who is tapping: the last runs, as on the menu.
+   - Send duty reminders now: asks first. Send, and it says what went.
+
+
+WHAT CHANGED
+------------
+
+1. BUS LINK FOR THIS SUNDAY. The passenger page's address, with a button
+   that opens WhatsApp ready to send it to a person or the group, and one
+   to copy it. Built in the app itself; it needs neither server.
+
+2. IS THE LIVE SERVER WORKING? and WHO IS TAPPING. Built by the sheet, the
+   same code as the menu items, handed back through the live server after
+   it has checked the PIN. The menu items are unchanged.
+
+3. SEND DUTY REMINDERS NOW. The same as the menu item: sends only the
+   reminders due today, and never the same one twice. The app asks
+   "Send the duty reminders due today?" first, and has no Ask again on the
+   answer, so it cannot be sent by a stray tap.
+
+4. A TEST THAT FAILED AFTER NINE AT NIGHT. One coordinator-alert test ran
+   on the real clock and, in the quiet hours, rightly saw a non-urgent
+   alert held for the morning. It now runs at two in the afternoon. The
+   app was never wrong.
+
+5. TIME TO SET OFF, AND NO WORD YET.
+   On the departure time (North 10:05 and South 10:16 on today's Bus Stops
+   tab, and whatever it says after a change), the rostered driver's phone
+   gets "Time to set off. Your North run is due to leave church at 10:05.
+   Tap Start as you pull away." Before, the first word was ten minutes late.
+   The ten and twenty-five minute reminders are unchanged.
+   Five minutes past, if nobody has tapped Start, everybody booked on that
+   route gets "No word yet that your bus has left church. It was due to
+   leave at 10:05. Yours is timetabled 10:36 at Fountains Road by Stanley
+   Close. We will message you as soon as it sets off." Once, and not on a
+   route called off, during a rehearsal, or more than an hour past.
+   WHY THOSE WORDS. Start is the only thing that tells the live server a bus
+   has gone. A driver who pulls away without tapping it is on the road while
+   the record says he is at church, so "the bus has not left" or "the driver
+   is running behind" could both be untrue, and the second points at a
+   person. "No word yet" is true either way. The moment Start is tapped,
+   they get "The bus has left church" as before.
+   Nothing to set up. It needs the Worker's every-minute Cron Trigger, which
+   you already have.

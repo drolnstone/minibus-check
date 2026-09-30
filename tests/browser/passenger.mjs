@@ -58,7 +58,7 @@ async function passenger(o) {
     if (p.get("bus")) {
       body = Object.assign(body, { date: KEY, closed: !!o.closed, rehearsal: o.rehearsal || false, rolled: false,
         cutoff: "Sunday 09:30", stops: STOPS, arrivals: ARRIVALS, off: [], counts: { S03: 3, N02: 2 },
-        driver: null, phone: o.booked ? "07700900123" : "", stopGone: "",
+        driver: o.driver || null, phone: o.booked ? "07700900123" : "", stopGone: "",
         mine: o.booked ? { stopId: "S03", seats: 2 } : null, seats: {} });
     } else if (p.get("trip")) {
       body = Object.assign(body, o.trip || { live: false, why: "open", date: KEY });
@@ -218,6 +218,31 @@ if (want("P7b")) {
         howFirst && !askFirst && !askAfter,
         "install sheet " + howFirst + ", alerts " + askFirst + " at first; alerts after " + askAfter + " ('" + title + "')");
   await me.ctx.close();
+}
+
+/* P8: from w2.28.0 the live server names the driver to a booked phone on the
+   morning, and the page's Message button, dark since the page left the
+   sheet, shows with his name and a WhatsApp link that says where the
+   passenger is booked. Once the run has ended it goes. */
+if (want("P8")) {
+  const DRIVER = { name: "Bro Trevor", wa: "447700900222", route: "South" };
+  const me = await passenger({ booked: true, pid: true, closed: true, driver: DRIVER, trip: leftChurch() });
+  await me.pg.evaluate(() => { const b = document.getElementById("alertAskNot"); if (b) b.click(); });
+  await me.pg.waitForTimeout(300);
+  const btn = await me.pg.$eval("#wa", (n) => ({ shown: n.style.display !== "none" && !!n.offsetParent,
+    text: (n.textContent || "").trim(), href: n.getAttribute("href") || "" })).catch(() => ({}));
+  await me.shot("P8-message-driver");
+  await me.ctx.close();
+  const ended = await passenger({ booked: true, pid: true, closed: true, driver: DRIVER,
+    trip: leftChurch({ ended: true, mine: "served", servedAt: "10:41" }) });
+  const gone = await ended.pg.$eval("#wa", (n) => n.style.display === "none" || !n.offsetParent).catch(() => true);
+  await ended.ctx.close();
+  const text = decodeURIComponent((btn.href || "").split("?text=")[1] || "");
+  check("P8", "a booked passenger on the morning can message the driver, until the run ends",
+        btn.shown && btn.text === "Message Bro Trevor" && btn.href.indexOf("https://wa.me/447700900222?text=") === 0 &&
+        text.indexOf(S03.stop) > -1 && gone,
+        "shown " + btn.shown + ", '" + btn.text + "', " + (btn.href || "").slice(0, 40) + ", says stop " +
+        (text.indexOf(S03.stop) > -1) + ", gone after the run " + gone);
 }
 
 const bad = results.filter((r) => !r.ok);

@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.89.0";
+var SCRIPT_VERSION = "v1.90.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -2582,6 +2582,9 @@ function pushToWorker() {
     /* Who people ring. The live server stamps it on every answer, so the
        pages take it from there rather than from a file. */
     coordinator: coordinatorContact(readDrivers(ss)),
+    /* And every driver's WhatsApp number, for the passenger's Message button.
+       See driverWhatsApp for who is ever handed one. */
+    driverWa: driverWhatsApp(readDrivers(ss)),
     cache: cache,
     coordShelf: coordShelf || undefined,
     coordApplied: coordApplied,
@@ -7741,16 +7744,40 @@ function driverOnDuty(ss, key, route) {
   drivers.forEach(function (x) { if (!hit && flat(x.name) === flat(who)) hit = x; });
   if (!hit || !hit.phone) return null;
 
-  /* wa.me wants digits only, in international form. A UK mobile written the
-     way anybody actually writes it starts 07, so the leading nought becomes
-     44. Anything already carrying a country code is left alone. Too short to
-     be a real number and nothing is sent, because a WhatsApp button that
-     opens a chat with a stranger is worse than no button. */
-  var digits = String(hit.phone).replace(/\D/g, "");
-  if (digits.charAt(0) === "0") digits = "44" + digits.substring(1);
-  if (digits.length < 11) return null;
+  var digits = waNumber(hit.phone);
+  if (!digits) return null;
 
   return { name: hit.name, wa: digits, route: route };
+}
+
+/* A phone number as wa.me wants it: digits only, in international form. A UK
+   mobile written the way anybody actually writes it starts 07, so the leading
+   nought becomes 44. Anything already carrying a country code is left alone.
+   Too short to be a real number and the answer is "", because a WhatsApp
+   button that opens a chat with a stranger is worse than no button. */
+function waNumber(phone) {
+  var digits = String(phone == null ? "" : phone).replace(/\D/g, "");
+  if (digits.charAt(0) === "0") digits = "44" + digits.substring(1);
+  return digits.length < 11 ? "" : digits;
+}
+
+/* EVERY ACTIVE DRIVER'S WHATSAPP NUMBER, FOR THE LIVE SERVER. From v1.90.0.
+
+   The passenger page's Message button was built against this file, and when
+   the page moved to the live server it went dark, because the live server
+   had no numbers. They go on the sync now, beside the coordinator's, over the
+   same guarded call. The live server hands one number to one phone only: a
+   phone with a seat on that route, once that Sunday's bookings have closed,
+   and the page drops the button when the run ends. Anybody else who opens
+   the link sees nothing, exactly as before. */
+function driverWhatsApp(drivers) {
+  var out = {};
+  (drivers || []).forEach(function (d) {
+    if (!d || !d.active || !d.name) return;
+    var wa = waNumber(d.phone);
+    if (wa) out[String(d.name).trim()] = wa;
+  });
+  return out;
 }
 
 function busPayload(key, ref, pid) {

@@ -1,22 +1,32 @@
 MINIBUS
 =======
-  pages v1.87.0 · server w2.27.0 · sheet v1.89.0
+  pages v1.88.0 · server w2.28.0 · sheet v1.90.0
 
-Four more things from the Minibus menu in the coordinator's app, under
-Have a look. And on a Sunday: the driver is told to set off on the
-departure time, and passengers are told if nothing has recorded the bus
-leaving five minutes after it.
+Two things on the passenger page. On a first visit it offers "Add to your
+phone" before asking about alerts, instead of the alerts question sometimes
+winning and the offer never coming. And on a Sunday morning a booked
+passenger can WhatsApp the driver on his route, with the Message button that
+has been dark since the page moved to the live server.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.86.0         v1.87.0
-  Worker  w2.25.0         w2.27.0
-  Code.gs v1.88.0         v1.89.0
+  Pages   v1.87.0         v1.88.0
+  Worker  w2.27.0         w2.28.0
+  Code.gs v1.89.0         v1.90.0
 
-If v1.86.0's steps are not done yet (the Buses tab check, Worker w2.25.0,
-Code.gs v1.88.0), do those first: analysis/DEPLOY-v1.86.0.txt. This
-release carries them too, so doing this one does both, but the Buses tab
-check at the top of that file still applies.
+If v1.87.0's steps are not done yet, do those first:
+analysis/DEPLOY-v1.87.0.txt.
+
+
+BEFORE YOU START
+----------------
+
+Tell the drivers. From this release, on a Sunday morning after bookings
+close, a passenger booked on a driver's route can open WhatsApp to that
+driver from the passenger page. Only a booked passenger, only for his own
+route, only on the morning, and not once the run has ended. A driver who
+would rather not: leave his Phone cell on the Drivers tab empty, and there is
+no button for his route.
 
 
 IN THIS ORDER
@@ -29,7 +39,8 @@ IN THIS ORDER
    Save. Deploy, Manage deployments, the pencil, Version: New version,
    Deploy.
 
-3. Minibus, Send everything to the live server now.
+3. Minibus, Send everything to the live server now. This is what carries
+   the drivers' numbers across; until it runs there is no button.
 
 4. PAGES. Merge the pull request.
 
@@ -37,56 +48,36 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.87.0 · server w2.27.0 · sheet
-   v1.89.0 .
+A. The foot of all three apps reads  app v1.88.0 · server w2.28.0 · sheet
+   v1.90.0 .
 
-B. Coordinator's app, Have a look:
-   - Bus link for this Sunday: Send on WhatsApp opens WhatsApp with the
-     link ready to send. Copy the link copies it.
-   - Is the live server working?: the same lines as the menu item, sorted
-     into Needs attention and Fine. It should have nothing needing
-     attention.
-   - Who is tapping: the last runs, as on the menu.
-   - Send duty reminders now: asks first. Send, and it says what went.
+B. A phone that has never opened the passenger page (or one whose site data
+   has been cleared): open the link. "Add to your phone" comes up first. Tap
+   Not now, and "Turn on bus alerts?" comes up after it. On an iPhone the
+   steps come up, and it is not asked a second time on that visit.
+
+C. On a Sunday after 09:30, a phone booked on a route: the bar at the foot
+   shows Not coming and Message with the driver's name. It opens WhatsApp to
+   him with a message saying where the passenger is booked. A phone with no
+   seat shows no Message button.
 
 
 WHAT CHANGED
 ------------
 
-1. BUS LINK FOR THIS SUNDAY. The passenger page's address, with a button
-   that opens WhatsApp ready to send it to a person or the group, and one
-   to copy it. Built in the app itself; it needs neither server.
+1. ADD TO YOUR PHONE, FIRST. The install offer and the alerts question rose
+   on timers of their own, 600 ms and half a second, and whenever the
+   subscription lookup had answered before the stops landed the alerts
+   question won. The install sheet then found it up and stood down, and the
+   offer never came. The alerts question now waits while the install offer is
+   still to come on that visit, and rises as the install sheet closes.
+   (sunday/index.html. Browser checks P7, P7b; sabotages S19, S19b.)
 
-2. IS THE LIVE SERVER WORKING? and WHO IS TAPPING. Built by the sheet, the
-   same code as the menu items, handed back through the live server after
-   it has checked the PIN. The menu items are unchanged.
-
-3. SEND DUTY REMINDERS NOW. The same as the menu item: sends only the
-   reminders due today, and never the same one twice. The app asks
-   "Send the duty reminders due today?" first, and has no Ask again on the
-   answer, so it cannot be sent by a stray tap.
-
-4. A TEST THAT FAILED AFTER NINE AT NIGHT. One coordinator-alert test ran
-   on the real clock and, in the quiet hours, rightly saw a non-urgent
-   alert held for the morning. It now runs at two in the afternoon. The
-   app was never wrong.
-
-5. TIME TO SET OFF, AND NO WORD YET.
-   On the departure time (North 10:05 and South 10:16 on today's Bus Stops
-   tab, and whatever it says after a change), the rostered driver's phone
-   gets "Time to set off. Your North run is due to leave church at 10:05.
-   Tap Start as you pull away." Before, the first word was ten minutes late.
-   The ten and twenty-five minute reminders are unchanged.
-   Five minutes past, if nobody has tapped Start, everybody booked on that
-   route gets "No word yet that your bus has left church. It was due to
-   leave at 10:05. Yours is timetabled 10:36 at Fountains Road by Stanley
-   Close. We will message you as soon as it sets off." Once, and not on a
-   route called off, during a rehearsal, or more than an hour past.
-   WHY THOSE WORDS. Start is the only thing that tells the live server a bus
-   has gone. A driver who pulls away without tapping it is on the road while
-   the record says he is at church, so "the bus has not left" or "the driver
-   is running behind" could both be untrue, and the second points at a
-   person. "No word yet" is true either way. The moment Start is tapped,
-   they get "The bus has left church" as before.
-   Nothing to set up. It needs the Worker's every-minute Cron Trigger, which
-   you already have.
+2. MESSAGE THE DRIVER. The sheet sends every active driver's WhatsApp number
+   on the sync, beside the coordinator's, over the same guarded call. The
+   live server names the driver on a route, cover first, only to a phone with
+   a seat on that route that Sunday, once bookings have closed and while the
+   route is running; everybody else gets nothing. A number too short to be
+   real, or none at all, gives no button. (Code.gs driverWhatsApp and
+   waNumber; worker.js driverForPassenger; tests/suites/34-message-driver.mjs
+   and browser check P8.)

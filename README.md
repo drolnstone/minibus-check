@@ -1794,6 +1794,23 @@ seat for the coming Sunday. A page open on a stranger's phone is asked for
 nothing. It also waits half a second and re-tests, because the install sheet
 opens on a timer of its own.
 
+**On a first visit the install offer comes first**, from v1.88.0. The two used
+to race: whenever the subscription lookup answered before the stops landed,
+the alerts question rose first, the install sheet found it up and stood down,
+and "Add to your phone" was never offered. Now the alerts question waits while
+the install offer is still to come on that visit, and rises as the install
+sheet closes. An iPhone just shown the Home Screen steps is not asked to add
+the page again on the same visit. Browser checks P7 and P7b.
+
+**The Message button**, from w2.28.0 and sheet v1.90.0. The sheet sends every
+active driver's WhatsApp number on the sync, and the live server names the
+driver, with his number, only to a phone that has a seat on that route on
+that Sunday, once bookings have closed, with the route running; the rota's
+cover wins over the man first down. The page shows **Message** and his name
+beside **Not coming**, with a message that says where the passenger is
+booked, and drops it once the run has ended. Everybody else, all week, is
+given nothing. A driver with no number on the Drivers tab has no button.
+
 **On an iPhone in a tab it asks the other question**, because that phone cannot
 be given an alert at all until the app is on the Home Screen. The button opens
 the steps instead.
