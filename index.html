@@ -1189,11 +1189,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 
   <!-- 7. DRIVING ROTA -->
   <section class="screen" id="s-rota">
+    <!-- No heading of its own from v1.90.0: the bar says Driving rota. -->
     <div class="rota-top">
-      <div>
-        <p class="eyebrow">Sunday transport</p>
-        <h1>Driving rota</h1>
-      </div>
+      <div></div>
       <button class="rota-back" id="rotaBack" type="button">Back</button>
     </div>
     <div class="rota-controls">
@@ -1214,11 +1212,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
        one screen used in a vehicle, so it should not be something layered on
        top of another screen with a backdrop to tap past. -->
   <section class="screen" id="s-stops">
+    <!-- The bar says Stops and bookings. -->
     <div class="rota-top">
-      <div>
-        <p class="eyebrow">Sunday bus</p>
-        <h1>Stops and bookings</h1>
-      </div>
+      <div></div>
       <button class="rota-back" id="stopsBack" type="button">Back</button>
     </div>
     <div id="stopsBody"></div>
@@ -1298,9 +1294,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 
   <!-- 9. PENDING -->
   <section class="screen" id="s-pending">
-    <p class="eyebrow">Held on this phone</p>
-    <h1>Waiting to send</h1>
-    <p class="lede">They send themselves once you have signal.</p>
+    <!-- The bar says Waiting to send. -->
+    <p class="lede">Held on this phone. They send themselves once you have signal.</p>
     <div id="pendList"></div>
     <div class="linkrow">
       <button class="btn btn-ghost btn-wide" id="flush" type="button">Send them all now</button>
@@ -1576,7 +1571,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.89.1";
+var APP_VERSION = "v1.90.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.

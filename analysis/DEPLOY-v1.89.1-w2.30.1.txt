@@ -1,0 +1,84 @@
+MINIBUS
+=======
+  pages v1.89.1 · server w2.30.1 · sheet v1.92.0 (unchanged)
+
+A fix, to go live before Sunday 4 October. The driver app calls a stop tap
+"pickup" (Picked up) or "empty" (Nobody there). The live server looked for
+"picked" and "none" instead in three places, so a real tap never woke the
+passengers further down the route, never showed on the coordinator's Run
+record, and Add on the Run record could put a second time beside the
+driver's own. The sheet always read the taps correctly; nothing on it needs
+putting right.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.89.0         v1.89.1
+  Worker  w2.30.0         w2.30.1
+  Code.gs v1.92.0         v1.92.0   (no change)
+
+If the last release's steps (pages v1.89.0, server w2.30.0, sheet v1.92.0)
+are not done yet, do those first: analysis/DEPLOY-v1.89.0-w2.30.0.txt.
+
+
+BEFORE YOU START
+----------------
+
+Nothing to tell the drivers: they tap exactly as before. Passengers with
+alerts on will now be woken as the bus marks each stop before theirs, as
+the app always meant them to be.
+
+
+IN THIS ORDER
+-------------
+
+1. WORKER. Cloudflare, the minibus Worker, Edit code. Replace everything
+   with server/worker.js. Deploy. No database change.
+
+2. PAGES. Merge the pull request.
+
+Code.gs is not touched.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.89.1 · server w2.30.1 · sheet
+   v1.92.0 .
+
+B. The coordinator's app, Run record, the last two Sundays. The stops the
+   drivers marked show their times, where they said "not marked" before.
+   These are the taps already on the live server: nothing has to be sent
+   again.
+
+C. On Sunday, a passenger with alerts on hears as the bus marks the stop
+   before theirs, and a stop marked Nobody there is told "Nobody there", not
+   "Picked up".
+
+
+WHAT CHANGED
+------------
+
+1. ONE LIST OF WHAT A STOP TAP IS CALLED. pickup and empty (what the driver
+   app's buttons send), with picked and none kept readable for rows already
+   written. Read by the tap alerts, the Run record and Add. (worker.js
+   TAP_PICKED, TAP_EMPTY, isStopTap.)
+
+2. THE TAP ALERTS. A real tap now wakes the booked stops after it, and tells
+   a booked stop the bus has gone past unmarked. Neither had fired for a real
+   tap in any version this repository holds. (worker.js handleTrip,
+   wakeAfterTap.)
+
+3. THE RUN RECORD shows the drivers' taps, and "nobody there" for a stop
+   marked so. (worker.js coordRuns; coord/index.html evRow.)
+
+4. ADD refuses a stop the driver already tapped, whichever word the tap
+   used, and writes "pickup", the driver app's word, so the Trip Events tab
+   carries one word for one thing. (worker.js actFix.)
+
+5. A PASSENGER'S NOTIFICATION after Nobody there at their stop says so. It
+   said "Picked up at …, have a good service" to somebody still at the kerb.
+   The page always told the two apart. (worker.js pushWhat.)
+
+   (tests/suites/37-stop-taps.mjs, 7 checks, reading the words straight off
+   the driver app's buttons, every one failing on w2.30.0; browser check C9
+   now feeds the Run record the driver app's words; sabotages S28 and S28b.)

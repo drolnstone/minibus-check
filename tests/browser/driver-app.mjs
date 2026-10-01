@@ -720,6 +720,34 @@ if (want("T20")) {
   await me.ctx.close();
 }
 
+/* T21 — from v1.90.0 no screen says its own name twice: the bar names the
+   Driving rota, Stops and bookings and Waiting to send, and the page under
+   it does not say it again. */
+if (want("T21")) {
+  const me = await phone({ clock: "2026-09-26T19:00:00+01:00" });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn(); await me.close();
+  const look = (id) => me.pg.evaluate((x) => {
+    const title = (document.getElementById("dashTitle").textContent || "").trim().toLowerCase();
+    const hs = [...document.querySelectorAll("#" + x + " h1")].map((h) => h.textContent.trim().toLowerCase());
+    return { on: document.getElementById(x).classList.contains("is-on"), title, h1: hs };
+  }, id);
+  await toHub(me);
+  await me.click("Driving rota", "#s-hub"); await me.wait(600);
+  const rota = await look("s-rota");
+  await me.shot("T21-rota");
+  await toHub(me);
+  await me.click("Stops and bookings", "#s-hub"); await me.wait(1200);
+  const stops = await look("s-stops");
+  await me.shot("T21-stops");
+  const pending = await me.pg.$$eval("#s-pending h1", (x) => x.length);
+  check("T21", "the rota, stops and waiting screens carry their name in the bar only",
+        rota.on && rota.title === "driving rota" && !rota.h1.length &&
+        stops.on && stops.title === "stops and bookings" && !stops.h1.length && pending === 0 && !me.errs.length,
+        JSON.stringify({ rota, stops, pending, errors: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

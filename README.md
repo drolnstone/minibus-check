@@ -332,6 +332,36 @@ and the church's from its footer, so a new church changes each once, in the
 page. A phone that added the driver app before v1.89.0 keeps the label it was
 given, *Dominion Transport*, until it is removed and added again.
 
+### A stop is its number
+
+From v1.90.0 (pages), w2.31.0 and v1.93.0. The coordinator keeps a fixed range
+of stop numbers and edits the place behind a number as the passengers change,
+so N05 can be one road this month and another the next. Everything is matched
+by the number: bookings, taps, the Run record, the driver's list.
+
+What that leaves open is **a seat taken before the edit**. It stays a seat at
+N05, and the driver stops at whatever N05 is now, but the passenger booked the
+old place. A booking and a tap keep the name their number had when they were
+made, and a name that no longer matches today's for the same number is the
+whole of the test (spacing and capitals are not a change). The name is only
+ever compared, never matched on. The guards:
+
+- **History** gets every change to a numbered row of the Bus Stops tab: the
+  place, the time, Active, a number added or taken off. From an edit, a paste
+  or a script, caught at the edit or at the five minute sync (`stopsAudit`).
+- **The sheet says so at once** when an edit leaves seats booked for a coming
+  Sunday at the old place, and History's line names them.
+- **Is everything working?** lists each such seat under To do until it is
+  dealt with (`stopsHealth`).
+- **The coordinator's Bookings** marks it: *Booked when N05 was …*.
+
+**The passenger is told nothing.** Rearranging the stops is the
+coordinator's business, and the numbers behind them are not the passenger's.
+A seat stops being flagged once it is booked again, or cancelled.
+
+A number switched off or taken off the tab was already handled: the passenger
+is told their stop has gone and the seat is not shown as booked.
+
 ### Why the overbooking email stops at the numbers
 
 It used to end: *"Booked is not boarded. Some will not turn up, and some who
@@ -1140,20 +1170,28 @@ Each change is made under the coordinator's PIN:
 
 | Screen | What can be done there |
 |---|---|
-| Rota | who drives or covers each route; which bus runs which route (choosing the other route's bus swaps the two); both routes running, North off, South off or all off; a note on the Sunday |
+| Rota | who drives or covers each route; which bus runs which route (choosing the other route's bus swaps the two); both routes running, North off, South off or all off; a note on the Sunday. From v1.90.0 the way in is the Sunday card on the first screen (it says *Rota ›*): Back from that Sunday is the list of Sundays, and Back again home. The first screen has no Rota button of its own |
 | Rota requests | the pending ones, approved with a cover chosen from the drivers free that morning, or turned down |
-| Bookings | this Sunday's and next Sunday's, stop by stop, with the numbers to ring. A booking cancelled for somebody who rings; seats booked for somebody without a smartphone |
-| Defects | the open ones, with their status changed, and closed only with what was done. From v1.89.0 each has *What has happened to it*: every status it has been given, by whom, where and when, a reopening included |
+| Bookings | this Sunday's and next Sunday's, stop by stop, each by its number, with the numbers to ring. A booking cancelled for somebody who rings; seats booked for somebody without a smartphone. From v1.90.0 a seat taken when its stop number was another place says *Booked when N05 was …* (see *A stop is its number*) |
+| Defects | the open ones, with their status changed, and closed only with what was done. From v1.89.0 each has *What has happened to it*: every status it has been given, by whom, where and when, a reopening included. From v1.90.0 **one card per fault on each bus**, however many walkarounds reported it: the heaviest weight any report gave it, the newest words, *3 reports since …*, how long it has been open and *DVSA daily check* when it is on that list. **Update** and **Close** are for every report on the card, each listed and ticked; untick one that is a different fault under the same heading. Each report gets its own History line |
 | Buses | from v1.89.0, each bus's MOT, service, insurance and permit dates with how far off they are, its log, and the jobs its last walkaround asked for. **Record something** for an MOT, service, renewal, repair, tyres or other job done or booked ahead; **Correct** or withdraw an entry; **Done** on a job. See *The vehicle log* |
-| Run record | the last five Sundays. A wrong stop time put right, or a stop nobody tapped given its time; both are marked Corrected |
+| Run record | the last five Sundays, each stop by its number. A wrong stop time put right, or a stop nobody tapped given its time; both are marked Corrected. From v1.90.0 a stop with no tap says which it is: *2 seats booked, not marked* in amber, or *nobody booked* in grey, where the driver app asks for no tap at all. A number that was another place that morning says *then …* |
 | Have a look | the bus link for this Sunday; bookings this Sunday; are we over on seats; is everything working; is the live server working; who has alerts on; who is tapping; who is carrying the load; which bus is on which route; send duty reminders now |
-| What I have done | every change, and whether the sheet has it |
+| What has been done | every change, by whom, and whether the sheet has it. *What I have done* until v1.90.0, which told whoever opened it that every change was theirs |
 
 The first screen also carries what cannot wait: a bus stopped at the
 walkaround (Authorise), a run still open half an hour after it was due at
 church (End it), a request waiting, a Sunday over on seats, a critical defect,
 and a change the sheet did not take. Authorise and End it use the same calls
 the driver app does.
+
+**Every screen says its name once**, from v1.90.0: in the bar. The heading
+that repeated it under the bar is gone, here and on the driver app's Driving
+rota, Stops and bookings and Waiting to send. A heading stays only where it
+says something the bar does not: a Sunday's date, a bus's plate, a report's
+name. On Bookings and the Run record **the row of Sundays stays under the
+bar** while the list scrolls, and **switching Sunday is not a step**: one Back
+leaves the screen however many Sundays were looked at.
 
 Left in the spreadsheet on purpose: setting or seeing a PIN, setup, and
 free-form editing of any tab. The rehearsal controls are in the app from
@@ -1181,7 +1219,7 @@ and the overlay stops.
 
 A change the sheet refuses, such as a request somebody decided on the tab in
 the meantime, is shown as **Not taken** with the reason, on the first screen
-and in *What I have done*, and is no longer laid over the copy.
+and in *What has been done*, and is no longer laid over the copy.
 
 Each change carries an id made on the phone when the sheet for it opens, so a
 second tap after a lost answer is the same change and is made once. Apps
@@ -1216,10 +1254,17 @@ Save, and the live server works it out again and keeps its own answer:
 | MOT | tested within a month (less a day) before it ran out: it keeps its date, a year on. Earlier than that, or after it ran out: a year from the test, less a day, which is the date the certificate carries |
 | Insurance, parking permit | renewed in the two months up to its expiry: the anniversary, a year on. After it lapsed, or earlier than that (a new policy): twelve months from the renewal |
 
-A date typed from the certificate or the policy always wins. Each entry says
-how its date was worked out, and how many days early or late it was done. A
-service done on the same visit as the MOT can be lined up with it (record the
-MOT first); the offer is made only when the MOT is six to thirteen months off.
+A date typed from the certificate or the policy always wins. The app shows
+the next due date and how many days early or late it was done; how the date
+was worked out goes in the Vehicle Log tab's own column, not on the screen.
+An MOT and a service done together are each recorded; a date that moves is
+put right by hand. (Up to v1.90.0 the form offered to line a service up with
+an MOT six to thirteen months off. The rule is still in all three copies, so
+they stay one, but nothing offers it.)
+
+**No teaching on the screens.** From v1.90.0 the coordinator's app states
+facts, asks questions and names buttons, and leaves how and why to the manual
+and the videos. Note fields carry no sample text: an empty note sends nothing.
 
 **The new date is on every phone at once**, the driver app's warnings
 included, as any other change from the app is (see *How a change travels*).
@@ -2002,7 +2047,7 @@ scheduled jobs, the email allowance, the driver PINs and the row counts.
 | A driver made no entries at all | he was signed out. The app now restores his name and offers a Sign in button wherever it would otherwise go quiet |
 | Passengers waiting for a bus that was called off | the Rota's Status for that Sunday. `North cancelled` or `South cancelled` tells them within five minutes |
 | Bookings will not open for next week | last Sunday's run was never ended |
-| A change made in the coordinator's app is not on the sheet | *What I have done* in the app. **On the way** means the sheet has not reported it yet, and the Worker keeps knocking every minute. **Not taken** gives the sheet's reason |
+| A change made in the coordinator's app is not on the sheet | *What has been done* in the app. **On the way** means the sheet has not reported it yet, and the Worker keeps knocking every minute. **Not taken** gives the sheet's reason |
 | No emails at all | `COORDINATOR_EMAIL` is blank, or the daily allowance is used up |
 
 ---

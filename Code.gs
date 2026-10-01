@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.92.0";
+var SCRIPT_VERSION = "v1.93.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1389,6 +1389,153 @@ function busDatesAudit(ss, where, who) {
   } finally {
     try { if (lock) lock.releaseLock(); } catch (err) {}
   }
+}
+
+/* ---- THE STOP BEHIND A NUMBER ---------------------------------------------
+
+   From v1.93.0. A stop is its number. The coordinator keeps a fixed range of
+   numbers and edits the place behind one as the passengers change, so N05 can
+   be one road this month and another the next, and everything in the system
+   is matched by the number.
+
+   What that leaves unguarded is a seat taken before the edit. It stays a
+   seat at N05, and the driver stops at whatever N05 is now; the passenger
+   booked the old place and nothing told him. So:
+
+     - every change to a numbered row (the place, its time, Active, a number
+       added or taken off) is written on History with what it was, from an
+       edit, a paste or a script, caught here or at the five minute sync;
+     - a change that leaves seats booked for a coming Sunday at the old place
+       says so at once, on the sheet and on History;
+     - Is everything working? lists any such seat until it is dealt with;
+     - the coordinator's Bookings screen marks it.
+
+   The passenger is told nothing: rearranging the stops is the coordinator's
+   business, and the numbers behind them are not the passenger's.
+
+   The name is only ever compared, never matched on. A seat keeps the name its
+   number had when it was taken, and differing from today's name for the same
+   number is the whole of the test. Spacing and capitals are not a change. */
+var STOPS_SEEN = "busStopsSeen";
+
+function stopWords(x) { return String(x || "").trim().toLowerCase().replace(/\s+/g, " "); }
+
+/* Every numbered row as it reads now, switched-off ones too, because switching
+   a stop off is a change worth writing down. */
+function stopsNow(ss) {
+  var sh = ss.getSheetByName(STOPS_SHEET);
+  if (!sh || sh.getLastRow() < 2) return {};
+  var c = colsSoft(sh, STOPS_SHEET);
+  if (!c.id) return {};
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+  var out = {};
+  vals.forEach(function (r) {
+    var id = String(at1(r, c.id) || "").trim();
+    if (!id) return;
+    var t = at1(r, c.time);
+    out[id] = {
+      stop: String(at1(r, c.stop) || "").trim(),
+      time: (t && typeof t.getHours === "function")
+        ? Utilities.formatDate(t, Session.getScriptTimeZone(), "HH:mm") : String(t || "").trim(),
+      active: String(at1(r, c.active) || "YES").trim().toUpperCase() === "NO" ? "NO" : "YES"
+    };
+  });
+  return out;
+}
+
+/* Seats for this Sunday or a later one taken when their number named another
+   place. One line per Sunday and number. */
+function stopsMovedUnderBookings(ss) {
+  var now = stopsNow(ss);
+  var from = dateToKey(sundayOf(new Date()));
+  var by = {}, out = [];
+  bookingRows(ss).forEach(function (b) {
+    if (b.sunday < from || b.status === "cancelled" || b.status === "rehearsal") return;
+    if (!b.stopId || !b.stop) return;
+    var s = now[b.stopId];
+    if (!s || s.active === "NO" || stopWords(s.stop) === stopWords(b.stop)) return;
+    var k = b.sunday + "|" + b.stopId + "|" + stopWords(b.stop);
+    if (!by[k]) { by[k] = { sunday: b.sunday, id: b.stopId, was: b.stop, now: s.stop, seats: 0, n: 0 }; out.push(by[k]); }
+    by[k].seats += b.seats; by[k].n++;
+  });
+  return out.sort(function (a, b) { return a.sunday < b.sunday ? -1 : a.sunday > b.sunday ? 1 : (a.id < b.id ? -1 : 1); });
+}
+
+function stopMovedWords(m) {
+  return ukDay(m.sunday) + ", " + m.id + ": " + m.seats + (m.seats === 1 ? " seat" : " seats") +
+         " booked when it was " + m.was + "; it is now " + m.now + ".";
+}
+
+/* What changed on the Bus Stops tab since it was last looked at, on History.
+   Returns the seats it leaves booked at an old place. */
+function stopsAudit(ss, where, who) {
+  var lock = null;
+  try { lock = LockService.getScriptLock(); if (!lock.tryLock(5000)) return []; } catch (err) { lock = null; }
+  try {
+    var now = stopsNow(ss);
+    var seen = null;
+    try { seen = JSON.parse(PropertiesService.getScriptProperties().getProperty(STOPS_SEEN) || "null"); } catch (err) {}
+    var write = function () {
+      try { PropertiesService.getScriptProperties().setProperty(STOPS_SEEN, JSON.stringify(now)); } catch (err) {}
+    };
+    if (!seen) { write(); return []; }
+    var rows = [], placeMoved = {};
+    var line = function (id, s) { return [id, s.stop, s.time].filter(Boolean).join(" \u00B7 "); };
+    Object.keys(now).forEach(function (id) {
+      var a = seen[id], b = now[id];
+      if (!a) {
+        rows.push({ who: who, where: where, reg: "", what: "Stop " + id + " added", from: "", to: line(id, b), why: "", ref: id });
+        return;
+      }
+      if (stopWords(a.stop) !== stopWords(b.stop)) {
+        placeMoved[id] = rows.length;
+        rows.push({ who: who, where: where, reg: "", what: "Stop " + id + ": the place", from: a.stop, to: b.stop,
+                    why: "Same number, another place", ref: id });
+      }
+      if (a.time !== b.time) {
+        rows.push({ who: who, where: where, reg: "", what: "Stop " + id + ": time", from: a.time, to: b.time, why: "", ref: id });
+      }
+      if (a.active !== b.active) {
+        rows.push({ who: who, where: where, reg: "", what: "Stop " + id + ": active", from: a.active, to: b.active,
+                    why: "", ref: id });
+      }
+    });
+    Object.keys(seen).forEach(function (id) {
+      if (!now[id]) rows.push({ who: who, where: where, reg: "", what: "Stop " + id + " taken off the tab",
+                                from: line(id, seen[id]), to: "", why: "", ref: id });
+    });
+    var moved = stopsMovedUnderBookings(ss);
+    moved.forEach(function (m) {
+      var i = placeMoved[m.id];
+      if (i !== undefined) rows[i].why = rows[i].why + ". " + stopMovedWords(m);
+    });
+    if (rows.length) historyAdd(ss, rows);
+    write();
+    return Object.keys(placeMoved).length ? moved.filter(function (m) { return placeMoved[m.id] !== undefined; }) : [];
+  } finally {
+    try { if (lock) lock.releaseLock(); } catch (err) {}
+  }
+}
+
+function onEditBusStops(e, sh) {
+  var ss = sh.getParent ? sh.getParent() : SpreadsheetApp.getActiveSpreadsheet();
+  var moved = stopsAudit(ss, "On the Bus Stops tab", editorOf(e));
+  if (!moved.length) return;
+  try {
+    ss.toast(moved.map(stopMovedWords).join("\n"), "Booked at the old place", 20);
+  } catch (err) {}
+}
+
+/* Is everything working?: any seat still booked at an old place. */
+function stopsHealth(ss, good, bad, todo) {
+  var moved = stopsMovedUnderBookings(ss);
+  if (!moved.length) {
+    good.push("Bookings: every seat for the coming Sundays is at the place its stop number names.");
+    return;
+  }
+  moved.forEach(function (m) {
+    todo.push("Booked at a stop that has changed. " + stopMovedWords(m));
+  });
 }
 
 /* ---- starting the log --------------------------------------------------- */
@@ -3907,10 +4054,21 @@ function coordDecide(ss, a, b, by, ctx) {
            result: after === "Approved" ? "Approved on the sheet." : "Turned down on the sheet." };
 }
 
+/* From v1.93.0 one update can be for every report of the same fault (keys),
+   each set and written on History by the same path as one alone. */
 function coordDefect(ss, a, b, by) {
-  var r = defectSetStatus(ss, String(b.key || ""), String(b.status || "Open"), String(b.action || "").trim(),
-                          by, "Coordinator's app", a);
-  return { done: true, ok: r.ok, push: true, result: r.result };
+  var keys = (b.keys && b.keys.length ? b.keys : [b.key]).map(function (k) { return String(k || ""); })
+    .filter(function (k) { return k; });
+  if (!keys.length) return { done: true, ok: false, push: true, result: "No defect was named." };
+  var got = keys.map(function (k) {
+    return defectSetStatus(ss, k, String(b.status || "Open"), String(b.action || "").trim(), by, "Coordinator's app", a);
+  });
+  var good = got.filter(function (r) { return r.ok; }).length;
+  if (keys.length === 1) return { done: true, ok: got[0].ok, push: true, result: got[0].result };
+  return { done: true, ok: good === keys.length, push: true,
+           result: good === keys.length ? "All " + good + " reports, on the Defects tab."
+                 : good + " of " + keys.length + " reports on the Defects tab; " +
+                   (keys.length - good) + " were not there any more." };
 }
 
 /* One defect's status, set, with what was done added to Action taken and a
@@ -4565,6 +4723,7 @@ function liveSync() {
     var vss = SpreadsheetApp.getActiveSpreadsheet();
     vlogBoot(vss);
     busDatesAudit(vss, "On the Buses tab", "");
+    stopsAudit(vss, "On the Bus Stops tab", "");
   } catch (err) {}
   var back = null;
   try { back = drainNow(); } catch (err) {}
@@ -6701,6 +6860,9 @@ function bookingRowsFresh(ss) {
       sunday: sunday,
       status: String(at1(r, c.status) || "").trim().toLowerCase(),
       stopId: String(at1(r, c.stopId) || "").trim(),
+      /* What the number was called when the seat was taken. Compared, never
+         matched on: see THE STOP BEHIND A NUMBER. */
+      stop: String(at1(r, c.stop) || "").trim(),
       seats: Number(at1(r, c.seats)) || 0,
       device: String(at1(r, c.device) || "").trim(),
       phone: String(raw == null ? "" : raw).trim().replace(/^'/, ""),
@@ -11546,6 +11708,10 @@ function healthReport() {
     bad.push("Live server did not answer: " + ((err && err.message) || err));
   }
 
+  /* The sheet's own tabs only, so it is said whether or not the live server
+     answered. */
+  try { stopsHealth(ss, good, bad, todo); } catch (err) {}
+
   /* Every tab's headings, against what the code expects to find.
 
      Most tabs are still read by position, so a renamed or reordered column
@@ -12035,6 +12201,7 @@ function onEdit(e) {
     if (name === BUSES_SHEET)    return onEditBuses(e, sh);
     if (name === VLOG_SHEET)     return onEditVlog(e, sh);
     if (name === HISTORY_SHEET)  return onEditHistory(e, sh);
+    if (name === STOPS_SHEET)    return onEditBusStops(e, sh);
   } catch (err) {
     // Never let a trigger error block someone editing the sheet.
   }
