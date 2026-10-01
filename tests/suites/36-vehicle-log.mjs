@@ -1,6 +1,6 @@
 /* THE VEHICLE LOG AND THE HISTORY.
 
-   Until v1.91.0 (sheet) / w2.29.0 (live server) / v1.89.0 (pages) the Buses
+   Until v1.92.0 (sheet) / w2.30.0 (live server) / v1.89.0 (pages) the Buses
    tab held one date per renewal, and a new date was typed over the old one:
    the day an MOT was actually done, the date it had been due, and anything
    about the service before were all lost. From this release:

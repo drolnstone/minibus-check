@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.29.0";
+const SCRIPT_VERSION = "w2.30.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1143,7 +1143,7 @@ async function getBuses(env) {
     "SELECT reg, seats, active FROM buses").all();
   let extra = {};
   try { extra = (await cacheGet(env, "bus_extra")) || {}; } catch (e) {}
-  /* From w2.29.0 a renewal recorded in the coordinator's app shows here at
+  /* From w2.30.0 a renewal recorded in the coordinator's app shows here at
      once, before the sheet has written it on the Buses tab. The sync that
      names it as applied brings the tab's own date, and it stops being laid
      over then. */
@@ -5745,6 +5745,16 @@ async function alertRoll(env) {
     out.driversOff = null;
     out.rollError = String((err && err.message) || err);
   }
+  /* WHOSE NUMBERS IT HOLDS, for the passenger's Message button. From
+     w2.29.0. Names only: the sheet already has the numbers, and asks this
+     only to find out whether they arrived. null when it could not tell,
+     [] when it holds none, which is the fault the check is for. */
+  try {
+    const book = await cacheGet(env, "driver_wa");
+    out.waHeld = (book && typeof book === "object") ? Object.keys(book) : [];
+  } catch (err) {
+    out.waHeld = null;
+  }
   return out;
 }
 
@@ -6250,7 +6260,7 @@ const DEFECT_STATES = ["Open", "Booked in", "Parts on order", "Monitoring", "Fix
 const DEFECT_CLOSED = ["Fixed", "Not a defect"];
 
 /* ---- when each renewal next falls due ----------------------------------
-   From w2.29.0. A renewal recorded in the coordinator's app keeps the date it
+   From w2.30.0. A renewal recorded in the coordinator's app keeps the date it
    was actually done, and the next due date is worked out from it here. The
    same rules, word for word, are in Code.gs (for a row typed on the sheet)
    and coord/index.html (to show the date before Save); tests/suites run all
@@ -6353,7 +6363,7 @@ function rnNextDue(item, done, was, given) {
 }
 
 /* ---- the vehicle log, on the live server --------------------------------
-   From w2.29.0. The coordinator's app records an MOT, a service, a renewal, a
+   From w2.30.0. The coordinator's app records an MOT, a service, a renewal, a
    repair or a booking; this checks it, works out the next due date, and files
    it as a coordinator action (vlog), a correction (vfix) or a job done (job)
    for the sheet to write onto the Vehicle Log, the Buses tab and History.
@@ -6421,7 +6431,7 @@ async function coordVehiclesView(env) {
   return { log, jobs };
 }
 
-/* The sheet's Vehicle Log and jobs to arrange, from v1.91.0's sync, kept to
+/* The sheet's Vehicle Log and jobs to arrange, from v1.92.0's sync, kept to
    their shape: registrations to lists of plain rows, forty a bus, and each
    bus's jobs as words. Anything else, or an older sheet that sends none, is
    an empty log. */
@@ -6983,7 +6993,7 @@ async function coordDefectsView(env) {
     }
     d.waiting = true;
   }
-  /* From w2.29.0 a defect ticked as put right on a Vehicle Log entry is
+  /* From w2.30.0 a defect ticked as put right on a Vehicle Log entry is
      closed by the sheet as it writes the entry; until then it goes here. */
   for (const a of await coordPending(env, ["vlog"])) {
     for (const k of (a.body && a.body.defects) || []) {
@@ -7100,7 +7110,7 @@ async function coordLoad(env, me) {
 
   out.requests = await coordRequestsView(env);
   out.defects = await coordDefectsView(env);
-  /* From w2.29.0: each bus's Vehicle Log and jobs to arrange, and the last
+  /* From w2.30.0: each bus's Vehicle Log and jobs to arrange, and the last
      mileage a walkaround read, for the Record form. */
   try { out.vehicles = await coordVehiclesView(env); } catch (e) { out.vehicles = { log: {}, jobs: {} }; }
   try {

@@ -1148,7 +1148,7 @@ function paintHome(){
        item("requests", "Rota requests", pend ? pend + " waiting" : "none waiting", pend ? "warn" : "") +
        item("bookings/" + bk, "Bookings", booked + " booked" + (bk !== D.today ? " for " + shortDay(bk) : ""), "") +
        item("defects", "Defects", defs ? defs + " open" : "none open", defs ? "warn" : "") +
-       /* A live server from before w2.29.0 sends no vehicle log. */
+       /* A live server from before w2.30.0 sends no vehicle log. */
        (D && D.vehicles ? item("buses", "Buses", jobs ? (jobs === 1 ? "1 job to arrange" : jobs + " jobs to arrange") : "", jobs ? "warn" : "") : "") +
        item("runs", "Run record", "") +
        /* A live server from before w2.20.0 cannot run one from here. */
@@ -1552,7 +1552,7 @@ function updateDefect(key){
 }
 
 /* Every step a defect has been through, off the sheet's History tab, from
-   v1.91.0: who set which status and when, and a reopening with the day it
+   v1.92.0: who set which status and when, and a reopening with the day it
    had first been closed. */
 function trailHTML(trail){
   if(!trail || !trail.length) return '';
@@ -1577,7 +1577,7 @@ function trailHTML(trail){
 
 /* When each renewal next falls due. The same rules as rnNextDue in worker.js
    and Code.gs, here so the date shows before Save; the live server works it
-   out again and its answer is the one kept. tests/suites/35-vehicle-log.mjs
+   out again and its answer is the one kept. tests/suites/36-vehicle-log.mjs
    holds the three together. */
 var RENEWALS = {
   mot:       { label: "MOT",            column: "MOT due" },

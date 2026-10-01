@@ -347,7 +347,7 @@ export function makeGas(opts) {
         "dd/MM/yyyy": `${p.d}/${p.mo}/${p.y}`,
         "yyyyMMdd": `${p.y}${p.mo}${p.d}`,
         "yyyyMMdd-HHmm": `${p.y}${p.mo}${p.d}-${p.h}${p.mi}`,
-        /* A hand-typed Vehicle Log row's Log ID, from v1.91.0. */
+        /* A hand-typed Vehicle Log row's Log ID, from v1.92.0. */
         "yyyyMMdd-HHmmss": `${p.y}${p.mo}${p.d}-${p.h}${p.mi}${p.s}`,
         /* The calendar file's own two. */
         "yyyyMMdd'T'HHmmss'Z'": `${p.y}${p.mo}${p.d}T${p.h}${p.mi}${p.s}Z`,
@@ -491,7 +491,7 @@ export function makeGas(opts) {
       const b = {
         requireValueInList(list, drop) { rule._values = list.slice(); rule._drop = drop !== false; return b; },
         /* A date, or a date between two. Kept so a test can ask what the
-           cell will take, as the Buses tab's due dates do from v1.91.0. */
+           cell will take, as the Buses tab's due dates do from v1.92.0. */
         requireDate() { rule._date = {}; return b; },
         requireDateBetween(from, to) { rule._date = { from, to }; return b; },
         setAllowInvalid(v) { rule._allowInvalid = !!v; return b; },

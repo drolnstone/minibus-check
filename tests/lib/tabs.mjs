@@ -64,8 +64,8 @@ export const TABS = {
               "Critical", "What the driver found", "Status", "Action taken",
               "Closed on", "Kind"],
 
-  /* Two tabs the sheet makes itself from v1.91.0, so these are Code.gs's own
-     header rows rather than an export's. 35-vehicle-log.mjs checks the two
+  /* Two tabs the sheet makes itself from v1.92.0, so these are Code.gs's own
+     header rows rather than an export's. 36-vehicle-log.mjs checks the two
      agree. */
   "Vehicle Log": ["Recorded", "Log ID", "Registration", "What", "Status", "Date done",
                   "Booked for", "Was due", "Days early (-) or late (+)", "Next due",

@@ -1,6 +1,6 @@
 MINIBUS
 =======
-  pages v1.89.0 · server w2.29.0 · sheet v1.91.0
+  pages v1.89.0 · server w2.30.0 · sheet v1.92.0
 
 The first of the four parts agreed for the buses' records: a new date never
 removes the old one. Every MOT, service, insurance or permit renewal, repair,
@@ -13,11 +13,12 @@ when and what it was before.
 
 YOU ARE ON              GOING TO
   Pages   v1.88.0         v1.89.0
-  Worker  w2.28.0         w2.29.0
-  Code.gs v1.90.0         v1.91.0
+  Worker  w2.29.0         w2.30.0
+  Code.gs v1.91.0         v1.92.0
 
-If v1.88.0's steps are not done yet, do those first:
-analysis/DEPLOY-v1.88.0.txt.
+If the last release's steps (pages v1.88.0, server w2.29.0, sheet v1.91.0,
+the Message-the-driver check) are not done yet, do those first:
+analysis/DEPLOY-v1.88.0-w2.29.0.txt.
 
 
 BEFORE YOU START
@@ -53,8 +54,8 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.89.0 · server w2.29.0 · sheet
-   v1.91.0 .
+A. The foot of all three apps reads  app v1.89.0 · server w2.30.0 · sheet
+   v1.92.0 .
 
 B. The sheet has a Vehicle Log tab with one row, marked Estimated, for each
    date of each active bus on the Buses tab, and a
@@ -114,5 +115,5 @@ WHAT CHANGED
    year back from it, the last service taken as done with the last MOT.
    Correct any whose real date you know.
 
-   (tests/suites/35-vehicle-log.mjs, 32 checks; browser checks C29 to C32;
+   (tests/suites/36-vehicle-log.mjs, 33 checks; browser checks C29 to C32;
    sabotages S20 to S24.)
