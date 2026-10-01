@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.94.0";
+var SCRIPT_VERSION = "v1.95.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -128,9 +128,11 @@ var BOOKINGS_SHEET = "Bus Bookings";
    coming back from the Worker finds the row it already wrote, instead of
    appending a second one every few minutes. Appended on the right like every
    other column this file has ever added. */
+/* Scheduled, from v1.95.0: the stop's timetable time when the seat was
+   taken. Early or late at that stop is measured from it. */
 var BOOKINGS_HEADERS = ["Received", "Sunday", "Route", "Stop ID", "Stop",
                         "Seats", "Device", "Status", "Phone", "Passenger ID",
-                        "Live ID"];
+                        "Live ID", "Scheduled"];
 
 /* ==========================================================================
    WHOSE BOOKING IT IS
@@ -4242,7 +4244,8 @@ function drainFromWorker() {
           /* The apostrophe keeps the leading zero, same as every other write
              to this column in this file. */
           phone: b.phone ? "'" + String(b.phone).replace(/^'/, "") : "",
-          passenger: b.pid || ""
+          passenger: b.pid || "",
+          scheduled: b.sched || ""
         };
 
         if (seen[id]) {
@@ -6828,6 +6831,10 @@ function bookingRow(c, wide, v, base) {
   put(c.status,    v.status);
   put(c.phone,     v.phone);
   put(c.passenger, v.passenger);
+  /* Plain text, so Sheets keeps 10:15 as the time it was given and does not
+     turn it into a date. */
+  if (v.scheduled) put(c.scheduled, v.scheduled);
+  if (c.scheduled) row[c.scheduled - 1] = quotedTime(row[c.scheduled - 1]);
   return row;
 }
 
@@ -6891,8 +6898,39 @@ function bookingRowsFresh(ss) {
       seats: Number(at1(r, c.seats)) || 0,
       device: String(at1(r, c.device) || "").trim(),
       phone: String(raw == null ? "" : raw).trim().replace(/^'/, ""),
-      pid: String(pid == null ? "" : pid).trim()
+      pid: String(pid == null ? "" : pid).trim(),
+      scheduled: hhmmOf(at1(r, c.scheduled))
     });
+  });
+  return out;
+}
+
+/* A Scheduled value ready to write: text with the apostrophe, which
+   getValues strips, put back. Same reason as the Phone column. */
+function quotedTime(v) {
+  var t = hhmmOf(v);
+  return t ? "'" + t : (v == null ? "" : v);
+}
+
+/* A Scheduled cell as HH:MM, whether it came back as text or Sheets made it
+   a time anyway. Blank for anything else. */
+function hhmmOf(v) {
+  if (v instanceof Date || (v && typeof v.getHours === "function")) {
+    return ("0" + v.getHours()).slice(-2) + ":" + ("0" + v.getMinutes()).slice(-2);
+  }
+  var m = /^\s*'?(\d{1,2}):(\d{2})/.exec(String(v == null ? "" : v));
+  return m ? ("0" + m[1]).slice(-2) + ":" + m[2] : "";
+}
+
+/* stopId to the time the passenger was given, for one Sunday, from the first
+   live booking there that has one. A stop number belongs to one route, so
+   the route needs no asking. See BOOKINGS_HEADERS. */
+function bookedTimes(ss, key) {
+  var out = {};
+  bookingRows(ss).forEach(function (b) {
+    if (b.sunday !== key || !b.scheduled || out[b.stopId]) return;
+    if (b.status === "cancelled" || b.status === "rehearsal") return;
+    out[b.stopId] = b.scheduled;
   });
   return out;
 }
@@ -8182,6 +8220,8 @@ function handleTripLocked(payload) {
      it used to be written with no scheduled time and no offset beside it —
      which is why the first stop of every run had nothing to project from. */
   var depart = departStopFor(ss, route);
+  /* The times passengers were given at the stops they booked. */
+  var promised = rehearsing ? {} : bookedTimes(ss, key);
 
   var rows = [], pending = {}, undoneNow = 0;
   events.forEach(function (ev) {
@@ -8220,7 +8260,9 @@ function handleTripLocked(payload) {
       stop   = depart;
       stopId = depart.id;
     }
-    var sched = stop ? stopMomentOn(key, stop.time) : null;
+    /* Early or late is from the time the passenger was given when they
+       booked, where somebody booked; otherwise from the timetable now. */
+    var sched = stop ? stopMomentOn(key, promised[stopId] || stop.time) : null;
     var off   = sched ? Math.round((at - sched.getTime()) / 60000) : "";
 
     /* A run started with no check on record is marked here rather than refused
@@ -9113,6 +9155,10 @@ function handleBookingLocked(b) {
     var row = sh.getRange(existing.row, 1, 1, wide).getValues()[0];
     var put = function (col, v) { if (col) row[col - 1] = v; };
 
+    /* The time given with the seat: kept when only the seats change, given
+       again when the stop changes. */
+    if (existing.stopId !== stop.id || !existing.scheduled) put(bc.scheduled, stop.time);
+    if (bc.scheduled) row[bc.scheduled - 1] = quotedTime(row[bc.scheduled - 1]);
     put(bc.route,    stop.route);
     put(bc.stopId,   stop.id);
     put(bc.stop,     stop.stop);
@@ -9148,7 +9194,7 @@ function handleBookingLocked(b) {
     sh.getRange(sh.getLastRow() + 1, 1, 1, wide).setValues([bookingRow(bc, wide, {
       received: new Date(), sunday: key, route: stop.route, stopId: stop.id,
       stop: stop.stop, seats: seats, device: ref, status: "Booked",
-      phone: phone ? "'" + phone : "", passenger: pid
+      phone: phone ? "'" + phone : "", passenger: pid, scheduled: stop.time
     })]);
   }
 
@@ -13279,7 +13325,8 @@ FIELDS[STOPS_SHEET] = {
 FIELDS[BOOKINGS_SHEET] = {
   received: "Received", sunday: "Sunday", route: "Route", stopId: "Stop ID",
   stop: "Stop", seats: "Seats", device: "Device", status: "Status",
-  phone: "Phone", passenger: "Passenger ID", liveId: "Live ID"
+  phone: "Phone", passenger: "Passenger ID", liveId: "Live ID",
+  scheduled: "Scheduled"
 };
 FIELDS[DRIVERS_SHEET] = {
   name: "Name", role: "Role", active: "Active", order: "Primary order",

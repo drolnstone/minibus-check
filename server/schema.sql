@@ -145,7 +145,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   status    TEXT NOT NULL DEFAULT 'Booked',
   received  INTEGER NOT NULL,       -- ms
   note      TEXT DEFAULT '',        -- late-withdrawal note, for the Sheet
-  synced    INTEGER NOT NULL DEFAULT 0   -- 0 until Apps Script has taken a copy
+  synced    INTEGER NOT NULL DEFAULT 0,  -- 0 until Apps Script has taken a copy
+  sched     TEXT NOT NULL DEFAULT ''     -- the stop's timetable time when booked (w2.32.0)
 );
 CREATE INDEX IF NOT EXISTS bookings_sunday ON bookings(sunday, status);
 CREATE INDEX IF NOT EXISTS bookings_pid    ON bookings(sunday, pid);

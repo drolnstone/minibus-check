@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.31.0";
+const SCRIPT_VERSION = "w2.32.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1756,6 +1756,57 @@ async function liveBookings(env, key) {
   }));
 }
 
+/* THE TIME THE PASSENGER WAS GIVEN, from w2.32.0.
+
+   A booking keeps its stop's timetable time as it stood when the seat was
+   taken, in sched. Early or late at a booked stop is measured from that, not
+   from whatever the Bus Stops tab says by the time the bus gets there. Added
+   to a live database on first use, like every column since v1.70.0. */
+let bookSchedReady = false;
+async function ensureBookSched(env) {
+  if (bookSchedReady) return true;
+  try {
+    await env.DB.prepare("ALTER TABLE bookings ADD COLUMN sched TEXT NOT NULL DEFAULT ''").run();
+  } catch (e) { /* already there */ }
+  try {
+    await env.DB.prepare("SELECT sched FROM bookings LIMIT 1").all();
+    bookSchedReady = true;
+  } catch (e) { bookSchedReady = false; }
+  return bookSchedReady;
+}
+
+/* Stamps a booking with its stop's time. force for a new seat or a change of
+   stop; otherwise only a row that has none yet, so changing the number of
+   seats keeps the time first given. synced=0 so the sheet gets it even when a
+   drain took the row between the write and this. */
+async function stampBooked(env, id, hhmm, force) {
+  if (!id || !hhmm) return;
+  try {
+    if (!(await ensureBookSched(env))) return;
+    await env.DB.prepare("UPDATE bookings SET sched=?, synced=0 WHERE id=?" +
+      (force ? "" : " AND sched=''")).bind(hhmm, Number(id)).run();
+  } catch (e) { /* the timetable time still applies */ }
+}
+
+/* stopId to the booked time for one Sunday and route, from the first live
+   booking there that has one. Empty when nothing is booked or the column is
+   not there yet, and the timetable applies. */
+async function bookedTimes(env, key, route) {
+  const out = {};
+  try {
+    if (!(await ensureBookSched(env))) return out;
+    const q = await env.DB.prepare(
+      "SELECT stop_id, sched, status FROM bookings WHERE sunday=? AND route=? AND sched<>'' ORDER BY id")
+      .bind(key, route).all();
+    for (const b of (q.results || [])) {
+      const st = String(b.status || "").toLowerCase();
+      if (st === "cancelled" || st === "rehearsal") continue;
+      if (!out[b.stop_id]) out[b.stop_id] = String(b.sched);
+    }
+  } catch (e) {}
+  return out;
+}
+
 function bookingCounts(rows) {
   const out = {};
   for (const b of rows) out[b.stopId] = (out[b.stopId] || 0) + b.seats;
@@ -2575,11 +2626,13 @@ async function handleBooking(env, b) {
       "pid=CASE WHEN pid='' THEN ? ELSE pid END, " +
       "phone=CASE WHEN pid='' THEN ? ELSE phone END, synced=0 WHERE id=?"
     ).bind(stop.route, stop.id, stop.stop, seats, Date.now(), ref, pid, phone, existing.row).run();
+    await stampBooked(env, existing.row, stop.time, existing.stopId !== stop.id);
   } else {
-    await env.DB.prepare(
+    const res = await env.DB.prepare(
       "INSERT INTO bookings (sunday, route, stop_id, stop, seats, device, pid, phone, status, received, synced) " +
       "VALUES (?,?,?,?,?,?,?,?,'Booked',?,0)"
     ).bind(key, stop.route, stop.id, stop.stop, seats, ref, pid, phone, Date.now()).run();
+    await stampBooked(env, Number(res && res.meta && res.meta.last_row_id) || 0, stop.time, true);
   }
 
   await subsFollow(env, ref, pid);
@@ -2869,6 +2922,10 @@ async function handleTrip(env, payload) {
   let wantBus = "";
   try { wantBus = (await busFor(env, key, route, buses, rotaRow)).reg || ""; } catch {}
 
+  /* The times passengers were given at the stops they booked. Not for a
+     rehearsal: its seats were drawn this morning from today's timetable. */
+  const promised = rehearsing ? {} : await bookedTimes(env, key, route);
+
   const stmts = [];
   let written = 0, undone = 0;
 
@@ -2896,7 +2953,10 @@ async function handleTrip(env, payload) {
        edits. */
     if (!stop && kind === "start" && depart) { stop = depart; stopId = depart.id; }
 
-    const sched = stop ? londonMoment(key, stop.time) : null;
+    /* Early or late is from the time the passenger was given when they
+       booked, where somebody booked; otherwise from the timetable now. */
+    const anchor = stop ? (promised[stopId] || stop.time) : "";
+    const sched = anchor ? londonMoment(key, anchor) : null;
     const off = sched ? Math.round((at - sched.getTime()) / 60000) : null;
 
     /* Built from parts, because a run can be two things at once. A cover
@@ -2970,12 +3030,13 @@ async function handleTrip(env, payload) {
          changes nothing. Only a row somebody has taken back can be revived,
          and reviving it is the whole point. */
       "ON CONFLICT(trip, event, stop_id) DO UPDATE SET " +
-      "happened=excluded.happened, status=excluded.status, " +
+      "happened=excluded.happened, scheduled=excluded.scheduled, off_min=excluded.off_min, " +
+      "status=excluded.status, " +
       "logged=excluded.logged, geo=excluded.geo, acc=excluded.acc, " +
       "away=excluded.away, synced=0 " +
       "WHERE trip_events.status='Undone'"
     ).bind(trip, key, route, who, reg, kind === "start" ? wantBus : "", kind, stopId,
-           stop ? stop.stop : "", stop ? stop.time : "", at, off, status,
+           stop ? stop.stop : "", anchor, at, off, status,
            geo, acc, away, Date.now()));
     written++;
   }
@@ -7316,6 +7377,7 @@ async function coordRuns(env, me, sundayIn) {
                             status: r.status || "", note: r.fix_note || "",
                             corrected: /Corrected/.test(String(r.status || "")) }) : null;
   for (const rt of routeNames(all)) {
+    const promised = await bookedTimes(env, key, rt);
     const mine = rows.filter((r) => r.route === rt);
     const trips = [];
     for (const r of mine) if (trips.indexOf(r.trip) === -1) trips.push(r.trip);
@@ -7334,7 +7396,11 @@ async function coordRuns(env, me, sundayIn) {
           /* The name this number had that morning, from the tap or the seat,
              when it is not the name it has now. */
           const then = (tap && tap.stop) || (bk && bk.stop) || "";
-          return { id: s.id, stop: s.stop, time: s.time, ev: ev(tap),
+          /* The time early or late is measured from: the one on the tap, or
+             the one the passenger was given, before today's timetable. */
+          const time = (tap && /^\d{1,2}:\d{2}$/.test(String(tap.scheduled || "")) && tap.scheduled) ||
+                       promised[s.id] || s.time;
+          return { id: s.id, stop: s.stop, time: time, ev: ev(tap),
                    booked: bk ? bk.seats : 0,
                    then: then && !sameStopName(then, s.stop) ? then : "" };
         })
@@ -7740,6 +7806,8 @@ async function actBooking(env, me, act, actionId) {
       await env.DB.prepare(
         "UPDATE bookings SET route=?, stop_id=?, stop=?, seats=?, status='Booked', note=?, received=?, synced=0 WHERE id=?")
         .bind(stop.route, stop.id, stop.stop, seats, note, Date.now(), bid).run();
+      const was = rows.find((b) => Number(b.row) === bid);
+      await stampBooked(env, bid, stop.time, !was || was.stopId !== stop.id);
     } else {
       const res = await env.DB.prepare(
         "INSERT INTO bookings (sunday, route, stop_id, stop, seats, device, pid, phone, status, received, note, synced) " +
@@ -7750,6 +7818,7 @@ async function actBooking(env, me, act, actionId) {
         const got = await env.DB.prepare("SELECT id FROM bookings WHERE device=?").bind(device).first();
         bid = got ? Number(got.id) : 0;
       }
+      await stampBooked(env, bid, stop.time, true);
     }
     const after = await liveBookings(env, key);
     const buses = await getBuses(env);
@@ -7865,7 +7934,8 @@ async function actFix(env, me, act) {
     "SELECT id FROM trip_events WHERE trip=? AND stop_id=? AND event IN " + TAP_SQL + " AND status<>'Undone' LIMIT 1")
     .bind(trip, stop.id).first();
   if (live) return { ok: false, error: stop.stop + " already has a time. Correct that one." };
-  const sched = londonMoment(key, stop.time);
+  const anchor = (await bookedTimes(env, key, any.route))[stop.id] || stop.time;
+  const sched = londonMoment(key, anchor);
   const off = sched ? Math.round((at - sched.getTime()) / 60000) : null;
   const note = "Added by " + stampNow + ". No tap was recorded.";
   return { ok: true, sunday: key,
@@ -7877,7 +7947,7 @@ async function actFix(env, me, act) {
              "off_min=excluded.off_min, status=excluded.status, logged=excluded.logged, " +
              "fix_note=excluded.fix_note, synced=0 WHERE trip_events.status='Undone'")
              .bind(trip, key, any.route, any.driver || "", any.reg || "", stop.id, stop.stop,
-                   stop.time, at, off, Date.now(), note)],
+                   anchor, at, off, Date.now(), note)],
            body: { trip: trip, sunday: key, route: any.route, event: "pickup", stopId: stop.id,
                    stop: stop.stop, time: hhmm, added: true },
            words: any.route + ", " + shortDay(key) + ": " + stop.stop + " added at " + hhmm + ".",

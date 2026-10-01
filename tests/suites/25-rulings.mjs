@@ -406,6 +406,21 @@ export default async function (root) {
          "a row that never reached the tab was confirmed, so it is never sent again");
   });
 
+  s.test("the time the passenger was given lands in Scheduled, as text, and stays on a rewrite", (a) => {
+    const L = sheet();
+    worker(L, { drain: drainWith([oneBooking({ sched: "10:15" })], -58) });
+    call(L, "drainFromWorker");
+    const sh = L.gas.ss.getSheetByName("Bus Bookings");
+    const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    const col = head.indexOf("Scheduled") + 1;
+    a.ok(col > 0, "no Scheduled column on Bus Bookings");
+    a.eq(String(sh.getRange(2, col).getValue()).replace(/^'/, ""), "10:15");
+    /* A later copy from an older Worker, with no time on it, keeps the one there. */
+    worker(L, { drain: drainWith([oneBooking({ status: "Cancelled" })], -59) });
+    call(L, "drainFromWorker");
+    a.eq(String(sh.getRange(2, col).getValue()).replace(/^'/, ""), "10:15", "the time given was wiped");
+  });
+
   s.test("a column the coordinator added keeps its value when the drain rewrites the row", (a) => {
     const head = TABS["Bus Bookings"].concat(["My note"]);
     const r1 = row("Bus Bookings", { Sunday: KEY, Route: "South", "Stop ID": "S03", Stop: "Sedley Street",
