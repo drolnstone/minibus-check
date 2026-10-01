@@ -1628,6 +1628,68 @@ function vlogShelf(ss) {
   return { log: by, jobs: jobsOutstanding(ss) };
 }
 
+/* ---- is everything working? ----------------------------------------------
+   DO THE PHONES HAVE WHAT THE SHEET HAS ABOUT EACH BUS? From v1.92.0.
+
+   The Message button's lesson: when a feature's data stops reaching the live
+   server, nothing fails loudly. The button just is not there, and an empty
+   log looks like a bus with nothing recorded. So the live server's own answer
+   (w2.30.0 on) is held against the tabs:
+
+     the due dates      what every driver app warns from, against the Buses tab
+     the Vehicle Log    what the coordinator's Buses screen shows, against the tab
+     a date cell that cannot be read as a date, which the drivers never see
+
+   A difference is a sync that has not landed, and Send everything mends it. */
+function vehicleHealth(ss, lv, good, bad, todo) {
+  try {
+    if (!lv || typeof lv.vlogHeld === "undefined") {
+      bad.push("Bus records: the live server is older than w2.30.0, so the coordinator's Buses screen " +
+               "shows no Vehicle Log. Deploy the Worker from the repository.");
+      return;
+    }
+    if (lv.vlogHeld === null || lv.busDates === null) {
+      bad.push("Bus records: could not read what the live server holds about the buses.");
+      return;
+    }
+    var tab = busDatesNow(ss);
+    var differ = [], unreadable = [];
+    Object.keys(tab).forEach(function (reg) {
+      var live = (lv.busDates || {})[reg] || {};
+      RENEW_KEYS.forEach(function (k) {
+        var t = tab[reg][k] || "";
+        if (t.charAt(0) === "?") { unreadable.push(reg + " " + RENEWALS[k].column); return; }
+        var l = String(live[k] || "");
+        if (l !== t) differ.push(reg + " " + RENEWALS[k].label + " (the tab says " + (t ? ukDay(t) : "nothing") +
+                                 ", the phones " + (l ? ukDay(l) : "nothing") + ")");
+      });
+    });
+    var onTab = {}, entries = 0;
+    vlogRows(ss).forEach(function (x) { if (x.reg) { onTab[x.reg] = (onTab[x.reg] || 0) + 1; entries++; } });
+    var missing = Object.keys(onTab).filter(function (reg) { return !Number((lv.vlogHeld || {})[reg] || 0); });
+
+    if (differ.length) {
+      bad.push("Bus records: the drivers are warned from different due dates than the Buses tab: " +
+               differ.join("; ") + ". Use Send everything to the live server now.");
+    }
+    if (missing.length) {
+      bad.push("Bus records: the coordinator's app shows no Vehicle Log for " + missing.join(" and ") +
+               ", which " + (missing.length === 1 ? "has" : "have") + " entries on the tab. " +
+               "Use Send everything to the live server now.");
+    }
+    if (unreadable.length) {
+      todo.push("Bus records: " + unreadable.join(", ") + " cannot be read as a date, so no driver is " +
+                "warned about it. Type it like 17/06/2027.");
+    }
+    if (!differ.length && !missing.length) {
+      good.push("Bus records: the phones have every bus's due dates" +
+                (entries ? " and the Vehicle Log (" + entries + " entr" + (entries === 1 ? "y" : "ies") + ")" : "") + ".");
+    }
+  } catch (err) {
+    bad.push("Bus records: could not be checked: " + ((err && err.message) || err));
+  }
+}
+
 /* ---- typed on the sheet -------------------------------------------------- */
 
 function onEditBuses(e, sh) {
@@ -11478,6 +11540,7 @@ function healthReport() {
       }
 
       messageDriverHealth(ss, lv, good, bad, todo);
+      vehicleHealth(ss, lv, good, bad, todo);
     }
   } catch (err) {
     bad.push("Live server did not answer: " + ((err && err.message) || err));

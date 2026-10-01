@@ -650,5 +650,99 @@ export default async function (root) {
     });
   });
 
+  /* ---- is everything working? -----------------------------------------
+     The Message button went dark for weeks with nothing to say so. The same
+     must not happen to the due dates or the log: the live server says what
+     it holds, and the sheet holds it against its own tabs. */
+
+  s.test("the live server says what it holds about each bus: due dates and how many log entries", async (a) => {
+    await atTime(THU, async () => {
+      const { env } = await fresh();
+      const out = await J(await post(env, { action: "ping" }));
+      a.eq(out.busDates && out.busDates["YS70 PWE"] && out.busDates["YS70 PWE"].mot, "2026-10-20");
+      a.eq(out.vlogHeld && out.vlogHeld["YS70 PWE"], 1);
+      a.hasnt(JSON.stringify(out.vlogHeld), "Estimated", "more than a count came back");
+    });
+  });
+
+  const health = (L, lv) => {
+    const good = [], bad = [], todo = [];
+    call(L, "vehicleHealth", ss(L), lv, good, bad, todo);
+    return { good: good.join(" | "), bad: bad.join(" | "), todo: todo.join(" | ") };
+  };
+  const liveOf = (L) => {
+    const dates = call(L, "busDatesNow", ss(L)), held = {};
+    call(L, "vlogRows", ss(L)).forEach((x) => { held[x.reg] = (held[x.reg] || 0) + 1; });
+    return { busDates: JSON.parse(JSON.stringify(dates)), vlogHeld: held };
+  };
+
+  s.test("Is everything working? says the phones have every bus's dates and log when they do", async (a) => {
+    await atTime(THU, async () => {
+      const L = sheet();
+      call(L, "vlogBoot", ss(L));
+      const r = health(L, liveOf(L));
+      a.eq(r.bad, "", r.bad);
+      a.has(r.good, "the phones have every bus's due dates and the Vehicle Log (8 entries)");
+    });
+  });
+
+  s.test("and says so when the log has not reached the coordinator's app", async (a) => {
+    await atTime(THU, async () => {
+      const L = sheet();
+      call(L, "vlogBoot", ss(L));
+      const lv = liveOf(L);
+      lv.vlogHeld = {};
+      const r = health(L, lv);
+      a.has(r.bad, "shows no Vehicle Log for");
+      a.has(r.bad, "YS70 PWE");
+      a.has(r.bad, "Send everything");
+      a.hasnt(r.good, "Bus records");
+    });
+  });
+
+  s.test("and when the drivers are warned from a different date than the Buses tab", async (a) => {
+    await atTime(THU, async () => {
+      const L = sheet();
+      const lv = liveOf(L);
+      lv.busDates["YS70 PWE"].mot = "2026-10-19";
+      const r = health(L, lv);
+      a.has(r.bad, "YS70 PWE MOT (the tab says 20/10/2026, the phones 19/10/2026)");
+    });
+  });
+
+  s.test("a date cell that cannot be read is a thing to do, and an old live server is named", async (a) => {
+    await atTime(THU, async () => {
+      const L = sheet();
+      ss(L).getSheetByName("Buses").getRange(3, TABS["Buses"].indexOf("Permit due") + 1).setValue("end of Jan");
+      const lv = liveOf(L);
+      const r = health(L, lv);
+      a.has(r.todo, "NH56 FWP Permit due cannot be read as a date");
+      a.has(health(L, { waHeld: [] }).bad, "older than w2.30.0");
+      a.has(health(L, { vlogHeld: null, busDates: {} }).bad, "could not read");
+    });
+  });
+
+  s.test("the whole way round: the sheet's push, the live server's answer, the report", async (a) => {
+    await atTime(THU, async () => {
+      const { env } = await fresh();
+      const L = sheet();
+      call(L, "vlogBoot", ss(L));
+      const sent = [];
+      L.ctx.UrlFetchApp = { fetch(url, o) { try { sent.push(JSON.parse(o.payload)); } catch (e) {}
+        return { getResponseCode: () => 200, getAllHeaders: () => ({}), getContentText: () => "{\"ok\":true}" }; } };
+      call(L, "pushToWorker");
+      const sync = sent.filter((b) => b && b.action === "sync").pop();
+      a.ok(sync, "no sync was sent");
+      await W.handleSync(env, sync);
+      const ping = await J(await post(env, { action: "ping" }));
+      L.ctx.UrlFetchApp = { fetch() { return { getResponseCode: () => 200, getAllHeaders: () => ({}),
+        getContentText: () => JSON.stringify(ping) }; } };
+      const r = call(L, "healthReport");
+      const bad = [].concat(r.bad || []).join(" | ");
+      a.hasnt(bad, "Bus records", bad);
+      a.has([].concat(r.good || []).join(" | "), "the phones have every bus's due dates and the Vehicle Log");
+    });
+  });
+
   return s;
 }

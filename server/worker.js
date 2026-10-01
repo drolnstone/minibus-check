@@ -5755,6 +5755,27 @@ async function alertRoll(env) {
   } catch (err) {
     out.waHeld = null;
   }
+  /* WHAT EVERY PHONE HAS ABOUT EACH BUS, from w2.30.0: the due dates the
+     driver app warns from, as the sheet last sent them, and how many Vehicle
+     Log entries the coordinator's Buses screen holds for each registration.
+     Dates and counts only. The sheet holds them against its own tabs, so a
+     sync that stops landing is noticed rather than shown as an empty log.
+     null when it could not tell. */
+  try {
+    const extra = (await cacheGet(env, "bus_extra")) || {};
+    out.busDates = {};
+    for (const r of Object.keys(extra)) out.busDates[r] = Object.assign({}, (extra[r] && extra[r].dates) || {});
+  } catch (err) {
+    out.busDates = null;
+  }
+  try {
+    const shelf = await cacheGet(env, "coord_shelf");
+    const log = (shelf && shelf.vehicles && shelf.vehicles.log) || {};
+    out.vlogHeld = {};
+    for (const r of Object.keys(log)) out.vlogHeld[r] = (log[r] || []).length;
+  } catch (err) {
+    out.vlogHeld = null;
+  }
   return out;
 }
 

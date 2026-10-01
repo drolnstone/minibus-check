@@ -70,7 +70,15 @@ D. The coordinator's app, first screen: Buses is in the list. Open it: each
    something, choose MOT. The box under the dates says when it would be due
    next and why. Tap Not now: nothing is recorded.
 
-E. When a real MOT, service or renewal is next done, record it there. Its
+E. Minibus, Have a look, Is everything working? (or the same in the
+   coordinator's app) has a line starting "Bus records". Under Fine it reads
+     Bus records: the phones have every bus's due dates and the Vehicle Log
+     (8 entries).
+   with the number of rows on your Vehicle Log. Run before step 3, the same
+   report says the Vehicle Log and History tabs are missing: that is
+   expected, and step 3 makes them.
+
+F. When a real MOT, service or renewal is next done, record it there. Its
    row appears on the Vehicle Log within a minute, the Buses tab's date
    moves, and History says what it was.
 
@@ -115,5 +123,13 @@ WHAT CHANGED
    year back from it, the last service taken as done with the last MOT.
    Correct any whose real date you know.
 
-   (tests/suites/36-vehicle-log.mjs, 33 checks; browser checks C29 to C32;
+6. IS EVERYTHING WORKING? holds what the phones have against the tabs, as
+   it now does for the Message button: the due dates every driver app warns
+   from against the Buses tab, and the Vehicle Log the coordinator's Buses
+   screen shows against the tab. A difference is a sync that has not landed
+   (Needs attention: Send everything); a date cell that cannot be read is
+   listed To do. (Code.gs vehicleHealth; worker.js alertRoll's busDates and
+   vlogHeld, dates and counts only.)
+
+   (tests/suites/36-vehicle-log.mjs, 39 checks; browser checks C29 to C32;
    sabotages S20 to S24.)

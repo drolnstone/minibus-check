@@ -1216,6 +1216,13 @@ date, with the last service taken as done with the last MOT. Nothing on the
 Buses tab moves. Correct any whose real date you know; it only affects the
 log.
 
+**Is everything working?** holds what the phones have against the tabs, from
+w2.30.0 and v1.92.0, so a sync that stops landing is noticed rather than
+shown as an empty log: the due dates every driver app warns from against the
+Buses tab, and the Vehicle Log the coordinator's Buses screen shows against
+the tab. A difference says Send everything; a date cell that cannot be read is
+listed to do. The live server sends dates and counts only.
+
 **A date typed on the Buses tab** is written on History too, with who typed it
 where the sheet will say, both as it is typed and at the five minute sync (so a
 paste or a fill-down is caught). Text that is not a date is refused as it is
