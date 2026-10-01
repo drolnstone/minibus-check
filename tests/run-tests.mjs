@@ -19,6 +19,9 @@ import vm from "node:vm";
 import { Suite } from "./lib/t.mjs";
 import { installGlobals, cleanup } from "./lib/worker.mjs";
 
+/* London time, as the sheet runs, whatever clock this machine is on. */
+process.env.TZ = "Europe/London";
+
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(process.env.MINIBUS_ROOT || join(here, ".."));
 const only = process.argv.slice(2).filter((a) => !a.startsWith("-"));
