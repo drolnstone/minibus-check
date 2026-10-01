@@ -1166,7 +1166,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       <div class="field">
         <label for="sign">Type your name to sign</label>
         <input id="sign" type="text" placeholder="Name or initials" autocomplete="off">
-        <div class="hint">This records that you did the check yourself, today.</div>
       </div>
     </div>
   </section>
@@ -1571,7 +1570,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.90.0";
+var APP_VERSION = "v1.90.1";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2172,13 +2171,13 @@ function mileProblem(){
   if(n < p){
     return { kind:"low",
       msg:"That is LOWER than the last reading of " + p.toLocaleString("en-GB") +
-          " on " + prev.date + ". An odometer does not go backwards, so one of the two is wrong.",
+          " on " + prev.date + ".",
       confirm:"I have read it twice and the dashboard really does say this" };
   }
   if(n - p > BIG_JUMP){
     return { kind:"jump",
       msg:"That is " + (n-p).toLocaleString("en-GB") + " miles since " + prev.date +
-          ". That is a long way for this bus. Check you have not added a digit.",
+          ". Check you have not added a digit.",
       confirm:"I have read it twice and the dashboard really does say this" };
   }
   return null;
@@ -3330,9 +3329,9 @@ function geoText(){
   switch(geo.status){
     case "off":         return "";
     case "asking":      return "Finding you\u2026";
-    case "refused":     return "Location turned off for this app. The check still counts, and the record will show it was not given.";
-    case "timeout":     return "Could not get a location in time. Carry on: the record will show it was not available.";
-    case "unavailable": return "No location available here. Carry on: the record will show it was not available.";
+    case "refused":     return "Location turned off for this app. Carry on.";
+    case "timeout":     return "Could not get a location in time. Carry on.";
+    case "unavailable": return "No location available here. Carry on.";
     case "unsupported": return "This phone cannot give a location. Carry on as normal.";
     case "ok":
       var d = geo.dist===null ? ""
@@ -3783,7 +3782,7 @@ function verdictHTML(lv,defs,advs,auth){
   if(lv==="stop"){
     var ph = coordPhone();
     var call = ph ? '<a class="callbtn" href="tel:'+esc(ph)+'">Call '+esc(who)+' \u00B7 '+esc(prettyPhone())+'</a>' : "";
-    return '<div class="verdict v-stop"><h2>The bus does not run</h2><p>A safety critical item has failed. Do not carry passengers. Ring the coordinator and arrange lifts. Nobody will be upset with you for stopping the bus.</p>'+defsHTML(defs)+advsHTML(advs)+call+'</div>';
+    return '<div class="verdict v-stop"><h2>The bus does not run</h2><p>A safety critical item has failed. Do not carry passengers. Ring the coordinator and arrange lifts.</p>'+defsHTML(defs)+advsHTML(advs)+call+'</div>';
   }
   if(lv==="warn"){
     /* Three warn screens, not one, because "Safe to drive, with defects" over
@@ -7007,8 +7006,7 @@ function rotaPaintStops(){
     /* Say what happened, not what is wrong with his phone. The old wording
        told a driver standing on full signal that he had no signal. */
     $("stopsBody").innerHTML=
-      '<p class="lede">The timetable did not come through. This is usually the '+
-      'record taking too long to answer rather than anything on your phone.</p>'+
+      '<p class="lede">The timetable did not come through.</p>'+
       '<button class="btn btn-main btn-wide" id="stopsRetry" type="button">Try again</button>';
     $("stopsRetry").addEventListener("click",function(){
       rotaStopsAsked=false;
@@ -8238,9 +8236,8 @@ function rotaOpenRequest(key){
       /* Backups sit outside both patterns, so they have no Sundays of their
          own and nothing to trade. That is not a fault, it is what a backup
          is, but a driver staring at an empty list cannot know that. */
-      swapNote(esc(who)+" has no Sundays of his own coming up, so there is "+
-               "nothing to swap. Ask for a cover instead and he can be put "+
-               "down for this Sunday.");
+      swapNote(esc(who)+" has no Sundays of his own coming up. Ask for a "+
+               "cover instead.");
       return;
     }
     swapNote("");
@@ -9237,7 +9234,7 @@ function pinOffline(tried){
 function pinLetThrough(){
   st.pinOk = true;
   st.pinState = "offline";
-  pinSay("No signal to check the PIN. Carry on: the record will show it was not checked.");
+  pinSay("No signal to check the PIN. Carry on.");
   paintFoot();
 }
 function showPinField(){
@@ -9312,9 +9309,8 @@ function showPinField(){
   showPinField();
 })();
 
-$("modeNote").textContent = LIVE
-  ? "Works with no signal. Checks send themselves when you are back in range."
-  : "Practice mode: no record address is set up yet, so nothing is being sent.";
+$("modeNote").textContent = LIVE ? "" : "Practice mode: nothing is being sent.";
+$("modeNote").hidden = LIVE;
 
 /* ---- Appearance ----------------------------------------------------
 
@@ -9425,8 +9421,7 @@ function howHtml(){
   var d=deviceKind(), mine=(d==="ios-other") ? "ios" : d;
   var h='<div id="howOne"></div>';
   if(d==="ios-other"){
-    h+='<p class="how-note">Open this address in <b>Safari</b> first. '+
-       'On an iPhone only Safari can do this.</p>';
+    h+='<p class="how-note">Open this address in <b>Safari</b> first.</p>';
   }
   h+='<p class="how-lab">'+esc(HOW[mine][0])+'</p>'+
      '<ol class="how-steps">'+HOW[mine][1]+'</ol>';
