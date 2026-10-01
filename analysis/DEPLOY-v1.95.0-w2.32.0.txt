@@ -1,7 +1,7 @@
 MINIBUS
 =======
-  sheet v1.95.0 · server w2.32.0 · pages unchanged
-  Goes in after sheet v1.94.0 (the drop-downs). This Code.gs includes it.
+  pages v1.90.2 · sheet v1.95.0 · server w2.32.0
+  Goes in after #19 and #20. This Code.gs includes #20.
 
 Each booking keeps its stop's timetable time as it was when booked. Early
 or late at a booked stop is measured from that time. A stop nobody booked,
@@ -11,7 +11,7 @@ leaving church and back at church still go by the timetable.
 YOU ARE ON              GOING TO
   Code.gs v1.94.0         v1.95.0
   Worker w2.31.0          w2.32.0
-  Pages                   no change
+  Pages v1.90.1            v1.90.2 (on merge)
 
 
 THE FILES TO PASTE, from this pull request's branch and nowhere else:
@@ -38,7 +38,8 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. The foot of all three apps reads  server w2.32.0  and  sheet v1.95.0 .
+A. The foot of all three apps reads  app v1.90.2 · server w2.32.0 ·
+   sheet v1.95.0 .
 
 B. Bus Bookings has a Scheduled column on the right. Make a booking: its
    row shows the stop's time.
@@ -61,6 +62,7 @@ WHAT CHANGED
 
 3. RUN RECORD. The left column shows the time the figure was measured
    from: the tap's own, else the booked time, else today's timetable.
+   Under a stop whose number had another name that Sunday: "was <name>".
 
 4. A tap revived after Undo takes the new figure too.
 
