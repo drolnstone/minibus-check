@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.93.0";
+var SCRIPT_VERSION = "v1.94.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -858,7 +858,7 @@ function ensureBuses(ss) {
     }));
   }
   pretty("Buses dropdown", function () {
-    sh.getRange(2, bc.active, 2000, 1).setDataValidation(listRule(["YES", "NO"]));
+    sh.getRange(2, bc.active, 2000, 1).setDataValidation(pickRule(YES_NO));
   });
   /* From v1.92.0 the four due dates take a date and nothing else. Text that
      only looked like a date used to be read as blank, silently, and the
@@ -909,7 +909,7 @@ function busColumnsFirstFill(sh, bc) {
     });
   } catch (err) {}
   pretty("Buses route dropdown", function () {
-    sh.getRange(2, bc.oddRoute, 199, 1).setDataValidation(listRule(["North", "South"]));
+    sh.getRange(2, bc.oddRoute, 199, 1).setDataValidation(pickRule(ROUTES));
   });
   var last = sh.getLastRow();
   if (last < 2) return;
@@ -1169,7 +1169,7 @@ function ensureVehicleLog(ss) {
         "under Corrects. Never delete a row.");
     });
     pretty("Vehicle Log dropdown", function () {
-      sh.getRange(2, vc.what, rows, 1).setDataValidation(listRule(VLOG_WHAT));
+      sh.getRange(2, vc.what, rows, 1).setDataValidation(pickRule(VLOG_WHAT));
     });
     /* A row some later row corrects is struck through, so the tab reads true
        at a glance without anybody editing the row itself. */
@@ -2476,7 +2476,7 @@ function handleCheckLocked(c) {
       dput(dfc.reg,      safeText(c.reg));
       dput(dfc.driver,   safeText(c.driver));
       dput(dfc.item,     safeText(d.name));
-      dput(dfc.critical, d.crit ? "YES" : "");
+      dput(dfc.critical, d.crit ? "YES" : "NO");
       dput(dfc.found,    safeText(d.note));
       dput(dfc.status,   "Open");
       dput(dfc.kind,     kind);
@@ -3922,11 +3922,11 @@ function coordDefectsList(ss) {
       date: anyToKey(at1(r, dc.date)),
       driver: String(at1(r, dc.driver) || "").trim(),
       item: String(at1(r, dc.item) || "").trim(),
-      crit: String(at1(r, dc.critical) || "") === "YES",
+      crit: String(at1(r, dc.critical) || "").trim().toUpperCase() === "YES",
       found: String(at1(r, dc.found) || ""),
       status: status,
       action: String(at1(r, dc.action) || ""),
-      kind: String(at1(r, dc.kind) || "").trim() === "Advisory" ? "Advisory" : "Defect",
+      kind: String(at1(r, dc.kind) || "").trim().toLowerCase() === "advisory" ? "Advisory" : "Defect",
       received: isDateLike(rec) ? rec.getTime() : 0,
       trail: (trails[defectKey(r, dc)] || []).slice(-8)
     });
@@ -6016,8 +6016,10 @@ function coverBalance() {
      Rota            the two scheduled columns, the two cover columns,
                      Status and Notes
      Rota Requests   Status and Replacement assigned, which is the whole job
-     Defects         Status, Action taken, Closed on
+     Defects         Critical, Status, Action taken, Closed on, Kind
      Drivers         everything below the header, since the register grows
+     Vehicle Log     the columns a new row is typed in (from v1.94.0)
+   Locked whole: Checks, Trip Events, History (from v1.94.0) and the archives.
 
    Locked everywhere: the header row. That is where the quiet damage happens.
    Rename or shift a heading and things break without saying so, which is
@@ -6056,9 +6058,11 @@ function sheetLocks(ss) {
 
   add(DEFECTS_SHEET, function (sh) {
     /* Status, Action taken and Closed on, found by heading. As three columns
-       from position 9 this unlocked whatever happened to sit there. */
+       from position 9 this unlocked whatever happened to sit there. Critical
+       and Kind from v1.94.0: a report the coordinator judges again (a tyre
+       that is an advisory, not a critical defect) is changed there. */
     var d = colsSoft(sh, DEFECTS_SHEET), out = [];
-    [d.status, d.action, d.closed].forEach(function (col) {
+    [d.critical, d.status, d.action, d.closed, d.kind].forEach(function (col) {
       if (col) out.push(sh.getRange(2, col, last(sh) - 1, 1));
     });
     return out;
@@ -6113,6 +6117,21 @@ function sheetLocks(ss) {
                         Math.max(sh.getLastColumn(), DRIVERS_HEADERS.length))];
   }, "Drivers: the header row is fixed, the register below it is yours");
 
+  /* From v1.94.0. A new row is typed across the columns a person fills; the
+     ones the sheet fills are locked. A row already there is corrected with a
+     new row, and an edit to one is written on History. */
+  add(VLOG_SHEET, function (sh) {
+    var v = colsSoft(sh, VLOG_SHEET), out = [];
+    [v.reg, v.what, v.status, v.done, v.bookedFor, v.next, v.how, v.given, v.miles,
+     v.garage, v.cost, v.defects, v.notes, v.corrects].forEach(function (col) {
+      if (col) out.push(sh.getRange(2, col, last(sh) - 1, 1));
+    });
+    return out;
+  }, "Vehicle Log: Log ID, Recorded, Was due and Recorded by are the sheet's");
+
+  add(HISTORY_SHEET, function () { return []; },
+      "History: the sheet adds rows here, nothing is edited");
+
   /* The archive tabs, locked whole. They hold rows that were records on the
      live tab a moment before they were moved, and moving them did not make
      them anybody's to edit. Named rather than listed, so a tab that does not
@@ -6134,10 +6153,13 @@ function lockSheet() {
     "still go ahead when you mean to: this stops the accidental keystroke, " +
     "not you.\n\n" +
     "Still edited freely:\n" +
-    "  Rota: drivers, covers, Status, Notes\n" +
+    "  Rota: drivers, covers, buses, Status, Notes\n" +
     "  Rota Requests: Status and Replacement assigned\n" +
-    "  Defects: Status, Action taken, Closed on\n" +
-    "  Drivers: the whole register\n\n" +
+    "  Defects: Critical, Status, Action taken, Closed on, Kind\n" +
+    "  Buses: Seats, Active, Notes\n" +
+    "  Bus Bookings: Status\n" +
+    "  Vehicle Log: the columns you type a new row in\n" +
+    "  Bus Stops and Drivers: everything below the header\n\n" +
     "Header rows are locked everywhere. Minibus \u203a Unlock the sheet " +
     "removes all of this if you ever need to work freely.");
 }
@@ -6155,8 +6177,11 @@ function applyLocks(ss) {
 }
 
 function removeLocks(ss) {
+  /* History's own protection, from before it joined the lock set, goes too,
+     so the tab is not protected twice. */
   ss.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(function (p) {
-    if (String(p.getDescription() || "").indexOf(LOCK_TAG) === 0) p.remove();
+    var d = String(p.getDescription() || "");
+    if (d.indexOf(LOCK_TAG) === 0 || d.indexOf("History: only ever added to") === 0) p.remove();
   });
   ss.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(function (p) {
     if (String(p.getDescription() || "").indexOf(LOCK_TAG) === 0) p.remove();
@@ -6498,8 +6523,8 @@ function ensureBusStops(ss) {
       /* Down the named columns, not down F and G. Those two letters were
          only ever "Active" and "Type" because nothing had been inserted to
          the left of them. */
-      sh.getRange(2, sc.active, 399, 1).setDataValidation(listRule(["YES", "NO"]));
-      sh.getRange(2, sc.type, 399, 1).setDataValidation(listRule(STOP_TYPES));
+      sh.getRange(2, sc.active, 399, 1).setDataValidation(pickRule(YES_NO));
+      sh.getRange(2, sc.type, 399, 1).setDataValidation(pickRule(STOP_TYPES));
       sh.getRange(1, sc.type).setNote(STOP_TYPE_NOTE);
     });
     structDone("stoptypes");
@@ -9276,7 +9301,7 @@ function ensureDrivers(ss) {
         "North or South. Blank counts as North, so rows written before the\n" +
         "South route started keep working without being edited.");
       pretty("Drivers Route dropdown", function () {
-        sh.getRange(2, dc.route, 199, 1).setDataValidation(listRule(["North", "South"])); });
+        sh.getRange(2, dc.route, 199, 1).setDataValidation(pickRule(ROUTES)); });
     }
     if (!hadPhone) sh.getRange(1, dc.phone).setNote(DRIVERS_PHONE_NOTE);
   }
@@ -9286,11 +9311,11 @@ function ensureDrivers(ss) {
       sh.appendRow(driverRow(dc, Math.max(sh.getLastColumn(), DRIVERS_HEADERS.length), d));
     });
     pretty("Drivers Route dropdown", function () {
-      sh.getRange(2, dc.route, 199, 1).setDataValidation(listRule(["North", "South"])); });
+      sh.getRange(2, dc.route, 199, 1).setDataValidation(pickRule(ROUTES)); });
     sh.setColumnWidth(dc.name, 150);
     sh.setColumnWidth(dc.role, 160);
     pretty("Drivers Active dropdown", function () {
-      sh.getRange(2, dc.active, 199, 1).setDataValidation(listRule(["YES", "NO"])); });
+      sh.getRange(2, dc.active, 199, 1).setDataValidation(pickRule(YES_NO)); });
     sh.getRange(1, dc.order).setNote(
       "Number the repeating pattern here: 1, 2, 3, 4...\n" +
       "Each route is numbered separately, so both start at 1.\n" +
@@ -9580,14 +9605,14 @@ function refreshDropdowns() {
        coloured chips, so the status stays perfectly readable. */
     step("Rota status colours", function () { rotaColours(rota); });
     step("Rota status list", function () {
-      rotaColRange(rota, rotaCols(rota).status).setDataValidation(listRule(ROTA_STATUS)); });
+      rotaColRange(rota, rotaCols(rota).status).setDataValidation(pickRule(ROTA_STATUS)); });
   }
 
   var reqs = ss.getSheetByName(REQUESTS_SHEET);
   if (reqs) {
     step("Requests lists", function () {
       var qc = requestCols(reqs);
-      reqs.getRange(2, qc.status, 1999, 1).setDataValidation(listRule(REQ_STATUS));
+      reqs.getRange(2, qc.status, 1999, 1).setDataValidation(pickRule(REQ_STATUS));
       reqs.getRange(2, qc.replacement, 1999, 1).setDataValidation(listRule(active)); });
     step("Requests column widths", function () {
       var qc2 = requestCols(reqs);
@@ -9602,6 +9627,8 @@ function refreshDropdowns() {
      to run" rather than wait for somebody to spell it. */
   var chk = ss.getSheetByName(CHECKS_SHEET);
   if (chk) step("Checks outcome list", function () { applyOutcomeDropdown(chk, 0); });
+
+  fixedListDropdowns(ss, step);
 
   try { PropertiesService.getScriptProperties()
           .setProperty("dropdownsSkipped", JSON.stringify(skipped)); }
@@ -9649,6 +9676,97 @@ function listRule(values) {
     .build();
 }
 
+/* ---- every cell with a fixed answer offers it, and takes nothing else ---
+
+   From v1.94.0. listRule above is for names and buses, where a value off the
+   list can be right. A cell whose answer is a word the script reads (YES,
+   Advisory, Fixed, North) is different: a near miss is a wrong answer that
+   nothing reports. So those take the list and nothing else, and snapToList
+   puts a right word typed in the wrong case back the way the list spells it.
+
+   Applied down the whole tab on every Set up and every Refresh dropdowns,
+   rather than once when a tab was made, so a tab older than its dropdown
+   gets it too. */
+var YES_NO         = ["YES", "NO"];
+var ROUTES         = ["North", "South"];
+var DEFECT_KINDS   = ["Defect", "Advisory"];
+var BOOKING_STATUS = ["Booked", "Cancelled"];
+var VLOG_STATUS    = ["Booked", "Done", "Estimated", "Correction", "Withdrawn"];
+
+function pickRule(values) {
+  var clean = values.filter(function (v) { return String(v || "").length; });
+  return SpreadsheetApp.newDataValidation()
+    .requireValueInList(clean, true)
+    .setAllowInvalid(false)
+    .setHelpText("Pick one: " + clean.join(", "))
+    .build();
+}
+
+function fixedListDropdowns(ss, step) {
+  var plan = [
+    [DEFECTS_SHEET,  [["status", STATUS_OPTIONS], ["critical", YES_NO], ["kind", DEFECT_KINDS]]],
+    [DRIVERS_SHEET,  [["active", YES_NO], ["route", ROUTES]]],
+    [BUSES_SHEET,    [["active", YES_NO], ["oddRoute", ROUTES]]],
+    [STOPS_SHEET,    [["route", ROUTES], ["active", YES_NO], ["type", STOP_TYPES]]],
+    [BOOKINGS_SHEET, [["status", BOOKING_STATUS]]],
+    [VLOG_SHEET,     [["what", VLOG_WHAT], ["status", VLOG_STATUS]]]
+  ];
+  var down = function (sh, col, rule) {
+    if (col) sh.getRange(2, col, Math.max(1, sh.getMaxRows() - 1), 1).setDataValidation(rule);
+  };
+  plan.forEach(function (p) {
+    var sh = ss.getSheetByName(p[0]);
+    if (!sh) return;
+    var c = colsSoft(sh, p[0]);
+    p[1].forEach(function (f) {
+      step(p[0] + " " + FIELDS[p[0]][f[0]] + " list", function () { down(sh, c[f[0]], pickRule(f[1])); });
+    });
+  });
+
+  /* The two that grow. A Vehicle Log row is for a bus on the Buses tab, so
+     a new bus goes on that tab first. A new title on the Drivers tab is let
+     in, and offered from the next refresh. */
+  var vlog = ss.getSheetByName(VLOG_SHEET);
+  var regs = readBuses(ss).map(function (b) { return b.reg; });
+  if (vlog && regs.length) step("Vehicle Log Registration list", function () {
+    down(vlog, colsSoft(vlog, VLOG_SHEET).reg, pickRule(regs)); });
+  var drv = ss.getSheetByName(DRIVERS_SHEET);
+  if (drv) step("Drivers Role list", function () {
+    var dc = colsSoft(drv, DRIVERS_SHEET);
+    if (!dc.role) return;
+    var roles = ["Driver"].concat(AUTHORISER_ROLES);
+    if (drv.getLastRow() >= 2) drv.getRange(2, dc.role, drv.getLastRow() - 1, 1).getValues()
+      .forEach(function (r) {
+        var v = String(r[0] || "").trim();
+        if (v && roles.map(function (x) { return x.toLowerCase(); }).indexOf(v.toLowerCase()) === -1) roles.push(v);
+      });
+    down(drv, dc.role, listRule(roles));
+  });
+}
+
+/* A word from a cell's list typed in another case (yes, advisory, fixed)
+   becomes the list's own spelling, so the script reads it. One cell at a
+   time: a paste is left as pasted. */
+function snapToList(e) {
+  var r = e.range;
+  if (r.getNumRows() !== 1 || r.getNumColumns() !== 1) return;
+  var typed = e.value == null ? "" : String(e.value);
+  if (!typed.trim()) return;
+  var dv = r.getDataValidation();
+  if (!dv) return;
+  if (dv.getCriteriaType && dv.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return;
+  var list = (dv.getCriteriaValues() || [])[0];
+  if (!Array.isArray(list)) return;
+  var want = typed.trim().toLowerCase();
+  for (var i = 0; i < list.length; i++) {
+    var w = String(list[i]);
+    if (w.toLowerCase() === want) {
+      if (w !== typed) { r.setValue(w); e.value = w; }
+      return;
+    }
+  }
+}
+
 /* ---- helpers that are safe to press Run on ------------------------------
 
    The Apps Script editor lists every function in this file in one dropdown,
@@ -9680,7 +9798,7 @@ function applyRotaValidation(sh, row) {
     (row ? sh.getRange(row, c.northCover) : rotaColRange(sh, c.northCover))
       .setDataValidation(listRule(active));
     (row ? sh.getRange(row, c.status) : rotaColRange(sh, c.status))
-      .setDataValidation(listRule(ROTA_STATUS));
+      .setDataValidation(pickRule(ROTA_STATUS));
   });
 }
 
@@ -9692,7 +9810,7 @@ function applyRequestValidation(sh, row) {
   pretty("Request row dropdowns", function () {
     var rq = requestCols(sh);
     (row ? sh.getRange(row, rq.status) : sh.getRange(2, rq.status, 1999, 1))
-      .setDataValidation(listRule(REQ_STATUS));
+      .setDataValidation(pickRule(REQ_STATUS));
     (row ? sh.getRange(row, rq.replacement) : sh.getRange(2, rq.replacement, 1999, 1))
       .setDataValidation(listRule(active));
   });
@@ -9858,10 +9976,10 @@ function openDefectsByReg(ss) {
     if (!out[reg]) out[reg] = [];
     /* Blank on every row written before v1.62.0, and every one of those is a
        defect, because there was nothing else a row could be. */
-    var kind = String(at1(r, c.kind) || "").trim() === "Advisory" ? "Advisory" : "Defect";
+    var kind = String(at1(r, c.kind) || "").trim().toLowerCase() === "advisory" ? "Advisory" : "Defect";
     out[reg].push({ reg: reg,
                     item: String(at1(r, c.item) || ""),
-                    crit: String(at1(r, c.critical) || "") === "YES",
+                    crit: String(at1(r, c.critical) || "").trim().toUpperCase() === "YES",
                     note: String(at1(r, c.found) || ""),
                     kind: kind,
                     date: anyToKey(at1(r, c.date)),
@@ -12194,6 +12312,7 @@ function onEdit(e) {
     if (!e || !e.range) return;
     var sh = e.range.getSheet();
     var name = sh.getName();
+    try { snapToList(e); } catch (err) {}
     if (name === DEFECTS_SHEET)  return onEditDefects(e, sh);
     if (name === ROTA_SHEET)     return onEditRota(e, sh);
     if (name === REQUESTS_SHEET) return onEditRequests(e, sh);
@@ -12424,11 +12543,12 @@ function onEditDefects(e, sh) {
   var hWho = e.fromScript ? (e.by || "") : editorOf(e);
   var hWhere = e.fromScript ? (e.where || "") : "On the Defects tab";
   var hRow = function (row) { return sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0]; };
-  /* A person's own edit to Status or Action taken, with what it was. The app
+  /* A person's own edit to Status, Action taken, Critical or Kind, with what it was. The app
      and a repair write their own History row before they get here. */
   if (!e.fromScript) {
     var single = numRows === 1 && numCols === 1;
-    var watched = [[dc.status, "Status"], [dc.action, "Action taken"]];
+    var watched = [[dc.status, "Status"], [dc.action, "Action taken"],
+                   [dc.critical, "Critical"], [dc.kind, "Kind"]];
     for (var er = firstRow; er <= Math.min(lastRow, firstRow + 49); er++) {
       var rr = hRow(er);
       watched.forEach(function (w) {
