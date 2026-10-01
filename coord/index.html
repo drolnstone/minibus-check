@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.89.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.89.1 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -602,7 +602,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.89.0";
+var PAGE_VERSION = "v1.89.1";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -2059,7 +2059,7 @@ function evRow(label, tt, ev, run, stopId){
             (ev ? ' data-ev="'+ev.id+'"' : '') + ' data-label="'+esc(label)+'" data-tt="'+esc(tt)+'">'+(ev ? 'Fix' : 'Add')+'</button>';
   return '<div class="ev'+(ev ? '' : ' miss')+'"><span class="tm">'+esc(tt)+'</span>' +
          '<span class="nm">'+esc(label)+(ev && ev.corrected ? ' <span class="tag info">Corrected</span>' : '')+
-           (ev && ev.event === "none" ? '<small>nobody there</small>' : '')+(ev ? '' : '<small>not marked</small>')+'</span>' +
+           (ev && (ev.event === "empty" || ev.event === "none") ? '<small>nobody there</small>' : '')+(ev ? '' : '<small>not marked</small>')+'</span>' +
          '<span class="at'+(late ? ' late' : '')+'">'+(ev ? esc(hhmm(ev.at)) + (offWords(ev.off) ? '<small>'+esc(offWords(ev.off))+'</small>' : '') : '–')+'</span>' +
          '<span>'+btn+'</span></div>';
 }

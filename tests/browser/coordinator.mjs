@@ -151,12 +151,14 @@ async function world() {
   await book(TODAY, "N01", 2, "07700900111");
 
   /* Last Sunday's North run: left church three minutes late, Wilburn Street
-     tapped seven minutes behind, Westminster Road never tapped. */
+     tapped seven minutes behind, Westminster Road never tapped, and nobody
+     at Fountains Road. In the driver app's own words: pickup and empty, what
+     its buttons send (the live server read neither before w2.30.1). */
   const at = (key, t, plus) => W.londonMoment(key, t).getTime() + (plus || 0) * 60000;
   const n = (id) => REAL.stops.find((x) => x.id === id);
   const events = [{ event: "start", at: at(LAST, "10:05", 3) }];
   for (const [id, plus] of [["N01", 2], ["N02", 3], ["N03", 2], ["N04", 4], ["N06", 5], ["N07", 6], ["N08", 7]]) {
-    events.push({ event: "picked", stopId: id, at: at(LAST, n(id).time, plus) });
+    events.push({ event: id === "N04" ? "empty" : "pickup", stopId: id, at: at(LAST, n(id).time, plus) });
   }
   events.push({ event: "end", at: at(LAST, "11:00", 9) });
   const bus = busesOf(LAST);
@@ -164,8 +166,8 @@ async function world() {
                             sunday: LAST, events });
   await W.handleTrip(env, { trip: "trip-last-s", route: "South", driver: southOf(LAST), reg: bus.South,
                             sunday: LAST, events: [{ event: "start", at: at(LAST, "10:16", 1) },
-                                                   { event: "picked", stopId: "S01", at: at(LAST, "10:24", 1) },
-                                                   { event: "picked", stopId: "S04", at: at(LAST, "10:36", 2) },
+                                                   { event: "pickup", stopId: "S01", at: at(LAST, "10:24", 1) },
+                                                   { event: "pickup", stopId: "S04", at: at(LAST, "10:36", 2) },
                                                    { event: "end", at: at(LAST, "11:00", 4) }] });
   db._exec("UPDATE trip_events SET synced=1");
   return { db, env };
@@ -431,6 +433,7 @@ if (want("C9")) {
   await me.shot("C9a-run-record");
   const wil = me.pg.locator("#runsBody .ev", { hasText: "Wilburn" }).first();
   const wasText = await wil.textContent();
+  const emptyText = await me.pg.locator("#runsBody .ev", { hasText: "Fountains" }).first().textContent();
   await wil.locator("button").click();
   await me.wait(300);
   await me.pg.fill("#fixAt", "10:53");
@@ -448,11 +451,12 @@ if (want("C9")) {
   await me.wait(700);
   const added = db._one("SELECT status, fix_note FROM trip_events WHERE trip='trip-last-n' AND stop_id='N05'");
   await me.shot("C9-run-record-after");
-  check("C9", "a stop time is put right and marked as a correction; a stop nobody tapped is given its time",
+  check("C9", "the driver's taps are on the record, Nobody there said so; a stop time is put right and marked as a correction; a stop nobody tapped is given its time",
+        /nobody there/i.test(emptyText) && !/not marked/i.test(wasText) &&
         /\+7/.test(wasText) && label === "Correct it to 10:53" && W.londonHHMM(new Date(row.happened)) === "10:53" &&
         /Corrected/.test(row.status) && /Recorded as 10:58/.test(row.fix_note) && row.synced === 0 &&
         /Corrected/.test(nowText) && added && added.status === "Corrected",
-        "was '" + wasText.replace(/\n/g, " ") + "', label '" + label + "', row " + JSON.stringify(row) +
+        "empty '" + emptyText.replace(/\n/g, " ") + "', was '" + wasText.replace(/\n/g, " ") + "', label '" + label + "', row " + JSON.stringify(row) +
         ", now '" + nowText.replace(/\n/g, " ") + "', added " + JSON.stringify(added));
 }
 
