@@ -1,50 +1,31 @@
 MINIBUS
 =======
-  pages v1.89.0 · server w2.30.0 · sheet v1.92.0
+  pages v1.89.1 · server w2.30.1 · sheet v1.92.0 (unchanged)
 
-The first of the four parts agreed for the buses' records: a new date never
-removes the old one. Every MOT, service, insurance or permit renewal, repair,
-tyres or other job goes on a Vehicle Log of its own, recorded from a new Buses
-screen in the coordinator's app or typed on the sheet. The next due date is
-worked out by the agreed rules and shown on every phone at once. Every change
-to a bus's dates or a defect's status is written on a History tab, with who,
-when and what it was before. And the three apps now follow one pattern: each
-opens on the church's logo, and once signed in the bar names the app over
-who is using it. The driver app is called Driver on the phone, and a bus
-tapped shows at once that it is the one chosen.
+A fix, to go live before Sunday 4 October. The driver app calls a stop tap
+"pickup" (Picked up) or "empty" (Nobody there). The live server looked for
+"picked" and "none" instead in three places, so a real tap never woke the
+passengers further down the route, never showed on the coordinator's Run
+record, and Add on the Run record could put a second time beside the
+driver's own. The sheet always read the taps correctly; nothing on it needs
+putting right.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.88.0         v1.89.0
-  Worker  w2.29.0         w2.30.0
-  Code.gs v1.91.0         v1.92.0
+  Pages   v1.89.0         v1.89.1
+  Worker  w2.30.0         w2.30.1
+  Code.gs v1.92.0         v1.92.0   (no change)
 
-If the last release's steps (pages v1.88.0, server w2.29.0, sheet v1.91.0,
-the Message-the-driver check) are not done yet, do those first:
-analysis/DEPLOY-v1.88.0-w2.29.0.txt.
+If the last release's steps (pages v1.89.0, server w2.30.0, sheet v1.92.0)
+are not done yet, do those first: analysis/DEPLOY-v1.89.0-w2.30.0.txt.
 
 
 BEFORE YOU START
 ----------------
 
-Tell the drivers, in a few words:
-  - the app is called Driver now. A phone that already has it on its home
-    screen keeps the old name, Dominion Transport, under the icon until it
-    is removed and added again; it works the same either way;
-  - the first screen opens on the church's logo, and once signed in the bar
-    at the top says DRIVER over their name;
-  - when they tap a bus it turns blue with a tick, and the other one fades.
-It warns from the same dates on the Buses tab, which now move when a renewal
-is recorded.
-
-The emails' sender name stays as it is in Script Properties (SENDER_NAME,
-Dominion Assembly Transport): that is the name of the service, and the
-driver's "nothing outstanding" notification now uses it too.
-
-Tell the coordinators, the Minister in Charge and the Assistant Coordinator:
-the coordinator's app has a Buses screen. An MOT, a service or a renewal is
-recorded there, and not by typing over the date on the Buses tab (which still
-works, and is written down, but loses the day it was done and the garage).
+Nothing to tell the drivers: they tap exactly as before. Passengers with
+alerts on will now be woken as the bus marks each stop before theirs, as
+the app always meant them to be.
 
 
 IN THIS ORDER
@@ -53,128 +34,51 @@ IN THIS ORDER
 1. WORKER. Cloudflare, the minibus Worker, Edit code. Replace everything
    with server/worker.js. Deploy. No database change.
 
-2. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
-   Save. Deploy, Manage deployments, the pencil, Version: New version,
-   Deploy.
+2. PAGES. Merge the pull request.
 
-3. Minibus, Send everything to the live server now. This makes the two new
-   tabs, Vehicle Log and History, starts the log from the Buses tab's dates,
-   and sends it to the live server. (The five minute sync would do the same
-   by itself; this does it now.)
-
-4. PAGES. Merge the pull request.
+Code.gs is not touched.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.89.0 · server w2.30.0 · sheet
+A. The foot of all three apps reads  app v1.89.1 · server w2.30.1 · sheet
    v1.92.0 .
 
-B. The sheet has a Vehicle Log tab with one row, marked Estimated, for each
-   date of each active bus on the Buses tab, and a
-   History tab whose first row says "Vehicle Log started". Nothing on the
-   Buses tab has moved.
+B. The coordinator's app, Run record, the last two Sundays. The stops the
+   drivers marked show their times, where they said "not marked" before.
+   These are the taps already on the live server: nothing has to be sent
+   again.
 
-C. On the Buses tab, type a word into any MOT due cell. It is refused with
-   "A date, like 17/06/2027." Press Escape.
-
-D. The coordinator's app, first screen: Buses is in the list. Open it: each
-   bus with its four dates and how far off they are. Open a bus, Record
-   something, choose MOT. The box under the dates says when it would be due
-   next and why. Tap Not now: nothing is recorded.
-
-E. Minibus, Have a look, Is everything working? (or the same in the
-   coordinator's app) has a line starting "Bus records". Under Fine it reads
-     Bus records: the phones have every bus's due dates and the Vehicle Log
-     (8 entries).
-   with the number of rows on your Vehicle Log. Run before step 3, the same
-   report says the Vehicle Log and History tabs are missing: that is
-   expected, and step 3 makes them.
-
-F. When a real MOT, service or renewal is next done, record it there. Its
-   row appears on the Vehicle Log within a minute, the Buses tab's date
-   moves, and History says what it was.
-
-G. The driver app opens on the church's logo with no dark bar. Sign in: the
-   bar says DRIVER over your name. Vehicle check, tap a bus: it turns blue
-   with a tick and the other fades, and the bar shows its plate. The
-   coordinator's app opens on the same logo, with COORDINATOR above "Who is
-   it?", and the bar says COORDINATOR over your name once you are in.
+C. On Sunday, a passenger with alerts on hears as the bus marks the stop
+   before theirs, and a stop marked Nobody there is told "Nobody there", not
+   "Picked up".
 
 
 WHAT CHANGED
 ------------
 
-1. THE VEHICLE LOG. A new tab, and a Buses screen in the coordinator's app
-   (each bus's dates, its log, Record something, Correct, and the jobs the
-   last walkaround asked for with a Done button). All that is needed is what
-   it was; the day done is today unless changed, and everything else may be
-   left empty. Booked ahead puts a garage booking on the log and moves no
-   date. A mistake is put right with a correction or a withdrawal, a new row
-   naming the old one, which stays struck through. (coord/index.html
-   paintBuses, paintBus, recordFor, correctEntry, jobDone; worker.js actVlog,
-   actVfix, actJob, coordVehiclesView; Code.gs coordVlog, coordVfix,
-   coordJob, vlogShelf.)
+1. ONE LIST OF WHAT A STOP TAP IS CALLED. pickup and empty (what the driver
+   app's buttons send), with picked and none kept readable for rows already
+   written. Read by the tap alerts, the Run record and Add. (worker.js
+   TAP_PICKED, TAP_EMPTY, isStopTap.)
 
-2. THE NEXT DUE DATE. Service, twelve months from the day it was done. MOT,
-   tested within a month less a day before it ran out keeps its date a year
-   on; otherwise a year from the test less a day. Insurance and permit,
-   renewed in the two months up to expiry keeps the anniversary; otherwise
-   twelve months from the renewal. A date from the certificate or policy
-   always wins. A service can be lined up with an MOT six to thirteen months
-   off. The same rules are in worker.js, Code.gs and coord/index.html
-   (rnNextDue), and a test holds the three together over every day for three
-   years. The new date is on every phone the moment it is recorded.
+2. THE TAP ALERTS. A real tap now wakes the booked stops after it, and tells
+   a booked stop the bus has gone past unmarked. Neither had fired for a real
+   tap in any version this repository holds. (worker.js handleTrip,
+   wakeAfterTap.)
 
-3. HISTORY. A new tab, only ever added to: every change to a bus's due
-   dates (from the app, a row typed on the Vehicle Log, the Buses tab typed
-   on, pasted into or changed by a script, caught at the next sync), every
-   status a defect is given and what was done about it, a defect reopened
-   with the day it had first been closed, the log's own corrections, and
-   jobs marked done. An edit on History is itself written down. The
-   coordinator's Defects screen shows each defect's trail.
+3. THE RUN RECORD shows the drivers' taps, and "nobody there" for a stop
+   marked so. (worker.js coordRuns; coord/index.html evRow.)
 
-4. THE BUSES TAB'S DATES take a date and nothing else, from the first sync.
-   A cell already holding text that is not a date is written on History as
-   unreadable rather than read as blank.
+4. ADD refuses a stop the driver already tapped, whichever word the tap
+   used, and writes "pickup", the driver app's word, so the Trip Events tab
+   carries one word for one thing. (worker.js actFix.)
 
-5. WHERE THE LOG STARTS. One Estimated row for each date on the Buses tab, a
-   year back from it, the last service taken as done with the last MOT.
-   Correct any whose real date you know.
+5. A PASSENGER'S NOTIFICATION after Nobody there at their stop says so. It
+   said "Picked up at …, have a good service" to somebody still at the kerb.
+   The page always told the two apart. (worker.js pushWhat.)
 
-6. IS EVERYTHING WORKING? holds what the phones have against the tabs, as
-   it now does for the Message button: the due dates every driver app warns
-   from against the Buses tab, and the Vehicle Log the coordinator's Buses
-   screen shows against the tab. A difference is a sync that has not landed
-   (Needs attention: Send everything); a date cell that cannot be read is
-   listed To do. (Code.gs vehicleHealth; worker.js alertRoll's busDates and
-   vlogHeld, dates and counts only.)
-
-7. ONE PATTERN FOR THE THREE APPS. The service is Dominion Assembly
-   Transport (the emails, and the logo block: RCCG Dominion Assembly,
-   Liverpool · Transport). Each app has a short name under its icon: Sunday
-   Bus, Driver (was Dominion Transport, which a phone cuts short), and
-   Coordinator. Each opens on the logo: the passenger page as before, the
-   driver app's first screen without the dark bar it had, and the
-   coordinator's sign-in with the logo and COORDINATOR above "Who is it?".
-   Signed in, both staff apps' bar names the app over who is signed in
-   (DRIVER / BRO X, COORDINATOR / BRO Y) or the screen over who. The driver
-   app's bar becomes the check's once a bus is chosen: the plate, VEHICLE
-   CHECK over the bus (not the registration a second time) and the three
-   lights. Before, its first screen carried VEHICLE CHECK, CHOOSE YOUR NAME
-   TO BEGIN with "Fleet" in an empty plate and three unlit lights. The home
-   screen says "Nobody signed in" when nobody is, and otherwise leaves the
-   name to the bar. (index.html paintDash, paintLinks; coord/index.html
-   route; manifest.webmanifest; browser checks T19 and C33; sabotages S25,
-   S25b, S25c and S27.)
-
-8. THE BUS TAPPED, AT A GLANCE. On "Which one today?" a tapped bus turned
-   a near-black border into another near-black border and its white into a
-   barely different white. It now fills with the blue the app uses for
-   "yours", is ringed and ticked, and the other buses fade back; a second
-   tap on the other moves all of it. (index.html renderVehicles; browser
-   check T20; sabotages S26 and S26b.)
-
-   (tests/suites/36-vehicle-log.mjs, 39 checks; browser checks C29 to C32;
-   sabotages S20 to S24.)
+   (tests/suites/37-stop-taps.mjs, 7 checks, reading the words straight off
+   the driver app's buttons, every one failing on w2.30.0; browser check C9
+   now feeds the Run record the driver app's words; sabotages S28 and S28b.)

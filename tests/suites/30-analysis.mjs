@@ -125,8 +125,9 @@ export default function () {
   }
 
   s.test("both vocabularies for a stop tap are read", (a) => {
-    /* The tab says pickup and empty for older rows, picked and none for
-       newer ones, in the same column. */
+    /* The driver app writes pickup and empty, and always has. The
+       coordinator's Add wrote picked before w2.30.1, and the tab keeps those
+       rows. Both, in the same column. */
     for (const ev of ["pickup", "picked", "empty", "none"]) {
       const { legs } = read([
         { trip: "t", route: "North", event: "start", stop: "Church",

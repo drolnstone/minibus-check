@@ -110,7 +110,13 @@ const S = [
     ["  box.classList.toggle(\"has-pick\", !!st.veh);\n", ""] ] },
   /* v1.89.0, the coordinator's sign-in opens on the logo. */
   { id: "S27 no bar over the sign-in", tests: "C33", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
-    ["  document.querySelector(\".bar\").classList.toggle(\"is-away\", name === \"sign\");\n", ""] ] }
+    ["  document.querySelector(\".bar\").classList.toggle(\"is-away\", name === \"sign\");\n", ""] ] },
+  /* v1.89.1: the live server reads the driver app's own words for a tap. */
+  { id: "S28 the server deaf to pickup and empty", tests: "C9", file: "server/worker.js", runner: "coordinator.mjs", swaps: [
+    ["const TAP_PICKED = [\"pickup\", \"picked\"];", "const TAP_PICKED = [\"picked\"];"],
+    ["const TAP_EMPTY = [\"empty\", \"none\"];", "const TAP_EMPTY = [\"none\"];"] ] },
+  { id: "S28b Nobody there not said", tests: "C9", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
+    ["(ev && (ev.event === \"empty\" || ev.event === \"none\") ?", "(ev && ev.event === \"none\" ?"] ] }
 ];
 
 const summary = [];

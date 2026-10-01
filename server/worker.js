@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.30.0";
+const SCRIPT_VERSION = "w2.30.1";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1103,6 +1103,24 @@ function numOrNull(v) {
   const n = Number(v);
   return isFinite(n) ? n : null;
 }
+
+/* WHAT A STOP TAP IS CALLED, AND THERE ARE TWO NAMES FOR EACH.
+
+   The driver app has always sent "pickup" for Picked up and "empty" for
+   Nobody there (its buttons' data-tripkind). The tap alerts, the Run record
+   and the coordinator's Add were written against "picked" and "none", the
+   words the tests used, so up to w2.30.0 not one real tap woke the next
+   stop's passengers or showed on the Run record, and Add could put a second
+   time beside a driver's real one. The sheet always read all four.
+
+   One list, read everywhere a tap is asked about. The older words stay in
+   it, because rows the coordinator's Add wrote before w2.30.1 say "picked".
+   Anything written from now says what the driver app says. */
+const TAP_PICKED = ["pickup", "picked"];
+const TAP_EMPTY = ["empty", "none"];
+const TAP_KINDS = TAP_PICKED.concat(TAP_EMPTY);
+const isStopTap = (kind) => TAP_KINDS.indexOf(String(kind || "").trim().toLowerCase()) !== -1;
+const TAP_SQL = "('" + TAP_KINDS.join("','") + "')";
 
 /* Every stop on one route, in the order a driver taps them, departure row
    first. getStops already orders by route then seq, so filtering keeps it. */
@@ -2212,7 +2230,8 @@ async function tripPayload(env, ref, want, askedStop, pid) {
     /* "Nobody there" and "picked up" are different facts. Collapsing them
        told a family thirty seconds up the road they were on a bus they were
        not on. */
-    out.servedEvent = String(servedHere.event || "").toLowerCase();
+    const said = String(servedHere.event || "").toLowerCase();
+    out.servedEvent = TAP_EMPTY.indexOf(said) !== -1 ? "empty" : said;
     return out;
   }
 
@@ -2983,7 +3002,7 @@ async function handleTrip(env, payload) {
         const kind = String(ev.event || "").trim().toLowerCase();
         if (kind === "start") {
           await wakeDeparture(env, key, route, stops, null);
-        } else if (kind === "picked" || kind === "none") {
+        } else if (isStopTap(kind)) {
           await wakeAfterTap(env, key, route, all, stops, String(ev.stopId || "").trim(), marked);
         }
       }
@@ -5616,6 +5635,14 @@ async function pushWhat(env, endpoint) {
                    (p.passedAtWords ? " at " + p.passedAtWords : "") +
                    ", and nothing was recorded at " + stop + "." };
   }
+  /* The page has always told these two apart; the notification did not, and
+     a stop marked Nobody there was told it had been picked up. */
+  if (p.mine === "served" && p.servedEvent === "empty") {
+    return { ok: true, tag: "bus", url: "./",
+             title: "Nobody there at " + stop,
+             body: "The driver marked nobody waiting" + (p.servedAt ? " at " + p.servedAt : "") +
+                   ". Still there? Open the page." };
+  }
   if (p.mine === "served") {
     return { ok: true, tag: "bus", url: "./",
              title: "Picked up at " + stop, body: "Have a good service." };
@@ -7268,7 +7295,7 @@ async function coordRuns(env, me, sundayIn) {
         start: ev(start), end: ev(end),
         stops: stopsOnRoute(all, rt).filter((s) => !s.depart && !s.arrival).map((s) => ({
           id: s.id, stop: s.stop, time: s.time,
-          ev: ev(tr.find((r) => (r.event === "picked" || r.event === "none") && r.stop_id === s.id) || null)
+          ev: ev(tr.find((r) => isStopTap(r.event) && r.stop_id === s.id) || null)
         }))
       };
     });
@@ -7770,7 +7797,7 @@ async function actFix(env, me, act) {
                                s.route === any.route && !s.depart && !s.arrival) || null;
   if (!stop) return { ok: false, error: "That stop is not on the " + any.route + " route." };
   const live = await env.DB.prepare(
-    "SELECT id FROM trip_events WHERE trip=? AND stop_id=? AND event IN ('picked','none') AND status<>'Undone' LIMIT 1")
+    "SELECT id FROM trip_events WHERE trip=? AND stop_id=? AND event IN " + TAP_SQL + " AND status<>'Undone' LIMIT 1")
     .bind(trip, stop.id).first();
   if (live) return { ok: false, error: stop.stop + " already has a time. Correct that one." };
   const sched = londonMoment(key, stop.time);
@@ -7780,19 +7807,19 @@ async function actFix(env, me, act) {
            stmts: [env.DB.prepare(
              "INSERT INTO trip_events (trip, sunday, route, driver, reg, rota_bus, event, stop_id, stop, " +
              "scheduled, happened, off_min, status, geo, acc, away, logged, synced, fix_note) " +
-             "VALUES (?,?,?,?,?,'','picked',?,?,?,?,?,'Corrected','',NULL,NULL,?,0,?) " +
+             "VALUES (?,?,?,?,?,'','pickup',?,?,?,?,?,'Corrected','',NULL,NULL,?,0,?) " +
              "ON CONFLICT(trip, event, stop_id) DO UPDATE SET happened=excluded.happened, " +
              "off_min=excluded.off_min, status=excluded.status, logged=excluded.logged, " +
              "fix_note=excluded.fix_note, synced=0 WHERE trip_events.status='Undone'")
              .bind(trip, key, any.route, any.driver || "", any.reg || "", stop.id, stop.stop,
                    stop.time, at, off, Date.now(), note)],
-           body: { trip: trip, sunday: key, route: any.route, event: "picked", stopId: stop.id,
+           body: { trip: trip, sunday: key, route: any.route, event: "pickup", stopId: stop.id,
                    stop: stop.stop, time: hhmm, added: true },
            words: any.route + ", " + shortDay(key) + ": " + stop.stop + " added at " + hhmm + ".",
            after: async () => {
              /* The row's own id, so the sheet can say when it has it. */
              const r = await env.DB.prepare(
-               "SELECT id FROM trip_events WHERE trip=? AND event='picked' AND stop_id=?").bind(trip, stop.id).first();
+               "SELECT id FROM trip_events WHERE trip=? AND event='pickup' AND stop_id=?").bind(trip, stop.id).first();
              return r ? Number(r.id) : 0;
            } };
 }

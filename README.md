@@ -1481,6 +1481,15 @@ The stops the bus went **past** without marking are not subject to any of this.
 Somebody standing at a kerb the bus has driven by is not receiving an update; he
 is receiving the only message that will ever reach him.
 
+**Until w2.30.1 none of this fired for a real tap.** The driver app sends
+`pickup` for Picked up and `empty` for Nobody there, and always has. The live
+server asked for `picked` and `none`, the words the tests sent, so every test
+passed while a real morning woke nobody after the departure. The Run record
+and Add asked the same wrong question. One list in `worker.js`
+(`TAP_PICKED`, `TAP_EMPTY`, `isStopTap`) now answers it everywhere, and
+`tests/suites/37-stop-taps.mjs` reads the words off the driver app's own
+buttons rather than typing them, so the two cannot drift apart again.
+
 ### The bold line
 
 The title is the only part of a notification that is certainly read: it is what
