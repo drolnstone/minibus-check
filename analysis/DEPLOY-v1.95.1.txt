@@ -1,0 +1,65 @@
+MINIBUS
+=======
+  sheet v1.95.1 · pages and server unchanged
+
+Every tab locked by Set up, with nothing to lock by hand. A tab made later is
+locked when it is made, and any tab left unlocked is locked again overnight.
+
+
+YOU ARE ON              GOING TO
+  Code.gs v1.95.0         v1.95.1
+  Pages and Worker        no change
+
+
+IN THIS ORDER
+-------------
+
+1. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
+   Save. Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy.
+
+2. Reload the spreadsheet. Minibus, Set up / refresh rota.
+
+3. Merge the pull request.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  sheet v1.95.1 .
+
+B. Set up ends with "Ready", or with a list of what was skipped. A tab that
+   could not be locked is named in that list.
+
+C. Data, Protect sheets and ranges: a "Minibus lock" on every tab: Rota,
+   Rota Requests, Defects, Checks, Buses, Bus Bookings, Trip Events, Bus
+   Stops, Drivers, Vehicle Log, History, and any archive tabs.
+
+D. Minibus, Have a look, Is everything working?: under Fine, "Sheet
+   protection: every tab is locked."
+
+
+WHAT CHANGED
+------------
+
+1. ONE TAB NO LONGER UNLOCKS THEM ALL. sheetLocks and applyLocks lock each
+   tab on its own. Before, one tab whose lock could not be worked out threw
+   out of the whole list, Set up swallowed the error, no tab was locked, and
+   the Set up message still said the protection was done. A tab with only
+   its header row was one such tab. Now that tab is named and the rest are
+   locked.
+
+2. SET UP SAYS WHAT IT COULD NOT LOCK, in the same list as the skipped
+   dropdowns.
+
+3. LOCKED WHEN MADE. A tab made after Set up (Checks and Defects on the
+   first walkaround, the Vehicle Log and History on the first sync, the
+   archive tabs) is locked as it is made (relockIfNeeded).
+
+4. LOCKED AGAIN OVERNIGHT. The 3am pass locks any tab with no lock. Unlock
+   the sheet lasts until then.
+
+5. IS EVERYTHING WORKING? names any tab not locked (locksHealth).
+
+Tests: tests/suites/40-locks.mjs. The test spreadsheet now refuses a range
+of no rows, as Apps Script does.

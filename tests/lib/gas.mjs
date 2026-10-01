@@ -164,6 +164,10 @@ class FakeSheet {
       const c2 = m[3] ? colNum(m[3]) : c1, r2 = m[4] ? Number(m[4]) : r1;
       return new FakeRange(this, r1, c1, r2 - r1 + 1, c2 - c1 + 1);
     }
+    /* Apps Script refuses a range of no rows or no columns. The fake used to
+       read 0 as 1, which hid a lock list that threw on a header-only tab. */
+    if (c !== undefined && c < 1) throw new Error("The number of rows in the range must be at least 1.");
+    if (d !== undefined && d < 1) throw new Error("The number of columns in the range must be at least 1.");
     return new FakeRange(this, a, b, c || 1, d || 1);
   }
   getDataRange() {
@@ -239,6 +243,17 @@ class FakeSpreadsheet {
   getSheetByName(n) { return this.sheets.find((s) => s.name === n) || null; }
   getSheets() { return this.sheets.slice(); }
   insertSheet(n) { const s = new FakeSheet(n, []); this.sheets.push(s); return s; }
+  /* Sheet protections, each knowing its own tab, as getRange().getSheet()
+     does in Apps Script. Range protections are not used by Code.gs. */
+  getProtections(type) {
+    if (type !== "SHEET") return [];
+    const out = [];
+    for (const sh of this.sheets) for (const p of (sh.protections || [])) {
+      if (!p.getRange) p.getRange = () => ({ getSheet: () => sh });
+      out.push(p);
+    }
+    return out;
+  }
   deleteSheet(s) { this.sheets = this.sheets.filter((x) => x !== s); }
   getUrl() { return this.url; }
   getId() { return this.id; }
@@ -501,6 +516,7 @@ export function makeGas(opts) {
       return b;
     },
     DataValidationCriteria: { VALUE_IN_LIST: "VALUE_IN_LIST", DATE_BETWEEN: "DATE_BETWEEN" },
+    ProtectionType: { SHEET: "SHEET", RANGE: "RANGE" },
     /* A rule is recorded and never applied: how a cell looks carries no fact. */
     newConditionalFormatRule() {
       const rule = { _ranges: [] };

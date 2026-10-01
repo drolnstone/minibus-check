@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.95.0";
+var SCRIPT_VERSION = "v1.95.1";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1529,6 +1529,13 @@ function onEditBusStops(e, sh) {
 }
 
 /* Is everything working?: any seat still booked at an old place. */
+/* From v1.95.1. Which tabs are locked, said where the coordinator looks. */
+function locksHealth(ss, good, todo) {
+  var missing = locksMissing(ss);
+  if (!missing.length) { good.push("Sheet protection: every tab is locked."); return; }
+  todo.push("Not locked: " + missing.join(", ") + ". Minibus \u203a Lock the sheet, or wait for tonight.");
+}
+
 function stopsHealth(ss, good, bad, todo) {
   var moved = stopsMovedUnderBookings(ss);
   if (!moved.length) {
@@ -2988,6 +2995,9 @@ function nightlyMaintenance() {
     } catch (err2) {}
   }
 
+  /* Any tab not locked, locked. Unlock the sheet lasts until tonight. */
+  relockIfNeeded(ss);
+
   /* The heartbeat is what maintainIfDue watches. Written last, so a run that
      failed halfway does not claim to have succeeded. */
   try {
@@ -3171,6 +3181,7 @@ function archiveTab(spec, dryRun) {
     dest = book.insertSheet(name);
     dest.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight("bold");
     dest.setFrozenRows(1);
+    relockIfNeeded(book);
   }
   ensureCols(dest, head.filter(function (h) { return !!h; }));
 
@@ -6032,11 +6043,20 @@ var LOCK_TAG = "Minibus lock";
 
 function sheetLocks(ss) {
   var out = [];
+  /* Each tab on its own, from v1.95.1. One tab whose editable columns could
+     not be worked out used to throw out of the whole list, and Set up
+     swallowed that, so no tab was locked and nothing said so. Now that tab
+     is named in skipped and every other tab is still locked. */
+  out.skipped = [];
   function add(name, ranges, note) {
     var sh = ss.getSheetByName(name);
-    if (sh) out.push({ sh: sh, ranges: ranges(sh), note: note });
+    if (!sh) return;
+    try { out.push({ sh: sh, ranges: ranges(sh), note: note }); }
+    catch (err) { out.skipped.push("Lock on " + name + " (" + String((err && err.message) || err) + ")"); }
   }
-  var last = function (sh) { return sh.getMaxRows(); };
+  /* Never fewer than two rows, so "below the header" is at least one row
+     even on a tab that has only its header. */
+  var last = function (sh) { return Math.max(2, sh.getMaxRows()); };
 
   add(ROTA_SHEET, function (sh) {
     /* Everything a person is meant to edit: the two scheduled names, the two
@@ -6167,16 +6187,45 @@ function lockSheet() {
     "removes all of this if you ever need to work freely.");
 }
 
+/* Returns what could not be locked, by tab. Empty means every tab is. */
 function applyLocks(ss) {
   removeLocks(ss);
-  sheetLocks(ss).forEach(function (item) {
-    var p = item.sh.protect().setDescription(LOCK_TAG + ": " + item.note);
-    if (item.ranges.length) p.setUnprotectedRanges(item.ranges);
-    /* Warning, not refusal. See the note above: strict protection would be
-       invisible to the owner and would lock out anyone you later share the
-       sheet with, which is not what is wanted. */
-    p.setWarningOnly(true);
+  var plan = sheetLocks(ss), skipped = plan.skipped.slice();
+  plan.forEach(function (item) {
+    try {
+      var p = item.sh.protect().setDescription(LOCK_TAG + ": " + item.note);
+      if (item.ranges.length) p.setUnprotectedRanges(item.ranges);
+      /* Warning, not refusal. See the note above: strict protection would be
+         invisible to the owner and would lock out anyone you later share the
+         sheet with, which is not what is wanted. */
+      p.setWarningOnly(true);
+    } catch (err) {
+      skipped.push("Lock on " + item.sh.getName() + " (" + String((err && err.message) || err) + ")");
+    }
   });
+  try { PropertiesService.getScriptProperties().setProperty("locksSkipped", JSON.stringify(skipped)); }
+  catch (err) {}
+  return skipped;
+}
+
+/* From v1.95.1. Every tab the lock set names that has no lock of its own:
+   a tab made since the last Set up (the first walkaround makes Checks and
+   Defects, the first sync the Vehicle Log and History, the archive its
+   archive tabs), or a sheet left unlocked. Run when a tab is made and every
+   night, so no tab waits for somebody to lock it by hand. */
+function locksMissing(ss) {
+  var have = {};
+  ss.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(function (p) {
+    if (String(p.getDescription() || "").indexOf(LOCK_TAG) === 0) {
+      try { have[p.getRange().getSheet().getName()] = true; } catch (err) {}
+    }
+  });
+  return sheetLocks(ss).filter(function (item) { return !have[item.sh.getName()]; })
+    .map(function (item) { return item.sh.getName(); });
+}
+
+function relockIfNeeded(ss) {
+  try { if (locksMissing(ss).length) applyLocks(ss); } catch (err) {}
 }
 
 function removeLocks(ss) {
@@ -6199,7 +6248,8 @@ function unlockSheet() {
     "finished.", ui.ButtonSet.YES_NO);
   if (answer !== ui.Button.YES) return;
   removeLocks(SpreadsheetApp.getActiveSpreadsheet());
-  ui.alert("Unlocked. Nothing will warn you now. Lock it again when you are done.");
+  ui.alert("Unlocked. Nothing will warn you now. Lock it again when you are done. " +
+           "It locks again by itself overnight.");
 }
 
 function checkDriversTab() {
@@ -6291,9 +6341,17 @@ function setUpEverything() {
   var dropSkips = [];
   try { dropSkips = refreshDropdowns() || []; }
   catch (err) { dropSkips = ["dropdowns and colours (" + String(err.message || err) + ")"]; }
+  /* Re-applied every setup, because adding a tab or columns leaves the old
+     protection covering the wrong range. Before the report, so a tab that
+     could not be locked is in it rather than the report saying "the sheet
+     protection" was done. */
+  var lockSkips = [];
+  try { lockSkips = applyLocks(ss); }
+  catch (err) { lockSkips = ["Sheet protection (" + String((err && err.message) || err) + ")"]; }
+
   /* Everything the tabs above refused, said in the same breath as the
      dropdowns, because to whoever is reading it they are the same problem. */
-  dropSkips = PRETTY_SKIPS.concat(dropSkips);
+  dropSkips = PRETTY_SKIPS.concat(dropSkips).concat(lockSkips);
   try { PropertiesService.getScriptProperties()
           .setProperty("setupSkipped", JSON.stringify(dropSkips)); }
   catch (err) {}
@@ -6307,10 +6365,6 @@ function setUpEverything() {
   try { installMissingCheckAlert(); } catch (err) { /* same */ }
   try { installLiveSync(); } catch (err) { /* same. The menu can send by hand. */ }
   try { installLivePush(); } catch (err) { /* same. The five minute sync still pushes. */ }
-  /* Re-applied every setup, because adding a tab or columns leaves the old
-     protection covering the wrong range. */
-  try { applyLocks(ss); } catch (err) { /* never block setup over this */ }
-
   var n = ss.getSheetByName(ROTA_SHEET).getLastRow() - 1;
   var tz = timeZoneWarning();
   var dh = driversHeaderWarning(ss);
@@ -11875,6 +11929,7 @@ function healthReport() {
   /* The sheet's own tabs only, so it is said whether or not the live server
      answered. */
   try { stopsHealth(ss, good, bad, todo); } catch (err) {}
+  try { locksHealth(ss, good, todo); } catch (err) {}
 
   /* Every tab's headings, against what the code expects to find.
 
@@ -13493,6 +13548,7 @@ function sheet(ss, name, headers) {
     sh.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sh.setFrozenRows(1);
     if (name === DEFECTS_SHEET) setUpDefectsSheet(sh);
+    relockIfNeeded(ss);
   }
   return sh;
 }
