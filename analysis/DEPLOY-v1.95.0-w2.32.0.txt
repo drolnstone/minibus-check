@@ -14,6 +14,12 @@ YOU ARE ON              GOING TO
   Pages                   no change
 
 
+THE FILES TO PASTE, from this pull request's branch and nowhere else:
+  Worker   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/run-record-timing-97hz84/server/worker.js
+  Code.gs  https://raw.githubusercontent.com/drolnstone/minibus-check/claude/run-record-timing-97hz84/Code.gs
+  Open each link, select all, copy.
+
+
 IN THIS ORDER
 -------------
 
