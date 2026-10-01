@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.90.2 · THE COORDINATOR'S APP.
+<!-- BUILD v1.91.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -630,7 +630,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.90.2";
+var PAGE_VERSION = "v1.91.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1681,6 +1681,10 @@ function defectByKey(k){ var a = (D && D.defects) || []; for(var i=0;i<a.length;
 function updateDefect(gk){
   var g = defectGroupByKey(gk); if(!g) return;
   var chosen = g.status || "Open";
+  /* Critical and Kind, from v1.91.0: the coordinator's judgement over the
+     driver's. Sent only when changed. */
+  var wasCrit = g.crit ? "YES" : "NO", crit = wasCrit;
+  var wasKind = g.kind === "Advisory" ? "Advisory" : "Defect", kind = wasKind;
   var many = g.reports.length > 1;
   openSheet({ eyebrow: g.reg, title: g.item,
     body: (many ? '<div id="defReps"><p class="tiny" style="margin:0 0 2px">Reports</p>' +
@@ -1689,6 +1693,12 @@ function updateDefect(gk){
                      esc([d.date ? shortDay(d.date) : "", d.driver].filter(Boolean).join(", ")) +
                      '<small>'+esc((d.found ? "“" + d.found + "”, " : "") + (d.status || "Open"))+'</small></span></label>';
             }).join("") + '</div>' : '') +
+          '<div class="chips" id="defCrit">' + [["YES", "Critical"], ["NO", "Not critical"]].map(function(c){
+            return '<button type="button" data-crit="'+c[0]+'" class="'+(c[0] === crit ? 'on' : '')+'">'+c[1]+'</button>';
+          }).join("") + '</div>' +
+          '<div class="chips" id="defKind">' + ["Defect", "Advisory"].map(function(k){
+            return '<button type="button" data-kind="'+k+'" class="'+(k === kind ? 'on' : '')+'">'+k+'</button>';
+          }).join("") + '</div>' +
           '<div class="chips" id="defStates">' + DEF_STATES.map(function(s){
             return '<button type="button" data-state="'+esc(s)+'" class="'+(s === chosen ? 'on' : '')+'">'+esc(s)+'</button>';
           }).join("") + '</div>' +
@@ -1700,9 +1710,13 @@ function updateDefect(gk){
         return g.reports[Number(x.getAttribute("data-rep"))]; }) : [g.reports[0]];
       if(!reps.length){ sheetSay("Tick at least one report.", true); return; }
       if((chosen === "Fixed" || chosen === "Not a defect") && !did){ sheetSay("Say what was done.", true); return; }
-      if(reps.every(function(d){ return chosen === (d.status || "Open"); }) && !did){ sheetSay("Nothing has changed.", true); return; }
+      var critTo = crit !== wasCrit ? crit : "", kindTo = kind !== wasKind ? kind : "";
+      if(reps.every(function(d){ return chosen === (d.status || "Open"); }) && !did && !critTo && !kindTo){ sheetSay("Nothing has changed.", true); return; }
       var keys = reps.map(function(d){ return d.key; });
-      act({ kind:"defect", key:keys[0], keys:keys, status:chosen, action:did });
+      var a = { kind:"defect", key:keys[0], keys:keys, status:chosen, action:did };
+      if(critTo) a.crit = critTo;
+      if(kindTo) a.type = kindTo;   /* not kind: that names the change */
+      act(a);
     } });
   var label = function(){
     var n = many ? document.querySelectorAll("#defReps input[data-rep]:checked").length : 1;
@@ -1718,6 +1732,15 @@ function updateDefect(gk){
     };
   });
   Array.prototype.forEach.call(document.querySelectorAll("#defReps input[data-rep]"), function(x){ x.onchange = label; });
+  [["#defCrit button", "data-crit", function(v){ crit = v; }], ["#defKind button", "data-kind", function(v){ kind = v; }]].forEach(function(f){
+    Array.prototype.forEach.call(document.querySelectorAll(f[0]), function(b){
+      b.onclick = function(){
+        f[2](b.getAttribute(f[1]));
+        Array.prototype.forEach.call(document.querySelectorAll(f[0]), function(x){ x.classList.toggle("on", x === b); });
+        if(!busy) sheetSay("");
+      };
+    });
+  });
   label();
 }
 

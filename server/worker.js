@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.32.0";
+const SCRIPT_VERSION = "w2.33.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -6384,6 +6384,8 @@ const COORD_OVERLAY_DAYS = 3;
 const SHEET_REPORT_MS = 25000;
 const DEFECT_STATES = ["Open", "Booked in", "Parts on order", "Monitoring", "Fixed", "Not a defect"];
 const DEFECT_CLOSED = ["Fixed", "Not a defect"];
+const DEFECT_CRIT = ["YES", "NO"];
+const DEFECT_KINDS = ["Defect", "Advisory"];
 
 /* ---- when each renewal next falls due ----------------------------------
    From w2.30.0. A renewal recorded in the coordinator's app keeps the date it
@@ -6987,6 +6989,8 @@ async function coordOverlayShelf(env, out) {
   }
   const closes = acts.filter((a) => a.kind === "defect" && DEFECT_CLOSED.indexOf(a.body.status) !== -1);
   if (closes.length && out.openDefects) out.openDefects = defectsWithout(out.openDefects, closes);
+  const judged = acts.filter((a) => a.kind === "defect" && (a.body.crit || a.body.type));
+  if (judged.length && out.openDefects) out.openDefects = defectsJudged(out.openDefects, judged);
 }
 
 /* One defect, one key, worked out the same way in Code.gs (defectKey). */
@@ -7002,6 +7006,25 @@ function defectsWithout(map, closes) {
   for (const reg of Object.keys(map || {})) {
     const left = (map[reg] || []).filter((d) => !gone[defectKeyOf(d)]);
     if (left.length) out[reg] = left;
+  }
+  return out;
+}
+
+/* Critical and Kind as the coordinator has just set them, from w2.33.0, so
+   the driver app has them before the sheet's next copy comes back. */
+function defectsJudged(map, acts) {
+  const set = {};
+  for (const a of acts) for (const k of defectKeysOf(a.body)) set[k] = a.body;
+  const out = {};
+  for (const reg of Object.keys(map || {})) {
+    out[reg] = (map[reg] || []).map((d) => {
+      const b = set[defectKeyOf(d)];
+      if (!b) return d;
+      const x = Object.assign({}, d);
+      if (b.crit) x.crit = b.crit === "YES";
+      if (b.type) x.kind = b.type;
+      return x;
+    });
   }
   return out;
 }
@@ -7116,6 +7139,8 @@ async function coordDefectsView(env) {
       const d = list.find((x) => x.key === k);
       if (!d) continue;
       d.status = a.body.status;
+      if (a.body.crit) d.crit = a.body.crit === "YES";
+      if (a.body.type) d.kind = a.body.type;
       const add = String(a.body.action || "").trim();
       if (add && String(d.action || "").split("\n").map((x) => x.trim()).indexOf(add) === -1) {
         d.action = d.action ? d.action + "\n" + add : add;
@@ -7861,17 +7886,31 @@ async function actDefect(env, me, act) {
   if (ds.some((x) => x.reg !== d.reg)) return { ok: false, error: "Those reports are not all on one bus." };
   const status = String(act.status || "").trim();
   if (DEFECT_STATES.indexOf(status) === -1) return { ok: false, error: "unknown status" };
+  /* From w2.33.0: Critical and Kind, judged again by the coordinator. Either
+     missing is no change. */
+  const crit = act.crit == null || act.crit === "" ? "" : String(act.crit);
+  /* type, not kind: kind names the change itself ("defect"). */
+  const kind = act.type == null || act.type === "" ? "" : String(act.type);
+  if (crit && DEFECT_CRIT.indexOf(crit) === -1) return { ok: false, error: "unknown critical" };
+  if (kind && DEFECT_KINDS.indexOf(kind) === -1) return { ok: false, error: "unknown kind" };
+  const critChange = !!crit && ds.some((x) => (x.crit ? "YES" : "NO") !== crit);
+  const kindChange = !!kind && ds.some((x) => (x.kind === "Advisory" ? "Advisory" : "Defect") !== kind);
   const action = String(act.action || "").replace(/\s+/g, " ").trim().slice(0, 500);
   const closing = DEFECT_CLOSED.indexOf(status) !== -1;
   if (closing && !action) return { ok: false, error: "Say what was done before closing it." };
-  if (ds.every((x) => status === (x.status || "Open")) && !action) return { ok: false, error: "Nothing to change." };
+  if (ds.every((x) => status === (x.status || "Open")) && !action && !critChange && !kindChange) {
+    return { ok: false, error: "Nothing to change." };
+  }
   const many = keys.length > 1 ? " (" + keys.length + " reports)" : "";
   return { ok: true, sunday: "",
            /* key and the first report's details stay, for a sheet from
               before v1.93.0, which reads key alone. */
            body: { key: keys[0], keys: keys, checkId: d.checkId || "", reg: d.reg, item: d.item, date: d.date || "",
-                   status: status, action: action },
+                   status: status, action: action,
+                   crit: critChange ? crit : undefined, type: kindChange ? kind : undefined },
            words: d.reg + ", " + d.item + many + ": " + (closing ? "closed, " + status.toLowerCase() : status.toLowerCase()) +
+                  (critChange ? (crit === "YES" ? ", critical" : ", not critical") : "") +
+                  (kindChange ? (kind === "Advisory" ? ", an advisory" : ", a defect") : "") +
                   (action ? ". " + action : "") + "." };
 }
 
