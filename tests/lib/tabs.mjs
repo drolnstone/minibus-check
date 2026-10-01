@@ -38,7 +38,7 @@ export const TABS = {
                 "Where", "Lat", "Lng"],
 
   "Bus Bookings": ["Received", "Sunday", "Route", "Stop ID", "Stop", "Seats",
-                   "Device", "Status", "Phone", "Passenger ID", "Live ID"],
+                   "Device", "Status", "Phone", "Passenger ID", "Live ID", "Scheduled"],
 
   "Drivers": ["Name", "Role", "Active", "Primary order", "PIN", "Email", "Route",
               "Phone"],

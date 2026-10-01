@@ -1,0 +1,64 @@
+MINIBUS
+=======
+  sheet v1.95.0 · server w2.32.0 · pages unchanged
+  Goes in after sheet v1.94.0 (the drop-downs). This Code.gs includes it.
+
+Each booking keeps its stop's timetable time as it was when booked. Early
+or late at a booked stop is measured from that time. A stop nobody booked,
+leaving church and back at church still go by the timetable.
+
+
+YOU ARE ON              GOING TO
+  Code.gs v1.94.0         v1.95.0
+  Worker w2.31.0          w2.32.0
+  Pages                   no change
+
+
+IN THIS ORDER
+-------------
+
+1. WORKER. Cloudflare, the Worker, Edit code, replace everything with
+   server/worker.js. Deploy.
+
+2. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
+   Save. Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy.
+
+3. Reload the spreadsheet. Minibus, Set up / refresh rota.
+
+4. Merge the pull request.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  server w2.32.0  and  sheet v1.95.0 .
+
+B. Bus Bookings has a Scheduled column on the right. Make a booking: its
+   row shows the stop's time.
+
+C. Coordinator app, Run record, a Sunday from before: the left column shows
+   the timetable time each early or late figure was worked out from.
+
+
+WHAT CHANGED
+------------
+
+1. BOOKINGS KEEP THE TIME. bookings.sched (added by the Worker on first
+   use), filled when a seat is booked or moved to another stop. Changing
+   only the seats keeps it. Bus Bookings, Scheduled column, as text.
+
+2. EARLY OR LATE. A tap at a booked stop is measured from the first live
+   booking's time there. A cancelled seat's time no longer counts. The same
+   on the Worker, on an Added time in the coordinator's app, and on the
+   sheet's own tap path.
+
+3. RUN RECORD. The left column shows the time the figure was measured
+   from: the tap's own, else the booked time, else today's timetable.
+
+4. A tap revived after Undo takes the new figure too.
+
+Bookings made before this have no time on them, so their stops go by the
+timetable until they are changed.
+
+Tests: tests/suites/40-booked-time.mjs, and one in 25-rulings.mjs.
