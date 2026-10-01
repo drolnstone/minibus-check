@@ -1,0 +1,71 @@
+MINIBUS
+=======
+  sheet v1.94.0 · pages and server unchanged
+
+Drop-downs on every cell with a fixed answer, on every tab. A word off the
+list is refused. A right word in the wrong case is put right. Critical and
+Kind on Defects can be changed on a locked sheet. The Vehicle Log and History
+are locked like the other tabs.
+
+
+YOU ARE ON              GOING TO
+  Code.gs v1.93.0         v1.94.0
+  Pages and Worker        no change
+
+
+IN THIS ORDER
+-------------
+
+1. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
+   Save. Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy.
+
+2. Reload the spreadsheet. Minibus, Set up / refresh rota.
+
+3. Merge the pull request.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  sheet v1.94.0 .
+
+B. Defects tab: Critical offers YES or NO, Kind offers Defect or Advisory.
+   Type  maybe  in Critical: refused. Type  advisory  in Kind: it becomes
+   Advisory. Put it back.
+
+C. Drivers, Buses and Bus Stops: Active offers YES or NO, Route North or
+   South. Bus Bookings: Status offers Booked or Cancelled. Vehicle Log:
+   Registration, What and Status each offer their list.
+
+D. Defects tab, Critical on any row: no protection warning. What the driver
+   found: the warning.
+
+E. Vehicle Log, Log ID: the warning. Registration: no warning.
+   History, any cell: the warning.
+
+
+WHAT CHANGED
+------------
+
+1. FIXED ANSWERS TAKE THE LIST AND NOTHING ELSE. pickRule, applied down the
+   whole column on every Set up and Refresh dropdowns by fixedListDropdowns:
+   Defects Critical, Kind and Status; Drivers, Buses and Bus Stops Active
+   and Route; Bus Stops Type; Bus Bookings Status; Vehicle Log What, Status
+   and Registration (the buses on the Buses tab); Rota Status; Rota
+   Requests Status. Names and buses on the Rota and Requests, and Role on
+   Drivers, still offer a list and let a new value in.
+
+2. THE CASE IS PUT RIGHT. snapToList, first thing in onEdit: one cell whose
+   value matches a list word in another case becomes the list's word.
+   Critical and Kind are also read whatever the case.
+
+3. NEW WALKAROUND DEFECTS SAY NO in Critical, not a blank cell.
+
+4. LOCKS. Defects: Critical and Kind open, with Status, Action taken and
+   Closed on. Vehicle Log: the columns a new row is typed in open, Recorded,
+   Log ID, Was due, Days early, Recorded by and Source locked. History:
+   locked whole, in the same lock set. A Critical or Kind change is written
+   on History.
+
+Tests: tests/suites/39-dropdowns.mjs.

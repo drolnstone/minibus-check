@@ -408,12 +408,13 @@ export default function (root) {
           "a deleted stop is deleted; nothing puts it back and nothing complains");
   });
 
-  s.test("a Type nobody expected is warned about, never refused", (a) => {
-    /* setAllowInvalid(true). The dropdown is a convenience, not a gate: a
-       spreadsheet that refuses what a coordinator types is a spreadsheet he
-       works around. */
-    const rule = call(L, "listRule", ["Pickup", "Arrival", "Depart"]);
+  s.test("a name off the list is warned about, never refused", (a) => {
+    /* setAllowInvalid(true) for names and buses, where a value off the list
+       can be right. A fixed word (Type, Status, YES) takes pickRule from
+       v1.94.0, which refuses anything else: see 39-dropdowns.mjs. */
+    const rule = call(L, "listRule", ["Bro Trevor", "Sis Ama"]);
     a.eq(rule._allowInvalid, true);
+    a.eq(call(L, "pickRule", ["Pickup", "Arrival", "Depart"])._allowInvalid, false);
   });
 
   /* ---- the duty calendar entry -------------------------------------------
