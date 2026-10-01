@@ -95,7 +95,12 @@ const S = [
   { id: "S23 a correction moves the date", tests: "C30", file: "server/worker.js", runner: "coordinator.mjs", swaps: [
     ["  body.targets = targets;\n", "  body.targets = [];\n"] ] },
   { id: "S24 a job done leaves the list", tests: "C31", file: "server/worker.js", runner: "coordinator.mjs", swaps: [
-    ["        j.jobs = (j.jobs || []).filter((x) => x !== b.job);\n", ""] ] }
+    ["        j.jobs = (j.jobs || []).filter((x) => x !== b.job);\n", ""] ] },
+  /* v1.89.0, the driver app's top bar: the app's until a bus is chosen. */
+  { id: "S25 no empty plate before a bus", tests: "T19", swaps: [
+    ["  d.classList.toggle(\"no-veh\", !st.veh);\n", ""] ] },
+  { id: "S25b the app named on the way in", tests: "T19", swaps: [
+    ["          : appName();\n", "          : \"Vehicle check\";\n"] ] }
 ];
 
 const summary = [];

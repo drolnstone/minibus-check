@@ -277,6 +277,8 @@ input,textarea{font:inherit;color:inherit}
   font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;letter-spacing:.055em;
   padding:3px 9px 2px;border-radius:4px;border:1.5px solid var(--plate-ink);flex:none}
 .plate.blank{background:var(--dash-slot);color:var(--dash-dim);border-color:var(--dash-plate-edge);letter-spacing:.14em;font-size:14px}
+/* No bus chosen: the bar is the app's, not the check's. See paintDash. */
+.dash.no-veh .plate,.dash.no-veh .lamps{display:none}
 .dash-id{flex:1;min-width:0}
 .dash-id b{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:16px;
   letter-spacing:.09em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
@@ -2705,6 +2707,18 @@ function paintLinks(){
   }
 }
 
+/* The app's name as the home screen icon gives it, and the church's as the
+   foot of the first screen does, so a church setting this up changes each
+   once, in the page. */
+function appName(){
+  var m=document.querySelector('meta[name="apple-mobile-web-app-title"]');
+  return (m && m.getAttribute("content")) || "Transport";
+}
+function churchName(){
+  var b=document.querySelector(".footer-brand span");
+  return (b && (b.textContent||"").trim()) || "";
+}
+
 function paintDash(){
   var t=tally(), lv=level(), d=$("dash");
   d.className = "dash" + (lv==="stop"?" is-stop":lv==="warn"?" is-warn":"");
@@ -2716,24 +2730,32 @@ function paintDash(){
   else if(lv==="warn") L[1].className="lamp on-warn";
   else if(TOTAL && t.done===TOTAL) L[0].className="lamp on-pass";
 
+  /* THE PLATE AND THE THREE LIGHTS ARE THE CHECK'S, from v1.89.0, and show
+     once a bus is chosen. Before that the bar is the app's, as the
+     coordinator's app and the passenger page show theirs: the app's name, or
+     the screen's, over the church before anybody signs in and the driver's
+     name after. It said VEHICLE CHECK, CHOOSE YOUR NAME TO BEGIN over the
+     way into the whole app, with "Fleet" in an empty plate that read as a
+     button that did not work, and three unlit lights that read as a page
+     still loading. */
   var p=$("plate");
+  d.classList.toggle("no-veh", !st.veh);
   if(st.veh){ p.className="plate"; p.textContent=st.veh.reg; }
-  else { p.className="plate blank"; p.textContent="Fleet"; }
+  else { p.className="plate blank"; p.textContent=""; }
 
   var title, sub;
-  /* The test was on the vehicle alone, never on which screen was showing,
-     which is why it has been like this since the first version rather than
-     having drifted. */
   if(!st.veh){
-    title="Vehicle check";
-    sub = st.screen==="driver"  ? "Choose your name to begin"
-        : st.screen==="rota"    ? "Driving rota"
-        : st.screen==="stops"   ? "Stops and bookings"
-        : st.screen==="pending" ? "Waiting to send"
-        : "Choose a vehicle to begin";
+    var who = st.screen==="driver" ? "" : String(st.driver||"").trim();
+    title = st.screen==="vehicle" ? "Vehicle check"
+          : st.screen==="rota"    ? "Driving rota"
+          : st.screen==="stops"   ? "Stops and bookings"
+          : st.screen==="pending" ? "Waiting to send"
+          : appName();
+    sub = st.screen==="vehicle" ? "Choose a vehicle to begin" : (who || churchName());
   }
   else if(st.screen==="stage"||st.screen==="review"){ title=t.done+" of "+TOTAL+" checked"; sub=st.veh.name; }
-  else { title=st.veh.reg; sub=st.veh.name; }
+  /* Not the registration again: the plate beside it already says it. */
+  else { title="Vehicle check"; sub=st.veh.name; }
   if(t.critDef>0) sub=t.critDef+" critical defect"+(t.critDef>1?"s":"");
   else if(t.def>0) sub=t.def+" defect"+(t.def>1?"s":"")+" noted";
   else if(t.adv>0) sub=t.adv+" advisory"+(t.adv>1?" notes":" note");

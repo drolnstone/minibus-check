@@ -8,7 +8,8 @@ tyres or other job goes on a Vehicle Log of its own, recorded from a new Buses
 screen in the coordinator's app or typed on the sheet. The next due date is
 worked out by the agreed rules and shown on every phone at once. Every change
 to a bus's dates or a defect's status is written on a History tab, with who,
-when and what it was before.
+when and what it was before. And the driver app's top bar says what app it
+is until a bus is chosen, instead of VEHICLE CHECK over an empty plate.
 
 
 YOU ARE ON              GOING TO
@@ -24,8 +25,11 @@ analysis/DEPLOY-v1.88.0-w2.29.0.txt.
 BEFORE YOU START
 ----------------
 
-Nothing to tell the drivers. The driver app looks the same; it warns from the
-same dates on the Buses tab, which now move when a renewal is recorded.
+Tell the drivers, in a line: the bar at the top of the driver app now says
+DOMINION TRANSPORT, with their name once they have signed in. The number
+plate and the three lights come up once they choose a bus, as before. It
+warns from the same dates on the Buses tab, which now move when a renewal is
+recorded.
 
 Tell the coordinators, the Minister in Charge and the Assistant Coordinator:
 the coordinator's app has a Buses screen. An MOT, a service or a renewal is
@@ -130,6 +134,17 @@ WHAT CHANGED
    (Needs attention: Send everything); a date cell that cannot be read is
    listed To do. (Code.gs vehicleHealth; worker.js alertRoll's busDates and
    vlogHeld, dates and counts only.)
+
+7. THE DRIVER APP'S TOP BAR. Before a bus is chosen it said VEHICLE CHECK,
+   CHOOSE YOUR NAME TO BEGIN over the way into the whole app, with "Fleet" in
+   an empty number plate that read as a button that did not work and three
+   unlit lights that read as a page still loading. Now, until a bus is
+   chosen, it names the app (DOMINION TRANSPORT, as the home screen icon
+   does) or the screen (DRIVING ROTA, STOPS AND BOOKINGS), over the church
+   before anybody signs in and the driver's name after, as the coordinator's
+   app does. The plate and the lights come with the bus, and the title beside
+   the plate says VEHICLE CHECK instead of the registration a second time.
+   (index.html paintDash; browser check T19; sabotages S25, S25b.)
 
    (tests/suites/36-vehicle-log.mjs, 39 checks; browser checks C29 to C32;
    sabotages S20 to S24.)

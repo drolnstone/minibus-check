@@ -306,6 +306,19 @@ ones. The other is the general net: no `class="tiny"` on the decision page may
 run past sixty characters, because small print that runs past a line has
 almost always stopped being a fact and started being a lesson.
 
+### The top bar says what app it is
+
+All three apps open with a bar that names them: **Coordinator** over the
+church, the passenger page's own heading, and from v1.89.0 the driver app's
+**Dominion Transport** over the church, then over the driver's name once
+signed in, or the screen's name on the rota and the stops. The driver app's
+bar turns into the check's dashboard only once a bus is chosen: the number
+plate, **Vehicle check** or *12 of 20 checked*, the three lights (pass,
+advisory, do not run) and the red **Do not run** strip. Before v1.89.0 that
+dashboard stood empty over the first screen, with "Fleet" in the plate. The
+app's name is read from the page's `apple-mobile-web-app-title` and the
+church's from its footer, so a new church changes each once, in the page.
+
 ### Why the overbooking email stops at the numbers
 
 It used to end: *"Booked is not boarded. Some will not turn up, and some who

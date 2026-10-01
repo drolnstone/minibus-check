@@ -649,6 +649,37 @@ if (want("T16d")) {
   await me.ctx.close();
 }
 
+/* T19 — from v1.89.0 the top bar is the app's until a bus is chosen: its
+   name over the church on the first screen, over the driver once signed in,
+   and the plate and the three lights only once there is a bus to check. */
+if (want("T19")) {
+  const me = await phone({ clock: "2026-09-26T19:00:00+01:00" });
+  const bar = () => me.pg.evaluate(() => {
+    const seen = (id) => { const e = document.getElementById(id); return !!(e && e.offsetParent && e.getBoundingClientRect().width > 0); };
+    return { title: document.getElementById("dashTitle").textContent, sub: document.getElementById("dashSub").textContent,
+             plate: seen("plate") ? document.getElementById("plate").textContent : "", lamps: seen("lampA"),
+             fleet: /Fleet/.test(document.getElementById("dash").textContent) };
+  });
+  await me.load(); await me.close(["howDone"]);
+  const first = await bar();
+  await me.shot("T19a-first-landing");
+  await me.signIn(); await me.close();
+  await toHub(me);
+  const hub = await bar();
+  await me.click("Vehicle check", "#s-hub");
+  const choosing = await bar();
+  await me.pickBus("NH56 FWP");
+  const chosen = await bar();
+  await me.shot("T19b-bus-chosen");
+  check("T19", "the top bar names the app and who is signed in until a bus is chosen; the plate and lights come with the bus",
+        first.title === "Dominion Transport" && first.sub === "RCCG Dominion Assembly Liverpool" && !first.plate && !first.lamps && !first.fleet &&
+        hub.title === "Dominion Transport" && hub.sub === SAMPLE && !hub.plate && !hub.lamps &&
+        choosing.title === "Vehicle check" && choosing.sub === "Choose a vehicle to begin" && !choosing.plate && !choosing.lamps &&
+        chosen.plate === "NH56 FWP" && chosen.lamps && chosen.title === "Vehicle check" && /Transit/.test(chosen.sub),
+        JSON.stringify({ first, hub, choosing, chosen }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");
