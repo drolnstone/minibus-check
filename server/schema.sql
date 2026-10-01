@@ -321,7 +321,7 @@ CREATE INDEX IF NOT EXISTS links_pending ON links(kind, used, synced);
 CREATE TABLE IF NOT EXISTS coord_actions (
   seq     INTEGER PRIMARY KEY AUTOINCREMENT,
   id      TEXT NOT NULL UNIQUE,
-  kind    TEXT NOT NULL,             -- rota | decide | booking | defect | fix
+  kind    TEXT NOT NULL,             -- rota | decide | booking | defect | fix | vlog | vfix | job
   sunday  TEXT NOT NULL DEFAULT '',
   body    TEXT NOT NULL,             -- the change as checked here, JSON
   by_name TEXT NOT NULL DEFAULT '',  -- the coordinator whose PIN matched

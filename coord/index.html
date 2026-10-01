@@ -8,10 +8,11 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.88.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.89.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
-     rota, rota requests, bookings, defects, the run record and the "have a
+     rota, rota requests, bookings, defects, each bus's dates and records (from
+     v1.89.0), the run record and the "have a
      look" reports. Every change goes to the live server under his PIN and is
      answered at once; the spreadsheet applies it a few seconds later with the
      same code a person editing that cell sets going.
@@ -340,6 +341,44 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .def-foot{display:flex;align-items:center;gap:8px;margin-top:6px}
 .def-foot .tiny{flex:1;min-width:0;margin:0}
 .def-foot .mini{min-height:36px}
+.trail{margin-top:6px}
+.trail summary{font-size:13px;font-weight:600;color:var(--muted);padding:4px 0;cursor:pointer}
+.trail li{font-size:14px}
+.trail li small{display:block;color:var(--muted);font-size:12px}
+.trail .why{display:block;color:var(--ink-2);white-space:pre-line}
+
+/* ---- buses, from v1.89.0 ---- */
+.bus-card{display:block;width:100%;text-align:left;padding-top:9px;padding-bottom:4px}
+.bus-card:active{background:var(--press)}
+.bus-card+.bus-card{margin-top:10px}
+.bus-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px}
+.bus-head .go{margin-left:auto;color:var(--faint);font-size:20px;line-height:1}
+.plate-big{font-size:24px;padding:1px 9px}
+.due{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:0 10px;padding:7px 0;
+  border-top:1px solid var(--hair)}
+.bus-head+.due,.card>.due:first-child{border-top:none}
+.due b{font-weight:600;font-size:15px}
+.due .when{font-family:"IBM Plex Mono",monospace;font-size:14px;text-align:right}
+.due small{grid-column:1/-1;font-size:13px;color:var(--muted)}
+.due .late{color:var(--stop);font-weight:600}
+.due .soon{color:var(--warn);font-weight:600}
+.vlog{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);padding:10px 12px;margin-bottom:8px}
+.vlog-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.vlog-head b{flex:1;font-weight:600;font-size:16px}
+.vlog p{margin:4px 0 0;font-size:14px}
+.vlog .did{white-space:pre-line;color:var(--ink-2)}
+.vlog.gone{opacity:.62}
+.vlog.gone .vlog-head b,.vlog.gone>p{text-decoration:line-through}
+.vlog-foot{display:flex;align-items:center;gap:8px;margin-top:6px}
+.vlog-foot .tiny{flex:1;min-width:0;margin:0}
+.vlog-foot .mini{min-height:36px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.two .field{margin-bottom:12px}
+.check{display:flex;gap:10px;align-items:flex-start;padding:7px 0;font-size:15px;line-height:1.35}
+.check input{width:22px;height:22px;flex:none;margin:0}
+.check small{color:var(--muted);font-size:13px}
+.preview{background:var(--info-bg);border:1px solid var(--info-line);border-radius:8px;padding:9px 11px;
+  font-size:14px;line-height:1.4;margin:0 0 12px;color:var(--ink)}
 
 /* ---- the run record ---- */
 .ev{display:grid;grid-template-columns:44px 1fr auto auto;align-items:center;gap:8px;padding:7px 0;
@@ -505,6 +544,8 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
   <section class="screen" id="s-requests"><div id="requestsBody"></div></section>
   <section class="screen" id="s-bookings"><div id="bookingsBody"></div></section>
   <section class="screen" id="s-defects"><div id="defectsBody"></div></section>
+  <section class="screen" id="s-buses"><div id="busesBody"></div></section>
+  <section class="screen" id="s-bus"><div id="busBody"></div></section>
   <section class="screen" id="s-runs"><div id="runsBody"></div></section>
   <section class="screen" id="s-look"><div id="lookBody"></div></section>
   <section class="screen" id="s-report"><div id="reportBody"></div></section>
@@ -541,7 +582,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.88.0";
+var PAGE_VERSION = "v1.89.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -877,7 +918,7 @@ function say(id, t, bad){
 /* ---- screens ------------------------------------------------------------- */
 
 var TITLES = { home:"Coordinator", rota:"Rota", sunday:"Rota", requests:"Rota requests", bookings:"Bookings",
-               defects:"Defects", runs:"Run record", look:"Have a look", report:"Have a look",
+               defects:"Defects", buses:"Buses", bus:"Bus", runs:"Run record", look:"Have a look", report:"Have a look",
                activity:"What I have done", rehearsal:"Rehearsal", sign:"Coordinator" };
 
 /* Each screen is a step in the phone's own history, so its back gesture
@@ -920,6 +961,8 @@ function paint(name, arg){
   if(name === "requests") return paintRequests();
   if(name === "bookings") return paintBookings(arg || D.today);
   if(name === "defects") return paintDefects();
+  if(name === "buses") return paintBuses();
+  if(name === "bus") return paintBus(arg);
   if(name === "runs") return paintRuns(arg || "");
   if(name === "look") return paintLook();
   if(name === "report") return paintReport(arg || "bookings");
@@ -1093,6 +1136,8 @@ function paintHome(){
   var booked = 0, sk = (D.seats && D.seats[bk]) || {};
   Object.keys(sk).forEach(function(rt){ booked += Number(sk[rt].booked) || 0; });
   var defs = (D.defects || []).length;
+  var jobs = 0, jv = (D.vehicles && D.vehicles.jobs) || {};
+  Object.keys(jv).forEach(function(r){ jobs += ((jv[r] && jv[r].jobs) || []).length; });
   var waiting = Number(D.waiting) || 0;
   var item = function(go, t, n, tone){
     return '<li><button type="button" data-go="'+go+'"><span class="t">'+t+'</span>' +
@@ -1103,6 +1148,8 @@ function paintHome(){
        item("requests", "Rota requests", pend ? pend + " waiting" : "none waiting", pend ? "warn" : "") +
        item("bookings/" + bk, "Bookings", booked + " booked" + (bk !== D.today ? " for " + shortDay(bk) : ""), "") +
        item("defects", "Defects", defs ? defs + " open" : "none open", defs ? "warn" : "") +
+       /* A live server from before w2.29.0 sends no vehicle log. */
+       (D && D.vehicles ? item("buses", "Buses", jobs ? (jobs === 1 ? "1 job to arrange" : jobs + " jobs to arrange") : "", jobs ? "warn" : "") : "") +
        item("runs", "Run record", "") +
        /* A live server from before w2.20.0 cannot run one from here. */
        (D && ("rehearsal" in D) ? item("rehearsal", "Rehearsal", D.rehearsal ? "until " + hhmm(D.rehearsal.ends) : "",
@@ -1466,6 +1513,7 @@ function paintDefects(){
            '<span class="tag '+(d.status === "Open" ? 'warn' : '')+'">'+esc(d.status || "Open")+'</span></div>' +
            (d.found ? '<p>“'+esc(d.found)+'”</p>' : '') +
            (d.action ? '<p class="did">'+esc(d.action)+'</p>' : '') +
+           trailHTML(d.trail) +
            '<div class="def-foot"><p class="tiny">'+esc([d.date ? shortDay(d.date) : "", d.driver].filter(Boolean).join(", "))+'</p>' +
            (d.waiting ? '<span class="tag info">To the sheet</span>' : '') +
            '<button class="mini" type="button" data-do="defect" data-key="'+esc(d.key)+'">Update</button></div></div>';
@@ -1501,6 +1549,433 @@ function updateDefect(key){
     };
   });
   label();
+}
+
+/* Every step a defect has been through, off the sheet's History tab, from
+   v1.91.0: who set which status and when, and a reopening with the day it
+   had first been closed. */
+function trailHTML(trail){
+  if(!trail || !trail.length) return '';
+  return '<details class="trail"><summary>What has happened to it (' + trail.length + ')</summary><ul class="notes">' +
+    trail.map(function(t){
+      var change = (t.from ? t.from + " \u2192 " : "") + (t.to || "");
+      var tail = /^Defect reopened/.test(String(t.what || "")) ? "Reopened" : String(t.what || "").split(" \u2014 ")[1];
+      /* The why, unless it only says where, which the line under it says. */
+      var why = t.why && !/^Edited on the /.test(t.why) ? t.why : "";
+      return '<li>' + esc((tail ? tail + ": " : "") + change) + (why ? '<span class="why">' + esc(why) + '</span>' : '') +
+             '<small>' + esc([t.when ? when(t.when) : "", t.who, t.where].filter(Boolean).join(", ")) + '</small></li>';
+    }).join("") + '</ul></details>';
+}
+
+/* ---- buses: their dates, their log, the jobs to arrange ------------------------
+
+   From v1.89.0. Every MOT, service, renewal, repair or booking recorded here
+   goes on the sheet's Vehicle Log as a row of its own, and the Buses tab's
+   date moves with a line on History saying what it was before. Nothing is
+   typed over: a mistake is put right with a correction, which is a new row
+   that names the one it corrects. */
+
+/* When each renewal next falls due. The same rules as rnNextDue in worker.js
+   and Code.gs, here so the date shows before Save; the live server works it
+   out again and its answer is the one kept. tests/suites/35-vehicle-log.mjs
+   holds the three together. */
+var RENEWALS = {
+  mot:       { label: "MOT",            column: "MOT due" },
+  service:   { label: "Service",        column: "Service due" },
+  insurance: { label: "Insurance",      column: "Insurance due" },
+  permit:    { label: "Parking permit", column: "Permit due" }
+};
+var RENEW_KEYS = ["mot", "service", "insurance", "permit"];
+var VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Other"];
+var VLOG_ITEM = { "MOT": "mot", "Service": "service", "Insurance": "insurance", "Parking permit": "permit" };
+
+function rnParts(k){
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(k || ""));
+  return m ? { y: +m[1], m: +m[2], d: +m[3] } : null;
+}
+function rnKey(y, m, d){
+  var t = new Date(Date.UTC(y, m - 1, d));
+  return t.getUTCFullYear() + "-" + ("0" + (t.getUTCMonth() + 1)).slice(-2) + "-" + ("0" + t.getUTCDate()).slice(-2);
+}
+function rnAddMonths(k, n){
+  var p = rnParts(k);
+  if(!p) return "";
+  var idx = p.y * 12 + (p.m - 1) + n;
+  var y = Math.floor(idx / 12), m = idx - y * 12 + 1;
+  var last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return rnKey(y, m, Math.min(p.d, last));
+}
+function rnAddDays(k, n){
+  var p = rnParts(k);
+  return p ? rnKey(p.y, p.m, p.d + n) : "";
+}
+function rnYearLessDay(k){
+  var p = rnParts(k);
+  return p ? rnAddDays(rnKey(p.y + 1, p.m, p.d), -1) : "";
+}
+function rnDays(a, b){
+  var x = rnParts(a), y = rnParts(b);
+  if(!x || !y) return null;
+  return Math.round((Date.UTC(y.y, y.m - 1, y.d) - Date.UTC(x.y, x.m - 1, x.d)) / 86400000);
+}
+function rnNextDue(item, done, was, given){
+  if(!RENEWALS[item] || !rnParts(done)) return { next: "", how: "" };
+  if(rnParts(given)){
+    return { next: given, how: item === "mot" ? "the date on the certificate" : "the date given" };
+  }
+  var prior = rnParts(was) ? was : "";
+  if(item === "service") return { next: rnAddMonths(done, 12), how: "twelve months from the day it was done" };
+  if(item === "mot"){
+    if(prior && done <= prior && done >= rnAddDays(rnAddMonths(prior, -1), 1)){
+      return { next: rnAddMonths(prior, 12), how: "kept its date: tested within a month of running out" };
+    }
+    var next = rnYearLessDay(done);
+    if(!prior) return { next: next, how: "a year from the test, less a day" };
+    return { next: next, how: done > prior ? "a year from the test, less a day: tested after it ran out"
+                                           : "a year from the test, less a day: tested more than a month early" };
+  }
+  if(prior && done <= prior && done >= rnAddMonths(prior, -2)){
+    return { next: rnAddMonths(prior, 12), how: "a year on from the old expiry" };
+  }
+  return { next: rnAddMonths(done, 12), how: !prior ? "twelve months from the renewal"
+                                          : done > prior ? "twelve months from the renewal: it had lapsed"
+                                          : "twelve months from the renewal: more than two months before the old one ran out" };
+}
+
+/* Whether a service done on done may be lined up with an MOT due on mot:
+   only one six to thirteen months off. The live server's lineUpOk. */
+function lineUpOk(done, mot){
+  return !!(rnParts(done) && rnParts(mot) && mot > rnAddMonths(done, 6) && mot <= rnAddMonths(done, 13));
+}
+
+/* 17/06/2027, as the tabs write a day; and Thu 17 Jun 2027 for a date a
+   year off, where the day of the week alone would not do. */
+function ukDay(key){ var p = rnParts(key); return p ? ("0"+p.d).slice(-2) + "/" + ("0"+p.m).slice(-2) + "/" + p.y : ""; }
+function yearDay(key){ var p = parts(key); return p ? DAYS[p.dow] + " " + p.d + " " + MONS[p.mo-1] + " " + p.y : ""; }
+function calToday(){ return (D && (D.londonToday || D.today)) || ""; }
+function dayCount(n){ return n + (n === 1 ? " day" : " days"); }
+
+/* How far off a due date is, in words, and how loudly to say it. */
+function dueWords(key){
+  var n = rnDays(calToday(), key);
+  if(n === null) return { tone: "", words: "No date on the Buses tab" };
+  if(n < 0) return { tone: "late", words: dayCount(-n) + " overdue" };
+  if(n === 0) return { tone: "late", words: "Due today" };
+  if(n <= 30) return { tone: "soon", words: "In " + dayCount(n) };
+  if(n <= 60) return { tone: "", words: "In " + n + " days" };
+  return { tone: "", words: "In about " + Math.round(n / 30.44) + " months" };
+}
+/* An entry's lateness against the date it had been due. */
+function lateWords(early){
+  if(early === null || early === undefined || early === "") return "";
+  var n = Number(early);
+  if(!isFinite(n)) return "";
+  return n === 0 ? "on the day it was due" : n > 0 ? dayCount(n) + " late" : dayCount(-n) + " early";
+}
+
+function busList(){ return (D && D.buses) || []; }
+function busByReg(reg){ var b = busList(); for(var i=0;i<b.length;i++) if(same(b[i].reg, reg)) return b[i]; return null; }
+function logOf(reg){
+  var v = (D && D.vehicles && D.vehicles.log) || {};
+  for(var k in v) if(Object.prototype.hasOwnProperty.call(v, k) && same(k, reg)) return v[k] || [];
+  return [];
+}
+function jobsOf(reg){
+  var v = (D && D.vehicles && D.vehicles.jobs) || {};
+  for(var k in v) if(Object.prototype.hasOwnProperty.call(v, k) && same(k, reg)) return v[k];
+  return null;
+}
+function defectsOf(reg){ return ((D && D.defects) || []).filter(function(d){ return same(d.reg, reg); }); }
+function milesOf(reg){
+  var v = (D && D.lastMiles) || {};
+  for(var k in v) if(Object.prototype.hasOwnProperty.call(v, k) && same(k, reg)) return v[k];
+  return null;
+}
+/* The latest standing entry that set one renewal's date. */
+function latestDone(reg, item){
+  var best = null;
+  logOf(reg).forEach(function(x){
+    if(x.correctedBy || x.status === "Withdrawn" || VLOG_ITEM[x.what] !== item || !x.done) return;
+    if(["Done", "Estimated", "Correction"].indexOf(x.status) === -1) return;
+    if(!best || x.done > best.done) best = x;
+  });
+  return best;
+}
+function entryById(reg, id){ var l = logOf(reg); for(var i=0;i<l.length;i++) if(l[i].id === id) return l[i]; return null; }
+
+function dueRows(b){
+  return RENEW_KEYS.map(function(item){
+    var key = (b.dates || {})[item] || "";
+    var w = dueWords(key);
+    var last = latestDone(b.reg, item);
+    return '<span class="due"><b>' + esc(RENEWALS[item].label) + '</b>' +
+           '<span class="when ' + w.tone + '">' + esc(key ? ukDay(key) : "Not set") + '</span>' +
+           '<small><span class="' + w.tone + '">' + esc(key ? w.words : "No date on the Buses tab") + '</span>' +
+           (last ? ' · last done ' + esc(ukDay(last.done)) + (last.status === "Estimated" ? " (estimated)" : "") : '') +
+           '</small></span>';
+  }).join("");
+}
+
+function paintBuses(){
+  var h = '<h1>Buses</h1>';
+  var list = busList().slice().sort(function(a, b){ return (b.active ? 1 : 0) - (a.active ? 1 : 0) || String(a.reg).localeCompare(String(b.reg)); });
+  if(!list.length){ $("busesBody").innerHTML = h + '<div class="card"><p class="tiny" style="margin:0">No buses have reached the live server.</p></div>'; return; }
+  list.forEach(function(b){
+    var j = jobsOf(b.reg), jn = j && j.jobs ? j.jobs.length : 0, dn = defectsOf(b.reg).length;
+    h += '<button type="button" class="card bus-card" data-go="bus/' + esc(encodeURIComponent(b.reg)) + '">' +
+         '<span class="bus-head"><span class="plate">' + esc(b.reg) + '</span>' +
+         (b.active ? '' : '<span class="tag">Not in use</span>') +
+         (jn ? '<span class="tag warn">' + esc(jn === 1 ? "1 job" : jn + " jobs") + '</span>' : '') +
+         (dn ? '<span class="tag warn">' + esc(dn === 1 ? "1 defect" : dn + " defects") + '</span>' : '') +
+         '<span class="go">›</span></span>' + dueRows(b) + '</button>';
+  });
+  $("busesBody").innerHTML = h;
+}
+
+function entryHTML(reg, x){
+  var gone = !!x.correctedBy || x.status === "Withdrawn";
+  var tag = x.status === "Booked" ? '<span class="tag info">Booked</span>'
+          : x.status === "Estimated" ? '<span class="tag">Estimated</span>'
+          : x.status === "Correction" ? '<span class="tag info">Correction</span>'
+          : x.status === "Withdrawn" ? '<span class="tag stop">Withdrawn</span>' : '';
+  var lines = [];
+  if(x.status === "Booked") lines.push("Booked for " + yearDay(x.bookedFor));
+  else if(x.done) lines.push("Done " + yearDay(x.done) + (x.was ? ", " + lateWords(x.early) + " (was due " + ukDay(x.was) + ")" : ""));
+  if(x.next) lines.push("Next due " + ukDay(x.next) + (x.how ? ": " + x.how : ""));
+  var facts = [];
+  if(x.garage) facts.push(x.garage);
+  if(x.miles !== null && x.miles !== undefined && x.miles !== "") facts.push(Number(x.miles).toLocaleString("en-GB") + " miles");
+  if(x.cost !== null && x.cost !== undefined && x.cost !== "") facts.push("£" + Number(x.cost).toFixed(2));
+  if(facts.length) lines.push(facts.join(" · "));
+  if(x.defects) lines.push("Put right: " + x.defects);
+  var h = '<div class="vlog' + (gone ? ' gone' : '') + '"><div class="vlog-head"><b>' + esc(x.what) + '</b>' + tag +
+          (x.correctedBy ? '<span class="tag">Corrected</span>' : '') + '</div>' +
+          lines.map(function(l){ return '<p>' + esc(l) + '</p>'; }).join("") +
+          (x.notes ? '<p class="did">' + esc(x.notes) + '</p>' : '');
+  h += '<div class="vlog-foot"><p class="tiny">' + esc([x.by, x.source, x.recorded ? when(x.recorded) : ""].filter(Boolean).join(", ")) + '</p>' +
+       (x.waiting ? '<span class="tag info">To the sheet</span>' : '');
+  if(!gone && !x.waiting && x.id){
+    if(x.status === "Booked") h += '<button class="mini" type="button" data-do="vlogdone" data-reg="' + esc(reg) + '" data-id="' + esc(x.id) + '">Done</button>';
+    h += '<button class="mini" type="button" data-do="vfix" data-reg="' + esc(reg) + '" data-id="' + esc(x.id) + '">Correct</button>';
+  }
+  return h + '</div></div>';
+}
+
+function paintBus(reg){
+  var b = busByReg(reg);
+  if(!b){ $("busBody").innerHTML = '<h1>' + esc(reg || "Bus") + '</h1><div class="card"><p class="tiny" style="margin:0">That bus is not on the live server’s list.</p></div>'; return; }
+  var h = '<h1><span class="plate plate-big">' + esc(b.reg) + '</span></h1>';
+  h += '<div class="card">' + dueRows(b) + '</div>';
+  h += '<button class="btn btn-main btn-wide" type="button" data-do="vlog" data-reg="' + esc(b.reg) + '" style="margin-top:12px">Record something</button>';
+  var j = jobsOf(b.reg);
+  if(j && j.jobs && j.jobs.length){
+    h += '<h3>Jobs to arrange</h3><div class="card"><p class="tiny" style="margin:0 0 4px">From the walkaround ' +
+         esc([j.date ? shortDay(j.date) : "", j.driver].filter(Boolean).join(", ")) + '.</p>' +
+         j.jobs.map(function(x){
+           return '<div class="row"><span class="v">' + esc(x) + '</span><span class="acts">' +
+                  '<button class="mini" type="button" data-do="job" data-reg="' + esc(b.reg) + '" data-job="' + esc(x) + '">Done</button></span></div>';
+         }).join("") + '</div>';
+  }
+  var dn = defectsOf(b.reg).length;
+  if(dn) h += '<button class="need" type="button" data-go="defects"><p>' + esc(dn === 1 ? "A defect is open on this bus." : dn + " defects are open on this bus.") + '</p><span class="go">›</span></button>';
+  var log = logOf(b.reg);
+  h += '<h3>Log</h3>';
+  if(!log.length) h += '<div class="card"><p class="tiny" style="margin:0">Nothing recorded yet.</p></div>';
+  else h += log.map(function(x){ return entryHTML(b.reg, x); }).join("");
+  $("busBody").innerHTML = h;
+}
+
+/* ---- recording one -------------------------------------------------------- */
+
+var VL = null;          /* what the open Record form has chosen */
+
+function givenLabel(item){
+  return item === "mot" ? "Expiry date on the certificate"
+       : item === "insurance" ? "Date the new policy runs to"
+       : item === "permit" ? "Date the new permit runs to" : "Next service due, if the garage gave one";
+}
+function numIn(v){
+  var t = String(v == null ? "" : v).replace(/[£,\s]/g, "");
+  if(!t) return "";
+  var n = Number(t);
+  return isFinite(n) && n >= 0 ? n : NaN;
+}
+
+/* The Record form. from, a Booked entry the form starts from: what it was,
+   and its day if that has come. */
+function recordFor(reg, from){
+  var b = busByReg(reg); if(!b) return;
+  var today = calToday();
+  VL = { reg: b.reg, what: from ? from.what : "", status: "Done" };
+  var m = milesOf(b.reg);
+  var defs = defectsOf(b.reg);
+  var startDay = from && from.bookedFor && from.bookedFor <= today ? from.bookedFor : today;
+  openSheet({ eyebrow: b.reg, title: "Record something",
+    body: '<div class="chips" id="vlWhat">' + VLOG_WHAT.map(function(w){
+            return '<button type="button" data-w="' + esc(w) + '" class="' + (w === VL.what ? 'on' : '') + '">' + esc(w) + '</button>';
+          }).join("") + '</div>' +
+          '<div class="chips" id="vlStatus"><button type="button" data-s="Done" class="on">Done</button>' +
+          (from ? '' : '<button type="button" data-s="Booked">Booked ahead</button>') + '</div>' +
+          '<div class="field" id="vlDoneF"><label for="vlDay">Day it was done</label><input type="date" id="vlDay" value="' + esc(startDay) + '" max="' + esc(today) + '"></div>' +
+          '<div class="field" id="vlBookF" hidden><label for="vlFor">Booked for</label><input type="date" id="vlFor" min="' + esc(today) + '"></div>' +
+          '<div class="field" id="vlGivenF" hidden><label for="vlGiven" id="vlGivenL"></label><input type="date" id="vlGiven"></div>' +
+          '<label class="check" id="vlMotF" hidden><input type="checkbox" id="vlMot"><span id="vlMotL"></span></label>' +
+          '<p class="preview" id="vlNext" hidden></p>' +
+          '<div class="two"><div class="field"><label for="vlMiles">Mileage</label><input id="vlMiles" inputmode="numeric" autocomplete="off"' +
+            (m && m.miles ? ' placeholder="' + esc("Last read " + Number(m.miles).toLocaleString("en-GB")) + '"' : '') + '></div>' +
+          '<div class="field"><label for="vlCost">Cost (£)</label><input id="vlCost" inputmode="decimal" autocomplete="off"></div></div>' +
+          '<div class="field"><label for="vlGarage">Garage</label><input id="vlGarage" maxlength="80" autocomplete="off" value="' + esc(from && from.garage || "") + '"></div>' +
+          (defs.length ? '<div id="vlDefs"><p class="tiny" style="margin:0 0 2px">Defects it put right, closed as it goes on:</p>' + defs.map(function(d){
+            return '<label class="check"><input type="checkbox" data-def="' + esc(d.key) + '"><span>' + esc(d.item) +
+                   (d.date ? ' <small>' + esc(shortDay(d.date)) + '</small>' : '') + '</span></label>';
+          }).join("") + '</div>' : '') +
+          '<div class="field"><label for="vlNotes">Notes</label><textarea id="vlNotes" maxlength="500"></textarea></div>' +
+          '<p class="tiny">Only what it was is needed. Everything else can be left empty.</p>',
+    go: "Record it",
+    onGo: function(){ recordSend(b); } });
+  var pick = function(sel, attr, set){
+    Array.prototype.forEach.call(document.querySelectorAll(sel + " button"), function(x){
+      x.onclick = function(){
+        set(x.getAttribute(attr));
+        Array.prototype.forEach.call(document.querySelectorAll(sel + " button"), function(y){ y.classList.toggle("on", y === x); });
+        if(!busy) sheetSay("");
+        recordShow(b);
+      };
+    });
+  };
+  pick("#vlWhat", "data-w", function(w){ VL.what = w; });
+  pick("#vlStatus", "data-s", function(s){ VL.status = s; });
+  ["vlDay", "vlFor", "vlGiven", "vlMot"].forEach(function(id){
+    var el = $(id); if(el){ el.onchange = function(){ recordShow(b); }; el.oninput = el.onchange; }
+  });
+  recordShow(b);
+}
+
+/* What the form says as it is filled: the date the bus will have. */
+function recordShow(b){
+  if(!VL) return;
+  var item = VLOG_ITEM[VL.what] || "", done = VL.status === "Done";
+  var day = $("vlDay").value, given = item && done ? $("vlGiven").value : "";
+  var was = (b.dates || {})[item] || "";
+  var mot = (b.dates || {}).mot || "";
+  $("vlDoneF").hidden = !done;
+  $("vlBookF").hidden = done;
+  $("vlGivenF").hidden = !(item && done);
+  if(item) $("vlGivenL").textContent = givenLabel(item);
+  var canLine = item === "service" && done && !given && lineUpOk(day, mot);
+  $("vlMotF").hidden = !canLine;
+  if(canLine) $("vlMotL").textContent = "Line the next service up with the MOT, " + ukDay(mot);
+  var defs = $("vlDefs"); if(defs) defs.hidden = !done;
+  var p = $("vlNext");
+  if(!done){
+    p.hidden = !VL.what;
+    p.textContent = "It goes on the log as booked. Record it as done on the day, and the date moves then.";
+    return;
+  }
+  if(!item || !rnParts(day)){ p.hidden = true; return; }
+  var nd = canLine && $("vlMot").checked ? { next: mot, how: "lined up with the MOT" } : rnNextDue(item, day, was, given);
+  var late = was ? rnDays(was, day) : null;
+  p.hidden = false;
+  p.textContent = (was ? "It was due " + ukDay(was) + (late !== null ? ": " + lateWords(late) + ". " : ". ") : "") +
+                  "Next due " + ukDay(nd.next) + ", " + nd.how + ".";
+}
+
+function recordSend(b){
+  if(!VL.what){ sheetSay("Choose what it was.", true); return; }
+  var today = calToday(), done = VL.status === "Done", item = VLOG_ITEM[VL.what] || "";
+  var a = { kind: "vlog", reg: b.reg, what: VL.what, status: VL.status };
+  if(done){
+    a.done = $("vlDay").value || today;
+    if(a.done > today){ sheetSay("That day has not come yet. To record a day ahead, choose Booked ahead.", true); return; }
+    if(item) a.given = $("vlGiven").value || "";
+    if(item === "service" && !$("vlMotF").hidden && $("vlMot").checked) a.withMot = true;
+    a.defects = Array.prototype.map.call(document.querySelectorAll("#vlDefs input[data-def]:checked"), function(x){ return x.getAttribute("data-def"); });
+  } else {
+    a.bookedFor = $("vlFor").value || "";
+    if(!a.bookedFor){ sheetSay("Say the day it is booked for.", true); return; }
+    if(a.bookedFor < today){ sheetSay("That day has gone. Record it as done instead.", true); return; }
+  }
+  var miles = numIn($("vlMiles").value), cost = numIn($("vlCost").value);
+  if(miles !== miles){ sheetSay("The mileage is not a number of miles.", true); return; }
+  if(cost !== cost){ sheetSay("The cost is not an amount in pounds.", true); return; }
+  a.miles = miles; a.cost = cost;
+  a.garage = $("vlGarage").value || "";
+  a.notes = $("vlNotes").value || "";
+  act(a);
+}
+
+/* ---- putting one right -------------------------------------------------------
+   Correct: the entry as it should have been, and a new next due date from
+   it. Withdraw: it should never have been recorded, and the bus goes back to
+   the date it had before it. Either way the entry stays on the log, struck
+   through, beside the one that corrects it. */
+function correctEntry(reg, id){
+  var b = busByReg(reg), x = entryById(reg, id);
+  if(!b || !x) return;
+  var mode = "fix";
+  var booking = x.status === "Booked";
+  var item = VLOG_ITEM[x.what] || "";
+  openSheet({ eyebrow: b.reg + " · " + x.what, title: "Put this entry right",
+    line: booking ? "Booked for " + ukDay(x.bookedFor) + "." : x.done ? "Done " + ukDay(x.done) + (x.next ? ", next due " + ukDay(x.next) : "") + "." : "",
+    body: '<div class="chips" id="vfMode"><button type="button" data-m="fix" class="on">Correct it</button><button type="button" data-m="withdraw">Withdraw it</button></div>' +
+          '<div id="vfFix">' +
+          (booking ? '<div class="field"><label for="vfFor">Booked for</label><input type="date" id="vfFor" value="' + esc(x.bookedFor) + '"></div>'
+                   : '<div class="field"><label for="vfDay">Day it was done</label><input type="date" id="vfDay" value="' + esc(x.done) + '" max="' + esc(calToday()) + '"></div>' +
+                     (item ? '<div class="field"><label for="vfGiven">' + esc(givenLabel(item)) + '</label><input type="date" id="vfGiven" value="' + esc(x.given || "") + '"></div>' : '') +
+                     '<p class="preview" id="vfNext" hidden></p>') +
+          '<div class="two"><div class="field"><label for="vfMiles">Mileage</label><input id="vfMiles" inputmode="numeric" autocomplete="off" value="' + esc(x.miles == null ? "" : x.miles) + '"></div>' +
+          '<div class="field"><label for="vfCost">Cost (£)</label><input id="vfCost" inputmode="decimal" autocomplete="off" value="' + esc(x.cost == null ? "" : x.cost) + '"></div></div>' +
+          '<div class="field"><label for="vfGarage">Garage</label><input id="vfGarage" maxlength="80" autocomplete="off" value="' + esc(x.garage || "") + '"></div>' +
+          '</div>' +
+          '<div class="field"><label for="vfWhy">Why</label><textarea id="vfWhy" maxlength="300" placeholder="The date was typed wrong"></textarea></div>',
+    go: "Correct it",
+    onGo: function(){
+      var a = { kind: "vfix", corrects: x.id, why: $("vfWhy").value || "" };
+      if(mode === "withdraw"){ a.withdraw = true; act(a); return; }
+      if(booking){
+        a.bookedFor = $("vfFor").value || x.bookedFor;
+      } else {
+        a.done = $("vfDay").value || x.done;
+        if(a.done > calToday()){ sheetSay("That day has not come yet.", true); return; }
+        if(item) a.given = $("vfGiven").value || "";
+      }
+      var miles = numIn($("vfMiles").value), cost = numIn($("vfCost").value);
+      if(miles !== miles){ sheetSay("The mileage is not a number of miles.", true); return; }
+      if(cost !== cost){ sheetSay("The cost is not an amount in pounds.", true); return; }
+      a.miles = miles; a.cost = cost;
+      a.garage = $("vfGarage").value || "";
+      act(a);
+    } });
+  var show = function(){
+    $("vfFix").hidden = mode === "withdraw";
+    $("sheetGo").textContent = mode === "withdraw" ? "Withdraw it" : "Correct it";
+    $("sheetGo").className = "btn " + (mode === "withdraw" ? "btn-stop" : "btn-main");
+    var p = $("vfNext");
+    if(!p) return;
+    var day = $("vfDay").value, given = $("vfGiven") ? $("vfGiven").value : "";
+    var nd = item && rnParts(day) ? rnNextDue(item, day, x.was || "", given) : { next: "" };
+    p.hidden = !nd.next;
+    if(nd.next) p.textContent = "Next due " + ukDay(nd.next) + ", " + nd.how + ".";
+  };
+  Array.prototype.forEach.call(document.querySelectorAll("#vfMode button"), function(bt){
+    bt.onclick = function(){
+      mode = bt.getAttribute("data-m");
+      Array.prototype.forEach.call(document.querySelectorAll("#vfMode button"), function(y){ y.classList.toggle("on", y === bt); });
+      if(!busy) sheetSay("");
+      show();
+    };
+  });
+  ["vfDay", "vfGiven"].forEach(function(id){ var el = $(id); if(el){ el.onchange = show; el.oninput = show; } });
+  show();
+}
+
+/* A job the last walkaround asked for, arranged. */
+function jobDone(reg, job){
+  var j = jobsOf(reg); if(!j) return;
+  openSheet({ eyebrow: reg, title: job, line: "Asked for at the walkaround " + (j.date ? shortDay(j.date) : "") + ". Mark it done?",
+    body: '<div class="field"><label for="jobNote">Note</label><input id="jobNote" maxlength="200" autocomplete="off" placeholder="Topped up after the service"></div>',
+    go: "Done",
+    onGo: function(){ act({ kind: "job", reg: reg, job: job, checkId: j.checkId, note: $("jobNote").value || "" }); } });
 }
 
 /* ---- the run record -------------------------------------------------------------- */
@@ -1973,6 +2448,10 @@ document.addEventListener("click", function(e){
   else if(d === "empties"){ var er = t.getAttribute("data-route"); BOOK_ALL[er] = !BOOK_ALL[er]; paintBookings(BOOK.sunday); }
   else if(d === "book") bookFor(key);
   else if(d === "defect") updateDefect(key);
+  else if(d === "vlog") recordFor(t.getAttribute("data-reg"));
+  else if(d === "vlogdone") recordFor(t.getAttribute("data-reg"), entryById(t.getAttribute("data-reg"), t.getAttribute("data-id")));
+  else if(d === "vfix") correctEntry(t.getAttribute("data-reg"), t.getAttribute("data-id"));
+  else if(d === "job") jobDone(t.getAttribute("data-reg"), t.getAttribute("data-job"));
   else if(d === "fix") fixTime(t);
   else if(d === "again"){ REP = { name:"", data:null }; paintReport(t.getAttribute("data-name")); }
   else if(d === "remind") remindAsk();

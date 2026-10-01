@@ -52,6 +52,8 @@ const northOf = (k) => turn(k, NP, NA), southOf = (k) => turn(k, SP, SA);
 const ODD_ROUTE = { "NH56 FWP": "North", "YS70 PWE": "South" };
 const PAIRED = REAL.buses.map((b) => ({ reg: b.reg, active: true, oddRoute: ODD_ROUTE[b.reg] || "" }));
 const busesOf = (k) => W.busRule(k, PAIRED);
+const CAL = W.londonKey(new Date());
+const DAY = (n) => W.rnAddDays(CAL, n);
 
 async function world() {
   const db = makeDB(join(ROOT, "server", "schema.sql"));
@@ -70,6 +72,9 @@ async function world() {
   }
   const extra = {};
   for (const b of PAIRED) extra[b.reg.toUpperCase()] = { dates: {}, oddRoute: b.oddRoute };
+  /* From v1.89.0 the Buses screen: YS70 PWE's MOT due in ten days, its
+     service a month overdue. */
+  extra["YS70 PWE"].dates = { mot: DAY(10), service: DAY(-30), insurance: DAY(200), permit: DAY(120) };
   await W.cachePut(env, "bus_extra", extra).run();
   await W.cachePut(env, "auth_rules", { roles: ["coordinator", "minister in charge"], sameHandBothWays: true }).run();
   await W.cachePut(env, "sheet_url", { url: "https://script.google.com/macros/s/TEST/exec" }).run();
@@ -97,7 +102,13 @@ async function world() {
     { checkId: "chk-b", reg: "NH56 FWP", date: LAST, driver: northOf(LAST), item: "Brake fluid level", crit: true,
       found: "Below the minimum mark", status: "Booked in", action: "Booked into Kwik Fit for Tuesday", kind: "Defect" },
     { checkId: "chk-b", reg: "NH56 FWP", date: LAST, driver: northOf(LAST), item: "Wiper blades", crit: false,
-      found: "Smearing on the driver's side", status: "Open", action: "", kind: "Advisory" }];
+      found: "Smearing on the driver's side", status: "Open", action: "", kind: "Advisory",
+      /* Its trail, for C32. C8 closes the first defect on the screen, so the
+         trail is on one no other check changes. */
+      trail: [{ when: Date.now() - 5 * 86400000, who: "Bro Arthur", where: "Coordinator's app", from: "Open", to: "Monitoring",
+                why: "Blades on order", what: "Defect: Wiper blades" },
+              { when: Date.now() - 2 * 86400000, who: "", where: "On the Defects tab", from: "Monitoring", to: "Open",
+                why: "Edited on the Defects tab", what: "Defect: Wiper blades \u2014 Status" }] }];
   const openDefects = {};
   for (const d of defects) {
     d.key = W.defectKeyOf(d);
@@ -113,7 +124,18 @@ async function world() {
                { id: "rq-real-0", sunday: TODAY, driver: southOf(TODAY), type: "Request cover", reason: "Working",
                  status: "Approved", received: Date.now() - 9 * 86400000, decidedOn: Date.now() - 6 * 86400000,
                  replacement: "Bro Alfred" }],
-    defects }).run();
+    defects,
+    /* The Vehicle Log as the sheet starts it, and the jobs the last walkaround asked for. */
+    vehicles: {
+      log: { "YS70 PWE": [
+        { id: "S-YS70PWE-mot", what: "MOT", status: "Estimated", done: W.rnAddDays(W.rnAddMonths(DAY(10), -12), 1), was: "",
+          next: DAY(10), how: "estimated: a year back from the due date on the Buses tab", by: "", source: "Started from the Buses tab",
+          recorded: Date.now() - 86400000, correctedBy: "" },
+        { id: "S-YS70PWE-service", what: "Service", status: "Estimated", done: W.rnAddMonths(DAY(-30), -12), was: "",
+          next: DAY(-30), how: "estimated: a year back from the due date on the Buses tab", by: "", source: "Started from the Buses tab",
+          recorded: Date.now() - 86400000, correctedBy: "" }] },
+      jobs: { "YS70 PWE": { checkId: "chk-a", date: LAST, driver: southOf(LAST), jobs: ["Screenwash", "Tyre pressures"] } }
+    } }).run();
 
   const book = async (key, stopId, seats, phone) => {
     const s = REAL.stops.find((x) => x.id === stopId);
@@ -924,6 +946,118 @@ if (want("C28")) {
         /\/sunday\/$/.test(text.split(" ").pop()) && /Book your seat/.test(text) && shown.indexOf("/sunday/") !== -1 &&
         title === "Send the duty reminders due today?" && beforeSend === 0 && !p.errs.length,
         "whatsapp '" + text + "', sheet '" + title + "', asked " + beforeSend + ", errors " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
+/* C29 — Buses: each bus's four dates, and an MOT recorded moves its date at once */
+if (want("C29")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  const menu = await p.text("#homeBody .menu");
+  await p.pg.click('#homeBody [data-go="buses"]');
+  await p.wait(300);
+  const list = await p.text("#busesBody");
+  await p.shot("C29a-buses");
+  await p.pg.click('#busesBody [data-go="bus/YS70%20PWE"]');
+  await p.wait(300);
+  const before = await p.text("#busBody .card");
+  await p.pg.click('#busBody [data-do="vlog"]');
+  await p.wait(250);
+  await p.tapText("MOT", "#vlWhat");
+  const preview = await p.text("#vlNext");
+  await p.pg.fill("#vlMiles", "45,180");
+  await p.pg.fill("#vlGarage", "Walton Garage");
+  await p.pg.click('#vlDefs input[type="checkbox"]');
+  await p.shot("C29b-record-mot");
+  const expect = W.rnNextDue("mot", CAL, DAY(10), "");
+  const uk = (k) => k.slice(8, 10) + "/" + k.slice(5, 7) + "/" + k.slice(0, 4);
+  await p.go();
+  await p.settle();
+  await p.wait(400);
+  const after = await p.text("#busBody .card");
+  const acts = db._rows("SELECT kind, body FROM coord_actions WHERE kind='vlog'");
+  const body = acts.length ? JSON.parse(acts[0].body) : {};
+  const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth);
+  await p.shot("C29c-bus-after");
+  check("C29", "Buses shows each bus's dates; an MOT recorded is worked out before Save, kept, and shown at once",
+        /Buses/.test(menu) && /2 jobs to arrange/.test(menu) && /YS70 PWE/.test(list) && /overdue/.test(list) &&
+        before.indexOf(uk(DAY(10))) !== -1 && preview.indexOf("Next due " + uk(expect.next)) !== -1 && /kept its date/.test(preview) &&
+        after.indexOf(uk(expect.next)) !== -1 && body.miles === 45180 && body.garage === "Walton Garage" &&
+        (body.defects || []).length === 1 && wide <= 390 && !p.errs.length,
+        "menu '" + menu + "', list '" + list.slice(0, 120) + "', preview '" + preview + "', after '" + after.slice(0, 120) +
+        "', body " + JSON.stringify(body).slice(0, 200) + ", width " + wide + ", errors " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
+/* C30 — an entry put right: a correction, with the date worked out again */
+if (want("C30")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  await p.pg.evaluate(() => { location.hash = "bus/YS70%20PWE"; });
+  await p.wait(400);
+  await p.pg.click('#busBody [data-do="vfix"][data-id="S-YS70PWE-service"]');
+  await p.wait(250);
+  const day = W.rnAddDays(CAL, -3);
+  await p.pg.fill("#vfDay", day);
+  await p.pg.dispatchEvent("#vfDay", "change");
+  const preview = await p.text("#vfNext");
+  await p.pg.fill("#vfWhy", "The real date from the invoice");
+  await p.shot("C30a-correct");
+  await p.go();
+  await p.settle();
+  await p.wait(400);
+  const acts = db._rows("SELECT body FROM coord_actions WHERE kind='vfix'");
+  const body = acts.length ? JSON.parse(acts[0].body) : {};
+  const next = W.rnAddMonths(day, 12);
+  const uk = (k) => k.slice(8, 10) + "/" + k.slice(5, 7) + "/" + k.slice(0, 4);
+  const card = await p.text("#busBody .card");
+  const struck = await p.pg.$$eval("#busBody .vlog.gone", (els) => els.length);
+  await p.shot("C30b-corrected");
+  check("C30", "Correct: the new day gives a new next due date, the old entry stays struck through",
+        preview.indexOf(uk(next)) !== -1 && body.corrects === "S-YS70PWE-service" && body.next === next &&
+        body.why === "The real date from the invoice" && card.indexOf(uk(next)) !== -1 && struck >= 1 && !p.errs.length,
+        "preview '" + preview + "', body " + JSON.stringify(body).slice(0, 200) + ", card '" + card.slice(0, 160) + "', struck " + struck);
+  await p.ctx.close();
+}
+
+/* C31 — a job from the walkaround, marked done */
+if (want("C31")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  await p.pg.evaluate(() => { location.hash = "bus/YS70%20PWE"; });
+  await p.wait(400);
+  await p.pg.click('#busBody [data-do="job"][data-job="Screenwash"]');
+  await p.wait(250);
+  const title = await p.pg.$eval("#sheetTitle", (el) => el.textContent).catch(() => "");
+  await p.go();
+  await p.settle();
+  await p.wait(400);
+  const left = await p.pg.$$eval('#busBody [data-do="job"]', (els) => els.map((e) => e.getAttribute("data-job")));
+  const acts = db._rows("SELECT body FROM coord_actions WHERE kind='job'");
+  await p.shot("C31-job-done");
+  check("C31", "a job the walkaround asked for is marked done and leaves the list",
+        title === "Screenwash" && JSON.stringify(left) === JSON.stringify(["Tyre pressures"]) && acts.length === 1 && !p.errs.length,
+        "title '" + title + "', left " + JSON.stringify(left) + ", acts " + acts.length);
+  await p.ctx.close();
+}
+
+/* C32 — a defect's trail: every status it has had, a reopening included */
+if (want("C32")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  await p.pg.evaluate(() => { location.hash = "defects"; });
+  await p.wait(400);
+  const summary = await p.text("#defectsBody details.trail summary");
+  /* Opened only if it is there, so a page without it fails this check
+     rather than stopping the run. */
+  await p.pg.click("#defectsBody details.trail summary", { timeout: 3000 }).catch(() => {});
+  await p.wait(200);
+  const trail = await p.text("#defectsBody details.trail");
+  await p.shot("C32-defect-trail");
+  check("C32", "a defect shows every status it has been given, by whom and where",
+        /What has happened to it \(2\)/.test(summary) && /Open → Monitoring/.test(trail) && /Status: Monitoring → Open/.test(trail) && /Blades on order/.test(trail) &&
+        /Bro Arthur/.test(trail) && /On the Defects tab/.test(trail) && !p.errs.length,
+        "summary '" + summary + "', trail '" + trail + "'");
   await p.ctx.close();
 }
 

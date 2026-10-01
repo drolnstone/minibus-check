@@ -1,0 +1,83 @@
+MINIBUS
+=======
+  pages v1.88.0 · server w2.28.0 · sheet v1.90.0
+
+Two things on the passenger page. On a first visit it offers "Add to your
+phone" before asking about alerts, instead of the alerts question sometimes
+winning and the offer never coming. And on a Sunday morning a booked
+passenger can WhatsApp the driver on his route, with the Message button that
+has been dark since the page moved to the live server.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.87.0         v1.88.0
+  Worker  w2.27.0         w2.28.0
+  Code.gs v1.89.0         v1.90.0
+
+If v1.87.0's steps are not done yet, do those first:
+analysis/DEPLOY-v1.87.0.txt.
+
+
+BEFORE YOU START
+----------------
+
+Tell the drivers. From this release, on a Sunday morning after bookings
+close, a passenger booked on a driver's route can open WhatsApp to that
+driver from the passenger page. Only a booked passenger, only for his own
+route, only on the morning, and not once the run has ended. A driver who
+would rather not: leave his Phone cell on the Drivers tab empty, and there is
+no button for his route.
+
+
+IN THIS ORDER
+-------------
+
+1. WORKER. Cloudflare, the minibus Worker, Edit code. Replace everything
+   with server/worker.js. Deploy.
+
+2. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
+   Save. Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy.
+
+3. Minibus, Send everything to the live server now. This is what carries
+   the drivers' numbers across; until it runs there is no button.
+
+4. PAGES. Merge the pull request.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.88.0 · server w2.28.0 · sheet
+   v1.90.0 .
+
+B. A phone that has never opened the passenger page (or one whose site data
+   has been cleared): open the link. "Add to your phone" comes up first. Tap
+   Not now, and "Turn on bus alerts?" comes up after it. On an iPhone the
+   steps come up, and it is not asked a second time on that visit.
+
+C. On a Sunday after 09:30, a phone booked on a route: the bar at the foot
+   shows Not coming and Message with the driver's name. It opens WhatsApp to
+   him with a message saying where the passenger is booked. A phone with no
+   seat shows no Message button.
+
+
+WHAT CHANGED
+------------
+
+1. ADD TO YOUR PHONE, FIRST. The install offer and the alerts question rose
+   on timers of their own, 600 ms and half a second, and whenever the
+   subscription lookup had answered before the stops landed the alerts
+   question won. The install sheet then found it up and stood down, and the
+   offer never came. The alerts question now waits while the install offer is
+   still to come on that visit, and rises as the install sheet closes.
+   (sunday/index.html. Browser checks P7, P7b; sabotages S19, S19b.)
+
+2. MESSAGE THE DRIVER. The sheet sends every active driver's WhatsApp number
+   on the sync, beside the coordinator's, over the same guarded call. The
+   live server names the driver on a route, cover first, only to a phone with
+   a seat on that route that Sunday, once bookings have closed and while the
+   route is running; everybody else gets nothing. A number too short to be
+   real, or none at all, gives no button. (Code.gs driverWhatsApp and
+   waNumber; worker.js driverForPassenger; tests/suites/34-message-driver.mjs
+   and browser check P8.)

@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.90.0";
+var SCRIPT_VERSION = "v1.91.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -860,8 +860,30 @@ function ensureBuses(ss) {
   pretty("Buses dropdown", function () {
     sh.getRange(2, bc.active, 2000, 1).setDataValidation(listRule(["YES", "NO"]));
   });
+  /* From v1.91.0 the four due dates take a date and nothing else. Text that
+     only looked like a date used to be read as blank, silently, and the
+     driver was never warned. */
+  pretty("Buses due dates", function () { busDateRules(sh); });
   memoDrop("buses");                     /* this may have just seeded the tab */
   return sh;
+}
+
+/* The four due dates take a date and nothing else. Set by Set up and by the
+   first sync of v1.91.0 (vlogBoot), so it is on without anybody running Set
+   up after the upgrade. */
+function busDateRules(sh) {
+  var bc = colsSoft(sh, BUSES_SHEET);
+  var rule = SpreadsheetApp.newDataValidation()
+    .requireDateBetween(new Date(2000, 0, 1), new Date(2100, 0, 1))
+    .setAllowInvalid(false)
+    .setHelpText("A date, like 17/06/2027.")
+    .build();
+  RENEW_KEYS.forEach(function (k) {
+    if (!bc[k]) return;
+    var r = sh.getRange(2, bc[k], 2000, 1);
+    r.setDataValidation(rule);
+    r.setNumberFormat("dd/mm/yyyy");
+  });
 }
 
 /* Called five times in one ?board=1, to read the same two rows. */
@@ -966,6 +988,719 @@ function readBusesFresh(ss) {
     });
   });
   return out;
+}
+
+/* ==========================================================================
+   THE VEHICLE LOG AND THE HISTORY. From v1.91.0.
+
+   Until this release the Buses tab held one date per renewal, and a new date
+   typed over the old one: the day an MOT was actually done, the date it had
+   been due, anything about the service before, all gone. From here nothing
+   about a bus is ever overwritten without a record of what it was.
+
+     Vehicle Log   one row for every MOT, service, insurance or permit
+                   renewal, repair, tyres or other job: the day it was
+                   actually done, the date it had been due, how early or late
+                   that was, the next due date and how it was worked out, and
+                   whatever else was known (mileage, garage, cost, the defects
+                   it put right). A mistake is put right by a Correction row
+                   that names the row it corrects; the wrong row stays,
+                   struck through, and is never removed. The coordinator's app
+                   writes here, and a row typed straight onto the tab is
+                   completed by onEditVlog as though the app had written it.
+
+     History       one row for every change to a bus's due dates, a defect's
+                   status, the Vehicle Log and jobs to arrange: when, who,
+                   where (the app, the sheet, a walkaround), what it was, what
+                   it became, and why. Only ever added to. A change typed on
+                   the Buses tab is caught at the edit, and by busDatesAudit
+                   every five minutes as well, so a paste or a script that
+                   bypasses the edit trigger is still written down.
+
+   The next due date follows the rules in rnNextDue below, which are the live
+   server's (worker.js) and the coordinator's app's word for word. The Buses
+   tab keeps showing the CURRENT due dates, because that is what the driver
+   app warns from; the log is where the past lives.
+   ========================================================================== */
+
+var VLOG_SHEET    = "Vehicle Log";
+var HISTORY_SHEET = "History";
+
+var VLOG_HEADERS = [
+  "Recorded", "Log ID", "Registration", "What", "Status", "Date done", "Booked for",
+  "Was due", "Days early (-) or late (+)", "Next due", "How the next date was worked out",
+  "Certificate or policy date", "Mileage", "Garage", "Cost (£)", "Defects put right",
+  "Notes", "Corrects", "Recorded by", "Source"
+];
+var HISTORY_HEADERS = ["When", "Who", "Where", "Registration", "What changed", "From", "To", "Why", "Ref"];
+
+/* What can be recorded, and which of them move a date on the Buses tab. */
+var VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Other"];
+var VLOG_ITEM = { "MOT": "mot", "Service": "service", "Insurance": "insurance", "Parking permit": "permit" };
+var RENEW_KEYS = ["mot", "service", "insurance", "permit"];
+
+/* ---- when each renewal next falls due ---------------------------------
+   The same rules as rnNextDue in worker.js and coord/index.html. Read the
+   note there; tests/suites/35-vehicle-log.mjs holds the three together. */
+var RENEWALS = {
+  mot:       { label: "MOT",            column: "MOT due" },
+  service:   { label: "Service",        column: "Service due" },
+  insurance: { label: "Insurance",      column: "Insurance due" },
+  permit:    { label: "Parking permit", column: "Permit due" }
+};
+
+function rnParts(k) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(k || ""));
+  return m ? { y: +m[1], m: +m[2], d: +m[3] } : null;
+}
+function rnKey(y, m, d) {
+  var t = new Date(Date.UTC(y, m - 1, d));
+  return t.getUTCFullYear() + "-" + p2(t.getUTCMonth() + 1) + "-" + p2(t.getUTCDate());
+}
+function rnAddMonths(k, n) {
+  var p = rnParts(k);
+  if (!p) return "";
+  var idx = p.y * 12 + (p.m - 1) + n;
+  var y = Math.floor(idx / 12), m = idx - y * 12 + 1;
+  var last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return rnKey(y, m, Math.min(p.d, last));
+}
+function rnAddDays(k, n) {
+  var p = rnParts(k);
+  return p ? rnKey(p.y, p.m, p.d + n) : "";
+}
+function rnYearLessDay(k) {
+  var p = rnParts(k);
+  return p ? rnAddDays(rnKey(p.y + 1, p.m, p.d), -1) : "";
+}
+function rnDays(a, b) {
+  var x = rnParts(a), y = rnParts(b);
+  if (!x || !y) return null;
+  return Math.round((Date.UTC(y.y, y.m - 1, y.d) - Date.UTC(x.y, x.m - 1, x.d)) / 86400000);
+}
+function rnNextDue(item, done, was, given) {
+  if (!RENEWALS[item] || !rnParts(done)) return { next: "", how: "" };
+  if (rnParts(given)) {
+    return { next: given, how: item === "mot" ? "the date on the certificate" : "the date given" };
+  }
+  var prior = rnParts(was) ? was : "";
+  if (item === "service") return { next: rnAddMonths(done, 12), how: "twelve months from the day it was done" };
+  if (item === "mot") {
+    if (prior && done <= prior && done >= rnAddDays(rnAddMonths(prior, -1), 1)) {
+      return { next: rnAddMonths(prior, 12), how: "kept its date: tested within a month of running out" };
+    }
+    var next = rnYearLessDay(done);
+    if (!prior) return { next: next, how: "a year from the test, less a day" };
+    return { next: next, how: done > prior ? "a year from the test, less a day: tested after it ran out"
+                                           : "a year from the test, less a day: tested more than a month early" };
+  }
+  if (prior && done <= prior && done >= rnAddMonths(prior, -2)) {
+    return { next: rnAddMonths(prior, 12), how: "a year on from the old expiry" };
+  }
+  return { next: rnAddMonths(done, 12), how: !prior ? "twelve months from the renewal"
+                                          : done > prior ? "twelve months from the renewal: it had lapsed"
+                                          : "twelve months from the renewal: more than two months before the old one ran out" };
+}
+
+/* 17/06/2027 from 2027-06-17, as every tab and email writes a day. */
+function ukDay(key) {
+  var p = rnParts(key);
+  return p ? p2(p.d) + "/" + p2(p.m) + "/" + p.y : "";
+}
+
+/* A column number as its letters, for a formula: 1 A, 27 AA. */
+function a1Col(n) {
+  var s = "";
+  while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+
+/* Who made an edit on the sheet, when the sheet will say. It often will not
+   (a simple trigger on a personal account gets no address), and then it is
+   blank rather than a guess. */
+function editorOf(e) {
+  try { if (e && e.user && e.user.getEmail) { var m = String(e.user.getEmail() || ""); if (m) return m; } } catch (err) {}
+  try { return String(Session.getActiveUser().getEmail() || ""); } catch (err) { return ""; }
+}
+
+/* ---- the two tabs ------------------------------------------------------ */
+
+function ensureHistory(ss) {
+  var existing = ss.getSheetByName(HISTORY_SHEET);
+  var sh = sheet(ss, HISTORY_SHEET, HISTORY_HEADERS);
+  ensureCols(sh, HISTORY_HEADERS);
+  if (!existing) {
+    var hc = colsHard(sh, HISTORY_SHEET);
+    pretty("History formats", function () {
+      sh.getRange(2, hc.when, Math.max(1, sh.getMaxRows() - 1), 1).setNumberFormat("dd/mm/yyyy hh:mm");
+      sh.setColumnWidth(hc.when, 130);
+      sh.setColumnWidth(hc.what, 220);
+      sh.setColumnWidth(hc.why, 380);
+      sh.getRange(1, hc.when).setNote(
+        "Every change to a bus's due dates, a defect, the Vehicle Log and jobs to arrange,\n" +
+        "from the app or typed on the sheet. The script only ever adds rows here.\n" +
+        "Please do not edit or delete them: a change made here is itself written down.");
+    });
+    pretty("History protection", function () {
+      sh.protect().setDescription("History: only ever added to").setWarningOnly(true);
+    });
+  }
+  return sh;
+}
+
+function ensureVehicleLog(ss) {
+  var existing = ss.getSheetByName(VLOG_SHEET);
+  var sh = sheet(ss, VLOG_SHEET, VLOG_HEADERS);
+  ensureCols(sh, VLOG_HEADERS);
+  if (!existing) {
+    var vc = colsHard(sh, VLOG_SHEET);
+    var rows = Math.max(1, sh.getMaxRows() - 1);
+    pretty("Vehicle Log formats", function () {
+      sh.getRange(2, vc.recorded, rows, 1).setNumberFormat("dd/mm/yyyy hh:mm");
+      [vc.done, vc.bookedFor, vc.was, vc.next, vc.given].forEach(function (c) {
+        sh.getRange(2, c, rows, 1).setNumberFormat("dd/mm/yyyy");
+      });
+      sh.setColumnWidth(vc.how, 320);
+      sh.setColumnWidth(vc.notes, 320);
+      sh.getRange(1, vc.id).setNote(
+        "To add a row by hand: Registration, What (" + VLOG_WHAT.join(", ") + ") and Date done.\n" +
+        "Leave Log ID empty: the sheet fills it, works out Next due and updates the Buses tab.\n" +
+        "To correct a row, add a new one with the right values and put the wrong row's Log ID\n" +
+        "under Corrects. Never delete a row.");
+    });
+    pretty("Vehicle Log dropdown", function () {
+      sh.getRange(2, vc.what, rows, 1).setDataValidation(listRule(VLOG_WHAT));
+    });
+    /* A row some later row corrects is struck through, so the tab reads true
+       at a glance without anybody editing the row itself. */
+    pretty("Vehicle Log corrected rows", function () {
+      var id = a1Col(vc.id), cor = a1Col(vc.corrects);
+      var rule = SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied("=AND($" + id + "2<>\"\",COUNTIF($" + cor + ":$" + cor + ",$" + id + "2)>0)")
+        .setStrikethrough(true).setFontColor("#888888")
+        .setRanges([sh.getRange(2, 1, rows, sh.getMaxColumns())]).build();
+      var list = sh.getConditionalFormatRules();
+      list.push(rule);
+      sh.setConditionalFormatRules(list);
+    });
+  }
+  return sh;
+}
+
+/* ---- writing ------------------------------------------------------------ */
+
+/* Rows onto History. Each: { who, where, reg, what, from, to, why, ref, when }. */
+function historyAdd(ss, rows) {
+  if (!rows || !rows.length) return;
+  var sh = ensureHistory(ss);
+  var hc = colsHard(sh, HISTORY_SHEET);
+  var w = Math.max(sh.getLastColumn(), HISTORY_HEADERS.length);
+  var now = new Date();
+  var out = rows.map(function (h) {
+    var r = [];
+    for (var i = 0; i < w; i++) r.push("");
+    var put = function (c, v) { if (c) r[c - 1] = v; };
+    put(hc.when, h.when || now);
+    put(hc.who, safeText(h.who || ""));
+    put(hc.where, safeText(h.where || ""));
+    put(hc.reg, safeText(h.reg || ""));
+    put(hc.what, safeText(h.what || ""));
+    put(hc.from, safeText(h.from == null ? "" : String(h.from)));
+    put(hc.to, safeText(h.to == null ? "" : String(h.to)));
+    put(hc.why, safeText(h.why || ""));
+    put(hc.ref, safeText(h.ref || ""));
+    return r;
+  });
+  sh.getRange(sh.getLastRow() + 1, 1, out.length, w).setValues(out);
+}
+
+function vlogAppend(ss, e) {
+  var sh = ensureVehicleLog(ss);
+  var vc = colsHard(sh, VLOG_SHEET);
+  var w = Math.max(sh.getLastColumn(), VLOG_HEADERS.length);
+  var row = [];
+  for (var i = 0; i < w; i++) row.push("");
+  var put = function (c, v) { if (c) row[c - 1] = v; };
+  var day = function (k) { return rnParts(k) ? keyToDate(k) : ""; };
+  var num = function (v) { return (v === 0 || (v !== "" && v != null && isFinite(Number(v)))) ? Number(v) : ""; };
+  put(vc.recorded, e.recorded ? new Date(Number(e.recorded)) : new Date());
+  put(vc.id, safeText(e.id || ""));
+  put(vc.reg, safeText(e.reg || ""));
+  put(vc.what, safeText(e.what || ""));
+  put(vc.status, safeText(e.status || ""));
+  put(vc.done, day(e.done));
+  put(vc.bookedFor, day(e.bookedFor));
+  put(vc.was, day(e.was));
+  put(vc.early, num(e.early));
+  put(vc.next, day(e.next));
+  put(vc.how, safeText(e.how || ""));
+  put(vc.given, day(e.given));
+  put(vc.miles, num(e.miles));
+  put(vc.garage, safeText(e.garage || ""));
+  put(vc.cost, num(e.cost));
+  put(vc.defects, safeText((e.defectNames || []).join("; ")));
+  put(vc.notes, safeText(e.notes || ""));
+  put(vc.corrects, safeText(e.corrects || ""));
+  put(vc.by, safeText(e.by || ""));
+  put(vc.source, safeText(e.source || ""));
+  sh.getRange(sh.getLastRow() + 1, 1, 1, w).setValues([row]);
+}
+
+/* ---- reading ------------------------------------------------------------ */
+
+function vlogRows(ss) {
+  var sh = ss.getSheetByName(VLOG_SHEET);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var vc = colsSoft(sh, VLOG_SHEET);
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+  var out = [];
+  var str = function (r, c) { return String(at1(r, c) == null ? "" : at1(r, c)).trim(); };
+  var num = function (r, c) { var v = at1(r, c); return (v === "" || v == null || !isFinite(Number(v))) ? null : Number(v); };
+  vals.forEach(function (r, i) {
+    var id = str(r, vc.id), reg = str(r, vc.reg).toUpperCase();
+    if (!id && !reg) return;
+    var rec = at1(r, vc.recorded);
+    out.push({
+      row: i + 2, id: id, reg: reg, what: str(r, vc.what), status: str(r, vc.status),
+      done: anyToKey(at1(r, vc.done)), bookedFor: anyToKey(at1(r, vc.bookedFor)),
+      was: anyToKey(at1(r, vc.was)), early: num(r, vc.early), next: anyToKey(at1(r, vc.next)),
+      how: str(r, vc.how), given: anyToKey(at1(r, vc.given)), miles: num(r, vc.miles),
+      garage: str(r, vc.garage), cost: num(r, vc.cost), defects: str(r, vc.defects),
+      notes: str(r, vc.notes), corrects: str(r, vc.corrects), by: str(r, vc.by),
+      source: str(r, vc.source), recorded: isDateLike(rec) ? rec.getTime() : 0
+    });
+  });
+  return out;
+}
+
+/* The rows that stand: not corrected by a later one, and not a withdrawal. */
+function vlogStanding(rows) {
+  var gone = {};
+  rows.forEach(function (x) { if (x.corrects) gone[x.corrects] = true; });
+  return rows.filter(function (x) { return !(x.id && gone[x.id]) && x.status !== "Withdrawn"; });
+}
+
+/* A bus's current dates off the Buses tab, one entry per registration. A
+   cell holding something that is not a date reads "?" and what it holds, so
+   the difference between blank and unreadable is never lost. */
+function busDatesNow(ss) {
+  var out = {};
+  var sh = ss.getSheetByName(BUSES_SHEET);
+  if (!sh || sh.getLastRow() < 2) return out;
+  var bc = colsSoft(sh, BUSES_SHEET);
+  if (!bc.reg) return out;
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+  vals.forEach(function (r) {
+    var reg = String(at1(r, bc.reg) || "").trim().toUpperCase();
+    if (!reg) return;
+    var d = {};
+    RENEW_KEYS.forEach(function (k) {
+      if (!bc[k]) return;
+      var v = at1(r, bc[k]);
+      var key = isoDay(v);
+      var raw = String(v == null ? "" : v).trim();
+      d[k] = key || (raw ? "?" + raw.slice(0, 40) : "");
+    });
+    out[reg] = d;
+  });
+  return out;
+}
+
+/* ---- the Buses tab, changed with a record ------------------------------ */
+
+var BUS_SEEN = "busDatesSeen";
+function busSeenRead() {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty(BUS_SEEN) || "null"); }
+  catch (err) { return null; }
+}
+function busSeenWrite(v) {
+  try { PropertiesService.getScriptProperties().setProperty(BUS_SEEN, JSON.stringify(v || {})); } catch (err) {}
+}
+
+/* One due date on the Buses tab, set to key, with a History row saying what it
+   was. h: { who, where, why, ref }. Null when the bus or the column is not
+   there. What it writes is also what busDatesAudit expects to find, so the
+   same change is never written down twice. */
+function busDateWrite(ss, reg, item, key, h) {
+  var sh = ss.getSheetByName(BUSES_SHEET);
+  if (!sh || sh.getLastRow() < 2 || !RENEWALS[item] || !rnParts(key)) return null;
+  var bc = colsSoft(sh, BUSES_SHEET);
+  if (!bc.reg || !bc[item]) return null;
+  var want = String(reg || "").trim().toUpperCase();
+  var regs = sh.getRange(2, bc.reg, sh.getLastRow() - 1, 1).getValues();
+  var row = 0;
+  for (var i = 0; i < regs.length; i++) {
+    if (String(regs[i][0] || "").trim().toUpperCase() === want) { row = i + 2; break; }
+  }
+  if (!row) return null;
+  var cell = sh.getRange(row, bc[item]);
+  var had = cell.getValue();
+  var fromKey = isoDay(had);
+  var fromRaw = String(had == null ? "" : had).trim();
+  var seen = busSeenRead() || busDatesNow(ss);
+  if (fromKey !== key) {
+    cell.setValue(keyToDate(key));
+    try { cell.setNumberFormat("dd/mm/yyyy"); } catch (err) {}
+    historyAdd(ss, [{ who: h.who, where: h.where, reg: want, what: RENEWALS[item].column,
+                      from: fromKey ? ukDay(fromKey) : (fromRaw || "(blank)"), to: ukDay(key),
+                      why: h.why || "", ref: h.ref || "" }]);
+  }
+  seen[want] = seen[want] || {};
+  seen[want][item] = key;
+  busSeenWrite(seen);
+  try { memoDrop("buses"); } catch (err) {}
+  return { from: fromKey, to: key, same: fromKey === key };
+}
+
+/* Anything on the Buses tab's dates that is not what was last written down,
+   written down now. Called on an edit of the tab and on every five minute
+   sync, so a paste, a fill-down or another script is caught as well. The first
+   run only takes its bearings: there is nothing earlier to compare with. */
+function busDatesAudit(ss, where, who) {
+  var lock = null;
+  try { lock = LockService.getScriptLock(); if (!lock.tryLock(5000)) return 0; } catch (err) { lock = null; }
+  try {
+    var now = busDatesNow(ss);
+    var seen = busSeenRead();
+    if (!seen) { busSeenWrite(now); return 0; }
+    var rows = [];
+    var show = function (x) { return !x ? "(blank)" : x.charAt(0) === "?" ? x.slice(1) : ukDay(x); };
+    Object.keys(now).forEach(function (reg) {
+      var was = seen[reg];
+      if (!was) {
+        rows.push({ who: who, where: where, reg: reg, what: "Bus added to the Buses tab", from: "", to: reg, why: "" });
+        was = {};
+      }
+      RENEW_KEYS.forEach(function (k) {
+        var a = was[k] || "", b = now[reg][k] || "";
+        if (a === b) return;
+        rows.push({ who: who, where: where, reg: reg, what: RENEWALS[k].column, from: show(a), to: show(b),
+                    why: b.charAt(0) === "?" ? "The sheet cannot read this as a date. Type it like 17/06/2027."
+                                             : "Changed on the Buses tab, not through the app" });
+      });
+    });
+    Object.keys(seen).forEach(function (reg) {
+      if (!now[reg]) rows.push({ who: who, where: where, reg: reg, what: "Bus taken off the Buses tab",
+                                 from: reg, to: "", why: "Its Vehicle Log and History stay" });
+    });
+    if (rows.length) historyAdd(ss, rows);
+    busSeenWrite(now);
+    return rows.length;
+  } finally {
+    try { if (lock) lock.releaseLock(); } catch (err) {}
+  }
+}
+
+/* ---- starting the log --------------------------------------------------- */
+
+/* Once, on a sheet whose Vehicle Log is empty: one Estimated row for each date
+   on the Buses tab, worked back a year. The last service is taken to have been
+   done with the last MOT. Nothing on the Buses tab moves. Correct any of them
+   in the app once the real date is known. */
+function vlogSeed(ss) {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty("vlogSeeded")) return 0;
+  var sh = ss.getSheetByName(VLOG_SHEET);
+  if (sh && sh.getLastRow() >= 2) { props.setProperty("vlogSeeded", "1"); return 0; }
+  var n = 0;
+  readBusesFresh(ss).forEach(function (b) {
+    if (!b.active || !b.dates) return;
+    var d = b.dates;
+    var reg = String(b.reg || "").trim().toUpperCase();
+    var motTest = rnParts(d.mot) ? rnAddDays(rnAddMonths(d.mot, -12), 1) : "";
+    [["MOT", "mot"], ["Service", "service"], ["Insurance", "insurance"], ["Parking permit", "permit"]].forEach(function (p) {
+      var due = d[p[1]];
+      if (!rnParts(due)) return;
+      var done = p[1] === "mot" ? motTest : p[1] === "service" ? (motTest || rnAddMonths(due, -12)) : rnAddMonths(due, -12);
+      vlogAppend(ss, { id: "S-" + reg.replace(/\s+/g, "") + "-" + p[1], reg: reg, what: p[0], status: "Estimated",
+                       done: done, next: due,
+                       how: p[1] === "service" && motTest ? "estimated: taken as done with the last MOT; next due as on the Buses tab"
+                                                           : "estimated: a year back from the due date on the Buses tab",
+                       source: "Started from the Buses tab" });
+      n++;
+    });
+  });
+  if (n) historyAdd(ss, [{ who: "", where: "The sheet", reg: "", what: "Vehicle Log started",
+                           from: "", to: n + " estimated rows",
+                           why: "Worked back from each due date on the Buses tab and marked Estimated. Correct any you know in the app." }]);
+  props.setProperty("vlogSeeded", "1");
+  return n;
+}
+
+/* The tabs made, the log started and the Buses tab's dates taken as the
+   starting point. Once per sheet; cheap to ask after that. */
+function vlogBoot(ss) {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty("vlogReady") === SCRIPT_VERSION) return;
+  ensureHistory(ss);
+  ensureVehicleLog(ss);
+  var bs = ss.getSheetByName(BUSES_SHEET);
+  if (bs) pretty("Buses due dates", function () { busDateRules(bs); });
+  vlogSeed(ss);
+  busDatesAudit(ss, "On the Buses tab", "");
+  props.setProperty("vlogReady", SCRIPT_VERSION);
+}
+
+/* ---- from the coordinator's app ---------------------------------------- */
+
+function vlogSummary(x) {
+  var bits = [x.what + (x.status === "Booked" ? " booked for " + ukDay(x.bookedFor) : "")];
+  if (x.done) bits.push("done " + ukDay(x.done));
+  if (x.next) bits.push("next due " + ukDay(x.next));
+  if (x.garage) bits.push(x.garage);
+  return bits.join(", ");
+}
+
+/* The latest standing Done (or Estimated) row for one renewal on one bus. */
+function vlogLatest(rows, reg, item) {
+  var best = null;
+  vlogStanding(rows).forEach(function (x) {
+    if (x.reg !== reg || VLOG_ITEM[x.what] !== item || !x.done) return;
+    if (x.status !== "Done" && x.status !== "Estimated" && x.status !== "Correction") return;
+    if (!best || x.done > best.done || (x.done === best.done && x.recorded >= best.recorded)) best = x;
+  });
+  return best;
+}
+
+function coordVlog(ss, a, b, by) {
+  var reg = String(b.reg || "").trim().toUpperCase();
+  var onTab = readBusesFresh(ss).some(function (x) { return String(x.reg || "").trim().toUpperCase() === reg; });
+  if (!onTab) return { done: true, ok: false, push: true, result: "That bus is not on the Buses tab." };
+  var rows = vlogRows(ss);
+  if (b.logId && rows.some(function (x) { return x.id === b.logId; })) {
+    return { done: true, ok: true, push: true, result: "On the Vehicle Log tab." };
+  }
+  var where = "Coordinator's app";
+  vlogAppend(ss, { recorded: Number(a.made) || Date.now(), id: b.logId, reg: reg, what: b.what, status: b.status,
+                   done: b.done, bookedFor: b.bookedFor, was: b.was, early: b.early, next: b.next, how: b.how,
+                   given: b.given, miles: b.miles, garage: b.garage, cost: b.cost, defectNames: b.defectNames,
+                   notes: b.notes, by: by, source: where });
+  historyAdd(ss, [{ who: by, where: where, reg: reg, what: "Vehicle Log: " + b.what, from: "",
+                    to: vlogSummary(b), why: b.notes || "", ref: b.logId }]);
+  var item = VLOG_ITEM[b.what];
+  if (b.status === "Done" && item && rnParts(b.next)) {
+    busDateWrite(ss, reg, item, b.next, { who: by, where: where, ref: b.logId,
+      why: b.what + " done " + ukDay(b.done) + ": " + b.how });
+  }
+  (b.defects || []).forEach(function (key) {
+    defectSetStatus(ss, key, "Fixed", "Put right: " + b.what + ", " + ukDay(b.done) + " (" + b.logId + ")",
+                    by, where, a);
+  });
+  bumpRotaVersion();
+  return { done: true, ok: true, push: true, result: "On the Vehicle Log tab." };
+}
+
+/* A correction, or a withdrawal. The row it corrects stays where it is; a new
+   row carries the right values and names it under Corrects. Then the dates on
+   the Buses tab are put back to what the standing rows say. */
+function coordVfix(ss, a, b, by) {
+  var rows = vlogRows(ss);
+  if (b.logId && rows.some(function (x) { return x.id === b.logId; })) {
+    return { done: true, ok: true, push: true, result: "On the Vehicle Log tab." };
+  }
+  var orig = null;
+  rows.forEach(function (x) { if (x.id === b.corrects) orig = x; });
+  if (!orig) return { done: true, ok: false, push: true, result: "That entry is not on the Vehicle Log tab." };
+  if (rows.some(function (x) { return x.corrects === orig.id; })) {
+    return { done: true, ok: false, push: true, result: "That entry has already been corrected. Correct the correction instead." };
+  }
+  var where = "Coordinator's app";
+  var fixed = {
+    recorded: Number(a.made) || Date.now(), id: b.logId, reg: String(b.reg || orig.reg).trim().toUpperCase(),
+    what: b.withdraw ? orig.what : b.what, status: b.withdraw ? "Withdrawn" : "Correction",
+    done: b.withdraw ? "" : b.done, bookedFor: b.withdraw ? "" : b.bookedFor, was: b.withdraw ? "" : b.was,
+    early: b.withdraw ? "" : b.early, next: b.withdraw ? "" : b.next, how: b.withdraw ? "" : b.how,
+    given: b.withdraw ? "" : b.given, miles: b.withdraw ? "" : b.miles, garage: b.withdraw ? "" : b.garage,
+    cost: b.withdraw ? "" : b.cost, defectNames: [], notes: b.why || b.notes || "",
+    corrects: orig.id, by: by, source: where
+  };
+  vlogAppend(ss, fixed);
+  historyAdd(ss, [{ who: by, where: where, reg: orig.reg,
+                    what: b.withdraw ? "Vehicle Log entry withdrawn" : "Vehicle Log entry corrected",
+                    from: vlogSummary(orig), to: b.withdraw ? "(withdrawn)" : vlogSummary(fixed),
+                    why: b.why || "", ref: orig.id + " → " + b.logId }]);
+  /* The dates the standing rows now give. */
+  var after = vlogRows(ss);
+  var touched = {};
+  [[orig.reg, VLOG_ITEM[orig.what]], [fixed.reg, VLOG_ITEM[fixed.what]]].forEach(function (p) {
+    if (!p[1]) return;
+    var k = p[0] + "|" + p[1];
+    if (touched[k]) return;
+    touched[k] = true;
+    var latest = vlogLatest(after, p[0], p[1]);
+    var target = latest ? latest.next : (p[0] === orig.reg && VLOG_ITEM[orig.what] === p[1] ? orig.was : "");
+    if (rnParts(target)) {
+      busDateWrite(ss, p[0], p[1], target, { who: by, where: where, ref: b.logId,
+        why: b.withdraw ? "an entry was withdrawn: " + (b.why || "") : "an entry was corrected: " + (b.why || "") });
+    }
+  });
+  bumpRotaVersion();
+  return { done: true, ok: true, push: true, result: "On the Vehicle Log tab." };
+}
+
+/* A job from a walkaround, done. The walkaround row is not touched: the job
+   is marked on History, and the list of what is left is worked out from the
+   two (jobsOutstanding). */
+function coordJob(ss, a, b, by) {
+  historyAdd(ss, [{ who: by, where: "Coordinator's app", reg: String(b.reg || "").trim().toUpperCase(),
+                    what: "Job to arrange", from: String(b.job || ""), to: "Done",
+                    why: String(b.note || ""), ref: String(b.checkId || "") }]);
+  bumpRotaVersion();
+  return { done: true, ok: true, push: true, result: "On the History tab." };
+}
+
+/* ---- jobs to arrange ----------------------------------------------------
+   What the last walkaround on each bus asked for, less anything since marked
+   done. The last walkaround is the truth about the bus: one that ticked
+   Nothing needed leaves nothing, and one that asks again asks again. */
+function jobsOutstanding(ss) {
+  var out = {};
+  var ck = ss.getSheetByName(CHECKS_SHEET);
+  if (!ck || ck.getLastRow() < 2) return out;
+  var c = colsSoft(ck, CHECKS_SHEET);
+  if (!c.reg || !c.arrange) return out;
+  var n = Math.min(ck.getLastRow() - 1, 500);
+  var vals = ck.getRange(ck.getLastRow() - n + 1, 1, n, ck.getLastColumn()).getValues();
+  var latest = {};
+  vals.forEach(function (r) {
+    var reg = String(at1(r, c.reg) || "").trim().toUpperCase();
+    if (!reg) return;
+    var rec = at1(r, c.received);
+    var t = isDateLike(rec) ? rec.getTime() : 0;
+    if (latest[reg] && t < latest[reg].t) return;
+    latest[reg] = { t: t, checkId: String(at1(r, c.id) || "").trim(), date: anyToKey(at1(r, c.date)),
+                    driver: String(at1(r, c.driver) || "").trim(),
+                    jobs: String(at1(r, c.arrange) || "").split(",").map(function (j) { return j.trim(); })
+                            .filter(function (j) { return j; }) };
+  });
+  var done = {};
+  historyRead(ss, 3000).forEach(function (h) {
+    if (h.what === "Job to arrange" && h.to === "Done") done[h.reg + "|" + h.ref + "|" + h.from] = true;
+  });
+  Object.keys(latest).forEach(function (reg) {
+    var L = latest[reg];
+    var left = L.jobs.filter(function (j) { return !done[reg + "|" + L.checkId + "|" + j]; });
+    if (left.length) out[reg] = { checkId: L.checkId, date: L.date, driver: L.driver, jobs: left };
+  });
+  return out;
+}
+
+/* The last rows of History, oldest first, as objects. */
+function historyRead(ss, max) {
+  var sh = ss.getSheetByName(HISTORY_SHEET);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var hc = colsSoft(sh, HISTORY_SHEET);
+  var n = Math.min(sh.getLastRow() - 1, max || 3000);
+  var vals = sh.getRange(sh.getLastRow() - n + 1, 1, n, sh.getLastColumn()).getValues();
+  return vals.map(function (r) {
+    var w = at1(r, hc.when);
+    return { when: isDateLike(w) ? w.getTime() : 0, who: String(at1(r, hc.who) || ""),
+             where: String(at1(r, hc.where) || ""), reg: String(at1(r, hc.reg) || "").trim().toUpperCase(),
+             what: String(at1(r, hc.what) || ""), from: String(at1(r, hc.from) == null ? "" : at1(r, hc.from)),
+             to: String(at1(r, hc.to) == null ? "" : at1(r, hc.to)), why: String(at1(r, hc.why) || ""),
+             ref: String(at1(r, hc.ref) || "") };
+  });
+}
+
+/* What the coordinator's app shows about each bus: its log, newest first,
+   with the corrected rows marked, and the jobs still to arrange. */
+function vlogShelf(ss) {
+  var rows = vlogRows(ss);
+  var by = {};
+  var correctedBy = {};
+  rows.forEach(function (x) { if (x.corrects) correctedBy[x.corrects] = x.id; });
+  rows.forEach(function (x) {
+    if (!x.reg) return;
+    (by[x.reg] = by[x.reg] || []).push({
+      id: x.id, what: x.what, status: x.status, done: x.done, bookedFor: x.bookedFor, was: x.was,
+      early: x.early, next: x.next, how: x.how, given: x.given, miles: x.miles, garage: x.garage,
+      cost: x.cost, defects: x.defects, notes: x.notes, corrects: x.corrects, by: x.by,
+      source: x.source, recorded: x.recorded, correctedBy: correctedBy[x.id] || ""
+    });
+  });
+  Object.keys(by).forEach(function (reg) {
+    by[reg].sort(function (p, q) {
+      var a = p.done || p.bookedFor || "", b = q.done || q.bookedFor || "";
+      return a < b ? 1 : a > b ? -1 : (q.recorded - p.recorded);
+    });
+    by[reg] = by[reg].slice(0, 40);
+  });
+  return { log: by, jobs: jobsOutstanding(ss) };
+}
+
+/* ---- typed on the sheet -------------------------------------------------- */
+
+function onEditBuses(e, sh) {
+  busDatesAudit(sh.getParent ? sh.getParent() : SpreadsheetApp.getActiveSpreadsheet(), "On the Buses tab", editorOf(e));
+}
+
+/* A row typed on the Vehicle Log by hand is finished off as the app would
+   have written it. A row that already has a Log ID is a record: a change to
+   one of its cells is written on History with what it was. */
+function onEditVlog(e, sh) {
+  var ss = sh.getParent ? sh.getParent() : SpreadsheetApp.getActiveSpreadsheet();
+  var vc = colsSoft(sh, VLOG_SHEET);
+  if (!vc.reg || !vc.what || !vc.done || !vc.id) return;
+  var who = editorOf(e);
+  var top = Math.max(2, e.range.getRow());
+  var last = e.range.getRow() + e.range.getNumRows() - 1;
+  var single = e.range.getNumRows() === 1 && e.range.getNumColumns() === 1;
+  for (var row = top; row <= last; row++) {
+    var r = sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0];
+    var id = String(at1(r, vc.id) || "").trim();
+    if (id) {
+      if (single && e.oldValue !== undefined) {
+        var head = headerRow(sh)[e.range.getColumn() - 1] || "";
+        historyAdd(ss, [{ who: who, where: "On the Vehicle Log tab", reg: String(at1(r, vc.reg) || "").trim().toUpperCase(),
+                          what: "Vehicle Log row edited: " + head, from: e.oldValue, to: e.value == null ? "" : e.value,
+                          why: "Edited on the sheet. Rows are corrected with a new row, not edited.", ref: id }]);
+      }
+      continue;
+    }
+    var reg = String(at1(r, vc.reg) || "").trim().toUpperCase();
+    var what = String(at1(r, vc.what) || "").trim();
+    var done = anyToKey(at1(r, vc.done));
+    var booked = anyToKey(at1(r, vc.bookedFor));
+    if (!reg || !what || (!done && !booked)) continue;         /* still being typed */
+    var item = VLOG_ITEM[what];
+    var now = busDatesNow(ss)[reg] || {};
+    var was = item && now[item] && now[item].charAt(0) !== "?" ? now[item] : "";
+    var given = anyToKey(at1(r, vc.given));
+    var nd = item && done ? rnNextDue(item, done, was, given) : { next: "", how: "" };
+    var newId = "H-" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd-HHmmss") + "-" + row;
+    var status = String(at1(r, vc.status) || "").trim() || (done ? "Done" : "Booked");
+    var set = function (c, v) { if (c) sh.getRange(row, c).setValue(v); };
+    set(vc.id, newId);
+    set(vc.status, status);
+    if (!at1(r, vc.recorded)) set(vc.recorded, new Date());
+    if (was) set(vc.was, keyToDate(was));
+    if (was && done) set(vc.early, rnDays(was, done));
+    if (nd.next && !anyToKey(at1(r, vc.next))) set(vc.next, keyToDate(nd.next));
+    if (nd.how && !String(at1(r, vc.how) || "").trim()) set(vc.how, nd.how);
+    if (!String(at1(r, vc.by) || "").trim()) set(vc.by, who);
+    set(vc.source, "Typed on the sheet");
+    var next = anyToKey(sh.getRange(row, vc.next).getValue());
+    historyAdd(ss, [{ who: who, where: "On the Vehicle Log tab", reg: reg, what: "Vehicle Log: " + what, from: "",
+                      to: vlogSummary({ what: what, status: status, done: done, bookedFor: booked, next: next }),
+                      why: "Typed on the sheet", ref: newId }]);
+    if (status === "Done" && item && rnParts(next)) {
+      busDateWrite(ss, reg, item, next, { who: who, where: "On the Vehicle Log tab", ref: newId,
+        why: what + " done " + ukDay(done) + ": " + (nd.how || "the date typed") });
+    }
+    bumpRotaVersion();
+  }
+}
+
+/* History is only ever added to. An edit there is itself written down. */
+function onEditHistory(e, sh) {
+  if (!e || !e.range || e.range.getRow() < 2) return;
+  var ss = sh.getParent ? sh.getParent() : SpreadsheetApp.getActiveSpreadsheet();
+  var single = e.range.getNumRows() === 1 && e.range.getNumColumns() === 1;
+  historyAdd(ss, [{ who: editorOf(e), where: "On the History tab", reg: "",
+                    what: "History edited by hand, row " + e.range.getRow(),
+                    from: single && e.oldValue !== undefined ? e.oldValue : "(several cells)",
+                    to: single ? (e.value == null ? "" : e.value) : "",
+                    why: "History is only ever added to" }]);
 }
 
 function busSeats(ss, reg) {
@@ -2575,6 +3310,9 @@ function pushToWorker() {
   var coordShelf = null;
   try {
     coordShelf = { readAt: readAt, requests: coordRequestsList(ss), defects: coordDefectsList(ss) };
+    /* From v1.91.0: each bus's Vehicle Log and the jobs still to arrange.
+       Guarded on its own, so a log that will not read costs only itself. */
+    try { coordShelf.vehicles = vlogShelf(ss); } catch (err) {}
   } catch (err) { coordShelf = null; }
 
   var out = workerCall("sync", {
@@ -2952,6 +3690,16 @@ function coordDefectsList(ss) {
   var dc = colsSoft(sh, DEFECTS_SHEET);
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
   var out = [];
+  /* Each defect's trail off History, from v1.91.0: every status it has been
+     given, by whom and when, oldest first. */
+  var trails = {};
+  try {
+    historyRead(ss, 3000).forEach(function (h) {
+      if (!h.ref || h.what.indexOf("Defect") !== 0) return;
+      (trails[h.ref] = trails[h.ref] || []).push({ when: h.when, who: h.who, where: h.where,
+                                                   from: h.from, to: h.to, why: h.why, what: h.what });
+    });
+  } catch (err) { trails = {}; }
   vals.forEach(function (r) {
     var status = String(at1(r, dc.status) || "").trim() || "Open";
     if (status === "Fixed" || status === "Not a defect") return;
@@ -2970,7 +3718,8 @@ function coordDefectsList(ss) {
       status: status,
       action: String(at1(r, dc.action) || ""),
       kind: String(at1(r, dc.kind) || "").trim() === "Advisory" ? "Advisory" : "Defect",
-      received: isDateLike(rec) ? rec.getTime() : 0
+      received: isDateLike(rec) ? rec.getTime() : 0,
+      trail: (trails[defectKey(r, dc)] || []).slice(-8)
     });
   });
   return out;
@@ -2994,6 +3743,9 @@ function applyCoordAction(ss, a, ctx) {
   if (kind === "rota") return coordRota(ss, a, b, by);
   if (kind === "decide") return coordDecide(ss, a, b, by, ctx || {});
   if (kind === "defect") return coordDefect(ss, a, b, by);
+  if (kind === "vlog") return coordVlog(ss, a, b, by);
+  if (kind === "vfix") return coordVfix(ss, a, b, by);
+  if (kind === "job") return coordJob(ss, a, b, by);
   if (kind === "booking") {
     return coordOnTab(ss, BOOKINGS_SHEET, b.bookingId, a, ctx || {},
                       "On the Bus Bookings tab.", "That booking is not on the Bus Bookings tab.");
@@ -3094,38 +3846,51 @@ function coordDecide(ss, a, b, by, ctx) {
 }
 
 function coordDefect(ss, a, b, by) {
+  var r = defectSetStatus(ss, String(b.key || ""), String(b.status || "Open"), String(b.action || "").trim(),
+                          by, "Coordinator's app", a);
+  return { done: true, ok: r.ok, push: true, result: r.result };
+}
+
+/* One defect's status, set, with what was done added to Action taken and a
+   History row saying what it was and what it became. The coordinator's app
+   comes here, and so does a repair on the Vehicle Log that put it right. */
+function defectSetStatus(ss, key, status, action, by, where, a) {
   var sh = ss.getSheetByName(DEFECTS_SHEET);
-  if (!sh || sh.getLastRow() < 2) return { done: true, ok: false, push: true, result: "That defect is not on the Defects tab." };
+  if (!sh || sh.getLastRow() < 2) return { ok: false, result: "That defect is not on the Defects tab." };
   var dc = colsSoft(sh, DEFECTS_SHEET);
-  if (!dc.status) return { done: true, ok: false, push: true, result: "The Defects tab has no Status column." };
+  if (!dc.status) return { ok: false, result: "The Defects tab has no Status column." };
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
   var row = 0;
   for (var i = vals.length - 1; i >= 0; i--) {
-    if (defectKey(vals[i], dc) === String(b.key || "")) { row = i + 2; break; }
+    if (defectKey(vals[i], dc) === String(key || "")) { row = i + 2; break; }
   }
-  if (!row) return { done: true, ok: false, push: true, result: "That defect is not on the Defects tab any more." };
+  if (!row) return { ok: false, result: "That defect is not on the Defects tab any more." };
+  var r = vals[row - 2];
   var cell = sh.getRange(row, dc.status);
   var was = String(cell.getValue() || "").trim();
   var closedAlready = was === "Fixed" || was === "Not a defect";
-  var closing = b.status === "Fixed" || b.status === "Not a defect";
-  if (closedAlready && closing) return { done: true, ok: true, push: true, result: "Already closed on the sheet." };
-  var action = String(b.action || "").trim();
+  var closing = status === "Fixed" || status === "Not a defect";
+  if (closedAlready && closing) return { ok: true, result: "Already closed on the sheet." };
   if (action && dc.action) {
     var ac = sh.getRange(row, dc.action);
     var had = String(ac.getValue() || "").trim();
     var lines = had.split("\n").map(function (x) { return x.trim(); });
     if (lines.indexOf(action) === -1) ac.setValue(safeText(had ? had + "\n" + action : action));
   }
-  cell.setValue(String(b.status || "Open"));
+  cell.setValue(String(status || "Open"));
   try {
-    cell.setNote("Set to " + b.status + " in the coordinator's app by " + by + " on " +
-      Utilities.formatDate(new Date(Number(a.made) || Date.now()), Session.getScriptTimeZone(),
+    cell.setNote("Set to " + status + " in the coordinator's app by " + by + " on " +
+      Utilities.formatDate(new Date(Number(a && a.made) || Date.now()), Session.getScriptTimeZone(),
                            "yyyy-MM-dd HH:mm") + ".");
   } catch (err) {}
-  /* Closed on, filled or cleared, exactly as for a person choosing it. */
-  onEditDefects({ range: cell }, sh);
+  historyAdd(ss, [{ who: by, where: where, reg: String(at1(r, dc.reg) || "").trim().toUpperCase(),
+                    what: "Defect: " + String(at1(r, dc.item) || "").trim(), from: was || "Open", to: status,
+                    why: action || "", ref: String(key || "") }]);
+  /* Closed on, filled or cleared, exactly as for a person choosing it, and
+     written on History by that same path. */
+  onEditDefects({ range: cell, fromScript: true, by: by, where: where }, sh);
   bumpRotaVersion();
-  return { done: true, ok: true, push: true, result: "On the Defects tab." };
+  return { ok: true, result: "On the Defects tab." };
 }
 
 /* A booking or a run time: the live server's own row, which the drain has
@@ -3732,6 +4497,13 @@ function liveSync() {
        is retried without anybody having to edit something. */
     if (now !== was || age > 3600000) pushToWorker();
   } catch (err) {}
+  /* The Vehicle Log and History, once; then any change to the Buses tab's
+     dates that did not come through the app or an edit, written down. */
+  try {
+    var vss = SpreadsheetApp.getActiveSpreadsheet();
+    vlogBoot(vss);
+    busDatesAudit(vss, "On the Buses tab", "");
+  } catch (err) {}
   var back = null;
   try { back = drainNow(); } catch (err) {}
   /* An Outcome edit the live server did not answer when it was made. */
@@ -3965,6 +4737,9 @@ function installLiveSync() {
 
 function liveSendNow() {
   var ui = SpreadsheetApp.getUi();
+  /* From v1.91.0 the Vehicle Log and History are made here if they are not
+     yet, so the first push after the upgrade carries the log started. */
+  try { vlogBoot(SpreadsheetApp.getActiveSpreadsheet()); } catch (err) {}
   var out = pushToWorker();
   if (!out || out.ok !== true) {
     ui.alert("Could not reach the live server",
@@ -5220,6 +5995,7 @@ function setUpEverything() {
     ensureRequestColumns(ss.getSheetByName(REQUESTS_SHEET));
   });
   pretty("Rota",        function () { ensureRota(ss); });
+  pretty("Vehicle Log and History", function () { vlogBoot(ss); });
   /* The columns a walkaround writes, added now rather than by the first check
      after a deploy, so a coordinator opening the tab straight after Set up
      sees Authorised by and Kind where they will be. Only if the tab exists:
@@ -10641,7 +11417,9 @@ function healthReport() {
    [STOPS_SHEET,    STOPS_HEADERS],
    [BOOKINGS_SHEET, BOOKINGS_HEADERS],
    [TRIP_SHEET,     TRIP_HEADERS],
-   [BUSES_SHEET,    BUSES_HEADERS]].forEach(function (pair) {
+   [BUSES_SHEET,    BUSES_HEADERS],
+   [VLOG_SHEET,     VLOG_HEADERS],
+   [HISTORY_SHEET,  HISTORY_HEADERS]].forEach(function (pair) {
     if (!pair[1]) return;                         /* no list to check against */
     var sh = ss.getSheetByName(pair[0]);
     if (!sh) { headerTrouble.push(pair[0] + " tab is missing"); return; }
@@ -11109,6 +11887,9 @@ function onEdit(e) {
     if (name === ROTA_SHEET)     return onEditRota(e, sh);
     if (name === REQUESTS_SHEET) return onEditRequests(e, sh);
     if (name === BOOKINGS_SHEET) return onEditBookings(e, sh);
+    if (name === BUSES_SHEET)    return onEditBuses(e, sh);
+    if (name === VLOG_SHEET)     return onEditVlog(e, sh);
+    if (name === HISTORY_SHEET)  return onEditHistory(e, sh);
   } catch (err) {
     // Never let a trigger error block someone editing the sheet.
   }
@@ -11327,6 +12108,27 @@ function onEditDefects(e, sh) {
 
   var dc = colsSoft(sh, DEFECTS_SHEET);
   if (!dc.status || !dc.closed) return;
+  var hss = sh.getParent ? sh.getParent() : SpreadsheetApp.getActiveSpreadsheet();
+  var hWho = e.fromScript ? (e.by || "") : editorOf(e);
+  var hWhere = e.fromScript ? (e.where || "") : "On the Defects tab";
+  var hRow = function (row) { return sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0]; };
+  /* A person's own edit to Status or Action taken, with what it was. The app
+     and a repair write their own History row before they get here. */
+  if (!e.fromScript) {
+    var single = numRows === 1 && numCols === 1;
+    var watched = [[dc.status, "Status"], [dc.action, "Action taken"]];
+    for (var er = firstRow; er <= Math.min(lastRow, firstRow + 49); er++) {
+      var rr = hRow(er);
+      watched.forEach(function (w) {
+        if (!w[0] || topCol > w[0] || lastCol < w[0]) return;
+        historyAdd(hss, [{ who: hWho, where: hWhere, reg: String(at1(rr, dc.reg) || "").trim().toUpperCase(),
+                           what: "Defect: " + String(at1(rr, dc.item) || "").trim() + " \u2014 " + w[1],
+                           from: single && e.oldValue !== undefined ? e.oldValue : "(several cells)",
+                           to: String(at1(rr, w[0]) == null ? "" : at1(rr, w[0])),
+                           why: "Edited on the Defects tab", ref: defectKey(rr, dc) }]);
+      });
+    }
+  }
   var touchesStatus = topCol <= dc.status && lastCol >= dc.status;
   var touchesClosed = topCol <= dc.closed && lastCol >= dc.closed;
   if (!touchesStatus && !touchesClosed) return;
@@ -11342,6 +12144,13 @@ function onEditDefects(e, sh) {
       if (isClosed && !closedCell.getValue()) {
         closedCell.setValue(new Date());
       } else if (!isClosed && closedCell.getValue()) {
+        /* Reopened. The date it was closed goes onto History before the cell
+           is cleared, so the first closure is never lost. */
+        var rc = hRow(row);
+        historyAdd(hss, [{ who: hWho, where: hWhere, reg: String(at1(rc, dc.reg) || "").trim().toUpperCase(),
+                           what: "Defect reopened: " + String(at1(rc, dc.item) || "").trim(),
+                           from: "Closed on " + ukDay(anyToKey(closedCell.getValue())), to: status,
+                           why: "Closed on cleared", ref: defectKey(rc, dc) }]);
         closedCell.clearContent();
       }
       changed = true;
@@ -12073,6 +12882,17 @@ FIELDS[REQUESTS_SHEET] = {
   status: "Status", decidedOn: "Decided on",
   replacement: "Replacement assigned",
   theirSunday: "Their Sunday", bothAgreed: "Both agreed"
+};
+FIELDS[VLOG_SHEET] = {
+  recorded: "Recorded", id: "Log ID", reg: "Registration", what: "What", status: "Status",
+  done: "Date done", bookedFor: "Booked for", was: "Was due", early: "Days early (-) or late (+)",
+  next: "Next due", how: "How the next date was worked out", given: "Certificate or policy date",
+  miles: "Mileage", garage: "Garage", cost: "Cost (\u00A3)", defects: "Defects put right",
+  notes: "Notes", corrects: "Corrects", by: "Recorded by", source: "Source"
+};
+FIELDS[HISTORY_SHEET] = {
+  when: "When", who: "Who", where: "Where", reg: "Registration", what: "What changed",
+  from: "From", to: "To", why: "Why", ref: "Ref"
 };
 FIELDS[DEFECTS_SHEET] = {
   received: "Received", id: "Check ID", date: "Date", reg: "Registration",

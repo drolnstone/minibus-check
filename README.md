@@ -1028,12 +1028,14 @@ everything working?** names the side that is missing it.
 |---|---|
 | `Rota` | who drives, which route, which bus, per Sunday. **Status** is also where a route is marked not running |
 | `Drivers` | the register — name, role, route, order, active, **PIN**, **Phone**. The row with Role **Coordinator** is who every page tells people to ring, on its Phone |
-| `Buses` | registration, seats, active, and from v1.87.0 **MOT due**, **Service due**, **Insurance due**, **Permit due** and **Route in odd months**. The dates are what the driver app warns about (30 days ahead, red once passed; blank is not tracked) and the only place they are kept: a renewal is a cell, not a code change. **Route in odd months** is North or South, the route that bus takes in January, March and so on; even months swap. A Sunday's Rota row naming a bus still wins for that Sunday. Without exactly one active North and one active South, the pairing written in the code is used rather than a guess. The columns were filled once, the first *Set up / refresh rota* after v1.87.0, and never again |
+| `Buses` | registration, seats, active, and from v1.87.0 **MOT due**, **Service due**, **Insurance due**, **Permit due** and **Route in odd months**. The dates are what the driver app warns about (30 days ahead, red once passed; blank is not tracked) and the only place they are kept: a renewal is a cell, not a code change. **Route in odd months** is North or South, the route that bus takes in January, March and so on; even months swap. A Sunday's Rota row naming a bus still wins for that Sunday. Without exactly one active North and one active South, the pairing written in the code is used rather than a guess. The columns were filled once, the first *Set up / refresh rota* after v1.87.0, and never again. From v1.91.0 the four date columns take a date and nothing else, and every change to one, from the app or typed here, is written on History with what it was |
 | `Bus Stops` | route, stop, time, postcode, and from v1.71.0 **Lat** and **Lng** — the kerb itself, used for the driver's map link and for working out what passing a stop saves. *Set up / refresh rota* fills any blank one it recognises from `STOP_PINS` in `Code.gs` and never overwrites one you have typed. A stop it does not recognise stays blank, which everything downstream already handles |
 | `Checks` | every safety check. **Outcome** is a dropdown, and picking **Authorised to run** on today's row lets a stopped bus out |
 | `Defects` | one row per defect and one per advisory, told apart by **Kind**, so they can be chased |
 | `Bus Bookings` | passenger bookings |
 | `Trip Events` | every stop tap. **Ended by** is filled on the end row only, and differs from **Driver** when a coordinator closed somebody else's run |
+| `Vehicle Log` | from v1.91.0, one row for every MOT, service, insurance or permit renewal, repair, tyres or other job, and every one booked ahead: the day it was done, the date it had been due and how early or late that was, the next due date and how it was worked out, and whatever else was known (mileage, garage, cost, the defects it put right). Rows are never edited or removed: a mistake is put right with a new row naming the old one under **Corrects**, and the old one is struck through. A row typed here with a Registration, What and Date done is completed as the app would have: Log ID, next due date, the Buses tab. See *The vehicle log* |
+| `History` | from v1.91.0, one row for every change to a bus's due dates, a defect's status or what was done about it, the Vehicle Log and jobs to arrange: when, who, where, what it was, what it became, and why. Only ever added to; an edit here is itself written down |
 | `Rota Requests` | swaps and cover asked for by drivers. **Status** is what approving means; a decision made from an email link or in the coordinator's app writes that same cell and leaves a note saying who decided it, where and when |
 
 The Worker's own database holds the same stops, rota, buses and drivers (a
@@ -1115,7 +1117,8 @@ Each change is made under the coordinator's PIN:
 | Rota | who drives or covers each route; which bus runs which route (choosing the other route's bus swaps the two); both routes running, North off, South off or all off; a note on the Sunday |
 | Rota requests | the pending ones, approved with a cover chosen from the drivers free that morning, or turned down |
 | Bookings | this Sunday's and next Sunday's, stop by stop, with the numbers to ring. A booking cancelled for somebody who rings; seats booked for somebody without a smartphone |
-| Defects | the open ones, with their status changed, and closed only with what was done |
+| Defects | the open ones, with their status changed, and closed only with what was done. From v1.89.0 each has *What has happened to it*: every status it has been given, by whom, where and when, a reopening included |
+| Buses | from v1.89.0, each bus's MOT, service, insurance and permit dates with how far off they are, its log, and the jobs its last walkaround asked for. **Record something** for an MOT, service, renewal, repair, tyres or other job done or booked ahead; **Correct** or withdraw an entry; **Done** on a job. See *The vehicle log* |
 | Run record | the last five Sundays. A wrong stop time put right, or a stop nobody tapped given its time; both are marked Corrected |
 | Have a look | the bus link for this Sunday; bookings this Sunday; are we over on seats; is everything working; is the live server working; who has alerts on; who is tapping; who is carrying the load; which bus is on which route; send duty reminders now |
 | What I have done | every change, and whether the sheet has it |
@@ -1166,6 +1169,58 @@ forgets it after `coordApp.idleMinutes` untouched. Keying it again goes back
 to the same screen.
 
 The page has no service worker, so it never shows a screen from a cache.
+
+### The vehicle log
+
+From v1.89.0 (pages), w2.29.0 (live server) and v1.91.0 (sheet). Until then
+the Buses tab held one date per renewal and a new one was typed over the old:
+when an MOT had actually been done, what it had been due, and anything about
+the service before it were lost. Now a new date never removes the old one.
+
+**Record something**, on a bus's screen, needs only what it was. The day it
+was done is today unless changed, and everything else (the date on the
+certificate or policy, mileage, garage, cost, notes, the open defects it put
+right) can be left empty. **Booked ahead** puts a garage booking on the log and
+moves no date; **Done** on it later records it. The next due date shows before
+Save, and the live server works it out again and keeps its own answer:
+
+| Renewal | Next due |
+|---|---|
+| Service | twelve months from the day it was done. Due 30 September, done 14 October: next due 14 October next year |
+| MOT | tested within a month (less a day) before it ran out: it keeps its date, a year on. Earlier than that, or after it ran out: a year from the test, less a day, which is the date the certificate carries |
+| Insurance, parking permit | renewed in the two months up to its expiry: the anniversary, a year on. After it lapsed, or earlier than that (a new policy): twelve months from the renewal |
+
+A date typed from the certificate or the policy always wins. Each entry says
+how its date was worked out, and how many days early or late it was done. A
+service done on the same visit as the MOT can be lined up with it (record the
+MOT first); the offer is made only when the MOT is six to thirteen months off.
+
+**The new date is on every phone at once**, the driver app's warnings
+included, as any other change from the app is (see *How a change travels*).
+The sheet writes the row on the Vehicle Log, moves the date on the Buses tab
+and writes on History what it was. A defect ticked as put right is closed with
+the entry named under Action taken.
+
+**Correct** an entry to change its day, the certificate date, mileage, garage
+or cost: the next due date is worked out again from the date the bus had
+before the entry. **Withdraw** one that should never have been recorded, and
+the bus goes back to that date. Either way the entry stays on the log, struck
+through, beside the one that corrects it.
+
+**Jobs to arrange** are what the last walkaround on each bus asked for, less
+any marked **Done** here. A later walkaround's list replaces an earlier one's.
+
+**Where the log starts.** The first sync after v1.91.0 adds one row for each
+date already on the Buses tab, marked **Estimated**: a year back from the due
+date, with the last service taken as done with the last MOT. Nothing on the
+Buses tab moves. Correct any whose real date you know; it only affects the
+log.
+
+**A date typed on the Buses tab** is written on History too, with who typed it
+where the sheet will say, both as it is typed and at the five minute sync (so a
+paste or a fill-down is caught). Text that is not a date is refused as it is
+typed, and one already there is written down as unreadable rather than taken
+as blank.
 
 ### The reports
 
