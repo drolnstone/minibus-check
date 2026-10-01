@@ -8,8 +8,10 @@ tyres or other job goes on a Vehicle Log of its own, recorded from a new Buses
 screen in the coordinator's app or typed on the sheet. The next due date is
 worked out by the agreed rules and shown on every phone at once. Every change
 to a bus's dates or a defect's status is written on a History tab, with who,
-when and what it was before. And the driver app's top bar says what app it
-is until a bus is chosen, instead of VEHICLE CHECK over an empty plate.
+when and what it was before. And the three apps now follow one pattern: each
+opens on the church's logo, and once signed in the bar names the app over
+who is using it. The driver app is called Driver on the phone, and a bus
+tapped shows at once that it is the one chosen.
 
 
 YOU ARE ON              GOING TO
@@ -25,11 +27,19 @@ analysis/DEPLOY-v1.88.0-w2.29.0.txt.
 BEFORE YOU START
 ----------------
 
-Tell the drivers, in a line: the bar at the top of the driver app now says
-DOMINION TRANSPORT, with their name once they have signed in. The number
-plate and the three lights come up once they choose a bus, as before. It
-warns from the same dates on the Buses tab, which now move when a renewal is
-recorded.
+Tell the drivers, in a few words:
+  - the app is called Driver now. A phone that already has it on its home
+    screen keeps the old name, Dominion Transport, under the icon until it
+    is removed and added again; it works the same either way;
+  - the first screen opens on the church's logo, and once signed in the bar
+    at the top says DRIVER over their name;
+  - when they tap a bus it turns blue with a tick, and the other one fades.
+It warns from the same dates on the Buses tab, which now move when a renewal
+is recorded.
+
+The emails' sender name stays as it is in Script Properties (SENDER_NAME,
+Dominion Assembly Transport): that is the name of the service, and the
+driver's "nothing outstanding" notification now uses it too.
 
 Tell the coordinators, the Minister in Charge and the Assistant Coordinator:
 the coordinator's app has a Buses screen. An MOT, a service or a renewal is
@@ -86,6 +96,12 @@ F. When a real MOT, service or renewal is next done, record it there. Its
    row appears on the Vehicle Log within a minute, the Buses tab's date
    moves, and History says what it was.
 
+G. The driver app opens on the church's logo with no dark bar. Sign in: the
+   bar says DRIVER over your name. Vehicle check, tap a bus: it turns blue
+   with a tick and the other fades, and the bar shows its plate. The
+   coordinator's app opens on the same logo, with COORDINATOR above "Who is
+   it?", and the bar says COORDINATOR over your name once you are in.
+
 
 WHAT CHANGED
 ------------
@@ -135,16 +151,30 @@ WHAT CHANGED
    listed To do. (Code.gs vehicleHealth; worker.js alertRoll's busDates and
    vlogHeld, dates and counts only.)
 
-7. THE DRIVER APP'S TOP BAR. Before a bus is chosen it said VEHICLE CHECK,
-   CHOOSE YOUR NAME TO BEGIN over the way into the whole app, with "Fleet" in
-   an empty number plate that read as a button that did not work and three
-   unlit lights that read as a page still loading. Now, until a bus is
-   chosen, it names the app (DOMINION TRANSPORT, as the home screen icon
-   does) or the screen (DRIVING ROTA, STOPS AND BOOKINGS), over the church
-   before anybody signs in and the driver's name after, as the coordinator's
-   app does. The plate and the lights come with the bus, and the title beside
-   the plate says VEHICLE CHECK instead of the registration a second time.
-   (index.html paintDash; browser check T19; sabotages S25, S25b.)
+7. ONE PATTERN FOR THE THREE APPS. The service is Dominion Assembly
+   Transport (the emails, and the logo block: RCCG Dominion Assembly,
+   Liverpool · Transport). Each app has a short name under its icon: Sunday
+   Bus, Driver (was Dominion Transport, which a phone cuts short), and
+   Coordinator. Each opens on the logo: the passenger page as before, the
+   driver app's first screen without the dark bar it had, and the
+   coordinator's sign-in with the logo and COORDINATOR above "Who is it?".
+   Signed in, both staff apps' bar names the app over who is signed in
+   (DRIVER / BRO X, COORDINATOR / BRO Y) or the screen over who. The driver
+   app's bar becomes the check's once a bus is chosen: the plate, VEHICLE
+   CHECK over the bus (not the registration a second time) and the three
+   lights. Before, its first screen carried VEHICLE CHECK, CHOOSE YOUR NAME
+   TO BEGIN with "Fleet" in an empty plate and three unlit lights. The home
+   screen says "Nobody signed in" when nobody is, and otherwise leaves the
+   name to the bar. (index.html paintDash, paintLinks; coord/index.html
+   route; manifest.webmanifest; browser checks T19 and C33; sabotages S25,
+   S25b, S25c and S27.)
+
+8. THE BUS TAPPED, AT A GLANCE. On "Which one today?" a tapped bus turned
+   a near-black border into another near-black border and its white into a
+   barely different white. It now fills with the blue the app uses for
+   "yours", is ringed and ticked, and the other buses fade back; a second
+   tap on the other moves all of it. (index.html renderVehicles; browser
+   check T20; sabotages S26 and S26b.)
 
    (tests/suites/36-vehicle-log.mjs, 39 checks; browser checks C29 to C32;
    sabotages S20 to S24.)

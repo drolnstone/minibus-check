@@ -112,6 +112,18 @@ input,textarea,select{font:inherit;color:inherit}
 /* ---- the page ---- */
 .wrap{max-width:640px;margin:0 auto;
   padding:16px calc(14px + var(--safe-r)) calc(48px + var(--safe-b)) calc(14px + var(--safe-l))}
+/* THE SIGN-IN OPENS ON THE LOGO, from v1.89.0, as the passenger page and the
+   driver app's first screen do, with no bar over it. Signed in, the bar
+   returns: the app's name or the screen's, over who is signed in. Without the
+   bar the page keeps clear of the status bar itself. */
+.bar.is-away{display:none}
+body.bar-away .wrap{padding-top:calc(16px + var(--safe-t))}
+.brand{display:flex;align-items:center;gap:12px;margin:0 0 16px}
+.brand img{width:52px;height:52px;flex:none}
+.brand-txt b{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;
+  line-height:1.1;letter-spacing:.02em;color:var(--ink)}
+.brand-txt span{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:500;font-size:13px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:2px}
 .screen{display:none}
 .screen.is-on{display:block;animation:fade .2s ease}
 @keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
@@ -506,6 +518,14 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 <main class="wrap">
 
   <section class="screen" id="s-sign">
+    <div class="brand">
+      <img src="../logo.png" alt="">
+      <span class="brand-txt">
+        <b>RCCG Dominion Assembly</b>
+        <span>Liverpool · Transport</span>
+      </span>
+    </div>
+    <p class="eyebrow">Coordinator</p>
     <h1>Who is it?</h1>
     <div class="card">
       <div class="idrow">
@@ -939,6 +959,8 @@ function route(){
   Array.prototype.forEach.call(document.querySelectorAll(".screen"), function(s){
     s.classList.toggle("is-on", s.id === "s-" + name);
   });
+  document.querySelector(".bar").classList.toggle("is-away", name === "sign");
+  document.body.classList.toggle("bar-away", name === "sign");
   $("barTitle").textContent = TITLES[name];
   $("barSub").textContent = (name === "sign" || !who) ? "RCCG Dominion Assembly Liverpool" : who;
   $("barBack").hidden = (name === "home" || name === "sign");

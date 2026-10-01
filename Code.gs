@@ -285,7 +285,7 @@ var COORDINATOR_EMAIL = (function () {
 
 /* WHO THE EMAILS SAY THEY ARE FROM. From v1.86.0.
 
-   Set SENDER_NAME in Script Properties, for example  Dominion Transport ,
+   Set SENDER_NAME in Script Properties, for example  Dominion Assembly Transport ,
    and every email this sheet sends shows that as the sender rather than the
    name on the Google account. The ADDRESS is still the account the script
    runs as: Apps Script cannot send as somebody else. For a church address as

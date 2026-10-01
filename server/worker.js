@@ -5421,7 +5421,7 @@ async function pushWhat(env, endpoint) {
        nobody's driver today is told nothing, which is what the sweep would
        have told him. */
     if (!todays.mine) {
-      return { ok: true, tag: "end", url: "./", title: "Dominion Transport",
+      return { ok: true, tag: "end", url: "./", title: "Dominion Assembly Transport",
                body: "Nothing outstanding." };
     }
 
@@ -5541,7 +5541,7 @@ async function pushWhat(env, endpoint) {
                        "after vehicle check." };
       }
 
-      return { ok: true, tag: "end", url: "./", title: "Dominion Transport", body: "Nothing outstanding." };
+      return { ok: true, tag: "end", url: "./", title: "Dominion Assembly Transport", body: "Nothing outstanding." };
     }
 
     if (t && t.started && !t.ended) {
@@ -5556,7 +5556,7 @@ async function pushWhat(env, endpoint) {
                title: "Your run is running", body: "Nothing outstanding." };
     }
 
-    return { ok: true, tag: "end", url: "./", title: "Dominion Transport", body: "Nothing outstanding." };
+    return { ok: true, tag: "end", url: "./", title: "Dominion Assembly Transport", body: "Nothing outstanding." };
   }
 
   /* NEVER THE TEST RUN. While a rehearsal is on, tripPayload describes it:

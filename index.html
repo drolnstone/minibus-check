@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#1B222C">
 <!-- The name under the Home Screen tile on an iPhone. Without it Safari
      takes the title below and cuts it off. -->
-<meta name="apple-mobile-web-app-title" content="Dominion Transport">
-<title>Dominion Transport · RCCG Dominion Assembly Liverpool</title>
+<meta name="apple-mobile-web-app-title" content="Driver">
+<title>Driver · RCCG Dominion Assembly Liverpool</title>
 <link rel="manifest" href="manifest.webmanifest">
 <!-- The home screen tile, and — because the two tags below declare this page
      a web app — the icon Safari uses in its tab list as well.
@@ -279,6 +279,11 @@ input,textarea{font:inherit;color:inherit}
 .plate.blank{background:var(--dash-slot);color:var(--dash-dim);border-color:var(--dash-plate-edge);letter-spacing:.14em;font-size:14px}
 /* No bus chosen: the bar is the app's, not the check's. See paintDash. */
 .dash.no-veh .plate,.dash.no-veh .lamps{display:none}
+/* And on the first screen, no bar at all: the logo says whose app it is, as
+   on the passenger page and the coordinator's sign-in. Without the bar the
+   page keeps clear of the status bar itself. */
+.dash.is-away{display:none}
+body.dash-away .wrap{padding-top:calc(16px + var(--safe-t))}
 .dash-id{flex:1;min-width:0}
 .dash-id b{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:16px;
   letter-spacing:.09em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
@@ -354,8 +359,16 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   border:1.5px solid var(--hair);border-left:5px solid var(--steel-2);border-radius:var(--r);
   padding:14px 13px;margin-bottom:11px;transition:transform .08s}
 .veh:active{transform:scale(.99)}
-.veh.is-on{border-color:var(--steel);border-left-color:var(--steel);background:var(--card-2);
-  box-shadow:0 0 0 2px rgba(27,34,44,.14)}
+/* CHOSEN, AT A GLANCE, from v1.89.0. It was a near-black border for a
+   near-black border and a white for a barely different white: a tap that
+   looked like no tap. Now the "this is yours" blue fills it, rings it and
+   ticks it, and the buses not chosen step back. */
+.veh.is-on{border:2.5px solid var(--info);border-left:7px solid var(--info);background:var(--info-bg);
+  box-shadow:0 0 0 3px var(--info-ring);padding:13px 12px}
+.veh-tick{display:none}
+.veh.is-on .veh-tick{display:flex;align-items:center;justify-content:center;flex:none;width:30px;height:30px;
+  border-radius:50%;background:var(--info);color:var(--info-on);font-size:18px;font-weight:700;line-height:1}
+#vehList.has-pick .veh:not(.is-on){opacity:.55}
 .veh-plate{background:var(--plate);color:var(--plate-ink);font-family:"Barlow Condensed",sans-serif;font-weight:700;
   font-size:20px;letter-spacing:.05em;padding:5px 10px 4px;border-radius:5px;border:2px solid var(--plate-ink);flex:none}
 .veh-txt{flex:1;min-width:0}
@@ -2615,13 +2628,15 @@ function paintLinks(){
     pend.className = "btn btn-wide "+(q?"btn-warn":"btn-ghost");
   }
 
-  /* Who the hub is for, said at the top of it. A handset gets passed round
-     and a name can be a fortnight stale; the rota screen has said this for a
-     while and the screen every driver actually starts from did not. */
+  /* Who the hub is for. A handset gets passed round and a name can be a
+     fortnight stale. From v1.89.0 the bar says it, DRIVER over the name, on
+     every screen, so here it is only said when there is nobody: the name
+     twice on one screen was the bar and this line saying the same thing. */
   var who=$("hubWho");
-  if(who) who.textContent = st.driver.trim()
-    ? "Signed in as "+st.driver.trim()
-    : "Nobody signed in";
+  if(who){
+    who.textContent = st.driver.trim() ? "" : "Nobody signed in";
+    who.style.display = st.driver.trim() ? "none" : "";
+  }
 
   /* Which button is the obvious one depends on the morning. Before the
      cutoff, or on a Wednesday, the job is a walkaround. Once bookings have
@@ -2730,14 +2745,18 @@ function paintDash(){
   else if(lv==="warn") L[1].className="lamp on-warn";
   else if(TOTAL && t.done===TOTAL) L[0].className="lamp on-pass";
 
-  /* THE PLATE AND THE THREE LIGHTS ARE THE CHECK'S, from v1.89.0, and show
-     once a bus is chosen. Before that the bar is the app's, as the
-     coordinator's app and the passenger page show theirs: the app's name, or
-     the screen's, over the church before anybody signs in and the driver's
-     name after. It said VEHICLE CHECK, CHOOSE YOUR NAME TO BEGIN over the
-     way into the whole app, with "Fleet" in an empty plate that read as a
-     button that did not work, and three unlit lights that read as a page
-     still loading. */
+  /* ONE PATTERN FOR THE THREE APPS, from v1.89.0. The first screen opens on
+     the logo, as the passenger page and the coordinator's sign-in do, with
+     no bar over it. Signed in, the bar is the coordinator's app's: the app's
+     name (DRIVER, as its home screen icon) or the screen's, over the driver.
+     The plate and the three lights are the check's and come with a bus.
+     Before, the first screen carried VEHICLE CHECK, CHOOSE YOUR NAME TO
+     BEGIN over the way into the whole app, with "Fleet" in an empty plate
+     that read as a button that did not work, and three unlit lights that
+     read as a page still loading. */
+  var away = st.screen==="driver" && !st.veh;
+  d.classList.toggle("is-away", away);
+  document.body.classList.toggle("dash-away", away);
   var p=$("plate");
   d.classList.toggle("no-veh", !st.veh);
   if(st.veh){ p.className="plate"; p.textContent=st.veh.reg; }
@@ -3210,6 +3229,7 @@ function renderVehicles(){
     var b=document.createElement("button");
     b.type="button";
     b.className="veh"+(st.veh && st.veh.id===v.id?" is-on":"");
+    b.setAttribute("aria-pressed", st.veh && st.veh.id===v.id ? "true" : "false");
     var dl = dueItems(v);
     var chip = "";
     if(dl.length){
@@ -3224,13 +3244,14 @@ function renderVehicles(){
     var yours = busChipFor(v.reg);
     b.innerHTML='<span class="veh-plate">'+esc(v.reg)+'</span>'+
       '<span class="veh-txt"><b>'+esc(v.name)+'</b><span>'+esc(v.detail||"")+'</span>'+
-      yours+chip+'</span>';
+      yours+chip+'</span><span class="veh-tick" aria-hidden="true">\u2713</span>';
     b.addEventListener("click",function(){
       st.veh=v; st.res={}; st.miles=""; st.mileOk=false; st.stage=0;
       buildFor(v); renderVehicles(); paintDash(); paintFoot();
     });
     box.appendChild(b);
   });
+  box.classList.toggle("has-pick", !!st.veh);
 }
 
 /* ---------------- prep ---------------- */

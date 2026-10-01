@@ -1061,6 +1061,30 @@ if (want("C32")) {
   await p.ctx.close();
 }
 
+/* C33 — the sign-in opens on the logo with no bar, as the passenger page and
+   the driver app do; signed in, the bar says Coordinator over who it is. */
+if (want("C33")) {
+  const p = await page(env);
+  const look = () => p.pg.evaluate(() => {
+    const bar = document.querySelector(".bar");
+    const brand = document.querySelector("#s-sign .brand");
+    return { bar: !!(bar && getComputedStyle(bar).display !== "none" && bar.getBoundingClientRect().height > 0),
+             brand: !!(brand && brand.offsetParent !== null),
+             eyebrow: (document.querySelector("#s-sign .eyebrow") || {}).textContent || "",
+             title: document.getElementById("barTitle").textContent, sub: document.getElementById("barSub").textContent };
+  });
+  const signin = await look();
+  await p.shot("C33a-sign-in");
+  await p.signIn(PIN);
+  const home = await look();
+  await p.shot("C33b-home");
+  check("C33", "the sign-in opens on the logo with no bar over it; signed in, the bar is Coordinator over who it is",
+        !signin.bar && signin.brand && signin.eyebrow === "Coordinator" &&
+        home.bar && home.title === "Coordinator" && home.sub === "Bro Arthur" && !p.errs.length,
+        JSON.stringify({ signin, home, errors: p.errs }));
+  await p.ctx.close();
+}
+
 check("C0", "no script error on the page throughout", me && !me.errs.length, JSON.stringify(me && me.errs));
 if (me) await me.ctx.close();
 await done();

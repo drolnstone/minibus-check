@@ -306,18 +306,31 @@ ones. The other is the general net: no `class="tiny"` on the decision page may
 run past sixty characters, because small print that runs past a line has
 almost always stopped being a fact and started being a lesson.
 
-### The top bar says what app it is
+### One pattern for the three apps
 
-All three apps open with a bar that names them: **Coordinator** over the
-church, the passenger page's own heading, and from v1.89.0 the driver app's
-**Dominion Transport** over the church, then over the driver's name once
-signed in, or the screen's name on the rota and the stops. The driver app's
-bar turns into the check's dashboard only once a bus is chosen: the number
-plate, **Vehicle check** or *12 of 20 checked*, the three lights (pass,
-advisory, do not run) and the red **Do not run** strip. Before v1.89.0 that
-dashboard stood empty over the first screen, with "Fleet" in the plate. The
-app's name is read from the page's `apple-mobile-web-app-title` and the
-church's from its footer, so a new church changes each once, in the page.
+From v1.89.0. **The service** is *Dominion Assembly Transport*: the emails'
+sender name (`SENDER_NAME`) and the logo block, *RCCG Dominion Assembly ·
+Liverpool · Transport*. **Each app** has a short name under its icon, because
+a phone shows about twelve characters there and a coordinator may have all
+three: **Sunday Bus**, **Driver**, **Coordinator**.
+
+**Each opens on the logo.** The passenger page always has. The driver app's
+first screen and the coordinator's sign-in show the logo block with no dark
+bar over it, and say what they are in the line above the question
+(*Before the first pick up*, *Coordinator*).
+
+**Signed in, the bar names the app over who is using it**: DRIVER / Bro X,
+COORDINATOR / Bro Y, or the screen's name over who on the screens past the
+first. The driver app's bar becomes the check's once a bus is chosen: the
+number plate, **Vehicle check** or *12 of 20 checked* over the bus, the three
+lights (pass, advisory, do not run) and the red **Do not run** strip. Before
+v1.89.0 that strip stood empty over the driver app's first screen, with
+"Fleet" in the plate.
+
+The driver app reads its own name from the page's `apple-mobile-web-app-title`
+and the church's from its footer, so a new church changes each once, in the
+page. A phone that added the driver app before v1.89.0 keeps the label it was
+given, *Dominion Transport*, until it is removed and added again.
 
 ### Why the overbooking email stops at the numbers
 
@@ -1010,7 +1023,7 @@ itself and one that never does.
 | Key | What it is |
 |---|---|
 | `COORDINATOR_EMAIL` | where every alert goes. Blank means nothing is ever sent |
-| `SENDER_NAME` | optional. The name emails show as sent by, e.g. `Dominion Transport`. The address is still the Google account the script runs as; for a church address, keep the spreadsheet under a church Google account |
+| `SENDER_NAME` | optional. The name emails show as sent by, e.g. `Dominion Assembly Transport`. The address is still the Google account the script runs as; for a church address, keep the spreadsheet under a church Google account |
 | `WEB_APP_URL` | optional. The sheet's own web app address, copied from **Deploy, Manage deployments**. Only needed when **Is everything working?** says the live server knocks on a different deployment from this one |
 | `COORDINATOR_ROLES` | the titles in the Role column that make somebody a coordinator, separated by commas, the one people should ring first: `Coordinator, Minister in Charge`. Blank uses that default. After changing it, **Send everything to the live server now** |
 | `WORKER_URL` | the Worker's address |
