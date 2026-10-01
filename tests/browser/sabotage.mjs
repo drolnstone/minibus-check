@@ -87,7 +87,7 @@ const S = [
   /* v1.89.0: the Buses screens in the coordinator's app, and the live
      server's half of them. */
   { id: "S20 defect trail shown", tests: "C32", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
-    ["           trailHTML(d.trail) +\n", ""] ] },
+    ["           trailHTML(g.trail) +\n", ""] ] },
   { id: "S21 MOT keeps its date before Save", tests: "C29", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
     ["    if(prior && done <= prior && done >= rnAddDays(rnAddMonths(prior, -1), 1)){", "    if(false){"] ] },
   { id: "S22 new date on every phone at once", tests: "C29", file: "server/worker.js", runner: "coordinator.mjs", swaps: [
@@ -116,7 +116,32 @@ const S = [
     ["const TAP_PICKED = [\"pickup\", \"picked\"];", "const TAP_PICKED = [\"picked\"];"],
     ["const TAP_EMPTY = [\"empty\", \"none\"];", "const TAP_EMPTY = [\"none\"];"] ] },
   { id: "S28b Nobody there not said", tests: "C9", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
-    ["(ev && (ev.event === \"empty\" || ev.event === \"none\") ?", "(ev && ev.event === \"none\" ?"] ] }
+    ["? '<small>nobody there</small>' : '')", "? '' : '')"] ] },
+  /* v1.90.0, the tidy-up. */
+  { id: "S29 a date switch is a step again", tests: "C35", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
+    ["  if(to === now && to !== \"home\"){ history.replaceState(history.state, \"\", \"#\" + where); route(); return; }\n", ""] ] },
+  { id: "S30 the dates scroll away", tests: "C34", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
+    [".chips.stick{position:sticky;", ".chips.stick{position:static;"] ] },
+  { id: "S31 a Sunday from home goes back home", tests: "C36", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
+    ["  if(to === \"sunday\" && now === \"home\"){ seq++; history.pushState({ n: seq }, \"\", \"#rota\"); }\n", ""] ] },
+  { id: "S32 the Rota says Rota twice", tests: "C37", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
+    ["function paintRota(){\n  var h = '';", "function paintRota(){\n  var h = '<h1>Rota</h1>';"] ] },
+  { id: "S33 every report its own card", tests: "C39", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
+    ["+ \"|\" + String(d.item || \"\").trim().toLowerCase();", "+ \"|\" + String(d.item || \"\").trim().toLowerCase() + \"|\" + d.key;"] ] },
+  { id: "S34 Close closes one report", tests: "C39", file: "server/worker.js", runner: "coordinator.mjs", swaps: [
+    ["const keys = [...new Set(defectKeysOf(act))].slice(0, 50);", "const keys = [...new Set(defectKeysOf(act))].slice(0, 1);"] ] },
+  { id: "S35 booked and untapped reads as nobody booked", tests: "C38", file: "server/worker.js", runner: "coordinator.mjs", swaps: [
+    ["                   booked: bk ? bk.seats : 0,", "                   booked: 0,"] ] },
+  { id: "S36 no number by the stop", tests: "C38", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
+    ["'<span class=\"nm\">'+(st ? sid(st.id) : '')+esc(label)", "'<span class=\"nm\">'+esc(label)"] ] },
+  { id: "S37 the old place not said on Bookings", tests: "C40", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
+    ["var moved = k.stop && !sameStop(k.stop, s.stop);", "var moved = false;"] ] },
+  { id: "S38 the passenger not told the stop changed", tests: "P9", file: "sunday/index.html", runner: "passenger.mjs", swaps: [
+    ["  if(STOPMOVED && booked){", "  if(false){"] ] },
+  { id: "S39 Keep it keeps asking", tests: "P9", file: "sunday/index.html", runner: "passenger.mjs", swaps: [
+    ["  if(out && out.ok) STOPMOVED=null;\n", ""] ] },
+  { id: "S40 the driver's rota says it twice", tests: "T21", swaps: [
+    ["      <div></div>\n      <button class=\"rota-back\" id=\"rotaBack\"", "      <div><h1>Driving rota</h1></div>\n      <button class=\"rota-back\" id=\"rotaBack\""] ] }
 ];
 
 const summary = [];

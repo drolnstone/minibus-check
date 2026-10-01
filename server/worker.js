@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.30.1";
+const SCRIPT_VERSION = "w2.31.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1122,6 +1122,19 @@ const TAP_KINDS = TAP_PICKED.concat(TAP_EMPTY);
 const isStopTap = (kind) => TAP_KINDS.indexOf(String(kind || "").trim().toLowerCase()) !== -1;
 const TAP_SQL = "('" + TAP_KINDS.join("','") + "')";
 
+/* A STOP IS ITS NUMBER. The coordinator keeps a fixed range of numbers and
+   edits the place behind one when the passengers change, so N05 can be one
+   road this month and another the next. Everything is matched by number.
+
+   The name is only ever COMPARED, never matched on: a booking or a tap keeps
+   the name its number had at the time, and when that differs from the
+   timetable's name for the same number today, the place has changed since.
+   That is how the guards below notice a seat booked at the old place, and how
+   a past Sunday's record can say what its stop was then. Spacing and capitals
+   are not a change. */
+const stopWords = (x) => String(x || "").trim().toLowerCase().replace(/\s+/g, " ");
+const sameStopName = (a, b) => stopWords(a) === stopWords(b);
+
 /* Every stop on one route, in the order a driver taps them, departure row
    first. getStops already orders by route then seq, so filtering keeps it. */
 const stopsOnRoute = (all, route) =>
@@ -1735,7 +1748,11 @@ async function liveBookings(env, key) {
     return true;
   }).map((b) => ({
     row: b.id, sunday: b.sunday, stopId: b.stop_id, seats: Number(b.seats) || 0,
-    device: b.device || "", pid: b.pid || "", phone: b.phone || "", status: b.status
+    device: b.device || "", pid: b.pid || "", phone: b.phone || "", status: b.status,
+    /* What the stop was called when this seat was taken. The number is the
+       booking; this is only ever compared, to notice the place behind a
+       number changing after somebody booked it (sameStopName). */
+    stop: b.stop || "", route: b.route || ""
   }));
 }
 
@@ -2001,6 +2018,24 @@ async function busPayload(env, keyIn, ref, pid) {
     if (!stops.some((s) => s.id === mine.stopId)) { stopGone = mine.stopId; mine = null; }
   }
 
+  /* THE NUMBER IS STILL THERE, BUT THE PLACE BEHIND IT HAS CHANGED.
+
+     The coordinator edits the stop behind a number rather than making new
+     numbers, so a seat booked at N05 when N05 was one road is, after the
+     edit, a seat at whatever road N05 is now. The booking is still good, by
+     number, and the driver will stop at the new place. But the passenger
+     booked the old one, and nothing told him. Said here, with the old name
+     and the new, so the page can ask him whether the new place still suits;
+     choosing it again (or another) takes the notice away, because the seat
+     then carries the name it has now. */
+  let stopMoved = null;
+  if (mine && mine.stopId && mine.stop) {
+    const now = stops.find((s) => s.id === mine.stopId);
+    if (now && !sameStopName(now.stop, mine.stop)) {
+      stopMoved = { id: now.id, was: mine.stop, now: now.stop, time: now.time || "" };
+    }
+  }
+
   const buses = await getBuses(env);
   const rotaRow = await getRotaRow(env, key);
   const seats = {};
@@ -2032,6 +2067,7 @@ async function busPayload(env, keyIn, ref, pid) {
     phone: mine && mine.phone ? mine.phone : "",
     mine: mine ? { stopId: mine.stopId, seats: mine.seats } : null,
     stopGone,
+    stopMoved,
     seats
   };
 }
@@ -6544,11 +6580,13 @@ async function actVlog(env, me, act, id) {
   const defects = [], defectNames = [];
   if (!booking && Array.isArray(act.defects) && act.defects.length) {
     const open = await coordDefectsView(env);
-    for (const k of act.defects.slice(0, 20)) {
+    /* From w2.31.0 one tick is every report of a fault, so more keys come
+       than faults; the name is said once. */
+    for (const k of [...new Set(act.defects)].slice(0, 50)) {
       const d = open.find((x) => x.key === k && String(x.reg || "").toUpperCase() === reg);
       if (!d) return { ok: false, error: "One of those defects is not open on this bus any more. Refresh and try again." };
       defects.push(d.key);
-      defectNames.push(d.item);
+      if (defectNames.indexOf(d.item) === -1) defectNames.push(d.item);
     }
   }
   const body = {
@@ -6917,7 +6955,7 @@ function defectKeyOf(d) {
 
 function defectsWithout(map, closes) {
   const gone = {};
-  for (const a of closes) gone[String(a.body.key || "")] = 1;
+  for (const a of closes) for (const k of defectKeysOf(a.body)) gone[k] = 1;
   const out = {};
   for (const reg of Object.keys(map || {})) {
     const left = (map[reg] || []).filter((d) => !gone[defectKeyOf(d)]);
@@ -7032,14 +7070,16 @@ async function coordDefectsView(env) {
     }
   }
   for (const a of await coordPending(env, ["defect"])) {
-    const d = list.find((x) => x.key === a.body.key);
-    if (!d) continue;
-    d.status = a.body.status;
-    const add = String(a.body.action || "").trim();
-    if (add && String(d.action || "").split("\n").map((x) => x.trim()).indexOf(add) === -1) {
-      d.action = d.action ? d.action + "\n" + add : add;
+    for (const k of defectKeysOf(a.body)) {
+      const d = list.find((x) => x.key === k);
+      if (!d) continue;
+      d.status = a.body.status;
+      const add = String(a.body.action || "").trim();
+      if (add && String(d.action || "").split("\n").map((x) => x.trim()).indexOf(add) === -1) {
+        d.action = d.action ? d.action + "\n" + add : add;
+      }
+      d.waiting = true;
     }
-    d.waiting = true;
   }
   /* From w2.30.0 a defect ticked as put right on a Vehicle Log entry is
      closed by the sheet as it writes the entry; until then it goes here. */
@@ -7276,6 +7316,20 @@ async function coordRuns(env, me, sundayIn) {
     const st = String(r.status || "");
     return st !== "Undone" && !/rehearsal/i.test(st);
   });
+  /* WHAT WAS BOOKED, BY NUMBER. A stop nobody tapped is either one nobody
+     booked, where the driver app asks for no tap at all, or one with seats
+     the driver did not mark. The record has to tell those apart, or every
+     quiet stop reads as a missed one. Real seats only: a rehearsal's are
+     not this morning's. */
+  const booked = {};
+  try {
+    for (const b of await liveBookings(env, key)) {
+      if (!b.stopId || /rehearsal/i.test(String(b.status || ""))) continue;
+      const x = booked[b.stopId] || (booked[b.stopId] = { seats: 0, stop: "" });
+      x.seats += b.seats;
+      if (!x.stop) x.stop = b.stop;
+    }
+  } catch (e) { /* the taps still show; every untapped stop reads as nobody booked */ }
   const ev = (r) => r ? ({ id: Number(r.id), event: r.event, at: Number(r.happened) || 0,
                             off: (r.off_min === null || r.off_min === undefined) ? null : Number(r.off_min),
                             status: r.status || "", note: r.fix_note || "",
@@ -7293,10 +7347,16 @@ async function coordRuns(env, me, sundayIn) {
         trip: trip, driver: (first && first.driver) || "", reg: (first && first.reg) || "",
         endedBy: (end && end.ended_by) || "",
         start: ev(start), end: ev(end),
-        stops: stopsOnRoute(all, rt).filter((s) => !s.depart && !s.arrival).map((s) => ({
-          id: s.id, stop: s.stop, time: s.time,
-          ev: ev(tr.find((r) => isStopTap(r.event) && r.stop_id === s.id) || null)
-        }))
+        stops: stopsOnRoute(all, rt).filter((s) => !s.depart && !s.arrival).map((s) => {
+          const tap = tr.find((r) => isStopTap(r.event) && r.stop_id === s.id) || null;
+          const bk = booked[s.id] || null;
+          /* The name this number had that morning, from the tap or the seat,
+             when it is not the name it has now. */
+          const then = (tap && tap.stop) || (bk && bk.stop) || "";
+          return { id: s.id, stop: s.stop, time: s.time, ev: ev(tap),
+                   booked: bk ? bk.seats : 0,
+                   then: then && !sameStopName(then, s.stop) ? then : "" };
+        })
       };
     });
     out.routes.push({ route: rt, runs: runs });
@@ -7723,21 +7783,45 @@ async function actBooking(env, me, act, actionId) {
   return { ok: false, error: "unknown booking change" };
 }
 
+/* ONE FAULT, HOWEVER MANY TIMES IT WAS REPORTED.
+
+   Every walkaround that finds the same fault writes another row, so a key
+   remote nobody has fixed is on the Defects tab once per inspection. From
+   w2.31.0 an update names every report it is for (keys), and one Close with
+   one "what was done" closes them all, each with its own History line. The
+   coordinator's app sends every open report of the fault, ticked, and he
+   can untick one that turns out to be a different fault under the same
+   heading. One key alone, as before, is still one report. */
+function defectKeysOf(body) {
+  const b = body || {};
+  const keys = Array.isArray(b.keys) && b.keys.length ? b.keys : [b.key];
+  return keys.map((k) => String(k || "")).filter(Boolean);
+}
+
 async function actDefect(env, me, act) {
   const list = await coordDefectsView(env);
-  const key = String(act.key || "");
-  const d = list.find((x) => x.key === key);
-  if (!d) return { ok: false, error: "That defect is not open on the live server's copy. Refresh and try again." };
+  const keys = [...new Set(defectKeysOf(act))].slice(0, 50);
+  const ds = keys.map((k) => list.find((x) => x.key === k) || null);
+  if (!keys.length || ds.some((d) => !d)) {
+    return { ok: false, error: keys.length > 1
+      ? "One of those reports is not open on the live server's copy. Refresh and try again."
+      : "That defect is not open on the live server's copy. Refresh and try again." };
+  }
+  const d = ds[0];
+  if (ds.some((x) => x.reg !== d.reg)) return { ok: false, error: "Those reports are not all on one bus." };
   const status = String(act.status || "").trim();
   if (DEFECT_STATES.indexOf(status) === -1) return { ok: false, error: "unknown status" };
   const action = String(act.action || "").replace(/\s+/g, " ").trim().slice(0, 500);
   const closing = DEFECT_CLOSED.indexOf(status) !== -1;
   if (closing && !action) return { ok: false, error: "Say what was done before closing it." };
-  if (status === (d.status || "Open") && !action) return { ok: false, error: "Nothing to change." };
+  if (ds.every((x) => status === (x.status || "Open")) && !action) return { ok: false, error: "Nothing to change." };
+  const many = keys.length > 1 ? " (" + keys.length + " reports)" : "";
   return { ok: true, sunday: "",
-           body: { key: key, checkId: d.checkId || "", reg: d.reg, item: d.item, date: d.date || "",
+           /* key and the first report's details stay, for a sheet from
+              before v1.93.0, which reads key alone. */
+           body: { key: keys[0], keys: keys, checkId: d.checkId || "", reg: d.reg, item: d.item, date: d.date || "",
                    status: status, action: action },
-           words: d.reg + ", " + d.item + ": " + (closing ? "closed, " + status.toLowerCase() : status.toLowerCase()) +
+           words: d.reg + ", " + d.item + many + ": " + (closing ? "closed, " + status.toLowerCase() : status.toLowerCase()) +
                   (action ? ". " + action : "") + "." };
 }
 

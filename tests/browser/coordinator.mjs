@@ -109,6 +109,13 @@ async function world() {
                 why: "Blades on order", what: "Defect: Wiper blades" },
               { when: Date.now() - 2 * 86400000, who: "", where: "On the Defects tab", from: "Monitoring", to: "Open",
                 why: "Edited on the Defects tab", what: "Defect: Wiper blades \u2014 Status" }] }];
+  /* From v1.90.0, C39: one fault reported on two walkarounds, critical the
+     first time and on the DVSA daily list. One card, closed in one go. */
+  defects.push(
+    { checkId: "chk-0", reg: "YS70 PWE", date: W.keyAddWeeks(LAST, -2), driver: southOf(W.keyAddWeeks(LAST, -2)), item: "Tyres",
+      crit: true, found: "Nearside front wearing fast", status: "Monitoring", action: "", kind: "Defect" },
+    { checkId: "chk-a", reg: "YS70 PWE", date: LAST, driver: southOf(LAST), item: "Tyres", crit: false,
+      found: "Nearside front tread low", status: "Open", action: "", kind: "Defect" });
   const openDefects = {};
   for (const d of defects) {
     d.key = W.defectKeyOf(d);
@@ -137,11 +144,13 @@ async function world() {
       jobs: { "YS70 PWE": { checkId: "chk-a", date: LAST, driver: southOf(LAST), jobs: ["Screenwash", "Tyre pressures"] } }
     } }).run();
 
-  const book = async (key, stopId, seats, phone) => {
+  /* name: what the stop was called when the seat was taken, when that is not
+     what its number is called now (C38, C40). */
+  const book = async (key, stopId, seats, phone, name) => {
     const s = REAL.stops.find((x) => x.id === stopId);
     const pid = phone ? await W.passengerId(env, phone) : "";
     await db.prepare("INSERT INTO bookings (sunday, route, stop_id, stop, seats, device, pid, phone, status, received, synced) VALUES (?,?,?,?,?,?,?,?,?,?,1)")
-      .bind(key, s.route, s.id, s.stop, seats, "dev-" + stopId + seats, pid, phone || "", "Booked", Date.now() - 3600000).run();
+      .bind(key, s.route, s.id, name || s.stop, seats, "dev-" + stopId + seats, pid, phone || "", "Booked", Date.now() - 3600000).run();
   };
   await book(NEXT, "N02", 2, "07700900123");
   await book(NEXT, "N02", 1, "07700900456");
@@ -149,6 +158,12 @@ async function world() {
   await book(NEXT, "S04", 2, "07700900321");
   await book(NEXT, "S07", 1, "");
   await book(TODAY, "N01", 2, "07700900111");
+  /* C40: a seat taken when N06 was another place. */
+  await book(NEXT, "N06", 1, "07700900654", "Old Place by the Park");
+  /* C38: last Sunday's seats. S03 booked and never tapped; S05 booked when
+     it was another place, and never tapped; S02 nobody booked. */
+  await book(LAST, "S03", 2, "07700900222");
+  await book(LAST, "S05", 1, "07700900333", "Old Place by the Park");
 
   /* Last Sunday's North run: left church three minutes late, Wilburn Street
      tapped seven minutes behind, Westminster Road never tapped, and nobody
@@ -249,7 +264,7 @@ if (want("C1") || true) {
   await me.shot("C1-home");
   const onScreen = await me.pg.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 2);
   check("C1", "a wrong PIN says so; the right one opens the first screen, all of it on one screen",
-        /not right/.test(bad) && /2 tries left/.test(bad) && home && /1 waiting/.test(menu) && /3 open/.test(menu) && onScreen,
+        /not right/.test(bad) && /2 tries left/.test(bad) && home && /1 waiting/.test(menu) && /4 open/.test(menu) && onScreen,
         "bad '" + bad + "', home " + home + ", menu '" + menu.replace(/\n/g, " | ") + "', fits " + onScreen);
 }
 
@@ -406,6 +421,9 @@ if (want("C8")) {
   await me.wait(400);
   await me.shot("C8a-defects");
   const before = await me.pg.$$eval("#defectsBody .def", (els) => els.length);
+  const pubOf = async () => { const m = (await W.cachedRota(env, TODAY, 1)).openDefects || {};
+                              return Object.keys(m).reduce((n, k) => n + m[k].length, 0); };
+  const pubBefore = await pubOf();
   await me.pg.click('#defectsBody [data-do="defect"]');
   await me.wait(300);
   await me.pg.click('#defStates [data-state="Fixed"]');
@@ -418,12 +436,11 @@ if (want("C8")) {
   await me.shot("C8b-close");
   await me.go();
   const after = await me.pg.$$eval("#defectsBody .def", (els) => els.length);
-  const pub = (await W.cachedRota(env, TODAY, 1)).openDefects || {};
-  const pubCount = Object.keys(pub).reduce((n, k) => n + pub[k].length, 0);
+  const pubCount = await pubOf();
   await me.shot("C8-defects-after");
   check("C8", "a defect is closed only with what was done, and leaves every phone at once",
-        label === "Close it" && /what was done/i.test(refusal) && cleared === "" && after === before - 1 && pubCount === 2,
-        "label '" + label + "', refusal '" + refusal + "', then '" + cleared + "', " + before + " -> " + after + ", public " + pubCount);
+        label === "Close it" && /what was done/i.test(refusal) && cleared === "" && after === before - 1 && pubCount === pubBefore - 1,
+        "label '" + label + "', refusal '" + refusal + "', then '" + cleared + "', " + before + " -> " + after + ", public " + pubBefore + " -> " + pubCount);
 }
 
 /* C9 — the Wilburn time put right, and a stop nobody tapped given its time */
@@ -971,7 +988,7 @@ if (want("C29")) {
   const preview = await p.text("#vlNext");
   await p.pg.fill("#vlMiles", "45,180");
   await p.pg.fill("#vlGarage", "Walton Garage");
-  await p.pg.click('#vlDefs input[type="checkbox"]');
+  await p.pg.locator("#vlDefs label", { hasText: "Nearside rear tyre" }).locator("input").click();
   await p.shot("C29b-record-mot");
   const expect = W.rnNextDue("mot", CAL, DAY(10), "");
   const uk = (k) => k.slice(8, 10) + "/" + k.slice(5, 7) + "/" + k.slice(0, 4);
@@ -1086,6 +1103,204 @@ if (want("C33")) {
         !signin.bar && signin.brand && signin.eyebrow === "Coordinator" &&
         home.bar && home.title === "Coordinator" && home.sub === "Bro Arthur" && !p.errs.length,
         JSON.stringify({ signin, home, errors: p.errs }));
+  await p.ctx.close();
+}
+
+/* ---- v1.90.0, the tidy-up ------------------------------------------------- */
+
+const screenIs = (p) => p.pg.evaluate(() => (document.querySelector(".screen.is-on") || {}).id || "");
+/* A check that cannot finish, because what it taps is not there, is a failed
+   check and not a crashed run: the sabotages need to see it fail. */
+const stopped = (id, e) => check(id, "could not finish", false, String((e && e.message) || e).split("\n")[0]);
+const back = async (p) => { await p.pg.click("#barBack"); await p.wait(450); };
+
+/* C34 — the row of Sundays stays under the bar while the list scrolls */
+if (want("C34")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    await p.pg.evaluate((k) => { location.hash = "runs/" + k; }, LAST);
+    await p.wait(900);
+    const pin = () => p.pg.evaluate(() => {
+      const bar = document.querySelector(".bar").getBoundingClientRect();
+      const chips = document.querySelector("#runsBody .chips");
+      return chips ? { gap: Math.round(chips.getBoundingClientRect().top - bar.bottom), y: window.scrollY,
+                       lit: (chips.querySelector(".on") || {}).textContent || "" } : null;
+    });
+    const top = await pin();
+    await p.pg.evaluate(() => window.scrollTo(0, 700));
+    await p.wait(300);
+    const down = await pin();
+    await p.shot("C34-dates-stay");
+    await p.pg.evaluate((k) => { location.hash = "bookings/" + k; }, NEXT);
+    await p.wait(900);
+    const bk = await p.pg.evaluate(() => { const c = document.querySelector("#bookingsBody .chips");
+                                           return c ? getComputedStyle(c).position : ""; });
+    check("C34", "on the Run record and Bookings, the row of Sundays stays under the bar while the list scrolls",
+          top && down && down.y > 300 && Math.abs(down.gap) <= 2 && down.lit && bk === "sticky" && !p.errs.length,
+          JSON.stringify({ top, down, bookings: bk, errors: p.errs }));
+  } catch (e) { stopped("C34", e); }
+  await p.ctx.close();
+}
+
+/* C35 — however many Sundays were looked at, one Back leaves the screen */
+if (want("C35")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    await p.pg.click('#homeBody [data-go^="bookings/"]');
+    await p.wait(700);
+    for (const k of [TODAY, NEXT, TODAY, NEXT]) { await p.pg.click('#bookingsBody .chips [data-go="bookings/' + k + '"]'); await p.wait(500); }
+    const lit = await p.pg.$eval("#bookingsBody .chips .on", (b) => b.getAttribute("data-go")).catch(() => "");
+    await back(p);
+    const afterBookings = await screenIs(p);
+    await p.pg.click('#homeBody [data-go="runs"]');
+    await p.wait(900);
+    const dates = await p.pg.$$eval("#runsBody .chips button", (bs) => bs.map((b) => b.getAttribute("data-go")));
+    for (let i = 0; i < 4; i++) { const g = dates[i % dates.length]; await p.pg.click('#runsBody .chips [data-go="' + g + '"]'); await p.wait(600); }
+    /* And the phone's own back gesture, which is the browser's. */
+    await p.pg.goBack(); await p.wait(450);
+    const afterRuns = await screenIs(p);
+    check("C35", "five Sundays looked at on Bookings or the Run record, and one Back still leaves the screen",
+          lit === "bookings/" + NEXT &&
+          afterBookings === "s-home" && dates.length >= 1 && afterRuns === "s-home" && !p.errs.length,
+          JSON.stringify({ lit, afterBookings, dates, afterRuns, errors: p.errs }));
+  } catch (e) { stopped("C35", e); }
+  await p.ctx.close();
+}
+
+/* C36 — the Sunday card is the way into the Rota: Back goes to the list of
+   Sundays, then home; and no Rota button of its own on the first screen */
+if (want("C36")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    const menu = await p.text("#homeBody .menu");
+    const rotaItem = await p.pg.$$eval('#homeBody .menu [data-go="rota"]', (x) => x.length);
+    const cue = await p.text("#homeBody .sun .sun-cue");
+    await p.pg.click("#homeBody .sun");
+    await p.wait(500);
+    const first = await screenIs(p), firstTitle = await p.text("#barTitle");
+    await back(p);
+    const second = await screenIs(p), list = await p.pg.$$eval("#rotaBody .sun", (x) => x.length);
+    await back(p);
+    const third = await screenIs(p);
+    await p.shot("C36-rota-way");
+    check("C36", "the Sunday card opens the Sunday; Back is the Rota list, then home; no Rota button, and What has been done",
+          rotaItem === 0 && /Rota/i.test(cue) && first === "s-sunday" && firstTitle === "Rota" && second === "s-rota" &&
+          list > 2 && third === "s-home" && /What has been done/.test(menu) && !/What I have done/.test(menu) && !p.errs.length,
+          JSON.stringify({ rotaItem, cue, first, firstTitle, second, list, third, menu, errors: p.errs }));
+  } catch (e) { stopped("C36", e); }
+  await p.ctx.close();
+}
+
+/* C37 — no screen says its own name twice */
+if (want("C37")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    const seen = [];
+    for (const h of ["rota", "requests", "bookings/" + NEXT, "defects", "buses", "runs/" + LAST, "look", "activity", "rehearsal",
+                     "sunday/" + NEXT, "bus/YS70%20PWE"]) {
+      await p.pg.evaluate((x) => { location.hash = x; }, h);
+      await p.wait(700);
+      await p.shot("C37-" + h.split("/")[0]);
+      seen.push(await p.pg.evaluate((x) => {
+        const title = document.getElementById("barTitle").textContent.trim().toLowerCase();
+        const scr = document.querySelector(".screen.is-on");
+        const hs = Array.prototype.map.call(scr ? scr.querySelectorAll("h1") : [], (e) => e.textContent.trim().toLowerCase());
+        return { at: x, title, twice: hs.filter((t) => t === title).length, h1: hs.length };
+      }, h));
+    }
+    const twice = seen.filter((x) => x.twice);
+    const sunday = seen.find((x) => /^sunday/.test(x.at)), bus = seen.find((x) => /^bus\//.test(x.at));
+    check("C37", "no screen says its own name twice; the Sunday keeps its date and the bus its plate",
+          !twice.length && sunday.h1 === 1 && bus.h1 === 1 && seen.find((x) => x.at === "activity").title === "what has been done" &&
+          !p.errs.length, JSON.stringify({ twice, seen, errors: p.errs }));
+  } catch (e) { stopped("C37", e); }
+  await p.ctx.close();
+}
+
+/* C38 — the Run record: seats booked and no tap stand out; nobody booked does not */
+if (want("C38")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    await p.pg.evaluate((k) => { location.hash = "runs/" + k; }, LAST);
+    await p.wait(900);
+    const row = (id) => p.pg.evaluate((x) => {
+      const r = Array.prototype.find.call(document.querySelectorAll("#runsBody .ev"),
+        (e) => ((e.querySelector(".sid") || {}).textContent || "") === x);
+      return r ? { cls: r.className, text: r.textContent.replace(/\s+/g, " ").trim(),
+                   add: ((r.querySelector("button") || {}).textContent || "").trim() } : null;
+    }, id);
+    const s03 = await row("S03"), s02 = await row("S02"), s05 = await row("S05"), n01 = await row("N01");
+    const numbered = await p.pg.$$eval("#runsBody .ev", (rs) => rs.filter((r) => r.querySelector(".sid")).length);
+    await p.shot("C38-run-record-booked");
+    check("C38", "on the Run record a booked stop with no tap says so in amber; a stop nobody booked is quiet; each by its number",
+          s03 && /missed/.test(s03.cls) && /2 seats booked, not marked/.test(s03.text) && /add/i.test(s03.add) &&
+          s02 && /quiet/.test(s02.cls) && /nobody booked/.test(s02.text) && !/missed/.test(s02.cls) && /add/i.test(s02.add) &&
+          s05 && /then Old Place by the Park/.test(s05.text) && /1 seat booked, not marked/.test(s05.text) &&
+          n01 && !/miss/.test(n01.cls) && numbered >= 14 && !p.errs.length,
+          JSON.stringify({ s03, s02, s05, n01, numbered, errors: p.errs }));
+  } catch (e) { stopped("C38", e); }
+  await p.ctx.close();
+}
+
+/* C39 — one fault on two walkarounds is one card, closed in one go */
+if (want("C39")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    await p.pg.evaluate(() => { location.hash = "defects"; });
+    await p.wait(600);
+    const cards = await p.pg.$$eval("#defectsBody .def", (ds) => ds.map((d) => d.textContent.replace(/\s+/g, " ").trim()));
+    const tyres = cards.filter((t) => /^Tyres/.test(t));
+    await p.shot("C39a-defects-grouped");
+    const card = p.pg.locator("#defectsBody .def", { hasText: "Nearside front tread low" }).first();
+    await card.locator('[data-do="defect"]').click();
+    await p.wait(300);
+    const ticks = await p.pg.$$eval("#defReps input[data-rep]", (xs) => xs.map((x) => x.checked));
+    await p.pg.click('#defStates [data-state="Fixed"]');
+    const all = await p.text("#sheetGo");
+    await p.pg.click("#defReps input[data-rep]");
+    const one = await p.text("#sheetGo");
+    await p.pg.click("#defReps input[data-rep]");
+    await p.pg.fill("#defDid", "Both front tyres replaced at Walton Tyres");
+    await p.shot("C39b-close-all");
+    await p.go();
+    await p.wait(600);
+    const sent = JSON.parse(db._one("SELECT body FROM coord_actions WHERE kind='defect' ORDER BY seq DESC LIMIT 1").body);
+    const left = await p.pg.$$eval("#defectsBody .def", (ds) => ds.filter((d) => /^Tyres/.test(d.textContent.trim())).length);
+    check("C39", "one fault reported twice is one card, with the DVSA tag and how long it has been open; Close closes both",
+          tyres.length === 1 && /2 reports since/.test(tyres[0]) && /DVSA daily check/.test(tyres[0]) && /Critical/.test(tyres[0]) &&
+          /open \d+ days/.test(tyres[0]) && /tread low/.test(tyres[0]) &&
+          ticks.length === 2 && ticks.every(Boolean) && all === "Close all 2" && one === "Close it" &&
+          sent.keys && sent.keys.length === 2 && left === 0 && !p.errs.length,
+          JSON.stringify({ tyres, ticks, all, one, keys: sent.keys, left, errors: p.errs }));
+  } catch (e) { stopped("C39", e); }
+  await p.ctx.close();
+}
+
+/* C40 — a seat taken when its stop number was another place is marked */
+if (want("C40")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    await p.pg.evaluate((k) => { location.hash = "bookings/" + k; }, NEXT);
+    await p.wait(900);
+    const n06 = await p.pg.evaluate(() => {
+      const r = Array.prototype.find.call(document.querySelectorAll("#bookingsBody .bs"),
+        (e) => ((e.querySelector(".sid") || {}).textContent || "") === "N06");
+      return r ? r.textContent.replace(/\s+/g, " ").trim() : "";
+    });
+    const marks = await p.pg.$$eval("#bookingsBody .moved", (ts) => ts.map((t) => t.textContent));
+    const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+    await p.shot("C40-booked-at-old-place");
+    check("C40", "on Bookings each stop shows its number, and a seat taken when the number was another place says so",
+          /Booked when N06 was Old Place by the Park/.test(n06) && marks.filter((t) => /Booked when/.test(t)).length === 1 &&
+          !wide && !p.errs.length, JSON.stringify({ n06, marks, wide, errors: p.errs }));
+  } catch (e) { stopped("C40", e); }
   await p.ctx.close();
 }
 

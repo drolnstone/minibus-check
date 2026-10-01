@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.89.1 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.90.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -744,7 +744,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.89.1";
+var PAGE_VERSION = "v1.90.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -1079,6 +1079,9 @@ function roundOf(r){ return !r ? 0 : (typeof r==="object" ? (Number(r.round)||1)
 var booked=null, chosen=null, seats=null, saving=false, route="North", ROUTES=[];
 /* Their seat was at a stop that has since been taken off the timetable. */
 var STOPGONE=false;
+/* From v1.90.0: their stop's number is still on the timetable, but the place
+   behind it was changed after they booked. { id, was, now, time } or null. */
+var STOPMOVED=null;
 var seatsAsk=false;   /* the question has just appeared and wants looking at */
 /* The withdraw question is open. Asked on both sides of the cutoff; the
    wording differs because the consequence does. See paint(). */
@@ -1139,6 +1142,7 @@ function applyBus(out){
      door makes the assumption true instead of likely. */
   booked = out.mine ? { stopId:out.mine.stopId, seats:seatCount(out.mine.seats) } : null;
   STOPGONE = !!out.stopGone;
+  STOPMOVED = (out.mine && out.stopMoved && out.stopMoved.id === out.mine.stopId) ? out.stopMoved : null;
   chosen = booked ? booked.stopId : null;
   seats  = booked ? booked.seats : null;
   cancelAsk = false;        /* a fresh load is never mid-question */
@@ -2317,6 +2321,7 @@ function paint(){
           '</div>';
   }
 
+
   if(CLOSED){
     /* The whole of Sunday morning now sits here: bookings shut at 09:30 and
        the page stays on today until the buses are back. It is the list the
@@ -2567,6 +2572,24 @@ function paint(){
 
   /* The frozen pane, written from the same pass that built the list, so the
      two cannot disagree about whether this phone has a seat. */
+  /* Their stop's number is the same, and the bus will stop there, but the
+     place behind it has changed since they booked. In the frozen pane with
+     "You are booked.", because the page scrolls to their stop and a notice
+     at the top of the list would be off the screen. Said with both places,
+     and asked: keeping it saves the seat again at the new place, which is
+     what takes this away. */
+  if(STOPMOVED && booked){
+    mineNote+='<div class="note note-warn" id="movedNote"><b>Your stop has changed since you booked.</b> '+
+          'You booked '+esc(STOPMOVED.was)+'. The bus now stops at '+esc(STOPMOVED.now)+
+          (STOPMOVED.time ? ', '+esc(STOPMOVED.time) : '')+'. '+
+          /* Not "choose another stop": once booked, the other stops are shut
+             until Not coming, and an instruction to tap them would send
+             people at dead buttons. */
+          (CLOSED ? 'If that does not suit, tell the group.'
+                  : 'Does it still suit? If not, tap Not coming and book the stop that does.'+
+                    '<div style="margin-top:8px"><button class="callbtn" type="button" id="keepStop">Yes, keep it</button></div>')+
+          '</div>';
+  }
   if($("mine")) $("mine").innerHTML = mineNote;
   paintAlerts();
 
@@ -2636,6 +2659,14 @@ function paint(){
 
   if($("cancelNo")) $("cancelNo").addEventListener("click",function(){
     cancelAsk=false; paint();
+  });
+  if($("keepStop")) $("keepStop").addEventListener("click",function(){
+    if(saving || !booked) return;
+    this.innerHTML='<span class="spin"></span>';
+    send({ date:DATE, ref:REF, pid:PID, phone:PHONE, stopId:booked.stopId, seats:booked.seats }, function(out){
+      applySaved(out);
+      toast("Kept.");
+    });
   });
   if($("cancelYes")) $("cancelYes").addEventListener("click",function(){
     if(saving) return;
@@ -3035,7 +3066,7 @@ function send(payload, done){
       $("save").textContent="Confirm";
       /* Same repaint rule as verifySend: the spinner may be sitting on a
          button inside the withdraw question, and only paint() draws that. */
-      if(cancelAsk || CLOSED) paint(); else paintBar();
+      if(cancelAsk || CLOSED || $("keepStop")) paint(); else paintBar();
 
       /* The record has no number against this booking and will not take it.
 
@@ -3169,6 +3200,8 @@ function seatJump(){
 function applySaved(out){
   bookJumped = Date.now();
   if(out && out.counts) COUNTS=out.counts;
+  /* Any seat saved now carries the name its stop has now. */
+  if(out && out.ok) STOPMOVED=null;
   booked = (out && out.mine && out.mine.stopId)
     ? { stopId:out.mine.stopId, seats:seatCount(out.mine.seats) } : null;
   chosen = booked ? booked.stopId : null;

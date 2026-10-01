@@ -55,11 +55,20 @@ async function passenger(o) {
     const p = u.searchParams;
     asked.push(u.search);
     let body = { ok: true, server: "w2.16.0", sheet: "v1.80.0" };
-    if (p.get("bus")) {
+    /* A booking saved: answered as the live server answers it. */
+    let sent = null;
+    try { sent = route.request().method() === "POST" ? JSON.parse(route.request().postData() || "{}") : null; } catch (e) {}
+    if (sent && sent.action === "booking") {
+      asked.push("POST " + JSON.stringify(sent.booking));
+      const b = sent.booking || {};
+      body = Object.assign(body, { stopId: b.stopId, seats: b.seats, counts: { S03: 3 },
+                                   mine: b.seats ? { stopId: b.stopId, seats: b.seats } : null });
+    } else if (p.get("bus")) {
       body = Object.assign(body, { date: KEY, closed: !!o.closed, rehearsal: o.rehearsal || false, rolled: false,
         cutoff: "Sunday 09:30", stops: STOPS, arrivals: ARRIVALS, off: [], counts: { S03: 3, N02: 2 },
         driver: o.driver || null, phone: o.booked ? "07700900123" : "", stopGone: "",
-        mine: o.booked ? { stopId: "S03", seats: 2 } : null, seats: {} });
+        mine: o.booked ? { stopId: "S03", seats: 2 } : null, seats: {},
+        stopMoved: o.moved ? { id: "S03", was: "Old Place by the Park", now: S03.stop, time: S03.time } : null });
     } else if (p.get("trip")) {
       body = Object.assign(body, o.trip || { live: false, why: "open", date: KEY });
     }
@@ -243,6 +252,35 @@ if (want("P8")) {
         text.indexOf(S03.stop) > -1 && gone,
         "shown " + btn.shown + ", '" + btn.text + "', " + (btn.href || "").slice(0, 40) + ", says stop " +
         (text.indexOf(S03.stop) > -1) + ", gone after the run " + gone);
+}
+
+/* P9 — from v1.90.0: the seat is at the same stop number, but the place behind
+   it was changed after booking. The page says so, with both, and keeping it
+   saves the seat again at the new place, which takes the notice away. */
+if (want("P9")) {
+  const me = await passenger({ booked: true, moved: true, pid: true, wait: 1500 });
+  const note = await me.text("#movedNote");
+  /* Tapped only if it is there: a missing button is a failed check, not a
+     crashed run. */
+  if (!(await me.pg.$("#keepStop"))) {
+    check("P9", "a seat whose stop number is now another place is told, with both, and Keep it saves it again",
+          false, "no Keep it button; note '" + note + "'");
+  } else {
+  await me.shot("P9-stop-moved");
+  await me.pg.click("#keepStop");
+  await me.pg.waitForTimeout(900);
+  const after = await me.pg.$$eval("#movedNote", (x) => x.length);
+  const posted = me.asked.filter((x) => /^POST /.test(x));
+  const plain = await passenger({ booked: true, pid: true, wait: 1500 });
+  const none = await plain.pg.$$eval("#movedNote", (x) => x.length);
+  check("P9", "a seat whose stop number is now another place is told, with both, and Keep it saves it again",
+        /Your stop has changed since you booked/.test(note) && /Old Place by the Park/.test(note) &&
+        note.indexOf(S03.stop) > -1 && posted.length === 1 && /"stopId":"S03","seats":2/.test(posted[0]) &&
+        after === 0 && none === 0 && !me.errs.length,
+        JSON.stringify({ note, posted, after, none, errors: me.errs }));
+  await plain.ctx.close();
+  }
+  await me.ctx.close();
 }
 
 const bad = results.filter((r) => !r.ok);

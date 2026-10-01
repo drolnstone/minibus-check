@@ -1,31 +1,42 @@
 MINIBUS
 =======
-  pages v1.89.1 · server w2.30.1 · sheet v1.92.0 (unchanged)
+  pages v1.90.0 · server w2.31.0 · sheet v1.93.0
 
-A fix, to go live before Sunday 4 October. The driver app calls a stop tap
-"pickup" (Picked up) or "empty" (Nobody there). The live server looked for
-"picked" and "none" instead in three places, so a real tap never woke the
-passengers further down the route, never showed on the coordinator's Run
-record, and Add on the Run record could put a second time beside the
-driver's own. The sheet always read the taps correctly; nothing on it needs
-putting right.
+The coordinator's tidy-up, and guards for a stop number whose place has been
+changed. Every screen says its name once, in the bar. On Bookings and the Run
+record the row of Sundays stays in view, and one Back leaves the screen
+however many Sundays were looked at. The Sunday card is the way into the
+Rota. "What I have done" is "What has been done". A fault reported on
+several walkarounds is one card, closed in one go. The Run record says which
+stops had seats booked and no tap. And a seat taken at a stop number before
+the place behind it was changed is noticed everywhere it matters, the
+passenger's own page included.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.89.0         v1.89.1
-  Worker  w2.30.0         w2.30.1
-  Code.gs v1.92.0         v1.92.0   (no change)
+  Pages   v1.89.1         v1.90.0
+  Worker  w2.30.1         w2.31.0
+  Code.gs v1.92.0         v1.93.0
 
-If the last release's steps (pages v1.89.0, server w2.30.0, sheet v1.92.0)
-are not done yet, do those first: analysis/DEPLOY-v1.89.0-w2.30.0.txt.
+If the fix before this one (pages v1.89.1, server w2.30.1, the stop taps) is
+not done yet, do it first: analysis/DEPLOY-v1.89.1-w2.30.1.txt.
 
 
 BEFORE YOU START
 ----------------
 
-Nothing to tell the drivers: they tap exactly as before. Passengers with
-alerts on will now be woken as the bus marks each stop before theirs, as
-the app always meant them to be.
+Tell the coordinators, the Minister in Charge and the Assistant Coordinator:
+  - the Rota is reached from the Sunday card on the first screen (it says
+    ROTA at its corner). Back from that Sunday is the list of Sundays, and
+    Back again is the first screen. There is no Rota button now;
+  - What I have done is called What has been done. It always showed every
+    coordinator's changes, each with the name of who made it;
+  - on Defects, a fault reported on several walkarounds is one card. Update
+    or Close on it is for every report, each ticked; untick one that turns
+    out to be a different fault.
+
+Nothing to tell the drivers. A passenger hears nothing unless a stop's place
+is changed after they booked it; then their page asks them about it.
 
 
 IN THIS ORDER
@@ -34,51 +45,111 @@ IN THIS ORDER
 1. WORKER. Cloudflare, the minibus Worker, Edit code. Replace everything
    with server/worker.js. Deploy. No database change.
 
-2. PAGES. Merge the pull request.
+2. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
+   Save. Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy.
 
-Code.gs is not touched.
+3. PAGES. Merge the pull request.
+
+Code.gs before the pages: a Close for several reports is filed by the sheet
+one report at a time from v1.93.0, and an older sheet would close only the
+first. The five minute sync after step 2 takes a copy of the Bus Stops tab;
+from then on every change to it is written on History.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.89.1 · server w2.30.1 · sheet
-   v1.92.0 .
+A. The foot of all three apps reads  app v1.90.0 · server w2.31.0 · sheet
+   v1.93.0 .
 
-B. The coordinator's app, Run record, the last two Sundays. The stops the
-   drivers marked show their times, where they said "not marked" before.
-   These are the taps already on the live server: nothing has to be sent
-   again.
+B. The coordinator's app, first screen: no Rota in the list; the Sunday card
+   says ROTA at its corner. Tap it: that Sunday, the bar saying ROTA. Back:
+   the list of Sundays. Back: the first screen. The list ends with What has
+   been done.
 
-C. On Sunday, a passenger with alerts on hears as the bus marks the stop
-   before theirs, and a stop marked Nobody there is told "Nobody there", not
-   "Picked up".
+C. Bookings, and the Run record: no heading under the bar repeating it. Tap
+   the other Sunday four or five times, then Back once: the first screen.
+   On a long list, scroll: the row of Sundays stays under the bar.
+
+D. Run record, last Sunday: every stop with its number in front. A stop with
+   no tap says either "N seats booked, not marked" in amber, or "nobody
+   booked" in grey.
+
+E. Defects: a fault reported on more than one walkaround is one card, saying
+   "N reports since" and how long it has been open, with DVSA DAILY CHECK on
+   the items on that list. Do not close one to try it unless it is really
+   done.
+
+F. Minibus, Have a look, Is everything working?: under Fine, "Bookings:
+   every seat for the coming Sundays is at the place its stop number names."
+   (Run before step 3, the report is the same: this one is the sheet's own.)
+
+G. The driver app: Driving rota and Stops and bookings say their name in the
+   bar and nowhere else.
 
 
 WHAT CHANGED
 ------------
 
-1. ONE LIST OF WHAT A STOP TAP IS CALLED. pickup and empty (what the driver
-   app's buttons send), with picked and none kept readable for rows already
-   written. Read by the tap alerts, the Run record and Add. (worker.js
-   TAP_PICKED, TAP_EMPTY, isStopTap.)
+1. EVERY SCREEN SAYS ITS NAME ONCE. The heading that repeated the bar is gone
+   from Rota, Rota requests, Bookings, Defects, Buses, Run record, Have a
+   look, What has been done and Rehearsal, and from the driver app's Driving
+   rota, Stops and bookings and Waiting to send. A Sunday keeps its date, a
+   bus its plate and a report its name. (coord/index.html, index.html;
+   browser checks C37 and T21; sabotages S32 and S40.)
 
-2. THE TAP ALERTS. A real tap now wakes the booked stops after it, and tells
-   a booked stop the bus has gone past unmarked. Neither had fired for a real
-   tap in any version this repository holds. (worker.js handleTrip,
-   wakeAfterTap.)
+2. THE ROW OF SUNDAYS STAYS IN VIEW on Bookings and the Run record, pinned
+   under the bar while the list scrolls. (coord/index.html .chips.stick,
+   barHeight; C34; S30.)
 
-3. THE RUN RECORD shows the drivers' taps, and "nobody there" for a stop
-   marked so. (worker.js coordRuns; coord/index.html evRow.)
+3. ONE BACK. Switching Sunday on Bookings or the Run record replaces the page
+   instead of adding one, so five Sundays no longer take five Backs.
+   (coord/index.html go; C35; S29.)
 
-4. ADD refuses a stop the driver already tapped, whichever word the tap
-   used, and writes "pickup", the driver app's word, so the Trip Events tab
-   carries one word for one thing. (worker.js actFix.)
+4. THE ROTA FROM THE SUNDAY CARD. A Sunday opened from the first screen is
+   opened from inside the Rota: Back is the list of Sundays. The Rota button
+   is gone; the card says ROTA at its corner. (go, sunCard, paintHome; C36;
+   S31.)
 
-5. A PASSENGER'S NOTIFICATION after Nobody there at their stop says so. It
-   said "Picked up at …, have a good service" to somebody still at the kerb.
-   The page always told the two apart. (worker.js pushWhat.)
+5. WHAT HAS BEEN DONE, not What I have done: the screen always showed every
+   coordinator's changes, each with who made it. (C36, C37.)
 
-   (tests/suites/37-stop-taps.mjs, 7 checks, reading the words straight off
-   the driver app's buttons, every one failing on w2.30.0; browser check C9
-   now feeds the Run record the driver app's words; sabotages S28 and S28b.)
+6. ONE CARD PER FAULT. Repeated reports of one item on one bus are one card:
+   the heaviest weight any report gave it, the newest words, how many reports
+   since when, how long open, the DVSA tag, and every trail. Update and Close
+   are for every report, ticked; one Close with one "what was done" closes
+   them all, each with its own History line. The first screen, the Buses
+   screens and Record something count and tick faults, not reports. The
+   driver app stops showing "Still open on this bus" for a fault closed in
+   one go. (coord/index.html defectGroups, paintDefects, updateDefect,
+   DVSA_ITEMS held to the driver app's list by a test; worker.js actDefect
+   keys, defectKeysOf; Code.gs coordDefect; C39; S33 and S34.)
+
+7. THE RUN RECORD KNOWS WHAT WAS BOOKED. Each stop by its number, with the
+   seats booked there that Sunday by number. An untapped stop with seats is
+   amber, "N seats booked, not marked"; one with nobody booked is grey, since
+   the driver app asks for no tap there. A number that was another place
+   that morning says "then" and the old place. (worker.js coordRuns;
+   coord/index.html evRow; C38; S35 and S36.)
+
+8. A STOP IS ITS NUMBER, AND THE GUARDS FOR CHANGING THE PLACE BEHIND ONE.
+   A booking and a tap keep the name their number had when they were made;
+   it is compared, never matched on. When it no longer matches:
+     - History has every change to a numbered row of the Bus Stops tab (the
+       place, the time, Active, a number added or taken off), from an edit,
+       a paste or a script (Code.gs stopsAudit, onEditBusStops);
+     - the sheet says at once which seats for a coming Sunday were booked at
+       the old place, and History's line names them;
+     - Is everything working? lists them under To do (stopsHealth);
+     - the coordinator's Bookings says "Booked when N05 was …" (C40; S37);
+     - the passenger's page says "Your stop has changed since you booked",
+       with both places, and Yes, keep it saves the seat again at the new
+       place, which clears all of these (worker.js and Code.gs busPayload
+       stopMoved; sunday/index.html; P9; S38 and S39).
+   Stops are shown with their number on the Run record, Bookings and
+   booking for somebody.
+
+   (tests/suites/38-tidy-up.mjs, 12 checks, ten of them failing on w2.30.1 /
+   v1.92.0 and the other two on the v1.89.1 page; browser checks C34 to C40,
+   T21, P9; sabotages S29 to S40.)

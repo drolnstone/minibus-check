@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.89.1 · THE COORDINATOR'S APP.
+<!-- BUILD v1.90.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -131,6 +131,9 @@ body.bar-away .wrap{padding-top:calc(16px + var(--safe-t))}
 .eyebrow{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.16em;
   text-transform:uppercase;color:var(--muted);margin:0 0 4px}
 h1{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:30px;line-height:1.06;margin:0 0 12px}
+/* With no heading under the bar (from v1.90.0), a screen that opens on a
+   bus's plate starts at the top like every other. */
+.screen > div > h3:first-child{margin-top:0}
 h2{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:26px;line-height:1.1;margin:0 0 8px}
 h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;letter-spacing:.1em;
   text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
@@ -217,6 +220,13 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .chips button{min-height:40px;padding:0 14px;border:1.5px solid var(--hair);border-radius:20px;background:var(--card);
   font-size:14px;font-weight:500}
 .chips button.on{background:var(--steel);border-color:var(--steel);color:var(--on-accent)}
+/* THE DATES STAY IN VIEW, from v1.90.0. On Bookings and the Run record the
+   row of Sundays is pinned under the bar while the list scrolls, so the one
+   lit is always there to say which Sunday this is. --bar-h is the bar's own
+   height, measured, because the status bar above it differs by phone. */
+.chips.stick{position:sticky;top:var(--bar-h,60px);z-index:50;background:var(--paper);
+  margin:-16px calc(-14px - var(--safe-r)) 12px calc(-14px - var(--safe-l));
+  padding:10px calc(14px + var(--safe-r)) 10px calc(14px + var(--safe-l));border-bottom:1px solid var(--hair)}
 
 /* ---- small labels ---- */
 .tag{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:11px;
@@ -256,6 +266,9 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .sun.now{border:2px solid var(--steel)}
 .sun:active{background:var(--press)}
 .sun-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+/* On the first screen only: the card is the way into the Rota, and says so. */
+.sun-cue{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:12px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);white-space:nowrap}
 .sun-date{flex:1;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:18px;letter-spacing:.04em;
   text-transform:uppercase;white-space:nowrap}
 .leg{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:8px;padding:4px 0;
@@ -332,6 +345,7 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .bk{display:flex;align-items:center;gap:8px;margin:4px 0 0 52px;font-size:14px;min-height:36px}
 .bk .who{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px}
 .bk .n{font-weight:600;white-space:nowrap}
+.bk .moved{flex-basis:100%;color:var(--warn);font-weight:600;font-size:13px;line-height:1.3}
 .bk a{color:var(--info-deep);font-weight:600;text-decoration:none;white-space:nowrap}
 .bk .mini{min-height:34px;padding:0 9px;font-size:13px}
 .bs-more{display:block;width:100%;min-height:42px;margin-top:2px;padding:0;border-top:1px solid var(--hair);
@@ -353,6 +367,10 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .def-foot{display:flex;align-items:center;gap:8px;margin-top:6px}
 .def-foot .tiny{flex:1;min-width:0;margin:0}
 .def-foot .mini{min-height:36px}
+.def .def-age{font-size:13px;color:var(--muted);margin-top:3px}
+.def .def-dvsa{margin:4px 0 0}
+.tag.dvsa{background:var(--card);color:var(--ink-2);border-color:var(--hair)}
+#defReps .check small{display:block;margin-top:1px}
 .trail{margin-top:6px}
 .trail summary{font-size:13px;font-weight:600;color:var(--muted);padding:4px 0;cursor:pointer}
 .trail li{font-size:14px}
@@ -392,6 +410,11 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .preview{background:var(--info-bg);border:1px solid var(--info-line);border-radius:8px;padding:9px 11px;
   font-size:14px;line-height:1.4;margin:0 0 12px;color:var(--ink)}
 
+/* ---- a stop's number ---- */
+.sid{font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:600;color:var(--muted);margin-right:5px;
+  letter-spacing:0;white-space:nowrap}
+.then{display:block;font-weight:400;color:var(--muted);font-size:12px;font-style:italic}
+
 /* ---- the run record ---- */
 .ev{display:grid;grid-template-columns:44px 1fr auto auto;align-items:center;gap:8px;padding:7px 0;
   border-top:1px solid var(--hair)}
@@ -402,6 +425,11 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .ev .at small{display:block;font-weight:500;font-size:12px;color:var(--muted)}
 .ev .at.late small{color:var(--warn)}
 .ev.miss .at{color:var(--muted);font-weight:400}
+/* Seats booked and no tap: the one that wants looking at. Nobody booked and
+   no tap: the driver app asks for nothing there, so nothing is missing. */
+.ev.missed .nm small.why{color:var(--warn);font-weight:600}
+.ev.quiet .nm{color:var(--muted);font-weight:400}
+.ev .mini.quiet{border-color:transparent;color:var(--muted);background:transparent}
 .ev .mini{min-height:34px;padding:0 10px;font-size:13px}
 
 /* ---- reports ---- */
@@ -602,7 +630,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.89.1";
+var PAGE_VERSION = "v1.90.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -727,6 +755,13 @@ function dayOf(ms){
 function when(ms){ return ms ? shortDay(dayOf(ms)) + " " + hhmm(ms) : ""; }
 function phoneWords(p){ p=String(p||""); return p.length===11 ? p.slice(0,5)+" "+p.slice(5) : p; }
 function seatWords(n){ return n + (Number(n)===1 ? " seat" : " seats"); }
+/* A STOP IS ITS NUMBER, from v1.90.0: shown first wherever a stop is named,
+   because the place behind a number is edited as the passengers change and
+   the number is what everybody refers to. The name is only compared, to say
+   when a seat or a tap was made at the place the number used to be. */
+function sid(id){ return id ? '<span class="sid">'+esc(id)+'</span>' : ''; }
+function stopWords(x){ return String(x||"").trim().toLowerCase().replace(/\s+/g, " "); }
+function sameStop(a, b){ return stopWords(a) === stopWords(b); }
 function offWords(off){
   if(off === null || off === undefined || off === "") return "";
   off = Number(off);
@@ -939,12 +974,29 @@ function say(id, t, bad){
 
 var TITLES = { home:"Coordinator", rota:"Rota", sunday:"Rota", requests:"Rota requests", bookings:"Bookings",
                defects:"Defects", buses:"Buses", bus:"Bus", runs:"Run record", look:"Have a look", report:"Have a look",
-               activity:"What I have done", rehearsal:"Rehearsal", sign:"Coordinator" };
+               activity:"What has been done", rehearsal:"Rehearsal", sign:"Coordinator" };
 
 /* Each screen is a step in the phone's own history, so its back gesture
    works. The bar's back arrow never leaves the app: at the first step it
-   goes home. */
-function go(where){ seq++; history.pushState({ n: seq }, "", "#" + where); route(); }
+   goes home.
+
+   SWITCHING WITHIN A SCREEN IS NOT A STEP, from v1.90.0. Another Sunday on
+   Bookings or the Run record replaces the one on show, so one Back leaves
+   the screen however many dates were looked at; five dates used to take five
+   Backs. And a Sunday opened from the first screen is opened from inside the
+   Rota: Back goes to the list of Sundays, and Back again home, which is why
+   the first screen no longer needs a Rota button of its own. */
+function go(where){
+  var now = current().name, to = String(where).split("/")[0] || "home";
+  if(to === now && to !== "home"){ history.replaceState(history.state, "", "#" + where); route(); return; }
+  if(to === "sunday" && now === "home"){ seq++; history.pushState({ n: seq }, "", "#rota"); }
+  seq++; history.pushState({ n: seq }, "", "#" + where); route();
+}
+function barHeight(){
+  var b = document.querySelector(".bar");
+  if(b && b.offsetHeight) document.documentElement.style.setProperty("--bar-h", b.offsetHeight + "px");
+}
+window.addEventListener("resize", barHeight);
 function back(){
   if(history.state && history.state.n > 0) history.back();
   else { history.replaceState({ n: 0 }, "", "#home"); route(); }
@@ -967,6 +1019,7 @@ function route(){
   $("barLock").hidden = (name !== "home");
   bellPaint(name);
   paint(name, arg);
+  barHeight();
   window.scrollTo(0, 0);
 }
 
@@ -1067,7 +1120,7 @@ function lastDrove(name){
   return best;
 }
 
-function sunCard(key, now){
+function sunCard(key, now, cue){
   var r = rowFor(key);
   if(!r) return "";
   var l = legs(r), seats = (D.seats && D.seats[key]) || {};
@@ -1075,7 +1128,8 @@ function sunCard(key, now){
           '<div class="sun-head"><span class="sun-date">'+esc(now ? longDay(key) : shortDay(key))+'</span>' +
           statusTag(r.status) +
           (pendingFor(key).length && r.status !== "Change requested" ? '<span class="tag warn">Request</span>' : '') +
-          (r.coordPending ? '<span class="tag info">To the sheet</span>' : '') + '</div>';
+          (r.coordPending ? '<span class="tag info">To the sheet</span>' : '') +
+          (cue ? '<span class="sun-cue">Rota \u203A</span>' : '') + '</div>';
   ["North","South"].forEach(function(rt){
     var g = l[rt], off = isOff(r.status, rt);
     if(!g.sched && !g.cover && rt === "South" && !off) return;
@@ -1134,7 +1188,8 @@ function needs(){
       }
     });
   });
-  var crit = ((D && D.defects) || []).filter(function(d){ return d.crit && d.kind !== "Advisory"; }).length;
+  /* Faults, not reports: three walkarounds finding one tyre are one tyre. */
+  var crit = defectGroups((D && D.defects) || []).filter(function(g){ return g.crit && g.kind !== "Advisory"; }).length;
   if(crit) out.push({ tone:"stop", text: crit === 1 ? "A critical defect is open." : crit + " critical defects are open.", go:"defects" });
   var refused = ((D && D.activity) || []).filter(function(x){ return x.state === "refused" && Date.now() - x.made < 2 * 86400000; }).length;
   if(refused) out.push({ tone:"stop", text: refused === 1 ? "The sheet did not take a change." : "The sheet did not take " + refused + " changes.", go:"activity" });
@@ -1150,14 +1205,15 @@ function paintHome(){
   if(D.rota && D.rota.error){
     h += '<div class="need stop"><p>The rota has not reached the live server.</p></div>';
   }
-  h += sunCard(D.today, true) || '<div class="card"><p class="tiny">'+esc(longDay(D.today))+' is not on the live server’s rota.</p></div>';
-  if(D.open && D.open !== D.today) h += sunCard(D.open, false);
+  h += sunCard(D.today, true, true) || '<div class="card"><p class="tiny">'+esc(longDay(D.today))+' is not on the live server’s rota.</p>' +
+       '<button class="mini" type="button" data-go="rota">Rota</button></div>';
+  if(D.open && D.open !== D.today) h += sunCard(D.open, false, true);
 
   var pend = (D.requests || []).filter(function(q){ return q.status === "Pending"; }).length;
   var bk = D.open || D.today;
   var booked = 0, sk = (D.seats && D.seats[bk]) || {};
   Object.keys(sk).forEach(function(rt){ booked += Number(sk[rt].booked) || 0; });
-  var defs = (D.defects || []).length;
+  var defs = defectGroups(D.defects || []).length;
   var jobs = 0, jv = (D.vehicles && D.vehicles.jobs) || {};
   Object.keys(jv).forEach(function(r){ jobs += ((jv[r] && jv[r].jobs) || []).length; });
   var waiting = Number(D.waiting) || 0;
@@ -1166,7 +1222,6 @@ function paintHome(){
            (n ? '<span class="n '+(tone||'')+'">'+esc(n)+'</span>' : '') + '<span class="go">›</span></button></li>';
   };
   h += '<ul class="menu">' +
-       item("rota", "Rota", "") +
        item("requests", "Rota requests", pend ? pend + " waiting" : "none waiting", pend ? "warn" : "") +
        item("bookings/" + bk, "Bookings", booked + " booked" + (bk !== D.today ? " for " + shortDay(bk) : ""), "") +
        item("defects", "Defects", defs ? defs + " open" : "none open", defs ? "warn" : "") +
@@ -1177,7 +1232,7 @@ function paintHome(){
        (D && ("rehearsal" in D) ? item("rehearsal", "Rehearsal", D.rehearsal ? "until " + hhmm(D.rehearsal.ends) : "",
                                       D.rehearsal ? "warn" : "") : "") +
        item("look", "Have a look", "") +
-       item("activity", "What I have done", waiting ? waiting + " on the way" : "", waiting ? "warn" : "") +
+       item("activity", "What has been done", waiting ? waiting + " on the way" : "", waiting ? "warn" : "") +
        '</ul>';
   /* Signed in, so the way back carries him: to the driver app's hub, not its
      name screen. The link on the sign-in screen has no PIN to carry and stays
@@ -1193,7 +1248,7 @@ function paintHome(){
 /* ---- the rota -------------------------------------------------------------- */
 
 function paintRota(){
-  var h = '<h1>Rota</h1>';
+  var h = '';
   if(D.rota && D.rota.error) h += '<div class="need stop"><p>The rota has not reached the live server.</p></div>';
   var ahead = rows().filter(function(r){ return r.date >= D.today; });
   ahead.slice(0, ROTA_SHOW).forEach(function(r){ h += sunCard(r.date, r.date === D.today); });
@@ -1355,7 +1410,7 @@ function paintRequests(){
   var all = D.requests || [];
   var pend = all.filter(function(q){ return q.status === "Pending"; });
   var done = all.filter(function(q){ return q.status !== "Pending"; });
-  var h = '<h1>Rota requests</h1>';
+  var h = '';
   if(!pend.length) h += '<div class="card"><p class="tiny" style="margin:0">None waiting.</p></div>';
   pend.forEach(function(q){ h += reqCard(q); });
   if(done.length){
@@ -1415,7 +1470,7 @@ function loadBookings(key){
   api("bookings", { sunday:key }).then(function(out){
     if(BOOK.loading !== key) return;
     BOOK.loading = "";
-    if(!out || !out.ok){ $("bookingsBody").innerHTML = '<h1>Bookings</h1><div class="card"><p class="say bad">'+esc(plain(out && out.error) || "No answer.")+'</p></div>'; return; }
+    if(!out || !out.ok){ $("bookingsBody").innerHTML = '<div class="card"><p class="say bad">'+esc(plain(out && out.error) || "No answer.")+'</p></div>'; return; }
     BOOK = { sunday:key, data:out };
     var c = current();
     if(c.name === "bookings" && (c.arg || D.today) === key) paintBookings(key);
@@ -1424,7 +1479,7 @@ function loadBookings(key){
 
 function paintBookings(key){
   var chips = [D.today, plusWeeks(D.today, 1)];
-  var h = '<h1>Bookings</h1><div class="chips">' + chips.map(function(k){
+  var h = '<div class="chips stick">' + chips.map(function(k){
     return '<button type="button" class="'+(k === key ? 'on' : '')+'" data-go="bookings/'+esc(k)+'">'+esc(shortDay(k))+'</button>';
   }).join("") + '</div>';
   if(!BOOK.data || BOOK.sunday !== key){
@@ -1446,11 +1501,16 @@ function paintBookings(key){
     if(!booked.length && !every) h += '<p class="bk-none">Nobody booked.</p>';
     (every ? rt.stops : booked).forEach(function(s){
       h += '<div class="bs'+(s.seats ? '' : ' nobody')+(s.passed ? ' passed' : '')+'"><div class="bs-h"><span class="tm">'+esc(s.time)+'</span>' +
-           '<span class="nm">'+esc(s.stop)+(s.passed ? ' <span class="tag">Passed</span>' : '')+'</span><span class="ct">'+(s.seats || '–')+'</span></div>';
+           '<span class="nm">'+sid(s.id)+esc(s.stop)+(s.passed ? ' <span class="tag">Passed</span>' : '')+'</span><span class="ct">'+(s.seats || '–')+'</span></div>';
       s.bookings.forEach(function(k){
+        /* Taken when this number was another place. The seat is still good,
+           by number; the passenger booked the old place, and their own page
+           asks them about it. Said here so whoever rings round knows. */
+        var moved = k.stop && !sameStop(k.stop, s.stop);
         h += '<div class="bk"><span class="who"><span class="n">'+esc(seatWords(k.seats))+'</span>' +
              (k.phone ? '<a href="tel:'+esc(k.phone)+'">'+esc(phoneWords(k.phone))+'</a>' : '<span>no number</span>') +
-             (k.coord ? '<span class="tag info">By phone</span>' : '') + '</span>' +
+             (k.coord ? '<span class="tag info">By phone</span>' : '') +
+             (moved ? '<small class="moved">Booked when '+esc(s.id)+' was '+esc(k.stop)+'</small>' : '') + '</span>' +
              (b.mayAct && !k.rehearsal ? '<button class="mini warn" type="button" data-do="cancel" data-id="'+k.id+'">Cancel</button>' : '') + '</div>';
       });
       h += '</div>';
@@ -1462,7 +1522,7 @@ function paintBookings(key){
   if(!b.mayAct) h += '<p class="tiny center">Past Sundays are for looking only.</p>';
   if(b.cancelled && b.cancelled.length){
     h += '<details class="more"><summary>Cancelled ('+b.cancelled.length+')</summary><ul class="list">' + b.cancelled.map(function(k){
-      return '<li>'+esc(seatWords(k.seats))+' at '+esc(k.stop)+(k.phone ? ', '+esc(phoneWords(k.phone)) : '')+
+      return '<li>'+esc(seatWords(k.seats))+' at '+esc((k.stopId ? k.stopId + " " : "") + k.stop)+(k.phone ? ', '+esc(phoneWords(k.phone)) : '')+
              '<small>'+esc(k.note || when(k.received))+'</small></li>';
     }).join("") + '</ul></details>';
   }
@@ -1480,7 +1540,7 @@ function bookingById(id){
 
 function cancelBooking(id){
   var k = bookingById(id); if(!k) return;
-  openSheet({ eyebrow: shortDay(BOOK.sunday), title: "Cancel " + seatWords(k.seats) + " at " + k.stop + "?",
+  openSheet({ eyebrow: shortDay(BOOK.sunday), title: "Cancel " + seatWords(k.seats) + " at " + (k.stopId ? k.stopId + " " : "") + k.stop + "?",
               line: k.phone ? phoneWords(k.phone) : "", go: "Cancel the booking", stop: true, keep: "Keep it",
               onGo: function(){ act({ kind:"booking", op:"cancel", bookingId:id }); } });
 }
@@ -1489,7 +1549,7 @@ function bookFor(key){
   var b = BOOK.data; if(!b) return;
   var opts = b.routes.filter(function(r){ return !r.off && !r.ended; }).map(function(r){
     return '<optgroup label="'+esc(r.route)+'">' + r.stops.filter(function(s){ return !s.passed; }).map(function(s){
-      return '<option value="'+esc(s.id)+'">'+esc(s.time+"  "+s.stop)+'</option>';
+      return '<option value="'+esc(s.id)+'">'+esc(s.id+"  "+s.time+"  "+s.stop)+'</option>';
     }).join("") + '</optgroup>';
   }).join("");
   if(!opts){ toast("No route is taking seats that Sunday.", true); return; }
@@ -1520,25 +1580,100 @@ function bookFor(key){
 
 var DEF_STATES = ["Open", "Booked in", "Parts on order", "Monitoring", "Fixed", "Not a defect"];
 
+/* THE ITEMS ON DVSA'S DAILY WALKAROUND CHECK, by the name a defect carries.
+   The driver app holds the same list by item (DVSA_DAILY in index.html) and
+   tags its checklist with it; tests/suites/38-tidy-up.mjs reads that list
+   off the driver app and holds this one to it. */
+var DVSA_ITEMS = ["Tyres", "Wheel nuts", "Lights, plates and reflectors", "Passenger and cab doors", "Body and glass",
+  "Clean enough to be safe", "Leaks underneath", "Brake pipes and lines", "Exhaust", "Fuel and filler cap",
+  "Mudflaps and spray guards", "Screenwash", "AdBlue", "Battery", "Seat belts", "Seats and anchorages", "Step",
+  "Emergency exits and signage", "Gangway, handrails and hammers", "Interior and step lighting", "Fire extinguisher",
+  "First aid kit", "ABS warning lamp", "Other warning lights", "Brakes and pedals", "Steering",
+  "Mirrors, wipers and washers", "Horn, heater, demist", "Driver's seat and belt"];
+function isDvsa(item){
+  var k = String(item || "").trim().toLowerCase();
+  return DVSA_ITEMS.some(function(x){ return x.toLowerCase() === k; });
+}
+
+/* ONE CARD PER FAULT, from v1.90.0, as the driver app has shown them since
+   v1.83.0. Every walkaround that finds the same fault writes another row, so
+   a key remote nobody has fixed was on this screen once per inspection, and
+   closing one left the others open: the driver app went on listing it as
+   "Still open on this bus" from the rows nobody had closed.
+
+   Grouped by bus and item. The weight never comes down: one critical report
+   makes the card critical, and a defect outranks an advisory. The words are
+   the newest report's, the count and the first date say how long it has been
+   saying them, and the status is the least settled of them. Update and
+   Close are for every report on the card, each listed and ticked, so one
+   that is a different fault under the same heading can be left out. */
+var DEF_RANK = { "Open": 0, "Parts on order": 1, "Booked in": 2, "Monitoring": 3 };
+function defectGroups(list){
+  var by = {}, out = [];
+  (list || []).forEach(function(d){
+    var k = String(d.reg || "").trim().toUpperCase() + "|" + String(d.item || "").trim().toLowerCase();
+    var g = by[k];
+    if(!g){ g = by[k] = { gk: k, reg: d.reg, item: d.item, reports: [], crit: false, kind: "Advisory", status: "",
+                          found: "", newest: "", oldest: "", driver: "", waiting: false }; out.push(g); }
+    g.reports.push(d);
+    if(d.crit) g.crit = true;
+    if(d.kind !== "Advisory") g.kind = "Defect";
+    var st = d.status || "Open", r = DEF_RANK[st] === undefined ? 9 : DEF_RANK[st];
+    if(!g.status || r < (DEF_RANK[g.status] === undefined ? 9 : DEF_RANK[g.status])) g.status = st;
+    var dt = String(d.date || "");
+    if(!g.newest || dt >= g.newest){ g.newest = dt; g.found = d.found || ""; g.driver = d.driver || ""; if(d.item) g.item = d.item; }
+    if(dt && (!g.oldest || dt < g.oldest)) g.oldest = dt;
+    if(d.waiting) g.waiting = true;
+  });
+  out.forEach(function(g){
+    g.reports.sort(function(a, b){ return String(b.date || "") < String(a.date || "") ? -1 : String(b.date || "") > String(a.date || "") ? 1 : 0; });
+    g.keys = g.reports.map(function(d){ return d.key; });
+    var did = [];
+    g.reports.forEach(function(d){ String(d.action || "").split("\n").forEach(function(x){ x = x.trim(); if(x && did.indexOf(x) === -1) did.push(x); }); });
+    g.action = did.join("\n");
+    g.trail = [].concat.apply([], g.reports.map(function(d){ return d.trail || []; }))
+      .sort(function(a, b){ return (Number(a.when) || 0) - (Number(b.when) || 0); });
+    g.dvsa = isDvsa(g.item);
+  });
+  /* Critical first, then a defect before an advisory, then the oldest. */
+  return out.sort(function(a, b){
+    return (b.crit - a.crit) || ((a.kind === "Advisory") - (b.kind === "Advisory")) ||
+           (a.oldest < b.oldest ? -1 : a.oldest > b.oldest ? 1 : 0);
+  });
+}
+function defectGroupByKey(gk){
+  var g = defectGroups((D && D.defects) || []);
+  for(var i = 0; i < g.length; i++) if(g[i].gk === gk) return g[i];
+  return null;
+}
+function openFor(g){
+  var n = g.oldest ? rnDays(g.oldest, calToday()) : null;
+  return n === null || n < 0 ? "" : n === 0 ? "open since today" : n === 1 ? "open 1 day" : "open " + n + " days";
+}
+
 function paintDefects(){
   var list = D.defects || [];
-  var h = '<h1>Defects</h1>';
+  var h = '';
   if(!list.length){ $("defectsBody").innerHTML = h + '<div class="card"><p class="tiny" style="margin:0">None open.</p></div>'; return; }
+  var groups = defectGroups(list);
   var regs = [];
-  list.forEach(function(d){ if(regs.indexOf(d.reg) === -1) regs.push(d.reg); });
+  groups.forEach(function(g){ if(regs.indexOf(g.reg) === -1) regs.push(g.reg); });
   regs.sort().forEach(function(reg){
     h += '<h3><span class="plate">'+esc(reg)+'</span></h3>';
-    list.filter(function(d){ return d.reg === reg; }).forEach(function(d){
-      var cls = d.kind === "Advisory" ? " adv" : d.crit ? " crit" : "";
-      h += '<div class="def'+cls+'"><div class="def-head"><b>'+esc(d.item)+'</b>' +
-           (d.kind === "Advisory" ? '<span class="tag info">Advisory</span>' : d.crit ? '<span class="tag stop">Critical</span>' : '') +
-           '<span class="tag '+(d.status === "Open" ? 'warn' : '')+'">'+esc(d.status || "Open")+'</span></div>' +
-           (d.found ? '<p>“'+esc(d.found)+'”</p>' : '') +
-           (d.action ? '<p class="did">'+esc(d.action)+'</p>' : '') +
-           trailHTML(d.trail) +
-           '<div class="def-foot"><p class="tiny">'+esc([d.date ? shortDay(d.date) : "", d.driver].filter(Boolean).join(", "))+'</p>' +
-           (d.waiting ? '<span class="tag info">To the sheet</span>' : '') +
-           '<button class="mini" type="button" data-do="defect" data-key="'+esc(d.key)+'">Update</button></div></div>';
+    groups.filter(function(g){ return g.reg === reg; }).forEach(function(g){
+      var cls = g.kind === "Advisory" ? " adv" : g.crit ? " crit" : "";
+      var n = g.reports.length;
+      h += '<div class="def'+cls+'"><div class="def-head"><b>'+esc(g.item)+'</b>' +
+           (g.kind === "Advisory" ? '<span class="tag info">Advisory</span>' : g.crit ? '<span class="tag stop">Critical</span>' : '') +
+           '<span class="tag '+(g.status === "Open" ? 'warn' : '')+'">'+esc(g.status || "Open")+'</span></div>' +
+           (g.dvsa ? '<p class="def-dvsa"><span class="tag dvsa">DVSA daily check</span></p>' : '') +
+           (g.found ? '<p>“'+esc(g.found)+'”</p>' : '') +
+           '<p class="def-age">'+esc([n > 1 ? n + " reports since " + shortDay(g.oldest) : "", openFor(g)].filter(Boolean).join(", "))+'</p>' +
+           (g.action ? '<p class="did">'+esc(g.action)+'</p>' : '') +
+           trailHTML(g.trail) +
+           '<div class="def-foot"><p class="tiny">'+esc([g.newest ? (n > 1 ? "Last " : "") + shortDay(g.newest) : "", g.driver].filter(Boolean).join(", "))+'</p>' +
+           (g.waiting ? '<span class="tag info">To the sheet</span>' : '') +
+           '<button class="mini" type="button" data-do="defect" data-key="'+esc(g.gk)+'">Update</button></div></div>';
     });
   });
   $("defectsBody").innerHTML = h;
@@ -1546,22 +1681,37 @@ function paintDefects(){
 
 function defectByKey(k){ var a = (D && D.defects) || []; for(var i=0;i<a.length;i++) if(a[i].key === k) return a[i]; return null; }
 
-function updateDefect(key){
-  var d = defectByKey(key); if(!d) return;
-  var chosen = d.status || "Open";
-  openSheet({ eyebrow: d.reg, title: d.item,
-    body: '<div class="chips" id="defStates">' + DEF_STATES.map(function(s){
+function updateDefect(gk){
+  var g = defectGroupByKey(gk); if(!g) return;
+  var chosen = g.status || "Open";
+  var many = g.reports.length > 1;
+  openSheet({ eyebrow: g.reg, title: g.item,
+    body: (many ? '<div id="defReps"><p class="tiny" style="margin:0 0 2px">For each report of it, all ticked. Untick one that is a different fault:</p>' +
+            g.reports.map(function(d, i){
+              return '<label class="check"><input type="checkbox" data-rep="'+i+'" checked><span>' +
+                     esc([d.date ? shortDay(d.date) : "", d.driver].filter(Boolean).join(", ")) +
+                     '<small>'+esc((d.found ? "“" + d.found + "”, " : "") + (d.status || "Open"))+'</small></span></label>';
+            }).join("") + '</div>' : '') +
+          '<div class="chips" id="defStates">' + DEF_STATES.map(function(s){
             return '<button type="button" data-state="'+esc(s)+'" class="'+(s === chosen ? 'on' : '')+'">'+esc(s)+'</button>';
           }).join("") + '</div>' +
           '<div class="field"><label for="defDid">What was done</label><textarea id="defDid" maxlength="500"></textarea></div>',
     go: "Save",
     onGo: function(){
       var did = String($("defDid").value || "").trim();
+      var reps = many ? Array.prototype.map.call(document.querySelectorAll("#defReps input[data-rep]:checked"), function(x){
+        return g.reports[Number(x.getAttribute("data-rep"))]; }) : [g.reports[0]];
+      if(!reps.length){ sheetSay("Tick at least one report.", true); return; }
       if((chosen === "Fixed" || chosen === "Not a defect") && !did){ sheetSay("Say what was done.", true); return; }
-      if(chosen === (d.status || "Open") && !did){ sheetSay("Nothing has changed.", true); return; }
-      act({ kind:"defect", key:key, status:chosen, action:did });
+      if(reps.every(function(d){ return chosen === (d.status || "Open"); }) && !did){ sheetSay("Nothing has changed.", true); return; }
+      var keys = reps.map(function(d){ return d.key; });
+      act({ kind:"defect", key:keys[0], keys:keys, status:chosen, action:did });
     } });
-  var label = function(){ $("sheetGo").textContent = (chosen === "Fixed" || chosen === "Not a defect") ? "Close it" : "Save"; };
+  var label = function(){
+    var n = many ? document.querySelectorAll("#defReps input[data-rep]:checked").length : 1;
+    var closing = chosen === "Fixed" || chosen === "Not a defect";
+    $("sheetGo").textContent = closing ? (n > 1 ? "Close all " + n : "Close it") : "Save";
+  };
   Array.prototype.forEach.call(document.querySelectorAll("#defStates button"), function(b){
     b.onclick = function(){
       chosen = b.getAttribute("data-state");
@@ -1570,6 +1720,7 @@ function updateDefect(key){
       label();
     };
   });
+  Array.prototype.forEach.call(document.querySelectorAll("#defReps input[data-rep]"), function(x){ x.onchange = label; });
   label();
 }
 
@@ -1739,11 +1890,11 @@ function dueRows(b){
 }
 
 function paintBuses(){
-  var h = '<h1>Buses</h1>';
+  var h = '';
   var list = busList().slice().sort(function(a, b){ return (b.active ? 1 : 0) - (a.active ? 1 : 0) || String(a.reg).localeCompare(String(b.reg)); });
   if(!list.length){ $("busesBody").innerHTML = h + '<div class="card"><p class="tiny" style="margin:0">No buses have reached the live server.</p></div>'; return; }
   list.forEach(function(b){
-    var j = jobsOf(b.reg), jn = j && j.jobs ? j.jobs.length : 0, dn = defectsOf(b.reg).length;
+    var j = jobsOf(b.reg), jn = j && j.jobs ? j.jobs.length : 0, dn = defectGroups(defectsOf(b.reg)).length;
     h += '<button type="button" class="card bus-card" data-go="bus/' + esc(encodeURIComponent(b.reg)) + '">' +
          '<span class="bus-head"><span class="plate">' + esc(b.reg) + '</span>' +
          (b.active ? '' : '<span class="tag">Not in use</span>') +
@@ -1798,7 +1949,7 @@ function paintBus(reg){
                   '<button class="mini" type="button" data-do="job" data-reg="' + esc(b.reg) + '" data-job="' + esc(x) + '">Done</button></span></div>';
          }).join("") + '</div>';
   }
-  var dn = defectsOf(b.reg).length;
+  var dn = defectGroups(defectsOf(b.reg)).length;
   if(dn) h += '<button class="need" type="button" data-go="defects"><p>' + esc(dn === 1 ? "A defect is open on this bus." : dn + " defects are open on this bus.") + '</p><span class="go">›</span></button>';
   var log = logOf(b.reg);
   h += '<h3>Log</h3>';
@@ -1830,7 +1981,8 @@ function recordFor(reg, from){
   var today = calToday();
   VL = { reg: b.reg, what: from ? from.what : "", status: "Done" };
   var m = milesOf(b.reg);
-  var defs = defectsOf(b.reg);
+  /* One tick per fault, from v1.90.0, closing every report of it. */
+  var defs = defectGroups(defectsOf(b.reg));
   var startDay = from && from.bookedFor && from.bookedFor <= today ? from.bookedFor : today;
   openSheet({ eyebrow: b.reg, title: "Record something",
     body: '<div class="chips" id="vlWhat">' + VLOG_WHAT.map(function(w){
@@ -1847,9 +1999,10 @@ function recordFor(reg, from){
             (m && m.miles ? ' placeholder="' + esc("Last read " + Number(m.miles).toLocaleString("en-GB")) + '"' : '') + '></div>' +
           '<div class="field"><label for="vlCost">Cost (£)</label><input id="vlCost" inputmode="decimal" autocomplete="off"></div></div>' +
           '<div class="field"><label for="vlGarage">Garage</label><input id="vlGarage" maxlength="80" autocomplete="off" value="' + esc(from && from.garage || "") + '"></div>' +
-          (defs.length ? '<div id="vlDefs"><p class="tiny" style="margin:0 0 2px">Defects it put right, closed as it goes on:</p>' + defs.map(function(d){
-            return '<label class="check"><input type="checkbox" data-def="' + esc(d.key) + '"><span>' + esc(d.item) +
-                   (d.date ? ' <small>' + esc(shortDay(d.date)) + '</small>' : '') + '</span></label>';
+          (defs.length ? '<div id="vlDefs"><p class="tiny" style="margin:0 0 2px">Defects it put right, closed as it goes on:</p>' + defs.map(function(g, i){
+            var n = g.reports.length;
+            return '<label class="check"><input type="checkbox" data-defg="' + i + '"><span>' + esc(g.item) +
+                   ' <small>' + esc(n > 1 ? n + " reports since " + shortDay(g.oldest) : (g.oldest ? shortDay(g.oldest) : "")) + '</small></span></label>';
           }).join("") + '</div>' : '') +
           '<div class="field"><label for="vlNotes">Notes</label><textarea id="vlNotes" maxlength="500"></textarea></div>' +
           '<p class="tiny">Only what it was is needed. Everything else can be left empty.</p>',
@@ -1911,7 +2064,9 @@ function recordSend(b){
     if(a.done > today){ sheetSay("That day has not come yet. To record a day ahead, choose Booked ahead.", true); return; }
     if(item) a.given = $("vlGiven").value || "";
     if(item === "service" && !$("vlMotF").hidden && $("vlMot").checked) a.withMot = true;
-    a.defects = Array.prototype.map.call(document.querySelectorAll("#vlDefs input[data-def]:checked"), function(x){ return x.getAttribute("data-def"); });
+    var groups = defectGroups(defectsOf(b.reg));
+    a.defects = [].concat.apply([], Array.prototype.map.call(document.querySelectorAll("#vlDefs input[data-defg]:checked"), function(x){
+      var g = groups[Number(x.getAttribute("data-defg"))]; return g ? g.keys : []; }));
   } else {
     a.bookedFor = $("vlFor").value || "";
     if(!a.bookedFor){ sheetSay("Say the day it is booked for.", true); return; }
@@ -2013,7 +2168,7 @@ function loadRuns(key){
   api("runs", { sunday:key }).then(function(out){
     if(RUNS.loading !== (key || "-")) return;
     RUNS.loading = "";
-    if(!out || !out.ok){ $("runsBody").innerHTML = '<h1>Run record</h1><div class="card"><p class="say bad">'+esc(plain(out && out.error) || "No answer.")+'</p></div>'; return; }
+    if(!out || !out.ok){ $("runsBody").innerHTML = '<div class="card"><p class="say bad">'+esc(plain(out && out.error) || "No answer.")+'</p></div>'; return; }
     RUNS = { sunday:out.sunday, data:out };
     var c = current();
     if(c.name === "runs") paintRuns(out.sunday);
@@ -2022,7 +2177,7 @@ function loadRuns(key){
 
 function paintRuns(key){
   key = key || lastSunday();
-  var h = '<h1>Run record</h1>';
+  var h = '';
   if(!RUNS.data || RUNS.sunday !== key){
     $("runsBody").innerHTML = h + '<p class="tiny center">Loading…</p>';
     if(RUNS.loading !== key) loadRuns(key);
@@ -2031,7 +2186,7 @@ function paintRuns(key){
   var r = RUNS.data;
   var days = (r.recent || []).slice(0, 5);
   if(days.indexOf(key) === -1) days.unshift(key);
-  h += '<div class="chips">' + days.map(function(k){
+  h += '<div class="chips stick">' + days.map(function(k){
     return '<button type="button" class="'+(k === key ? 'on' : '')+'" data-go="runs/'+esc(k)+'">'+esc(shortDay(k))+'</button>';
   }).join("") + '</div>';
   var any = false;
@@ -2043,7 +2198,7 @@ function paintRuns(key){
            '<p class="tiny" style="margin:2px 0 4px">'+esc(run.driver || "")+
              (run.endedBy && !same(run.endedBy, run.driver) ? ', ended by ' + esc(run.endedBy) : '')+'</p>';
       h += evRow("Left church", "", run.start, run, "start");
-      run.stops.forEach(function(s){ h += evRow(s.stop, s.time, s.ev, run, s.id); });
+      run.stops.forEach(function(s){ h += evRow(s.stop, s.time, s.ev, run, s.id, s); });
       h += evRow("Back at church", "", run.end, run, "end");
       h += '</div>';
     });
@@ -2052,14 +2207,28 @@ function paintRuns(key){
   $("runsBody").innerHTML = h;
 }
 
-function evRow(label, tt, ev, run, stopId){
+/* One line of the record. st is the stop, for a pickup: its number, the seats
+   booked there that Sunday, and the name it had then if it has another now.
+   From v1.90.0 an untapped stop says which of two things it is. With seats
+   booked and no tap, the driver was asked and nothing was marked: amber,
+   with Add. With nobody booked the driver app asks for no tap at all, so
+   nothing is missing: grey, and Add stays, small, for somebody who turned up
+   and was not noted. A live server from before w2.31.0 sends no booked
+   figure, and every untapped stop reads as it always did. */
+function evRow(label, tt, ev, run, stopId, st){
   var fixable = !!ev || (stopId !== "start" && stopId !== "end");
   var late = ev && ev.off !== null && ev.off !== undefined && Number(ev.off) > 2;
-  var btn = !fixable ? '' : '<button class="mini" type="button" data-do="fix" data-trip="'+esc(run.trip)+'" data-stop="'+esc(stopId)+'"' +
-            (ev ? ' data-ev="'+ev.id+'"' : '') + ' data-label="'+esc(label)+'" data-tt="'+esc(tt)+'">'+(ev ? 'Fix' : 'Add')+'</button>';
-  return '<div class="ev'+(ev ? '' : ' miss')+'"><span class="tm">'+esc(tt)+'</span>' +
-         '<span class="nm">'+esc(label)+(ev && ev.corrected ? ' <span class="tag info">Corrected</span>' : '')+
-           (ev && (ev.event === "empty" || ev.event === "none") ? '<small>nobody there</small>' : '')+(ev ? '' : '<small>not marked</small>')+'</span>' +
+  var known = !!st && st.booked !== undefined;
+  var missed = !ev && known && st.booked > 0, quiet = !ev && known && !st.booked;
+  var full = st ? st.id + " \u00B7 " + label : label;
+  var btn = !fixable ? '' : '<button class="mini'+(quiet ? ' quiet' : '')+'" type="button" data-do="fix" data-trip="'+esc(run.trip)+'" data-stop="'+esc(stopId)+'"' +
+            (ev ? ' data-ev="'+ev.id+'"' : '') + ' data-label="'+esc(full)+'" data-tt="'+esc(tt)+'">'+(ev ? 'Fix' : 'Add')+'</button>';
+  var why = ev ? ((ev.event === "empty" || ev.event === "none") ? '<small>nobody there</small>' : '')
+          : missed ? '<small class="why">'+esc(seatWords(st.booked))+' booked, not marked</small>'
+          : quiet ? '<small>nobody booked</small>' : '<small>not marked</small>';
+  return '<div class="ev'+(ev ? '' : ' miss')+(missed ? ' missed' : '')+(quiet ? ' quiet' : '')+'"><span class="tm">'+esc(tt)+'</span>' +
+         '<span class="nm">'+(st ? sid(st.id) : '')+esc(label)+(ev && ev.corrected ? ' <span class="tag info">Corrected</span>' : '')+
+           (st && st.then ? '<span class="then">then '+esc(st.then)+'</span>' : '')+why+'</span>' +
          '<span class="at'+(late ? ' late' : '')+'">'+(ev ? esc(hhmm(ev.at)) + (offWords(ev.off) ? '<small>'+esc(offWords(ev.off))+'</small>' : '') : '–')+'</span>' +
          '<span>'+btn+'</span></div>';
 }
@@ -2146,7 +2315,7 @@ function remindAsk(){
 }
 
 function paintLook(){
-  $("lookBody").innerHTML = '<h1>Have a look</h1><ul class="menu">' + LOOKS.map(function(l){
+  $("lookBody").innerHTML = '<ul class="menu">' + LOOKS.map(function(l){
     var how = l[0] === "remind" ? 'data-do="remind"' : 'data-go="report/'+l[0]+'"';
     return '<li><button type="button" '+how+'><span class="t">'+esc(l[1])+'</span><span class="go">›</span></button></li>';
   }).join("") + '</ul>';
@@ -2194,7 +2363,7 @@ function paintReport(name){
 
 function paintActivity(){
   var list = D.activity || [];
-  var h = '<h1>What I have done</h1>';
+  var h = '';
   if(!list.length){ $("activityBody").innerHTML = h + '<div class="card"><p class="tiny" style="margin:0">Nothing yet.</p></div>'; return; }
   h += '<ul class="list">' + list.map(function(x){
     var tag = x.state === "done" ? '<span class="tag pass">On the sheet</span>'
@@ -2267,7 +2436,7 @@ function rehRunWords(r){
 }
 
 function paintRehearsal(){
-  var h = '<h1>Rehearsal</h1>';
+  var h = '';
   if(!("rehearsal" in D)){
     $("rehearsalBody").innerHTML = h + '<div class="card"><p class="tiny" style="margin:0">The live server is ' +
       esc(lastSeen.server || "an older copy") + '. A rehearsal runs from here from w2.20.1.</p></div>';
