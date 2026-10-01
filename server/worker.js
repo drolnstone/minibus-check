@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.29.0";
+const SCRIPT_VERSION = "w2.30.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1143,10 +1143,27 @@ async function getBuses(env) {
     "SELECT reg, seats, active FROM buses").all();
   let extra = {};
   try { extra = (await cacheGet(env, "bus_extra")) || {}; } catch (e) {}
+  /* From w2.30.0 a renewal recorded in the coordinator's app shows here at
+     once, before the sheet has written it on the Buses tab. The sync that
+     names it as applied brings the tab's own date, and it stops being laid
+     over then. */
+  const over = {};
+  try {
+    for (const a of await coordPending(env, ["vlog", "vfix"])) {
+      const b = a.body || {};
+      const set = (reg, item, next) => {
+        if (!reg || !item || !rnParts(next)) return;
+        (over[String(reg).toUpperCase()] = over[String(reg).toUpperCase()] || {})[item] = next;
+      };
+      if (a.kind === "vlog" && b.status === "Done") set(b.reg, VLOG_ITEM[b.what], b.next);
+      if (a.kind === "vfix") for (const t of b.targets || []) set(t.reg, t.item, t.next);
+    }
+  } catch (e) {}
   return (results || []).map((b) => {
-    const x = extra[String(b.reg || "").toUpperCase()] || {};
+    const reg = String(b.reg || "").toUpperCase();
+    const x = extra[reg] || {};
     return { reg: b.reg, seats: Number(b.seats) || 0, active: !!b.active,
-             dates: x.dates || {}, oddRoute: x.oddRoute || "" };
+             dates: Object.assign({}, x.dates || {}, over[reg] || {}), oddRoute: x.oddRoute || "" };
   });
 }
 
@@ -3331,7 +3348,8 @@ async function handleSync(env, body) {
       builtAt: Date.now(),
       readAt: Number(body.coordShelf.readAt) || Date.now(),
       requests: Array.isArray(body.coordShelf.requests) ? body.coordShelf.requests : [],
-      defects: Array.isArray(body.coordShelf.defects) ? body.coordShelf.defects : []
+      defects: Array.isArray(body.coordShelf.defects) ? body.coordShelf.defects : [],
+      vehicles: vehiclesShelfOf(body.coordShelf.vehicles)
     }));
   }
 
@@ -5403,7 +5421,7 @@ async function pushWhat(env, endpoint) {
        nobody's driver today is told nothing, which is what the sweep would
        have told him. */
     if (!todays.mine) {
-      return { ok: true, tag: "end", url: "./", title: "Dominion Transport",
+      return { ok: true, tag: "end", url: "./", title: "Dominion Assembly Transport",
                body: "Nothing outstanding." };
     }
 
@@ -5523,7 +5541,7 @@ async function pushWhat(env, endpoint) {
                        "after vehicle check." };
       }
 
-      return { ok: true, tag: "end", url: "./", title: "Dominion Transport", body: "Nothing outstanding." };
+      return { ok: true, tag: "end", url: "./", title: "Dominion Assembly Transport", body: "Nothing outstanding." };
     }
 
     if (t && t.started && !t.ended) {
@@ -5538,7 +5556,7 @@ async function pushWhat(env, endpoint) {
                title: "Your run is running", body: "Nothing outstanding." };
     }
 
-    return { ok: true, tag: "end", url: "./", title: "Dominion Transport", body: "Nothing outstanding." };
+    return { ok: true, tag: "end", url: "./", title: "Dominion Assembly Transport", body: "Nothing outstanding." };
   }
 
   /* NEVER THE TEST RUN. While a rehearsal is on, tripPayload describes it:
@@ -5736,6 +5754,27 @@ async function alertRoll(env) {
     out.waHeld = (book && typeof book === "object") ? Object.keys(book) : [];
   } catch (err) {
     out.waHeld = null;
+  }
+  /* WHAT EVERY PHONE HAS ABOUT EACH BUS, from w2.30.0: the due dates the
+     driver app warns from, as the sheet last sent them, and how many Vehicle
+     Log entries the coordinator's Buses screen holds for each registration.
+     Dates and counts only. The sheet holds them against its own tabs, so a
+     sync that stops landing is noticed rather than shown as an empty log.
+     null when it could not tell. */
+  try {
+    const extra = (await cacheGet(env, "bus_extra")) || {};
+    out.busDates = {};
+    for (const r of Object.keys(extra)) out.busDates[r] = Object.assign({}, (extra[r] && extra[r].dates) || {});
+  } catch (err) {
+    out.busDates = null;
+  }
+  try {
+    const shelf = await cacheGet(env, "coord_shelf");
+    const log = (shelf && shelf.vehicles && shelf.vehicles.log) || {};
+    out.vlogHeld = {};
+    for (const r of Object.keys(log)) out.vlogHeld[r] = (log[r] || []).length;
+  } catch (err) {
+    out.vlogHeld = null;
   }
   return out;
 }
@@ -6240,6 +6279,330 @@ const COORD_OVERLAY_DAYS = 3;
 const SHEET_REPORT_MS = 25000;
 const DEFECT_STATES = ["Open", "Booked in", "Parts on order", "Monitoring", "Fixed", "Not a defect"];
 const DEFECT_CLOSED = ["Fixed", "Not a defect"];
+
+/* ---- when each renewal next falls due ----------------------------------
+   From w2.30.0. A renewal recorded in the coordinator's app keeps the date it
+   was actually done, and the next due date is worked out from it here. The
+   same rules, word for word, are in Code.gs (for a row typed on the sheet)
+   and coord/index.html (to show the date before Save); tests/suites run all
+   three over thousands of dates and fail on any disagreement.
+
+     service    twelve months from the day it was done. Due 30 September,
+                done 14 October: next due 14 October next year.
+     MOT        tested within a month (less a day) before it ran out: it keeps
+                its date, a year on. Tested earlier than that, or after it ran
+                out: a year from the test, less a day, which is the date a
+                certificate carries.
+     insurance  renewed in the two months up to its expiry: the policy's
+                anniversary, a year on. After it lapsed, or more than two
+                months early (a new policy, not a renewal): twelve months from
+                the renewal. The anniversary is never carried further than
+                that, so a date is never shown later than the cover runs.
+     permit     the same as insurance.
+
+   A date typed from the certificate or the policy always wins, and is said
+   to have. Every answer carries its reason, which goes on the log. */
+const RENEWALS = {
+  mot:       { label: "MOT",            column: "MOT due" },
+  service:   { label: "Service",        column: "Service due" },
+  insurance: { label: "Insurance",      column: "Insurance due" },
+  permit:    { label: "Parking permit", column: "Permit due" }
+};
+
+function rnParts(k) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(k || ""));
+  return m ? { y: +m[1], m: +m[2], d: +m[3] } : null;
+}
+function rnKey(y, m, d) {
+  const t = new Date(Date.UTC(y, m - 1, d));
+  const p2 = (n) => (n < 10 ? "0" : "") + n;
+  return t.getUTCFullYear() + "-" + p2(t.getUTCMonth() + 1) + "-" + p2(t.getUTCDate());
+}
+/* A calendar month later or earlier, kept inside the month it lands in: 31
+   March less a month is 28 February (29th in a leap year), and 29 February
+   plus a year is 28 February. */
+function rnAddMonths(k, n) {
+  const p = rnParts(k);
+  if (!p) return "";
+  const idx = p.y * 12 + (p.m - 1) + n;
+  const y = Math.floor(idx / 12), m = idx - y * 12 + 1;
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return rnKey(y, m, Math.min(p.d, last));
+}
+function rnAddDays(k, n) {
+  const p = rnParts(k);
+  return p ? rnKey(p.y, p.m, p.d + n) : "";
+}
+/* The day before the same date next year, which is how long an MOT
+   certificate runs. A test on 29 February runs to 28 February: the same date
+   next year does not exist, so it rolls to 1 March, and the day before is the
+   28th. Not the same as a year less a day by rnAddMonths, which clamps first
+   and would say the 27th. */
+function rnYearLessDay(k) {
+  const p = rnParts(k);
+  return p ? rnAddDays(rnKey(p.y + 1, p.m, p.d), -1) : "";
+}
+/* Days from a to b: positive when b is later. */
+function rnDays(a, b) {
+  const x = rnParts(a), y = rnParts(b);
+  if (!x || !y) return null;
+  return Math.round((Date.UTC(y.y, y.m - 1, y.d) - Date.UTC(x.y, x.m - 1, x.d)) / 86400000);
+}
+
+/* Whether a service done on done may be lined up with an MOT due on mot. */
+function lineUpOk(done, mot) {
+  return !!(rnParts(done) && rnParts(mot) && mot > rnAddMonths(done, 6) && mot <= rnAddMonths(done, 13));
+}
+
+/* { next, how } for one renewal. item is a RENEWALS key; done the day it was
+   done; was the due date it had; given a date typed from the paperwork. An
+   item that is not a renewal, or a done date that is not a date, gives
+   { next: "", how: "" }. */
+function rnNextDue(item, done, was, given) {
+  if (!RENEWALS[item] || !rnParts(done)) return { next: "", how: "" };
+  if (rnParts(given)) {
+    return { next: given, how: item === "mot" ? "the date on the certificate" : "the date given" };
+  }
+  const prior = rnParts(was) ? was : "";
+  if (item === "service") return { next: rnAddMonths(done, 12), how: "twelve months from the day it was done" };
+  if (item === "mot") {
+    if (prior && done <= prior && done >= rnAddDays(rnAddMonths(prior, -1), 1)) {
+      return { next: rnAddMonths(prior, 12), how: "kept its date: tested within a month of running out" };
+    }
+    const next = rnYearLessDay(done);
+    if (!prior) return { next: next, how: "a year from the test, less a day" };
+    return { next: next, how: done > prior ? "a year from the test, less a day: tested after it ran out"
+                                           : "a year from the test, less a day: tested more than a month early" };
+  }
+  /* insurance and permit */
+  if (prior && done <= prior && done >= rnAddMonths(prior, -2)) {
+    return { next: rnAddMonths(prior, 12), how: "a year on from the old expiry" };
+  }
+  return { next: rnAddMonths(done, 12), how: !prior ? "twelve months from the renewal"
+                                          : done > prior ? "twelve months from the renewal: it had lapsed"
+                                          : "twelve months from the renewal: more than two months before the old one ran out" };
+}
+
+/* ---- the vehicle log, on the live server --------------------------------
+   From w2.30.0. The coordinator's app records an MOT, a service, a renewal, a
+   repair or a booking; this checks it, works out the next due date, and files
+   it as a coordinator action (vlog), a correction (vfix) or a job done (job)
+   for the sheet to write onto the Vehicle Log, the Buses tab and History.
+   Until the sheet names it as applied, getBuses and coordVehiclesView lay it
+   over the sheet's copy, so every phone has the new date at once. */
+const VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Other"];
+const VLOG_ITEM = { "MOT": "mot", "Service": "service", "Insurance": "insurance", "Parking permit": "permit" };
+
+function rnUk(k) {
+  const p = rnParts(k);
+  return p ? (p.d < 10 ? "0" : "") + p.d + "/" + (p.m < 10 ? "0" : "") + p.m + "/" + p.y : "";
+}
+function vlogText(v, n) { return String(v == null ? "" : v).replace(/\s+/g, " ").trim().slice(0, n); }
+/* A number as a person types it: 45,180 miles, £54.85. */
+function vlogNum(v, max, whole) {
+  if (v === "" || v == null) return null;
+  const t = String(v).replace(/[£,\s]/g, "");
+  if (!t) return null;
+  const n = Number(t);
+  if (!isFinite(n) || n < 0 || n > max) return undefined;
+  return whole ? Math.round(n) : Math.round(n * 100) / 100;
+}
+function vlogDay(v) { const k = String(v || ""); return rnParts(k) && rnKey(+k.slice(0, 4), +k.slice(5, 7), +k.slice(8, 10)) === k ? k : ""; }
+
+/* The sheet's Vehicle Log and jobs to arrange, with what has been recorded
+   here and not yet written there laid over them. */
+async function coordVehiclesView(env) {
+  const shelf = await cacheGet(env, "coord_shelf");
+  const v = (shelf && shelf.vehicles) || {};
+  const log = {};
+  for (const reg of Object.keys(v.log || {})) log[reg] = (v.log[reg] || []).map((x) => Object.assign({}, x));
+  const jobs = JSON.parse(JSON.stringify(v.jobs || {}));
+  const entry = (b, a, status) => ({
+    id: b.logId, what: b.what, status: status, done: b.done || "", bookedFor: b.bookedFor || "",
+    was: b.was || "", early: b.early == null ? null : b.early, next: b.next || "", how: b.how || "",
+    given: b.given || "", miles: b.miles == null ? null : b.miles, garage: b.garage || "",
+    cost: b.cost == null ? null : b.cost, defects: (b.defectNames || []).join("; "),
+    notes: b.notes || b.why || "", corrects: b.corrects || "", by: a.by, source: "Coordinator's app",
+    recorded: a.made, correctedBy: "", waiting: true });
+  for (const a of await coordPending(env, ["vlog", "vfix", "job"])) {
+    const b = a.body || {};
+    if (a.kind === "job") {
+      const j = jobs[b.reg];
+      if (j && j.checkId === b.checkId) {
+        j.jobs = (j.jobs || []).filter((x) => x !== b.job);
+        if (!j.jobs.length) delete jobs[b.reg];
+      }
+      continue;
+    }
+    const list = log[b.reg] = log[b.reg] || [];
+    if (list.some((x) => x.id === b.logId)) continue;
+    if (a.kind === "vfix") {
+      for (const r of Object.keys(log)) for (const x of log[r]) if (x.id === b.corrects) x.correctedBy = b.logId;
+      list.push(entry(b, a, b.withdraw ? "Withdrawn" : "Correction"));
+    } else {
+      list.push(entry(b, a, b.status));
+    }
+  }
+  for (const reg of Object.keys(log)) {
+    log[reg].sort((p, q) => {
+      const a = p.done || p.bookedFor || "", b = q.done || q.bookedFor || "";
+      return a < b ? 1 : a > b ? -1 : (Number(q.recorded) || 0) - (Number(p.recorded) || 0);
+    });
+  }
+  return { log, jobs };
+}
+
+/* The sheet's Vehicle Log and jobs to arrange, from v1.92.0's sync, kept to
+   their shape: registrations to lists of plain rows, forty a bus, and each
+   bus's jobs as words. Anything else, or an older sheet that sends none, is
+   an empty log. */
+function vehiclesShelfOf(v) {
+  const out = { log: {}, jobs: {} };
+  if (!v || typeof v !== "object") return out;
+  const regs = (o) => (o && typeof o === "object" && !Array.isArray(o)) ? Object.keys(o).slice(0, 50) : [];
+  for (const reg of regs(v.log)) {
+    const list = Array.isArray(v.log[reg]) ? v.log[reg] : [];
+    const rows = list.filter((x) => x && typeof x === "object" && !Array.isArray(x)).slice(0, 40);
+    if (rows.length) out.log[String(reg).toUpperCase()] = rows;
+  }
+  for (const reg of regs(v.jobs)) {
+    const j = v.jobs[reg];
+    if (!j || typeof j !== "object" || !Array.isArray(j.jobs)) continue;
+    const jobs = j.jobs.map((x) => vlogText(x, 80)).filter(Boolean).slice(0, 20);
+    if (jobs.length) out.jobs[String(reg).toUpperCase()] = { checkId: vlogText(j.checkId, 80), date: vlogDay(j.date),
+                                                             driver: vlogText(j.driver, 60), jobs };
+  }
+  return out;
+}
+
+/* The latest standing done row for one renewal, in a view. */
+function vlogLatestIn(list, item) {
+  let best = null;
+  for (const x of list || []) {
+    if (x.correctedBy || x.status === "Withdrawn" || VLOG_ITEM[x.what] !== item || !x.done) continue;
+    if (["Done", "Estimated", "Correction"].indexOf(x.status) === -1) continue;
+    if (!best || x.done > best.done || (x.done === best.done && (Number(x.recorded) || 0) >= (Number(best.recorded) || 0))) best = x;
+  }
+  return best;
+}
+
+async function actVlog(env, me, act, id) {
+  const reg = String(act.reg || "").trim().toUpperCase();
+  const bus = (await getBuses(env)).find((b) => String(b.reg).toUpperCase() === reg);
+  if (!bus) return { ok: false, error: "That bus is not on the Buses tab." };
+  const what = String(act.what || "");
+  if (VLOG_WHAT.indexOf(what) === -1) return { ok: false, error: "Choose what was done." };
+  const booking = act.status === "Booked";
+  const today = londonKey(new Date());
+  const done = booking ? "" : (vlogDay(act.done) || today);
+  if (done && done > today) return { ok: false, error: "That day has not come yet. To record a date ahead, choose Booked." };
+  if (done && done < "2000-01-01") return { ok: false, error: "That date is too long ago." };
+  const bookedFor = booking ? vlogDay(act.bookedFor) : "";
+  if (booking && !bookedFor) return { ok: false, error: "Say the day it is booked for." };
+  if (booking && bookedFor < today) return { ok: false, error: "A booking is for a day ahead. For a day gone, record it as done." };
+  const item = VLOG_ITEM[what] || "";
+  const was = item && !booking ? ((bus.dates || {})[item] || "") : "";
+  const given = item && !booking ? vlogDay(act.given) : "";
+  let nd = item && !booking ? rnNextDue(item, done, was, given) : { next: "", how: "" };
+  /* A service done on the same visit as the MOT may be lined up with it. The
+     MOT's date is the one the bus has now, so record the MOT first. Only an
+     MOT six to thirteen months off: lined up with one due in three weeks,
+     the service would be due in three weeks too. */
+  if (item === "service" && !booking && act.withMot && !given && lineUpOk(done, (bus.dates || {}).mot)) {
+    nd = { next: bus.dates.mot, how: "lined up with the MOT" };
+  }
+  const miles = vlogNum(act.miles, 2000000, true), cost = vlogNum(act.cost, 1000000, false);
+  if (miles === undefined) return { ok: false, error: "The mileage is not a number of miles." };
+  if (cost === undefined) return { ok: false, error: "The cost is not an amount in pounds." };
+  const defects = [], defectNames = [];
+  if (!booking && Array.isArray(act.defects) && act.defects.length) {
+    const open = await coordDefectsView(env);
+    for (const k of act.defects.slice(0, 20)) {
+      const d = open.find((x) => x.key === k && String(x.reg || "").toUpperCase() === reg);
+      if (!d) return { ok: false, error: "One of those defects is not open on this bus any more. Refresh and try again." };
+      defects.push(d.key);
+      defectNames.push(d.item);
+    }
+  }
+  const body = {
+    logId: "L-" + id, reg: reg, what: what, status: booking ? "Booked" : "Done",
+    done: done, bookedFor: bookedFor, was: was, early: was && done ? rnDays(was, done) : null,
+    next: nd.next, how: nd.how, given: given, miles: miles, garage: vlogText(act.garage, 80), cost: cost,
+    defects: defects, defectNames: defectNames, notes: vlogText(act.notes, 500)
+  };
+  const words = reg + ": " + what + (booking ? " booked for " + rnUk(bookedFor) : " done " + rnUk(done)) +
+                (nd.next ? ". Next due " + rnUk(nd.next) : "") +
+                (defectNames.length ? ". Put right: " + defectNames.join(", ") : "") + ".";
+  return { ok: true, sunday: "", body: body, words: words };
+}
+
+/* A correction or a withdrawal of one entry. The next due date is worked out
+   again from the corrected facts and the date the bus had before the entry,
+   and the dates the bus will have once it is written go with it (targets),
+   so getBuses can show them before the sheet has. */
+async function actVfix(env, me, act, id) {
+  const view = await coordVehiclesView(env);
+  let orig = null, origReg = "";
+  for (const r of Object.keys(view.log)) for (const x of view.log[r]) if (x.id && x.id === act.corrects) { orig = x; origReg = r; }
+  if (!orig) return { ok: false, error: "That entry is not on the Vehicle Log. Refresh and try again." };
+  if (orig.correctedBy) return { ok: false, error: "That entry has already been corrected. Correct the correction instead." };
+  if (orig.status === "Withdrawn") return { ok: false, error: "That entry was withdrawn." };
+  const withdraw = !!act.withdraw;
+  const why = vlogText(act.why, 300);
+  const today = londonKey(new Date());
+  let body;
+  if (withdraw) {
+    body = { logId: "C-" + id, corrects: orig.id, reg: origReg, what: orig.what, withdraw: true, why: why };
+  } else {
+    const what = VLOG_WHAT.indexOf(String(act.what || "")) !== -1 ? String(act.what) : orig.what;
+    const booking = orig.status === "Booked";
+    const done = booking ? "" : (vlogDay(act.done) || orig.done);
+    if (done && done > today) return { ok: false, error: "That day has not come yet." };
+    const bookedFor = booking ? (vlogDay(act.bookedFor) || orig.bookedFor) : "";
+    const item = VLOG_ITEM[what] || "";
+    const was = orig.was || "";
+    const given = item && !booking ? vlogDay(act.given) : "";
+    const nd = item && !booking ? rnNextDue(item, done, was, given) : { next: "", how: "" };
+    const miles = act.miles === undefined ? orig.miles : vlogNum(act.miles, 2000000, true);
+    const cost = act.cost === undefined ? orig.cost : vlogNum(act.cost, 1000000, false);
+    if (miles === undefined) return { ok: false, error: "The mileage is not a number of miles." };
+    if (cost === undefined) return { ok: false, error: "The cost is not an amount in pounds." };
+    body = { logId: "C-" + id, corrects: orig.id, reg: origReg, what: what, withdraw: false, why: why,
+             status: booking ? "Booked" : "Done", done: done, bookedFor: bookedFor, was: was,
+             early: was && done ? rnDays(was, done) : null, next: nd.next, how: nd.how, given: given,
+             miles: miles, cost: cost,
+             garage: act.garage === undefined ? orig.garage : vlogText(act.garage, 80),
+             notes: act.notes === undefined ? orig.notes : vlogText(act.notes, 500) };
+  }
+  /* The bus's dates once this is written: the latest standing entry for each
+     renewal it touches, or the date it had before the entry if none is left. */
+  const list = (view.log[origReg] || []).map((x) => Object.assign({}, x));
+  for (const x of list) if (x.id === orig.id) x.correctedBy = body.logId;
+  if (!withdraw) list.push({ id: body.logId, what: body.what, status: "Correction", done: body.done,
+                             next: body.next, recorded: Date.now() });
+  const targets = [];
+  for (const item of [VLOG_ITEM[orig.what], VLOG_ITEM[body.what]].filter((x, i, a) => x && a.indexOf(x) === i)) {
+    const latest = vlogLatestIn(list, item);
+    const next = latest ? latest.next : (VLOG_ITEM[orig.what] === item ? orig.was : "");
+    if (rnParts(next)) targets.push({ reg: origReg, item: item, next: next });
+  }
+  body.targets = targets;
+  const words = origReg + ": " + orig.what + (withdraw ? " entry withdrawn" : " entry corrected") +
+                (!withdraw && body.next ? ". Next due " + rnUk(body.next) : "") + (why ? ". " + why : "") + ".";
+  return { ok: true, sunday: "", body: body, words: words };
+}
+
+async function actJob(env, me, act) {
+  const reg = String(act.reg || "").trim().toUpperCase();
+  const view = await coordVehiclesView(env);
+  const j = view.jobs[reg];
+  const job = String(act.job || "");
+  if (!j || j.checkId !== String(act.checkId || "") || (j.jobs || []).indexOf(job) === -1) {
+    return { ok: false, error: "That job is not waiting any more. Refresh and try again." };
+  }
+  return { ok: true, sunday: "", body: { reg: reg, job: job, checkId: j.checkId, note: vlogText(act.note, 200) },
+           words: reg + ": " + job + ", done." };
+}
 const ROTA_OFF = ["North cancelled", "South cancelled", "Cancelled/declined"];
 /* The order the sheet writes them in, which is the order the status rule
    sees them in. The status goes last so a status set on purpose stands. */
@@ -6651,6 +7014,14 @@ async function coordDefectsView(env) {
     }
     d.waiting = true;
   }
+  /* From w2.30.0 a defect ticked as put right on a Vehicle Log entry is
+     closed by the sheet as it writes the entry; until then it goes here. */
+  for (const a of await coordPending(env, ["vlog"])) {
+    for (const k of (a.body && a.body.defects) || []) {
+      const d = list.find((x) => x.key === k);
+      if (d) d.status = "Fixed";
+    }
+  }
   return list.filter((d) => DEFECT_CLOSED.indexOf(d.status) === -1);
 }
 
@@ -6760,6 +7131,15 @@ async function coordLoad(env, me) {
 
   out.requests = await coordRequestsView(env);
   out.defects = await coordDefectsView(env);
+  /* From w2.30.0: each bus's Vehicle Log and jobs to arrange, and the last
+     mileage a walkaround read, for the Record form. */
+  try { out.vehicles = await coordVehiclesView(env); } catch (e) { out.vehicles = { log: {}, jobs: {} }; }
+  try {
+    const c = await cacheGet(env, "cache_last");
+    const last = (c && c.payload && c.payload.last) || {};
+    out.lastMiles = {};
+    for (const reg of Object.keys(last)) out.lastMiles[reg] = { miles: last[reg].miles, date: last[reg].date || "" };
+  } catch (e) { out.lastMiles = {}; }
 
   /* Today's walkarounds and runs, for the two things that cannot wait: a bus
      the check stopped, and a run left open. */
@@ -7434,6 +7814,9 @@ async function coordAct(env, me, act) {
   else if (kind === "booking") r = await actBooking(env, me, act, id);
   else if (kind === "defect") r = await actDefect(env, me, act);
   else if (kind === "fix") r = await actFix(env, me, act);
+  else if (kind === "vlog") r = await actVlog(env, me, act, id);
+  else if (kind === "vfix") r = await actVfix(env, me, act, id);
+  else if (kind === "job") r = await actJob(env, me, act);
   else if (kind === "rehearsal") r = await rehearsalPlan(env, String(act.op || ""), String(act.shape || ""));
   else return { ok: false, error: "unknown kind" };
   if (!r || !r.ok) return r || { ok: false, error: "refused" };

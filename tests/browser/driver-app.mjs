@@ -649,6 +649,77 @@ if (want("T16d")) {
   await me.ctx.close();
 }
 
+/* T19 — from v1.89.0 the three apps follow one pattern. The first screen
+   opens on the logo with no bar over it, as the passenger page and the
+   coordinator's sign-in do. Signed in, the bar names the app (DRIVER, as the
+   home screen icon) over the driver, as the coordinator's app does; the plate
+   and the three lights come with a bus. */
+if (want("T19")) {
+  const me = await phone({ clock: "2026-09-26T19:00:00+01:00" });
+  const bar = () => me.pg.evaluate(() => {
+    const seen = (el) => !!(el && el.offsetParent !== null && el.getBoundingClientRect().width > 0);
+    const dash = document.getElementById("dash");
+    return { bar: !!(dash && dash.getBoundingClientRect().height > 0 && getComputedStyle(dash).display !== "none"),
+             brand: seen(document.querySelector("#s-driver .brand")),
+             title: document.getElementById("dashTitle").textContent, sub: document.getElementById("dashSub").textContent,
+             plate: seen(document.getElementById("plate")) ? document.getElementById("plate").textContent : "",
+             lamps: seen(document.getElementById("lampA")),
+             hubLine: seen(document.getElementById("hubWho")) ? document.getElementById("hubWho").textContent : "",
+             icon: (document.querySelector('meta[name="apple-mobile-web-app-title"]') || {}).content || "" };
+  });
+  await me.load(); await me.close(["howDone"]);
+  const first = await bar();
+  await me.shot("T19a-first-landing");
+  await me.signIn(); await me.close();
+  await toHub(me);
+  const hub = await bar();
+  await me.shot("T19b-hub");
+  await me.click("Vehicle check", "#s-hub");
+  const choosing = await bar();
+  await me.pickBus("NH56 FWP");
+  const chosen = await bar();
+  check("T19", "the first screen opens on the logo with no bar; signed in, DRIVER over the driver; the plate and lights come with a bus",
+        !first.bar && first.brand && first.icon === "Driver" &&
+        hub.bar && hub.title === "Driver" && hub.sub === SAMPLE && !hub.plate && !hub.lamps && hub.hubLine === "" &&
+        choosing.title === "Vehicle check" && choosing.sub === "Choose a vehicle to begin" && !choosing.plate && !choosing.lamps &&
+        chosen.plate === "NH56 FWP" && chosen.lamps && chosen.title === "Vehicle check" && /Transit/.test(chosen.sub),
+        JSON.stringify({ first, hub, choosing, chosen }));
+  await me.ctx.close();
+}
+
+/* T20 — a bus tapped on "Which one today?" shows at once that it is the one:
+   filled and ringed in blue, ticked, and the others stepped back. Tapping the
+   other moves all of it. */
+if (want("T20")) {
+  const me = await phone({ clock: "2026-09-26T19:00:00+01:00" });
+  const cards = () => me.pg.evaluate(() => [...document.querySelectorAll("#vehList .veh")].map((b) => {
+    const cs = getComputedStyle(b), tick = b.querySelector(".veh-tick");
+    return { reg: (b.querySelector(".veh-plate") || {}).textContent, on: b.classList.contains("is-on"),
+             pressed: b.getAttribute("aria-pressed"), bg: cs.backgroundColor, left: parseFloat(cs.borderLeftWidth),
+             opacity: parseFloat(cs.opacity), tick: !!(tick && getComputedStyle(tick).display !== "none") };
+  }));
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn(); await me.close();
+  await toHub(me);
+  await me.click("Vehicle check", "#s-hub");
+  const before = await cards();
+  await me.pickBus("NH56 FWP");
+  await me.wait(400);                       /* past the fade of the others */
+  const one = await cards();
+  await me.shot("T20-bus-chosen");
+  await me.pickBus("YS70 PWE");
+  await me.wait(400);
+  const two = await cards();
+  const pick = (list, reg) => list.find((c) => c.reg === reg) || {};
+  const a1 = pick(one, "NH56 FWP"), b1 = pick(one, "YS70 PWE"), a2 = pick(two, "NH56 FWP"), b2 = pick(two, "YS70 PWE");
+  check("T20", "the bus tapped is filled, ringed and ticked at once, the others step back, and a second tap moves it",
+        before.length === 2 && before.every((c) => !c.on && !c.tick && c.opacity === 1) &&
+        a1.on && a1.pressed === "true" && a1.tick && a1.bg !== b1.bg && a1.left >= 6 && b1.opacity < 0.8 && !b1.tick &&
+        b2.on && b2.tick && !a2.on && !a2.tick && a2.opacity < 0.8 && two.filter((c) => c.on).length === 1,
+        JSON.stringify({ before, one, two }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

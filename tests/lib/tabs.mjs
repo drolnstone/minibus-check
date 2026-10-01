@@ -62,7 +62,19 @@ export const TABS = {
 
   "Defects": ["Received", "Check ID", "Date", "Registration", "Driver", "Item",
               "Critical", "What the driver found", "Status", "Action taken",
-              "Closed on", "Kind"]
+              "Closed on", "Kind"],
+
+  /* Two tabs the sheet makes itself from v1.92.0, so these are Code.gs's own
+     header rows rather than an export's. 36-vehicle-log.mjs checks the two
+     agree. */
+  "Vehicle Log": ["Recorded", "Log ID", "Registration", "What", "Status", "Date done",
+                  "Booked for", "Was due", "Days early (-) or late (+)", "Next due",
+                  "How the next date was worked out", "Certificate or policy date",
+                  "Mileage", "Garage", "Cost (£)", "Defects put right", "Notes",
+                  "Corrects", "Recorded by", "Source"],
+
+  "History": ["When", "Who", "Where", "Registration", "What changed", "From", "To",
+              "Why", "Ref"]
 };
 
 /* A row built BY COLUMN NAME, in the tab's own order, with every other cell

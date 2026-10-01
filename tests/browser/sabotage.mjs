@@ -83,7 +83,34 @@ const S = [
   { id: "S19 install offer first", tests: "P7", file: "sunday/index.html", runner: "passenger.mjs", swaps: [
     ["  if(howComing()) return;\n", ""] ] },
   { id: "S19b no second Home Screen ask", tests: "P7b", file: "sunday/index.html", runner: "passenger.mjs", swaps: [
-    ["  if(needsHome && howShown) return;\n", ""] ] }
+    ["  if(needsHome && howShown) return;\n", ""] ] },
+  /* v1.89.0: the Buses screens in the coordinator's app, and the live
+     server's half of them. */
+  { id: "S20 defect trail shown", tests: "C32", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
+    ["           trailHTML(d.trail) +\n", ""] ] },
+  { id: "S21 MOT keeps its date before Save", tests: "C29", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
+    ["    if(prior && done <= prior && done >= rnAddDays(rnAddMonths(prior, -1), 1)){", "    if(false){"] ] },
+  { id: "S22 new date on every phone at once", tests: "C29", file: "server/worker.js", runner: "coordinator.mjs", swaps: [
+    ["      if (a.kind === \"vlog\" && b.status === \"Done\") set(b.reg, VLOG_ITEM[b.what], b.next);\n", ""] ] },
+  { id: "S23 a correction moves the date", tests: "C30", file: "server/worker.js", runner: "coordinator.mjs", swaps: [
+    ["  body.targets = targets;\n", "  body.targets = [];\n"] ] },
+  { id: "S24 a job done leaves the list", tests: "C31", file: "server/worker.js", runner: "coordinator.mjs", swaps: [
+    ["        j.jobs = (j.jobs || []).filter((x) => x !== b.job);\n", ""] ] },
+  /* v1.89.0, the driver app's top bar: the app's until a bus is chosen. */
+  { id: "S25 no empty plate before a bus", tests: "T19", swaps: [
+    ["  d.classList.toggle(\"no-veh\", !st.veh);\n", ""] ] },
+  { id: "S25b the app named on the way in", tests: "T19", swaps: [
+    ["          : appName();\n", "          : \"Vehicle check\";\n"] ] },
+  { id: "S25c no bar over the first screen", tests: "T19", swaps: [
+    ["  d.classList.toggle(\"is-away\", away);\n", ""] ] },
+  /* v1.89.0, the bus tapped shows at once. */
+  { id: "S26 the chosen bus ticked", tests: "T20", swaps: [
+    ["'</span><span class=\"veh-tick\" aria-hidden=\"true\">\\u2713</span>';", "'</span>';"] ] },
+  { id: "S26b the others step back", tests: "T20", swaps: [
+    ["  box.classList.toggle(\"has-pick\", !!st.veh);\n", ""] ] },
+  /* v1.89.0, the coordinator's sign-in opens on the logo. */
+  { id: "S27 no bar over the sign-in", tests: "C33", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
+    ["  document.querySelector(\".bar\").classList.toggle(\"is-away\", name === \"sign\");\n", ""] ] }
 ];
 
 const summary = [];

@@ -198,6 +198,18 @@ class FakeSheet {
   hideColumn() { return this; }
   showColumns() { return this; }
   getFilter() { return null; }
+  /* Protection is recorded: what it says and whether it only warns. */
+  protect() {
+    const p = { desc: "", warn: false, ranges: [],
+      setDescription(d) { p.desc = String(d); return p; }, getDescription() { return p.desc; },
+      setWarningOnly(w) { p.warn = !!w; return p; }, isWarningOnly() { return p.warn; },
+      setUnprotectedRanges(r) { p.ranges = r || []; return p; },
+      remove: () => { this.protections = this.protections.filter((x) => x !== p); } };
+    (this.protections = this.protections || []).push(p);
+    return p;
+  }
+  getConditionalFormatRules() { return (this.cfRules || []).slice(); }
+  setConditionalFormatRules(r) { this.cfRules = (r || []).slice(); return this; }
   activate() { return this; }
   createTextFinder(q) {
     const self = this;
@@ -335,6 +347,8 @@ export function makeGas(opts) {
         "dd/MM/yyyy": `${p.d}/${p.mo}/${p.y}`,
         "yyyyMMdd": `${p.y}${p.mo}${p.d}`,
         "yyyyMMdd-HHmm": `${p.y}${p.mo}${p.d}-${p.h}${p.mi}`,
+        /* A hand-typed Vehicle Log row's Log ID, from v1.92.0. */
+        "yyyyMMdd-HHmmss": `${p.y}${p.mo}${p.d}-${p.h}${p.mi}${p.s}`,
         /* The calendar file's own two. */
         "yyyyMMdd'T'HHmmss'Z'": `${p.y}${p.mo}${p.d}T${p.h}${p.mi}${p.s}Z`,
         "yyyyMMdd'T'HHmmss": `${p.y}${p.mo}${p.d}T${p.h}${p.mi}${p.s}`
@@ -476,13 +490,26 @@ export function makeGas(opts) {
       const rule = { _values: [], _help: "", _allowInvalid: true };
       const b = {
         requireValueInList(list, drop) { rule._values = list.slice(); rule._drop = drop !== false; return b; },
+        /* A date, or a date between two. Kept so a test can ask what the
+           cell will take, as the Buses tab's due dates do from v1.92.0. */
+        requireDate() { rule._date = {}; return b; },
+        requireDateBetween(from, to) { rule._date = { from, to }; return b; },
         setAllowInvalid(v) { rule._allowInvalid = !!v; return b; },
         setHelpText(t) { rule._help = t; return b; },
         build() { return Object.assign(rule, { getCriteriaValues: () => [rule._values], copy: () => b }); }
       };
       return b;
     },
-    DataValidationCriteria: { VALUE_IN_LIST: "VALUE_IN_LIST" },
+    DataValidationCriteria: { VALUE_IN_LIST: "VALUE_IN_LIST", DATE_BETWEEN: "DATE_BETWEEN" },
+    /* A rule is recorded and never applied: how a cell looks carries no fact. */
+    newConditionalFormatRule() {
+      const rule = { _ranges: [] };
+      const b = new Proxy({}, { get: (t, k) => k === "build"
+        ? () => Object.assign(rule, { getRanges: () => rule._ranges, getBooleanCondition: () => null })
+        : k === "setRanges" ? (r) => { rule._ranges = r || []; return b; }
+        : (...a) => { rule[k] = a; return b; } });
+      return b;
+    },
     BorderStyle: { SOLID: "SOLID" }
   };
 
