@@ -426,10 +426,10 @@ export default function (root) {
      at about ten on Saturday night, which is the last hour he can ring
      somebody if he cannot make it. */
 
-  function ics(tabsOver) {
+  function ics(tabsOver, sunday) {
     const L2 = loadCodeGs(root, { tabs: tabsOver || tabs(),
                                   props: { COORDINATOR_EMAIL: "a@b.c" } });
-    return call(L2, "dutyIcs", new Date(2026, 8, 27), "Bro Adrian", "", "North", "YS70 PWE");
+    return call(L2, "dutyIcs", sunday || new Date(2026, 8, 27), "Bro Adrian", "", "North", "YS70 PWE");
   }
 
   s.test("the duty entry is timed to the real departure", (a) => {
@@ -509,6 +509,11 @@ export default function (root) {
     const line = (/DTSTART:[^\r\n]*/.exec(ics()) || [""])[0];
     a.has(line, "Z", "a Z on the end means no client has to guess the zone: " + line);
     a.has(line, "20260927T0852", "09:52 British Summer Time is 08:52 UTC, got " + line);
+  });
+
+  s.test("after the clocks go back, 09:52 is 09:52 UTC", (a) => {
+    const line = (/DTSTART:[^\r\n]*/.exec(ics(null, new Date(2026, 10, 1))) || [""])[0];
+    a.has(line, "20261101T0952", "09:52 on 1 November is 09:52 UTC, got " + line);
   });
 
   s.test("a timed duty is time he is not free", (a) => {
