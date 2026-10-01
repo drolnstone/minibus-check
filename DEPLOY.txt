@@ -1,163 +1,53 @@
 MINIBUS
 =======
-  pages v1.90.0 · server w2.31.0 · sheet v1.93.0
+  pages v1.90.1 · server w2.31.0 · sheet v1.93.0
 
-The coordinator's tidy-up, and guards for a stop number whose place has been
-changed. Every screen says its name once, in the bar. On Bookings and the Run
-record the row of Sundays stays in view, and one Back leaves the screen
-however many Sundays were looked at. The Sunday card is the way into the
-Rota. "What I have done" is "What has been done". A fault reported on
-several walkarounds is one card, closed in one go. The Run record says which
-stops had seats booked and no tap. A seat taken at a stop number before the
-place behind it was changed is noticed on the sheet and in the coordinator's
-app; the passenger is told nothing. And the teaching text is off the
-coordinator's screens.
+The cleanup sweep: prompts and instructions only, in all three apps. The
+coordinator's app was done in v1.90.0. This takes the explaining lines off
+the driver app and the passenger page.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.89.1         v1.90.0
-  Worker  w2.30.1         w2.31.0
-  Code.gs v1.92.0         v1.93.0
+  Pages   v1.90.0         v1.90.1
+  Worker  w2.31.0         w2.31.0   (no change)
+  Code.gs v1.93.0         v1.93.0   (no change)
 
-If the fix before this one (pages v1.89.1, server w2.30.1, the stop taps) is
-not done yet, do it first: analysis/DEPLOY-v1.89.1-w2.30.1.txt.
-
-
-BEFORE YOU START
-----------------
-
-Tell the coordinators, the Minister in Charge and the Assistant Coordinator:
-  - the Rota is reached from the Sunday card on the first screen (it says
-    ROTA at its corner). Back from that Sunday is the list of Sundays, and
-    Back again is the first screen. There is no Rota button now;
-  - What I have done is called What has been done. It always showed every
-    coordinator's changes, each with the name of who made it;
-  - on Defects, a fault reported on several walkarounds is one card. Update
-    or Close on it is for every report, each ticked; untick one that turns
-    out to be a different fault.
-
-Nothing to tell the drivers or the passengers.
+If v1.90.0 (the coordinator's tidy-up) is not done yet, do it first:
+analysis/DEPLOY-v1.90.0-w2.31.0.txt.
 
 
 IN THIS ORDER
 -------------
 
-1. WORKER. Cloudflare, the minibus Worker, Edit code. Replace everything
-   with server/worker.js. Deploy. No database change.
-
-2. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
-   Save. Deploy, Manage deployments, the pencil, Version: New version,
-   Deploy.
-
-3. PAGES. Merge the pull request.
-
-Code.gs before the pages: a Close for several reports is filed by the sheet
-one report at a time from v1.93.0, and an older sheet would close only the
-first. The five minute sync after step 2 takes a copy of the Bus Stops tab;
-from then on every change to it is written on History.
+1. Merge the pull request. Nothing to paste in Cloudflare or Apps Script.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.90.0 · server w2.31.0 · sheet
+A. The foot of all three apps reads  app v1.90.1 · server w2.31.0 · sheet
    v1.93.0 .
 
-B. The coordinator's app, first screen: no Rota in the list; the Sunday card
-   says ROTA at its corner. Tap it: that Sunday, the bar saying ROTA. Back:
-   the list of Sundays. Back: the first screen. The list ends with What has
-   been done.
-
-C. Bookings, and the Run record: no heading under the bar repeating it. Tap
-   the other Sunday four or five times, then Back once: the first screen.
-   On a long list, scroll: the row of Sundays stays under the bar.
-
-D. Run record, last Sunday: every stop with its number in front. A stop with
-   no tap says either "N seats booked, not marked" in amber, or "nobody
-   booked" in grey.
-
-E. Defects: a fault reported on more than one walkaround is one card, saying
-   "N reports since" and how long it has been open, with DVSA DAILY CHECK on
-   the items on that list. Do not close one to try it unless it is really
-   done.
-
-F. Minibus, Have a look, Is everything working?: under Fine, "Bookings:
-   every seat for the coming Sundays is at the place its stop number names."
-   (Run before step 3, the report is the same: this one is the sheet's own.)
-
-G. The driver app: Driving rota and Stops and bookings say their name in the
-   bar and nowhere else.
+B. The driver app, a walkaround on a bus that fails: "The bus does not run"
+   ends at "Ring the coordinator and arrange lifts."
 
 
 WHAT CHANGED
 ------------
 
-1. EVERY SCREEN SAYS ITS NAME ONCE. The heading that repeated the bar is gone
-   from Rota, Rota requests, Bookings, Defects, Buses, Run record, Have a
-   look, What has been done and Rehearsal, and from the driver app's Driving
-   rota, Stops and bookings and Waiting to send. A Sunday keeps its date, a
-   bus its plate and a report its name. (coord/index.html, index.html;
-   browser checks C37 and T21; sabotages S32 and S40.)
+The driver app:
+  - The signature box: no "This records that you did the check yourself".
+  - The mileage warnings: no "An odometer does not go backwards…" and no
+    "That is a long way for this bus".
+  - Location and PIN with no signal: "Carry on." without the reason.
+  - The bus does not run: no "Nobody will be upset with you…".
+  - The timetable that did not come through: no guess at why.
+  - A swap with a driver who has no Sundays: "Ask for a cover instead."
+  - The first screen: no "Works with no signal…" line. Practice mode still
+    says "Practice mode: nothing is being sent."
+  - Install steps: no "On an iPhone only Safari can do this".
 
-2. THE ROW OF SUNDAYS STAYS IN VIEW on Bookings and the Run record, pinned
-   under the bar while the list scrolls. (coord/index.html .chips.stick,
-   barHeight; C34; S30.)
-
-3. ONE BACK. Switching Sunday on Bookings or the Run record replaces the page
-   instead of adding one, so five Sundays no longer take five Backs.
-   (coord/index.html go; C35; S29.)
-
-4. THE ROTA FROM THE SUNDAY CARD. A Sunday opened from the first screen is
-   opened from inside the Rota: Back is the list of Sundays. The Rota button
-   is gone; the card says ROTA at its corner. (go, sunCard, paintHome; C36;
-   S31.)
-
-5. WHAT HAS BEEN DONE, not What I have done: the screen always showed every
-   coordinator's changes, each with who made it. (C36, C37.)
-
-6. ONE CARD PER FAULT. Repeated reports of one item on one bus are one card:
-   the heaviest weight any report gave it, the newest words, how many reports
-   since when, how long open, the DVSA tag, and every trail. Update and Close
-   are for every report, ticked; one Close with one "what was done" closes
-   them all, each with its own History line. The first screen, the Buses
-   screens and Record something count and tick faults, not reports. The
-   driver app stops showing "Still open on this bus" for a fault closed in
-   one go. (coord/index.html defectGroups, paintDefects, updateDefect,
-   DVSA_ITEMS held to the driver app's list by a test; worker.js actDefect
-   keys, defectKeysOf; Code.gs coordDefect; C39; S33 and S34.)
-
-7. THE RUN RECORD KNOWS WHAT WAS BOOKED. Each stop by its number, with the
-   seats booked there that Sunday by number. An untapped stop with seats is
-   amber, "N seats booked, not marked"; one with nobody booked is grey, since
-   the driver app asks for no tap there. A number that was another place
-   that morning says "then" and the old place. (worker.js coordRuns;
-   coord/index.html evRow; C38; S35 and S36.)
-
-8. A STOP IS ITS NUMBER, AND THE GUARDS FOR CHANGING THE PLACE BEHIND ONE.
-   A booking and a tap keep the name their number had when they were made;
-   it is compared, never matched on. When it no longer matches:
-     - History has every change to a numbered row of the Bus Stops tab (the
-       place, the time, Active, a number added or taken off), from an edit,
-       a paste or a script (Code.gs stopsAudit, onEditBusStops);
-     - the sheet says at once which seats for a coming Sunday were booked at
-       the old place, and History's line names them;
-     - Is everything working? lists them under To do (stopsHealth);
-     - the coordinator's Bookings says "Booked when N05 was …" (C40; S37).
-   The passenger is told nothing: the stops and their numbers are the
-   coordinator's business.
-   Stops are shown with their number on the Run record, Bookings and
-   booking for somebody.
-
-9. NO TEACHING ON THE SCREENS. The coordinator's app states facts, asks
-   questions and names buttons; the how and the why are for the manual and
-   the videos. Gone: "Only what it was is needed…", "It goes on the log as
-   booked…", how each next due date was worked out (it stays on the Vehicle
-   Log tab), the offer to line a service up with the MOT, the rehearsal's
-   explanations, the duty reminders' and the bus link's, "Past Sundays are…",
-   the long half of two error messages, and the sample text in the note
-   fields ("Topped up after the service", "The date was typed wrong"), which
-   was only ever a sample and never sent.
-
-   (tests/suites/38-tidy-up.mjs, 10 checks, eight of them failing on w2.30.1 /
-   v1.92.0 and the other two on the v1.89.1 page; browser checks C34 to C40
-   and T21; sabotages S29 to S37 and S40.)
+The passenger page:
+  - Alerts refused: "Not turned on." without "You can still watch this page".
+  - Install steps: no "On an iPhone only Safari can do this", and the
+    iPhone alerts line stops at "once this is on your Home Screen".
