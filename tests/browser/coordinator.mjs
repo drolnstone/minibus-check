@@ -1304,6 +1304,42 @@ if (want("C40")) {
   await p.ctx.close();
 }
 
+/* C41 — Critical and Kind changed on a defect card, from v1.91.0 */
+if (want("C41")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    await p.pg.evaluate(() => { location.hash = "defects"; });
+    await p.wait(600);
+    const item = await p.text('#defectsBody .def .def-head b');
+    await p.pg.click('#defectsBody [data-do="defect"]');
+    await p.wait(300);
+    const has = await p.pg.$$eval("#defCrit button, #defKind button", (bs) => bs.map((b) => b.textContent));
+    /* The other choice from the one each row starts on. */
+    const to = await p.pg.evaluate(() => {
+      const flip = (sel) => { const off = document.querySelector(sel + " button:not(.on)"); off.click(); return off.textContent; };
+      return { crit: flip("#defCrit"), kind: flip("#defKind") };
+    });
+    await p.shot("C41a-judged");
+    await p.pg.click("#sheetGo");
+    await p.wait(900);
+    const card = await p.pg.evaluate((it) => {
+      const c = Array.prototype.find.call(document.querySelectorAll("#defectsBody .def"),
+        (e) => ((e.querySelector(".def-head b") || {}).textContent || "") === it);
+      return c ? c.querySelector(".def-head").textContent.replace(/\s+/g, " ") : "";
+    }, item);
+    const view = (await W.coordDefectsView(env)).filter((d) => d.item === item);
+    await p.shot("C41b-after");
+    const wantAdv = to.kind === "Advisory";
+    check("C41", "Critical and Kind are set from a defect's Update, and the card and the live server follow",
+          has.join("|") === "Critical|Not critical|Defect|Advisory" && view.length > 0 &&
+          view.every((d) => (d.kind === "Advisory") === wantAdv && d.crit === (to.crit === "Critical")) &&
+          (wantAdv ? /Advisory/.test(card) : !/Advisory/.test(card)) && !p.errs.length,
+          JSON.stringify({ item, has, to, card, view: view.map((d) => [d.crit, d.kind]), errors: p.errs }));
+  } catch (e) { stopped("C41", e); }
+  await p.ctx.close();
+}
+
 check("C0", "no script error on the page throughout", me && !me.errs.length, JSON.stringify(me && me.errs));
 if (me) await me.ctx.close();
 await done();

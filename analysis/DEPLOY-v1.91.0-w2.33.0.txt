@@ -1,0 +1,60 @@
+MINIBUS
+=======
+  pages v1.91.0 · server w2.33.0 · sheet v1.96.0
+
+Phase 2, screen 1. Critical and Kind are changed from a defect's Update in
+the coordinator's app, for every report ticked. The Defects tab and History
+follow, and the driver app has it at once.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.90.2         v1.91.0
+  Worker  w2.32.0         w2.33.0
+  Code.gs v1.95.1         v1.96.0
+
+
+IN THIS ORDER
+-------------
+
+1. WORKER. Cloudflare, the minibus Worker, Edit code. Replace everything
+   with server/worker.js. Deploy. No database change.
+
+2. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
+   Save. Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy.
+
+3. PAGES. Merge the pull request.
+
+The Worker and Code.gs before the pages: an older Worker or sheet ignores
+Critical and Kind.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.91.0 · server w2.33.0 · sheet
+   v1.96.0 .
+
+B. Coordinator's app, Defects, Update on any card: Critical / Not critical,
+   then Defect / Advisory, then the statuses.
+
+C. Pick the other Kind, Save. The card's tag changes. Within a few minutes
+   the Defects tab has the new Kind, and History has "Defect: <item> — Kind".
+   Put it back the same way.
+
+
+WHAT CHANGED
+------------
+
+1. coord/index.html updateDefect: two rows of choices, sent as crit and type
+   only when changed. "Nothing has changed" counts them.
+
+2. worker.js actDefect: takes crit (YES, NO) and type (Defect, Advisory);
+   either alone is a change; words say "critical", "not critical", "an
+   advisory", "a defect". coordDefectsView and the driver app's open
+   defects (defectsJudged) show it before the sheet's copy comes back.
+
+3. Code.gs defectSetStatus: writes Critical and Kind, a History line for
+   each, and no status line when only they changed.
+
+Tests: tests/suites/41-defect-judged.mjs; browser check C41.

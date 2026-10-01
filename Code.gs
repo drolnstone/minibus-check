@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.95.1";
+var SCRIPT_VERSION = "v1.96.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -4074,7 +4074,8 @@ function coordDefect(ss, a, b, by) {
     .filter(function (k) { return k; });
   if (!keys.length) return { done: true, ok: false, push: true, result: "No defect was named." };
   var got = keys.map(function (k) {
-    return defectSetStatus(ss, k, String(b.status || "Open"), String(b.action || "").trim(), by, "Coordinator's app", a);
+    return defectSetStatus(ss, k, String(b.status || "Open"), String(b.action || "").trim(), by, "Coordinator's app", a,
+                           { crit: b.crit, kind: b.type });
   });
   var good = got.filter(function (r) { return r.ok; }).length;
   if (keys.length === 1) return { done: true, ok: got[0].ok, push: true, result: got[0].result };
@@ -4087,7 +4088,11 @@ function coordDefect(ss, a, b, by) {
 /* One defect's status, set, with what was done added to Action taken and a
    History row saying what it was and what it became. The coordinator's app
    comes here, and so does a repair on the Vehicle Log that put it right. */
-function defectSetStatus(ss, key, status, action, by, where, a) {
+/* re, from v1.96.0: { crit: "YES" or "NO", kind: "Defect" or "Advisory" },
+   either missing for no change. The app sends Kind as type, since kind
+   already names the change ("defect"). The coordinator judging a report again: a
+   tyre a driver called critical that is an advisory to watch. */
+function defectSetStatus(ss, key, status, action, by, where, a, re) {
   var sh = ss.getSheetByName(DEFECTS_SHEET);
   if (!sh || sh.getLastRow() < 2) return { ok: false, result: "That defect is not on the Defects tab." };
   var dc = colsSoft(sh, DEFECTS_SHEET);
@@ -4110,15 +4115,34 @@ function defectSetStatus(ss, key, status, action, by, where, a) {
     var lines = had.split("\n").map(function (x) { return x.trim(); });
     if (lines.indexOf(action) === -1) ac.setValue(safeText(had ? had + "\n" + action : action));
   }
+  var reg = String(at1(r, dc.reg) || "").trim().toUpperCase();
+  var item = String(at1(r, dc.item) || "").trim();
+  var hist = [];
+  re = re || {};
+  [[dc.critical, "Critical", re.crit === "YES" || re.crit === "NO" ? re.crit : "", function (v) {
+      return String(v || "").trim().toUpperCase() === "YES" ? "YES" : "NO"; }],
+   [dc.kind, "Kind", re.kind === "Defect" || re.kind === "Advisory" ? re.kind : "", function (v) {
+      return String(v || "").trim().toLowerCase() === "advisory" ? "Advisory" : "Defect"; }]
+  ].forEach(function (f) {
+    if (!f[0] || !f[2]) return;
+    var now = f[3](at1(r, f[0]));
+    if (now === f[2]) return;
+    sh.getRange(row, f[0]).setValue(f[2]);
+    hist.push({ who: by, where: where, reg: reg, what: "Defect: " + item + " \u2014 " + f[1],
+                from: now, to: f[2], why: action || "", ref: String(key || "") });
+  });
   cell.setValue(String(status || "Open"));
   try {
     cell.setNote("Set to " + status + " in the coordinator's app by " + by + " on " +
       Utilities.formatDate(new Date(Number(a && a.made) || Date.now()), Session.getScriptTimeZone(),
                            "yyyy-MM-dd HH:mm") + ".");
   } catch (err) {}
-  historyAdd(ss, [{ who: by, where: where, reg: String(at1(r, dc.reg) || "").trim().toUpperCase(),
-                    what: "Defect: " + String(at1(r, dc.item) || "").trim(), from: was || "Open", to: status,
-                    why: action || "", ref: String(key || "") }]);
+  /* The status line, unless all that changed was Critical or Kind. */
+  if ((was || "Open") !== status || action || !hist.length) {
+    hist.unshift({ who: by, where: where, reg: reg, what: "Defect: " + item, from: was || "Open", to: status,
+                   why: action || "", ref: String(key || "") });
+  }
+  historyAdd(ss, hist);
   /* Closed on, filled or cleared, exactly as for a person choosing it, and
      written on History by that same path. */
   onEditDefects({ range: cell, fromScript: true, by: by, where: where }, sh);
