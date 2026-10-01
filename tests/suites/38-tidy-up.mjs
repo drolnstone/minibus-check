@@ -8,8 +8,8 @@
      number, and says what a number was called that morning if it is called
      something else now.
    - A stop is its number. When the place behind a number changes after a
-     seat was taken there, History says so, the sheet says so at once, Is
-     everything working? lists it, and the passenger's page asks.
+     seat was taken there, History says so, the sheet says so at once, and
+     Is everything working? lists it. The passenger is told nothing.
 
    Everything here fails on w2.30.1 / v1.92.0. */
 
@@ -260,34 +260,6 @@ export default async function (root) {
     });
   });
 
-  /* ---- the passenger's page ------------------------------------------------ */
-
-  s.test("a seat at a number whose place has changed is told so, and keeping it clears it", async (a) => {
-    await atTime(THU, async () => {
-      const { db, env } = await fresh();
-      const phone = "07700900123";
-      const made = await J(await W.handleBooking(env, { date: KEY, ref: "dev1", phone, stopId: "N03", seats: 2 }));
-      a.ok(made.ok, JSON.stringify(made));
-      const pid = await W.passengerId(env, phone);
-      const before = await W.busPayload(env, KEY, "dev1", pid);
-      a.eq(before.stopMoved, null, "a seat at an unchanged stop was told it had moved");
-      db._exec("UPDATE stops SET stop='Westminster Road' WHERE stop_id='N03'");
-      const after = await W.busPayload(env, KEY, "dev1", pid);
-      a.ok(after.stopMoved, "nothing told him his stop is another place now");
-      a.eq(after.stopMoved && after.stopMoved.id, "N03");
-      a.eq(after.stopMoved && after.stopMoved.was, "Litherland Rd");
-      a.eq(after.stopMoved && after.stopMoved.now, "Westminster Road");
-      a.eq(after.mine && after.mine.stopId, "N03", "the seat itself must stay, by number");
-      /* Only spacing and capitals: not a change. */
-      db._exec("UPDATE stops SET stop='  litherland   RD ' WHERE stop_id='N03'");
-      a.eq((await W.busPayload(env, KEY, "dev1", pid)).stopMoved, null, "a tidied name read as a new place");
-      db._exec("UPDATE stops SET stop='Westminster Road' WHERE stop_id='N03'");
-      const kept = await J(await W.handleBooking(env, { date: KEY, ref: "dev1", phone, stopId: "N03", seats: 2 }));
-      a.ok(kept.ok, JSON.stringify(kept));
-      a.eq((await W.busPayload(env, KEY, "dev1", pid)).stopMoved, null, "keeping it did not take the notice away");
-    });
-  });
-
   /* ---- the sheet: History, the toast, Is everything working? ----------------- */
 
   s.test("the place behind a number edited on the sheet goes on History, and seats booked at the old place are said at once", async (a) => {
@@ -331,17 +303,6 @@ export default async function (root) {
       call(ok, "stopsHealth", ss(ok), g2, b2, t2);
       a.eq(t2.length, 0);
       a.has(g2.join(" "), "every seat for the coming Sundays is at the place its stop number names");
-    });
-  });
-
-  s.test("the sheet's own answer to the passenger page carries the same notice", async (a) => {
-    await atTime(THU, async () => {
-      const L = sheet({ stops: [
-        { Route: "North", "Stop ID": "N03", Time: "10:24", Stop: "Westminster Road by Leighton Street", Active: "YES", Type: "Pickup" }] });
-      const out = call(L, "busPayload", KEY, "dev-a", "p-a");
-      a.ok(out.mine, "the seat went: " + JSON.stringify(out).slice(0, 300));
-      a.eq(out.stopMoved && out.stopMoved.was, "Bedford Road by Stuart Hotel");
-      a.eq(out.stopMoved && out.stopMoved.now, "Westminster Road by Leighton Street");
     });
   });
 

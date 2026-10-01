@@ -1265,9 +1265,7 @@ function paintSunday(key){
   var h = '<p class="eyebrow">Rota '+statusTag(st)+(r.coordPending ? ' <span class="tag info">To the sheet</span>' : '')+'</p>' +
           '<h1>'+esc(longDay(key))+'</h1>';
   if(!past) pendingFor(key).forEach(function(q){ h += reqCard(q, true); });
-  if(past){
-    h += '<div class="card"><p class="tiny" style="margin:0">Past Sundays are the record. Change them on the sheet.</p></div>';
-  } else {
+  if(!past){
     var seg = function(m, t){ return '<button type="button" class="'+(mode === m ? 'on' + (m !== "on" ? ' off' : '') : '')+'" data-do="status" data-key="'+esc(key)+'" data-mode="'+m+'">'+t+'</button>'; };
     h += '<div class="seg">' + seg("on","Both running") + seg("North","North off") + seg("South","South off") + seg("all","All off") + '</div>';
   }
@@ -1519,7 +1517,6 @@ function paintBookings(key){
                    (every ? 'Booked stops only' : (empty === 1 ? '1 stop' : empty + ' stops') + ' with nobody booked') + '</button>';
     h += '</div>';
   });
-  if(!b.mayAct) h += '<p class="tiny center">Past Sundays are for looking only.</p>';
   if(b.cancelled && b.cancelled.length){
     h += '<details class="more"><summary>Cancelled ('+b.cancelled.length+')</summary><ul class="list">' + b.cancelled.map(function(k){
       return '<li>'+esc(seatWords(k.seats))+' at '+esc((k.stopId ? k.stopId + " " : "") + k.stop)+(k.phone ? ', '+esc(phoneWords(k.phone)) : '')+
@@ -1686,7 +1683,7 @@ function updateDefect(gk){
   var chosen = g.status || "Open";
   var many = g.reports.length > 1;
   openSheet({ eyebrow: g.reg, title: g.item,
-    body: (many ? '<div id="defReps"><p class="tiny" style="margin:0 0 2px">For each report of it, all ticked. Untick one that is a different fault:</p>' +
+    body: (many ? '<div id="defReps"><p class="tiny" style="margin:0 0 2px">Reports</p>' +
             g.reports.map(function(d, i){
               return '<label class="check"><input type="checkbox" data-rep="'+i+'" checked><span>' +
                      esc([d.date ? shortDay(d.date) : "", d.driver].filter(Boolean).join(", ")) +
@@ -1816,7 +1813,10 @@ function rnNextDue(item, done, was, given){
 }
 
 /* Whether a service done on done may be lined up with an MOT due on mot:
-   only one six to thirteen months off. The live server's lineUpOk. */
+   only one six to thirteen months off. The live server's lineUpOk. Not
+   offered on the form from v1.90.0: an MOT and a service done together are
+   each recorded, and a date that moves is put right by hand. Kept so the
+   three copies of the rules stay one. */
 function lineUpOk(done, mot){
   return !!(rnParts(done) && rnParts(mot) && mot > rnAddMonths(done, 6) && mot <= rnAddMonths(done, 13));
 }
@@ -1914,7 +1914,7 @@ function entryHTML(reg, x){
   var lines = [];
   if(x.status === "Booked") lines.push("Booked for " + yearDay(x.bookedFor));
   else if(x.done) lines.push("Done " + yearDay(x.done) + (x.was ? ", " + lateWords(x.early) + " (was due " + ukDay(x.was) + ")" : ""));
-  if(x.next) lines.push("Next due " + ukDay(x.next) + (x.how ? ": " + x.how : ""));
+  if(x.next) lines.push("Next due " + ukDay(x.next));
   var facts = [];
   if(x.garage) facts.push(x.garage);
   if(x.miles !== null && x.miles !== undefined && x.miles !== "") facts.push(Number(x.miles).toLocaleString("en-GB") + " miles");
@@ -1965,7 +1965,7 @@ var VL = null;          /* what the open Record form has chosen */
 function givenLabel(item){
   return item === "mot" ? "Expiry date on the certificate"
        : item === "insurance" ? "Date the new policy runs to"
-       : item === "permit" ? "Date the new permit runs to" : "Next service due, if the garage gave one";
+       : item === "permit" ? "Date the new permit runs to" : "Next service due";
 }
 function numIn(v){
   var t = String(v == null ? "" : v).replace(/[£,\s]/g, "");
@@ -1993,19 +1993,17 @@ function recordFor(reg, from){
           '<div class="field" id="vlDoneF"><label for="vlDay">Day it was done</label><input type="date" id="vlDay" value="' + esc(startDay) + '" max="' + esc(today) + '"></div>' +
           '<div class="field" id="vlBookF" hidden><label for="vlFor">Booked for</label><input type="date" id="vlFor" min="' + esc(today) + '"></div>' +
           '<div class="field" id="vlGivenF" hidden><label for="vlGiven" id="vlGivenL"></label><input type="date" id="vlGiven"></div>' +
-          '<label class="check" id="vlMotF" hidden><input type="checkbox" id="vlMot"><span id="vlMotL"></span></label>' +
           '<p class="preview" id="vlNext" hidden></p>' +
           '<div class="two"><div class="field"><label for="vlMiles">Mileage</label><input id="vlMiles" inputmode="numeric" autocomplete="off"' +
             (m && m.miles ? ' placeholder="' + esc("Last read " + Number(m.miles).toLocaleString("en-GB")) + '"' : '') + '></div>' +
           '<div class="field"><label for="vlCost">Cost (£)</label><input id="vlCost" inputmode="decimal" autocomplete="off"></div></div>' +
           '<div class="field"><label for="vlGarage">Garage</label><input id="vlGarage" maxlength="80" autocomplete="off" value="' + esc(from && from.garage || "") + '"></div>' +
-          (defs.length ? '<div id="vlDefs"><p class="tiny" style="margin:0 0 2px">Defects it put right, closed as it goes on:</p>' + defs.map(function(g, i){
+          (defs.length ? '<div id="vlDefs"><p class="tiny" style="margin:0 0 2px">Defects put right</p>' + defs.map(function(g, i){
             var n = g.reports.length;
             return '<label class="check"><input type="checkbox" data-defg="' + i + '"><span>' + esc(g.item) +
                    ' <small>' + esc(n > 1 ? n + " reports since " + shortDay(g.oldest) : (g.oldest ? shortDay(g.oldest) : "")) + '</small></span></label>';
           }).join("") + '</div>' : '') +
-          '<div class="field"><label for="vlNotes">Notes</label><textarea id="vlNotes" maxlength="500"></textarea></div>' +
-          '<p class="tiny">Only what it was is needed. Everything else can be left empty.</p>',
+          '<div class="field"><label for="vlNotes">Notes</label><textarea id="vlNotes" maxlength="500"></textarea></div>',
     go: "Record it",
     onGo: function(){ recordSend(b); } });
   var pick = function(sel, attr, set){
@@ -2020,7 +2018,7 @@ function recordFor(reg, from){
   };
   pick("#vlWhat", "data-w", function(w){ VL.what = w; });
   pick("#vlStatus", "data-s", function(s){ VL.status = s; });
-  ["vlDay", "vlFor", "vlGiven", "vlMot"].forEach(function(id){
+  ["vlDay", "vlFor", "vlGiven"].forEach(function(id){
     var el = $(id); if(el){ el.onchange = function(){ recordShow(b); }; el.oninput = el.onchange; }
   });
   recordShow(b);
@@ -2032,27 +2030,22 @@ function recordShow(b){
   var item = VLOG_ITEM[VL.what] || "", done = VL.status === "Done";
   var day = $("vlDay").value, given = item && done ? $("vlGiven").value : "";
   var was = (b.dates || {})[item] || "";
-  var mot = (b.dates || {}).mot || "";
   $("vlDoneF").hidden = !done;
   $("vlBookF").hidden = done;
   $("vlGivenF").hidden = !(item && done);
   if(item) $("vlGivenL").textContent = givenLabel(item);
-  var canLine = item === "service" && done && !given && lineUpOk(day, mot);
-  $("vlMotF").hidden = !canLine;
-  if(canLine) $("vlMotL").textContent = "Line the next service up with the MOT, " + ukDay(mot);
   var defs = $("vlDefs"); if(defs) defs.hidden = !done;
   var p = $("vlNext");
   if(!done){
-    p.hidden = !VL.what;
-    p.textContent = "It goes on the log as booked. Record it as done on the day, and the date moves then.";
+    p.hidden = true;
     return;
   }
   if(!item || !rnParts(day)){ p.hidden = true; return; }
-  var nd = canLine && $("vlMot").checked ? { next: mot, how: "lined up with the MOT" } : rnNextDue(item, day, was, given);
+  var nd = rnNextDue(item, day, was, given);
   var late = was ? rnDays(was, day) : null;
   p.hidden = false;
   p.textContent = (was ? "It was due " + ukDay(was) + (late !== null ? ": " + lateWords(late) + ". " : ". ") : "") +
-                  "Next due " + ukDay(nd.next) + ", " + nd.how + ".";
+                  "Next due " + ukDay(nd.next) + ".";
 }
 
 function recordSend(b){
@@ -2061,16 +2054,15 @@ function recordSend(b){
   var a = { kind: "vlog", reg: b.reg, what: VL.what, status: VL.status };
   if(done){
     a.done = $("vlDay").value || today;
-    if(a.done > today){ sheetSay("That day has not come yet. To record a day ahead, choose Booked ahead.", true); return; }
+    if(a.done > today){ sheetSay("That day has not come yet.", true); return; }
     if(item) a.given = $("vlGiven").value || "";
-    if(item === "service" && !$("vlMotF").hidden && $("vlMot").checked) a.withMot = true;
     var groups = defectGroups(defectsOf(b.reg));
     a.defects = [].concat.apply([], Array.prototype.map.call(document.querySelectorAll("#vlDefs input[data-defg]:checked"), function(x){
       var g = groups[Number(x.getAttribute("data-defg"))]; return g ? g.keys : []; }));
   } else {
     a.bookedFor = $("vlFor").value || "";
     if(!a.bookedFor){ sheetSay("Say the day it is booked for.", true); return; }
-    if(a.bookedFor < today){ sheetSay("That day has gone. Record it as done instead.", true); return; }
+    if(a.bookedFor < today){ sheetSay("That day has gone.", true); return; }
   }
   var miles = numIn($("vlMiles").value), cost = numIn($("vlCost").value);
   if(miles !== miles){ sheetSay("The mileage is not a number of miles.", true); return; }
@@ -2104,7 +2096,7 @@ function correctEntry(reg, id){
           '<div class="field"><label for="vfCost">Cost (£)</label><input id="vfCost" inputmode="decimal" autocomplete="off" value="' + esc(x.cost == null ? "" : x.cost) + '"></div></div>' +
           '<div class="field"><label for="vfGarage">Garage</label><input id="vfGarage" maxlength="80" autocomplete="off" value="' + esc(x.garage || "") + '"></div>' +
           '</div>' +
-          '<div class="field"><label for="vfWhy">Why</label><textarea id="vfWhy" maxlength="300" placeholder="The date was typed wrong"></textarea></div>',
+          '<div class="field"><label for="vfWhy">Why</label><textarea id="vfWhy" maxlength="300"></textarea></div>',
     go: "Correct it",
     onGo: function(){
       var a = { kind: "vfix", corrects: x.id, why: $("vfWhy").value || "" };
@@ -2132,7 +2124,7 @@ function correctEntry(reg, id){
     var day = $("vfDay").value, given = $("vfGiven") ? $("vfGiven").value : "";
     var nd = item && rnParts(day) ? rnNextDue(item, day, x.was || "", given) : { next: "" };
     p.hidden = !nd.next;
-    if(nd.next) p.textContent = "Next due " + ukDay(nd.next) + ", " + nd.how + ".";
+    if(nd.next) p.textContent = "Next due " + ukDay(nd.next) + ".";
   };
   Array.prototype.forEach.call(document.querySelectorAll("#vfMode button"), function(bt){
     bt.onclick = function(){
@@ -2150,7 +2142,7 @@ function correctEntry(reg, id){
 function jobDone(reg, job){
   var j = jobsOf(reg); if(!j) return;
   openSheet({ eyebrow: reg, title: job, line: "Asked for at the walkaround " + (j.date ? shortDay(j.date) : "") + ". Mark it done?",
-    body: '<div class="field"><label for="jobNote">Note</label><input id="jobNote" maxlength="200" autocomplete="off" placeholder="Topped up after the service"></div>',
+    body: '<div class="field"><label for="jobNote">Note</label><input id="jobNote" maxlength="200" autocomplete="off"></div>',
     go: "Done",
     onGo: function(){ act({ kind: "job", reg: reg, job: job, checkId: j.checkId, note: $("jobNote").value || "" }); } });
 }
@@ -2281,8 +2273,6 @@ function busLinkWords(){ return "Book your seat on the Sunday bus: " + busLink()
 function paintLink(){
   var url = busLink();
   $("reportBody").innerHTML = '<div class="rep"><h1>Bus link for this Sunday</h1>' +
-    '<p class="lead">The same link every week: the page works out which Sunday it is by itself, ' +
-    'so it can be pinned in the group once.</p>' +
     '<ul><li>'+esc(url)+'</li></ul>' +
     '<a class="btn btn-main btn-wide" style="margin-top:14px;text-decoration:none" href="https://wa.me/?text=' +
       encodeURIComponent(busLinkWords()) + '" target="_blank" rel="noopener">Send on WhatsApp</a>' +
@@ -2309,7 +2299,6 @@ function copyLink(){
    reminder already sent is never sent twice, so asking again is safe. */
 function remindAsk(){
   openSheet({ eyebrow: "Duty reminders", title: "Send the duty reminders due today?",
-    line: "Only the ones due today go out, and nobody is sent the same reminder twice.",
     go: "Send",
     onGo: function(){ closeSheet(); REP = { name:"", data:null }; go("report/remind"); } });
 }
@@ -2445,9 +2434,7 @@ function paintRehearsal(){
   var reh = D.rehearsal, det = D.rehearsalDetail;
   if(!reh){
     if(D.rehearsalBlocked) h += '<div class="need stop"><p>'+esc(D.rehearsalBlocked)+'</p></div>';
-    h += '<div class="card"><p class="tiny" style="margin:0">None running. A rehearsal lasts two hours, ' +
-         'and ends at midnight if it reaches Sunday. It puts test seats on both routes. A coordinator can ' +
-         'drive either route in it, and a driver his own. Its seats and taps are cleared when it ends.</p></div>';
+    h += '<div class="card"><p class="tiny" style="margin:0">None running.</p></div>';
     h += '<button class="btn btn-main btn-wide" type="button" data-do="rehstart" style="margin-top:12px"' +
          (D.rehearsalBlocked ? ' disabled' : '') + '>Start a rehearsal</button>';
     $("rehearsalBody").innerHTML = h;
@@ -2464,9 +2451,7 @@ function paintRehearsal(){
          '<p class="tiny">'+esc(rehRunWords(r))+'</p></div>';
   });
   h += '<div class="req-acts"><button class="btn btn-ghost" type="button" data-do="rehover">Start over</button>' +
-       '<button class="btn btn-stop" type="button" data-do="rehend">End it</button></div>' +
-       '<p class="tiny">Start over draws new seats, and every phone drops the run it made in this round. ' +
-       'End it takes its seats and taps off the live server and the sheet.</p>';
+       '<button class="btn btn-stop" type="button" data-do="rehend">End it</button></div>';
   $("rehearsalBody").innerHTML = h;
 }
 
@@ -2475,8 +2460,6 @@ function rehearsalStart(again){
     return '<li><button type="button" data-pick="'+x[0]+'"><b>'+esc(x[1])+'</b><small>'+esc(x[2])+'</small></button></li>';
   }).join("") + '</ul>';
   openSheet({ eyebrow: "Rehearsal", title: again ? "Start it over?" : "Start a rehearsal?",
-    line: again ? "New test seats. Every phone drops the run it made in this round."
-                : "Test seats on both routes, for two hours at most.",
     body: list, go: again ? "Start over" : "Start",
     onPick: function(k){
       var w = ""; REH_SHAPES.forEach(function(x){ if(x[0] === k) w = x[1].toLowerCase(); });
@@ -2487,7 +2470,6 @@ function rehearsalStart(again){
 
 function rehearsalEnd(){
   openSheet({ eyebrow: "Rehearsal", title: "End the rehearsal?",
-    line: "Its test seats and test taps come off the live server and the sheet. Every phone goes back to the real thing.",
     go: "End it", stop: true,
     onGo: function(){ act({ kind:"rehearsal", op:"end" }); } });
 }

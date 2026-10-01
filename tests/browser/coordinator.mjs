@@ -714,8 +714,8 @@ if (want("C19")) {
     const after = await me.text("#rehearsalBody");
     await me.shot("C19e-ended");
     const acts = db._rows("SELECT words FROM coord_actions WHERE kind='rehearsal' ORDER BY seq").map((r) => r.words);
-    check("C19c", "End it clears the live server, and the screen and What I have done say so",
-          /come off the live server and the sheet/.test(endLine) && !flag() && seeds().length === 0 &&
+    check("C19c", "End it clears the live server, and the screen and What has been done say so; the sheet asks without a lesson",
+          endLine === "" && !flag() && seeds().length === 0 &&
           /None running/.test(after) && acts.length === 3 && acts[2] === "Rehearsal ended." &&
           /^Rehearsal started over: a quiet morning/.test(acts[1]),
           "line '" + endLine + "', flag " + JSON.stringify(flag()) + ", seats " + seeds().length +
@@ -1002,7 +1002,7 @@ if (want("C29")) {
   await p.shot("C29c-bus-after");
   check("C29", "Buses shows each bus's dates; an MOT recorded is worked out before Save, kept, and shown at once",
         /Buses/.test(menu) && /2 jobs to arrange/.test(menu) && /YS70 PWE/.test(list) && /overdue/.test(list) &&
-        before.indexOf(uk(DAY(10))) !== -1 && preview.indexOf("Next due " + uk(expect.next)) !== -1 && /kept its date/.test(preview) &&
+        before.indexOf(uk(DAY(10))) !== -1 && preview.indexOf("Next due " + uk(expect.next)) !== -1 && !/kept its date/.test(preview) &&
         after.indexOf(uk(expect.next)) !== -1 && body.miles === 45180 && body.garage === "Walton Garage" &&
         (body.defects || []).length === 1 && wide <= 390 && !p.errs.length,
         "menu '" + menu + "', list '" + list.slice(0, 120) + "', preview '" + preview + "', after '" + after.slice(0, 120) +

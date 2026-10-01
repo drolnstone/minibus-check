@@ -354,11 +354,10 @@ ever compared, never matched on. The guards:
 - **Is everything working?** lists each such seat under To do until it is
   dealt with (`stopsHealth`).
 - **The coordinator's Bookings** marks it: *Booked when N05 was …*.
-- **The passenger's own page** says *Your stop has changed since you booked*,
-  with the old place and the new, and **Yes, keep it** saves the seat again at
-  the new place, which clears every one of these. Not coming and a fresh
-  booking does too. The sheet's own answer, when the live server is down,
-  says the same.
+
+**The passenger is told nothing.** Rearranging the stops is the
+coordinator's business, and the numbers behind them are not the passenger's.
+A seat stops being flagged once it is booked again, or cancelled.
 
 A number switched off or taken off the tab was already handled: the passenger
 is told their stop has gone and the seat is not shown as booked.
@@ -1255,10 +1254,17 @@ Save, and the live server works it out again and keeps its own answer:
 | MOT | tested within a month (less a day) before it ran out: it keeps its date, a year on. Earlier than that, or after it ran out: a year from the test, less a day, which is the date the certificate carries |
 | Insurance, parking permit | renewed in the two months up to its expiry: the anniversary, a year on. After it lapsed, or earlier than that (a new policy): twelve months from the renewal |
 
-A date typed from the certificate or the policy always wins. Each entry says
-how its date was worked out, and how many days early or late it was done. A
-service done on the same visit as the MOT can be lined up with it (record the
-MOT first); the offer is made only when the MOT is six to thirteen months off.
+A date typed from the certificate or the policy always wins. The app shows
+the next due date and how many days early or late it was done; how the date
+was worked out goes in the Vehicle Log tab's own column, not on the screen.
+An MOT and a service done together are each recorded; a date that moves is
+put right by hand. (Up to v1.90.0 the form offered to line a service up with
+an MOT six to thirteen months off. The rule is still in all three copies, so
+they stay one, but nothing offers it.)
+
+**No teaching on the screens.** From v1.90.0 the coordinator's app states
+facts, asks questions and names buttons, and leaves how and why to the manual
+and the videos. Note fields carry no sample text: an empty note sends nothing.
 
 **The new date is on every phone at once**, the driver app's warnings
 included, as any other change from the app is (see *How a change travels*).

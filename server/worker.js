@@ -2018,24 +2018,6 @@ async function busPayload(env, keyIn, ref, pid) {
     if (!stops.some((s) => s.id === mine.stopId)) { stopGone = mine.stopId; mine = null; }
   }
 
-  /* THE NUMBER IS STILL THERE, BUT THE PLACE BEHIND IT HAS CHANGED.
-
-     The coordinator edits the stop behind a number rather than making new
-     numbers, so a seat booked at N05 when N05 was one road is, after the
-     edit, a seat at whatever road N05 is now. The booking is still good, by
-     number, and the driver will stop at the new place. But the passenger
-     booked the old one, and nothing told him. Said here, with the old name
-     and the new, so the page can ask him whether the new place still suits;
-     choosing it again (or another) takes the notice away, because the seat
-     then carries the name it has now. */
-  let stopMoved = null;
-  if (mine && mine.stopId && mine.stop) {
-    const now = stops.find((s) => s.id === mine.stopId);
-    if (now && !sameStopName(now.stop, mine.stop)) {
-      stopMoved = { id: now.id, was: mine.stop, now: now.stop, time: now.time || "" };
-    }
-  }
-
   const buses = await getBuses(env);
   const rotaRow = await getRotaRow(env, key);
   const seats = {};
@@ -2067,7 +2049,6 @@ async function busPayload(env, keyIn, ref, pid) {
     phone: mine && mine.phone ? mine.phone : "",
     mine: mine ? { stopId: mine.stopId, seats: mine.seats } : null,
     stopGone,
-    stopMoved,
     seats
   };
 }

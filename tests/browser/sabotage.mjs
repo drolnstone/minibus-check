@@ -136,10 +136,6 @@ const S = [
     ["'<span class=\"nm\">'+(st ? sid(st.id) : '')+esc(label)", "'<span class=\"nm\">'+esc(label)"] ] },
   { id: "S37 the old place not said on Bookings", tests: "C40", file: "coord/index.html", runner: "coordinator.mjs", swaps: [
     ["var moved = k.stop && !sameStop(k.stop, s.stop);", "var moved = false;"] ] },
-  { id: "S38 the passenger not told the stop changed", tests: "P9", file: "sunday/index.html", runner: "passenger.mjs", swaps: [
-    ["  if(STOPMOVED && booked){", "  if(false){"] ] },
-  { id: "S39 Keep it keeps asking", tests: "P9", file: "sunday/index.html", runner: "passenger.mjs", swaps: [
-    ["  if(out && out.ok) STOPMOVED=null;\n", ""] ] },
   { id: "S40 the driver's rota says it twice", tests: "T21", swaps: [
     ["      <div></div>\n      <button class=\"rota-back\" id=\"rotaBack\"", "      <div><h1>Driving rota</h1></div>\n      <button class=\"rota-back\" id=\"rotaBack\""] ] }
 ];

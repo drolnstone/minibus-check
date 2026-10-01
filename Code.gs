@@ -1408,8 +1408,10 @@ function busDatesAudit(ss, where, who) {
      - a change that leaves seats booked for a coming Sunday at the old place
        says so at once, on the sheet and on History;
      - Is everything working? lists any such seat until it is dealt with;
-     - the coordinator's Bookings screen marks it, and the passenger's own
-       page asks whether the new place still suits.
+     - the coordinator's Bookings screen marks it.
+
+   The passenger is told nothing: rearranging the stops is the coordinator's
+   business, and the numbers behind them are not the passenger's.
 
    The name is only ever compared, never matched on. A seat keeps the name its
    number had when it was taken, and differing from today's name for the same
@@ -1495,12 +1497,12 @@ function stopsAudit(ss, where, who) {
       }
       if (a.active !== b.active) {
         rows.push({ who: who, where: where, reg: "", what: "Stop " + id + ": active", from: a.active, to: b.active,
-                    why: b.active === "NO" ? "Switched off: a seat booked there is told its stop has gone" : "", ref: id });
+                    why: "", ref: id });
       }
     });
     Object.keys(seen).forEach(function (id) {
       if (!now[id]) rows.push({ who: who, where: where, reg: "", what: "Stop " + id + " taken off the tab",
-                                from: line(id, seen[id]), to: "", why: "A seat booked there is told its stop has gone", ref: id });
+                                from: line(id, seen[id]), to: "", why: "", ref: id });
     });
     var moved = stopsMovedUnderBookings(ss);
     moved.forEach(function (m) {
@@ -1520,9 +1522,7 @@ function onEditBusStops(e, sh) {
   var moved = stopsAudit(ss, "On the Bus Stops tab", editorOf(e));
   if (!moved.length) return;
   try {
-    ss.toast(moved.map(stopMovedWords).join("\n") +
-             "\nThe seats stay at the number. Their page will ask them whether the new place suits.",
-             "Booked at the old place", 20);
+    ss.toast(moved.map(stopMovedWords).join("\n"), "Booked at the old place", 20);
   } catch (err) {}
 }
 
@@ -1534,8 +1534,7 @@ function stopsHealth(ss, good, bad, todo) {
     return;
   }
   moved.forEach(function (m) {
-    todo.push("Booked at a stop that has changed. " + stopMovedWords(m) +
-              " Their page asks them whether it suits; ring them if the Sunday is close.");
+    todo.push("Booked at a stop that has changed. " + stopMovedWords(m));
   });
 }
 
@@ -8895,16 +8894,6 @@ function busPayload(key, ref, pid) {
     readBusStops(ss).forEach(function (s) { if (s.id === mine.stopId) stillThere = true; });
     if (!stillThere) { stopGone = mine.stopId; mine = null; }
   }
-  /* Still there by number, but the place behind it changed after the seat was
-     taken. The same as the live server's: see THE STOP BEHIND A NUMBER. */
-  var stopMoved = null;
-  if (mine && mine.stopId && mine.stop) {
-    readBusStops(ss).forEach(function (s) {
-      if (s.id === mine.stopId && stopWords(s.stop) !== stopWords(mine.stop)) {
-        stopMoved = { id: s.id, was: mine.stop, now: s.stop, time: s.time || "" };
-      }
-    });
-  }
 
   /* The driver's number goes out under four conditions at once, and it is the
      conjunction that keeps this proportionate: only once bookings have shut,
@@ -8950,7 +8939,6 @@ function busPayload(key, ref, pid) {
     mine: mine ? { stopId: mine.stopId, seats: mine.seats } : null,
     /* Set only when a booking was dropped because its stop has gone. */
     stopGone: stopGone,
-    stopMoved: stopMoved,
     /* One entry per route: which bus, how many seats, how many booked. The
        page decides when that is worth saying out loud — mostly it is not. */
     seats: (function () {
