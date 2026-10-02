@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.95.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.95.1 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -213,6 +213,8 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
   text-align:center;line-height:1.1}
 .btn:active{transform:scale(.98)}
 .btn[disabled]{opacity:.4;pointer-events:none}
+/* iPhone draws a date box wider than its card unless told not to. */
+.field input[type=date]{-webkit-appearance:none;appearance:none;display:block;min-width:0;max-width:100%;min-height:48px;text-align:left}
 .btn-main{background:var(--steel);color:var(--on-accent)}
 .btn-ghost{background:var(--card);border-color:var(--hair);color:var(--ink)}
 .btn-stop{background:var(--stop);color:var(--stop-on)}
@@ -642,7 +644,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.95.0";
+var PAGE_VERSION = "v1.95.1";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -2774,7 +2776,7 @@ function paintReport(name){
 
 var PDF_LIST = [["outstanding", "Outstanding"], ["fleet", "Fleet and safety record"],
                 ["sunday", "Sunday report"], ["summary", "Period summary"]];
-var PDF = { name: "outstanding", from: "", to: "", sunday: "", busy: false, out: null };
+var PDF = { name: "outstanding", from: "", to: "", sunday: "", q: "month", made: "", busy: false, out: null };
 var PDF_LIB = null;
 
 function pdfToday(){ return calToday() || dayOf(Date.now()); }
@@ -2794,7 +2796,7 @@ function pdfQuick(q){
   else if(q === "last"){ PDF.from = pdfMonth(t, -1); PDF.to = rnAddDays(first, -1); }
   else if(q === "three"){ PDF.from = pdfMonth(t, -2); PDF.to = t; }
   else if(q === "year"){ PDF.from = t.slice(0, 4) + "-01-01"; PDF.to = t; }
-  PDF.out = null; PDF.say = null;
+  PDF.q = q; PDF.say = null;
   paintPdf();
 }
 /* What is in the boxes now, kept before anything repaints them. */
@@ -2815,11 +2817,11 @@ function paintPdf(){
     h += '<div class="field"><label for="pdfSun">Sunday</label><input id="pdfSun" type="date" value="'+esc(PDF.sunday)+'" max="'+esc(pdfToday())+'"></div>';
   else
     h += '<div class="chips">' + [["month","This month"],["last","Last month"],["three","Last 3 months"],["year","This year"]].map(function(q){
-           return '<button type="button" data-do="pdfquick" data-q="'+q[0]+'">'+q[1]+'</button>';
+           return '<button type="button" data-do="pdfquick" data-q="'+q[0]+'"'+(PDF.q === q[0] ? ' class="on"' : '')+'>'+q[1]+'</button>';
          }).join("") + '</div>' +
          '<div class="field"><label for="pdfFrom">From</label><input id="pdfFrom" type="date" value="'+esc(PDF.from)+'"></div>' +
          '<div class="field"><label for="pdfTo">To</label><input id="pdfTo" type="date" value="'+esc(PDF.to)+'"></div>';
-  h += '<button class="btn btn-main btn-wide" type="button" data-do="pdfmake"'+(PDF.busy ? ' disabled' : '')+'>Make the PDF</button>' +
+  h += '<button class="btn btn-main btn-wide" type="button" data-do="pdfmake"'+(PDF.busy || PDF.made === pdfAsk() ? ' disabled' : '')+'>Make the PDF</button>' +
        '<p class="say" id="pdfSay"></p></div>';
   if(PDF.out){
     h += '<div class="card"><p style="margin:0 0 10px"><b>'+esc(PDF.out.name)+'</b></p>' +
@@ -2829,7 +2831,16 @@ function paintPdf(){
          '</div>';
   }
   $("pdfBody").innerHTML = h;
+  /* A date changed by hand is a new request, and no quick choice any more. */
+  ["pdfFrom", "pdfTo", "pdfSun"].forEach(function(id){
+    if($(id)) $(id).onchange = function(){ pdfRead(); if(id !== "pdfSun") PDF.q = ""; PDF.say = null; paintPdf(); };
+  });
   if(PDF.say) say("pdfSay", PDF.say.t, PDF.say.bad);
+}
+/* The request as it stands. Make the PDF stays off once this one is made,
+   until the report or its dates change. */
+function pdfAsk(){
+  return PDF.name + "|" + (PDF.name === "outstanding" ? pdfToday() : PDF.name === "sunday" ? PDF.sunday : PDF.from + "|" + PDF.to);
 }
 function pdfSay(t, bad){ PDF.say = t ? { t: t, bad: !!bad } : null; if($("pdfSay")) say("pdfSay", t, bad); }
 
@@ -2846,7 +2857,7 @@ function pdfLib(){
   PDF_LIB.catch(function(){ PDF_LIB = null; });
   return PDF_LIB;
 }
-/* The church logo as a small JPEG on white, so the file stays small. No logo
+/* The church logo as a small JPEG on the banner's colour, so the file stays small. No logo
    is no reason to stop. */
 function pdfLogo(){
   return new Promise(function(ok){
@@ -2858,7 +2869,7 @@ function pdfLogo(){
         try {
           var w = 360, h = Math.round(w * img.naturalHeight / img.naturalWidth) || w;
           var c = document.createElement("canvas"); c.width = w; c.height = h;
-          var g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, w, h); g.drawImage(img, 0, 0, w, h);
+          var g = c.getContext("2d"); g.fillStyle = "#1B222C"; g.fillRect(0, 0, w, h); g.drawImage(img, 0, 0, w, h);
           fin({ url: c.toDataURL("image/jpeg", 0.9), ratio: w / h });
         } catch(e){ fin(null); }
       };
@@ -2871,6 +2882,7 @@ function pdfLogo(){
 function pdfMake(){
   if(PDF.busy) return;
   pdfRead();
+  if(PDF.made === pdfAsk()) return;
   var name = PDF.name, from = PDF.from, to = PDF.to;
   if(name === "sunday"){
     from = to = PDF.sunday;
@@ -2887,9 +2899,10 @@ function pdfMake(){
     if(!out || !out.ok) return fail(out && out.error);
     var rep = out.report, now = Date.now();
     var doc = window.reportPdf(rep, { logo: v[2] && v[2].url, logoW: v[2] && v[2].ratio,
-                                      church: "RCCG Dominion Assembly Liverpool",
+                                      church: "RCCG Dominion Assembly", place: "Liverpool - Transport",
                                       made: ukDay(dayOf(now)) + " " + hhmm(now), who: who });
     var file = window.reportFileName(rep), blob = doc.output("blob");
+    PDF.made = pdfAsk();
     var share = false;
     try { share = !!(navigator.canShare && window.File && navigator.canShare({ files: [new File([blob], file, { type: "application/pdf" })] })); } catch(e){}
     PDF.out = { name: file, blob: blob, url: URL.createObjectURL(blob), drive: "", share: share };

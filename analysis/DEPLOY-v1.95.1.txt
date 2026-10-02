@@ -1,65 +1,53 @@
 MINIBUS
 =======
-  sheet v1.95.1 · pages and server unchanged
+  pages v1.95.1 · server w2.37.0 · sheet v1.100.0
 
-Every tab locked by Set up, with nothing to lock by hand. A tab made later is
-locked when it is made, and any tab left unlocked is locked again overnight.
+Asim's four notes on the PDF reports. Pages only.
 
 
 YOU ARE ON              GOING TO
-  Code.gs v1.95.0         v1.95.1
-  Pages and Worker        no change
+  Pages   v1.95.0         v1.95.1
+  Worker  w2.37.0         w2.37.0   (no paste)
+  Code.gs v1.100.0        v1.100.0  (no paste)
 
 
 IN THIS ORDER
 -------------
 
-1. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
-   Save. Deploy, Manage deployments, the pencil, Version: New version,
-   Deploy.
-
-2. Reload the spreadsheet. Minibus, Set up / refresh rota.
-
-3. Merge the pull request.
+1. PAGES. Merge the pull request. Nothing else.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  sheet v1.95.1 .
+A. The foot of all three apps reads  app v1.95.1 · server w2.37.0 · sheet
+   v1.100.0 .
 
-B. Set up ends with "Ready", or with a list of what was skipped. A tab that
-   could not be locked is named in that list.
+B. PDF reports, Fleet and safety record: This month is lit. Tap Last
+   month: it lights up and This month goes out. Change a date by hand:
+   none is lit.
 
-C. Data, Protect sheets and ranges: a "Minibus lock" on every tab: Rota,
-   Rota Requests, Defects, Checks, Buses, Bus Bookings, Trip Events, Bus
-   Stops, Drivers, Vehicle Log, History, and any archive tabs.
+C. The From and To boxes stay inside the card on the iPhone.
 
-D. Minibus, Have a look, Is everything working?: under Fine, "Sheet
-   protection: every tab is locked."
+D. Make the PDF. Once it is made, Make the PDF is faded and does nothing
+   until another report, period or date is chosen.
+
+E. The PDF opens with the app's dark banner (logo, RCCG Dominion Assembly,
+   Liverpool - Transport), then the title and a line saying what it covers:
+     Minibus: outstanding actions
+     Minibus: fleet and safety record
+     Minibus: Sunday service transport report
+     Minibus: transport summary for the period
 
 
 WHAT CHANGED
 ------------
 
-1. ONE TAB NO LONGER UNLOCKS THEM ALL. sheetLocks and applyLocks lock each
-   tab on its own. Before, one tab whose lock could not be worked out threw
-   out of the whole list, Set up swallowed the error, no tab was locked, and
-   the Set up message still said the protection was done. A tab with only
-   its header row was one such tab. Now that tab is named and the rest are
-   locked.
+1. coord/index.html: the period buttons light up (PDF.q); the date boxes
+   are held to the card's width; Make the PDF is off once that request is
+   made (PDF.made, pdfAsk). The logo is drawn on the banner colour.
 
-2. SET UP SAYS WHAT IT COULD NOT LOCK, in the same list as the skipped
-   dropdowns.
+2. coord/pdf.js: the banner, the titles and the line under each title
+   (TITLES). File names follow the new titles.
 
-3. LOCKED WHEN MADE. A tab made after Set up (Checks and Defects on the
-   first walkaround, the Vehicle Log and History on the first sync, the
-   archive tabs) is locked as it is made (relockIfNeeded).
-
-4. LOCKED AGAIN OVERNIGHT. The 3am pass locks any tab with no lock. Unlock
-   the sheet lasts until then.
-
-5. IS EVERYTHING WORKING? names any tab not locked (locksHealth).
-
-Tests: tests/suites/40-locks.mjs. The test spreadsheet now refuses a range
-of no rows, as Apps Script does.
+3. Tests. tests/suites/47-pdf-reports.mjs.
