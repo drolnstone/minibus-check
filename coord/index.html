@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.91.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.92.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -139,6 +139,8 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
   text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
 .card{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);padding:12px 13px}
 .card+.card{margin-top:10px}
+.drv.off{opacity:.7}
+#driversBody .btn-wide{margin-bottom:6px}
 .tiny{font-size:13px;color:var(--muted);margin:6px 0 0}
 .center{text-align:center}
 .mono{font-family:"IBM Plex Mono",monospace}
@@ -593,6 +595,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
   <section class="screen" id="s-bookings"><div id="bookingsBody"></div></section>
   <section class="screen" id="s-defects"><div id="defectsBody"></div></section>
   <section class="screen" id="s-buses"><div id="busesBody"></div></section>
+  <section class="screen" id="s-drivers"><div id="driversBody"></div></section>
   <section class="screen" id="s-bus"><div id="busBody"></div></section>
   <section class="screen" id="s-runs"><div id="runsBody"></div></section>
   <section class="screen" id="s-look"><div id="lookBody"></div></section>
@@ -630,7 +633,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.91.0";
+var PAGE_VERSION = "v1.92.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -973,7 +976,7 @@ function say(id, t, bad){
 /* ---- screens ------------------------------------------------------------- */
 
 var TITLES = { home:"Coordinator", rota:"Rota", sunday:"Rota", requests:"Rota requests", bookings:"Bookings",
-               defects:"Defects", buses:"Buses", bus:"Bus", runs:"Run record", look:"Have a look", report:"Have a look",
+               defects:"Defects", buses:"Buses", bus:"Bus", drivers:"Drivers", runs:"Run record", look:"Have a look", report:"Have a look",
                activity:"What has been done", rehearsal:"Rehearsal", sign:"Coordinator" };
 
 /* Each screen is a step in the phone's own history, so its back gesture
@@ -1037,6 +1040,7 @@ function paint(name, arg){
   if(name === "bookings") return paintBookings(arg || D.today);
   if(name === "defects") return paintDefects();
   if(name === "buses") return paintBuses();
+  if(name === "drivers") return paintDrivers();
   if(name === "bus") return paintBus(arg);
   if(name === "runs") return paintRuns(arg || "");
   if(name === "look") return paintLook();
@@ -1227,6 +1231,8 @@ function paintHome(){
        item("defects", "Defects", defs ? defs + " open" : "none open", defs ? "warn" : "") +
        /* A live server from before w2.30.0 sends no vehicle log. */
        (D && D.vehicles ? item("buses", "Buses", jobs ? (jobs === 1 ? "1 job to arrange" : jobs + " jobs to arrange") : "", jobs ? "warn" : "") : "") +
+       /* A live server from before w2.34.0 sends no register. */
+       (D && D.register ? item("drivers", "Drivers", D.register.drivers.filter(function(x){ return x.active; }).length + " active", "") : "") +
        item("runs", "Run record", "") +
        /* A live server from before w2.20.0 cannot run one from here. */
        (D && ("rehearsal" in D) ? item("rehearsal", "Rehearsal", D.rehearsal ? "until " + hhmm(D.rehearsal.ends) : "",
@@ -1742,6 +1748,93 @@ function updateDefect(gk){
     });
   });
   label();
+}
+
+/* ---- drivers: the Drivers tab, from v1.92.0 ---------------------------------
+
+   Role, route, active, primary order, email and phone, and a new driver. The
+   PIN is set on the sheet. */
+function regDriver(name){
+  var l = (D && D.register && D.register.drivers) || [];
+  for(var i = 0; i < l.length; i++) if(l[i].name === name) return l[i];
+  return null;
+}
+function paintDrivers(){
+  var R = D.register || { drivers: [] };
+  var h = '<button class="btn btn-main btn-wide" type="button" data-do="adddriver">Add a driver</button>';
+  ["North", "South"].forEach(function(rt){
+    var l = R.drivers.filter(function(x){ return x.route === rt; });
+    if(!l.length) return;
+    h += '<h3>' + esc(rt) + '</h3>';
+    l.forEach(function(x){
+      var miss = [];
+      if(!x.noContact && !x.email) miss.push("No email");
+      if(!x.noContact && !x.phone) miss.push("No phone");
+      if(!x.hasPin) miss.push("No PIN");
+      h += '<div class="card drv' + (x.active ? '' : ' off') + '"><div class="def-head"><b>' + esc(x.name) + '</b>' +
+           (x.active ? '' : '<span class="tag">Not active</span>') +
+           miss.map(function(m){ return '<span class="tag warn">' + esc(m) + '</span>'; }).join("") + '</div>' +
+           '<div class="def-foot"><p class="tiny">' + esc([x.role || "Driver", x.order ? "No. " + x.order : ""].filter(Boolean).join(", ")) + '</p>' +
+           (x.waiting ? '<span class="tag info">To the sheet</span>' : '') +
+           '<button class="mini" type="button" data-do="editdriver" data-name="' + esc(x.name) + '">Edit</button></div></div>';
+    });
+  });
+  $("driversBody").innerHTML = h;
+}
+function editDriver(name){
+  var R = D.register || { drivers: [], roles: ["Driver"] };
+  var x = name ? regDriver(name) : null;
+  if(name && !x) return;
+  var add = !x;
+  var v = add ? { role: "Driver", route: "", active: true, order: 0, email: "", phone: "" }
+              : { role: x.role || "Driver", route: x.route, active: x.active, order: x.order || 0, email: x.email || "", phone: x.phone || "" };
+  var pick = { role: v.role, route: v.route, active: v.active ? "YES" : "NO" };
+  var chips = function(id, opts, on){
+    return '<div class="chips" id="' + id + '">' + opts.map(function(o){
+      return '<button type="button" data-v="' + esc(o[0]) + '" class="' + (o[0] === on ? 'on' : '') + '">' + esc(o[1]) + '</button>';
+    }).join("") + '</div>';
+  };
+  openSheet({ eyebrow: add ? "New driver" : "Driver", title: add ? "Add a driver" : x.name,
+    body: (add ? '<div class="field"><label for="drName">Name</label><input id="drName" maxlength="40" autocomplete="off"></div>' : '') +
+          '<p class="tiny" style="margin:0 0 4px">Route</p>' + chips("drRoute", [["North", "North"], ["South", "South"]], pick.route) +
+          '<p class="tiny" style="margin:0 0 4px">Role</p>' + chips("drRole", R.roles.map(function(r){ return [r, r]; }), pick.role) +
+          '<p class="tiny" style="margin:0 0 4px">Active</p>' + chips("drActive", [["YES", "Active"], ["NO", "Not active"]], pick.active) +
+          '<div class="field"><label for="drOrder">Primary order</label><input id="drOrder" type="number" inputmode="numeric" min="0" max="99" value="' + esc(String(v.order || "")) + '"></div>' +
+          (x && x.noContact ? '' :
+          '<div class="field"><label for="drEmail">Email</label><input id="drEmail" type="email" autocomplete="off" maxlength="100" value="' + esc(v.email) + '"></div>' +
+          '<div class="field"><label for="drPhone">Phone</label><input id="drPhone" type="tel" inputmode="tel" autocomplete="off" maxlength="20" value="' + esc(v.phone) + '"></div>') +
+          (add ? '<p class="tiny">PIN: set it on the Drivers tab.</p>' : ''),
+    go: add ? "Add" : "Save",
+    onGo: function(){
+      var nm = add ? String($("drName").value || "").replace(/\s+/g, " ").trim() : x.name;
+      if(add && !/^[A-Za-z][A-Za-z .'-]{1,39}$/.test(nm)){ sheetSay("Type the driver's name, letters only.", true); return; }
+      if(!pick.route){ sheetSay("Pick North or South.", true); return; }
+      var ord = String($("drOrder").value || "").trim(), n = ord === "" ? 0 : Number(ord);
+      if(!(n >= 0 && n <= 99 && Math.floor(n) === n)){ sheetSay("Primary order is a number from 0 to 99.", true); return; }
+      var set = {};
+      if(add || pick.role !== v.role) set.role = pick.role;
+      if(add || pick.route !== v.route) set.route = pick.route;
+      if(add || (pick.active === "YES") !== v.active) set.active = pick.active === "YES";
+      if(add || n !== (Number(v.order) || 0)) set.order = n;
+      if($("drEmail")){
+        var em = String($("drEmail").value || "").trim(), ph = String($("drPhone").value || "").trim();
+        if(em && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ sheetSay("Check the email address.", true); return; }
+        if(ph && !/^\+?[0-9 ()-]{7,20}$/.test(ph)){ sheetSay("Check the phone number.", true); return; }
+        if(add || em !== v.email) set.email = em;
+        if(add || ph !== v.phone) set.phone = ph;
+      }
+      if(!add && !Object.keys(set).length){ sheetSay("Nothing has changed.", true); return; }
+      act({ kind: "driver", name: nm, add: add, set: set });
+    } });
+  [["drRoute", "route"], ["drRole", "role"], ["drActive", "active"]].forEach(function(f){
+    Array.prototype.forEach.call(document.querySelectorAll("#" + f[0] + " button"), function(b){
+      b.onclick = function(){
+        pick[f[1]] = b.getAttribute("data-v");
+        Array.prototype.forEach.call(document.querySelectorAll("#" + f[0] + " button"), function(y){ y.classList.toggle("on", y === b); });
+        if(!busy) sheetSay("");
+      };
+    });
+  });
 }
 
 /* Every step a defect has been through, off the sheet's History tab, from
@@ -2644,6 +2737,8 @@ document.addEventListener("click", function(e){
   else if(d === "empties"){ var er = t.getAttribute("data-route"); BOOK_ALL[er] = !BOOK_ALL[er]; paintBookings(BOOK.sunday); }
   else if(d === "book") bookFor(key);
   else if(d === "defect") updateDefect(key);
+  else if(d === "editdriver") editDriver(t.getAttribute("data-name"));
+  else if(d === "adddriver") editDriver("");
   else if(d === "vlog") recordFor(t.getAttribute("data-reg"));
   else if(d === "vlogdone") recordFor(t.getAttribute("data-reg"), entryById(t.getAttribute("data-reg"), t.getAttribute("data-id")));
   else if(d === "vfix") correctEntry(t.getAttribute("data-reg"), t.getAttribute("data-id"));

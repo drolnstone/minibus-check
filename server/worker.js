@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.33.0";
+const SCRIPT_VERSION = "w2.34.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -3446,6 +3446,10 @@ async function handleSync(env, body) {
       readAt: Number(body.coordShelf.readAt) || Date.now(),
       requests: Array.isArray(body.coordShelf.requests) ? body.coordShelf.requests : [],
       defects: Array.isArray(body.coordShelf.defects) ? body.coordShelf.defects : [],
+      /* From v1.97.0: the Drivers tab, with no PIN in it. Missing from an
+         older sheet, which leaves the Drivers screen to the drivers table. */
+      drivers: Array.isArray(body.coordShelf.drivers) ? body.coordShelf.drivers : null,
+      driverRoles: Array.isArray(body.coordShelf.driverRoles) ? body.coordShelf.driverRoles : null,
       vehicles: vehiclesShelfOf(body.coordShelf.vehicles)
     }));
   }
@@ -3471,6 +3475,7 @@ async function handleSync(env, body) {
      that they do not include yet goes back over them. */
   if (Array.isArray(body.rota)) {
     try { await reapplyRawRota(env); } catch (e) {}
+    try { await reapplyDrivers(env); } catch (e) {}
   }
 
   /* AFTER THE BATCH, AND ONLY AFTER IT.
@@ -6712,6 +6717,127 @@ async function actJob(env, me, act) {
   return { ok: true, sunday: "", body: { reg: reg, job: job, checkId: j.checkId, note: vlogText(act.note, 200) },
            words: reg + ": " + job + ", done." };
 }
+/* ---- the Drivers tab from the coordinator's app, from w2.34.0 ----------
+
+   A change to a driver, or a new one. The drivers table is changed at once,
+   so the rota's name lists and the sign-in screens have it now; the sheet
+   files it on the Drivers tab at its next drain, and laid back over each push
+   until then. The PIN is never here: it is set on the sheet. */
+const DRIVER_ROUTES = ["North", "South"];
+const DRIVER_NAME = /^[A-Za-z][A-Za-z .'-]{1,39}$/;
+const DRIVER_EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const DRIVER_PHONE = /^\+?[0-9 ()-]{7,20}$/;
+
+async function coordDriversView(env) {
+  const shelf = await cacheGet(env, "coord_shelf");
+  let list;
+  if (shelf && Array.isArray(shelf.drivers)) {
+    list = shelf.drivers.map((d) => ({ name: String(d.name || ""), role: String(d.role || ""), active: d.active !== false,
+      order: Number(d.order) || 0, route: d.route === "South" ? "South" : "North",
+      email: String(d.email || ""), phone: String(d.phone || ""), hasPin: !!d.hasPin }));
+  } else {
+    const q = await env.DB.prepare("SELECT name, role, route, ord, active, pin_hash FROM drivers").all();
+    list = (q.results || []).map((x) => ({ name: x.name, role: x.role || "", active: Number(x.active) !== 0,
+      order: Number(x.ord) || 0, route: String(x.route || "").toUpperCase().charAt(0) === "S" ? "South" : "North",
+      email: "", phone: "", hasPin: !!x.pin_hash, noContact: true }));
+  }
+  for (const a of await coordPending(env, ["driver"])) {
+    const b = a.body || {};
+    let d = list.find((x) => x.name.toLowerCase() === String(b.name || "").toLowerCase());
+    if (!d && b.add) { d = { name: b.name, role: "", active: true, order: 0, route: "North", email: "", phone: "", hasPin: false }; list.push(d); }
+    if (!d) continue;
+    Object.assign(d, b.set || {});
+    d.waiting = true;
+  }
+  const roles = (shelf && Array.isArray(shelf.driverRoles) && shelf.driverRoles.length)
+    ? shelf.driverRoles.map(String) : ["Driver", "Coordinator"];
+  for (const d of list) if (d.role && roles.map((r) => r.toLowerCase()).indexOf(d.role.toLowerCase()) === -1) roles.push(d.role);
+  return { drivers: list.sort((x, y) => x.route.localeCompare(y.route) || (x.order || 99) - (y.order || 99) ||
+                                         x.name.localeCompare(y.name)), roles: roles };
+}
+
+function driverSql(env, name, add, set) {
+  if (add) {
+    return env.DB.prepare("INSERT OR IGNORE INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,?,?,'')")
+      .bind(name, set.role || "", set.route || "North", Number(set.order) || 0, set.active === false ? 0 : 1);
+  }
+  const cols = [], vals = [];
+  if (set.role !== undefined) { cols.push("role=?"); vals.push(set.role); }
+  if (set.route !== undefined) { cols.push("route=?"); vals.push(set.route); }
+  if (set.order !== undefined) { cols.push("ord=?"); vals.push(Number(set.order) || 0); }
+  if (set.active !== undefined) { cols.push("active=?"); vals.push(set.active ? 1 : 0); }
+  if (!cols.length) return null;
+  return env.DB.prepare("UPDATE drivers SET " + cols.join(", ") + " WHERE name=? COLLATE NOCASE").bind(...vals, name);
+}
+
+async function reapplyDrivers(env) {
+  const acts = await coordPending(env, ["driver"]);
+  const stmts = [];
+  for (const a of acts) {
+    const st = driverSql(env, a.body.name, !!a.body.add, a.body.set || {});
+    if (st) stmts.push(st);
+    if (a.body.add) { const up = driverSql(env, a.body.name, false, a.body.set || {}); if (up) stmts.push(up); }
+  }
+  if (stmts.length) await env.DB.batch(stmts);
+  return stmts.length;
+}
+
+async function actDriver(env, me, act) {
+  const add = !!act.add;
+  const name = String(act.name || "").replace(/\s+/g, " ").trim();
+  if (!DRIVER_NAME.test(name)) return { ok: false, error: "Type the driver's name, letters only." };
+  const view = await coordDriversView(env);
+  const d = view.drivers.find((x) => x.name.toLowerCase() === name.toLowerCase());
+  if (add && d) return { ok: false, error: name + " is already a driver." };
+  if (!add && !d) return { ok: false, error: name + " is not on the live server's list. Refresh and try again." };
+  const inp = act.set || {};
+  const set = {};
+  if (inp.role !== undefined) {
+    const r = view.roles.find((x) => x.toLowerCase() === String(inp.role).trim().toLowerCase());
+    if (!r) return { ok: false, error: "Pick a role from the list." };
+    set.role = r;
+  }
+  if (inp.route !== undefined) {
+    if (DRIVER_ROUTES.indexOf(inp.route) === -1) return { ok: false, error: "Pick North or South." };
+    set.route = inp.route;
+  }
+  if (inp.active !== undefined) set.active = inp.active === true;
+  if (inp.order !== undefined) {
+    const n = Number(inp.order);
+    if (!Number.isInteger(n) || n < 0 || n > 99) return { ok: false, error: "Primary order is a number from 0 to 99." };
+    set.order = n;
+  }
+  if (inp.email !== undefined) {
+    const e = String(inp.email || "").trim();
+    if (e && (e.length > 100 || !DRIVER_EMAIL.test(e))) return { ok: false, error: "Check the email address." };
+    set.email = e;
+  }
+  if (inp.phone !== undefined) {
+    const p = String(inp.phone || "").trim();
+    if (p && !DRIVER_PHONE.test(p)) return { ok: false, error: "Check the phone number." };
+    set.phone = p;
+  }
+  if (add) {
+    if (!set.route) return { ok: false, error: "Pick North or South." };
+    if (!set.role) set.role = "Driver";
+    if (set.active === undefined) set.active = true;
+  } else {
+    for (const k of Object.keys(set)) if (set[k] === d[k] && !(d.noContact && (k === "email" || k === "phone"))) delete set[k];
+    if (!Object.keys(set).length) return { ok: false, error: "Nothing to change." };
+  }
+  const words = [];
+  if (set.role !== undefined) words.push(set.role);
+  if (set.route !== undefined) words.push(set.route);
+  if (set.active !== undefined) words.push(set.active ? "active" : "not active");
+  if (set.order !== undefined && (set.order || !add)) words.push("primary order " + set.order);
+  if (set.email !== undefined && (set.email || !add)) words.push(set.email ? (add ? "email" : "email changed") : "email taken off");
+  if (set.phone !== undefined && (set.phone || !add)) words.push(set.phone ? (add ? "phone" : "phone changed") : "phone taken off");
+  const st = driverSql(env, add ? name : d.name, add, set);
+  return { ok: true, sunday: "", stmts: st ? [st] : [],
+           body: { name: add ? name : d.name, add: add, set: set },
+           words: (add ? name + " added: " : d.name + ": ") + words.join(", ") + "." };
+}
+
 const ROTA_OFF = ["North cancelled", "South cancelled", "Cancelled/declined"];
 /* The order the sheet writes them in, which is the order the status rule
    sees them in. The status goes last so a status set on purpose stands. */
@@ -7265,6 +7391,8 @@ async function coordLoad(env, me) {
 
   out.requests = await coordRequestsView(env);
   out.defects = await coordDefectsView(env);
+  /* From w2.34.0: the Drivers tab, for the Drivers screen. */
+  try { out.register = await coordDriversView(env); } catch (e) { out.register = null; }
   /* From w2.30.0: each bus's Vehicle Log and jobs to arrange, and the last
      mileage a walkaround read, for the Record form. */
   try { out.vehicles = await coordVehiclesView(env); } catch (e) { out.vehicles = { log: {}, jobs: {} }; }
@@ -8018,6 +8146,7 @@ async function coordAct(env, me, act) {
   else if (kind === "vlog") r = await actVlog(env, me, act, id);
   else if (kind === "vfix") r = await actVfix(env, me, act, id);
   else if (kind === "job") r = await actJob(env, me, act);
+  else if (kind === "driver") r = await actDriver(env, me, act);
   else if (kind === "rehearsal") r = await rehearsalPlan(env, String(act.op || ""), String(act.shape || ""));
   else return { ok: false, error: "unknown kind" };
   if (!r || !r.ok) return r || { ok: false, error: "refused" };
