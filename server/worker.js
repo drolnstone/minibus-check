@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.34.0";
+const SCRIPT_VERSION = "w2.35.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1179,8 +1179,13 @@ async function getBuses(env) {
      names it as applied brings the tab's own date, and it stops being laid
      over then. */
   const over = {};
+  /* From w2.35.0 a bus changed or added in the coordinator's app, the same
+     way: laid over the table until the sheet has filed it, so the seat
+     counts and the rotation have it at once. */
+  const edits = [];
   try {
-    for (const a of await coordPending(env, ["vlog", "vfix"])) {
+    for (const a of await coordPending(env, ["vlog", "vfix", "bus"])) {
+      if (a.kind === "bus") { edits.push(a.body || {}); continue; }
       const b = a.body || {};
       const set = (reg, item, next) => {
         if (!reg || !item || !rnParts(next)) return;
@@ -1190,12 +1195,17 @@ async function getBuses(env) {
       if (a.kind === "vfix") for (const t of b.targets || []) set(t.reg, t.item, t.next);
     }
   } catch (e) {}
-  return (results || []).map((b) => {
+  const list = (results || []).map((b) => {
     const reg = String(b.reg || "").toUpperCase();
     const x = extra[reg] || {};
+    /* Notes from v1.98.0 of the sheet. noNotes: an older sheet, which sends
+       none, so the Buses screen does not offer to change them. */
     return { reg: b.reg, seats: Number(b.seats) || 0, active: !!b.active,
-             dates: Object.assign({}, x.dates || {}, over[reg] || {}), oddRoute: x.oddRoute || "" };
+             dates: Object.assign({}, x.dates || {}, over[reg] || {}), oddRoute: x.oddRoute || "",
+             notes: typeof x.notes === "string" ? x.notes : "", noNotes: typeof x.notes !== "string" };
   });
+  for (const e of edits) busEditApply(list, e);
+  return list;
 }
 
 async function getRotaRow(env, key) {
@@ -3283,6 +3293,8 @@ async function handleSync(env, body) {
           dates: { mot: day(d.mot), service: day(d.service), insurance: day(d.insurance), permit: day(d.permit) },
           oddRoute: r === "North" || r === "South" ? r : ""
         };
+        /* From v1.98.0, for the coordinator's Buses screen. */
+        if (typeof b.notes === "string") extra[String(b.reg).toUpperCase()].notes = b.notes.slice(0, 500);
       }
       stmts.push(cachePut(env, "bus_extra", extra));
     }
@@ -6838,6 +6850,99 @@ async function actDriver(env, me, act) {
            words: (add ? name + " added: " : d.name + ": ") + words.join(", ") + "." };
 }
 
+/* ---- the Buses tab from the coordinator's app, from w2.35.0 ------------
+
+   Seats, Active, Route in odd months and Notes, and a new bus. Nothing is
+   written to the buses table: getBuses lays each change over it until the
+   sheet has filed it on the Buses tab, so the seat counts and the rotation
+   have it at once and a push from the sheet cannot undo it. The due dates
+   are the Vehicle Log's. */
+const BUS_REG = /^[A-Z0-9][A-Z0-9 ]{1,9}$/;
+const busKey = (r) => String(r || "").toUpperCase().replace(/\s+/g, "");
+
+/* One change laid over the list getBuses builds. */
+function busEditApply(list, b) {
+  let x = list.find((y) => busKey(y.reg) === busKey(b.reg));
+  if (!x && b.add && busKey(b.reg)) {
+    x = { reg: String(b.reg), seats: 0, active: true, dates: {}, oddRoute: "", notes: "", noNotes: false };
+    list.push(x);
+  }
+  if (!x) return;
+  const s = b.set || {};
+  if (s.seats !== undefined) x.seats = Number(s.seats) || 0;
+  if (s.active !== undefined) x.active = s.active === true;
+  if (s.oddRoute !== undefined) x.oddRoute = s.oddRoute === "North" || s.oddRoute === "South" ? s.oddRoute : "";
+  if (s.notes !== undefined) { x.notes = String(s.notes || ""); x.noNotes = false; }
+  x.waiting = true;
+  for (const o of b.also || []) {
+    const y = list.find((z) => busKey(z.reg) === busKey(o && o.reg));
+    if (!y || y === x) continue;
+    y.oddRoute = o.oddRoute === "North" || o.oddRoute === "South" ? o.oddRoute : "";
+    y.waiting = true;
+  }
+}
+
+async function actBus(env, me, act) {
+  const add = !!act.add;
+  const reg = String(act.reg || "").toUpperCase().replace(/\s+/g, " ").trim();
+  if (!BUS_REG.test(reg)) return { ok: false, error: "Type the registration, letters and numbers only." };
+  const buses = await getBuses(env);
+  const x = buses.find((b) => busKey(b.reg) === busKey(reg));
+  if (add && x) return { ok: false, error: x.reg + " is already a bus." };
+  if (!add && !x) return { ok: false, error: reg + " is not on the live server's list. Refresh and try again." };
+  const inp = act.set || {};
+  const set = {};
+  if (inp.seats !== undefined) {
+    const n = Number(inp.seats);
+    if (!Number.isInteger(n) || n < 1 || n > 50) return { ok: false, error: "Seats is a number from 1 to 50." };
+    set.seats = n;
+  }
+  if (inp.active !== undefined) set.active = inp.active === true;
+  if (inp.oddRoute !== undefined) {
+    const r = String(inp.oddRoute || "");
+    if (r && DRIVER_ROUTES.indexOf(r) === -1) return { ok: false, error: "Pick North, South or Standby." };
+    set.oddRoute = r;
+  }
+  if (inp.notes !== undefined) {
+    const t = String(inp.notes || "").replace(/\r\n?/g, "\n").trim();
+    if (t.length > 500) return { ok: false, error: "Notes are 500 characters at most." };
+    set.notes = t;
+  }
+  if (add) {
+    if (!set.seats) return { ok: false, error: "Seats is a number from 1 to 50." };
+    if (set.active === undefined) set.active = true;
+    if (set.oddRoute === undefined) set.oddRoute = "";
+  } else {
+    for (const k of Object.keys(set)) if (set[k] === x[k] && !(k === "notes" && x.noNotes)) delete set[k];
+    if (!Object.keys(set).length) return { ok: false, error: "Nothing to change." };
+  }
+  /* Two buses on one route in odd months would leave the rotation to
+     whichever comes first on the tab. The bus that had the route takes this
+     one's old route, or none. */
+  const name = add ? reg : x.reg;
+  const was = add ? { active: false, oddRoute: "" } : x;
+  const nowActive = set.active !== undefined ? set.active : was.active;
+  const nowRoute = set.oddRoute !== undefined ? set.oddRoute : was.oddRoute;
+  const also = [];
+  if (nowActive && nowRoute && (set.oddRoute !== undefined || set.active === true)) {
+    const back = was.active && was.oddRoute && was.oddRoute !== nowRoute ? was.oddRoute : "";
+    for (const y of buses) {
+      if (busKey(y.reg) === busKey(name) || !y.active || y.oddRoute !== nowRoute) continue;
+      also.push({ reg: y.reg, oddRoute: back });
+    }
+  }
+  const words = [];
+  if (set.seats !== undefined) words.push(set.seats + " seats");
+  if (set.active !== undefined && (!add || !set.active)) words.push(set.active ? "in use" : "not in use");
+  if (set.oddRoute !== undefined && (set.oddRoute || !add)) words.push(set.oddRoute ? set.oddRoute + " in odd months" : "standby");
+  if (set.notes !== undefined && (set.notes || !add)) words.push(set.notes ? (add ? "notes" : "notes changed") : "notes taken off");
+  let said = (add ? name + " added: " : name + ": ") + words.join(", ") + ".";
+  for (const o of also) said += " " + o.reg + ": " + (o.oddRoute ? o.oddRoute + " in odd months" : "standby") + ".";
+  const body = { reg: name, add: add, set: set };
+  if (also.length) body.also = also;
+  return { ok: true, sunday: "", body: body, words: said };
+}
+
 const ROTA_OFF = ["North cancelled", "South cancelled", "Cancelled/declined"];
 /* The order the sheet writes them in, which is the order the status rule
    sees them in. The status goes last so a status set on purpose stands. */
@@ -7387,7 +7492,12 @@ async function coordLoad(env, me) {
   } catch (e) { out.drivers = []; }
 
   const buses = await getBuses(env);
-  out.buses = buses.map((b) => ({ reg: b.reg, seats: b.seats, active: b.active, dates: b.dates || {} }));
+  /* From w2.35.0 also what the Buses screen changes, and whether it is still
+     on its way to the sheet. */
+  out.buses = buses.map((b) => ({ reg: b.reg, seats: b.seats, active: b.active, dates: b.dates || {},
+                                  oddRoute: b.oddRoute || "", notes: b.notes || "", noNotes: !!b.noNotes,
+                                  waiting: !!b.waiting }));
+  out.busEdits = true;
 
   out.requests = await coordRequestsView(env);
   out.defects = await coordDefectsView(env);
@@ -8147,6 +8257,7 @@ async function coordAct(env, me, act) {
   else if (kind === "vfix") r = await actVfix(env, me, act, id);
   else if (kind === "job") r = await actJob(env, me, act);
   else if (kind === "driver") r = await actDriver(env, me, act);
+  else if (kind === "bus") r = await actBus(env, me, act);
   else if (kind === "rehearsal") r = await rehearsalPlan(env, String(act.op || ""), String(act.shape || ""));
   else return { ok: false, error: "unknown kind" };
   if (!r || !r.ok) return r || { ok: false, error: "refused" };

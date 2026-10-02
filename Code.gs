@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.97.0";
+var SCRIPT_VERSION = "v1.98.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -3459,7 +3459,9 @@ function pushToWorker() {
     /* The dates and the pairing too, from v1.87.0: the live server hands the
        dates to the driver app and builds the rotation from the pairing. */
     return { reg: b.reg, seats: b.seats, active: b.active,
-             dates: b.dates || {}, oddRoute: b.oddRoute || "" };
+             dates: b.dates || {}, oddRoute: b.oddRoute || "",
+             /* From v1.98.0, for the coordinator's Buses screen. */
+             notes: b.notes || "" };
   });
 
   var drivers = readDrivers(ss).map(function (d) {
@@ -3935,6 +3937,77 @@ function coordDriver(ss, a, b, by) {
   return { done: true, ok: true, push: true, result: "On the Drivers tab." };
 }
 
+/* ---- the Buses tab from the coordinator's app, from v1.98.0 ------------ */
+
+/* A bus's row by registration, whatever the case and the spaces. 0 for none. */
+function busRowOf(sh, bc, reg) {
+  if (sh.getLastRow() < 2) return 0;
+  var key = String(reg || "").toUpperCase().replace(/\s+/g, "");
+  var regs = sh.getRange(2, bc.reg, sh.getLastRow() - 1, 1).getValues();
+  for (var i = 0; i < regs.length; i++) {
+    if (key && String(regs[i][0] || "").toUpperCase().replace(/\s+/g, "") === key) return i + 2;
+  }
+  return 0;
+}
+
+/* One bus's row, changed or added, and any bus that gave up its route in odd
+   months to it. b: { reg, add, set: { seats, active, oddRoute, notes }, also:
+   [{ reg, oddRoute }] }, each one missing for no change. The due dates are
+   the Vehicle Log's. */
+var BUS_FIELDS = [["seats", "Seats for passengers"], ["active", "Active"], ["oddRoute", "Route in odd months"],
+                  ["notes", "Notes"]];
+function coordBus(ss, a, b, by) {
+  var sh = ss.getSheetByName(BUSES_SHEET);
+  if (!sh) return { done: true, ok: false, push: true, result: "There is no Buses tab." };
+  var bc = colsHard(sh, BUSES_SHEET);
+  var reg = String(b.reg || "").toUpperCase().replace(/\s+/g, " ").trim();
+  if (!reg) return { done: true, ok: false, push: true, result: "No bus was named." };
+  var wide = Math.max(sh.getLastColumn(), BUSES_HEADERS.length);
+  var row = busRowOf(sh, bc, reg);
+  if (b.add && row) return { done: true, ok: false, push: true, result: reg + " is already on the Buses tab." };
+  if (!b.add && !row) return { done: true, ok: false, push: true, result: reg + " is not on the Buses tab." };
+  var hist = [];
+  if (!row) {
+    row = sh.getLastRow() + 1;
+    var blank = [];
+    for (var j = 0; j < wide; j++) blank.push("");
+    blank[bc.reg - 1] = safeText(reg);
+    sh.getRange(row, 1, 1, wide).setValues([blank]);
+    hist.push({ who: by, where: "Coordinator's app", reg: reg, what: "Bus added: " + reg, from: "", to: "",
+                why: "", ref: reg });
+  }
+  var put = function (r, set) {
+    var cur = sh.getRange(r, 1, 1, wide).getValues()[0];
+    var name = String(at1(cur, bc.reg) || "").trim() || reg;
+    BUS_FIELDS.forEach(function (f) {
+      if (set[f[0]] === undefined || set[f[0]] === null) return;
+      var v = set[f[0]];
+      if (f[0] === "active") v = v === true || String(v).toUpperCase() === "YES" ? "YES" : "NO";
+      else if (f[0] === "seats") v = Number(v) || 0;
+      else if (f[0] === "oddRoute") v = v === "North" || v === "South" ? v : "";
+      else v = String(v).trim();
+      var col = bc[f[0]];
+      var was = at1(cur, col);
+      was = was == null ? "" : was;
+      if (String(was) === String(v)) return;
+      sh.getRange(r, col).setValue(typeof v === "string" ? safeText(v) : v);
+      hist.push({ who: by, where: "Coordinator's app", reg: name, what: "Bus: " + name + " \u2014 " + f[1],
+                  from: String(was), to: String(v), why: "", ref: name });
+    });
+  };
+  put(row, b.set || {});
+  (b.also || []).forEach(function (o) {
+    var r = busRowOf(sh, bc, o && o.reg);
+    if (r && r !== row) put(r, { oddRoute: o.oddRoute });
+  });
+  if (hist.length) historyAdd(ss, hist);
+  memoDrop("buses");
+  /* The rota's bus lists and the Vehicle Log's follow the tab. */
+  try { refreshDropdowns(); } catch (err) {}
+  bumpRotaVersion();
+  return { done: true, ok: true, push: true, result: "On the Buses tab." };
+}
+
 /* One defect, one key. The live server works it out the same way
    (defectKeyOf in worker.js), so the two can name the same row. */
 function defectKey(r, dc) {
@@ -4046,6 +4119,7 @@ function applyCoordAction(ss, a, ctx) {
   if (kind === "vfix") return coordVfix(ss, a, b, by);
   if (kind === "job") return coordJob(ss, a, b, by);
   if (kind === "driver") return coordDriver(ss, a, b, by);
+  if (kind === "bus") return coordBus(ss, a, b, by);
   if (kind === "booking") {
     return coordOnTab(ss, BOOKINGS_SHEET, b.bookingId, a, ctx || {},
                       "On the Bus Bookings tab.", "That booking is not on the Bus Bookings tab.");

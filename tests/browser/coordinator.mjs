@@ -1378,6 +1378,51 @@ if (want("C42")) {
   await p.ctx.close();
 }
 
+/* C43 — the Buses screens: a bus added and one edited, from v1.93.0 */
+if (want("C43")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    const extra = (await W.cacheGet(env, "bus_extra")) || {};
+    for (const k of Object.keys(extra)) extra[k].notes = extra[k].notes || "";
+    await W.cachePut(env, "bus_extra", extra).run();
+    const northBus = Object.keys(ODD_ROUTE).find((r) => ODD_ROUTE[r] === "North");
+    await p.pg.evaluate(() => { location.hash = "buses"; });
+    await p.wait(600);
+    await p.pg.click('#busesBody [data-do="addbus"]');
+    await p.wait(300);
+    await p.pg.click("#sheetGo");
+    const noReg = await p.text("#sheetSay");
+    await p.pg.fill("#buReg", "ab12 cde");
+    await p.pg.fill("#buSeats", "16");
+    await p.pg.click('#buRoute [data-v="North"]');
+    const swap = await p.text("#buSwap");
+    await p.pg.click("#sheetGo");
+    await p.wait(900);
+    const added = (await W.getBuses(env)).find((b) => b.reg === "AB12 CDE");
+    const gave = (await W.getBuses(env)).find((b) => b.reg === northBus);
+    await p.pg.click('#busesBody [data-go="bus/' + encodeURIComponent(northBus) + '"]');
+    await p.wait(500);
+    await p.pg.click('#busBody [data-do="editbus"]');
+    await p.wait(300);
+    await p.pg.fill("#buSeats", "13");
+    await p.pg.fill("#buNotes", "Rear door sticks");
+    await p.pg.click("#sheetGo");
+    await p.wait(900);
+    const edited = (await W.getBuses(env)).find((b) => b.reg === northBus);
+    const facts = await p.text("#busBody .bus-facts");
+    const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+    await p.shot("C43-buses");
+    check("C43", "on Buses a bus is added and one edited, and the live server has both at once",
+          /registration/i.test(noReg) && swap.indexOf(northBus + ": standby.") !== -1 &&
+          added && added.seats === 16 && added.oddRoute === "North" && added.active && gave.oddRoute === "" &&
+          edited.seats === 13 && edited.notes === "Rear door sticks" && /13 seats/.test(facts) && /Rear door sticks/.test(facts) &&
+          !wide && !p.errs.length,
+          JSON.stringify({ noReg, swap, added, gave, edited, facts, wide, errors: p.errs }));
+  } catch (e) { stopped("C43", e); }
+  await p.ctx.close();
+}
+
 check("C0", "no script error on the page throughout", me && !me.errs.length, JSON.stringify(me && me.errs));
 if (me) await me.ctx.close();
 await done();

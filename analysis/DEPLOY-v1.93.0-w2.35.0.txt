@@ -1,0 +1,68 @@
+MINIBUS
+=======
+  pages v1.93.0 · server w2.35.0 · sheet v1.98.0
+
+Phase 2, screen 3. Buses in the coordinator's app: Seats, Active, Route in
+odd months and Notes changed, and a bus added. Due dates stay with Record
+something.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.92.0         v1.93.0
+  Worker  w2.34.0         w2.35.0
+  Code.gs v1.97.0         v1.98.0
+
+
+IN THIS ORDER
+-------------
+
+1. WORKER. Cloudflare, the minibus Worker, Edit code. Replace everything
+   with server/worker.js. Deploy. No database change.
+
+2. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
+   Save. Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy.
+
+3. PAGES. Merge the pull request.
+
+Notes show on the Buses screen once the sheet has sent its first copy of
+the Buses tab: within an hour of step 2, or at once after any edit on the
+Rota or Buses tab.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.93.0 · server w2.35.0 · sheet
+   v1.98.0 .
+
+B. Coordinator's app, Buses: Add a bus at the top. Open a bus: under the
+   dates, its seats, In use or Not in use, its route in odd months, and
+   Edit.
+
+C. Edit a bus, change Seats, Save. Within a few minutes the Buses tab has
+   the new number and History has "Bus: <reg> — Seats for passengers". Put
+   it back the same way.
+
+D. Edit a bus, pick the other route in odd months. Before Save the sheet
+   names the other bus and its new route. Save, then put both back.
+
+
+WHAT CHANGED
+------------
+
+1. coord/index.html: Add a bus on the Buses screen, and the seats, active,
+   route and notes card with Edit on each bus (editBus). Active and Route in
+   odd months are choices; Seats is a number from 1 to 50.
+
+2. worker.js actBus: checks each field. getBuses lays each change over the
+   buses table until the sheet has filed it, so seat counts and the rotation
+   have it at once and a push from the sheet cannot undo it. A bus that
+   takes another active bus's route in odd months gives that bus its old
+   route, or standby. Notes travel in bus_extra.
+
+3. Code.gs: the push carries each bus's Notes. coordBus writes the cells or
+   a new row, a History line for each, and refreshes the rota's bus lists
+   and the Vehicle Log's.
+
+Tests: tests/suites/43-buses.mjs; browser check C43.

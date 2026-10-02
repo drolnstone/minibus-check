@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.92.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.93.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -140,7 +140,8 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .card{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);padding:12px 13px}
 .card+.card{margin-top:10px}
 .drv.off{opacity:.7}
-#driversBody .btn-wide{margin-bottom:6px}
+#driversBody .btn-wide,#busesBody>.btn-wide{margin-bottom:10px}
+.bus-facts .did{margin:6px 0 0}
 .tiny{font-size:13px;color:var(--muted);margin:6px 0 0}
 .center{text-align:center}
 .mono{font-family:"IBM Plex Mono",monospace}
@@ -633,7 +634,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.92.0";
+var PAGE_VERSION = "v1.93.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -2006,7 +2007,8 @@ function dueRows(b){
 }
 
 function paintBuses(){
-  var h = '';
+  /* A live server from before w2.35.0 cannot take a change to a bus. */
+  var h = (D && D.busEdits) ? '<button class="btn btn-main btn-wide" type="button" data-do="addbus">Add a bus</button>' : '';
   var list = busList().slice().sort(function(a, b){ return (b.active ? 1 : 0) - (a.active ? 1 : 0) || String(a.reg).localeCompare(String(b.reg)); });
   if(!list.length){ $("busesBody").innerHTML = h + '<div class="card"><p class="tiny" style="margin:0">No buses have reached the live server.</p></div>'; return; }
   list.forEach(function(b){
@@ -2014,6 +2016,7 @@ function paintBuses(){
     h += '<button type="button" class="card bus-card" data-go="bus/' + esc(encodeURIComponent(b.reg)) + '">' +
          '<span class="bus-head"><span class="plate">' + esc(b.reg) + '</span>' +
          (b.active ? '' : '<span class="tag">Not in use</span>') +
+         (b.waiting ? '<span class="tag info">To the sheet</span>' : '') +
          (jn ? '<span class="tag warn">' + esc(jn === 1 ? "1 job" : jn + " jobs") + '</span>' : '') +
          (dn ? '<span class="tag warn">' + esc(dn === 1 ? "1 defect" : dn + " defects") + '</span>' : '') +
          '<span class="go">›</span></span>' + dueRows(b) + '</button>';
@@ -2055,6 +2058,15 @@ function paintBus(reg){
   if(!b){ $("busBody").innerHTML = '<h1>' + esc(reg || "Bus") + '</h1><div class="card"><p class="tiny" style="margin:0">That bus is not on the live server’s list.</p></div>'; return; }
   var h = '<h1><span class="plate plate-big">' + esc(b.reg) + '</span></h1>';
   h += '<div class="card">' + dueRows(b) + '</div>';
+  /* From v1.93.0: seats, in use, route in odd months and notes, with Edit. */
+  if(D && D.busEdits){
+    h += '<div class="card bus-facts"><div class="def-foot"><p class="tiny">' +
+         esc([b.seats ? b.seats + " seats" : "Seats not set", b.active ? "In use" : "Not in use",
+              b.oddRoute ? b.oddRoute + " in odd months" : "Standby"].join(" · ")) + '</p>' +
+         (b.waiting ? '<span class="tag info">To the sheet</span>' : '') +
+         '<button class="mini" type="button" data-do="editbus" data-reg="' + esc(b.reg) + '">Edit</button></div>' +
+         (b.notes ? '<p class="did">' + esc(b.notes) + '</p>' : '') + '</div>';
+  }
   h += '<button class="btn btn-main btn-wide" type="button" data-do="vlog" data-reg="' + esc(b.reg) + '" style="margin-top:12px">Record something</button>';
   var j = jobsOf(b.reg);
   if(j && j.jobs && j.jobs.length){
@@ -2072,6 +2084,83 @@ function paintBus(reg){
   if(!log.length) h += '<div class="card"><p class="tiny" style="margin:0">Nothing recorded yet.</p></div>';
   else h += log.map(function(x){ return entryHTML(b.reg, x); }).join("");
   $("busBody").innerHTML = h;
+}
+
+/* ---- a bus changed or added: the Buses tab, from v1.93.0 -------------------
+
+   Seats, Active, Route in odd months and Notes, and a new bus. The due dates
+   are recorded with Record something. */
+
+/* The bus that gives up its route in odd months when this one takes it, and
+   what it gets instead. The live server works it out the same way. */
+function busSwaps(reg, was, nowActive, nowRoute, routeSet){
+  if(!nowActive || !nowRoute || !(routeSet || (nowActive && !was.active))) return [];
+  var back = was.active && was.oddRoute && was.oddRoute !== nowRoute ? was.oddRoute : "";
+  var key = function(r){ return String(r || "").toUpperCase().replace(/\s+/g, ""); };
+  return busList().filter(function(y){ return key(y.reg) !== key(reg) && y.active && y.oddRoute === nowRoute; })
+                  .map(function(y){ return { reg: y.reg, oddRoute: back }; });
+}
+function editBus(reg){
+  var x = reg ? busByReg(reg) : null;
+  if(reg && !x) return;
+  var add = !x;
+  var v = add ? { seats: "", active: true, oddRoute: "", notes: "" }
+              : { seats: x.seats || "", active: x.active, oddRoute: x.oddRoute || "", notes: x.notes || "" };
+  var pick = { active: v.active ? "YES" : "NO", oddRoute: v.oddRoute || "-" };
+  var chips = function(id, opts, on){
+    return '<div class="chips" id="' + id + '">' + opts.map(function(o){
+      return '<button type="button" data-v="' + esc(o[0]) + '" class="' + (o[0] === on ? 'on' : '') + '">' + esc(o[1]) + '</button>';
+    }).join("") + '</div>';
+  };
+  var regOf = function(){ return add ? String($("buReg").value || "").toUpperCase().replace(/\s+/g, " ").trim() : x.reg; };
+  var swaps = function(){
+    var was = add ? { active: false, oddRoute: "" } : { active: x.active, oddRoute: x.oddRoute || "" };
+    var route = pick.oddRoute === "-" ? "" : pick.oddRoute, on = pick.active === "YES";
+    return busSwaps(regOf(), was, on, route, add || route !== was.oddRoute || on !== was.active);
+  };
+  var show = function(){
+    var l = swaps(), el = $("buSwap");
+    if(!el) return;
+    el.hidden = !l.length;
+    el.textContent = l.map(function(o){ return o.reg + ": " + (o.oddRoute ? o.oddRoute + " in odd months" : "standby") + "."; }).join(" ");
+  };
+  openSheet({ eyebrow: add ? "New bus" : "Bus", title: add ? "Add a bus" : x.reg,
+    body: (add ? '<div class="field"><label for="buReg">Registration</label><input id="buReg" maxlength="10" autocomplete="off" autocapitalize="characters"></div>' : '') +
+          '<div class="field"><label for="buSeats">Seats for passengers</label><input id="buSeats" type="number" inputmode="numeric" min="1" max="50" value="' + esc(String(v.seats)) + '"></div>' +
+          '<p class="tiny" style="margin:0 0 4px">Active</p>' + chips("buActive", [["YES", "In use"], ["NO", "Not in use"]], pick.active) +
+          '<p class="tiny" style="margin:0 0 4px">Route in odd months</p>' + chips("buRoute", [["North", "North"], ["South", "South"], ["-", "Standby"]], pick.oddRoute) +
+          '<p class="preview" id="buSwap" hidden></p>' +
+          (x && x.noNotes ? '' : '<div class="field"><label for="buNotes">Notes</label><textarea id="buNotes" maxlength="500">' + esc(v.notes) + '</textarea></div>'),
+    go: add ? "Add" : "Save",
+    onGo: function(){
+      var r = regOf();
+      if(add && !/^[A-Z0-9][A-Z0-9 ]{1,9}$/.test(r)){ sheetSay("Type the registration, letters and numbers only.", true); return; }
+      var st = String($("buSeats").value || "").trim(), n = Number(st);
+      if(!st || !(n >= 1 && n <= 50 && Math.floor(n) === n)){ sheetSay("Seats is a number from 1 to 50.", true); return; }
+      var route = pick.oddRoute === "-" ? "" : pick.oddRoute, on = pick.active === "YES";
+      var set = {};
+      if(add || n !== (Number(v.seats) || 0)) set.seats = n;
+      if(add || on !== v.active) set.active = on;
+      if(add || route !== v.oddRoute) set.oddRoute = route;
+      if($("buNotes")){
+        var nt = String($("buNotes").value || "").replace(/\r\n?/g, "\n").trim();
+        if(add || nt !== String(v.notes).trim()) set.notes = nt;
+      }
+      if(!add && !Object.keys(set).length){ sheetSay("Nothing has changed.", true); return; }
+      act({ kind: "bus", reg: r, add: add, set: set });
+    } });
+  [["buActive", "active"], ["buRoute", "oddRoute"]].forEach(function(f){
+    Array.prototype.forEach.call(document.querySelectorAll("#" + f[0] + " button"), function(b){
+      b.onclick = function(){
+        pick[f[1]] = b.getAttribute("data-v");
+        Array.prototype.forEach.call(document.querySelectorAll("#" + f[0] + " button"), function(y){ y.classList.toggle("on", y === b); });
+        if(!busy) sheetSay("");
+        show();
+      };
+    });
+  });
+  if($("buReg")) $("buReg").oninput = show;
+  show();
 }
 
 /* ---- recording one -------------------------------------------------------- */
@@ -2739,6 +2828,8 @@ document.addEventListener("click", function(e){
   else if(d === "defect") updateDefect(key);
   else if(d === "editdriver") editDriver(t.getAttribute("data-name"));
   else if(d === "adddriver") editDriver("");
+  else if(d === "editbus") editBus(t.getAttribute("data-reg"));
+  else if(d === "addbus") editBus("");
   else if(d === "vlog") recordFor(t.getAttribute("data-reg"));
   else if(d === "vlogdone") recordFor(t.getAttribute("data-reg"), entryById(t.getAttribute("data-reg"), t.getAttribute("data-id")));
   else if(d === "vfix") correctEntry(t.getAttribute("data-reg"), t.getAttribute("data-id"));
