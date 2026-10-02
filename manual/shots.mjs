@@ -635,7 +635,7 @@ scene("rehearsal", async () => {
 const ROTA = () => realRows(rs => {
   const at = (d) => rs.find(r => r.date === d);
   let r = at("2026-10-11"); r.primary2 = NAMES.SOUTH3; r.actual2 = SAMPLE;
-  r = at("2026-10-25"); r.primary = SAMPLE; r.locked = true; r.lockNote = "Harvest Sunday";
+  r = at("2026-10-25"); r.primary = SAMPLE; r.locked = true; r.lockNote = "Thanksgiving Sunday";
   r = at("2026-11-01"); r.actual = SAMPLE; r.swaps = [{ a: SAMPLE, b: NAMES.NORTH2 }];
   r = at("2026-11-22"); r.primary = SAMPLE;
   r.requests = [{ driver: SAMPLE, type: "Holiday / planned leave", status: "Pending" }]; r.request = r.requests[0]; r.status = "Change requested";

@@ -21,7 +21,7 @@ import { atTime } from "../lib/clock.mjs";
 const THU = "2026-10-01T12:00:00+01:00";
 const KEY = "2026-10-04";
 const PIN = "1234";
-const NOTES = "Swapped: Bro Adrian in for Bro Martin (with 2026-10-11)\nBring the ramp\nPROTECTED: harvest";
+const NOTES = "Swapped: Bro Adrian in for Bro Martin (with 2026-10-11)\nBring the ramp\nPROTECTED: thanksgiving";
 
 export default async function (root) {
   const s = new Suite("a note on the rota, changed or taken off");
@@ -41,7 +41,7 @@ export default async function (root) {
     await W.cachePut(env, "cache_rota", { builtAt: Date.now() - 60000, from: "2026-07-12", to: "2028-09-24",
       payload: { ok: true, rows: [{ date: KEY, primary: "Bro Adrian", actual: "Bro Adrian", status: "Confirmed",
         primary2: "Bro Trevor", actual2: "", notes: NOTES, northBus: "YS70 PWE", southBus: "NH56 FWP",
-        swaps: [], locked: true, lockNote: "harvest", requests: [] }] } }).run();
+        swaps: [], locked: true, lockNote: "thanksgiving", requests: [] }] } }).run();
     return { db, env };
   }
   const post = (env, body) => W.default.fetch(new Request("https://worker.test/", {
@@ -58,7 +58,7 @@ export default async function (root) {
       a.ok(ch.ok, JSON.stringify(ch));
       a.has(ch.action.words, "Note changed.");
       a.has(await notesOf(env), "Bring the ramp and the cones");
-      a.has(await notesOf(env), "PROTECTED: harvest");
+      a.has(await notesOf(env), "PROTECTED: thanksgiving");
       a.has((await W.getRotaRow(env, KEY)).notes, "Bring the ramp and the cones");
       const off = await act(env, { kind: "rota", sunday: KEY, noteEdit: { was: "Bring the ramp and the cones", now: "" } });
       a.ok(off.ok, JSON.stringify(off));
@@ -95,7 +95,7 @@ export default async function (root) {
       const { env } = await fresh();
       a.has(String((await act(env, { kind: "rota", sunday: KEY,
         noteEdit: { was: "Swapped: Bro Adrian in for Bro Martin (with 2026-10-11)", now: "" } })).error), "Rota tab");
-      a.not((await act(env, { kind: "rota", sunday: KEY, noteEdit: { was: "PROTECTED: harvest", now: "harvest" } })).ok);
+      a.not((await act(env, { kind: "rota", sunday: KEY, noteEdit: { was: "PROTECTED: thanksgiving", now: "thanksgiving" } })).ok);
       a.not((await act(env, { kind: "rota", sunday: KEY, noteEdit: { was: "Bring the ramp", now: "PROTECTED" } })).ok);
       a.has(String((await act(env, { kind: "rota", sunday: KEY, noteEdit: { was: "No such note", now: "x" } })).error), "not on");
       a.has(String((await act(env, { kind: "rota", sunday: KEY, noteEdit: { was: "Bring the ramp", now: "Bring the ramp" } })).error), "Nothing");
@@ -117,16 +117,16 @@ export default async function (root) {
       const r1 = call(L, "applyCoordAction", ss, A("n1", { set: {}, note: "", noteEdit: { was: "Bring the ramp", now: "Ramp is in the shed" } }), {});
       a.ok(r1.done && r1.ok, JSON.stringify(r1));
       a.eq(String(cell().getValue()),
-           "Swapped: Bro Adrian in for Bro Martin (with 2026-10-11)\nRamp is in the shed\nPROTECTED: harvest");
+           "Swapped: Bro Adrian in for Bro Martin (with 2026-10-11)\nRamp is in the shed\nPROTECTED: thanksgiving");
       const r2 = call(L, "applyCoordAction", ss, A("n2", { set: {}, note: "", noteEdit: { was: "Ramp is in the shed", now: "" } }), {});
       a.ok(r2.ok, JSON.stringify(r2));
-      a.eq(String(cell().getValue()), "Swapped: Bro Adrian in for Bro Martin (with 2026-10-11)\nPROTECTED: harvest");
+      a.eq(String(cell().getValue()), "Swapped: Bro Adrian in for Bro Martin (with 2026-10-11)\nPROTECTED: thanksgiving");
       const r3 = call(L, "applyCoordAction", ss, A("n3", { set: {}, note: "", noteEdit: { was: "Ramp is in the shed", now: "x" } }), {});
       a.not(r3.ok);
       a.has(r3.result, "not on the Rota tab");
-      const r4 = call(L, "applyCoordAction", ss, A("n4", { set: {}, note: "", noteEdit: { was: "PROTECTED: harvest", now: "" } }), {});
+      const r4 = call(L, "applyCoordAction", ss, A("n4", { set: {}, note: "", noteEdit: { was: "PROTECTED: thanksgiving", now: "" } }), {});
       a.not(r4.ok, "a PROTECTED line was taken off");
-      a.has(String(cell().getValue()), "PROTECTED: harvest");
+      a.has(String(cell().getValue()), "PROTECTED: thanksgiving");
     });
   });
 
@@ -137,7 +137,7 @@ export default async function (root) {
     await W.cachePut(env, "cache_rota", { builtAt: Date.now() - 1000, from: "2026-07-12", to: "2028-09-24",
       payload: { ok: true, rows: [{ date: KEY, primary: "Bro Adrian", actual: "Bro Adrian", status: "Confirmed",
         primary2: "Bro Trevor", actual2: "", notes: notes, northBus: "YS70 PWE", southBus: "NH56 FWP",
-        swaps: [], locked: true, lockNote: "harvest", requests: [] }] } }).run();
+        swaps: [], locked: true, lockNote: "thanksgiving", requests: [] }] } }).run();
     await db.prepare("UPDATE rota SET notes=? WHERE sunday=?").bind(notes, KEY).run();
     for (const id of seen || []) await db.prepare("UPDATE coord_actions SET seen=1 WHERE id=?").bind(id).run();
     await W.reapplyRawRota(env);
