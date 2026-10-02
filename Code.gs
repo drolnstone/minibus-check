@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.97.0";
+var SCRIPT_VERSION = "v1.98.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -3459,7 +3459,9 @@ function pushToWorker() {
     /* The dates and the pairing too, from v1.87.0: the live server hands the
        dates to the driver app and builds the rotation from the pairing. */
     return { reg: b.reg, seats: b.seats, active: b.active,
-             dates: b.dates || {}, oddRoute: b.oddRoute || "" };
+             dates: b.dates || {}, oddRoute: b.oddRoute || "",
+             /* From v1.98.0, for the coordinator's Buses screen. */
+             notes: b.notes || "" };
   });
 
   var drivers = readDrivers(ss).map(function (d) {
@@ -3535,6 +3537,9 @@ function pushToWorker() {
     /* From v1.97.0: the Drivers tab as the coordinator's app edits it. The
        PIN is never in it, only whether there is one. */
     try { coordShelf.drivers = coordDriversList(ss); coordShelf.driverRoles = driverRoleList(ss); } catch (err) {}
+    /* From v1.98.0: every row on the Bus Stops tab, switched-off ones too,
+       in the tab's order, for the coordinator's Bus stops screen. */
+    try { coordShelf.stops = coordStopsList(ss); } catch (err) {}
     /* From v1.92.0: each bus's Vehicle Log and the jobs still to arrange.
        Guarded on its own, so a log that will not read costs only itself. */
     try { coordShelf.vehicles = vlogShelf(ss); } catch (err) {}
@@ -3935,6 +3940,276 @@ function coordDriver(ss, a, b, by) {
   return { done: true, ok: true, push: true, result: "On the Drivers tab." };
 }
 
+/* ---- the Buses tab from the coordinator's app, from v1.98.0 ------------ */
+
+/* A bus's row by registration, whatever the case and the spaces. 0 for none. */
+function busRowOf(sh, bc, reg) {
+  if (sh.getLastRow() < 2) return 0;
+  var key = String(reg || "").toUpperCase().replace(/\s+/g, "");
+  var regs = sh.getRange(2, bc.reg, sh.getLastRow() - 1, 1).getValues();
+  for (var i = 0; i < regs.length; i++) {
+    if (key && String(regs[i][0] || "").toUpperCase().replace(/\s+/g, "") === key) return i + 2;
+  }
+  return 0;
+}
+
+/* One bus's row, changed or added, and any bus that gave up its route in odd
+   months to it. b: { reg, add, set: { seats, active, oddRoute, notes }, also:
+   [{ reg, oddRoute }] }, each one missing for no change. The due dates are
+   the Vehicle Log's. */
+var BUS_FIELDS = [["seats", "Seats for passengers"], ["active", "Active"], ["oddRoute", "Route in odd months"],
+                  ["notes", "Notes"]];
+function coordBus(ss, a, b, by) {
+  var sh = ss.getSheetByName(BUSES_SHEET);
+  if (!sh) return { done: true, ok: false, push: true, result: "There is no Buses tab." };
+  var bc = colsHard(sh, BUSES_SHEET);
+  var reg = String(b.reg || "").toUpperCase().replace(/\s+/g, " ").trim();
+  if (!reg) return { done: true, ok: false, push: true, result: "No bus was named." };
+  var wide = Math.max(sh.getLastColumn(), BUSES_HEADERS.length);
+  var row = busRowOf(sh, bc, reg);
+  if (b.add && row) return { done: true, ok: false, push: true, result: reg + " is already on the Buses tab." };
+  if (!b.add && !row) return { done: true, ok: false, push: true, result: reg + " is not on the Buses tab." };
+  var hist = [];
+  if (!row) {
+    row = sh.getLastRow() + 1;
+    var blank = [];
+    for (var j = 0; j < wide; j++) blank.push("");
+    blank[bc.reg - 1] = safeText(reg);
+    sh.getRange(row, 1, 1, wide).setValues([blank]);
+    hist.push({ who: by, where: "Coordinator's app", reg: reg, what: "Bus added: " + reg, from: "", to: "",
+                why: "", ref: reg });
+    /* So busDatesAudit does not write the same bus down again as added by
+       hand. Only once it has taken its bearings. */
+    var seen = busSeenRead();
+    if (seen) {
+      var none = {};
+      RENEW_KEYS.forEach(function (k) { none[k] = ""; });
+      seen[reg] = none;
+      busSeenWrite(seen);
+    }
+  }
+  var put = function (r, set) {
+    var cur = sh.getRange(r, 1, 1, wide).getValues()[0];
+    var name = String(at1(cur, bc.reg) || "").trim() || reg;
+    BUS_FIELDS.forEach(function (f) {
+      if (set[f[0]] === undefined || set[f[0]] === null) return;
+      var v = set[f[0]];
+      if (f[0] === "active") v = v === true || String(v).toUpperCase() === "YES" ? "YES" : "NO";
+      else if (f[0] === "seats") v = Number(v) || 0;
+      else if (f[0] === "oddRoute") v = v === "North" || v === "South" ? v : "";
+      else v = String(v).trim();
+      var col = bc[f[0]];
+      var was = at1(cur, col);
+      was = was == null ? "" : was;
+      if (String(was) === String(v)) return;
+      sh.getRange(r, col).setValue(typeof v === "string" ? safeText(v) : v);
+      hist.push({ who: by, where: "Coordinator's app", reg: name, what: "Bus: " + name + " \u2014 " + f[1],
+                  from: String(was), to: String(v), why: "", ref: name });
+    });
+  };
+  put(row, b.set || {});
+  (b.also || []).forEach(function (o) {
+    var r = busRowOf(sh, bc, o && o.reg);
+    if (r && r !== row) put(r, { oddRoute: o.oddRoute });
+  });
+  if (hist.length) historyAdd(ss, hist);
+  memoDrop("buses");
+  /* The rota's bus lists and the Vehicle Log's follow the tab. */
+  try { refreshDropdowns(); } catch (err) {}
+  bumpRotaVersion();
+  return { done: true, ok: true, push: true, result: "On the Buses tab." };
+}
+
+/* ---- the Bus Stops tab from the coordinator's app, from v1.98.0 -------- */
+
+/* Every row with a Stop ID, in the tab's order, switched-off ones too. */
+function coordStopsList(ss) {
+  var sh = ss.getSheetByName(STOPS_SHEET);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var c = colsSoft(sh, STOPS_SHEET);
+  if (!c.id) return [];
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+  var out = [];
+  vals.forEach(function (r, i) {
+    var id = String(at1(r, c.id) || "").trim();
+    if (!id) return;
+    out.push(stopRowOf(r, c, i + 2));
+  });
+  return out;
+}
+
+/* A stop's Time as HH:MM text: a real time value, or 9:52 typed as text,
+   reads 09:52, so times compare as text. */
+function stopTimeText(t) {
+  if (t && typeof t.getHours === "function") return Utilities.formatDate(t, Session.getScriptTimeZone(), "HH:mm");
+  var m = /^\s*(\d{1,2}):(\d{2})\s*$/.exec(String(t == null ? "" : t));
+  return m ? ("0" + m[1]).slice(-2) + ":" + m[2] : String(t == null ? "" : t).trim();
+}
+
+function stopRowOf(r, c, row) {
+  var t = at1(r, c.time), type = String(at1(r, c.type) || "").trim().toLowerCase();
+  var name = String(at1(r, c.stop) || "").trim();
+  return {
+    row: row,
+    id: String(at1(r, c.id) || "").trim(),
+    route: String(at1(r, c.route) || "").trim().toUpperCase().charAt(0) === "S" ? "South" : "North",
+    time: stopTimeText(t),
+    stop: name,
+    postcode: String(at1(r, c.postcode) || "").trim(),
+    where: String(at1(r, c.where) || "").trim(),
+    /* A numbered row with no Stop is not on the driver's list (readBusStopsFresh). */
+    active: !!name && String(at1(r, c.active) || "YES").trim().toUpperCase() !== "NO",
+    type: type.indexOf("depart") === 0 ? "Depart" : type.indexOf("arriv") === 0 ? "Arrival" : "Pickup",
+    lat: numOrBlank(at1(r, c.lat)), lng: numOrBlank(at1(r, c.lng)),
+    hasPin: numOrBlank(at1(r, c.lat)) !== "" && numOrBlank(at1(r, c.lng)) !== ""
+  };
+}
+
+/* What is wrong with one stop's place on its route, or "". list is the tab's
+   rows in order; s is the one changed or added, already in it. Only its own
+   neighbours are looked at, so a tab already out of order elsewhere does not
+   stop every change. The live server asks the same (stopOrderProblem). */
+function stopOrderProblem(list, s) {
+  if (!s.active) return "";
+  var on = list.filter(function (x) { return x.active && x.route === s.route; });
+  var i = on.indexOf(s);
+  if (i === -1) return "";
+  var others = function (type) { return on.filter(function (x) { return x !== s && x.type === type; }); };
+  if (s.type === "Depart" && (others("Depart").length || i !== 0)) return "Depart is the first stop on a route, and there is one.";
+  if (s.type === "Arrival" && (others("Arrival").length || i !== on.length - 1)) return "Arrival is the last stop on a route, and there is one.";
+  var before = on.slice(0, i), after = on.slice(i + 1);
+  var has = function (l, type) { return l.some(function (x) { return x.type === type; }); };
+  if (s.type === "Pickup" && has(before, "Arrival")) return "Move its row above the Arrival on the Bus Stops tab first.";
+  if (s.type === "Pickup" && has(after, "Depart")) return "Move its row below the Depart on the Bus Stops tab first.";
+  var prev = on[i - 1], next = on[i + 1];
+  if ((prev && s.time < prev.time) || (next && next.time && s.time > next.time)) {
+    return "Pick a time " + (prev ? "from " + prev.time : "up to ") + (prev && next ? " to " : "") +
+           (next ? next.time : prev ? " or later" : "") + ".";
+  }
+  return "";
+}
+
+/* Where a new stop goes on the tab: after the last stop in use on its route
+   timed no later than it (a Depart first, an Arrival last). A switched-off row
+   keeps whatever time it had, so it says nothing about the place. 0 when the
+   route has no rows. */
+function stopInsertAfter(list, route, time, type) {
+  var mine = list.filter(function (x) { return x.route === route; });
+  if (!mine.length) return list.length ? list[list.length - 1].row : 0;
+  if (type === "Depart") return mine[0].row - 1;
+  if (type === "Arrival") return mine[mine.length - 1].row;
+  var after = 0;
+  mine.forEach(function (x) {
+    if (!x.active || x.type === "Arrival") return;
+    if (x.type === "Depart" || (x.time && x.time <= time)) after = x.row;
+  });
+  return after || mine[0].row - 1;
+}
+
+/* One stop's row, changed or added. b: { id, add, set: { route, time, stop,
+   postcode, where, active, type } }, each one missing for no change; route
+   only for a new stop. A new postcode clears Lat and Lng, which were the old
+   kerb's. */
+var STOP_FIELDS = [["time", "Time"], ["stop", "Stop"], ["postcode", "Postcode"], ["where", "Where"],
+                   ["active", "Active"], ["type", "Type"]];
+function coordStop(ss, a, b, by) {
+  var sh = ss.getSheetByName(STOPS_SHEET);
+  if (!sh) return { done: true, ok: false, push: true, result: "There is no Bus Stops tab." };
+  var sc = colsHard(sh, STOPS_SHEET);
+  var id = String(b.id || "").toUpperCase().trim();
+  if (!id) return { done: true, ok: false, push: true, result: "No stop was named." };
+  var set = b.set || {};
+  var list = coordStopsList(ss);
+  var cur = null;
+  list.forEach(function (x) { if (x.id.toUpperCase() === id) cur = x; });
+  if (b.add && cur) return { done: true, ok: false, push: true, result: id + " is already on the Bus Stops tab." };
+  if (!b.add && !cur) return { done: true, ok: false, push: true, result: id + " is not on the Bus Stops tab." };
+
+  /* A row with no Stop shows in the app as not active. Named there without
+     Active chosen, it stays so: Active is written NO. */
+  if (cur && !cur.stop && set.stop && (set.active === undefined || set.active === null)) set.active = false;
+
+  /* The stop as it would be, in its place, asked before anything is written. */
+  var next = cur ? JSON.parse(JSON.stringify(cur)) : { row: 0, id: id, route: set.route === "South" ? "South" : "North",
+    time: "", stop: "", postcode: "", where: "", active: true, type: "Pickup", hasPin: false };
+  STOP_FIELDS.forEach(function (f) {
+    if (set[f[0]] === undefined || set[f[0]] === null) return;
+    next[f[0]] = f[0] === "active" ? set.active === true || String(set.active).toUpperCase() === "YES" : String(set[f[0]]).trim();
+  });
+  var trial = list.map(function (x) { return x === cur ? next : x; });
+  var after = 0;
+  if (!cur) {
+    after = stopInsertAfter(list, next.route, next.time, next.type);
+    var at = 0;
+    while (at < trial.length && trial[at].row <= after) at++;
+    trial.splice(at, 0, next);
+  }
+  var wrong = stopOrderProblem(trial, next);
+  if (wrong) return { done: true, ok: false, push: true, result: id + ": " + wrong };
+
+  var wide = Math.max(sh.getLastColumn(), STOPS_HEADERS.length);
+  var hist = [];
+  var row;
+  if (!cur) {
+    if (after === 1 && sh.getLastRow() >= 2) {
+      /* First on the tab. A row put in under the header would take the
+         header's look and miss the drop-downs and the lock's opening, so it
+         goes in under the first stop and is moved above it. The first stop
+         moves down whole, its notes and text with it. */
+      sh.insertRowsAfter(2, 1);
+      sh.moveRows(sh.getRange("3:3"), 2);
+      row = 2;
+    } else if (after >= 1 && after < sh.getLastRow()) { sh.insertRowsAfter(after, 1); row = after + 1; }
+    else row = Math.max(sh.getLastRow(), 1) + 1;
+    var blank = [];
+    for (var j = 0; j < wide; j++) blank.push("");
+    blank[sc.route - 1] = next.route;
+    blank[sc.id - 1] = id;
+    sh.getRange(row, 1, 1, wide).setValues([blank]);
+  } else {
+    row = cur.row;
+  }
+  var was = sh.getRange(row, 1, 1, wide).getValues()[0];
+  /* Spacing and capitals are not a new postcode. */
+  var pcKey = function (p) { return String(p == null ? "" : p).replace(/\s+/g, "").toUpperCase(); };
+  var moved = !!cur && set.postcode !== undefined && pcKey(set.postcode) !== pcKey(cur.postcode);
+  STOP_FIELDS.forEach(function (f) {
+    if (set[f[0]] === undefined || set[f[0]] === null) return;
+    var col = sc[f[0]];
+    if (!col) return;
+    var v = f[0] === "active" ? (next.active ? "YES" : "NO") : String(next[f[0]]);
+    /* Active against the cell itself: a row with no Stop reads as not active
+       whatever its cell says. */
+    var old = cur ? (f[0] === "active" ? (String(at1(was, col) || "YES").trim().toUpperCase() === "NO" ? "NO" : "YES")
+                                       : String(cur[f[0]])) : "";
+    if (cur && old === v) return;
+    var cell = sh.getRange(row, col);
+    /* Time is text on this tab, 09:50, never a time value. */
+    if (f[0] === "time") cell.setNumberFormat("@");
+    cell.setValue(f[0] === "active" || f[0] === "time" || f[0] === "type" ? v : safeText(v));
+    /* The place, the time and Active are written on History by stopsAudit
+       below, as a hand edit on the tab would be. */
+    if (cur && (f[0] === "postcode" || f[0] === "where" || f[0] === "type")) {
+      hist.push({ who: by, where: "Coordinator's app", reg: "", what: "Stop " + id + ": " + f[1].toLowerCase(),
+                  from: old, to: v, why: "", ref: id });
+    }
+  });
+  if (moved && sc.lat && sc.lng && (at1(was, sc.lat) !== "" || at1(was, sc.lng) !== "")) {
+    sh.getRange(row, sc.lat).setValue("");
+    sh.getRange(row, sc.lng).setValue("");
+    hist.push({ who: by, where: "Coordinator's app", reg: "", what: "Stop " + id + ": pin cleared",
+                from: at1(was, sc.lat) + ", " + at1(was, sc.lng), to: "", why: "New postcode", ref: id });
+  }
+  if (hist.length) historyAdd(ss, hist);
+  try { CacheService.getScriptCache().remove(STOPS_CACHE_KEY); } catch (err) {}
+  stopsMemo = null;
+  var booked = [];
+  try { booked = stopsAudit(ss, "Coordinator's app", by); } catch (err) {}
+  bumpRotaVersion();
+  return { done: true, ok: true, push: true,
+           result: "On the Bus Stops tab." + (booked.length ? " " + booked.map(stopMovedWords).join(" ") : "") };
+}
+
 /* One defect, one key. The live server works it out the same way
    (defectKeyOf in worker.js), so the two can name the same row. */
 function defectKey(r, dc) {
@@ -4046,6 +4321,8 @@ function applyCoordAction(ss, a, ctx) {
   if (kind === "vfix") return coordVfix(ss, a, b, by);
   if (kind === "job") return coordJob(ss, a, b, by);
   if (kind === "driver") return coordDriver(ss, a, b, by);
+  if (kind === "bus") return coordBus(ss, a, b, by);
+  if (kind === "stop") return coordStop(ss, a, b, by);
   if (kind === "booking") {
     return coordOnTab(ss, BOOKINGS_SHEET, b.bookingId, a, ctx || {},
                       "On the Bus Bookings tab.", "That booking is not on the Bus Bookings tab.");
@@ -4092,14 +4369,40 @@ function coordRota(ss, a, b, by) {
     }
   });
   var note = String(b.note || "").trim();
+  /* One line of the Notes as the live server compares it (noteLine): spacing,
+     and the apostrophe that stops a formula, are not part of the note. */
+  var nl = function (x) { return String(x == null ? "" : x).replace(/\s+/g, " ").trim().replace(/^'/, ""); };
   if (note) {
-    var lines = String(sh.getRange(row, rc.notes).getValue() || "").split("\n")
-      .map(function (x) { return x.trim(); });
-    if (lines.indexOf(note) === -1) appendNote(sh, row, safeText(note));
+    var lines = String(sh.getRange(row, rc.notes).getValue() || "").split("\n").map(nl);
+    if (lines.indexOf(nl(note)) === -1) appendNote(sh, row, note);
     onEditRota({ range: sh.getRange(row, rc.notes) }, sh);
     did++;
   }
-  if (!did) return { done: true, ok: false, push: true, result: "There was nothing to change." };
+  /* From v1.98.0: a note already there, changed or taken off. Never a
+     Swapped line or PROTECTED, which the sheet reads back. */
+  var gone = false;
+  var ed = b.noteEdit;
+  if (ed && ed.was) {
+    var was = nl(ed.was), now = nl(ed.now);
+    var own = /^(swapped\s*:|protected\b)/i;
+    if (own.test(was) || own.test(now)) {
+      return { done: true, ok: false, push: true, result: "Swapped and PROTECTED lines are changed on the Rota tab." };
+    }
+    var ncell = sh.getRange(row, rc.notes);
+    var nlines = String(ncell.getValue() || "").split("\n");
+    var at = nlines.map(nl).indexOf(was);
+    if (at === -1) gone = true;
+    else {
+      if (now) nlines[at] = now; else nlines.splice(at, 1);
+      ncell.setValue(notesText(nlines.join("\n").replace(/^\n+|\n+$/g, "")));
+      onEditRota({ range: ncell }, sh);
+      did++;
+    }
+  }
+  if (!did) {
+    return { done: true, ok: false, push: true,
+             result: gone ? "That note is not on the Rota tab any more." : "There was nothing to change." };
+  }
   stamp(sh, row, by + " (app)");
   bumpRotaVersion();
   return { done: true, ok: true, push: true, result: "On the Rota tab." };
@@ -5518,7 +5821,21 @@ function applySwap(ss, rota, keyA, driverA, keyB, driverB) {
 function appendNote(sh, row, text) {
   var cell = sh.getRange(row, rotaCols(sh).notes);
   var had = String(cell.getValue() || "").trim();
-  cell.setValue(had ? had + "\n" + text : text);
+  cell.setValue(had ? had + "\n" + text : notesText(text));
+}
+
+/* A Notes cell as it is written. Only the cell's first character can start a
+   formula. One line on its own that Sheets would read as a value (11/10,
+   10:30, 07700 900123, 11 Oct, 11-Oct) gets an apostrophe in front, as typing it
+   would need, so it stays the words. */
+function notesText(t) {
+  t = String(t == null ? "" : t);
+  if (t.indexOf("\n") === -1 && t.charAt(0) !== "'" &&
+      (/^[-+]?[£$€]?[\d.,:\/\s-]*\d[\d.,:\/\s-]*%?\s*(am|pm)?$/i.test(t) || /^(true|false)$/i.test(t) ||
+       /^(\d{1,2}(st|nd|rd|th)?[\s-]+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?([\s-]+\d{1,2}(st|nd|rd|th)?)?([,\s-]+\d{2,4})?$/i.test(t))) {
+    return "'" + t;
+  }
+  return safeText(t);
 }
 
 /* Both routes at once, since almost every caller wants the pair. */
@@ -6847,10 +7164,9 @@ function readBusStopsFresh(ss) {
         ? "South" : "North",
       id: String(at1(r, c.id) || "").trim(),
       /* Read as text. A cell holding 09:50 as a real time comes back as a
-         Date, and the fuel column already taught us what that does. */
-      time: (t && typeof t.getHours === "function")
-        ? Utilities.formatDate(t, Session.getScriptTimeZone(), "HH:mm")
-        : String(t || "").trim(),
+         Date, and the fuel column already taught us what that does. 9:52
+         typed as text reads 09:52. */
+      time: stopTimeText(t),
       stop: stop,
       postcode: String(at1(r, c.postcode) || "").trim(),
       /* Where the bus actually pulls in, written as an address a person could

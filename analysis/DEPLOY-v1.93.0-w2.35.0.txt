@@ -1,0 +1,88 @@
+MINIBUS
+=======
+  pages v1.93.0 · server w2.35.0 · sheet v1.98.0
+
+Phase 2, screens 3 to 5 in one go, and the Run record browser check.
+Buses: Seats, Active, Route in odd months and Notes, and a bus added. Rota:
+a note changed or taken off. Bus stops: Time, Stop, Postcode, Where, Active
+and Type, and a stop added. Check B is the Drivers screen from #26.
+
+One Worker paste and one Code.gs paste carry all of it.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.92.0         v1.93.0
+  Worker  w2.34.0         w2.35.0
+  Code.gs v1.97.0         v1.98.0
+
+
+IN THIS ORDER
+-------------
+
+1. WORKER. Cloudflare, the minibus Worker, Edit code. Replace everything
+   with server/worker.js. Deploy. No database change.
+
+2. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
+   Save. Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy.
+
+3. PAGES. Merge the pull request.
+
+Bus stops on the first screen, and Notes on a bus, appear once the sheet
+has sent its next copy: within an hour of step 2, or at once after any edit
+on the Rota, Drivers, Buses or Bus Stops tab.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.93.0 · server w2.35.0 · sheet
+   v1.98.0 .
+
+B. First screen: Drivers, with the number active. Open it: Add a driver,
+   then North and South, each driver with Edit. Edit any driver, change
+   Phone, Save. Within a few minutes the Drivers tab has it and History has
+   "Driver: <name> — Phone". Put it back. A driver with no PIN shows NO
+   PIN; set the PIN on the Drivers tab.
+
+C. Buses: Add a bus at the top. Open a bus: under the dates, its seats, In
+   use or Not in use, its route in odd months, and Edit. Change Seats, Save.
+   Within a few minutes the Buses tab has it and History has "Bus: <reg> —
+   Seats for passengers". Put it back.
+
+D. Rota, any coming Sunday: Add a note. It shows with Change and Take off.
+   Change it, then Take off. The Notes cell on the Rota tab follows. Swapped
+   and PROTECTED lines have no buttons.
+
+E. First screen: Bus stops, with the number in use. Open it: Add a stop,
+   then North and South, each stop with Edit. Edit one, change Where, Save.
+   Within a few minutes the Bus Stops tab has it. Put it back.
+
+
+WHAT CHANGED
+------------
+
+1. Buses. coord/index.html editBus; worker.js actBus, laid over the buses
+   table by getBuses until the sheet files it; Code.gs coordBus. A bus that
+   takes another active bus's route in odd months gives that bus its old
+   route, or standby. Notes longer than 500 characters stay on the tab.
+
+2. Rota notes. coord/index.html editNote; worker.js actRota noteEdit,
+   rotaApplySet; Code.gs coordRota. One line of the Notes cell changed or
+   taken off. A line longer than 300 characters is never cut. A Notes cell
+   left with one line such as 11/10 or 10:30 stays as typed.
+
+3. Bus stops. coord/index.html paintStops and editStop; worker.js actStop,
+   the stops table changed at once and laid back over each push
+   (reapplyStops); Code.gs coordStopsList and coordStop. A new stop takes the
+   next number on its route and its place by time. A time out of order, a
+   second Depart or Arrival, or switching off a stop with seats booked for
+   a run still to come is refused. A new postcode clears Lat and Lng;
+   spacing and capitals are not a new postcode. Switched-off rows do not
+   decide where a new stop goes.
+
+4. tests/browser/coordinator.mjs C38 expects "was", as the Run record says
+   from v1.90.2.
+
+Tests: tests/suites/42-drivers.mjs, 43-buses.mjs, 44-rota-notes.mjs,
+45-bus-stops.mjs; browser checks C42, C43, C44, C45, C46.

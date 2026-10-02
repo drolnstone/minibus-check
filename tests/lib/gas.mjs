@@ -158,6 +158,8 @@ class FakeSheet {
        actually writes are understood, and anything else throws loudly rather
        than returning a range over the wrong cells. */
     if (typeof a === "string") {
+      const rows = /^(\d+):(\d+)$/.exec(a);
+      if (rows) return new FakeRange(this, Number(rows[1]), 1, Number(rows[2]) - Number(rows[1]) + 1, this.getMaxColumns());
       const m = /^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/.exec(a.toUpperCase());
       if (!m) throw new Error("fake getRange cannot read A1 notation: " + a);
       const c1 = colNum(m[1]), r1 = Number(m[2]);
@@ -182,6 +184,25 @@ class FakeSheet {
   insertRowsAfter(after, how) {
     const blank = new Array(this.getMaxColumns()).fill(EMPTY);
     for (let i = 0; i < (how || 1); i++) this.cells.splice(after + i, 0, blank.slice());
+    return this;
+  }
+  /* Rows moved whole. dest is a row number from before the move, as in
+     Apps Script. Cell notes are moved with them; validation is not. */
+  moveRows(range, dest) {
+    const from = range.r, n = range.nr;
+    const to = dest < from ? dest : dest - n;
+    const m = this.cells.splice(from - 1, n);
+    this.cells.splice(to - 1, 0, ...m);
+    const notes = {};
+    for (const k of Object.keys(this.notes)) {
+      const [r, c] = k.split(":").map(Number);
+      let r2 = r;
+      if (r >= from && r < from + n) r2 = to + (r - from);
+      else if (dest < from && r >= dest && r < from) r2 = r + n;
+      else if (dest > from && r >= from + n && r < dest) r2 = r - n;
+      notes[r2 + ":" + c] = this.notes[k];
+    }
+    this.notes = notes;
     return this;
   }
   /* Column inserts move the cells right of it along. Notes and validation

@@ -142,7 +142,11 @@ async function world() {
           next: DAY(-30), how: "estimated: a year back from the due date on the Buses tab", by: "", source: "Started from the Buses tab",
           recorded: Date.now() - 86400000, correctedBy: "" }] },
       jobs: { "YS70 PWE": { checkId: "chk-a", date: LAST, driver: southOf(LAST), jobs: ["Screenwash", "Tyre pressures"] } }
-    } }).run();
+    },
+    /* From v1.98.0: the Bus Stops tab, every row, in its order. */
+    stops: REAL.stops.map((s) => ({ id: s.id, route: s.route, time: s.time, stop: s.stop, postcode: s.postcode || "",
+      where: "", active: !!s.active, type: s.kind === "depart" ? "Depart" : s.kind === "arrival" ? "Arrival" : "Pickup",
+      lat: s.lat, lng: s.lng, hasPin: s.lat != null && s.lng != null })) }).run();
 
   /* name: what the stop was called when the seat was taken, when that is not
      what its number is called now (C38, C40). */
@@ -1240,7 +1244,7 @@ if (want("C38")) {
     check("C38", "on the Run record a booked stop with no tap says so in amber; a stop nobody booked is quiet; each by its number",
           s03 && /missed/.test(s03.cls) && /2 seats booked, not marked/.test(s03.text) && /add/i.test(s03.add) &&
           s02 && /quiet/.test(s02.cls) && /nobody booked/.test(s02.text) && !/missed/.test(s02.cls) && /add/i.test(s02.add) &&
-          s05 && /then Old Place by the Park/.test(s05.text) && /1 seat booked, not marked/.test(s05.text) &&
+          s05 && /was Old Place by the Park/.test(s05.text) && /1 seat booked, not marked/.test(s05.text) &&
           n01 && !/miss/.test(n01.cls) && numbered >= 14 && !p.errs.length,
           JSON.stringify({ s03, s02, s05, n01, numbered, errors: p.errs }));
   } catch (e) { stopped("C38", e); }
@@ -1375,6 +1379,168 @@ if (want("C42")) {
           listed.indexOf("Sis Newcomer") !== -1 && !wide && !p.errs.length,
           JSON.stringify({ first, before, after, noName, added, listed, wide, errors: p.errs }));
   } catch (e) { stopped("C42", e); }
+  await p.ctx.close();
+}
+
+/* C43 — the Buses screens: a bus added and one edited, from v1.93.0 */
+if (want("C43")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    const extra = (await W.cacheGet(env, "bus_extra")) || {};
+    for (const k of Object.keys(extra)) extra[k].notes = extra[k].notes || "";
+    await W.cachePut(env, "bus_extra", extra).run();
+    const northBus = Object.keys(ODD_ROUTE).find((r) => ODD_ROUTE[r] === "North");
+    await p.pg.evaluate(() => { location.hash = "buses"; });
+    await p.wait(600);
+    await p.pg.click('#busesBody [data-do="addbus"]');
+    await p.wait(300);
+    await p.pg.click("#sheetGo");
+    const noReg = await p.text("#sheetSay");
+    await p.pg.fill("#buReg", "ab12 cde");
+    await p.pg.fill("#buSeats", "16");
+    await p.pg.click('#buRoute [data-v="North"]');
+    const swap = await p.text("#buSwap");
+    await p.pg.click("#sheetGo");
+    await p.wait(900);
+    const added = (await W.getBuses(env)).find((b) => b.reg === "AB12 CDE");
+    const gave = (await W.getBuses(env)).find((b) => b.reg === northBus);
+    await p.pg.click('#busesBody [data-go="bus/' + encodeURIComponent(northBus) + '"]');
+    await p.wait(500);
+    await p.pg.click('#busBody [data-do="editbus"]');
+    await p.wait(300);
+    await p.pg.fill("#buSeats", "13");
+    await p.pg.fill("#buNotes", "Rear door sticks\nhttps://example.org/" + "x".repeat(120));
+    await p.pg.click("#sheetGo");
+    await p.wait(900);
+    const edited = (await W.getBuses(env)).find((b) => b.reg === northBus);
+    const facts = await p.text("#busBody .bus-facts");
+    /* Against the phone's own width: a page too wide makes innerWidth grow with it. */
+    const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth > 392);
+    await p.shot("C43-buses");
+    check("C43", "on Buses a bus is added and one edited, and the live server has both at once",
+          /registration/i.test(noReg) && swap.indexOf(northBus + ": standby.") !== -1 &&
+          added && added.seats === 16 && added.oddRoute === "North" && added.active && gave.oddRoute === "" &&
+          edited.seats === 13 && /^Rear door sticks\nhttps/.test(edited.notes) && /13 seats/.test(facts) && /Rear door sticks/.test(facts) &&
+          !wide && !p.errs.length,
+          JSON.stringify({ noReg, swap, added, gave, edited, facts, wide, errors: p.errs }));
+  } catch (e) { stopped("C43", e); }
+  await p.ctx.close();
+}
+
+/* C44 — a note on the rota changed, then taken off, from v1.93.0 */
+if (want("C44")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    await p.pg.evaluate((k) => { location.hash = "sunday/" + k; }, NEXT);
+    await p.wait(600);
+    await p.pg.click('#sundayBody [data-do="note"]');
+    await p.wait(300);
+    await p.pg.fill("#noteText", "Ramp in the shed");
+    await p.pg.click("#sheetGo");
+    await p.wait(900);
+    /* Other notes may be on that Sunday already: this one by its words. */
+    await p.pg.locator("#sundayBody .notes li", { hasText: "Ramp in the shed" }).locator('[data-do="noteedit"]').click();
+    await p.wait(300);
+    await p.pg.fill("#noteText", "Ramp in the vestry");
+    await p.pg.click("#sheetGo");
+    await p.wait(900);
+    const changed = String((await W.getRotaRow(env, NEXT)).notes || "");
+    const shown = await p.text("#sundayBody .notes");
+    await p.shot("C44-note-changed");
+    await p.pg.locator("#sundayBody .notes li", { hasText: "Ramp in the vestry" }).locator('[data-do="noteoff"]').click();
+    await p.wait(300);
+    const asks = await p.text("#sheet .line");
+    await p.pg.click("#sheetGo");
+    await p.wait(900);
+    const after = String((await W.getRotaRow(env, NEXT)).notes || "");
+    const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth > 392);
+    check("C44", "a note on the rota is changed and then taken off, and the live server has each at once",
+          changed.split("\n").indexOf("Ramp in the vestry") !== -1 && !/shed/.test(changed) && /vestry/.test(shown) &&
+          /vestry/.test(asks) && !/vestry|shed/.test(after) && !wide && !p.errs.length,
+          JSON.stringify({ changed, shown, asks, after, wide, errors: p.errs }));
+  } catch (e) { stopped("C44", e); }
+  await p.ctx.close();
+}
+
+/* C45 — the Bus stops screen: a stop edited and one added, from v1.93.0 */
+if (want("C45")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    await p.pg.evaluate(() => { location.hash = "stops"; });
+    await p.wait(600);
+    const s03 = REAL.stops.find((x) => x.id === "S03");
+    await p.pg.click('#stopsBody [data-do="editstop"][data-id="S03"]');
+    await p.wait(300);
+    await p.pg.fill("#stTime", "10:33");
+    await p.pg.fill("#stWhere", "Outside 14 Pinehurst Avenue");
+    await p.pg.click("#sheetGo");
+    await p.wait(900);
+    const edited = (await W.getStops(env)).find((x) => x.id === "S03");
+    await p.pg.click('#stopsBody [data-do="addstop"]');
+    await p.wait(300);
+    await p.pg.click('#stRoute [data-v="South"]');
+    await p.pg.fill("#stTime", "11:30");
+    await p.pg.fill("#stName", "Late Road");
+    await p.pg.click("#sheetGo");
+    await p.wait(700);
+    const late = await p.text("#sheetSay");
+    await p.pg.fill("#stTime", "10:42");
+    await p.pg.fill("#stName", "Breck Road Shops");
+    await p.pg.fill("#stPost", "l6 5bj");
+    await p.pg.click("#sheetGo");
+    await p.wait(900);
+    const south = (await W.getStops(env)).filter((x) => x.route === "South");
+    const added = south.find((x) => x.stop === "Breck Road Shops");
+    const at = south.indexOf(added);
+    const listed = await p.pg.$$eval("#stopsBody .stp .stp-name", (bs) => bs.map((b) => b.textContent));
+    const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth > 392);
+    await p.shot("C45-stops");
+    check("C45", "on Bus stops a stop is edited and one added in its place, and the live server has both at once",
+          s03 && edited.time === "10:33" && edited.where === "Outside 14 Pinehurst Avenue" && /Pick a time/.test(late) &&
+          added && added.id === "S10" && added.postcode === "L6 5BJ" && south[at - 1].time <= "10:42" && south[at + 1].time >= "10:42" &&
+          listed.indexOf("Breck Road Shops") !== -1 && !wide && !p.errs.length,
+          JSON.stringify({ edited, late, added, around: [south[at - 1], south[at + 1]], wide, errors: p.errs }));
+  } catch (e) { stopped("C45", e); }
+  await p.ctx.close();
+}
+
+/* C46 — a stop's postcode written without its space, or a Where over two
+   lines, is not changed by saving its time, so the pin stays; a long Where
+   wraps. From v1.93.0. */
+if (want("C46")) {
+  const shelf = await W.cacheGet(env, "coord_shelf");
+  for (const x of shelf.stops) if (x.id === "S07") { x.postcode = "l66an"; x.where = "Hannan Road\nby the cafe"; }
+  await W.cachePut(env, "coord_shelf", shelf).run();
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    await p.pg.evaluate(() => { location.hash = "stops"; });
+    await p.wait(600);
+    await p.pg.click('#stopsBody [data-do="editstop"][data-id="S07"]');
+    await p.wait(300);
+    await p.pg.fill("#stTime", "10:47");
+    await p.pg.click("#sheetGo");
+    await p.wait(900);
+    const last = async () => JSON.parse((await env.DB.prepare("SELECT body FROM coord_actions WHERE kind='stop' ORDER BY seq DESC LIMIT 1").first()).body);
+    const b1 = await last();
+    const s07 = (await W.getStops(env)).find((x) => x.id === "S07");
+    const url = "https://www.google.com/maps/place/53.414313,-2.949187/@53.414313,-2.949187,19z/data=!3m1!1e3";
+    await p.pg.click('#stopsBody [data-do="editstop"][data-id="S08"]');
+    await p.wait(300);
+    await p.pg.fill("#stWhere", url);
+    await p.pg.click("#sheetGo");
+    await p.wait(1200);
+    const b2 = await last();
+    const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth > 392);
+    await p.shot("C46-stops-wrap");
+    check("C46", "saving a stop's time leaves a postcode without its space and its pin alone, and a long Where wraps",
+          JSON.stringify(Object.keys(b1.set)) === '["time"]' && !b1.pinCleared && s07 && s07.time === "10:47" && s07.lat != null &&
+          b2.set.where === url && !wide && !p.errs.length,
+          JSON.stringify({ b1, s07, b2, wide, errors: p.errs }));
+  } catch (e) { stopped("C46", e); }
   await p.ctx.close();
 }
 

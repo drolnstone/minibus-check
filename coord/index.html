@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.92.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.93.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -139,8 +139,12 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
   text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
 .card{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);padding:12px 13px}
 .card+.card{margin-top:10px}
-.drv.off{opacity:.7}
-#driversBody .btn-wide{margin-bottom:6px}
+.drv.off,.stp.off{opacity:.7}
+.stp .stp-name{margin:4px 0 0;overflow-wrap:anywhere}
+#stopsBody>.btn-wide{margin-bottom:10px}
+#driversBody .btn-wide,#busesBody>.btn-wide{margin-bottom:10px}
+.bus-facts .did{margin:6px 0 0;white-space:pre-line;color:var(--ink-2)}
+.did{overflow-wrap:anywhere}
 .tiny{font-size:13px;color:var(--muted);margin:6px 0 0}
 .center{text-align:center}
 .mono{font-family:"IBM Plex Mono",monospace}
@@ -304,6 +308,9 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .notes{margin:0;padding:0;list-style:none}
 .notes li{padding:6px 0;border-top:1px dashed var(--hair);font-size:15px;white-space:pre-line}
 .notes li:first-child{border-top:none}
+.notes li.ed{display:flex;align-items:flex-start;gap:8px}
+.notes li.ed .t{flex:1;min-width:0;overflow-wrap:anywhere}
+.notes li.ed .acts{display:flex;gap:6px;flex-shrink:0}
 
 /* ---- lists to choose from ---- */
 .pick{list-style:none;margin:0;padding:0;border:1px solid var(--hair);border-radius:var(--r);background:var(--card);
@@ -367,7 +374,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .def p{margin:5px 0 0;font-size:15px}
 .def .did{white-space:pre-line;color:var(--ink-2)}
 .def-foot{display:flex;align-items:center;gap:8px;margin-top:6px}
-.def-foot .tiny{flex:1;min-width:0;margin:0}
+.def-foot .tiny{flex:1;min-width:0;margin:0;overflow-wrap:anywhere}
 .def-foot .mini{min-height:36px}
 .def .def-age{font-size:13px;color:var(--muted);margin-top:3px}
 .def .def-dvsa{margin:4px 0 0}
@@ -596,6 +603,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
   <section class="screen" id="s-defects"><div id="defectsBody"></div></section>
   <section class="screen" id="s-buses"><div id="busesBody"></div></section>
   <section class="screen" id="s-drivers"><div id="driversBody"></div></section>
+  <section class="screen" id="s-stops"><div id="stopsBody"></div></section>
   <section class="screen" id="s-bus"><div id="busBody"></div></section>
   <section class="screen" id="s-runs"><div id="runsBody"></div></section>
   <section class="screen" id="s-look"><div id="lookBody"></div></section>
@@ -633,7 +641,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.92.0";
+var PAGE_VERSION = "v1.93.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -976,7 +984,7 @@ function say(id, t, bad){
 /* ---- screens ------------------------------------------------------------- */
 
 var TITLES = { home:"Coordinator", rota:"Rota", sunday:"Rota", requests:"Rota requests", bookings:"Bookings",
-               defects:"Defects", buses:"Buses", bus:"Bus", drivers:"Drivers", runs:"Run record", look:"Have a look", report:"Have a look",
+               defects:"Defects", buses:"Buses", bus:"Bus", drivers:"Drivers", stops:"Bus stops", runs:"Run record", look:"Have a look", report:"Have a look",
                activity:"What has been done", rehearsal:"Rehearsal", sign:"Coordinator" };
 
 /* Each screen is a step in the phone's own history, so its back gesture
@@ -1041,6 +1049,7 @@ function paint(name, arg){
   if(name === "defects") return paintDefects();
   if(name === "buses") return paintBuses();
   if(name === "drivers") return paintDrivers();
+  if(name === "stops") return paintStops();
   if(name === "bus") return paintBus(arg);
   if(name === "runs") return paintRuns(arg || "");
   if(name === "look") return paintLook();
@@ -1233,6 +1242,8 @@ function paintHome(){
        (D && D.vehicles ? item("buses", "Buses", jobs ? (jobs === 1 ? "1 job to arrange" : jobs + " jobs to arrange") : "", jobs ? "warn" : "") : "") +
        /* A live server from before w2.34.0 sends no register. */
        (D && D.register ? item("drivers", "Drivers", D.register.drivers.filter(function(x){ return x.active; }).length + " active", "") : "") +
+       /* A live server from before w2.35.0, or a sheet before v1.98.0, sends no stops. */
+       (D && D.stopsReg ? item("stops", "Bus stops", D.stopsReg.stops.filter(function(x){ return x.active && x.type === "Pickup"; }).length + " in use", "") : "") +
        item("runs", "Run record", "") +
        /* A live server from before w2.20.0 cannot run one from here. */
        (D && ("rehearsal" in D) ? item("rehearsal", "Rehearsal", D.rehearsal ? "until " + hhmm(D.rehearsal.ends) : "",
@@ -1284,8 +1295,15 @@ function paintSunday(key){
     h += '<div class="row"><span class="k">Bus</span><span class="v">'+(g.bus ? '<span class="plate">'+esc(g.bus)+'</span>' : '<span class="none">Not known</span>')+'</span>' + btn("bus", "Change") + '</div>';
     h += '</div>';
   });
-  var notes = String(r.notes || "").split("\n").map(function(x){ return x.trim(); }).filter(Boolean);
-  if(notes.length) h += '<div class="card"><h3 style="margin-top:0">Notes</h3><ul class="notes">'+notes.map(function(n){ return '<li>'+esc(n)+'</li>'; }).join("")+'</ul></div>';
+  var notes = noteLines(r);
+  /* From v1.93.0 each note can be changed or taken off, except the sheet's own
+     Swapped and PROTECTED lines. */
+  if(notes.length) h += '<div class="card"><h3 style="margin-top:0">Notes</h3><ul class="notes">'+notes.map(function(n, i){
+    if(past || NOTE_OWN.test(n) || !D.noteEdits) return '<li>'+esc(n)+'</li>';
+    return '<li class="ed"><span class="t">'+esc(n)+'</span><span class="acts">' +
+           '<button class="mini" type="button" data-do="noteedit" data-key="'+esc(key)+'" data-i="'+i+'">Change</button>' +
+           '<button class="mini" type="button" data-do="noteoff" data-key="'+esc(key)+'" data-i="'+i+'">Take off</button></span></li>';
+  }).join("")+'</ul></div>';
   if(!past) h += '<button class="btn btn-ghost btn-wide" type="button" data-do="note" data-key="'+esc(key)+'" style="margin-top:10px;min-height:46px;font-size:16px">Add a note</button>';
   $("sundayBody").innerHTML = h;
 }
@@ -1377,6 +1395,34 @@ function setStatus(key, mode){
               go: mode === "on" ? "Both routes running" : mode === "all" ? "Call off both" : "Call off " + mode,
               stop: mode !== "on",
               onGo: function(){ act({ kind:"rota", sunday:key, set:{ status: want } }); } });
+}
+
+var NOTE_OWN = /^(swapped\s*:|protected\b)/i;
+function noteLines(r){
+  return String((r && r.notes) || "").split("\n").map(function(x){ return x.replace(/\s+/g, " ").trim().replace(/^'/, ""); }).filter(Boolean);
+}
+/* A note changed (off false) or taken off (off true), from v1.93.0. */
+function editNote(key, i, off){
+  var was = noteLines(rowFor(key))[Number(i)];
+  if(!was || NOTE_OWN.test(was)) return;
+  if(off){
+    openSheet({ eyebrow: shortDay(key), title: "Take off this note", line: was, go: "Take it off", stop: true,
+                onGo: function(){ act({ kind:"rota", sunday:key, noteEdit:{ was: was, now: "" } }); } });
+    return;
+  }
+  /* A line typed longer on the Rota tab can stay as long. */
+  var most = Math.max(300, was.length);
+  openSheet({ eyebrow: shortDay(key), title: "Change the note",
+              body: '<div class="field"><label for="noteText">Note</label><textarea id="noteText" maxlength="'+most+'">'+esc(was)+'</textarea></div>',
+              go: "Save",
+              onGo: function(){
+                var t = String(($("noteText") || {}).value || "").replace(/\s+/g, " ").trim();
+                if(!t){ sheetSay("Write the note, or use Take off.", true); return; }
+                if(t.length > most){ sheetSay("Notes are " + most + " characters at most.", true); return; }
+                if(NOTE_OWN.test(t)){ sheetSay("Swapped and PROTECTED lines are changed on the Rota tab.", true); return; }
+                if(t === was){ sheetSay("Nothing has changed.", true); return; }
+                act({ kind:"rota", sunday:key, noteEdit:{ was: was, now: t } });
+              } });
 }
 
 function addNote(key){
@@ -1837,6 +1883,94 @@ function editDriver(name){
   });
 }
 
+/* ---- bus stops: the Bus Stops tab, from v1.93.0 ------------------------------
+
+   Time, the place, Postcode, Where, Active and Type, and a new stop. The
+   number of a new stop is the next one on its route. */
+function regStop(id){
+  var l = (D && D.stopsReg && D.stopsReg.stops) || [];
+  for(var i = 0; i < l.length; i++) if(l[i].id === id) return l[i];
+  return null;
+}
+function paintStops(){
+  var R = D.stopsReg || { stops: [] };
+  var h = '<button class="btn btn-main btn-wide" type="button" data-do="addstop">Add a stop</button>';
+  ["North", "South"].forEach(function(rt){
+    var l = R.stops.filter(function(x){ return x.route === rt; });
+    if(!l.length) return;
+    h += '<h3>' + esc(rt) + '</h3>';
+    l.forEach(function(x){
+      h += '<div class="card stp' + (x.active ? '' : ' off') + '"><div class="def-head"><span class="sid">' + esc(x.id) + '</span>' +
+           '<b>' + esc(x.time) + '</b>' + (x.type !== "Pickup" ? '<span class="tag info">' + esc(x.type) + '</span>' : '') +
+           (x.active ? '' : '<span class="tag">Not active</span>') + '</div>' +
+           '<p class="stp-name">' + esc(x.stop) + '</p>' +
+           '<div class="def-foot"><p class="tiny">' + esc([x.postcode, x.where].filter(Boolean).join(" · ")) + '</p>' +
+           (x.waiting ? '<span class="tag info">To the sheet</span>' : '') +
+           '<button class="mini" type="button" data-do="editstop" data-id="' + esc(x.id) + '">Edit</button></div></div>';
+    });
+  });
+  $("stopsBody").innerHTML = h;
+}
+function editStop(id){
+  var x = id ? regStop(id) : null;
+  if(id && !x) return;
+  var add = !x;
+  var v = add ? { route: "", time: "", stop: "", postcode: "", where: "", active: true, type: "Pickup" }
+              : { route: x.route, time: x.time, stop: String(x.stop || "").replace(/\s+/g, " ").trim(), postcode: x.postcode || "",
+                  where: String(x.where || "").replace(/\s+/g, " ").trim(), active: x.active, type: x.type };
+  var pick = { route: v.route, active: v.active ? "YES" : "NO", type: v.type };
+  var chips = function(cid, opts, on){
+    return '<div class="chips" id="' + cid + '">' + opts.map(function(o){
+      return '<button type="button" data-v="' + esc(o[0]) + '" class="' + (o[0] === on ? 'on' : '') + '">' + esc(o[1]) + '</button>';
+    }).join("") + '</div>';
+  };
+  openSheet({ eyebrow: add ? "New stop" : x.route + " · " + x.id, title: add ? "Add a stop" : x.stop,
+    body: (add ? '<p class="tiny" style="margin:0 0 4px">Route</p>' + chips("stRoute", [["North", "North"], ["South", "South"]], pick.route) : '') +
+          '<div class="field"><label for="stTime">Time</label><input id="stTime" type="time" step="60" value="' + esc(v.time) + '"></div>' +
+          '<div class="field"><label for="stName">Stop</label><input id="stName" maxlength="120" autocomplete="off" value="' + esc(v.stop) + '"></div>' +
+          '<div class="field"><label for="stPost">Postcode</label><input id="stPost" maxlength="8" autocomplete="off" autocapitalize="characters" value="' + esc(v.postcode) + '"></div>' +
+          '<div class="field"><label for="stWhere">Where</label><input id="stWhere" maxlength="200" autocomplete="off" value="' + esc(v.where) + '"></div>' +
+          '<p class="tiny" style="margin:0 0 4px">Type</p>' + chips("stType", [["Pickup", "Pickup"], ["Arrival", "Arrival"], ["Depart", "Depart"]], pick.type) +
+          (add ? '' : '<p class="tiny" style="margin:0 0 4px">Active</p>' + chips("stActive", [["YES", "Active"], ["NO", "Not active"]], pick.active)),
+    go: add ? "Add" : "Save",
+    onGo: function(){
+      if(add && !pick.route){ sheetSay("Pick North or South.", true); return; }
+      var tm = String($("stTime").value || "").trim();
+      if(!/^([01]?\d|2[0-3]):[0-5]\d$/.test(tm)){ sheetSay("Type the time as 10:35.", true); return; }
+      if(tm.length === 4) tm = "0" + tm;
+      var nm = String($("stName").value || "").replace(/\s+/g, " ").trim();
+      if(nm.length < 2){ sheetSay("Type the stop's name.", true); return; }
+      /* Spacing and capitals are not a change: a new postcode clears the pin. */
+      var pcKey = function(p){ return String(p || "").toUpperCase().replace(/\s+/g, ""); };
+      var flat = function(t){ return String(t || "").replace(/\s+/g, " ").trim(); };
+      var typed = flat($("stPost").value);
+      var pc = pcKey(typed);
+      var pcNew = add || typed !== flat(v.postcode);
+      if(pcNew && pc && !/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(pc)){ sheetSay("Check the postcode.", true); return; }
+      if(pc) pc = pc.slice(0, -3) + " " + pc.slice(-3);
+      var wh = flat($("stWhere").value);
+      var set = {};
+      if(add) set.route = pick.route;
+      if(add || tm !== v.time) set.time = tm;
+      if(add || nm !== flat(v.stop)) set.stop = nm;
+      if(pcNew) set.postcode = pc;
+      if(add || wh !== flat(v.where)) set.where = wh;
+      if(add || pick.type !== v.type) set.type = pick.type;
+      if(!add && (pick.active === "YES") !== v.active) set.active = pick.active === "YES";
+      if(!add && !Object.keys(set).length){ sheetSay("Nothing has changed.", true); return; }
+      act({ kind: "stop", stopId: add ? "" : x.id, add: add, set: set });
+    } });
+  [["stRoute", "route"], ["stType", "type"], ["stActive", "active"]].forEach(function(f){
+    Array.prototype.forEach.call(document.querySelectorAll("#" + f[0] + " button"), function(b){
+      b.onclick = function(){
+        pick[f[1]] = b.getAttribute("data-v");
+        Array.prototype.forEach.call(document.querySelectorAll("#" + f[0] + " button"), function(y){ y.classList.toggle("on", y === b); });
+        if(!busy) sheetSay("");
+      };
+    });
+  });
+}
+
 /* Every step a defect has been through, off the sheet's History tab, from
    v1.92.0: who set which status and when, and a reopening with the day it
    had first been closed. */
@@ -2006,7 +2140,8 @@ function dueRows(b){
 }
 
 function paintBuses(){
-  var h = '';
+  /* A live server from before w2.35.0 cannot take a change to a bus. */
+  var h = (D && D.busEdits) ? '<button class="btn btn-main btn-wide" type="button" data-do="addbus">Add a bus</button>' : '';
   var list = busList().slice().sort(function(a, b){ return (b.active ? 1 : 0) - (a.active ? 1 : 0) || String(a.reg).localeCompare(String(b.reg)); });
   if(!list.length){ $("busesBody").innerHTML = h + '<div class="card"><p class="tiny" style="margin:0">No buses have reached the live server.</p></div>'; return; }
   list.forEach(function(b){
@@ -2014,6 +2149,7 @@ function paintBuses(){
     h += '<button type="button" class="card bus-card" data-go="bus/' + esc(encodeURIComponent(b.reg)) + '">' +
          '<span class="bus-head"><span class="plate">' + esc(b.reg) + '</span>' +
          (b.active ? '' : '<span class="tag">Not in use</span>') +
+         (b.waiting ? '<span class="tag info">To the sheet</span>' : '') +
          (jn ? '<span class="tag warn">' + esc(jn === 1 ? "1 job" : jn + " jobs") + '</span>' : '') +
          (dn ? '<span class="tag warn">' + esc(dn === 1 ? "1 defect" : dn + " defects") + '</span>' : '') +
          '<span class="go">›</span></span>' + dueRows(b) + '</button>';
@@ -2055,6 +2191,15 @@ function paintBus(reg){
   if(!b){ $("busBody").innerHTML = '<h1>' + esc(reg || "Bus") + '</h1><div class="card"><p class="tiny" style="margin:0">That bus is not on the live server’s list.</p></div>'; return; }
   var h = '<h1><span class="plate plate-big">' + esc(b.reg) + '</span></h1>';
   h += '<div class="card">' + dueRows(b) + '</div>';
+  /* From v1.93.0: seats, in use, route in odd months and notes, with Edit. */
+  if(D && D.busEdits){
+    h += '<div class="card bus-facts"><div class="def-foot"><p class="tiny">' +
+         esc([b.seats ? b.seats + " seats" : "Seats not set", b.active ? "In use" : "Not in use",
+              b.oddRoute ? b.oddRoute + " in odd months" : "Standby"].join(" · ")) + '</p>' +
+         (b.waiting ? '<span class="tag info">To the sheet</span>' : '') +
+         '<button class="mini" type="button" data-do="editbus" data-reg="' + esc(b.reg) + '">Edit</button></div>' +
+         (b.notes ? '<p class="did">' + esc(b.notes) + '</p>' : '') + '</div>';
+  }
   h += '<button class="btn btn-main btn-wide" type="button" data-do="vlog" data-reg="' + esc(b.reg) + '" style="margin-top:12px">Record something</button>';
   var j = jobsOf(b.reg);
   if(j && j.jobs && j.jobs.length){
@@ -2072,6 +2217,83 @@ function paintBus(reg){
   if(!log.length) h += '<div class="card"><p class="tiny" style="margin:0">Nothing recorded yet.</p></div>';
   else h += log.map(function(x){ return entryHTML(b.reg, x); }).join("");
   $("busBody").innerHTML = h;
+}
+
+/* ---- a bus changed or added: the Buses tab, from v1.93.0 -------------------
+
+   Seats, Active, Route in odd months and Notes, and a new bus. The due dates
+   are recorded with Record something. */
+
+/* The bus that gives up its route in odd months when this one takes it, and
+   what it gets instead. The live server works it out the same way. */
+function busSwaps(reg, was, nowActive, nowRoute, routeSet){
+  if(!nowActive || !nowRoute || !(routeSet || (nowActive && !was.active))) return [];
+  var back = was.active && was.oddRoute && was.oddRoute !== nowRoute ? was.oddRoute : "";
+  var key = function(r){ return String(r || "").toUpperCase().replace(/\s+/g, ""); };
+  return busList().filter(function(y){ return key(y.reg) !== key(reg) && y.active && y.oddRoute === nowRoute; })
+                  .map(function(y){ return { reg: y.reg, oddRoute: back }; });
+}
+function editBus(reg){
+  var x = reg ? busByReg(reg) : null;
+  if(reg && !x) return;
+  var add = !x;
+  var v = add ? { seats: "", active: true, oddRoute: "", notes: "" }
+              : { seats: x.seats || "", active: x.active, oddRoute: x.oddRoute || "", notes: x.notes || "" };
+  var pick = { active: v.active ? "YES" : "NO", oddRoute: v.oddRoute || "-" };
+  var chips = function(id, opts, on){
+    return '<div class="chips" id="' + id + '">' + opts.map(function(o){
+      return '<button type="button" data-v="' + esc(o[0]) + '" class="' + (o[0] === on ? 'on' : '') + '">' + esc(o[1]) + '</button>';
+    }).join("") + '</div>';
+  };
+  var regOf = function(){ return add ? String($("buReg").value || "").toUpperCase().replace(/\s+/g, " ").trim() : x.reg; };
+  var swaps = function(){
+    var was = add ? { active: false, oddRoute: "" } : { active: x.active, oddRoute: x.oddRoute || "" };
+    var route = pick.oddRoute === "-" ? "" : pick.oddRoute, on = pick.active === "YES";
+    return busSwaps(regOf(), was, on, route, add || route !== was.oddRoute || on !== was.active);
+  };
+  var show = function(){
+    var l = swaps(), el = $("buSwap");
+    if(!el) return;
+    el.hidden = !l.length;
+    el.textContent = l.map(function(o){ return o.reg + ": " + (o.oddRoute ? o.oddRoute + " in odd months" : "standby") + "."; }).join(" ");
+  };
+  openSheet({ eyebrow: add ? "New bus" : "Bus", title: add ? "Add a bus" : x.reg,
+    body: (add ? '<div class="field"><label for="buReg">Registration</label><input id="buReg" maxlength="10" autocomplete="off" autocapitalize="characters"></div>' : '') +
+          '<div class="field"><label for="buSeats">Seats for passengers</label><input id="buSeats" type="number" inputmode="numeric" min="1" max="50" value="' + esc(String(v.seats)) + '"></div>' +
+          '<p class="tiny" style="margin:0 0 4px">Active</p>' + chips("buActive", [["YES", "In use"], ["NO", "Not in use"]], pick.active) +
+          '<p class="tiny" style="margin:0 0 4px">Route in odd months</p>' + chips("buRoute", [["North", "North"], ["South", "South"], ["-", "Standby"]], pick.oddRoute) +
+          '<p class="preview" id="buSwap" hidden></p>' +
+          (x && x.noNotes ? '' : '<div class="field"><label for="buNotes">Notes</label><textarea id="buNotes" maxlength="500">' + esc(v.notes) + '</textarea></div>'),
+    go: add ? "Add" : "Save",
+    onGo: function(){
+      var r = regOf();
+      if(add && !/^[A-Z0-9][A-Z0-9 ]{1,9}$/.test(r)){ sheetSay("Type the registration, letters and numbers only.", true); return; }
+      var st = String($("buSeats").value || "").trim(), n = Number(st);
+      if(!st || !(n >= 1 && n <= 50 && Math.floor(n) === n)){ sheetSay("Seats is a number from 1 to 50.", true); return; }
+      var route = pick.oddRoute === "-" ? "" : pick.oddRoute, on = pick.active === "YES";
+      var set = {};
+      if(add || n !== (Number(v.seats) || 0)) set.seats = n;
+      if(add || on !== v.active) set.active = on;
+      if(add || route !== v.oddRoute) set.oddRoute = route;
+      if($("buNotes")){
+        var nt = String($("buNotes").value || "").replace(/\r\n?/g, "\n").trim();
+        if(add || nt !== String(v.notes).trim()) set.notes = nt;
+      }
+      if(!add && !Object.keys(set).length){ sheetSay("Nothing has changed.", true); return; }
+      act({ kind: "bus", reg: r, add: add, set: set });
+    } });
+  [["buActive", "active"], ["buRoute", "oddRoute"]].forEach(function(f){
+    Array.prototype.forEach.call(document.querySelectorAll("#" + f[0] + " button"), function(b){
+      b.onclick = function(){
+        pick[f[1]] = b.getAttribute("data-v");
+        Array.prototype.forEach.call(document.querySelectorAll("#" + f[0] + " button"), function(y){ y.classList.toggle("on", y === b); });
+        if(!busy) sheetSay("");
+        show();
+      };
+    });
+  });
+  if($("buReg")) $("buReg").oninput = show;
+  show();
 }
 
 /* ---- recording one -------------------------------------------------------- */
@@ -2731,6 +2953,8 @@ document.addEventListener("click", function(e){
   else if(d === "driver") pickDriver(key, t.getAttribute("data-slot"));
   else if(d === "bus") pickBus(key, t.getAttribute("data-route"));
   else if(d === "note") addNote(key);
+  else if(d === "noteedit") editNote(key, t.getAttribute("data-i"), false);
+  else if(d === "noteoff") editNote(key, t.getAttribute("data-i"), true);
   else if(d === "approve") approve(t.getAttribute("data-id"));
   else if(d === "deny") deny(t.getAttribute("data-id"));
   else if(d === "cancel") cancelBooking(Number(t.getAttribute("data-id")));
@@ -2739,6 +2963,10 @@ document.addEventListener("click", function(e){
   else if(d === "defect") updateDefect(key);
   else if(d === "editdriver") editDriver(t.getAttribute("data-name"));
   else if(d === "adddriver") editDriver("");
+  else if(d === "editbus") editBus(t.getAttribute("data-reg"));
+  else if(d === "editstop") editStop(t.getAttribute("data-id"));
+  else if(d === "addstop") editStop("");
+  else if(d === "addbus") editBus("");
   else if(d === "vlog") recordFor(t.getAttribute("data-reg"));
   else if(d === "vlogdone") recordFor(t.getAttribute("data-reg"), entryById(t.getAttribute("data-reg"), t.getAttribute("data-id")));
   else if(d === "vfix") correctEntry(t.getAttribute("data-reg"), t.getAttribute("data-id"));
