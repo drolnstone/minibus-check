@@ -1570,7 +1570,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.93.1";
+var APP_VERSION = "v1.94.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2281,6 +2281,81 @@ function dueHTML(v){
       return '<li><b>'+esc(x.label)+'</b><span class="w">'+esc(x.words)+' \u00B7 '+esc(prettyDate(x.date))+'</span></li>';
     }).join("")+
     '</ul></div>';
+}
+
+/* AN EXPIRED MOT OR INSURANCE STOPS THE BUS, from v1.94.0.
+   Insurance first: it has no way round it. An MOT has one, the MOT run a
+   coordinator authorises to a booked test. Service and permit only warn.
+   The same rule as the live server's papersStop. */
+function papersOf(reg){
+  var v=null;
+  (VEHICLES||[]).forEach(function(x){ if(x && String(x.reg||"").toUpperCase()===String(reg||"").toUpperCase()) v=x; });
+  var dates = busDates(v || { reg:reg });
+  var keys = ["insurance","mot"];
+  for(var i=0;i<keys.length;i++){
+    var iso = dates[keys[i]];
+    var n = daysUntil(iso);
+    if(n !== null && n < 0) return { item:keys[i], label:DUE_LABELS[keys[i]], date:iso };
+  }
+  return null;
+}
+/* Today's MOT runs, by registration, off the board. */
+var tripMotRuns={};
+function motRunOf(reg){ return tripMotRuns[String(reg||"").toUpperCase()] || null; }
+/* An MOT run this driver has under way, if any. */
+function myMotRun(){
+  var me=(st.driver||"").trim().toLowerCase(), got=null;
+  Object.keys(tripMotRuns).forEach(function(k){
+    var r=tripMotRuns[k];
+    if(r && r.started && !r.ended && String(r.driver||"").trim().toLowerCase()===me) got=r;
+  });
+  return got;
+}
+function motRunSend(reg, step){
+  if(pinGateNeeded()){ pinGateFocus(); return; }
+  if(!LIVE){ toast("No signal to the live server."); return; }
+  toast(step==="start" ? "Starting the MOT run\u2026" : "Ending the MOT run\u2026");
+  callFetch(LIVE_ENDPOINT,{
+    method:"POST", redirect:"follow",
+    headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body: JSON.stringify({ token: CFG.token||"", action:"motrun",
+      motrun:{ reg:reg, step:step, who:(st.driver||"").trim() } })
+  }).then(function(r){ return r.text(); }).then(function(t){
+    var out=JSON.parse(t);
+    if(out && out.ok && out.motRun){
+      tripMotRuns[String(reg).toUpperCase()]=out.motRun;
+      toast(step==="start" ? "MOT run started." : "MOT run ended. "+reg+" is stopped again.");
+      tripPaint();
+      return;
+    }
+    toast(out && out.error==="used" ? reg+" has had its MOT run today."
+        : out && out.error==="started" ? out.driver+" has started this MOT run."
+        : out && out.error==="no mot run" ? "No MOT run is authorised for "+reg+" today. Ring "+coordName()+"."
+        : "The live server did not take that. Try again.");
+  }).catch(function(){ toast("No answer. Try again."); });
+}
+
+/* The MOT run, on the run screen whatever the day: the test is usually on a
+   weekday. Under way, it takes the place of the route. */
+function motRunHtml(){
+  var mr=myMotRun();
+  if(mr){
+    return { only:true, h:'<div class="trip-buses"><p class="trip-note"><b>MOT run \u00B7 '+esc(mr.reg)+'</b></p>'+
+      '<p class="trip-note">'+esc([mr.garage, mr.time].filter(Boolean).join(" \u00B7 "))+'. No passengers.</p>'+
+      '<button class="btn btn-main" type="button" data-motrun="end" data-reg="'+esc(mr.reg)+'">End MOT run</button></div>' };
+  }
+  var h="";
+  Object.keys(tripMotRuns).forEach(function(k){
+    var r=tripMotRuns[k], pap=papersOf(k);
+    if(!r || r.ended || !pap || pap.item!=="mot") return;
+    h+='<p class="trip-note"><b>MOT run \u00B7 '+esc(r.reg||k)+'</b> authorised by '+esc(r.by||"a coordinator")+': '+
+       esc([r.garage, r.time].filter(Boolean).join(" \u00B7 "))+'. No passengers.</p>';
+    if(!r.started)
+      h+='<button class="btn btn-ghost btn-wide" type="button" data-motrun="start" data-reg="'+esc(r.reg||k)+'">Start MOT run \u00B7 '+esc(r.reg||k)+'</button>';
+    else
+      h+='<p class="trip-note">'+esc(r.driver||"A driver")+' has started it.</p>';
+  });
+  return { only:false, h:h };
 }
 
 /* ---------------- tallies ---------------- */
@@ -5707,6 +5782,12 @@ function tripStart(route, reg, anyway){
     toast(reg+" was stopped by today\u2019s check. Ring "+coordName()+".");
     return;
   }
+  /* Expired insurance or MOT: no run with passengers. */
+  var pap=papersOf(reg);
+  if(pap){
+    toast(reg+": "+pap.label+" expired "+prettyDate(pap.date)+". Ring "+coordName()+".");
+    return;
+  }
 
   /* No check on record for this bus. Warned, and never blocked.
 
@@ -6112,6 +6193,7 @@ function rotaCountsFetch(route,cb){
       /* Which bus every other route already has out. North starts first, so
          by the time South is getting in this is usually filled. */
       if(out.others) tripOthers = out.others;
+      if(out.motRuns && typeof out.motRuns==="object") tripMotRuns = out.motRuns;
 
       var tp=out.trip;
       if(tp && tp.ok!==false){
@@ -7412,6 +7494,11 @@ function rotaPaintStops(){
       authOpen(this.getAttribute("data-auth"), this.getAttribute("data-insp")||"");
     });
   });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-motrun]"),function(b){
+    b.addEventListener("click",function(){
+      motRunSend(this.getAttribute("data-reg"), this.getAttribute("data-motrun"));
+    });
+  });
   Array.prototype.forEach.call(document.querySelectorAll("[data-tripstart]"),function(b){
     b.addEventListener("click",function(){
       if(pinGateNeeded()){ pinGateFocus(); return; }
@@ -7543,6 +7630,11 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
       return tripStripEnd(h);
     }
 
+    if(mayTap){
+      var mot=motRunHtml();
+      if(mot.only) return tripStripEnd(h+mot.h);
+      h+=mot.h;
+    }
     if(mayTap){
       /* The PIN used to be drawn here, above the buttons, because underneath
          them it was below the fold and a driver met a dead Start trip with no
@@ -7807,6 +7899,13 @@ function tripCoordStopsHtml(){
          ((OVR.showWhoAuthorised && av.by) ? ' by '+esc(av.by) : '')+
          '. The defect stays open.</p>';
     }
+    /* From v1.94.0: stopped by an expired MOT or insurance. */
+    var pap=papersOf(v.reg);
+    if(pap){
+      h+='<p class="trip-note"><b class="trip-stopme">'+esc(v.reg)+': '+esc(pap.label)+' expired '+
+         esc(prettyDate(pap.date))+'.</b> '+(pap.item==="mot" ? "Authorise an MOT run in the coordinator app."
+                                                          : "Record the renewal in the coordinator app.")+'</p>';
+    }
   });
   return h;
 }
@@ -7850,8 +7949,9 @@ function tripBusButtonsHtml(){
     if(!taken && tripOthers[rt]){ taken=tripOthers[rt]; takenOn=rt; }
   });
 
-  var mine=[], theirs=[], stopped=[];
+  var mine=[], theirs=[], stopped=[], papers=[];
   live.forEach(function(v){
+    if(papersOf(v.reg)){ papers.push(v.reg); return; }
     if(checkVerdict(v.reg).state==="stopped"){ stopped.push(v.reg); return; }
     if(taken && v.reg===taken) theirs.push(v); else mine.push(v);
   });
@@ -7900,7 +8000,7 @@ function tripBusButtonsHtml(){
     /* stopped and taken are worked out a few lines above, for the buttons.
        The same two facts decide what may be SUGGESTED, or the note would
        recommend a bus this very screen refuses to draw a button for. */
-    var note = busSeatNote(route, v.reg, stopped.concat(taken?[taken]:[]));
+    var note = busSeatNote(route, v.reg, stopped.concat(papers, taken?[taken]:[]));
     if(note) h+='<p class="trip-otherbus">'+esc(note)+'</p>';
   });
 
@@ -7929,6 +8029,13 @@ function tripBusButtonsHtml(){
       h+='<button class="btn btn-ghost btn-wide trip-auth" data-auth="'+esc(reg)+
          '" data-insp="'+esc(v.driver||"")+'" type="button">Authorise '+esc(reg)+
          ' to run</button>';
+  });
+
+  /* Stopped by its papers, with the MOT run where one is authorised. */
+  papers.forEach(function(reg){
+    var pap=papersOf(reg);
+    h+='<p class="trip-note"><b class="trip-stopme">'+esc(reg)+': '+esc(pap.label)+' expired '+
+       esc(prettyDate(pap.date))+'.</b> Ring '+esc(coordName())+'.</p>';
   });
 
   /* Said once, where the bus is chosen, so nobody wonders why a bus that was

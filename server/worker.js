@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.35.0";
+const SCRIPT_VERSION = "w2.36.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -2495,6 +2495,10 @@ async function boardPayload(env, route) {
   try { out.others = await runningRegs(env, r, stops); }
   catch (e) { out.othersError = String(e); }
 
+  /* From w2.36.0: today's MOT runs, by registration. */
+  try { out.motRuns = await motRunsToday(env, londonKey(new Date())); }
+  catch (e) { out.motRunsError = String(e); }
+
   try {
     const buses = await getBuses(env);
     const rotaRow = await getRotaRow(env, key);
@@ -2857,6 +2861,23 @@ async function handleTrip(env, payload) {
         route: route
       } });
     }
+  }
+
+  /* A run started on a bus its papers have stopped. The app refuses it; a
+     phone with an old copy of the dates may not, and refusing the start here
+     would hold every tap behind it. So the run is taken and the coordinators
+     are told at once. From w2.36.0. */
+  if (startsHere && !rehearsing && reg) {
+    try {
+      const bus = buses.find((b) => String(b.reg).toUpperCase() === reg.toUpperCase());
+      const ps = bus && papersStop(bus.dates, londonKey(new Date()));
+      if (ps) {
+        await handleCoordAlert(env, { alert: {
+          id: "papersrun|" + trip, kind: "stopped", urgent: true, reg: bus.reg,
+          title: "BUS STOPPED: " + bus.reg + " went out",
+          body: ps.label + " expired " + rnUk(ps.date) + ". " + (who || "A driver") + " started the " + route + " run." } });
+      }
+    } catch (e) {}
   }
 
   /* WHOSE RUN IS THIS TO END?
@@ -6745,6 +6766,119 @@ async function actJob(env, me, act) {
   return { ok: true, sunday: "", body: { reg: reg, job: job, checkId: j.checkId, note: vlogText(act.note, 200) },
            words: reg + ": " + job + ", done." };
 }
+
+/* ---- an expired MOT or insurance stops the bus, from w2.36.0 ------------
+
+   Insurance past its date stops the bus, with no way round it: it is free
+   again once the renewal is recorded with Record something. An MOT past its
+   date stops it the same way, except that a coordinator may authorise one
+   MOT run, to a test booked on the Vehicle Log for that bus that day. The run
+   carries nobody, is valid for one trip, and the bus is stopped again once it
+   ends, until the new MOT date is recorded. A service or permit past its date
+   is a warning only. A date is good to the end of the day it names, as the
+   driver app has always said ("Due today", then "Expired 1 day ago"). The
+   same rule is in index.html (papersOf) and coord/index.html (papersOf). */
+const PAPERS_STOP = ["insurance", "mot"];
+function papersStop(dates, today) {
+  const d = dates || {};
+  for (const item of PAPERS_STOP) {
+    const k = d[item];
+    if (rnParts(k) && rnParts(today) && k < today) return { item: item, date: k, label: RENEWALS[item].label };
+  }
+  return null;
+}
+
+const motRunKey = (day, reg) => "motrun:" + day + ":" + String(reg || "").trim().toUpperCase();
+
+async function motRunsToday(env, day) {
+  const { results } = await env.DB.prepare(
+    "SELECT k, v FROM settings WHERE k LIKE ?").bind("motrun:" + day + ":%").all();
+  const out = {};
+  for (const r of results || []) {
+    let v = null;
+    try { v = JSON.parse(r.v); } catch (e) { continue; }
+    if (v && v.reg) out[String(v.reg).toUpperCase()] = v;
+  }
+  return out;
+}
+
+/* Every bus in use that is stopped by its papers today, with its MOT run if
+   one is authorised. Keyed by registration. */
+async function papersToday(env) {
+  const day = londonKey(new Date());
+  const buses = await getBuses(env);
+  let runs = {};
+  try { runs = await motRunsToday(env, day); } catch (e) {}
+  const out = {};
+  for (const b of buses) {
+    if (!b || !b.active) continue;
+    const s = papersStop(b.dates, day);
+    if (!s) continue;
+    const reg = String(b.reg).toUpperCase();
+    out[reg] = Object.assign(s, { motRun: s.item === "mot" ? (runs[reg] || null) : null });
+  }
+  return out;
+}
+
+/* The standing MOT booking for a bus on a day, off its Vehicle Log. */
+function motBookingOn(list, day) {
+  for (const x of list || []) {
+    if (x.correctedBy || x.status !== "Booked" || x.what !== "MOT") continue;
+    if (x.bookedFor === day) return x;
+  }
+  return null;
+}
+
+async function actMotrun(env, me, act) {
+  const reg = String(act.reg || "").trim().toUpperCase();
+  const today = londonKey(new Date());
+  const bus = (await getBuses(env)).find((b) => String(b.reg).toUpperCase() === reg);
+  if (!bus) return { ok: false, error: "That bus is not on the Buses tab." };
+  const s = papersStop(bus.dates, today);
+  if (s && s.item === "insurance") return { ok: false, error: "The insurance has expired. Record the renewal first." };
+  if (!s) return { ok: false, error: "The MOT on this bus has not expired." };
+  const view = await coordVehiclesView(env);
+  const bk = motBookingOn(view.log[reg], today);
+  if (!bk) return { ok: false, error: "No MOT is booked for this bus today. Record the booking first." };
+  const time = String(act.time || "").trim();
+  if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(time)) return { ok: false, error: "Give the test time as hours and minutes." };
+  const k = motRunKey(today, reg);
+  const had = await cacheGet(env, k);
+  if (had) return { ok: false, error: had.ended ? "This bus has had its MOT run today." : "An MOT run is already authorised for this bus today." };
+  const garage = vlogText(bk.garage, 80);
+  const rec = { reg: reg, day: today, by: me.name, at: Date.now(), logId: bk.id || "", garage: garage,
+                time: time, started: 0, ended: 0, driver: "" };
+  return { ok: true, sunday: "", stmts: [cachePut(env, k, rec)],
+           body: { reg: reg, day: today, logId: rec.logId, garage: garage, time: time },
+           words: reg + ": MOT run authorised" + (garage ? " to " + garage : "") + " at " + time + "." };
+}
+
+/* The driver starting and ending the MOT run. Token checked; the app asks
+   for his PIN first, as it does before any run. */
+async function handleMotrun(env, body) {
+  const m = (body && body.motrun) || {};
+  const reg = String(m.reg || "").trim().toUpperCase();
+  const step = String(m.step || "");
+  const who = String(m.who || "").trim().slice(0, 60);
+  if (!reg) return json({ ok: false, error: "no reg" });
+  const k = motRunKey(londonKey(new Date()), reg);
+  const rec = await cacheGet(env, k);
+  if (!rec) return json({ ok: false, error: "no mot run" });
+  if (step === "start") {
+    if (rec.ended) return json({ ok: false, error: "used" });
+    if (rec.started && rec.driver && who && !sameName(rec.driver, who)) {
+      return json({ ok: false, error: "started", driver: rec.driver });
+    }
+    if (!rec.started) { rec.started = Date.now(); rec.driver = who; }
+  } else if (step === "end") {
+    if (!rec.started) return json({ ok: false, error: "not started" });
+    if (!rec.ended) { rec.ended = Date.now(); rec.endedBy = who; }
+  } else {
+    return json({ ok: false, error: "step" });
+  }
+  await cachePut(env, k, rec).run();
+  return json({ ok: true, motRun: rec });
+}
 /* ---- the Drivers tab from the coordinator's app, from w2.34.0 ----------
 
    A change to a driver, or a new one. The drivers table is changed at once,
@@ -7869,6 +8003,9 @@ async function coordLoad(env, me) {
   /* Today's walkarounds and runs, for the two things that cannot wait: a bus
      the check stopped, and a run left open. */
   try { out.checks = await checksToday(env); } catch (e) { out.checks = {}; }
+  /* From w2.36.0: buses stopped by an expired MOT or insurance, with any MOT
+     run, for the first screen. */
+  try { out.papers = await papersToday(env); } catch (e) { out.papers = {}; }
   out.runs = {};
   for (const rt of out.routes) {
     try {
@@ -8637,6 +8774,7 @@ async function coordAct(env, me, act) {
   else if (kind === "driver") r = await actDriver(env, me, act);
   else if (kind === "bus") r = await actBus(env, me, act);
   else if (kind === "stop") r = await actStop(env, me, act);
+  else if (kind === "motrun") r = await actMotrun(env, me, act);
   else if (kind === "rehearsal") r = await rehearsalPlan(env, String(act.op || ""), String(act.shape || ""));
   else return { ok: false, error: "unknown kind" };
   if (!r || !r.ok) return r || { ok: false, error: "refused" };
@@ -8788,6 +8926,8 @@ export default {
         /* Letting a bus out with a fault on it. Checks its own PIN. */
         if (action === "authorise") return knock(await handleAuthorise(env, body), "authorise");
         if (action === "endrun") return knock(await handleEndRun(env, body), "endrun");
+        /* An MOT run starting or ending, from w2.36.0. */
+        if (action === "motrun") return await handleMotrun(env, body);
         /* The Outcome column, edited on the spreadsheet. Token checked. */
         /* Minting one. Token checked: only the spreadsheet asks for these. */
         if (action === "mint") return await handleMintLink(env, body);

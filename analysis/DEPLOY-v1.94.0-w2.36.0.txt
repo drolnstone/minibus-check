@@ -1,0 +1,100 @@
+MINIBUS
+=======
+  pages v1.94.0 · server w2.36.0 · sheet v1.99.0
+
+Expired MOT or insurance stops the bus, the MOT run, renewals on the
+coordinator's first screen, and the safety alerts. One Worker paste and one
+Code.gs paste carry all of it.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.93.1         v1.94.0
+  Worker  w2.35.0         w2.36.0
+  Code.gs v1.98.0         v1.99.0
+
+
+IN THIS ORDER
+-------------
+
+1. WORKER. Cloudflare, the minibus Worker, Edit code. Replace everything
+   with server/worker.js. Deploy. No database change.
+
+2. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
+   Save. Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy. No new trigger: the alerts ride the 08:00 duty reminders and the
+   five-minute sync.
+
+3. PAGES. Merge the pull request.
+
+The first 08:00 run after this sends one alert for every renewal already
+inside 60 days or overdue. After that, each one only at its next stage.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.94.0 · server w2.36.0 · sheet
+   v1.99.0 .
+
+B. Coordinator app, first screen: Renewals, each bus with anything due in
+   the next 60 days or overdue. Nothing due: "Nothing due in the next 60
+   days."
+
+C. A bus whose MOT or insurance has passed its date shows at the top in red
+   with Record. In the driver app it has no Start trip button and reads
+   "<reg>: MOT expired <date>. Ring <coordinator>."
+
+D. MOT run (only when an MOT has expired): Record something on that bus,
+   MOT, Booked ahead, today's date, the garage. The red line then has
+   MOT run. Test time, Authorise. History has "MOT run authorised". In the
+   driver app: Start MOT run, then End MOT run. The bus is stopped again
+   until the new MOT is recorded.
+
+E. Safety emails now go to COORDINATOR_EMAIL and to the Email of every
+   active Coordinator and Minister in Charge on the Drivers tab.
+   COORDINATOR_EMAIL may hold several addresses, separated by commas.
+
+
+WHAT CHANGED
+------------
+
+1. The stop. worker.js papersStop and papersToday; index.html papersOf;
+   coord/index.html needs(). A date is good to the end of the day it names.
+   Insurance: no way round it. MOT: one MOT run. Service and permit: warning
+   only, as before. A run started on a stopped bus from a phone with old
+   dates is still taken (refusing it would hold every tap behind it), and
+   every coordinator's phone is told at once.
+
+2. The MOT run. coord/index.html motRun; worker.js actMotrun (a coordinator
+   action, kind motrun) and handleMotrun (action motrun, from the driver
+   app); index.html motRunHtml. Allowed only with a standing MOT booking on
+   the Vehicle Log for that bus for today. Garage from the booking. The test
+   time is typed when authorising (the Vehicle Log has no time column); a
+   time in the booking's notes is filled in. One per bus per day. Under way,
+   it takes the place of the route on the run screen. No passengers: it is
+   not a route run, so it carries no bookings.
+
+3. History. Code.gs coordMotrun writes "MOT run authorised" with the
+   coordinator, garage, time and booking. A defect authorisation from the
+   app now writes "Defect authorised".
+
+4. Renewals on the first screen. coord/index.html renewalsHtml.
+
+5. Alerts. Code.gs safetyAlert, safetyTo, renewalAlerts, missedTapAlert.
+   Each once, to every coordinator's phone and to safetyTo().
+   - Renewals at 60, 30 and 7 days and on the day, then weekly once
+     overdue, at 08:00. Expired MOT or insurance says BUS STOPPED.
+   - A booking on the Vehicle Log for tomorrow, at 08:00.
+   - A date on the Buses tab the sheet cannot read.
+   - A due date typed on the Buses tab, not through the app.
+   - A Vehicle Log entry corrected or withdrawn.
+   - A defect reopened.
+   - An MOT run authorised.
+   - A booked stop not marked, when a run ends.
+   - The walkaround stop email goes to safetyTo() too, at any hour, as
+     before.
+   - The weekly summary lists renewals due in 60 days or overdue.
+   An alert raised by an edit on the sheet goes with the next five-minute
+   sync.
+
+6. Tests. tests/suites/46-papers.mjs.

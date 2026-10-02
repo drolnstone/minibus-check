@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.98.0";
+var SCRIPT_VERSION = "v1.99.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1379,6 +1379,14 @@ function busDatesAudit(ss, where, who) {
         rows.push({ who: who, where: where, reg: reg, what: RENEWALS[k].column, from: show(a), to: show(b),
                     why: b.charAt(0) === "?" ? "The sheet cannot read this as a date. Type it like 17/06/2027."
                                              : "Changed on the Buses tab, not through the app" });
+        if (b.charAt(0) === "?") {
+          safetyAlert(unreadableAlert(reg, k, b));
+        } else {
+          safetyAlert({ id: "typed|" + reg + "|" + k + "|" + b, kind: "renewal", reg: reg,
+                        title: reg + ": " + RENEWALS[k].label + " due date typed on the sheet",
+                        body: "From " + show(a) + " to " + show(b) + (who ? ", by " + who : "") +
+                              ". Record renewals in the coordinator app.", tab: BUSES_SHEET });
+        }
       });
     });
     Object.keys(seen).forEach(function (reg) {
@@ -1675,6 +1683,10 @@ function coordVfix(ss, a, b, by) {
                     what: b.withdraw ? "Vehicle Log entry withdrawn" : "Vehicle Log entry corrected",
                     from: vlogSummary(orig), to: b.withdraw ? "(withdrawn)" : vlogSummary(fixed),
                     why: b.why || "", ref: orig.id + " → " + b.logId }]);
+  safetyAlert({ id: "vfix|" + b.logId, kind: "renewal", reg: orig.reg,
+                title: orig.reg + ": Vehicle Log entry " + (b.withdraw ? "withdrawn" : "corrected"),
+                body: orig.what + (b.withdraw ? "" : (b.next ? ". Next due " + ukDay(b.next) : "")) +
+                      ". By " + by + (b.why ? ": " + b.why : "") + ".", tab: VLOG_SHEET });
   /* The dates the standing rows now give. */
   var after = vlogRows(ss);
   var touched = {};
@@ -1702,6 +1714,21 @@ function coordJob(ss, a, b, by) {
                     what: "Job to arrange", from: String(b.job || ""), to: "Done",
                     why: String(b.note || ""), ref: String(b.checkId || "") }]);
   bumpRotaVersion();
+  return { done: true, ok: true, push: true, result: "On the History tab." };
+}
+
+/* An MOT run, authorised in the coordinator's app, from v1.99.0. Its own
+   line on History, apart from a defect authorisation. */
+function coordMotrun(ss, a, b, by) {
+  var reg = String(b.reg || "").trim().toUpperCase();
+  historyAdd(ss, [{ who: by, where: "Coordinator's app", reg: reg, what: "MOT run authorised",
+                    from: "MOT expired", to: [b.garage, b.time].filter(function (x) { return x; }).join(" at "),
+                    why: "MOT booked for " + ukDay(b.day) + ". One trip, no passengers.",
+                    ref: String(b.logId || "") }]);
+  safetyAlert({ id: "motrun|" + reg + "|" + b.day, kind: "renewal", reg: reg,
+                title: reg + ": MOT run authorised",
+                body: "By " + by + (b.garage ? ", to " + b.garage : "") + " at " + b.time + ". One trip, no passengers.",
+                tab: HISTORY_SHEET });
   return { done: true, ok: true, push: true, result: "On the History tab." };
 }
 
@@ -2514,7 +2541,7 @@ function handleCheckLocked(c) {
   var hasAdvisory = (c.advisories || []).length > 0;
   if (c.level !== "ok" || wantsSomething || hasAdvisory) {
     tellCoordinatorPhones(checkPhoneAlert(c, outcome, defectText));
-    if (COORDINATOR_EMAIL) notifyCheck(c, outcome, defectText);
+    if (COORDINATOR_EMAIL || safetyTo()) notifyCheck(c, outcome, defectText);
   }
 
   return reply({ ok: true });
@@ -4323,6 +4350,7 @@ function applyCoordAction(ss, a, ctx) {
   if (kind === "driver") return coordDriver(ss, a, b, by);
   if (kind === "bus") return coordBus(ss, a, b, by);
   if (kind === "stop") return coordStop(ss, a, b, by);
+  if (kind === "motrun") return coordMotrun(ss, a, b, by);
   if (kind === "booking") {
     return coordOnTab(ss, BOOKINGS_SHEET, b.bookingId, a, ctx || {},
                       "On the Bus Bookings tab.", "That booking is not on the Bus Bookings tab.");
@@ -4701,6 +4729,7 @@ function drainFromWorker() {
   /* ---- trip events ---- */
   try {
     var trips = got.trips || [];
+    var tends = [];
     if (trips.length) {
       var tsh = ensureTripEvents(ss);
       var tc = colsHard(tsh, TRIP_SHEET);
@@ -4710,6 +4739,10 @@ function drainFromWorker() {
 
       trips.forEach(function (t) {
         var id = String(t.id);
+        /* From v1.99.0: a run's end, for the missed-tap check below. */
+        if (String(t.event || "").toLowerCase() === "end" && !/rehearsal/i.test(String(t.status || "")) && !tseen[id]) {
+          tends.push({ sunday: t.sunday, route: String(t.route || ""), trip: String(t.trip || "") });
+        }
         /* Laid over the row as it stands, for the same reason as bookings:
            a column the coordinator added keeps its value. */
         var row = tseen[id] ? tsh.getRange(tseen[id], 1, 1, twide).getValues()[0] : [];
@@ -4764,6 +4797,7 @@ function drainFromWorker() {
         });
       }
     }
+    tends.forEach(function (x) { try { missedTapAlert(ss, x.sunday, x.route, x.trip); } catch (e) {} });
   } catch (err) {
     try { PropertiesService.getScriptProperties()
             .setProperty("liveError", "trips: " + String(err && err.message || err)); } catch (e) {}
@@ -4830,6 +4864,11 @@ function drainFromWorker() {
                            .setValue(new Date(Number(a.at) || Date.now()))
                            .setNumberFormat("dd/mm/yyyy hh:mm");
         a.via = "app";
+        try {
+          historyAdd(ss, [{ who: safeText(a.by || ""), where: "Driver app", reg: String(a.reg || "").trim().toUpperCase(),
+                            what: "Defect authorised", from: "Stopped by the walkaround", to: "Authorised to run",
+                            why: "The defect stays open", ref: String(a.checkId || "") }]);
+        } catch (e) {}
         notifyAuthorised(a);
         doneA.push({ key: a.key, at: a.at });
       });
@@ -5149,6 +5188,7 @@ function liveSync() {
   /* An Outcome edit the live server did not answer when it was made. */
   try { outcomeRetry(); } catch (err) {}
   try { overbookAfter(back); } catch (err) {}
+  try { safetyFlush(); } catch (err) {}
 }
 
 /* Whether to look at the seat counts after a drain, and doing it. */
@@ -10532,6 +10572,188 @@ function openDefectsByReg(ss) {
  * put two messages a Sunday in front of you that both say nothing is wrong,
  * and within a month you would skim them, including the one that mattered.
  */
+/* ==========================================================================
+   SAFETY ALERTS, from v1.99.0
+   ==========================================================================
+   Renewals at 60, 30 and 7 days and on the day, then weekly once overdue, at
+   08:00 with the duty reminders. An expired MOT or insurance stops the bus.
+   Also: a booking on the Vehicle Log tomorrow, a due date typed on the sheet,
+   a date the sheet cannot read, a Vehicle Log correction, a defect reopened,
+   an MOT run authorised, and a booked stop not marked on a run.
+
+   Each goes once (by its id) to every coordinator's phone and by email to
+   safetyTo(). One that cannot be sent where it happens (an edit on the sheet)
+   waits on a list and goes with the next five-minute sync. */
+function safetyTo() {
+  var seen = {}, out = [];
+  var add = function (e) {
+    e = String(e || "").trim();
+    if (!/^[^@\s]+@[^@\s]+$/.test(e) || seen[e.toLowerCase()]) return;
+    seen[e.toLowerCase()] = true;
+    out.push(e);
+  };
+  String(COORDINATOR_EMAIL || "").split(/[,;]/).forEach(add);
+  var roles = (AUTHORISER_ROLES || []).map(function (r) { return String(r || "").trim().toLowerCase(); });
+  try {
+    readDrivers(SpreadsheetApp.getActiveSpreadsheet()).forEach(function (d) {
+      if (d && d.active && roles.indexOf(String(d.role || "").trim().toLowerCase()) !== -1) add(d.email);
+    });
+  } catch (err) {}
+  return out.join(",");
+}
+
+var SAFETY_SENT = "safetySent", SAFETY_WAIT = "safetyWaiting";
+function safetyList(k) {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty(k) || "[]") || []; }
+  catch (err) { return []; }
+}
+function safetyKeep(k, list) {
+  try { PropertiesService.getScriptProperties().setProperty(k, JSON.stringify(list)); } catch (err) {}
+}
+
+/* a: { id, title, body, kind, reg, urgent, colour, tab }. */
+function safetyAlert(a) {
+  if (!a || !a.id || !a.title) return;
+  if (safetyList(SAFETY_SENT).indexOf(a.id) !== -1) return;
+  try {
+    safetySend(a);
+  } catch (err) {
+    var wait = safetyList(SAFETY_WAIT);
+    if (!wait.some(function (x) { return x.id === a.id; })) wait.push(a);
+    safetyKeep(SAFETY_WAIT, wait.slice(-40));
+  }
+}
+
+function safetySend(a) {
+  var to = safetyTo();
+  if (to) {
+    sendMail({
+      to: to,
+      subject: "Minibus: " + a.title,
+      body: a.title + "\n\n" + (a.body || "") + (a.tab ? "\n\n" + tabUrl(a.tab) : ""),
+      htmlBody: htmlShell(a.title, a.colour || (a.urgent ? "#A8231B" : "#8A6116"), [esc(a.body || "")],
+                          a.tab ? "Open the " + a.tab + " tab" : "Open spreadsheet", a.tab || CHECKS_SHEET)
+    });
+  }
+  tellCoordinatorPhones({ id: "safety|" + a.id, kind: a.kind || "renewal", urgent: !!a.urgent,
+                          reg: a.reg || "", title: a.title, body: a.body || "" });
+  var sent = safetyList(SAFETY_SENT);
+  sent.push(a.id);
+  safetyKeep(SAFETY_SENT, sent.slice(-300));
+}
+
+function safetyFlush() {
+  var wait = safetyList(SAFETY_WAIT);
+  if (!wait.length) return 0;
+  safetyKeep(SAFETY_WAIT, []);
+  var left = [];
+  wait.forEach(function (a) {
+    if (safetyList(SAFETY_SENT).indexOf(a.id) !== -1) return;
+    try { safetySend(a); } catch (err) { left.push(a); }
+  });
+  if (left.length) safetyKeep(SAFETY_WAIT, left);
+  return wait.length - left.length;
+}
+
+function unreadableAlert(reg, item, raw) {
+  return { id: "unreadable|" + reg + "|" + item + "|" + raw, kind: "renewal", reg: reg,
+           title: reg + ": " + RENEWALS[item].label + " date unreadable",
+           body: "The Buses tab says \"" + String(raw).slice(1) + "\". Type it like 17/06/2027.", tab: BUSES_SHEET };
+}
+
+/* Which alert a renewal is at, n days before it is due: "60", "30", "7",
+   "0", then "over0", "over1"... a week apart. "" when nothing is due. */
+function renewalStage(n) {
+  if (n === null || n > 60) return "";
+  if (n > 30) return "60";
+  if (n > 7) return "30";
+  if (n > 0) return "7";
+  if (n === 0) return "0";
+  return "over" + Math.floor((-n - 1) / 7);
+}
+
+/* Each bus in use with a renewal due within days, or overdue. */
+function renewalsDue(ss, today, days) {
+  var dates = busDatesNow(ss), active = {}, out = [];
+  try { readBuses(ss).forEach(function (b) { active[String(b.reg || "").toUpperCase()] = b.active !== false; }); } catch (err) {}
+  Object.keys(dates).forEach(function (reg) {
+    if (active[reg] === false) return;
+    RENEW_KEYS.forEach(function (k) {
+      var v = dates[reg][k] || "";
+      if (!rnParts(v)) return;
+      var n = rnDays(today, v);
+      if (n === null || n > days) return;
+      out.push({ reg: reg, item: k, label: RENEWALS[k].label, date: v, days: n,
+                 stop: n < 0 && (k === "mot" || k === "insurance") });
+    });
+  });
+  return out;
+}
+
+function renewalAlerts(ss) {
+  var today = dateToKey(new Date());
+  renewalsDue(ss, today, 60).forEach(function (x) {
+    var stage = renewalStage(x.days);
+    if (!stage) return;
+    var title = x.days < 0 ? (x.stop ? "BUS STOPPED: " : "") + x.reg + ": " + x.label + " expired " + ukDay(x.date)
+              : x.days === 0 ? x.reg + ": " + x.label + " due today"
+              : x.reg + ": " + x.label + " due in " + x.days + " days";
+    var body = x.days >= 0 ? "Due " + ukDay(x.date) + ". Record it in the coordinator app when done."
+             : x.item === "insurance" ? "The bus is stopped until the renewal is recorded in the coordinator app."
+             : x.item === "mot" ? "The bus is stopped until the new MOT is recorded. For a booked test, authorise an MOT run in the coordinator app."
+             : "Warning only. Record it in the coordinator app when done.";
+    safetyAlert({ id: "renew|" + x.reg + "|" + x.item + "|" + x.date + "|" + stage, kind: x.stop ? "stopped" : "renewal",
+                  urgent: x.stop, reg: x.reg, title: title, body: body,
+                  colour: x.days <= 7 ? "#A8231B" : "#8A6116", tab: BUSES_SHEET });
+  });
+  /* A date the sheet cannot read. */
+  var dates = busDatesNow(ss);
+  Object.keys(dates).forEach(function (reg) {
+    RENEW_KEYS.forEach(function (k) {
+      var v = dates[reg][k] || "";
+      if (v.charAt(0) === "?") safetyAlert(unreadableAlert(reg, k, v));
+    });
+  });
+  /* Booked on the Vehicle Log for tomorrow. */
+  var tomorrow = rnAddDays(today, 1);
+  vlogStanding(vlogRows(ss)).forEach(function (x) {
+    if (x.status !== "Booked" || x.bookedFor !== tomorrow) return;
+    safetyAlert({ id: "booked|" + (x.id || x.reg + "|" + x.what + "|" + x.bookedFor), kind: "renewal", reg: x.reg,
+                  title: x.reg + ": " + x.what + " booked tomorrow",
+                  body: [x.garage, x.notes].filter(function (t) { return t; }).join(". ") || ukDay(x.bookedFor) + ".",
+                  tab: VLOG_SHEET });
+  });
+}
+
+/* A booked stop with no tap on a run that has ended. */
+function missedTapAlert(ss, sunday, route, trip) {
+  if (!sunday || !route || !trip) return;
+  var ids = {};
+  readBusStops(ss).forEach(function (s) { if (s.route === route && !s.arrival) ids[s.id] = s; });
+  var booked = {};
+  readBookings(ss, sunday).forEach(function (b) {
+    if (ids[b.stopId]) booked[b.stopId] = (booked[b.stopId] || 0) + b.seats;
+  });
+  if (!Object.keys(booked).length) return;
+  var sh = ss.getSheetByName(TRIP_SHEET);
+  if (!sh || sh.getLastRow() < 2) return;
+  var tc = colsSoft(sh, TRIP_SHEET);
+  var last = sh.getLastRow(), from = Math.max(2, last - 600);
+  var tapped = {};
+  sh.getRange(from, 1, last - from + 1, sh.getLastColumn()).getValues().forEach(function (r) {
+    if (String(at1(r, tc.trip) || "") !== trip) return;
+    if (/undone/i.test(String(at1(r, tc.status) || ""))) return;
+    var ev = String(at1(r, tc.event) || "").trim().toLowerCase();
+    if (["pickup", "picked", "empty", "none"].indexOf(ev) !== -1) tapped[String(at1(r, tc.stopId) || "").trim()] = true;
+  });
+  var missed = Object.keys(booked).filter(function (id) { return !tapped[id]; });
+  if (!missed.length) return;
+  safetyAlert({ id: "missed|" + trip, kind: "defect",
+                title: route + ", " + ukDay(sunday) + ": " + missed.length + (missed.length === 1 ? " booked stop" : " booked stops") + " not marked",
+                body: missed.map(function (id) { return ids[id].stop + " (" + booked[id] + " booked)"; }).join(", ") +
+                      ". Correct it in the coordinator app's Run record.", tab: TRIP_SHEET });
+}
+
 function missingCheckAlert() {
   if (!COORDINATOR_EMAIL && !WORKER_URL) return;
 
@@ -11025,6 +11247,20 @@ function weeklyDigest() {
     if (watch.length > 15) lines.push("&bull; and " + (watch.length - 15) + " more");
   }
 
+  /* From v1.99.0: renewals due in the next 60 days or overdue. */
+  try {
+    var ren = renewalsDue(ss, dateToKey(new Date()), 60);
+    if (ren.length) {
+      lines.push("&nbsp;");
+      lines.push("<b>Renewals</b>");
+      ren.forEach(function (x) {
+        var t = esc(x.reg) + ": " + esc(x.label) + " " + (x.days < 0 ? "expired " : "due ") + ukDay(x.date) +
+                (x.stop ? " (bus stopped)" : "");
+        lines.push("&bull; " + (x.days < 0 ? "<b>" + t + "</b>" : t));
+      });
+    }
+  } catch (err) {}
+
   sendMail({
     to: COORDINATOR_EMAIL,
     subject: "Minibus weekly summary \u2014 " + pretty,
@@ -11138,6 +11374,9 @@ function remindDaysPhrase() {
 
 function dutyReminders() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  /* From v1.99.0, the same 08:00 run: renewals and bookings tomorrow. */
+  try { renewalAlerts(ss); } catch (err) {}
+  try { safetyFlush(); } catch (err) {}
   ensureRotaSheets(ss);
 
   var drivers = readDrivers(ss);
@@ -13102,6 +13341,11 @@ function onEditDefects(e, sh) {
                            what: "Defect reopened: " + String(at1(rc, dc.item) || "").trim(),
                            from: "Closed on " + ukDay(anyToKey(closedCell.getValue())), to: status,
                            why: "Closed on cleared", ref: defectKey(rc, dc) }]);
+        safetyAlert({ id: "reopen|" + defectKey(rc, dc) + "|" + anyToKey(closedCell.getValue()), kind: "defect",
+                      reg: String(at1(rc, dc.reg) || "").trim().toUpperCase(),
+                      title: String(at1(rc, dc.reg) || "").trim().toUpperCase() + ": defect reopened",
+                      body: String(at1(rc, dc.item) || "").trim() + ". Now " + status + (hWho ? ", by " + hWho : "") + ".",
+                      tab: DEFECTS_SHEET });
         closedCell.clearContent();
       }
       changed = true;
@@ -13524,7 +13768,7 @@ function notifyCheck(c, outcome, defectText) {
    .join("\n");
 
   sendMail({
-    to: COORDINATOR_EMAIL,
+    to: safetyTo() || COORDINATOR_EMAIL,
     subject: subject,
     body: plain,
     htmlBody: htmlShell(stopped ? "Bus stopped, critical defect"

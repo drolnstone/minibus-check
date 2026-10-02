@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.93.1 · THE COORDINATOR'S APP.
+<!-- BUILD v1.94.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -641,7 +641,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.93.1";
+var PAGE_VERSION = "v1.94.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1182,6 +1182,18 @@ function needs(){
       out.push({ tone:"stop", text: reg + " was stopped at the walkaround.", btn:"Authorise", data:'data-do="authorise" data-reg="'+esc(reg)+'"' });
     }
   });
+  /* From v1.94.0: stopped by an expired MOT or insurance. */
+  var pap = (D && D.papers) || {};
+  Object.keys(pap).forEach(function(reg){
+    var p = pap[reg], r = p.motRun, rec = 'data-do="vlog" data-reg="'+esc(reg)+'"';
+    var head = reg + ": " + p.label + " expired " + ukDay(p.date) + ".";
+    if(p.item !== "mot") out.push({ tone:"stop", text: head + " Record the renewal.", btn:"Record", data: rec });
+    else if(r && r.ended) out.push({ tone:"stop", text: head + " MOT run done. Record the new MOT.", btn:"Record", data: rec });
+    else if(r) out.push({ tone:"warn", text: reg + ": MOT run" + (r.garage ? " to " + r.garage : "") + " at " + r.time +
+                          (r.started ? ", under way." : ", authorised by " + r.by + "."), btn:"Record", data: rec });
+    else if(motBookingOn(reg, calToday())) out.push({ tone:"stop", text: head + " MOT booked today.", btn:"MOT run", data:'data-do="motrun" data-reg="'+esc(reg)+'"' });
+    else out.push({ tone:"stop", text: head + " Record the MOT or its booking.", btn:"Record", data: rec });
+  });
   var runs = (D && D.runs) || {};
   Object.keys(runs).forEach(function(rt){
     var r = runs[rt];
@@ -1221,6 +1233,8 @@ function paintHome(){
   h += sunCard(D.today, true, true) || '<div class="card"><p class="tiny">'+esc(longDay(D.today))+' is not on the live server’s rota.</p>' +
        '<button class="mini" type="button" data-go="rota">Rota</button></div>';
   if(D.open && D.open !== D.today) h += sunCard(D.open, false, true);
+
+  h += renewalsHtml();
 
   var pend = (D.requests || []).filter(function(q){ return q.status === "Pending"; }).length;
   var bk = D.open || D.today;
@@ -2136,8 +2150,50 @@ function latestDone(reg, item){
 }
 function entryById(reg, id){ var l = logOf(reg); for(var i=0;i<l.length;i++) if(l[i].id === id) return l[i]; return null; }
 
-function dueRows(b){
-  return RENEW_KEYS.map(function(item){
+/* From v1.94.0. The same rule as the live server's papersStop. */
+function motBookingOn(reg, day){
+  var l = logOf(reg);
+  for(var i=0;i<l.length;i++){
+    var x = l[i];
+    if(!x.correctedBy && x.status === "Booked" && x.what === "MOT" && x.bookedFor === day) return x;
+  }
+  return null;
+}
+
+/* Renewals on the first screen: every bus in use with something due in the
+   next 60 days or overdue. */
+function renewalsHtml(){
+  var today = calToday(), h = "";
+  busList().filter(function(b){ return b.active; }).forEach(function(b){
+    var items = RENEW_KEYS.filter(function(item){
+      var n = rnDays(today, (b.dates || {})[item] || "");
+      return n !== null && n <= 60;
+    });
+    if(!items.length) return;
+    h += '<button type="button" class="card bus-card" data-go="bus/' + esc(encodeURIComponent(b.reg)) + '">' +
+         '<span class="bus-head"><span class="plate">' + esc(b.reg) + '</span><span class="go">›</span></span>' +
+         dueRows(b, items) + '</button>';
+  });
+  return '<h3>Renewals</h3>' + (h || '<div class="card"><p class="tiny" style="margin:0">Nothing due in the next 60 days.</p></div>');
+}
+
+function motRun(reg){
+  var bk = motBookingOn(reg, calToday());
+  if(!bk) return;
+  var t = /\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/.exec(String(bk.notes || ""));
+  openSheet({ eyebrow: reg, title: "Authorise an MOT run?", line: [bk.garage, "Booked today"].filter(Boolean).join(" · ") + ". No passengers. One trip.",
+    body: '<div class="field"><label for="mrTime">Test time</label><input id="mrTime" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="e.g. 10:30" value="' +
+          esc(t ? ("0" + t[1]).slice(-2) + ":" + t[2] : "") + '"></div>',
+    go: "Authorise", stop: true,
+    onGo: function(){
+      var time = String($("mrTime").value || "").trim().replace(".", ":");
+      if(!/^([01]?\d|2[0-3]):[0-5]\d$/.test(time)){ sheetSay("Give the test time, e.g. 10:30.", true); return; }
+      act({ kind: "motrun", reg: reg, time: time });
+    } });
+}
+
+function dueRows(b, only){
+  return (only || RENEW_KEYS).map(function(item){
     var key = (b.dates || {})[item] || "";
     var w = dueWords(key);
     var last = latestDone(b.reg, item);
@@ -2965,6 +3021,7 @@ document.addEventListener("click", function(e){
   if(d === "driverapp"){ e.preventDefault(); toDriver("hub"); return; }
   if(d === "check"){ e.preventDefault(); toDriver("check"); return; }
   if(d === "authorise") authorise(t.getAttribute("data-reg"));
+  else if(d === "motrun") motRun(t.getAttribute("data-reg"));
   else if(d === "endrun") endRun(t.getAttribute("data-route"));
   else if(d === "more"){ ROTA_SHOW += 12; paintRota(); }
   else if(d === "status") setStatus(key, t.getAttribute("data-mode"));
