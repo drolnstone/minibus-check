@@ -18,8 +18,9 @@ IN THIS ORDER
 1. CODE.GS. Paste the whole file from this branch into the Apps Script
    editor and save:
    https://raw.githubusercontent.com/drolnstone/minibus-check/claude/final-touches-hdkwd8/Code.gs
-   No new trigger and no Set up: the weekly summary's Sunday run sends the
-   new emails.
+   Then Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy, so the sheet version on the foot updates. No new trigger and no
+   Set up: the weekly summary's Sunday run sends the new emails.
 
 2. PAGES. Merge the pull request.
 
