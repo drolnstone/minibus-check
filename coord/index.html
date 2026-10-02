@@ -374,7 +374,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .def p{margin:5px 0 0;font-size:15px}
 .def .did{white-space:pre-line;color:var(--ink-2)}
 .def-foot{display:flex;align-items:center;gap:8px;margin-top:6px}
-.def-foot .tiny{flex:1;min-width:0;margin:0}
+.def-foot .tiny{flex:1;min-width:0;margin:0;overflow-wrap:anywhere}
 .def-foot .mini{min-height:36px}
 .def .def-age{font-size:13px;color:var(--muted);margin-top:3px}
 .def .def-dvsa{margin:4px 0 0}
@@ -1399,7 +1399,7 @@ function setStatus(key, mode){
 
 var NOTE_OWN = /^(swapped\s*:|protected\b)/i;
 function noteLines(r){
-  return String((r && r.notes) || "").split("\n").map(function(x){ return x.replace(/\s+/g, " ").trim(); }).filter(Boolean);
+  return String((r && r.notes) || "").split("\n").map(function(x){ return x.replace(/\s+/g, " ").trim().replace(/^'/, ""); }).filter(Boolean);
 }
 /* A note changed (off false) or taken off (off true), from v1.93.0. */
 function editNote(key, i, off){
@@ -1410,12 +1410,15 @@ function editNote(key, i, off){
                 onGo: function(){ act({ kind:"rota", sunday:key, noteEdit:{ was: was, now: "" } }); } });
     return;
   }
+  /* A line typed longer on the Rota tab can stay as long. */
+  var most = Math.max(300, was.length);
   openSheet({ eyebrow: shortDay(key), title: "Change the note",
-              body: '<div class="field"><label for="noteText">Note</label><textarea id="noteText" maxlength="300">'+esc(was)+'</textarea></div>',
+              body: '<div class="field"><label for="noteText">Note</label><textarea id="noteText" maxlength="'+most+'">'+esc(was)+'</textarea></div>',
               go: "Save",
               onGo: function(){
                 var t = String(($("noteText") || {}).value || "").replace(/\s+/g, " ").trim();
                 if(!t){ sheetSay("Write the note, or use Take off.", true); return; }
+                if(t.length > most){ sheetSay("Notes are " + most + " characters at most.", true); return; }
                 if(NOTE_OWN.test(t)){ sheetSay("Swapped and PROTECTED lines are changed on the Rota tab.", true); return; }
                 if(t === was){ sheetSay("Nothing has changed.", true); return; }
                 act({ kind:"rota", sunday:key, noteEdit:{ was: was, now: t } });
@@ -1913,7 +1916,8 @@ function editStop(id){
   if(id && !x) return;
   var add = !x;
   var v = add ? { route: "", time: "", stop: "", postcode: "", where: "", active: true, type: "Pickup" }
-              : { route: x.route, time: x.time, stop: x.stop, postcode: x.postcode || "", where: x.where || "", active: x.active, type: x.type };
+              : { route: x.route, time: x.time, stop: String(x.stop || "").replace(/\s+/g, " ").trim(), postcode: x.postcode || "",
+                  where: String(x.where || "").replace(/\s+/g, " ").trim(), active: x.active, type: x.type };
   var pick = { route: v.route, active: v.active ? "YES" : "NO", type: v.type };
   var chips = function(cid, opts, on){
     return '<div class="chips" id="' + cid + '">' + opts.map(function(o){
@@ -1936,16 +1940,20 @@ function editStop(id){
       if(tm.length === 4) tm = "0" + tm;
       var nm = String($("stName").value || "").replace(/\s+/g, " ").trim();
       if(nm.length < 2){ sheetSay("Type the stop's name.", true); return; }
-      var pc = String($("stPost").value || "").toUpperCase().replace(/\s+/g, "");
-      if(pc && !/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(pc)){ sheetSay("Check the postcode.", true); return; }
+      /* Spacing and capitals are not a change: a new postcode clears the pin. */
+      var pcKey = function(p){ return String(p || "").toUpperCase().replace(/\s+/g, ""); };
+      var flat = function(t){ return String(t || "").replace(/\s+/g, " ").trim(); };
+      var pc = pcKey($("stPost").value);
+      var pcNew = add || pc !== pcKey(v.postcode);
+      if(pcNew && pc && !/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(pc)){ sheetSay("Check the postcode.", true); return; }
       if(pc) pc = pc.slice(0, -3) + " " + pc.slice(-3);
-      var wh = String($("stWhere").value || "").replace(/\s+/g, " ").trim();
+      var wh = flat($("stWhere").value);
       var set = {};
       if(add) set.route = pick.route;
       if(add || tm !== v.time) set.time = tm;
-      if(add || nm !== v.stop) set.stop = nm;
-      if(add || pc !== v.postcode) set.postcode = pc;
-      if(add || wh !== v.where) set.where = wh;
+      if(add || nm !== flat(v.stop)) set.stop = nm;
+      if(pcNew) set.postcode = pc;
+      if(add || wh !== flat(v.where)) set.where = wh;
       if(add || pick.type !== v.type) set.type = pick.type;
       if(!add && (pick.active === "YES") !== v.active) set.active = pick.active === "YES";
       if(!add && !Object.keys(set).length){ sheetSay("Nothing has changed.", true); return; }

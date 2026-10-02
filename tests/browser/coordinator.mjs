@@ -1507,6 +1507,43 @@ if (want("C45")) {
   await p.ctx.close();
 }
 
+/* C46 — a stop's postcode written without its space, or a Where over two
+   lines, is not changed by saving its time, so the pin stays; a long Where
+   wraps. From v1.93.0. */
+if (want("C46")) {
+  const shelf = await W.cacheGet(env, "coord_shelf");
+  for (const x of shelf.stops) if (x.id === "S07") { x.postcode = "l66an"; x.where = "Hannan Road\nby the cafe"; }
+  await W.cachePut(env, "coord_shelf", shelf).run();
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    await p.pg.evaluate(() => { location.hash = "stops"; });
+    await p.wait(600);
+    await p.pg.click('#stopsBody [data-do="editstop"][data-id="S07"]');
+    await p.wait(300);
+    await p.pg.fill("#stTime", "10:47");
+    await p.pg.click("#sheetGo");
+    await p.wait(900);
+    const last = async () => JSON.parse((await env.DB.prepare("SELECT body FROM coord_actions WHERE kind='stop' ORDER BY seq DESC LIMIT 1").first()).body);
+    const b1 = await last();
+    const s07 = (await W.getStops(env)).find((x) => x.id === "S07");
+    const url = "https://www.google.com/maps/place/53.414313,-2.949187/@53.414313,-2.949187,19z/data=!3m1!1e3";
+    await p.pg.click('#stopsBody [data-do="editstop"][data-id="S08"]');
+    await p.wait(300);
+    await p.pg.fill("#stWhere", url);
+    await p.pg.click("#sheetGo");
+    await p.wait(1200);
+    const b2 = await last();
+    const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth > 392);
+    await p.shot("C46-stops-wrap");
+    check("C46", "saving a stop's time leaves a postcode without its space and its pin alone, and a long Where wraps",
+          JSON.stringify(Object.keys(b1.set)) === '["time"]' && !b1.pinCleared && s07 && s07.time === "10:47" && s07.lat != null &&
+          b2.set.where === url && !wide && !p.errs.length,
+          JSON.stringify({ b1, s07, b2, wide, errors: p.errs }));
+  } catch (e) { stopped("C46", e); }
+  await p.ctx.close();
+}
+
 check("C0", "no script error on the page throughout", me && !me.errs.length, JSON.stringify(me && me.errs));
 if (me) await me.ctx.close();
 await done();

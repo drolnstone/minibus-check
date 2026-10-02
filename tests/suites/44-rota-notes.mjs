@@ -130,5 +130,90 @@ export default async function (root) {
     });
   });
 
+  /* What a push from the sheet does to the Notes: the sheet's copy and the
+     rota table rewritten, the actions it has filed marked seen, and what is
+     still on its way laid back over them. */
+  async function pushNotes(db, env, notes, seen) {
+    await W.cachePut(env, "cache_rota", { builtAt: Date.now() - 1000, from: "2026-07-12", to: "2028-09-24",
+      payload: { ok: true, rows: [{ date: KEY, primary: "Bro Adrian", actual: "Bro Adrian", status: "Confirmed",
+        primary2: "Bro Trevor", actual2: "", notes: notes, northBus: "YS70 PWE", southBus: "NH56 FWP",
+        swaps: [], locked: true, lockNote: "harvest", requests: [] }] } }).run();
+    await db.prepare("UPDATE rota SET notes=? WHERE sunday=?").bind(notes, KEY).run();
+    for (const id of seen || []) await db.prepare("UPDATE coord_actions SET seen=1 WHERE id=?").bind(id).run();
+    await W.reapplyRawRota(env);
+  }
+
+  s.test("a line typed longer than 300 on the Rota tab is changed whole, never cut", async (a) => {
+    await atTime(THU, async () => {
+      const { db, env } = await fresh();
+      const long = "Bring the ramp " + "and the cones ".repeat(24) + "END";
+      a.ok(long.length > 300, String(long.length));
+      await pushNotes(db, env, NOTES + "\n" + long, []);
+      const now = long.replace("Bring the ramp", "Bring the vans");
+      const ch = await act(env, { kind: "rota", sunday: KEY, noteEdit: { was: long, now: now } });
+      a.ok(ch.ok, JSON.stringify(ch));
+      const body = JSON.parse(db._one("SELECT body FROM coord_actions ORDER BY seq DESC LIMIT 1").body);
+      a.eq(body.noteEdit.now, now);
+      a.has(await notesOf(env), now);
+      a.has(String((await act(env, { kind: "rota", sunday: KEY, noteEdit: { was: now, now: now + " and more" } })).error),
+            "Notes are " + now.length + " characters at most.");
+      a.has(String((await act(env, { kind: "rota", sunday: KEY, noteEdit: { was: "Bring the ramp", now: "x".repeat(301) } })).error),
+            "Notes are 300 characters at most.");
+    });
+  });
+
+  s.test("a note starting with a minus, taken off while the sheet has filed only its adding: stays off", async (a) => {
+    await atTime(THU, async () => {
+      const { db, env } = await fresh();
+      a.ok((await act(env, { id: "minus-add", kind: "rota", sunday: KEY, note: "-5 seats" })).ok);
+      a.ok((await act(env, { id: "minus-off", kind: "rota", sunday: KEY, noteEdit: { was: "-5 seats", now: "" } })).ok);
+      /* A sheet before v1.98.0 kept the apostrophe that stops a formula. */
+      await pushNotes(db, env, NOTES + "\n'-5 seats", ["minus-add"]);
+      a.not(/5 seats/.test((await W.getRotaRow(env, KEY)).notes), (await W.getRotaRow(env, KEY)).notes);
+      a.not(/5 seats/.test(await notesOf(env)), await notesOf(env));
+    });
+  });
+
+  s.test("a note added then changed, laid over a copy that already has the change: shown once", async (a) => {
+    await atTime(THU, async () => {
+      const { db, env } = await fresh();
+      a.ok((await act(env, { kind: "rota", sunday: KEY, note: "Ramp in the shed" })).ok);
+      a.ok((await act(env, { kind: "rota", sunday: KEY, noteEdit: { was: "Ramp in the shed", now: "Ramp in the vestry" } })).ok);
+      /* The sheet filed both, and its push left before it could say so. */
+      await pushNotes(db, env, NOTES + "\nRamp in the vestry", []);
+      for (const t of [(await W.getRotaRow(env, KEY)).notes, await notesOf(env)]) {
+        a.eq(t.split("\n").filter((x) => /Ramp/.test(x)).join("|"), "Ramp in the vestry", t);
+      }
+      a.has(String((await act(env, { kind: "rota", sunday: KEY, noteEdit: { was: "Bring the ramp", now: "Ramp in the vestry" } })).error),
+            "That note is there already.");
+    });
+  });
+
+  s.test("the sheet keeps a lone date, time or number as the words, and a minus line without an apostrophe", async (a) => {
+    await atTime(THU, async () => {
+      const base = { "North Liverpool scheduled": "Bro Adrian", Status: "Confirmed", "South Liverpool scheduled": "Bro Trevor" };
+      const L = loadCodeGs(root, { tabs: {
+        "Rota": tab("Rota", [Object.assign({ Sunday: new Date(2026, 9, 4), Notes: "Bring the ramp\n11/10" }, base),
+                             Object.assign({ Sunday: new Date(2026, 9, 11), Notes: "" }, base),
+                             Object.assign({ Sunday: new Date(2026, 9, 18), Notes: "Bring the cones" }, base)]),
+        "Drivers": tab("Drivers", [{ Name: "Bro Adrian", Role: "Driver", Active: "YES", Route: "North" },
+                                   { Name: "Bro Trevor", Role: "Driver", Active: "YES", Route: "South" }]) },
+        props: {} });
+      const ss = L.gas.ss;
+      const A = (id, key, body) => ({ id, kind: "rota", sunday: key, by: "Bro Arthur", made: Date.now(),
+                                      body: Object.assign({ sunday: key, set: {}, note: "" }, body) });
+      const cell = (r) => String(ss.getSheetByName("Rota").getRange(r, TABS["Rota"].indexOf("Notes") + 1).getValue());
+      a.ok(call(L, "applyCoordAction", ss, A("d1", KEY, { noteEdit: { was: "Bring the ramp", now: "" } }), {}).ok);
+      a.eq(cell(2), "'11/10");
+      a.ok(call(L, "applyCoordAction", ss, A("d2", "2026-10-11", { note: "10:30" }), {}).ok);
+      a.eq(cell(3), "'10:30");
+      a.ok(call(L, "applyCoordAction", ss, A("d3", "2026-10-18", { note: "-5 seats" }), {}).ok);
+      a.eq(cell(4), "Bring the cones\n-5 seats");
+      a.eq(call(L, "notesText", "Bring the ramp"), "Bring the ramp");
+      a.eq(call(L, "notesText", "11 Oct"), "'11 Oct");
+      a.eq(call(L, "notesText", "=1+1\nx"), "'=1+1\nx");
+    });
+  });
+
   return s;
 }

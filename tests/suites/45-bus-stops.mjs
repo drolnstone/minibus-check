@@ -164,5 +164,111 @@ export default async function (root) {
     });
   });
 
+  s.test("three stops added in one gap keep their order on the stops table, through a push", async (a) => {
+    await atTime(THU, async () => {
+      const { db, env } = await fresh();
+      for (const t of ["10:26", "10:28", "10:30"]) {
+        const out = await act(env, { kind: "stop", add: true, set: { route: "North", time: t, stop: "Stop at " + t } });
+        a.ok(out.ok, JSON.stringify(out));
+      }
+      const want = "N00 N01 N02 N03 N12 N13 N14 N04 N05 N06 N07 N08 N09";
+      a.eq((await order(env, "North")).join(" "), want);
+      await db.prepare("DELETE FROM stops").run();
+      await seedSunday(db, KEY);
+      await W.reapplyStops(env);
+      a.eq((await order(env, "North")).join(" "), want);
+    });
+  });
+
+  s.test("a switched-off row's old time does not decide where a new stop goes", async (a) => {
+    await atTime(THU, async () => {
+      const { env } = await fresh();
+      const shelf = SHELF.map((x) => Object.assign({}, x, x.id === "N11" ? { time: "10:20" } : {}));
+      await W.cachePut(env, "coord_shelf", { builtAt: Date.now(), readAt: Date.now(), requests: [], defects: [], stops: shelf }).run();
+      const out = await act(env, { kind: "stop", add: true, set: { route: "North", time: "10:28", stop: "Bootle Village" } });
+      a.ok(out.ok, JSON.stringify(out));
+      const reg = (await coord(env, { op: "load" })).stopsReg.stops.map((x) => x.id);
+      a.eq(reg.indexOf("N12"), reg.indexOf("N03") + 1, reg.join(" "));
+    });
+  });
+
+  s.test("spacing and capitals in a postcode, or a line break in Where, are not a change: the pin stays", async (a) => {
+    await atTime(THU, async () => {
+      const { env } = await fresh();
+      const shelf = SHELF.map((x) => Object.assign({}, x, x.id === "N03" ? { postcode: "l41aa", where: "12 Litherland Rd\nBootle" } : {}));
+      await W.cachePut(env, "coord_shelf", { builtAt: Date.now(), readAt: Date.now(), requests: [], defects: [], stops: shelf }).run();
+      const out = await act(env, { kind: "stop", stopId: "N03", set: { time: "10:26", postcode: "L4 1AA", where: "12 Litherland Rd Bootle" } });
+      a.ok(out.ok, JSON.stringify(out));
+      a.eq(out.action.words, "N03: at 10:26.");
+      a.ok((await stop(env, "N03")).lat, "the pin was cleared");
+      a.has(String((await act(env, { kind: "stop", stopId: "N03", set: { postcode: "L41AA" } })).error), "Nothing");
+    });
+  });
+
+  s.test("after this Sunday's run, a stop whose seats were used can be switched off; before it, not", async (a) => {
+    const booked = async (db) => db.prepare("INSERT INTO bookings (sunday, route, stop_id, stop, seats, status, received) VALUES (?,?,?,?,?,?,?)")
+      .bind(KEY, "South", "S03", "Sedley St", 2, "Booked", Date.now()).run();
+    await atTime("2026-10-04T09:00:00+01:00", async () => {
+      const { db, env } = await fresh();
+      await booked(db);
+      a.has(String((await act(env, { kind: "stop", stopId: "S03", set: { active: false } })).error), "2 seats booked at S03");
+    });
+    await atTime("2026-10-04T14:00:00+01:00", async () => {
+      const { db, env } = await fresh();
+      await booked(db);
+      const off = await act(env, { kind: "stop", stopId: "S03", set: { active: false } });
+      a.ok(off.ok, JSON.stringify(off));
+    });
+  });
+
+  s.test("the sheet: the pin kept, a switched-off row passed over, a first row under the header, 9:52, a row with no stop", async (a) => {
+    await atTime(THU, async () => {
+      const rows = STOPS.filter((x) => x.route === "North").map((x) => ({ Route: x.route, "Stop ID": x.id, Time: x.time, Stop: x.stop,
+        Postcode: x.id === "N03" ? "L41AA" : "L4 1AA", Active: "YES", Type: TYPE[x.kind], Lat: x.lat, Lng: x.lng }));
+      rows[0].Time = "9:52";
+      rows.splice(6, 0, { Route: "North", "Stop ID": "N11", Time: "10:20", Stop: "Old Stop", Active: "NO", Type: "Pickup" });
+      rows.push({ Route: "North", "Stop ID": "N12" });
+      rows.push({ Route: "North", "Stop ID": "N13", Time: "11:05", Stop: "Late Rd", Active: "NO", Type: "Pickup" });
+      const L = loadCodeGs(root, { tabs: { "Bus Stops": tab("Bus Stops", rows) }, props: {} });
+      const ss = L.gas.ss;
+      call(L, "stopsAudit", ss, "setup", "");
+      const A = (id, body) => ({ id, kind: "stop", sunday: "", by: "Bro Arthur", made: Date.now(), body });
+      const ids = () => ss.getSheetByName("Bus Stops").getDataRange().getValues().slice(1).map((r) => r[TABS["Bus Stops"].indexOf("Stop ID")]);
+      const list = call(L, "coordStopsList", ss);
+      a.eq(list.find((x) => x.id === "N00").time, "09:52");
+      a.eq(list.find((x) => x.id === "N12").active, false);
+      a.eq(call(L, "readBusStopsFresh", ss).find((x) => x.id === "N00").time, "09:52");
+
+      const r1 = call(L, "applyCoordAction", ss, A("s1", { id: "N03", set: { time: "10:26", postcode: "L4 1AA" } }), {});
+      a.ok(r1.ok, JSON.stringify(r1));
+      const n3 = call(L, "coordStopsList", ss).find((x) => x.id === "N03");
+      a.ok(n3.hasPin, "the pin was cleared for spacing");
+      const r2 = call(L, "applyCoordAction", ss, A("s2", { id: "N14", add: true,
+        set: { route: "North", time: "10:28", stop: "Bootle Village", postcode: "", where: "", active: true, type: "Pickup" } }), {});
+      a.ok(r2.ok, JSON.stringify(r2));
+      a.eq(ids().indexOf("N14"), ids().indexOf("N03") + 1, ids().join(" "));
+      const r3 = call(L, "applyCoordAction", ss, A("s3", { id: "N01", set: { where: "By the shop" } }), {});
+      a.ok(r3.ok, JSON.stringify(r3));
+      const r4 = call(L, "applyCoordAction", ss, A("s4", { id: "N09", set: { time: "11:02" } }), {});
+      a.ok(r4.ok, JSON.stringify(r4));
+      const r5 = call(L, "applyCoordAction", ss, A("s5", { id: "N13", set: { active: true } }), {});
+      a.not(r5.ok, "a pickup below the Arrival was switched on");
+      a.has(r5.result, "Move its row above the Arrival");
+      const r6 = call(L, "applyCoordAction", ss, A("s6", { id: "N00", set: { time: "10:05" } }), {});
+      a.has(r6.result, "Pick a time up to 10:03.");
+
+      /* A new Depart, the old one switched off: first on the tab, in a data row. */
+      a.ok(call(L, "applyCoordAction", ss, A("s7", { id: "N00", set: { active: false } }), {}).ok);
+      const r8 = call(L, "applyCoordAction", ss, A("s8", { id: "N15", add: true,
+        set: { route: "North", time: "09:50", stop: "Church Gate", postcode: "", where: "", active: true, type: "Depart" } }), {});
+      a.ok(r8.ok, JSON.stringify(r8));
+      a.eq(ids().slice(0, 3).join(" "), "N15 N00 N01");
+      const sh = ss.getSheetByName("Bus Stops");
+      const H = TABS["Bus Stops"];
+      const row3 = sh.getRange(3, 1, 1, H.length).getValues()[0];
+      a.eq([row3[H.indexOf("Stop")], row3[H.indexOf("Active")], row3[H.indexOf("Lat")]].join("|"), "Church|NO|" + STOPS[0].lat);
+    });
+  });
+
   return s;
 }

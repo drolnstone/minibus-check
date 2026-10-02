@@ -4038,18 +4038,27 @@ function coordStopsList(ss) {
   return out;
 }
 
+/* A stop's Time as HH:MM text: a real time value, or 9:52 typed as text,
+   reads 09:52, so times compare as text. */
+function stopTimeText(t) {
+  if (t && typeof t.getHours === "function") return Utilities.formatDate(t, Session.getScriptTimeZone(), "HH:mm");
+  var m = /^\s*(\d{1,2}):(\d{2})\s*$/.exec(String(t == null ? "" : t));
+  return m ? ("0" + m[1]).slice(-2) + ":" + m[2] : String(t == null ? "" : t).trim();
+}
+
 function stopRowOf(r, c, row) {
   var t = at1(r, c.time), type = String(at1(r, c.type) || "").trim().toLowerCase();
+  var name = String(at1(r, c.stop) || "").trim();
   return {
     row: row,
     id: String(at1(r, c.id) || "").trim(),
     route: String(at1(r, c.route) || "").trim().toUpperCase().charAt(0) === "S" ? "South" : "North",
-    time: (t && typeof t.getHours === "function")
-      ? Utilities.formatDate(t, Session.getScriptTimeZone(), "HH:mm") : String(t || "").trim(),
-    stop: String(at1(r, c.stop) || "").trim(),
+    time: stopTimeText(t),
+    stop: name,
     postcode: String(at1(r, c.postcode) || "").trim(),
     where: String(at1(r, c.where) || "").trim(),
-    active: String(at1(r, c.active) || "YES").trim().toUpperCase() !== "NO",
+    /* A numbered row with no Stop is not on the driver's list (readBusStopsFresh). */
+    active: !!name && String(at1(r, c.active) || "YES").trim().toUpperCase() !== "NO",
     type: type.indexOf("depart") === 0 ? "Depart" : type.indexOf("arriv") === 0 ? "Arrival" : "Pickup",
     lat: numOrBlank(at1(r, c.lat)), lng: numOrBlank(at1(r, c.lng)),
     hasPin: numOrBlank(at1(r, c.lat)) !== "" && numOrBlank(at1(r, c.lng)) !== ""
@@ -4068,16 +4077,22 @@ function stopOrderProblem(list, s) {
   var others = function (type) { return on.filter(function (x) { return x !== s && x.type === type; }); };
   if (s.type === "Depart" && (others("Depart").length || i !== 0)) return "Depart is the first stop on a route, and there is one.";
   if (s.type === "Arrival" && (others("Arrival").length || i !== on.length - 1)) return "Arrival is the last stop on a route, and there is one.";
+  var before = on.slice(0, i), after = on.slice(i + 1);
+  var has = function (l, type) { return l.some(function (x) { return x.type === type; }); };
+  if (s.type === "Pickup" && has(before, "Arrival")) return "Move its row above the Arrival on the Bus Stops tab first.";
+  if (s.type === "Pickup" && has(after, "Depart")) return "Move its row below the Depart on the Bus Stops tab first.";
   var prev = on[i - 1], next = on[i + 1];
   if ((prev && s.time < prev.time) || (next && next.time && s.time > next.time)) {
-    return "Pick a time " + (prev ? "from " + prev.time : "up to") + (prev && next ? " to " : "") +
+    return "Pick a time " + (prev ? "from " + prev.time : "up to ") + (prev && next ? " to " : "") +
            (next ? next.time : prev ? " or later" : "") + ".";
   }
   return "";
 }
 
-/* Where a new stop goes on the tab: after the last of its route timed no later
-   than it (a Depart first, an Arrival last). 0 when the route has no rows. */
+/* Where a new stop goes on the tab: after the last stop in use on its route
+   timed no later than it (a Depart first, an Arrival last). A switched-off row
+   keeps whatever time it had, so it says nothing about the place. 0 when the
+   route has no rows. */
 function stopInsertAfter(list, route, time, type) {
   var mine = list.filter(function (x) { return x.route === route; });
   if (!mine.length) return list.length ? list[list.length - 1].row : 0;
@@ -4085,7 +4100,7 @@ function stopInsertAfter(list, route, time, type) {
   if (type === "Arrival") return mine[mine.length - 1].row;
   var after = 0;
   mine.forEach(function (x) {
-    if (x.type === "Arrival") return;
+    if (!x.active || x.type === "Arrival") return;
     if (x.type === "Depart" || (x.time && x.time <= time)) after = x.row;
   });
   return after || mine[0].row - 1;
@@ -4132,7 +4147,14 @@ function coordStop(ss, a, b, by) {
   var hist = [];
   var row;
   if (!cur) {
-    if (after >= 1 && after < sh.getLastRow()) { sh.insertRowsAfter(after, 1); row = after + 1; }
+    if (after === 1 && sh.getLastRow() >= 2) {
+      /* First on the tab. A row put in under the header would take the
+         header's look and miss the drop-downs and the lock's opening, so it
+         goes in under the first stop, which moves down into it. */
+      sh.insertRowsAfter(2, 1);
+      sh.getRange(3, 1, 1, wide).setValues(sh.getRange(2, 1, 1, wide).getValues());
+      row = 2;
+    } else if (after >= 1 && after < sh.getLastRow()) { sh.insertRowsAfter(after, 1); row = after + 1; }
     else row = Math.max(sh.getLastRow(), 1) + 1;
     var blank = [];
     for (var j = 0; j < wide; j++) blank.push("");
@@ -4143,7 +4165,9 @@ function coordStop(ss, a, b, by) {
     row = cur.row;
   }
   var was = sh.getRange(row, 1, 1, wide).getValues()[0];
-  var moved = !!cur && set.postcode !== undefined && String(set.postcode).trim().toUpperCase() !== cur.postcode.toUpperCase();
+  /* Spacing and capitals are not a new postcode. */
+  var pcKey = function (p) { return String(p == null ? "" : p).replace(/\s+/g, "").toUpperCase(); };
+  var moved = !!cur && set.postcode !== undefined && pcKey(set.postcode) !== pcKey(cur.postcode);
   STOP_FIELDS.forEach(function (f) {
     if (set[f[0]] === undefined || set[f[0]] === null) return;
     var col = sc[f[0]];
@@ -4340,7 +4364,7 @@ function coordRota(ss, a, b, by) {
   if (note) {
     var lines = String(sh.getRange(row, rc.notes).getValue() || "").split("\n")
       .map(function (x) { return x.trim(); });
-    if (lines.indexOf(note) === -1) appendNote(sh, row, safeText(note));
+    if (lines.indexOf(note) === -1) appendNote(sh, row, note);
     onEditRota({ range: sh.getRange(row, rc.notes) }, sh);
     did++;
   }
@@ -4361,7 +4385,7 @@ function coordRota(ss, a, b, by) {
     if (at === -1) gone = true;
     else {
       if (now) nlines[at] = now; else nlines.splice(at, 1);
-      ncell.setValue(safeText(nlines.join("\n").replace(/^\n+|\n+$/g, "")));
+      ncell.setValue(notesText(nlines.join("\n").replace(/^\n+|\n+$/g, "")));
       onEditRota({ range: ncell }, sh);
       did++;
     }
@@ -5788,7 +5812,21 @@ function applySwap(ss, rota, keyA, driverA, keyB, driverB) {
 function appendNote(sh, row, text) {
   var cell = sh.getRange(row, rotaCols(sh).notes);
   var had = String(cell.getValue() || "").trim();
-  cell.setValue(had ? had + "\n" + text : text);
+  cell.setValue(had ? had + "\n" + text : notesText(text));
+}
+
+/* A Notes cell as it is written. Only the cell's first character can start a
+   formula. One line on its own that Sheets would read as a value (11/10,
+   10:30, 07700 900123, 11 Oct) gets an apostrophe in front, as typing it
+   would need, so it stays the words. */
+function notesText(t) {
+  t = String(t == null ? "" : t);
+  if (t.indexOf("\n") === -1 && t.charAt(0) !== "'" &&
+      (/^[-+]?[£$€]?[\d.,:\/\s-]*\d[\d.,:\/\s-]*%?\s*(am|pm)?$/i.test(t) || /^(true|false)$/i.test(t) ||
+       /^(\d{1,2}(st|nd|rd|th)?\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(\s+\d{1,2}(st|nd|rd|th)?)?(,?\s+\d{2,4})?$/i.test(t))) {
+    return "'" + t;
+  }
+  return safeText(t);
 }
 
 /* Both routes at once, since almost every caller wants the pair. */
@@ -7117,10 +7155,9 @@ function readBusStopsFresh(ss) {
         ? "South" : "North",
       id: String(at1(r, c.id) || "").trim(),
       /* Read as text. A cell holding 09:50 as a real time comes back as a
-         Date, and the fuel column already taught us what that does. */
-      time: (t && typeof t.getHours === "function")
-        ? Utilities.formatDate(t, Session.getScriptTimeZone(), "HH:mm")
-        : String(t || "").trim(),
+         Date, and the fuel column already taught us what that does. 9:52
+         typed as text reads 09:52. */
+      time: stopTimeText(t),
       stop: stop,
       postcode: String(at1(r, c.postcode) || "").trim(),
       /* Where the bus actually pulls in, written as an address a person could

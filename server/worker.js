@@ -6973,23 +6973,33 @@ const STOP_TYPES = ["Pickup", "Arrival", "Depart"];
 const STOP_TIME = /^([01]?\d|2[0-3]):([0-5]\d)$/;
 const STOP_POSTCODE = /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/;
 
+/* 9:52 typed on the tab as text reads 09:52, so times compare as text. */
+function stopTime(t) {
+  const m = /^\s*(\d{1,2}):(\d{2})\s*$/.exec(String(t == null ? "" : t));
+  return m ? m[1].padStart(2, "0") + ":" + m[2] : String(t == null ? "" : t).trim();
+}
+/* Spacing and capitals are not a new postcode. */
+const postcodeKey = (p) => String(p || "").replace(/\s+/g, "").toUpperCase();
+
 function stopNorm(s) {
   const t = String(s.type || "");
-  return { id: String(s.id || ""), route: s.route === "South" ? "South" : "North", time: String(s.time || ""),
+  return { id: String(s.id || ""), route: s.route === "South" ? "South" : "North", time: stopTime(s.time),
            stop: String(s.stop || ""), postcode: String(s.postcode || ""), where: String(s.where || ""),
            active: s.active !== false, type: STOP_TYPES.indexOf(t) !== -1 ? t : "Pickup",
            lat: numOrNull(s.lat), lng: numOrNull(s.lng), hasPin: !!s.hasPin };
 }
 
-/* Where a new stop goes: after the last of its route timed no later than it
-   (a Depart first, an Arrival last). Code.gs stopInsertAfter, by index. */
+/* Where a new stop goes: after the last stop in use on its route timed no
+   later than it (a Depart first, an Arrival last). A switched-off row keeps
+   whatever time it had, so it says nothing about the place. Code.gs
+   stopInsertAfter, by index. */
 function stopInsertIndex(list, route, time, type) {
   let first = -1, last = -1, after = -1;
   list.forEach((x, i) => {
     if (x.route !== route) return;
     if (first === -1) first = i;
     last = i;
-    if (x.type === "Arrival") return;
+    if (!x.active || x.type === "Arrival") return;
     if (x.type === "Depart" || (x.time && x.time <= time)) after = i;
   });
   if (first === -1) return list.length;
@@ -7007,9 +7017,11 @@ function stopOrderProblem(list, s) {
   const others = (type) => on.filter((x) => x !== s && x.type === type);
   if (s.type === "Depart" && (others("Depart").length || i !== 0)) return "Depart is the first stop on a route, and there is one.";
   if (s.type === "Arrival" && (others("Arrival").length || i !== on.length - 1)) return "Arrival is the last stop on a route, and there is one.";
+  if (s.type === "Pickup" && on.slice(0, i).some((x) => x.type === "Arrival")) return "Move its row above the Arrival on the Bus Stops tab first.";
+  if (s.type === "Pickup" && on.slice(i + 1).some((x) => x.type === "Depart")) return "Move its row below the Depart on the Bus Stops tab first.";
   const prev = on[i - 1], next = on[i + 1];
   if ((prev && s.time < prev.time) || (next && next.time && s.time > next.time)) {
-    return "Pick a time " + (prev ? "from " + prev.time : "up to") + (prev && next ? " to " : "") +
+    return "Pick a time " + (prev ? "from " + prev.time : "up to ") + (prev && next ? " to " : "") +
            (next ? next.time : prev ? " or later" : "") + ".";
   }
   return "";
@@ -7069,10 +7081,15 @@ function stopSql(env, b, pins) {
     const k = stopKind(f.type);
     const r = f.route === "South" ? "South" : "North";
     const t = String(f.time || "");
+    /* A pickup goes halfway to the next stop, so a second one added in the
+       same gap goes between the first and that stop, not level with it. */
+    const prev = "(SELECT MAX(seq) FROM stops WHERE route=?1 AND stop_id<>?2 AND kind<>'arrival' " +
+                 "AND (kind='depart' OR time<=?3))";
     const seq = k === "depart" ? "(SELECT MIN(seq) FROM stops WHERE route=?1 AND stop_id<>?2) - 0.5"
               : k === "arrival" ? "(SELECT MAX(seq) FROM stops WHERE route=?1 AND stop_id<>?2) + 0.5"
-              : "COALESCE((SELECT MAX(seq) FROM stops WHERE route=?1 AND stop_id<>?2 AND kind<>'arrival' " +
-                "AND (kind='depart' OR time<=?3)) + 0.5, (SELECT MIN(seq) FROM stops WHERE route=?1 AND stop_id<>?2) - 0.5)";
+              : "COALESCE((" + prev + " + COALESCE((SELECT MIN(seq) FROM stops WHERE route=?1 AND stop_id<>?2 " +
+                "AND seq>" + prev + "), " + prev + " + 1)) / 2.0, " +
+                "(SELECT MIN(seq) FROM stops WHERE route=?1 AND stop_id<>?2) - 0.5)";
     const vals = "?2, ?1, ?3, ?4, ?5, ?6, ?7, COALESCE(" + seq + ", (SELECT MAX(seq) FROM stops) + 1, 0)" +
                  (pins ? ", ?8, ?9" : "");
     const st = env.DB.prepare("INSERT OR REPLACE INTO stops (stop_id, route, time, stop, postcode, place, kind, seq" +
@@ -7157,7 +7174,12 @@ async function actStop(env, me, act) {
     if (set.postcode === undefined) set.postcode = "";
     if (set.where === undefined) set.where = "";
   } else {
-    for (const k of Object.keys(set)) if (set[k] === x[k]) delete set[k];
+    const flat = (v) => String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+    for (const k of Object.keys(set)) {
+      const same = k === "postcode" ? postcodeKey(set[k]) === postcodeKey(x[k])
+                 : k === "stop" || k === "where" ? set[k] === flat(x[k]) : set[k] === x[k];
+      if (same) delete set[k];
+    }
     if (!Object.keys(set).length) return { ok: false, error: "Nothing to change." };
   }
 
@@ -7172,9 +7194,13 @@ async function actStop(env, me, act) {
   /* Seats booked there: a stop nobody can be picked up at any more would
      leave them standing. */
   if (x && x.active && x.type === "Pickup" && (set.active === false || (set.type && set.type !== "Pickup"))) {
+    /* From the Sunday the booking page offers: once this morning's run is
+       over, its seats have been used. */
+    let from = runSunday();
+    try { from = await busCurrentSunday(env, pickupsAndArrivals(await getStops(env))); } catch (e) {}
     const q = await env.DB.prepare(
       "SELECT COALESCE(SUM(seats),0) AS n FROM bookings WHERE stop_id=? AND sunday>=? AND lower(status)='booked'")
-      .bind(x.id, runSunday()).first();
+      .bind(x.id, from).first();
     const n = Number(q && q.n) || 0;
     if (n) return { ok: false, error: seatWord(n) + " booked at " + x.id + ". Cancel " + (n === 1 ? "it" : "them") + " on Bookings first." };
   }
@@ -7327,18 +7353,22 @@ function rotaApplySet(n0, body) {
   if (note) {
     /* Once. The same action applied twice, which the overlay can do in the
        seconds before the sheet reports it, must not write the note twice. */
-    const lines = String(n.notes || "").split("\n").map((x) => x.trim());
-    if (lines.indexOf(note) === -1) n.notes = n.notes ? n.notes + "\n" + note : note;
+    const lines = String(n.notes || "").split("\n").map(noteLine);
+    if (lines.indexOf(noteLine(note)) === -1) n.notes = n.notes ? n.notes + "\n" + note : note;
     rotaEditRule(n, false);
   }
   /* A note changed or taken off, from w2.35.0. Applied twice, the second
-     finds nothing to change. */
+     finds nothing to change. A change to a line already there takes the old
+     one off: laid over a copy that already has the change, a note added then
+     changed would otherwise show twice. */
   const ed = body && body.noteEdit;
   if (ed && ed.was) {
     const lines = String(n.notes || "").split("\n");
-    const i = lines.map(noteLine).indexOf(noteLine(ed.was));
+    const flat = lines.map(noteLine);
+    const i = flat.indexOf(noteLine(ed.was));
     if (i !== -1) {
-      if (noteLine(ed.now)) lines[i] = noteLine(ed.now); else lines.splice(i, 1);
+      const now = noteLine(ed.now);
+      if (now && flat.indexOf(now) === -1) lines[i] = now; else lines.splice(i, 1);
       n.notes = lines.join("\n");
     }
     rotaEditRule(n, false);
@@ -7346,8 +7376,10 @@ function rotaApplySet(n0, body) {
   return n;
 }
 
-/* One line of a Sunday's Notes, as the app and the sheet compare it. */
-function noteLine(x) { return String(x == null ? "" : x).replace(/\s+/g, " ").trim(); }
+/* One line of a Sunday's Notes, as the app and the sheet compare it (Code.gs
+   coordRota nl). A line the sheet kept from turning into a formula has an
+   apostrophe in front, which is not part of the note. */
+function noteLine(x) { return String(x == null ? "" : x).replace(/\s+/g, " ").trim().replace(/^'/, ""); }
 /* The lines the sheet writes and reads back: swaps, and a protected Sunday. */
 const ROTA_NOTE_OWN = /^(swapped\s*:|protected\b)/i;
 
@@ -8232,8 +8264,11 @@ async function actRota(env, me, act) {
      swap back from, and PROTECTED is what keeps a Sunday as it is. */
   let noteEdit = null;
   if (act.noteEdit && typeof act.noteEdit === "object") {
-    const was = noteLine(act.noteEdit.was), now = noteLine(act.noteEdit.now).slice(0, 300);
+    const was = noteLine(act.noteEdit.was), now = noteLine(act.noteEdit.now);
     if (!was) return { ok: false, error: "Pick a note." };
+    /* A line typed longer on the Rota tab can stay as long; it is never cut. */
+    const most = Math.max(300, was.length);
+    if (now.length > most) return { ok: false, error: "Notes are " + most + " characters at most." };
     if (ROTA_NOTE_OWN.test(was) || ROTA_NOTE_OWN.test(now)) {
       return { ok: false, error: "Swapped and PROTECTED lines are changed on the Rota tab." };
     }
@@ -8252,8 +8287,12 @@ async function actRota(env, me, act) {
     set.status = runningStatus(rotaApplySet(cur, { set: Object.assign({}, set, { status: cur.status }) }),
                                reqs.some((r) => r.sunday === key && r.status === "Pending"));
   }
-  if (noteEdit && String(cur.notes || "").split("\n").map(noteLine).indexOf(noteEdit.was) === -1) {
-    return { ok: false, error: "That note is not on the live server's copy. Refresh and try again." };
+  if (noteEdit) {
+    const flat = String(cur.notes || "").split("\n").map(noteLine);
+    if (flat.indexOf(noteEdit.was) === -1) {
+      return { ok: false, error: "That note is not on the live server's copy. Refresh and try again." };
+    }
+    if (noteEdit.now && flat.indexOf(noteEdit.now) !== -1) return { ok: false, error: "That note is there already." };
   }
   const next = rotaApplySet(cur, { set: set, note: note, noteEdit: noteEdit });
 
