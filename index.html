@@ -1072,7 +1072,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       <div class="hint rota-hint" id="rotaHint" style="display:none"></div>
       <div class="field" id="typeField" style="display:none">
         <label for="driver">Driver name</label>
-        <input id="driver" type="text" autocomplete="name" placeholder="Your full name">
+        <input id="driver" type="text" autocomplete="name" placeholder="e.g. Bro John Smith">
         <div class="hint">No driver register has been set up yet.</div>
       </div>
     </div>
@@ -1165,7 +1165,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
     <div class="card" id="signCard">
       <div class="field">
         <label for="sign">Type your name to sign</label>
-        <input id="sign" type="text" placeholder="Name or initials" autocomplete="off">
+        <input id="sign" type="text" placeholder="e.g. John Smith or JS" autocomplete="off">
       </div>
     </div>
   </section>
@@ -1570,7 +1570,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.93.0";
+var APP_VERSION = "v1.93.1";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -3644,7 +3644,7 @@ function renderStage(){
       '</div>'+
       '<div class="note'+(r&&needsNote(r)?" is-on":"")+(r&&r.v==="adv"?" is-adv":"")+'">'+
         '<div class="lbl">What did you find?</div>'+
-        '<textarea placeholder="Describe it plainly. A few words is enough."></textarea>'+
+        '<textarea placeholder="e.g. Nearside rear tyre worn on the edge"></textarea>'+
       '</div>';
 
     var bOk=el.querySelector(".ok"), bDef=el.querySelector(".def"),
@@ -8187,7 +8187,7 @@ function rotaOpenRequest(key){
     '</div>'+
     '<div id="rotaLockNote" class="rota-swap-note" style="display:none"></div>'+
     '<div class="field"><label for="rotaReqReason">Reason</label>'+
-      '<textarea id="rotaReqReason" placeholder="Tell the coordinator what they need to know."></textarea></div>'+
+      '<textarea id="rotaReqReason" placeholder="e.g. Away that Sunday, Bro James can cover"></textarea></div>'+
     (pinGateNeeded()? pinGateHtml("This request is sent in your name.") : "")+
     '<div class="rota-modal-actions"><button class="btn btn-ghost" id="rotaCancel2" type="button">Cancel</button>'+
       '<button class="btn btn-main" id="rotaSubmitRequest" type="button"'+
