@@ -1340,6 +1340,44 @@ if (want("C41")) {
   await p.ctx.close();
 }
 
+/* C42 — the Drivers screen: a driver edited and one added, from v1.92.0 */
+if (want("C42")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    await p.pg.evaluate(() => { location.hash = "drivers"; });
+    await p.wait(600);
+    const first = await p.text('#driversBody .drv .def-head b');
+    const before = await env.DB.prepare("SELECT route, active FROM drivers WHERE name=?").bind(first).first();
+    await p.pg.click('#driversBody [data-do="editdriver"]');
+    await p.wait(300);
+    const flipTo = before.route === "South" ? "North" : "South";
+    await p.pg.click('#drRoute [data-v="' + flipTo + '"]');
+    await p.pg.click('#drActive [data-v="NO"]');
+    await p.pg.click("#sheetGo");
+    await p.wait(900);
+    const after = await env.DB.prepare("SELECT route, active FROM drivers WHERE name=?").bind(first).first();
+    await p.pg.click('#driversBody [data-do="adddriver"]');
+    await p.wait(300);
+    await p.pg.click("#sheetGo");
+    const noName = await p.text("#sheetSay");
+    await p.pg.fill("#drName", "Sis Newcomer");
+    await p.pg.click('#drRoute [data-v="North"]');
+    await p.pg.click("#sheetGo");
+    await p.wait(900);
+    const added = await env.DB.prepare("SELECT route, active, pin_hash FROM drivers WHERE name=?").bind("Sis Newcomer").first();
+    const listed = await p.pg.$$eval("#driversBody .drv .def-head b", (bs) => bs.map((b) => b.textContent));
+    const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+    await p.shot("C42-drivers");
+    check("C42", "on Drivers a driver is edited and one added, and the live server has both at once",
+          after.route === flipTo && Number(after.active) === 0 && /name/i.test(noName) &&
+          added && added.route === "North" && Number(added.active) === 1 && added.pin_hash === "" &&
+          listed.indexOf("Sis Newcomer") !== -1 && !wide && !p.errs.length,
+          JSON.stringify({ first, before, after, noName, added, listed, wide, errors: p.errs }));
+  } catch (e) { stopped("C42", e); }
+  await p.ctx.close();
+}
+
 check("C0", "no script error on the page throughout", me && !me.errs.length, JSON.stringify(me && me.errs));
 if (me) await me.ctx.close();
 await done();

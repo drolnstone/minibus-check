@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.96.0";
+var SCRIPT_VERSION = "v1.97.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -3532,6 +3532,9 @@ function pushToWorker() {
   var coordShelf = null;
   try {
     coordShelf = { readAt: readAt, requests: coordRequestsList(ss), defects: coordDefectsList(ss) };
+    /* From v1.97.0: the Drivers tab as the coordinator's app edits it. The
+       PIN is never in it, only whether there is one. */
+    try { coordShelf.drivers = coordDriversList(ss); coordShelf.driverRoles = driverRoleList(ss); } catch (err) {}
     /* From v1.92.0: each bus's Vehicle Log and the jobs still to arrange.
        Guarded on its own, so a log that will not read costs only itself. */
     try { coordShelf.vehicles = vlogShelf(ss); } catch (err) {}
@@ -3858,6 +3861,80 @@ function coordAppliedFind(id) {
   return null;
 }
 
+/* ---- the Drivers tab from the coordinator's app, from v1.97.0 ---------- */
+
+function coordDriversList(ss) {
+  return readDriversFresh(ss).map(function (d) {
+    return { name: d.name, role: d.role, active: d.active, order: d.order, route: d.route,
+             email: d.email, phone: d.phone, hasPin: !!d.pin };
+  });
+}
+
+/* What Role offers: Driver, the coordinator titles, and any title already on
+   the tab. The same list as the tab's own dropdown. */
+function driverRoleList(ss) {
+  var roles = ["Driver"].concat(AUTHORISER_ROLES);
+  readDriversFresh(ss).forEach(function (d) {
+    var v = String(d.role || "").trim();
+    if (v && roles.map(function (x) { return x.toLowerCase(); }).indexOf(v.toLowerCase()) === -1) roles.push(v);
+  });
+  return roles;
+}
+
+/* One driver's row, changed or added. b: { name, add, set: { role, route,
+   active, order, email, phone } }, each one missing for no change. The PIN
+   is set on the sheet and nowhere else. */
+var DRIVER_FIELDS = [["role", "Role"], ["route", "Route"], ["active", "Active"], ["order", "Primary order"],
+                     ["email", "Email"], ["phone", "Phone"]];
+function coordDriver(ss, a, b, by) {
+  var sh = ss.getSheetByName(DRIVERS_SHEET);
+  if (!sh) return { done: true, ok: false, push: true, result: "There is no Drivers tab." };
+  var dc = colsHard(sh, DRIVERS_SHEET);
+  var name = String(b.name || "").replace(/\s+/g, " ").trim();
+  if (!name) return { done: true, ok: false, push: true, result: "No driver was named." };
+  var wide = Math.max(sh.getLastColumn(), DRIVERS_HEADERS.length);
+  var row = 0;
+  if (sh.getLastRow() >= 2) {
+    var names = sh.getRange(2, dc.name, sh.getLastRow() - 1, 1).getValues();
+    for (var i = 0; i < names.length; i++) {
+      if (String(names[i][0] || "").trim().toLowerCase() === name.toLowerCase()) { row = i + 2; break; }
+    }
+  }
+  if (b.add && row) return { done: true, ok: false, push: true, result: name + " is already on the Drivers tab." };
+  if (!b.add && !row) return { done: true, ok: false, push: true, result: name + " is not on the Drivers tab." };
+  var set = b.set || {};
+  var hist = [];
+  if (!row) {
+    row = sh.getLastRow() + 1;
+    var blank = [];
+    for (var j = 0; j < wide; j++) blank.push("");
+    blank[dc.name - 1] = safeText(name);
+    sh.getRange(row, 1, 1, wide).setValues([blank]);
+    hist.push({ who: by, where: "Coordinator's app", reg: "", what: "Driver added: " + name, from: "", to: "",
+                why: "", ref: name });
+  }
+  var cur = sh.getRange(row, 1, 1, wide).getValues()[0];
+  DRIVER_FIELDS.forEach(function (f) {
+    if (set[f[0]] === undefined || set[f[0]] === null) return;
+    var v = set[f[0]];
+    if (f[0] === "active") v = v === true || String(v).toUpperCase() === "YES" ? "YES" : "NO";
+    else if (f[0] === "order") v = Number(v) || 0;
+    else v = safeText(String(v).trim());
+    var col = dc[f[0]];
+    var was = at1(cur, col);
+    if (String(was) === String(v)) return;
+    sh.getRange(row, col).setValue(v);
+    hist.push({ who: by, where: "Coordinator's app", reg: "", what: "Driver: " + name + " \u2014 " + f[1],
+                from: was == null ? "" : String(was), to: String(v), why: "", ref: name });
+  });
+  if (hist.length) historyAdd(ss, hist);
+  memoDrop("drivers");
+  /* The rota's name lists follow the register. */
+  try { refreshDropdowns(); } catch (err) {}
+  bumpRotaVersion();
+  return { done: true, ok: true, push: true, result: "On the Drivers tab." };
+}
+
 /* One defect, one key. The live server works it out the same way
    (defectKeyOf in worker.js), so the two can name the same row. */
 function defectKey(r, dc) {
@@ -3968,6 +4045,7 @@ function applyCoordAction(ss, a, ctx) {
   if (kind === "vlog") return coordVlog(ss, a, b, by);
   if (kind === "vfix") return coordVfix(ss, a, b, by);
   if (kind === "job") return coordJob(ss, a, b, by);
+  if (kind === "driver") return coordDriver(ss, a, b, by);
   if (kind === "booking") {
     return coordOnTab(ss, BOOKINGS_SHEET, b.bookingId, a, ctx || {},
                       "On the Bus Bookings tab.", "That booking is not on the Bus Bookings tab.");

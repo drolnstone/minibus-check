@@ -1,0 +1,65 @@
+MINIBUS
+=======
+  pages v1.92.0 · server w2.34.0 · sheet v1.97.0
+
+Phase 2, screen 2. Drivers in the coordinator's app: Role, Route, Active,
+Primary order, Email and Phone changed, and a driver added. The PIN is set
+on the Drivers tab, as before.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.91.0         v1.92.0
+  Worker  w2.33.0         w2.34.0
+  Code.gs v1.96.0         v1.97.0
+
+
+IN THIS ORDER
+-------------
+
+1. WORKER. Cloudflare, the minibus Worker, Edit code. Replace everything
+   with server/worker.js. Deploy. No database change.
+
+2. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
+   Save. Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy.
+
+3. PAGES. Merge the pull request.
+
+The Drivers screen appears once the sheet has sent its first copy of the
+Drivers tab: within five minutes of step 2.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.92.0 · server w2.34.0 · sheet
+   v1.97.0 .
+
+B. Coordinator's app, first screen: Drivers, with the number active. Open
+   it: Add a driver, then North and South, each driver with Edit.
+
+C. Edit any driver, change Phone, Save. Within a few minutes the Drivers tab
+   has the new number and History has "Driver: <name> — Phone". Put it back
+   the same way.
+
+D. A driver with no PIN shows NO PIN. Set the PIN on the Drivers tab.
+
+
+WHAT CHANGED
+------------
+
+1. coord/index.html: the Drivers screen (paintDrivers) and its Edit and Add
+   sheet (editDriver). Route, Role and Active are choices; Primary order,
+   Email and Phone are typed and checked.
+
+2. worker.js actDriver: checks each field, changes the drivers table at
+   once, and lays pending changes back over each push from the sheet
+   (reapplyDrivers). coordDriversView gives the screen the Drivers tab from
+   the sheet's copy. No PIN is ever sent.
+
+3. Code.gs: the sheet's copy carries the Drivers tab with whether each
+   driver has a PIN, never the PIN (coordDriversList, driverRoleList).
+   coordDriver writes the cells or a new row, a History line for each, and
+   refreshes the rota's name lists.
+
+Tests: tests/suites/42-drivers.mjs; browser check C42.
