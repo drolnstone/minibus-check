@@ -1,0 +1,84 @@
+MINIBUS
+=======
+  pages v1.95.0 · server w2.37.0 · sheet v1.100.0
+
+PDF reports from the coordinator app, kept in Drive. One Worker paste and
+one Code.gs paste carry all of it.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.94.0         v1.95.0
+  Worker  w2.36.0         w2.37.0
+  Code.gs v1.99.0         v1.100.0
+
+
+IN THIS ORDER
+-------------
+
+1. WORKER. Cloudflare, the minibus Worker, Edit code. Replace everything
+   with server/worker.js. Deploy. No database change.
+
+2. CODE.GS. Apps Script, replace everything in Code.gs with this Code.gs.
+   Save. Then, once, so the script may use Drive:
+     the function list at the top, choose  pdfFolder , Run,
+     Review permissions, your account, Allow.
+   That makes the "Minibus reports" folder beside the spreadsheet.
+   Then Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy. No new trigger.
+
+3. PAGES. Merge the pull request.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.95.0 · server w2.37.0 · sheet
+   v1.100.0 .
+
+B. Coordinator app, first screen: PDF reports, above Have a look.
+
+C. Outstanding, Make the PDF. "Saved to Drive." with Open in Drive and
+   Save on this phone. The PDF has the logo, Outstanding, "As at" today,
+   and at the foot of every page "Contains names" and "Page 1 of 1".
+
+D. Drive: the file is in the "Minibus reports" folder beside the
+   spreadsheet. History has "PDF report saved".
+
+E. Period summary, Last month, Make the PDF. Sunday report, a Sunday,
+   Make the PDF. Fleet and safety record, This year, Make the PDF (this
+   one is landscape).
+
+
+WHAT CHANGED
+------------
+
+1. The reports. Code.gs pdfReport gathers each one as tables from the tabs:
+   - Outstanding (as at today): buses stopped (expired MOT or insurance, a
+     critical defect), renewals overdue or due in 60 days, open defects and
+     advisories, bookings on the Vehicle Log, rota gaps in the next 8
+     weeks, rota requests waiting.
+   - Fleet and safety record (From, To): each bus and its dates, walkaround
+     checks, defects reported or closed, the Vehicle Log, and History rows
+     about a bus.
+   - Sunday report (one Sunday): the rota, each run (left church, ended),
+     each stop marked against its time, seats booked by stop, walkaround
+     checks, defects reported that day.
+   - Period summary (From, To): counts, each route (runs, seats, stops,
+     average early or late), each driver (Sundays driven, covers, checks).
+   Quick dates: This month, Last month, Last 3 months, This year.
+
+2. The PDF. coord/pdf.js lays it out with coord/jspdf.umd.min.js (jsPDF
+   4.2.1, MIT, loaded only when a PDF is made). A4, real text, the logo,
+   title, period, who made it and when. Every page: "Contains names" and
+   "Page x of y". File name: Minibus - <report> - <dates>.pdf.
+
+3. Drive. The app sends the PDF through the live server (coord ops pdf and
+   pdfsave, after the PIN) to Code.gs pdfSave, which keeps it in the
+   "Minibus reports" folder beside the spreadsheet (Script Properties
+   REPORTS_FOLDER holds its id; set it to another folder's id to use that
+   one). The folder is shared with nobody: the files are yours, and the
+   coordinator who made one also has it on his phone.
+
+4. No typing boxes are added: the period is chosen with date pickers.
+
+5. Tests. tests/suites/47-pdf-reports.mjs.
