@@ -199,9 +199,39 @@ export default async function (root) {
       await W.cachePut(env, "coord_shelf", { builtAt: Date.now(), readAt: Date.now(), requests: [], defects: [], stops: shelf }).run();
       const out = await act(env, { kind: "stop", stopId: "N03", set: { time: "10:26", postcode: "L4 1AA", where: "12 Litherland Rd Bootle" } });
       a.ok(out.ok, JSON.stringify(out));
-      a.eq(out.action.words, "N03: at 10:26.");
+      a.eq(out.action.words, "N03: at 10:26, postcode L4 1AA.");
       a.ok((await stop(env, "N03")).lat, "the pin was cleared");
+      a.eq((await stop(env, "N03")).postcode, "L4 1AA");
       a.has(String((await act(env, { kind: "stop", stopId: "N03", set: { postcode: "L41AA" } })).error), "Nothing");
+    });
+  });
+
+  s.test("a stop switched back on keeps its row's place; a blank time and a stop with no name decide nothing", async (a) => {
+    await atTime(THU, async () => {
+      const { db, env } = await fresh();
+      /* N11 is switched off in the row above N05, at N05's time. */
+      const shelf = SHELF.map((x) => Object.assign({}, x, x.id === "N11" ? { time: "10:39" } : {}));
+      await W.cachePut(env, "coord_shelf", { builtAt: Date.now(), readAt: Date.now(), requests: [], defects: [], stops: shelf }).run();
+      const on = await act(env, { kind: "stop", stopId: "N11", set: { active: true } });
+      a.ok(on.ok, JSON.stringify(on));
+      a.eq((await order(env, "North")).join(" "), "N00 N01 N02 N03 N04 N11 N05 N06 N07 N08 N09");
+      await db.prepare("DELETE FROM stops").run();
+      await seedSunday(db, KEY);
+      await W.reapplyStops(env);
+      a.eq((await order(env, "North")).join(" "), "N00 N01 N02 N03 N04 N11 N05 N06 N07 N08 N09");
+    });
+    await atTime(THU, async () => {
+      const { db, env } = await fresh();
+      /* A stop in use with no time, hand-typed on the tab, between N05 and N06. */
+      await db.prepare("INSERT INTO stops (stop_id, route, time, stop, postcode, place, kind, seq) VALUES (?,?,?,?,?,?,?,?)")
+        .bind("N13", "North", "", "Placeholder Rd", "", "", "pickup", 5.5).run();
+      const out = await act(env, { kind: "stop", add: true, set: { route: "North", time: "10:26", stop: "Bootle Village" } });
+      a.ok(out.ok, JSON.stringify(out));
+      a.eq((await order(env, "North")).join(" "), "N00 N01 N02 N03 N12 N04 N05 N13 N06 N07 N08 N09");
+      /* Switched on with no name: refused. */
+      const shelf = SHELF.concat([{ id: "N14", route: "North", time: "", stop: "", postcode: "", where: "", active: false, type: "Pickup" }]);
+      await W.cachePut(env, "coord_shelf", { builtAt: Date.now(), readAt: Date.now(), requests: [], defects: [], stops: shelf }).run();
+      a.has(String((await act(env, { kind: "stop", stopId: "N14", set: { active: true, time: "10:50" } })).error), "name");
     });
   });
 
@@ -226,11 +256,13 @@ export default async function (root) {
       const rows = STOPS.filter((x) => x.route === "North").map((x) => ({ Route: x.route, "Stop ID": x.id, Time: x.time, Stop: x.stop,
         Postcode: x.id === "N03" ? "L41AA" : "L4 1AA", Active: "YES", Type: TYPE[x.kind], Lat: x.lat, Lng: x.lng }));
       rows[0].Time = "9:52";
+      const H = TABS["Bus Stops"];
       rows.splice(6, 0, { Route: "North", "Stop ID": "N11", Time: "10:20", Stop: "Old Stop", Active: "NO", Type: "Pickup" });
       rows.push({ Route: "North", "Stop ID": "N12" });
       rows.push({ Route: "North", "Stop ID": "N13", Time: "11:05", Stop: "Late Rd", Active: "NO", Type: "Pickup" });
       const L = loadCodeGs(root, { tabs: { "Bus Stops": tab("Bus Stops", rows) }, props: {} });
       const ss = L.gas.ss;
+      ss.getSheetByName("Bus Stops").getRange(2, H.indexOf("Stop") + 1).setNote("Gate code 4411");
       call(L, "stopsAudit", ss, "setup", "");
       const A = (id, body) => ({ id, kind: "stop", sunday: "", by: "Bro Arthur", made: Date.now(), body });
       const ids = () => ss.getSheetByName("Bus Stops").getDataRange().getValues().slice(1).map((r) => r[TABS["Bus Stops"].indexOf("Stop ID")]);
@@ -256,6 +288,12 @@ export default async function (root) {
       a.has(r5.result, "Move its row above the Arrival");
       const r6 = call(L, "applyCoordAction", ss, A("s6", { id: "N00", set: { time: "10:05" } }), {});
       a.has(r6.result, "Pick a time up to 10:03.");
+      /* The row with no Stop, named without Active chosen: off, as the app showed it. */
+      const r6b = call(L, "applyCoordAction", ss, A("s6b", { id: "N12", set: { time: "11:10", stop: "Late Road" } }), {});
+      a.ok(r6b.ok, JSON.stringify(r6b));
+      const n12 = call(L, "coordStopsList", ss).find((x) => x.id === "N12");
+      a.eq([n12.stop, n12.active].join("|"), "Late Road|false");
+      a.not(call(L, "readBusStopsFresh", ss).some((x) => x.id === "N12"), "N12 went on the driver's list");
 
       /* A new Depart, the old one switched off: first on the tab, in a data row. */
       a.ok(call(L, "applyCoordAction", ss, A("s7", { id: "N00", set: { active: false } }), {}).ok);
@@ -264,9 +302,10 @@ export default async function (root) {
       a.ok(r8.ok, JSON.stringify(r8));
       a.eq(ids().slice(0, 3).join(" "), "N15 N00 N01");
       const sh = ss.getSheetByName("Bus Stops");
-      const H = TABS["Bus Stops"];
       const row3 = sh.getRange(3, 1, 1, H.length).getValues()[0];
       a.eq([row3[H.indexOf("Stop")], row3[H.indexOf("Active")], row3[H.indexOf("Lat")]].join("|"), "Church|NO|" + STOPS[0].lat);
+      a.eq(sh.getRange(3, H.indexOf("Stop") + 1).getNote(), "Gate code 4411");
+      a.eq(sh.getRange(2, H.indexOf("Stop") + 1).getNote(), "");
     });
   });
 

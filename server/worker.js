@@ -7082,20 +7082,28 @@ function stopSql(env, b, pins) {
     const r = f.route === "South" ? "South" : "North";
     const t = String(f.time || "");
     /* A pickup goes halfway to the next stop, so a second one added in the
-       same gap goes between the first and that stop, not level with it. */
-    const prev = "(SELECT MAX(seq) FROM stops WHERE route=?1 AND stop_id<>?2 AND kind<>'arrival' " +
-                 "AND (kind='depart' OR time<=?3))";
-    const seq = k === "depart" ? "(SELECT MIN(seq) FROM stops WHERE route=?1 AND stop_id<>?2) - 0.5"
+       same gap goes between the first and that stop, not level with it. A
+       new one goes after the last in use timed no later than it (a blank
+       time says nothing, as on the tab); one switched back on keeps its own
+       row, so it goes after the stop in use above that row (full.after, ""
+       for none). */
+    const mid = (p) => "(" + p + " + COALESCE((SELECT MIN(seq) FROM stops WHERE route=?1 AND stop_id<>?2 " +
+                       "AND seq>" + p + "), " + p + " + 1)) / 2.0";
+    const first = "(SELECT MIN(seq) FROM stops WHERE route=?1 AND stop_id<>?2) - 0.5";
+    const byTime = mid("(SELECT MAX(seq) FROM stops WHERE route=?1 AND stop_id<>?2 AND kind<>'arrival' " +
+                       "AND (kind='depart' OR (time<>'' AND time<=?3)))");
+    const byRow = k === "pickup" && !b.add && typeof f.after === "string"
+      ? (f.after ? mid("(SELECT seq FROM stops WHERE stop_id=?10 AND route=?1)") : first) : null;
+    const seq = k === "depart" ? first
               : k === "arrival" ? "(SELECT MAX(seq) FROM stops WHERE route=?1 AND stop_id<>?2) + 0.5"
-              : "COALESCE((" + prev + " + COALESCE((SELECT MIN(seq) FROM stops WHERE route=?1 AND stop_id<>?2 " +
-                "AND seq>" + prev + "), " + prev + " + 1)) / 2.0, " +
-                "(SELECT MIN(seq) FROM stops WHERE route=?1 AND stop_id<>?2) - 0.5)";
+              : "COALESCE(" + (byRow ? byRow + ", " : "") + byTime + ", " + first + ")";
     const vals = "?2, ?1, ?3, ?4, ?5, ?6, ?7, COALESCE(" + seq + ", (SELECT MAX(seq) FROM stops) + 1, 0)" +
                  (pins ? ", ?8, ?9" : "");
     const st = env.DB.prepare("INSERT OR REPLACE INTO stops (stop_id, route, time, stop, postcode, place, kind, seq" +
                               (pins ? ", lat, lng" : "") + ") VALUES (" + vals + ")");
     const binds = [r, id, t, String(f.stop || ""), String(f.postcode || ""), String(f.where || ""), k];
     if (pins) binds.push(b.pinCleared ? null : numOrNull(f.lat), b.pinCleared ? null : numOrNull(f.lng));
+    if (byRow && f.after) { if (!pins) binds.push(null, null); binds.push(String(f.after)); }
     return [st.bind(...binds)];
   }
   const cols = [], vals = [];
@@ -7176,8 +7184,7 @@ async function actStop(env, me, act) {
   } else {
     const flat = (v) => String(v == null ? "" : v).replace(/\s+/g, " ").trim();
     for (const k of Object.keys(set)) {
-      const same = k === "postcode" ? postcodeKey(set[k]) === postcodeKey(x[k])
-                 : k === "stop" || k === "where" ? set[k] === flat(x[k]) : set[k] === x[k];
+      const same = k === "stop" || k === "where" || k === "postcode" ? set[k] === flat(x[k]) : set[k] === x[k];
       if (same) delete set[k];
     }
     if (!Object.keys(set).length) return { ok: false, error: "Nothing to change." };
@@ -7188,6 +7195,7 @@ async function actStop(env, me, act) {
   const trial = list.slice();
   if (x) trial[trial.indexOf(x)] = next;
   else trial.splice(stopInsertIndex(list, next.route, next.time, next.type), 0, next);
+  if (next.active && !String(next.stop || "").trim()) return { ok: false, error: "Type the stop's name." };
   const wrong = stopOrderProblem(trial, next);
   if (wrong) return { ok: false, error: wrong };
 
@@ -7205,12 +7213,18 @@ async function actStop(env, me, act) {
     if (n) return { ok: false, error: seatWord(n) + " booked at " + x.id + ". Cancel " + (n === 1 ? "it" : "them") + " on Bookings first." };
   }
 
-  const pinCleared = !add && set.postcode !== undefined && !!x.hasPin;
+  /* Spacing and capitals tidied are not a new kerb. */
+  const pinCleared = !add && set.postcode !== undefined && postcodeKey(set.postcode) !== postcodeKey(x.postcode) && !!x.hasPin;
   const body = { id: id, add: add, set: set };
   if (pinCleared) body.pinCleared = true;
   if (add || set.active === true) {
     body.full = { route: next.route, time: next.time, stop: next.stop, postcode: next.postcode, where: next.where,
                   type: next.type, lat: next.lat, lng: next.lng };
+    if (!add) {
+      const on = trial.filter((s) => s.active && s.route === next.route);
+      const at = on.indexOf(next);
+      body.full.after = at > 0 ? on[at - 1].id : "";
+    }
   }
   const pins = await ensureStopPins(env);
   const words = [];
@@ -7341,7 +7355,7 @@ function rotaEditRule(n, touchesDriver) {
   }
 }
 
-function rotaApplySet(n0, body) {
+function rotaApplySet(n0, body, made) {
   const n = Object.assign({}, n0);
   const set = (body && body.set) || {};
   for (const f of ROTA_SET_ORDER) {
@@ -7354,21 +7368,27 @@ function rotaApplySet(n0, body) {
     /* Once. The same action applied twice, which the overlay can do in the
        seconds before the sheet reports it, must not write the note twice. */
     const lines = String(n.notes || "").split("\n").map(noteLine);
-    if (lines.indexOf(noteLine(note)) === -1) n.notes = n.notes ? n.notes + "\n" + note : note;
+    if (lines.indexOf(noteLine(note)) === -1) {
+      n.notes = n.notes ? n.notes + "\n" + note : note;
+      if (made) made.add(noteLine(note));
+    }
     rotaEditRule(n, false);
   }
   /* A note changed or taken off, from w2.35.0. Applied twice, the second
-     finds nothing to change. A change to a line already there takes the old
-     one off: laid over a copy that already has the change, a note added then
-     changed would otherwise show twice. */
+     finds nothing to change. Laid over a copy that already has the change,
+     the new line is there already: the change is made. made holds the lines
+     this replay put in itself; a note added then changed takes that line
+     off, or it would show twice. */
   const ed = body && body.noteEdit;
   if (ed && ed.was) {
     const lines = String(n.notes || "").split("\n");
     const flat = lines.map(noteLine);
     const i = flat.indexOf(noteLine(ed.was));
+    const now = noteLine(ed.now);
     if (i !== -1) {
-      const now = noteLine(ed.now);
-      if (now && flat.indexOf(now) === -1) lines[i] = now; else lines.splice(i, 1);
+      if (!now) lines.splice(i, 1);
+      else if (flat.indexOf(now) === -1) { lines[i] = now; if (made) made.add(now); }
+      else if (made && made.has(flat[i])) lines.splice(i, 1);
       n.notes = lines.join("\n");
     }
     rotaEditRule(n, false);
@@ -7430,7 +7450,8 @@ function runningStatus(n, hasPending) {
 
 function shelfRowApply(row, a, ctx) {
   const n0 = rotaNorm(row, true);
-  const n = a.kind === "rota" ? rotaApplySet(n0, a.body) : decideApply(n0, a.body, ctx.routes);
+  const made = ctx.made ? (ctx.made[row.date] = ctx.made[row.date] || new Set()) : null;
+  const n = a.kind === "rota" ? rotaApplySet(n0, a.body, made) : decideApply(n0, a.body, ctx.routes);
   const out = Object.assign({}, row);
   out.primary = n.north;
   out.actual = n.northCover || n.north;
@@ -7505,7 +7526,8 @@ async function reapplyRawRota(env, onlySundays) {
     const raw = await getRotaRow(env, key);
     if (!raw) continue;          /* further ahead than the table holds; nothing reads it */
     let n = rotaNorm(raw, false);
-    for (const a of by[key]) n = a.kind === "rota" ? rotaApplySet(n, a.body) : decideApply(n, a.body, routes);
+    const made = new Set();
+    for (const a of by[key]) n = a.kind === "rota" ? rotaApplySet(n, a.body, made) : decideApply(n, a.body, routes);
     /* A note changed or taken off, from w2.35.0. The row here may already
        carry every change, and a note added then changed would come back if
        laid over it again, so the Notes are laid over the sheet's own copy
@@ -7516,7 +7538,8 @@ async function reapplyRawRota(env, onlySundays) {
         const row = c && c.payload && (c.payload.rows || []).find((x) => x.date === key);
         if (row) {
           let m = rotaNorm(row, true);
-          for (const a of by[key]) if (a.kind === "rota") m = rotaApplySet(m, a.body);
+          const mine = new Set();
+          for (const a of by[key]) if (a.kind === "rota") m = rotaApplySet(m, a.body, mine);
           n.notes = m.notes;
         }
       } catch (e) {}
@@ -7535,7 +7558,7 @@ async function reapplyRawRota(env, onlySundays) {
 async function coordOverlayShelf(env, out) {
   const acts = await coordPending(env, ["rota", "decide", "defect"]);
   if (!acts.length) return;
-  const ctx = { buses: await getBuses(env), routes: await driverRoutes(env) };
+  const ctx = { buses: await getBuses(env), routes: await driverRoutes(env), made: {} };
   for (const a of acts) {
     if (a.kind === "defect") continue;
     const i = (out.rows || []).findIndex((x) => x.date === a.sunday);

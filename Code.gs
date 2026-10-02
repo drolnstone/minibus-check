@@ -4125,6 +4125,10 @@ function coordStop(ss, a, b, by) {
   if (b.add && cur) return { done: true, ok: false, push: true, result: id + " is already on the Bus Stops tab." };
   if (!b.add && !cur) return { done: true, ok: false, push: true, result: id + " is not on the Bus Stops tab." };
 
+  /* A row with no Stop shows in the app as not active. Named there without
+     Active chosen, it stays so: Active is written NO. */
+  if (cur && !cur.stop && set.stop && (set.active === undefined || set.active === null)) set.active = false;
+
   /* The stop as it would be, in its place, asked before anything is written. */
   var next = cur ? JSON.parse(JSON.stringify(cur)) : { row: 0, id: id, route: set.route === "South" ? "South" : "North",
     time: "", stop: "", postcode: "", where: "", active: true, type: "Pickup", hasPin: false };
@@ -4150,9 +4154,10 @@ function coordStop(ss, a, b, by) {
     if (after === 1 && sh.getLastRow() >= 2) {
       /* First on the tab. A row put in under the header would take the
          header's look and miss the drop-downs and the lock's opening, so it
-         goes in under the first stop, which moves down into it. */
+         goes in under the first stop and is moved above it. The first stop
+         moves down whole, its notes and text with it. */
       sh.insertRowsAfter(2, 1);
-      sh.getRange(3, 1, 1, wide).setValues(sh.getRange(2, 1, 1, wide).getValues());
+      sh.moveRows(sh.getRange("3:3"), 2);
       row = 2;
     } else if (after >= 1 && after < sh.getLastRow()) { sh.insertRowsAfter(after, 1); row = after + 1; }
     else row = Math.max(sh.getLastRow(), 1) + 1;
@@ -4173,7 +4178,10 @@ function coordStop(ss, a, b, by) {
     var col = sc[f[0]];
     if (!col) return;
     var v = f[0] === "active" ? (next.active ? "YES" : "NO") : String(next[f[0]]);
-    var old = cur ? (f[0] === "active" ? (cur.active ? "YES" : "NO") : String(cur[f[0]])) : "";
+    /* Active against the cell itself: a row with no Stop reads as not active
+       whatever its cell says. */
+    var old = cur ? (f[0] === "active" ? (String(at1(was, col) || "YES").trim().toUpperCase() === "NO" ? "NO" : "YES")
+                                       : String(cur[f[0]])) : "";
     if (cur && old === v) return;
     var cell = sh.getRange(row, col);
     /* Time is text on this tab, 09:50, never a time value. */
@@ -4361,10 +4369,12 @@ function coordRota(ss, a, b, by) {
     }
   });
   var note = String(b.note || "").trim();
+  /* One line of the Notes as the live server compares it (noteLine): spacing,
+     and the apostrophe that stops a formula, are not part of the note. */
+  var nl = function (x) { return String(x == null ? "" : x).replace(/\s+/g, " ").trim().replace(/^'/, ""); };
   if (note) {
-    var lines = String(sh.getRange(row, rc.notes).getValue() || "").split("\n")
-      .map(function (x) { return x.trim(); });
-    if (lines.indexOf(note) === -1) appendNote(sh, row, note);
+    var lines = String(sh.getRange(row, rc.notes).getValue() || "").split("\n").map(nl);
+    if (lines.indexOf(nl(note)) === -1) appendNote(sh, row, note);
     onEditRota({ range: sh.getRange(row, rc.notes) }, sh);
     did++;
   }
@@ -4373,7 +4383,6 @@ function coordRota(ss, a, b, by) {
   var gone = false;
   var ed = b.noteEdit;
   if (ed && ed.was) {
-    var nl = function (x) { return String(x == null ? "" : x).replace(/\s+/g, " ").trim().replace(/^'/, ""); };
     var was = nl(ed.was), now = nl(ed.now);
     var own = /^(swapped\s*:|protected\b)/i;
     if (own.test(was) || own.test(now)) {
@@ -5817,13 +5826,13 @@ function appendNote(sh, row, text) {
 
 /* A Notes cell as it is written. Only the cell's first character can start a
    formula. One line on its own that Sheets would read as a value (11/10,
-   10:30, 07700 900123, 11 Oct) gets an apostrophe in front, as typing it
+   10:30, 07700 900123, 11 Oct, 11-Oct) gets an apostrophe in front, as typing it
    would need, so it stays the words. */
 function notesText(t) {
   t = String(t == null ? "" : t);
   if (t.indexOf("\n") === -1 && t.charAt(0) !== "'" &&
       (/^[-+]?[£$€]?[\d.,:\/\s-]*\d[\d.,:\/\s-]*%?\s*(am|pm)?$/i.test(t) || /^(true|false)$/i.test(t) ||
-       /^(\d{1,2}(st|nd|rd|th)?\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(\s+\d{1,2}(st|nd|rd|th)?)?(,?\s+\d{2,4})?$/i.test(t))) {
+       /^(\d{1,2}(st|nd|rd|th)?[\s-]+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?([\s-]+\d{1,2}(st|nd|rd|th)?)?([,\s-]+\d{2,4})?$/i.test(t))) {
     return "'" + t;
   }
   return safeText(t);

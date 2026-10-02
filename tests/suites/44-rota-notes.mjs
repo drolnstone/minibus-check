@@ -189,11 +189,24 @@ export default async function (root) {
     });
   });
 
+  s.test("a line changed, put back, then another changed to it, laid over the sheet's copy: both lines shown", async (a) => {
+    await atTime(THU, async () => {
+      const { db, env } = await fresh();
+      await pushNotes(db, env, "Ramp in the shed\nCones in the hall", []);
+      a.ok((await act(env, { kind: "rota", sunday: KEY, noteEdit: { was: "Ramp in the shed", now: "Ramp in the vestry" } })).ok);
+      a.ok((await act(env, { kind: "rota", sunday: KEY, noteEdit: { was: "Ramp in the vestry", now: "Ramp in the shed" } })).ok);
+      a.ok((await act(env, { kind: "rota", sunday: KEY, noteEdit: { was: "Cones in the hall", now: "Ramp in the vestry" } })).ok);
+      /* The sheet filed all three, and its push left before it could say so. */
+      await pushNotes(db, env, "Ramp in the shed\nRamp in the vestry", []);
+      for (const t of [(await W.getRotaRow(env, KEY)).notes, await notesOf(env)]) a.eq(t, "Ramp in the shed\nRamp in the vestry");
+    });
+  });
+
   s.test("the sheet keeps a lone date, time or number as the words, and a minus line without an apostrophe", async (a) => {
     await atTime(THU, async () => {
       const base = { "North Liverpool scheduled": "Bro Adrian", Status: "Confirmed", "South Liverpool scheduled": "Bro Trevor" };
       const L = loadCodeGs(root, { tabs: {
-        "Rota": tab("Rota", [Object.assign({ Sunday: new Date(2026, 9, 4), Notes: "Bring the ramp\n11/10" }, base),
+        "Rota": tab("Rota", [Object.assign({ Sunday: new Date(2026, 9, 4), Notes: "Bring the ramp\n11/10\nBring  the cones" }, base),
                              Object.assign({ Sunday: new Date(2026, 9, 11), Notes: "" }, base),
                              Object.assign({ Sunday: new Date(2026, 9, 18), Notes: "Bring the cones" }, base)]),
         "Drivers": tab("Drivers", [{ Name: "Bro Adrian", Role: "Driver", Active: "YES", Route: "North" },
@@ -203,7 +216,11 @@ export default async function (root) {
       const A = (id, key, body) => ({ id, kind: "rota", sunday: key, by: "Bro Arthur", made: Date.now(),
                                       body: Object.assign({ sunday: key, set: {}, note: "" }, body) });
       const cell = (r) => String(ss.getSheetByName("Rota").getRange(r, TABS["Rota"].indexOf("Notes") + 1).getValue());
+      /* Already there with other spacing: not added again. */
+      a.ok(call(L, "applyCoordAction", ss, A("d0", KEY, { note: "Bring the cones" }), {}).ok);
+      a.eq(cell(2), "Bring the ramp\n11/10\nBring  the cones");
       a.ok(call(L, "applyCoordAction", ss, A("d1", KEY, { noteEdit: { was: "Bring the ramp", now: "" } }), {}).ok);
+      a.ok(call(L, "applyCoordAction", ss, A("d1b", KEY, { noteEdit: { was: "Bring the cones", now: "" } }), {}).ok);
       a.eq(cell(2), "'11/10");
       a.ok(call(L, "applyCoordAction", ss, A("d2", "2026-10-11", { note: "10:30" }), {}).ok);
       a.eq(cell(3), "'10:30");
@@ -211,6 +228,8 @@ export default async function (root) {
       a.eq(cell(4), "Bring the cones\n-5 seats");
       a.eq(call(L, "notesText", "Bring the ramp"), "Bring the ramp");
       a.eq(call(L, "notesText", "11 Oct"), "'11 Oct");
+      a.eq(call(L, "notesText", "11-Oct"), "'11-Oct");
+      a.eq(call(L, "notesText", "11-Oct-26"), "'11-Oct-26");
       a.eq(call(L, "notesText", "=1+1\nx"), "'=1+1\nx");
     });
   });

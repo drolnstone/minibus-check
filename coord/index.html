@@ -1943,8 +1943,9 @@ function editStop(id){
       /* Spacing and capitals are not a change: a new postcode clears the pin. */
       var pcKey = function(p){ return String(p || "").toUpperCase().replace(/\s+/g, ""); };
       var flat = function(t){ return String(t || "").replace(/\s+/g, " ").trim(); };
-      var pc = pcKey($("stPost").value);
-      var pcNew = add || pc !== pcKey(v.postcode);
+      var typed = flat($("stPost").value);
+      var pc = pcKey(typed);
+      var pcNew = add || typed !== flat(v.postcode);
       if(pcNew && pc && !/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(pc)){ sheetSay("Check the postcode.", true); return; }
       if(pc) pc = pc.slice(0, -3) + " " + pc.slice(-3);
       var wh = flat($("stWhere").value);
