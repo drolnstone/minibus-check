@@ -1,19 +1,14 @@
 MINIBUS
 =======
-  pages v1.90.1 · server w2.31.0 · sheet v1.93.0
+  pages v1.93.1 · server w2.35.0 · sheet v1.98.0
 
-The cleanup sweep: prompts and instructions only, in all three apps. The
-coordinator's app was done in v1.90.0. This takes the explaining lines off
-the driver app and the passenger page.
+Faded "e.g." samples back in every typing box, in all three apps.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.90.0         v1.90.1
-  Worker  w2.31.0         w2.31.0   (no change)
-  Code.gs v1.93.0         v1.93.0   (no change)
-
-If v1.90.0 (the coordinator's tidy-up) is not done yet, do it first:
-analysis/DEPLOY-v1.90.0-w2.31.0.txt.
+  Pages   v1.93.0         v1.93.1
+  Worker  w2.35.0         w2.35.0   (no change)
+  Code.gs v1.98.0         v1.98.0   (no change)
 
 
 IN THIS ORDER
@@ -25,29 +20,18 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.90.1 · server w2.31.0 · sheet
-   v1.93.0 .
+A. The foot of all three apps reads  app v1.93.1 · server w2.35.0 · sheet
+   v1.98.0 . If a phone still shows v1.93.0, close the app and open it again.
 
-B. The driver app, a walkaround on a bus that fails: "The bus does not run"
-   ends at "Ring the coordinator and arrange lifts."
+B. Coordinator app, a bus, Jobs to arrange, Done on Needs a wash: Note
+   shows  e.g. Washed after the service . Needs fuel shows  e.g. Topped up
+   after the service .
 
+C. Coordinator app, a bus, Record something, tap MOT: Notes shows  e.g.
+   Passed, one advisory on the rear brakes . Tap Service: it changes to
+   e.g. Full service, oil and filters changed .
 
-WHAT CHANGED
-------------
+D. Driver app, walkaround, mark something as a defect: What did you find?
+   shows  e.g. Nearside rear tyre worn on the edge .
 
-The driver app:
-  - The signature box: no "This records that you did the check yourself".
-  - The mileage warnings: no "An odometer does not go backwards…" and no
-    "That is a long way for this bus".
-  - Location and PIN with no signal: "Carry on." without the reason.
-  - The bus does not run: no "Nobody will be upset with you…".
-  - The timetable that did not come through: no guess at why.
-  - A swap with a driver who has no Sundays: "Ask for a cover instead."
-  - The first screen: no "Works with no signal…" line. Practice mode still
-    says "Practice mode: nothing is being sent."
-  - Install steps: no "On an iPhone only Safari can do this".
-
-The passenger page:
-  - Alerts refused: "Not turned on." without "You can still watch this page".
-  - Install steps: no "On an iPhone only Safari can do this", and the
-    iPhone alerts line stops at "once this is on your Home Screen".
+E. Passenger page, Book: the phone number box shows  e.g. 07700 900123 .

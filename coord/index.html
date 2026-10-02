@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.93.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.93.1 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -641,7 +641,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.93.0";
+var PAGE_VERSION = "v1.93.1";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1413,7 +1413,7 @@ function editNote(key, i, off){
   /* A line typed longer on the Rota tab can stay as long. */
   var most = Math.max(300, was.length);
   openSheet({ eyebrow: shortDay(key), title: "Change the note",
-              body: '<div class="field"><label for="noteText">Note</label><textarea id="noteText" maxlength="'+most+'">'+esc(was)+'</textarea></div>',
+              body: '<div class="field"><label for="noteText">Note</label><textarea id="noteText" maxlength="'+most+'" placeholder="e.g. Harvest service, more people expected">'+esc(was)+'</textarea></div>',
               go: "Save",
               onGo: function(){
                 var t = String(($("noteText") || {}).value || "").replace(/\s+/g, " ").trim();
@@ -1427,7 +1427,7 @@ function editNote(key, i, off){
 
 function addNote(key){
   openSheet({ eyebrow: shortDay(key), title: "Add a note",
-              body: '<div class="field"><label for="noteText">Note</label><textarea id="noteText" maxlength="300"></textarea></div>',
+              body: '<div class="field"><label for="noteText">Note</label><textarea id="noteText" maxlength="300" placeholder="e.g. Harvest service, more people expected"></textarea></div>',
               go: "Add the note",
               onGo: function(){
                 var t = String(($("noteText") || {}).value || "").trim();
@@ -1607,7 +1607,7 @@ function bookFor(key){
     body: '<div class="field"><label for="bkStop">Stop</label><select id="bkStop">'+opts+'</select></div>' +
           '<div class="field"><label>Seats</label><div class="stepper"><button type="button" id="bkLess" aria-label="One fewer">−</button>' +
           '<output id="bkN">1</output><button type="button" id="bkMore" aria-label="One more">+</button></div></div>' +
-          '<div class="field"><label for="bkPhone">Their number</label><input id="bkPhone" type="tel" inputmode="tel" autocomplete="off" placeholder="07…"></div>',
+          '<div class="field"><label for="bkPhone">Their number</label><input id="bkPhone" type="tel" inputmode="tel" autocomplete="off" placeholder="e.g. 07700 900123"></div>',
     go: "Book",
     onGo: function(){
       var stop = $("bkStop").value, phone = String($("bkPhone").value || "").trim();
@@ -1754,7 +1754,7 @@ function updateDefect(gk){
           '<div class="chips" id="defStates">' + DEF_STATES.map(function(s){
             return '<button type="button" data-state="'+esc(s)+'" class="'+(s === chosen ? 'on' : '')+'">'+esc(s)+'</button>';
           }).join("") + '</div>' +
-          '<div class="field"><label for="defDid">What was done</label><textarea id="defDid" maxlength="500"></textarea></div>',
+          '<div class="field"><label for="defDid">What was done</label><textarea id="defDid" maxlength="500" placeholder="e.g. Tyre replaced at the garage"></textarea></div>',
     go: "Save",
     onGo: function(){
       var did = String($("defDid").value || "").trim();
@@ -1841,14 +1841,14 @@ function editDriver(name){
     }).join("") + '</div>';
   };
   openSheet({ eyebrow: add ? "New driver" : "Driver", title: add ? "Add a driver" : x.name,
-    body: (add ? '<div class="field"><label for="drName">Name</label><input id="drName" maxlength="40" autocomplete="off"></div>' : '') +
+    body: (add ? '<div class="field"><label for="drName">Name</label><input id="drName" maxlength="40" autocomplete="off" placeholder="e.g. Bro John Smith"></div>' : '') +
           '<p class="tiny" style="margin:0 0 4px">Route</p>' + chips("drRoute", [["North", "North"], ["South", "South"]], pick.route) +
           '<p class="tiny" style="margin:0 0 4px">Role</p>' + chips("drRole", R.roles.map(function(r){ return [r, r]; }), pick.role) +
           '<p class="tiny" style="margin:0 0 4px">Active</p>' + chips("drActive", [["YES", "Active"], ["NO", "Not active"]], pick.active) +
-          '<div class="field"><label for="drOrder">Primary order</label><input id="drOrder" type="number" inputmode="numeric" min="0" max="99" value="' + esc(String(v.order || "")) + '"></div>' +
+          '<div class="field"><label for="drOrder">Primary order</label><input id="drOrder" type="number" inputmode="numeric" min="0" max="99" placeholder="e.g. 1" value="' + esc(String(v.order || "")) + '"></div>' +
           (x && x.noContact ? '' :
-          '<div class="field"><label for="drEmail">Email</label><input id="drEmail" type="email" autocomplete="off" maxlength="100" value="' + esc(v.email) + '"></div>' +
-          '<div class="field"><label for="drPhone">Phone</label><input id="drPhone" type="tel" inputmode="tel" autocomplete="off" maxlength="20" value="' + esc(v.phone) + '"></div>') +
+          '<div class="field"><label for="drEmail">Email</label><input id="drEmail" type="email" autocomplete="off" maxlength="100" placeholder="e.g. john.smith@gmail.com" value="' + esc(v.email) + '"></div>' +
+          '<div class="field"><label for="drPhone">Phone</label><input id="drPhone" type="tel" inputmode="tel" autocomplete="off" maxlength="20" placeholder="e.g. 07700 900123" value="' + esc(v.phone) + '"></div>') +
           (add ? '<p class="tiny">PIN: set it on the Drivers tab.</p>' : ''),
     go: add ? "Add" : "Save",
     onGo: function(){
@@ -1927,9 +1927,9 @@ function editStop(id){
   openSheet({ eyebrow: add ? "New stop" : x.route + " · " + x.id, title: add ? "Add a stop" : x.stop,
     body: (add ? '<p class="tiny" style="margin:0 0 4px">Route</p>' + chips("stRoute", [["North", "North"], ["South", "South"]], pick.route) : '') +
           '<div class="field"><label for="stTime">Time</label><input id="stTime" type="time" step="60" value="' + esc(v.time) + '"></div>' +
-          '<div class="field"><label for="stName">Stop</label><input id="stName" maxlength="120" autocomplete="off" value="' + esc(v.stop) + '"></div>' +
-          '<div class="field"><label for="stPost">Postcode</label><input id="stPost" maxlength="8" autocomplete="off" autocapitalize="characters" value="' + esc(v.postcode) + '"></div>' +
-          '<div class="field"><label for="stWhere">Where</label><input id="stWhere" maxlength="200" autocomplete="off" value="' + esc(v.where) + '"></div>' +
+          '<div class="field"><label for="stName">Stop</label><input id="stName" maxlength="120" autocomplete="off" placeholder="e.g. Tesco car park" value="' + esc(v.stop) + '"></div>' +
+          '<div class="field"><label for="stPost">Postcode</label><input id="stPost" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="e.g. SE15 4QF" value="' + esc(v.postcode) + '"></div>' +
+          '<div class="field"><label for="stWhere">Where</label><input id="stWhere" maxlength="200" autocomplete="off" placeholder="e.g. By the bus shelter outside the main entrance" value="' + esc(v.where) + '"></div>' +
           '<p class="tiny" style="margin:0 0 4px">Type</p>' + chips("stType", [["Pickup", "Pickup"], ["Arrival", "Arrival"], ["Depart", "Depart"]], pick.type) +
           (add ? '' : '<p class="tiny" style="margin:0 0 4px">Active</p>' + chips("stActive", [["YES", "Active"], ["NO", "Not active"]], pick.active)),
     go: add ? "Add" : "Save",
@@ -2007,6 +2007,16 @@ var RENEWALS = {
 };
 var RENEW_KEYS = ["mot", "service", "insurance", "permit"];
 var VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Other"];
+/* The faded sample in Notes, matched to what it was. */
+var VLOG_SAMPLE = {
+  "MOT": "e.g. Passed, one advisory on the rear brakes",
+  "Service": "e.g. Full service, oil and filters changed",
+  "Insurance": "e.g. Renewed with the same insurer",
+  "Parking permit": "e.g. Renewed for another year",
+  "Repair": "e.g. Wing mirror replaced",
+  "Tyres": "e.g. Both front tyres replaced",
+  "Other": "e.g. Fire extinguisher replaced"
+};
 var VLOG_ITEM = { "MOT": "mot", "Service": "service", "Insurance": "insurance", "Parking permit": "permit" };
 
 function rnParts(k){
@@ -2258,12 +2268,12 @@ function editBus(reg){
     el.textContent = l.map(function(o){ return o.reg + ": " + (o.oddRoute ? o.oddRoute + " in odd months" : "standby") + "."; }).join(" ");
   };
   openSheet({ eyebrow: add ? "New bus" : "Bus", title: add ? "Add a bus" : x.reg,
-    body: (add ? '<div class="field"><label for="buReg">Registration</label><input id="buReg" maxlength="10" autocomplete="off" autocapitalize="characters"></div>' : '') +
-          '<div class="field"><label for="buSeats">Seats for passengers</label><input id="buSeats" type="number" inputmode="numeric" min="1" max="50" value="' + esc(String(v.seats)) + '"></div>' +
+    body: (add ? '<div class="field"><label for="buReg">Registration</label><input id="buReg" maxlength="10" autocomplete="off" autocapitalize="characters" placeholder="e.g. AB12 CDE"></div>' : '') +
+          '<div class="field"><label for="buSeats">Seats for passengers</label><input id="buSeats" type="number" inputmode="numeric" min="1" max="50" placeholder="e.g. 16" value="' + esc(String(v.seats)) + '"></div>' +
           '<p class="tiny" style="margin:0 0 4px">Active</p>' + chips("buActive", [["YES", "In use"], ["NO", "Not in use"]], pick.active) +
           '<p class="tiny" style="margin:0 0 4px">Route in odd months</p>' + chips("buRoute", [["North", "North"], ["South", "South"], ["-", "Standby"]], pick.oddRoute) +
           '<p class="preview" id="buSwap" hidden></p>' +
-          (x && x.noNotes ? '' : '<div class="field"><label for="buNotes">Notes</label><textarea id="buNotes" maxlength="500">' + esc(v.notes) + '</textarea></div>'),
+          (x && x.noNotes ? '' : '<div class="field"><label for="buNotes">Notes</label><textarea id="buNotes" maxlength="500" placeholder="e.g. Wheelchair lift, spare key in the church office">' + esc(v.notes) + '</textarea></div>'),
     go: add ? "Add" : "Save",
     onGo: function(){
       var r = regOf();
@@ -2333,9 +2343,9 @@ function recordFor(reg, from){
           '<div class="field" id="vlGivenF" hidden><label for="vlGiven" id="vlGivenL"></label><input type="date" id="vlGiven"></div>' +
           '<p class="preview" id="vlNext" hidden></p>' +
           '<div class="two"><div class="field"><label for="vlMiles">Mileage</label><input id="vlMiles" inputmode="numeric" autocomplete="off"' +
-            (m && m.miles ? ' placeholder="' + esc("Last read " + Number(m.miles).toLocaleString("en-GB")) + '"' : '') + '></div>' +
-          '<div class="field"><label for="vlCost">Cost (£)</label><input id="vlCost" inputmode="decimal" autocomplete="off"></div></div>' +
-          '<div class="field"><label for="vlGarage">Garage</label><input id="vlGarage" maxlength="80" autocomplete="off" value="' + esc(from && from.garage || "") + '"></div>' +
+            ' placeholder="' + esc(m && m.miles ? "Last read " + Number(m.miles).toLocaleString("en-GB") : "e.g. 57363") + '"></div>' +
+          '<div class="field"><label for="vlCost">Cost (£)</label><input id="vlCost" inputmode="decimal" autocomplete="off" placeholder="e.g. 245.00"></div></div>' +
+          '<div class="field"><label for="vlGarage">Garage</label><input id="vlGarage" maxlength="80" autocomplete="off" placeholder="e.g. High Street Garage" value="' + esc(from && from.garage || "") + '"></div>' +
           (defs.length ? '<div id="vlDefs"><p class="tiny" style="margin:0 0 2px">Defects put right</p>' + defs.map(function(g, i){
             var n = g.reports.length;
             return '<label class="check"><input type="checkbox" data-defg="' + i + '"><span>' + esc(g.item) +
@@ -2373,6 +2383,7 @@ function recordShow(b){
   $("vlGivenF").hidden = !(item && done);
   if(item) $("vlGivenL").textContent = givenLabel(item);
   var defs = $("vlDefs"); if(defs) defs.hidden = !done;
+  $("vlNotes").placeholder = done ? (VLOG_SAMPLE[VL.what] || "e.g. Fire extinguisher replaced") : "e.g. Booked for 9am, drop the bus off at 8:45";
   var p = $("vlNext");
   if(!done){
     p.hidden = true;
@@ -2430,11 +2441,11 @@ function correctEntry(reg, id){
                    : '<div class="field"><label for="vfDay">Day it was done</label><input type="date" id="vfDay" value="' + esc(x.done) + '" max="' + esc(calToday()) + '"></div>' +
                      (item ? '<div class="field"><label for="vfGiven">' + esc(givenLabel(item)) + '</label><input type="date" id="vfGiven" value="' + esc(x.given || "") + '"></div>' : '') +
                      '<p class="preview" id="vfNext" hidden></p>') +
-          '<div class="two"><div class="field"><label for="vfMiles">Mileage</label><input id="vfMiles" inputmode="numeric" autocomplete="off" value="' + esc(x.miles == null ? "" : x.miles) + '"></div>' +
-          '<div class="field"><label for="vfCost">Cost (£)</label><input id="vfCost" inputmode="decimal" autocomplete="off" value="' + esc(x.cost == null ? "" : x.cost) + '"></div></div>' +
-          '<div class="field"><label for="vfGarage">Garage</label><input id="vfGarage" maxlength="80" autocomplete="off" value="' + esc(x.garage || "") + '"></div>' +
+          '<div class="two"><div class="field"><label for="vfMiles">Mileage</label><input id="vfMiles" inputmode="numeric" autocomplete="off" placeholder="e.g. 57363" value="' + esc(x.miles == null ? "" : x.miles) + '"></div>' +
+          '<div class="field"><label for="vfCost">Cost (£)</label><input id="vfCost" inputmode="decimal" autocomplete="off" placeholder="e.g. 245.00" value="' + esc(x.cost == null ? "" : x.cost) + '"></div></div>' +
+          '<div class="field"><label for="vfGarage">Garage</label><input id="vfGarage" maxlength="80" autocomplete="off" placeholder="e.g. High Street Garage" value="' + esc(x.garage || "") + '"></div>' +
           '</div>' +
-          '<div class="field"><label for="vfWhy">Why</label><textarea id="vfWhy" maxlength="300"></textarea></div>',
+          '<div class="field"><label for="vfWhy">Why</label><textarea id="vfWhy" maxlength="300" placeholder="e.g. The date was typed wrong"></textarea></div>',
     go: "Correct it",
     onGo: function(){
       var a = { kind: "vfix", corrects: x.id, why: $("vfWhy").value || "" };
@@ -2477,10 +2488,17 @@ function correctEntry(reg, id){
 }
 
 /* A job the last walkaround asked for, arranged. */
+/* The faded sample in a job's Note, matched to the job. */
+var JOB_SAMPLE = {
+  "Needs a wash": "e.g. Washed after the service",
+  "Inside needs a clean": "e.g. Cleaned inside after the service",
+  "Needs fuel": "e.g. Topped up after the service",
+  "Tyres need air": "e.g. Tyres pumped up after the service"
+};
 function jobDone(reg, job){
   var j = jobsOf(reg); if(!j) return;
   openSheet({ eyebrow: reg, title: job, line: "Asked for at the walkaround " + (j.date ? shortDay(j.date) : "") + ". Mark it done?",
-    body: '<div class="field"><label for="jobNote">Note</label><input id="jobNote" maxlength="200" autocomplete="off"></div>',
+    body: '<div class="field"><label for="jobNote">Note</label><input id="jobNote" maxlength="200" autocomplete="off" placeholder="' + esc(JOB_SAMPLE[job] || "e.g. Booked in after the service") + '"></div>',
     go: "Done",
     onGo: function(){ act({ kind: "job", reg: reg, job: job, checkId: j.checkId, note: $("jobNote").value || "" }); } });
 }
