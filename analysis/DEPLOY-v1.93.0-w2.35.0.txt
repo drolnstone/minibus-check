@@ -2,20 +2,18 @@ MINIBUS
 =======
   pages v1.93.0 · server w2.35.0 · sheet v1.98.0
 
-Phase 2, screens 2 to 5 in one go, and the Run record browser check.
-Drivers (from #26, whose Worker and Code.gs were never pasted): Role,
-Route, Active, Primary order, Email and Phone, and a driver added. Buses:
-Seats, Active, Route in odd months and Notes, and a bus added. Rota: a note
-changed or taken off. Bus stops: Time, Stop, Postcode, Where, Active and
-Type, and a stop added.
+Phase 2, screens 3 to 5 in one go, and the Run record browser check.
+Buses: Seats, Active, Route in odd months and Notes, and a bus added. Rota:
+a note changed or taken off. Bus stops: Time, Stop, Postcode, Where, Active
+and Type, and a stop added. Check B is the Drivers screen from #26.
 
 One Worker paste and one Code.gs paste carry all of it.
 
 
 YOU ARE ON              GOING TO
   Pages   v1.92.0         v1.93.0
-  Worker  w2.33.0         w2.35.0
-  Code.gs v1.96.0         v1.98.0
+  Worker  w2.34.0         w2.35.0
+  Code.gs v1.97.0         v1.98.0
 
 
 IN THIS ORDER
@@ -30,9 +28,9 @@ IN THIS ORDER
 
 3. PAGES. Merge the pull request.
 
-Drivers and Bus stops on the first screen, and Notes on a bus, appear once
-the sheet has sent its next copy: within an hour of step 2, or at once after
-any edit on the Rota, Drivers, Buses or Bus Stops tab.
+Bus stops on the first screen, and Notes on a bus, appear once the sheet
+has sent its next copy: within an hour of step 2, or at once after any edit
+on the Rota, Drivers, Buses or Bus Stops tab.
 
 
 AFTER IT
@@ -63,9 +61,6 @@ E. First screen: Bus stops, with the number in use. Open it: Add a stop,
 
 WHAT CHANGED
 ------------
-
-0. Drivers, as in #26 (analysis/DEPLOY-v1.92.0-w2.34.0.txt): worker.js
-   actDriver and reapplyDrivers, Code.gs coordDriver. No PIN is ever sent.
 
 1. Buses. coord/index.html editBus; worker.js actBus, laid over the buses
    table by getBuses until the sheet files it; Code.gs coordBus. A bus that
