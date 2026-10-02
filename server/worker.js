@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.36.0";
+const SCRIPT_VERSION = "w2.37.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -7980,6 +7980,8 @@ async function coordLoad(env, me) {
                                   oddRoute: b.oddRoute || "", notes: b.notes || "", noNotes: !!b.noNotes,
                                   waiting: !!b.waiting }));
   out.busEdits = true;
+  /* From w2.37.0: PDF reports, made through the sheet. */
+  out.pdf = true;
   /* From w2.35.0 a note on the rota can be changed or taken off. */
   out.noteEdits = true;
   /* From w2.35.0: the Bus Stops tab, for the Bus stops screen. null until a
@@ -8351,6 +8353,35 @@ async function reportFromSheet(env, name, title) {
     out.sections.push({ head: "Live server: fine", tone: "good", lines: mine.good });
   }
   return out;
+}
+
+/* ---- PDF reports, from w2.37.0 ----------------------------------------------
+
+   The sheet holds the whole record, so it gathers each report and keeps the
+   finished file in Drive. This only carries the two calls, after the PIN. */
+const PDF_SHEET_MS = 40000;
+const PDF_NAMES = ["outstanding", "fleet", "sunday", "summary"];
+const PDF_MAX_CHARS = 11 * 1024 * 1024;   /* base64 of the sheet's 8 MB */
+
+async function coordPdf(env, me, body) {
+  const name = String(body.name || "");
+  if (PDF_NAMES.indexOf(name) === -1) return { ok: false, error: "no such report" };
+  const got = await sheetAsk(env, { action: "pdf", step: "data", name: name,
+                                    from: String(body.from || ""), to: String(body.to || "") }, PDF_SHEET_MS);
+  if (!got) return { ok: false, error: "The spreadsheet did not answer. Try again." };
+  if (got.ok !== true) return { ok: false, error: String(got.error || "The spreadsheet could not make that report.") };
+  return { ok: true, report: got.report };
+}
+
+async function coordPdfSave(env, me, body) {
+  const f = body.file || {};
+  const data = String(f.data || "");
+  if (!data || data.length > PDF_MAX_CHARS) return { ok: false, error: "That file is empty or too big." };
+  const got = await sheetAsk(env, { action: "pdf", step: "save", who: me.name,
+                                    file: { name: String(f.name || ""), data: data } }, PDF_SHEET_MS);
+  if (!got) return { ok: false, error: "The spreadsheet did not answer. The PDF is not in Drive." };
+  if (got.ok !== true) return { ok: false, error: String(got.error || "The spreadsheet did not keep it.") };
+  return { ok: true, url: String(got.url || ""), name: String(got.name || "") };
 }
 
 async function coordReport(env, me, name) {
@@ -8811,6 +8842,8 @@ async function handleCoord(env, body) {
   if (op === "bookings") return { body: await coordBookings(env, me, body.sunday) };
   if (op === "runs") return { body: await coordRuns(env, me, body.sunday) };
   if (op === "report") return { body: await coordReport(env, me, String(body.name || "")) };
+  if (op === "pdf") return { body: await coordPdf(env, me, body) };
+  if (op === "pdfsave") return { body: await coordPdfSave(env, me, body) };
   if (op === "act") {
     const out = await coordAct(env, me, body.act || {});
     return { body: out, knock: !!(out && out.ok && !out.duplicate) };

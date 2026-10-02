@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.99.0";
+var SCRIPT_VERSION = "v1.100.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -2269,6 +2269,19 @@ function doPost(e) {
         if (rname === "remind") return reply({ ok: true, report: remindReport() });
       } catch (err) { return reply({ ok: false, error: String(err) }); }
       return reply({ ok: false, error: "no such report" });
+    }
+
+    /* PDF REPORTS, from v1.100.0: the tables for one, or the finished file
+       to keep in Drive. The live server has checked the PIN. */
+    if (String(body.action || "") === "pdf") {
+      try {
+        if (String(body.step || "") === "save") {
+          var f = body.file || {};
+          f.who = body.who;
+          return reply(pdfSave(f));
+        }
+        return reply(pdfReport(String(body.name || ""), body.from, body.to));
+      } catch (err) { return reply({ ok: false, error: String(err) }); }
     }
 
     if (String(body.action || "") === "drainnow") {
@@ -14363,4 +14376,375 @@ function alreadyHave(sh, id) {
     if (String(ids[i][0]) === String(id)) return true;
   }
   return false;
+}
+
+/* ==========================================================================
+   PDF REPORTS. From v1.100.0.
+
+   Four reports, made in the coordinator's app: Outstanding, Fleet and safety
+   record, Sunday report and Period summary. This sheet holds the whole record,
+   so it gathers each one as tables (pdfReport); the app lays them out as a
+   PDF with the logo, page x of y and "Contains names", and sends the file
+   back here to be kept in Drive (pdfSave). The live server carries both
+   calls and has checked the coordinator's PIN first.
+
+   Every table is plain text: a heading, column names and rows. Nothing about
+   how it looks lives here. */
+
+var PDF_NAMES = {
+  outstanding: "Outstanding",
+  fleet: "Fleet and safety record",
+  sunday: "Sunday report",
+  summary: "Period summary"
+};
+var PDF_FOLDER_NAME = "Minibus reports";
+var PDF_FOLDER_PROP = "REPORTS_FOLDER";
+var PDF_RENEW_WORDS = { mot: "MOT", service: "Service", insurance: "Insurance", permit: "Parking permit" };
+
+/* A tab as objects keyed by heading, so a moved column cannot move a fact. */
+function pdfTab(ss, name) {
+  var sh = ss.getSheetByName(name);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var w = sh.getLastColumn();
+  var vals = sh.getRange(1, 1, sh.getLastRow(), w).getValues();
+  var head = vals[0].map(function (h) { return String(h || "").trim(); });
+  return vals.slice(1).map(function (r) {
+    var o = {};
+    head.forEach(function (h, i) { if (h) o[h] = r[i]; });
+    return o;
+  });
+}
+function pdfStr(v) { return v == null ? "" : String(v).trim(); }
+function pdfDay(key) { if (!key) return ""; var p = key.split("-"); return p[2] + "/" + p[1] + "/" + p[0]; }
+function pdfIn(key, from, to) { return !!key && key >= from && key <= to; }
+function pdfDays(a, b) { return Math.round((keyToDate(b) - keyToDate(a)) / 86400000); }
+function pdfWhenKey(v) {
+  if (isDateLike(v)) return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  return anyToKey(v);
+}
+function pdfTime(v) { return isDateLike(v) ? Utilities.formatDate(v, Session.getScriptTimeZone(), "HH:mm") : pdfStr(v); }
+function pdfOff(status, route) {
+  var s = pdfStr(status).toLowerCase();
+  if (s.indexOf("declined") >= 0) return true;
+  return s.indexOf("cancel") >= 0 && s.indexOf(route.toLowerCase()) >= 0;
+}
+function pdfLateWords(off) {
+  if (off === "" || off == null || isNaN(Number(off))) return "";
+  var n = Math.round(Number(off));
+  return n === 0 ? "On time" : n > 0 ? n + " min late" : (-n) + " min early";
+}
+function pdfSection(head, cols, rows, empty) {
+  return { head: head, cols: cols, rows: rows, empty: empty || "None." };
+}
+function pdfDefects(ss) {
+  return pdfTab(ss, DEFECTS_SHEET).map(function (d) {
+    return { date: anyToKey(d["Date"]) || pdfWhenKey(d["Received"]), reg: pdfStr(d["Registration"]).toUpperCase(),
+             driver: pdfStr(d["Driver"]), item: pdfStr(d["Item"]),
+             crit: pdfStr(d["Critical"]).toUpperCase() === "YES",
+             found: pdfStr(d["What the driver found"]), status: pdfStr(d["Status"]) || "Open",
+             action: pdfStr(d["Action taken"]), closed: anyToKey(d["Closed on"]),
+             kind: pdfStr(d["Kind"]) || "Defect" };
+  }).filter(function (d) { return d.reg || d.item; });
+}
+function pdfDefectOpen(d) { return ["Fixed", "Not a defect"].indexOf(d.status) === -1; }
+function pdfChecks(ss) {
+  return pdfTab(ss, CHECKS_SHEET).map(function (c) {
+    return { date: anyToKey(c["Date"]) || pdfWhenKey(c["Received"]), time: pdfTime(c["Time"]),
+             reg: pdfStr(c["Registration"]).toUpperCase(), driver: pdfStr(c["Driver"]),
+             outcome: pdfStr(c["Outcome"]), defects: Number(c["Defect count"]) || 0,
+             advisories: Number(c["Advisory count"]) || 0, by: pdfStr(c["Authorised by"]),
+             type: pdfStr(c["Check type"]) };
+  }).filter(function (c) { return c.date && c.reg; });
+}
+function pdfTrips(ss) {
+  return pdfTab(ss, TRIP_SHEET).map(function (t) {
+    return { sunday: anyToKey(t["Sunday"]), route: pdfStr(t["Route"]), driver: pdfStr(t["Driver"]),
+             event: pdfStr(t["Event"]).toLowerCase(), stopId: pdfStr(t["Stop ID"]), stop: pdfStr(t["Stop"]),
+             sched: pdfTime(t["Scheduled"]), at: pdfTime(t["Happened"]), offset: t["Offset"],
+             status: pdfStr(t["Status"]).toLowerCase(), reg: pdfStr(t["Reg"]).toUpperCase(),
+             endedBy: pdfStr(t["Ended by"]) };
+  }).filter(function (t) {
+    return t.sunday && t.status.indexOf("undone") === -1 && t.status.indexOf("rehearsal") === -1;
+  });
+}
+function pdfBookings(ss) {
+  return pdfTab(ss, BOOKINGS_SHEET).map(function (b) {
+    return { sunday: anyToKey(b["Sunday"]), route: pdfStr(b["Route"]), stop: pdfStr(b["Stop"]),
+             seats: Number(b["Seats"]) || 0, status: pdfStr(b["Status"]).toLowerCase() };
+  }).filter(function (b) { return b.sunday && b.status !== "cancelled" && b.status !== "rehearsal"; });
+}
+/* Each route's run on each Sunday: who, which bus, when it left and ended,
+   and every stop marked. */
+function pdfRuns(trips) {
+  var runs = {};
+  trips.forEach(function (t) {
+    var id = t.sunday + "|" + t.route;
+    var r = runs[id] || (runs[id] = { sunday: t.sunday, route: t.route, driver: "", reg: "", left: "", ended: "",
+                                      endedBy: "", stops: [] });
+    if (t.driver) r.driver = t.driver;
+    if (t.reg) r.reg = t.reg;
+    if (t.event === "start") r.left = t.at;
+    else if (t.event === "end") { r.ended = t.at; r.endedBy = t.endedBy; }
+    else r.stops.push(t);
+  });
+  return Object.keys(runs).sort().map(function (k) { return runs[k]; });
+}
+function pdfRenewals(ss, today, ahead) {
+  var out = [];
+  readBuses(ss).forEach(function (b) {
+    if (!b.active) return;
+    RENEW_KEYS.forEach(function (k) {
+      var due = b.dates && b.dates[k];
+      if (!due) return;
+      var n = pdfDays(today, due);
+      if (n > ahead) return;
+      out.push({ reg: b.reg, what: PDF_RENEW_WORDS[k], key: k, due: due, days: n });
+    });
+  });
+  return out.sort(function (a, b) { return a.days - b.days; });
+}
+function pdfDueWords(n) {
+  return n < 0 ? "Overdue " + (-n) + (n === -1 ? " day" : " days")
+       : n === 0 ? "Due today" : "Due in " + n + (n === 1 ? " day" : " days");
+}
+
+function pdfOutstanding(ss, today) {
+  var sections = [];
+  var ren = pdfRenewals(ss, today, 60);
+  var stopped = ren.filter(function (r) { return r.days < 0 && (r.key === "mot" || r.key === "insurance"); })
+                   .map(function (r) { return [r.reg, r.what + " expired " + pdfDay(r.due)]; });
+  var defs = pdfDefects(ss).filter(pdfDefectOpen);
+  defs.filter(function (d) { return d.crit && d.kind !== "Advisory"; }).forEach(function (d) {
+    stopped.push([d.reg, "Critical defect: " + d.item + " (" + pdfDay(d.date) + ")"]);
+  });
+  sections.push(pdfSection("Buses stopped", ["Bus", "Why"], stopped));
+  sections.push(pdfSection("Renewals overdue or due in the next 60 days", ["Bus", "What", "Due", ""],
+    ren.map(function (r) { return [r.reg, r.what, pdfDay(r.due), pdfDueWords(r.days)]; })));
+  defs.sort(function (a, b) { return (b.crit ? 1 : 0) - (a.crit ? 1 : 0) || (a.date < b.date ? -1 : 1); });
+  sections.push(pdfSection("Open defects and advisories", ["Reported", "Bus", "Item", "Kind", "Critical", "Status", "Found"],
+    defs.map(function (d) { return [pdfDay(d.date), d.reg, d.item, d.kind, d.crit ? "YES" : "", d.status, d.found]; })));
+  var booked = vlogStanding(vlogRows(ss)).filter(function (x) { return x.status === "Booked" && (!x.bookedFor || x.bookedFor >= today); });
+  sections.push(pdfSection("Booked on the Vehicle Log", ["Booked for", "Bus", "What", "Garage", "Notes"],
+    booked.sort(function (a, b) { return a.bookedFor < b.bookedFor ? -1 : 1; })
+          .map(function (x) { return [pdfDay(x.bookedFor), x.reg, x.what, x.garage, x.notes]; })));
+  var gaps = [];
+  var until = dateToKey(addWeeks(keyToDate(today), 8));
+  readRotaRows(ss).filter(function (r) { return r.date >= today && r.date <= until; })
+    .sort(function (a, b) { return a.date < b.date ? -1 : 1; })
+    .forEach(function (r) {
+      [["North", r.primary, r.actual, r.northBus], ["South", r.primary2, r.actual2, r.southBus]].forEach(function (x) {
+        if (pdfOff(r.status, x[0])) return;
+        var miss = [];
+        if (!x[1] && !x[2]) miss.push("No driver");
+        if (!x[3]) miss.push("No bus");
+        if (miss.length) gaps.push([pdfDay(r.date), x[0], miss.join(", ")]);
+      });
+    });
+  sections.push(pdfSection("Rota gaps in the next 8 weeks", ["Sunday", "Route", "Missing"], gaps));
+  var reqs = [];
+  var latest = readLatestRequests(ss);
+  Object.keys(latest).sort().forEach(function (k) {
+    if (k < today) return;
+    latest[k].forEach(function (q) { if (/^pending$/i.test(q.status)) reqs.push([pdfDay(k), q.driver, q.type]); });
+  });
+  sections.push(pdfSection("Rota requests waiting", ["Sunday", "Driver", "Asked for"], reqs));
+  return sections;
+}
+
+function pdfFleet(ss, from, to) {
+  var sections = [];
+  sections.push(pdfSection("Buses", ["Bus", "Seats", "Active", "MOT due", "Insurance due", "Service due", "Permit due"],
+    readBuses(ss).map(function (b) {
+      var d = b.dates || {};
+      return [b.reg, String(b.seats || ""), b.active ? "YES" : "NO", pdfDay(d.mot), pdfDay(d.insurance),
+              pdfDay(d.service), pdfDay(d.permit)];
+    })));
+  var checks = pdfChecks(ss).filter(function (c) { return pdfIn(c.date, from, to); })
+                            .sort(function (a, b) { return (a.date + a.time) < (b.date + b.time) ? -1 : 1; });
+  sections.push(pdfSection("Walkaround checks", ["Date", "Time", "Bus", "Driver", "Outcome", "Defects", "Advisories", "Authorised by"],
+    checks.map(function (c) { return [pdfDay(c.date), c.time, c.reg, c.driver, c.outcome, String(c.defects), String(c.advisories), c.by]; })));
+  var defs = pdfDefects(ss).filter(function (d) { return pdfIn(d.date, from, to) || pdfIn(d.closed, from, to); })
+                           .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  sections.push(pdfSection("Defects reported or closed", ["Reported", "Bus", "Item", "Kind", "Critical", "Status", "What was done", "Closed"],
+    defs.map(function (d) { return [pdfDay(d.date), d.reg, d.item, d.kind, d.crit ? "YES" : "", d.status, d.action, pdfDay(d.closed)]; })));
+  var log = vlogStanding(vlogRows(ss)).filter(function (x) { return pdfIn(x.done || x.bookedFor, from, to); })
+                                      .sort(function (a, b) { return (a.done || a.bookedFor) < (b.done || b.bookedFor) ? -1 : 1; });
+  sections.push(pdfSection("Vehicle Log", ["Date", "Bus", "What", "Status", "Garage", "Cost (£)", "Next due"],
+    log.map(function (x) {
+      return [pdfDay(x.done || x.bookedFor), x.reg, x.what, x.status, x.garage,
+              x.cost == null ? "" : Number(x.cost).toFixed(2), pdfDay(x.next)];
+    })));
+  var hist = historyRead(ss, 5000).filter(function (h) {
+    return h.when && h.reg && pdfIn(dateToKey(new Date(h.when)), from, to);
+  });
+  sections.push(pdfSection("Changes on History", ["When", "Bus", "What changed", "From", "To", "Who", "Why"],
+    hist.map(function (h) {
+      var d = new Date(h.when);
+      return [pdfDay(dateToKey(d)) + " " + pdfTime(d), h.reg, h.what, h.from, h.to, h.who, h.why];
+    })));
+  return sections;
+}
+
+function pdfSunday(ss, key) {
+  var sections = [];
+  var r = null;
+  readRotaRows(ss).forEach(function (x) { if (x.date === key) r = x; });
+  var runs = pdfRuns(pdfTrips(ss).filter(function (t) { return t.sunday === key; }));
+  var rows = [];
+  ["North", "South"].forEach(function (rt) {
+    var sched = r ? (rt === "North" ? r.primary : r.primary2) : "";
+    var cover = r ? (rt === "North" ? r.actual : r.actual2) : "";
+    var bus = r ? (rt === "North" ? r.northBus : r.southBus) : "";
+    var run = runs.filter(function (x) { return x.route === rt; })[0];
+    rows.push([rt, r && pdfOff(r.status, rt) ? "Not running" : "Running", sched, cover && cover !== sched ? cover : "",
+               bus, run ? run.driver : "", run ? run.reg : ""]);
+  });
+  sections.push(pdfSection("Rota", ["Route", "Status", "Scheduled", "Cover", "Rota bus", "Drove", "Bus driven"], rows));
+  if (r && r.notes) sections.push(pdfSection("Rota notes", ["Note"], r.notes.split("\n").filter(Boolean).map(function (n) { return [n]; })));
+  sections.push(pdfSection("Runs", ["Route", "Driver", "Bus", "Left church", "Ended", "Ended by", "Stops marked"],
+    runs.map(function (x) {
+      return [x.route, x.driver, x.reg, x.left, x.ended, x.endedBy && x.endedBy !== x.driver ? x.endedBy : "", String(x.stops.length)];
+    }), "No runs recorded."));
+  var stops = [];
+  runs.forEach(function (x) {
+    x.stops.forEach(function (t) {
+      stops.push([x.route, t.stop, t.sched, t.at, pdfLateWords(t.offset), t.event.charAt(0).toUpperCase() + t.event.slice(1)]);
+    });
+  });
+  sections.push(pdfSection("Stops", ["Route", "Stop", "Timetable", "Marked", "Early or late", "Marked as"], stops, "No stops marked."));
+  var seats = {};
+  pdfBookings(ss).filter(function (b) { return b.sunday === key; }).forEach(function (b) {
+    var k = b.route + "|" + b.stop;
+    seats[k] = (seats[k] || 0) + (Number(b.seats) || 0);
+  });
+  var brows = Object.keys(seats).sort().map(function (k) { var p = k.split("|"); return [p[0], p[1], String(seats[k])]; });
+  var total = 0; Object.keys(seats).forEach(function (k) { total += seats[k]; });
+  if (brows.length) brows.push(["Total", "", String(total)]);
+  sections.push(pdfSection("Seats booked", ["Route", "Stop", "Seats"], brows));
+  sections.push(pdfSection("Walkaround checks", ["Time", "Bus", "Driver", "Outcome", "Defects", "Authorised by"],
+    pdfChecks(ss).filter(function (c) { return c.date === key; })
+      .map(function (c) { return [c.time, c.reg, c.driver, c.outcome, String(c.defects), c.by]; })));
+  sections.push(pdfSection("Defects reported", ["Bus", "Item", "Kind", "Critical", "Found", "Driver", "Status"],
+    pdfDefects(ss).filter(function (d) { return d.date === key; })
+      .map(function (d) { return [d.reg, d.item, d.kind, d.crit ? "YES" : "", d.found, d.driver, d.status]; })));
+  return sections;
+}
+
+function pdfSummary(ss, from, to) {
+  var rota = readRotaRows(ss).filter(function (r) { return pdfIn(r.date, from, to); });
+  var runs = pdfRuns(pdfTrips(ss).filter(function (t) { return pdfIn(t.sunday, from, to); }));
+  var books = pdfBookings(ss).filter(function (b) { return pdfIn(b.sunday, from, to); });
+  var checks = pdfChecks(ss).filter(function (c) { return pdfIn(c.date, from, to); });
+  var defs = pdfDefects(ss);
+  var log = vlogStanding(vlogRows(ss)).filter(function (x) { return x.status === "Done" && pdfIn(x.done, from, to); });
+  var seats = 0; books.forEach(function (b) { seats += Number(b.seats) || 0; });
+  var cost = 0; log.forEach(function (x) { cost += Number(x.cost) || 0; });
+  var routeOff = 0;
+  rota.forEach(function (r) { ["North", "South"].forEach(function (rt) { if (pdfOff(r.status, rt)) routeOff++; }); });
+  var raised = defs.filter(function (d) { return pdfIn(d.date, from, to); });
+  var facts = [
+    ["Sundays", String(rota.length)],
+    ["Route runs called off", String(routeOff)],
+    ["Runs driven", String(runs.length)],
+    ["Seats booked", String(seats)],
+    ["Walkaround checks", String(checks.length)],
+    ["Checks that found a defect", String(checks.filter(function (c) { return c.defects > 0; }).length)],
+    ["Defects reported", String(raised.filter(function (d) { return d.kind !== "Advisory"; }).length)],
+    ["of which critical", String(raised.filter(function (d) { return d.crit && d.kind !== "Advisory"; }).length)],
+    ["Advisories reported", String(raised.filter(function (d) { return d.kind === "Advisory"; }).length)],
+    ["Defects closed", String(defs.filter(function (d) { return !pdfDefectOpen(d) && pdfIn(d.closed, from, to); }).length)],
+    ["Open now", String(defs.filter(pdfDefectOpen).length)],
+    ["Work done on the Vehicle Log", String(log.length)],
+    ["Cost on the Vehicle Log (£)", cost.toFixed(2)]
+  ];
+  var sections = [pdfSection("In this period", ["", "Count"], facts)];
+  var per = {};
+  ["North", "South"].forEach(function (rt) { per[rt] = { runs: 0, seats: 0, marked: 0, late: 0, lateSum: 0, n: 0 }; });
+  runs.forEach(function (x) {
+    var p = per[x.route] || (per[x.route] = { runs: 0, seats: 0, marked: 0, late: 0, lateSum: 0, n: 0 });
+    p.runs++;
+    x.stops.forEach(function (t) {
+      p.marked++;
+      var o = Number(t.offset);
+      if (t.offset === "" || t.offset == null || isNaN(o)) return;
+      p.n++; p.lateSum += o; if (o > 5) p.late++;
+    });
+  });
+  books.forEach(function (b) { if (per[b.route]) per[b.route].seats += Number(b.seats) || 0; });
+  sections.push(pdfSection("By route", ["Route", "Runs", "Seats booked", "Stops marked", "Average early or late", "Stops over 5 min late"],
+    Object.keys(per).map(function (rt) {
+      var p = per[rt];
+      return [rt, String(p.runs), String(p.seats), String(p.marked), p.n ? pdfLateWords(p.lateSum / p.n) : "", String(p.late)];
+    })));
+  var t = {};
+  var who = function (n) { return n ? (t[n] = t[n] || { drove: 0, gave: 0, got: 0, checks: 0 }) : null; };
+  rota.forEach(function (r) {
+    [["North", r.primary, r.actual], ["South", r.primary2, r.actual2]].forEach(function (x) {
+      if (pdfOff(r.status, x[0])) return;
+      var sched = x[1], cover = x[2], d = who(cover || sched);
+      if (d) d.drove++;
+      if (cover && sched && cover !== sched) { who(cover).gave++; who(sched).got++; }
+    });
+  });
+  checks.forEach(function (c) { var d = who(c.driver); if (d) d.checks++; });
+  sections.push(pdfSection("Drivers", ["Name", "Sundays driven", "Covered for others", "Was covered", "Walkaround checks"],
+    Object.keys(t).sort(function (a, b) { return t[b].drove - t[a].drove || (a < b ? -1 : 1); })
+      .map(function (n) { var v = t[n]; return [n, String(v.drove), String(v.gave), String(v.got), String(v.checks)]; })));
+  return sections;
+}
+
+/* What the app asked for, gathered. from and to are yyyy-mm-dd; the Sunday
+   report reads from as its Sunday. Outstanding is as things stand today. */
+function pdfReport(name, from, to) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var title = PDF_NAMES[name];
+  if (!title) return { ok: false, error: "no such report" };
+  var today = dateToKey(new Date());
+  from = anyToKey(from); to = anyToKey(to);
+  if (name === "outstanding") { from = today; to = today; }
+  if (name === "sunday") { to = from; if (!from || keyToDate(from).getDay() !== 0) return { ok: false, error: "That is not a Sunday." }; }
+  if (!from || !to) return { ok: false, error: "Choose the dates." };
+  if (from > to) return { ok: false, error: "The first date is after the last." };
+  var sections = name === "outstanding" ? pdfOutstanding(ss, today)
+               : name === "fleet" ? pdfFleet(ss, from, to)
+               : name === "sunday" ? pdfSunday(ss, from)
+               : pdfSummary(ss, from, to);
+  return { ok: true, report: { name: name, title: title, from: from, to: to,
+                               period: name === "outstanding" ? "As at " + pdfDay(today)
+                                     : from === to ? pdfDay(from) : pdfDay(from) + " to " + pdfDay(to),
+                               sections: sections } };
+}
+
+/* The folder the reports are kept in: the one named in Script Properties as
+   REPORTS_FOLDER, or a new "Minibus reports" folder beside this spreadsheet,
+   remembered there. Run this once from the editor to give the script Drive. */
+function pdfFolder() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty(PDF_FOLDER_PROP);
+  if (id) { try { return DriveApp.getFolderById(id); } catch (err) {} }
+  var folder = null;
+  try {
+    var parents = DriveApp.getFileById(SpreadsheetApp.getActiveSpreadsheet().getId()).getParents();
+    if (parents.hasNext()) folder = parents.next().createFolder(PDF_FOLDER_NAME);
+  } catch (err) {}
+  if (!folder) folder = DriveApp.createFolder(PDF_FOLDER_NAME);
+  props.setProperty(PDF_FOLDER_PROP, folder.getId());
+  return folder;
+}
+
+/* The PDF the app made, kept in Drive. Only a PDF, and only a sensible size. */
+var PDF_MAX_BYTES = 8 * 1024 * 1024;
+function pdfSave(file) {
+  file = file || {};
+  var name = pdfStr(file.name).replace(/[\\\/:*?"<>|]/g, "-").slice(0, 120);
+  if (!/\.pdf$/i.test(name)) return { ok: false, error: "That is not a PDF." };
+  var bytes = Utilities.base64Decode(String(file.data || ""));
+  if (bytes.length < 5 || bytes.length > PDF_MAX_BYTES) return { ok: false, error: "That file is empty or too big." };
+  if (String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) !== "%PDF") return { ok: false, error: "That is not a PDF." };
+  var made = pdfFolder().createFile(Utilities.newBlob(bytes, "application/pdf", name));
+  try {
+    historyAdd(SpreadsheetApp.getActiveSpreadsheet(), [{ who: pdfStr(file.who), where: "Coordinator app",
+      reg: "", what: "PDF report saved", from: "", to: name, why: "", ref: made.getId() }]);
+  } catch (err) {}
+  return { ok: true, url: made.getUrl(), name: name };
 }
