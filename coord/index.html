@@ -139,9 +139,12 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
   text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
 .card{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);padding:12px 13px}
 .card+.card{margin-top:10px}
-.drv.off{opacity:.7}
+.drv.off,.stp.off{opacity:.7}
+.stp .stp-name{margin:4px 0 0;overflow-wrap:anywhere}
+#stopsBody>.btn-wide{margin-bottom:10px}
 #driversBody .btn-wide,#busesBody>.btn-wide{margin-bottom:10px}
-.bus-facts .did{margin:6px 0 0}
+.bus-facts .did{margin:6px 0 0;white-space:pre-line;color:var(--ink-2)}
+.did{overflow-wrap:anywhere}
 .tiny{font-size:13px;color:var(--muted);margin:6px 0 0}
 .center{text-align:center}
 .mono{font-family:"IBM Plex Mono",monospace}
@@ -305,6 +308,9 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .notes{margin:0;padding:0;list-style:none}
 .notes li{padding:6px 0;border-top:1px dashed var(--hair);font-size:15px;white-space:pre-line}
 .notes li:first-child{border-top:none}
+.notes li.ed{display:flex;align-items:flex-start;gap:8px}
+.notes li.ed .t{flex:1;min-width:0;overflow-wrap:anywhere}
+.notes li.ed .acts{display:flex;gap:6px;flex-shrink:0}
 
 /* ---- lists to choose from ---- */
 .pick{list-style:none;margin:0;padding:0;border:1px solid var(--hair);border-radius:var(--r);background:var(--card);
@@ -597,6 +603,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
   <section class="screen" id="s-defects"><div id="defectsBody"></div></section>
   <section class="screen" id="s-buses"><div id="busesBody"></div></section>
   <section class="screen" id="s-drivers"><div id="driversBody"></div></section>
+  <section class="screen" id="s-stops"><div id="stopsBody"></div></section>
   <section class="screen" id="s-bus"><div id="busBody"></div></section>
   <section class="screen" id="s-runs"><div id="runsBody"></div></section>
   <section class="screen" id="s-look"><div id="lookBody"></div></section>
@@ -977,7 +984,7 @@ function say(id, t, bad){
 /* ---- screens ------------------------------------------------------------- */
 
 var TITLES = { home:"Coordinator", rota:"Rota", sunday:"Rota", requests:"Rota requests", bookings:"Bookings",
-               defects:"Defects", buses:"Buses", bus:"Bus", drivers:"Drivers", runs:"Run record", look:"Have a look", report:"Have a look",
+               defects:"Defects", buses:"Buses", bus:"Bus", drivers:"Drivers", stops:"Bus stops", runs:"Run record", look:"Have a look", report:"Have a look",
                activity:"What has been done", rehearsal:"Rehearsal", sign:"Coordinator" };
 
 /* Each screen is a step in the phone's own history, so its back gesture
@@ -1042,6 +1049,7 @@ function paint(name, arg){
   if(name === "defects") return paintDefects();
   if(name === "buses") return paintBuses();
   if(name === "drivers") return paintDrivers();
+  if(name === "stops") return paintStops();
   if(name === "bus") return paintBus(arg);
   if(name === "runs") return paintRuns(arg || "");
   if(name === "look") return paintLook();
@@ -1234,6 +1242,8 @@ function paintHome(){
        (D && D.vehicles ? item("buses", "Buses", jobs ? (jobs === 1 ? "1 job to arrange" : jobs + " jobs to arrange") : "", jobs ? "warn" : "") : "") +
        /* A live server from before w2.34.0 sends no register. */
        (D && D.register ? item("drivers", "Drivers", D.register.drivers.filter(function(x){ return x.active; }).length + " active", "") : "") +
+       /* A live server from before w2.35.0, or a sheet before v1.98.0, sends no stops. */
+       (D && D.stopsReg ? item("stops", "Bus stops", D.stopsReg.stops.filter(function(x){ return x.active && x.type === "Pickup"; }).length + " in use", "") : "") +
        item("runs", "Run record", "") +
        /* A live server from before w2.20.0 cannot run one from here. */
        (D && ("rehearsal" in D) ? item("rehearsal", "Rehearsal", D.rehearsal ? "until " + hhmm(D.rehearsal.ends) : "",
@@ -1285,8 +1295,15 @@ function paintSunday(key){
     h += '<div class="row"><span class="k">Bus</span><span class="v">'+(g.bus ? '<span class="plate">'+esc(g.bus)+'</span>' : '<span class="none">Not known</span>')+'</span>' + btn("bus", "Change") + '</div>';
     h += '</div>';
   });
-  var notes = String(r.notes || "").split("\n").map(function(x){ return x.trim(); }).filter(Boolean);
-  if(notes.length) h += '<div class="card"><h3 style="margin-top:0">Notes</h3><ul class="notes">'+notes.map(function(n){ return '<li>'+esc(n)+'</li>'; }).join("")+'</ul></div>';
+  var notes = noteLines(r);
+  /* From v1.93.0 each note can be changed or taken off, except the sheet's own
+     Swapped and PROTECTED lines. */
+  if(notes.length) h += '<div class="card"><h3 style="margin-top:0">Notes</h3><ul class="notes">'+notes.map(function(n, i){
+    if(past || NOTE_OWN.test(n) || !D.noteEdits) return '<li>'+esc(n)+'</li>';
+    return '<li class="ed"><span class="t">'+esc(n)+'</span><span class="acts">' +
+           '<button class="mini" type="button" data-do="noteedit" data-key="'+esc(key)+'" data-i="'+i+'">Change</button>' +
+           '<button class="mini" type="button" data-do="noteoff" data-key="'+esc(key)+'" data-i="'+i+'">Take off</button></span></li>';
+  }).join("")+'</ul></div>';
   if(!past) h += '<button class="btn btn-ghost btn-wide" type="button" data-do="note" data-key="'+esc(key)+'" style="margin-top:10px;min-height:46px;font-size:16px">Add a note</button>';
   $("sundayBody").innerHTML = h;
 }
@@ -1378,6 +1395,31 @@ function setStatus(key, mode){
               go: mode === "on" ? "Both routes running" : mode === "all" ? "Call off both" : "Call off " + mode,
               stop: mode !== "on",
               onGo: function(){ act({ kind:"rota", sunday:key, set:{ status: want } }); } });
+}
+
+var NOTE_OWN = /^(swapped\s*:|protected\b)/i;
+function noteLines(r){
+  return String((r && r.notes) || "").split("\n").map(function(x){ return x.replace(/\s+/g, " ").trim(); }).filter(Boolean);
+}
+/* A note changed (off false) or taken off (off true), from v1.93.0. */
+function editNote(key, i, off){
+  var was = noteLines(rowFor(key))[Number(i)];
+  if(!was || NOTE_OWN.test(was)) return;
+  if(off){
+    openSheet({ eyebrow: shortDay(key), title: "Take off this note", line: was, go: "Take it off", stop: true,
+                onGo: function(){ act({ kind:"rota", sunday:key, noteEdit:{ was: was, now: "" } }); } });
+    return;
+  }
+  openSheet({ eyebrow: shortDay(key), title: "Change the note",
+              body: '<div class="field"><label for="noteText">Note</label><textarea id="noteText" maxlength="300">'+esc(was)+'</textarea></div>',
+              go: "Save",
+              onGo: function(){
+                var t = String(($("noteText") || {}).value || "").replace(/\s+/g, " ").trim();
+                if(!t){ sheetSay("Write the note, or use Take off.", true); return; }
+                if(NOTE_OWN.test(t)){ sheetSay("Swapped and PROTECTED lines are changed on the Rota tab.", true); return; }
+                if(t === was){ sheetSay("Nothing has changed.", true); return; }
+                act({ kind:"rota", sunday:key, noteEdit:{ was: was, now: t } });
+              } });
 }
 
 function addNote(key){
@@ -1828,6 +1870,88 @@ function editDriver(name){
       act({ kind: "driver", name: nm, add: add, set: set });
     } });
   [["drRoute", "route"], ["drRole", "role"], ["drActive", "active"]].forEach(function(f){
+    Array.prototype.forEach.call(document.querySelectorAll("#" + f[0] + " button"), function(b){
+      b.onclick = function(){
+        pick[f[1]] = b.getAttribute("data-v");
+        Array.prototype.forEach.call(document.querySelectorAll("#" + f[0] + " button"), function(y){ y.classList.toggle("on", y === b); });
+        if(!busy) sheetSay("");
+      };
+    });
+  });
+}
+
+/* ---- bus stops: the Bus Stops tab, from v1.93.0 ------------------------------
+
+   Time, the place, Postcode, Where, Active and Type, and a new stop. The
+   number of a new stop is the next one on its route. */
+function regStop(id){
+  var l = (D && D.stopsReg && D.stopsReg.stops) || [];
+  for(var i = 0; i < l.length; i++) if(l[i].id === id) return l[i];
+  return null;
+}
+function paintStops(){
+  var R = D.stopsReg || { stops: [] };
+  var h = '<button class="btn btn-main btn-wide" type="button" data-do="addstop">Add a stop</button>';
+  ["North", "South"].forEach(function(rt){
+    var l = R.stops.filter(function(x){ return x.route === rt; });
+    if(!l.length) return;
+    h += '<h3>' + esc(rt) + '</h3>';
+    l.forEach(function(x){
+      h += '<div class="card stp' + (x.active ? '' : ' off') + '"><div class="def-head"><span class="sid">' + esc(x.id) + '</span>' +
+           '<b>' + esc(x.time) + '</b>' + (x.type !== "Pickup" ? '<span class="tag info">' + esc(x.type) + '</span>' : '') +
+           (x.active ? '' : '<span class="tag">Not active</span>') + '</div>' +
+           '<p class="stp-name">' + esc(x.stop) + '</p>' +
+           '<div class="def-foot"><p class="tiny">' + esc([x.postcode, x.where].filter(Boolean).join(" · ")) + '</p>' +
+           (x.waiting ? '<span class="tag info">To the sheet</span>' : '') +
+           '<button class="mini" type="button" data-do="editstop" data-id="' + esc(x.id) + '">Edit</button></div></div>';
+    });
+  });
+  $("stopsBody").innerHTML = h;
+}
+function editStop(id){
+  var x = id ? regStop(id) : null;
+  if(id && !x) return;
+  var add = !x;
+  var v = add ? { route: "", time: "", stop: "", postcode: "", where: "", active: true, type: "Pickup" }
+              : { route: x.route, time: x.time, stop: x.stop, postcode: x.postcode || "", where: x.where || "", active: x.active, type: x.type };
+  var pick = { route: v.route, active: v.active ? "YES" : "NO", type: v.type };
+  var chips = function(cid, opts, on){
+    return '<div class="chips" id="' + cid + '">' + opts.map(function(o){
+      return '<button type="button" data-v="' + esc(o[0]) + '" class="' + (o[0] === on ? 'on' : '') + '">' + esc(o[1]) + '</button>';
+    }).join("") + '</div>';
+  };
+  openSheet({ eyebrow: add ? "New stop" : x.route + " · " + x.id, title: add ? "Add a stop" : x.stop,
+    body: (add ? '<p class="tiny" style="margin:0 0 4px">Route</p>' + chips("stRoute", [["North", "North"], ["South", "South"]], pick.route) : '') +
+          '<div class="field"><label for="stTime">Time</label><input id="stTime" type="time" step="60" value="' + esc(v.time) + '"></div>' +
+          '<div class="field"><label for="stName">Stop</label><input id="stName" maxlength="120" autocomplete="off" value="' + esc(v.stop) + '"></div>' +
+          '<div class="field"><label for="stPost">Postcode</label><input id="stPost" maxlength="8" autocomplete="off" autocapitalize="characters" value="' + esc(v.postcode) + '"></div>' +
+          '<div class="field"><label for="stWhere">Where</label><input id="stWhere" maxlength="200" autocomplete="off" value="' + esc(v.where) + '"></div>' +
+          '<p class="tiny" style="margin:0 0 4px">Type</p>' + chips("stType", [["Pickup", "Pickup"], ["Arrival", "Arrival"], ["Depart", "Depart"]], pick.type) +
+          (add ? '' : '<p class="tiny" style="margin:0 0 4px">Active</p>' + chips("stActive", [["YES", "Active"], ["NO", "Not active"]], pick.active)),
+    go: add ? "Add" : "Save",
+    onGo: function(){
+      if(add && !pick.route){ sheetSay("Pick North or South.", true); return; }
+      var tm = String($("stTime").value || "").trim();
+      if(!/^([01]?\d|2[0-3]):[0-5]\d$/.test(tm)){ sheetSay("Type the time as 10:35.", true); return; }
+      if(tm.length === 4) tm = "0" + tm;
+      var nm = String($("stName").value || "").replace(/\s+/g, " ").trim();
+      if(nm.length < 2){ sheetSay("Type the stop's name.", true); return; }
+      var pc = String($("stPost").value || "").toUpperCase().replace(/\s+/g, "");
+      if(pc && !/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(pc)){ sheetSay("Check the postcode.", true); return; }
+      if(pc) pc = pc.slice(0, -3) + " " + pc.slice(-3);
+      var wh = String($("stWhere").value || "").replace(/\s+/g, " ").trim();
+      var set = {};
+      if(add) set.route = pick.route;
+      if(add || tm !== v.time) set.time = tm;
+      if(add || nm !== v.stop) set.stop = nm;
+      if(add || pc !== v.postcode) set.postcode = pc;
+      if(add || wh !== v.where) set.where = wh;
+      if(add || pick.type !== v.type) set.type = pick.type;
+      if(!add && (pick.active === "YES") !== v.active) set.active = pick.active === "YES";
+      if(!add && !Object.keys(set).length){ sheetSay("Nothing has changed.", true); return; }
+      act({ kind: "stop", stopId: add ? "" : x.id, add: add, set: set });
+    } });
+  [["stRoute", "route"], ["stType", "type"], ["stActive", "active"]].forEach(function(f){
     Array.prototype.forEach.call(document.querySelectorAll("#" + f[0] + " button"), function(b){
       b.onclick = function(){
         pick[f[1]] = b.getAttribute("data-v");
@@ -2820,6 +2944,8 @@ document.addEventListener("click", function(e){
   else if(d === "driver") pickDriver(key, t.getAttribute("data-slot"));
   else if(d === "bus") pickBus(key, t.getAttribute("data-route"));
   else if(d === "note") addNote(key);
+  else if(d === "noteedit") editNote(key, t.getAttribute("data-i"), false);
+  else if(d === "noteoff") editNote(key, t.getAttribute("data-i"), true);
   else if(d === "approve") approve(t.getAttribute("data-id"));
   else if(d === "deny") deny(t.getAttribute("data-id"));
   else if(d === "cancel") cancelBooking(Number(t.getAttribute("data-id")));
@@ -2829,6 +2955,8 @@ document.addEventListener("click", function(e){
   else if(d === "editdriver") editDriver(t.getAttribute("data-name"));
   else if(d === "adddriver") editDriver("");
   else if(d === "editbus") editBus(t.getAttribute("data-reg"));
+  else if(d === "editstop") editStop(t.getAttribute("data-id"));
+  else if(d === "addstop") editStop("");
   else if(d === "addbus") editBus("");
   else if(d === "vlog") recordFor(t.getAttribute("data-reg"));
   else if(d === "vlogdone") recordFor(t.getAttribute("data-reg"), entryById(t.getAttribute("data-reg"), t.getAttribute("data-id")));

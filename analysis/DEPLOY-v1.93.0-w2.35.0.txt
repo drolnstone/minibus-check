@@ -2,9 +2,10 @@ MINIBUS
 =======
   pages v1.93.0 · server w2.35.0 · sheet v1.98.0
 
-Phase 2, screen 3. Buses in the coordinator's app: Seats, Active, Route in
-odd months and Notes changed, and a bus added. Due dates stay with Record
-something.
+Phase 2, screens 3, 4 and 5 in one go, and the Run record browser check.
+Buses: Seats, Active, Route in odd months and Notes, and a bus added.
+Rota: a note changed or taken off. Bus stops: Time, Stop, Postcode, Where,
+Active and Type, and a stop added.
 
 
 YOU ARE ON              GOING TO
@@ -25,9 +26,9 @@ IN THIS ORDER
 
 3. PAGES. Merge the pull request.
 
-Notes show on the Buses screen once the sheet has sent its first copy of
-the Buses tab: within an hour of step 2, or at once after any edit on the
-Rota or Buses tab.
+Bus stops on the first screen, and Notes on a bus, appear once the sheet has
+sent its next copy: within an hour of step 2, or at once after any edit on
+the Rota, Buses or Bus Stops tab.
 
 
 AFTER IT
@@ -36,33 +37,41 @@ AFTER IT
 A. The foot of all three apps reads  app v1.93.0 · server w2.35.0 · sheet
    v1.98.0 .
 
-B. Coordinator's app, Buses: Add a bus at the top. Open a bus: under the
-   dates, its seats, In use or Not in use, its route in odd months, and
-   Edit.
+B. Buses: Add a bus at the top. Open a bus: under the dates, its seats, In
+   use or Not in use, its route in odd months, and Edit. Change Seats, Save.
+   Within a few minutes the Buses tab has it and History has "Bus: <reg> —
+   Seats for passengers". Put it back.
 
-C. Edit a bus, change Seats, Save. Within a few minutes the Buses tab has
-   the new number and History has "Bus: <reg> — Seats for passengers". Put
-   it back the same way.
+C. Rota, any coming Sunday: Add a note. It shows with Change and Take off.
+   Change it, then Take off. The Notes cell on the Rota tab follows. Swapped
+   and PROTECTED lines have no buttons.
 
-D. Edit a bus, pick the other route in odd months. Before Save the sheet
-   names the other bus and its new route. Save, then put both back.
+D. First screen: Bus stops, with the number in use. Open it: Add a stop,
+   then North and South, each stop with Edit. Edit one, change Where, Save.
+   Within a few minutes the Bus Stops tab has it. Put it back.
 
 
 WHAT CHANGED
 ------------
 
-1. coord/index.html: Add a bus on the Buses screen, and the seats, active,
-   route and notes card with Edit on each bus (editBus). Active and Route in
-   odd months are choices; Seats is a number from 1 to 50.
-
-2. worker.js actBus: checks each field. getBuses lays each change over the
-   buses table until the sheet has filed it, so seat counts and the rotation
-   have it at once and a push from the sheet cannot undo it. A bus that
+1. Buses. coord/index.html editBus; worker.js actBus, laid over the buses
+   table by getBuses until the sheet files it; Code.gs coordBus. A bus that
    takes another active bus's route in odd months gives that bus its old
-   route, or standby. Notes travel in bus_extra.
+   route, or standby. Notes longer than 500 characters stay on the tab.
 
-3. Code.gs: the push carries each bus's Notes. coordBus writes the cells or
-   a new row, a History line for each, and refreshes the rota's bus lists
-   and the Vehicle Log's.
+2. Rota notes. coord/index.html editNote; worker.js actRota noteEdit,
+   rotaApplySet; Code.gs coordRota. One line of the Notes cell changed or
+   taken off.
 
-Tests: tests/suites/43-buses.mjs; browser check C43.
+3. Bus stops. coord/index.html paintStops and editStop; worker.js actStop,
+   the stops table changed at once and laid back over each push
+   (reapplyStops); Code.gs coordStopsList and coordStop. A new stop takes the
+   next number on its route and its place by time. A time out of order, a
+   second Depart or Arrival, or switching off a stop with seats booked is
+   refused. A new postcode clears Lat and Lng.
+
+4. tests/browser/coordinator.mjs C38 expects "was", as the Run record says
+   from v1.90.2.
+
+Tests: tests/suites/43-buses.mjs, 44-rota-notes.mjs, 45-bus-stops.mjs;
+browser checks C43, C44, C45.

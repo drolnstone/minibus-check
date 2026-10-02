@@ -146,6 +146,54 @@ export default async function (root) {
     });
   });
 
+  s.test("a bus typed on the tab another way can still be edited; a new one must be letters and numbers", async (a) => {
+    await atTime(THU, async () => {
+      const { db, env } = await fresh();
+      await db.prepare("INSERT INTO buses (reg, seats, active) VALUES ('LJ12-ABC', 12, 1)").run();
+      const out = await act(env, { kind: "bus", reg: "LJ12-ABC", set: { seats: 13 } });
+      a.ok(out.ok, JSON.stringify(out));
+      a.eq((await bus(env, "LJ12-ABC")).seats, 13);
+      a.not((await act(env, { kind: "bus", add: true, reg: "LJ13-ABC", set: { seats: 10 } })).ok);
+    });
+  });
+
+  s.test("notes longer than the app takes are left to the tab", async (a) => {
+    await atTime(THU, async () => {
+      const { env } = await fresh();
+      const long = "x ".repeat(400);
+      await post(env, { action: "sync", buses: [
+        { reg: "YS70 PWE", seats: 16, active: true, dates: {}, oddRoute: "North", notes: long },
+        { reg: "NH56 FWP", seats: 14, active: true, dates: {}, oddRoute: "South", notes: "" }] });
+      const l = (await coord(env, { op: "load" })).buses.find((x) => x.reg === "YS70 PWE");
+      a.eq(l.noNotes, true);
+      a.has(String((await act(env, { kind: "bus", reg: "YS70 PWE", set: { notes: "short" } })).error), "Buses tab");
+      a.ok((await act(env, { kind: "bus", reg: "YS70 PWE", set: { seats: 15 } })).ok, "seats could not be changed");
+    });
+  });
+
+  s.test("a bus added in the app shows a renewal recorded on it at once", async (a) => {
+    await atTime(THU, async () => {
+      const { env } = await fresh();
+      a.ok((await act(env, { kind: "bus", add: true, reg: "AB12 CDE", set: { seats: 16 } })).ok);
+      const v = await act(env, { kind: "vlog", reg: "AB12 CDE", what: "MOT", status: "Done", done: "2026-09-30" });
+      a.ok(v.ok, JSON.stringify(v));
+      a.ok((await bus(env, "AB12 CDE")).dates.mot, "the new bus has no MOT date");
+    });
+  });
+
+  s.test("a bus added in the app is not written on History a second time as added by hand", async (a) => {
+    await atTime(THU, async () => {
+      const L = loadCodeGs(root, { tabs: { "Buses": tab("Buses", [
+        { Registration: "YS70 PWE", "Seats for passengers": 16, Active: "YES", "Route in odd months": "North" }]) }, props: {} });
+      const ss = L.gas.ss;
+      call(L, "busDatesAudit", ss, "On the Buses tab", "");
+      const r = call(L, "applyCoordAction", ss, { id: "b9", kind: "bus", sunday: "", by: "Bro Arthur", made: Date.now(),
+        body: { reg: "AB12 CDE", add: true, set: { seats: 16, active: true, oddRoute: "" } } }, {});
+      a.ok(r.ok, JSON.stringify(r));
+      a.eq(call(L, "busDatesAudit", ss, "On the Buses tab", ""), 0);
+    });
+  });
+
   s.test("the sheet writes the cells and a History line each, adds a row, and moves the other bus", async (a) => {
     await atTime(THU, async () => {
       const L = loadCodeGs(root, { tabs: { "Buses": tab("Buses", [

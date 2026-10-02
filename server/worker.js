@@ -1201,10 +1201,16 @@ async function getBuses(env) {
     /* Notes from v1.98.0 of the sheet. noNotes: an older sheet, which sends
        none, so the Buses screen does not offer to change them. */
     return { reg: b.reg, seats: Number(b.seats) || 0, active: !!b.active,
-             dates: Object.assign({}, x.dates || {}, over[reg] || {}), oddRoute: x.oddRoute || "",
-             notes: typeof x.notes === "string" ? x.notes : "", noNotes: typeof x.notes !== "string" };
+             dates: Object.assign({}, x.dates || {}), oddRoute: x.oddRoute || "",
+             notes: typeof x.notes === "string" ? x.notes : "", noNotes: typeof x.notes !== "string" || !!x.notesCut };
   });
   for (const e of edits) busEditApply(list, e);
+  /* After the edits, so a bus added in the app has a renewal recorded on it
+     too. */
+  for (const b of list) {
+    const o = over[String(b.reg || "").toUpperCase()];
+    if (o) b.dates = Object.assign({}, b.dates || {}, o);
+  }
   return list;
 }
 
@@ -3293,8 +3299,13 @@ async function handleSync(env, body) {
           dates: { mot: day(d.mot), service: day(d.service), insurance: day(d.insurance), permit: day(d.permit) },
           oddRoute: r === "North" || r === "South" ? r : ""
         };
-        /* From v1.98.0, for the coordinator's Buses screen. */
-        if (typeof b.notes === "string") extra[String(b.reg).toUpperCase()].notes = b.notes.slice(0, 500);
+        /* From v1.98.0, for the coordinator's Buses screen. Longer than the
+           app takes, they are left to the tab (notesCut), so a save from the
+           app cannot write a shortened copy over them. */
+        if (typeof b.notes === "string") {
+          extra[String(b.reg).toUpperCase()].notes = b.notes.slice(0, 500);
+          if (b.notes.length > 500) extra[String(b.reg).toUpperCase()].notesCut = true;
+        }
       }
       stmts.push(cachePut(env, "bus_extra", extra));
     }
@@ -3462,6 +3473,8 @@ async function handleSync(env, body) {
          older sheet, which leaves the Drivers screen to the drivers table. */
       drivers: Array.isArray(body.coordShelf.drivers) ? body.coordShelf.drivers : null,
       driverRoles: Array.isArray(body.coordShelf.driverRoles) ? body.coordShelf.driverRoles : null,
+      /* From v1.98.0: every row on the Bus Stops tab, switched-off ones too. */
+      stops: Array.isArray(body.coordShelf.stops) ? body.coordShelf.stops : null,
       vehicles: vehiclesShelfOf(body.coordShelf.vehicles)
     }));
   }
@@ -3488,6 +3501,9 @@ async function handleSync(env, body) {
   if (Array.isArray(body.rota)) {
     try { await reapplyRawRota(env); } catch (e) {}
     try { await reapplyDrivers(env); } catch (e) {}
+  }
+  if (Array.isArray(body.stops)) {
+    try { await reapplyStops(env); } catch (e) {}
   }
 
   /* AFTER THE BATCH, AND ONLY AFTER IT.
@@ -6885,7 +6901,9 @@ function busEditApply(list, b) {
 async function actBus(env, me, act) {
   const add = !!act.add;
   const reg = String(act.reg || "").toUpperCase().replace(/\s+/g, " ").trim();
-  if (!BUS_REG.test(reg)) return { ok: false, error: "Type the registration, letters and numbers only." };
+  /* The format is asked of a new bus only. One already on the tab is found
+     however it was typed there. */
+  if (add ? !BUS_REG.test(reg) : !busKey(reg)) return { ok: false, error: "Type the registration, letters and numbers only." };
   const buses = await getBuses(env);
   const x = buses.find((b) => busKey(b.reg) === busKey(reg));
   if (add && x) return { ok: false, error: x.reg + " is already a bus." };
@@ -6904,6 +6922,7 @@ async function actBus(env, me, act) {
     set.oddRoute = r;
   }
   if (inp.notes !== undefined) {
+    if (x && x.noNotes) return { ok: false, error: "Change these notes on the Buses tab." };
     const t = String(inp.notes || "").replace(/\r\n?/g, "\n").trim();
     if (t.length > 500) return { ok: false, error: "Notes are 500 characters at most." };
     set.notes = t;
@@ -6913,7 +6932,7 @@ async function actBus(env, me, act) {
     if (set.active === undefined) set.active = true;
     if (set.oddRoute === undefined) set.oddRoute = "";
   } else {
-    for (const k of Object.keys(set)) if (set[k] === x[k] && !(k === "notes" && x.noNotes)) delete set[k];
+    for (const k of Object.keys(set)) if (set[k] === x[k]) delete set[k];
     if (!Object.keys(set).length) return { ok: false, error: "Nothing to change." };
   }
   /* Two buses on one route in odd months would leave the rotation to
@@ -6941,6 +6960,247 @@ async function actBus(env, me, act) {
   const body = { reg: name, add: add, set: set };
   if (also.length) body.also = also;
   return { ok: true, sunday: "", body: body, words: said };
+}
+
+/* ---- the Bus Stops tab from the coordinator's app, from w2.35.0 --------
+
+   A stop's Time, place, Postcode, Where, Active and Type, and a new stop. The
+   stops table is changed at once, so the driver app and the passenger page
+   have it now; the sheet files it on the Bus Stops tab at its next drain, and
+   it is laid back over each push until then. A new postcode clears the pin,
+   which was the old kerb's. */
+const STOP_TYPES = ["Pickup", "Arrival", "Depart"];
+const STOP_TIME = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+const STOP_POSTCODE = /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/;
+
+function stopNorm(s) {
+  const t = String(s.type || "");
+  return { id: String(s.id || ""), route: s.route === "South" ? "South" : "North", time: String(s.time || ""),
+           stop: String(s.stop || ""), postcode: String(s.postcode || ""), where: String(s.where || ""),
+           active: s.active !== false, type: STOP_TYPES.indexOf(t) !== -1 ? t : "Pickup",
+           lat: numOrNull(s.lat), lng: numOrNull(s.lng), hasPin: !!s.hasPin };
+}
+
+/* Where a new stop goes: after the last of its route timed no later than it
+   (a Depart first, an Arrival last). Code.gs stopInsertAfter, by index. */
+function stopInsertIndex(list, route, time, type) {
+  let first = -1, last = -1, after = -1;
+  list.forEach((x, i) => {
+    if (x.route !== route) return;
+    if (first === -1) first = i;
+    last = i;
+    if (x.type === "Arrival") return;
+    if (x.type === "Depart" || (x.time && x.time <= time)) after = i;
+  });
+  if (first === -1) return list.length;
+  if (type === "Depart") return first;
+  if (type === "Arrival") return last + 1;
+  return after === -1 ? first : after + 1;
+}
+
+/* Code.gs stopOrderProblem: the changed stop against its own neighbours. */
+function stopOrderProblem(list, s) {
+  if (!s.active) return "";
+  const on = list.filter((x) => x.active && x.route === s.route);
+  const i = on.indexOf(s);
+  if (i === -1) return "";
+  const others = (type) => on.filter((x) => x !== s && x.type === type);
+  if (s.type === "Depart" && (others("Depart").length || i !== 0)) return "Depart is the first stop on a route, and there is one.";
+  if (s.type === "Arrival" && (others("Arrival").length || i !== on.length - 1)) return "Arrival is the last stop on a route, and there is one.";
+  const prev = on[i - 1], next = on[i + 1];
+  if ((prev && s.time < prev.time) || (next && next.time && s.time > next.time)) {
+    return "Pick a time " + (prev ? "from " + prev.time : "up to") + (prev && next ? " to " : "") +
+           (next ? next.time : prev ? " or later" : "") + ".";
+  }
+  return "";
+}
+
+/* The next number on a route: one more than the highest already on the tab,
+   switched-off rows included, so no number is ever used twice. */
+function nextStopId(list, route) {
+  let pre = route === "South" ? "S" : "N", top = 0, wide = 2;
+  for (const x of list) {
+    const m = /^([A-Za-z]+)(\d+)$/.exec(x.id);
+    if (!m || x.route !== route) continue;
+    pre = m[1].toUpperCase();
+    top = Math.max(top, Number(m[2]));
+    wide = Math.max(wide, m[2].length);
+  }
+  let id;
+  do { id = pre + String(++top).padStart(wide, "0"); } while (list.some((x) => x.id.toUpperCase() === id));
+  return id;
+}
+
+/* One change laid over the list the shelf holds. */
+function stopEditApply(list, b) {
+  const id = String(b.id || "").toUpperCase();
+  const set = b.set || {};
+  let x = list.find((s) => s.id.toUpperCase() === id);
+  if (!x && b.add && b.full) {
+    x = stopNorm(Object.assign({ id: id, active: true }, b.full));
+    list.splice(stopInsertIndex(list, x.route, x.time, x.type), 0, x);
+  }
+  if (!x) return;
+  for (const k of ["time", "stop", "postcode", "where", "type"]) if (set[k] !== undefined) x[k] = String(set[k]);
+  if (set.active !== undefined) x.active = set.active === true;
+  if (b.pinCleared) { x.lat = null; x.lng = null; x.hasPin = false; }
+  x.waiting = true;
+}
+
+async function coordStopsView(env) {
+  const shelf = await cacheGet(env, "coord_shelf");
+  if (!shelf || !Array.isArray(shelf.stops)) return null;
+  const list = shelf.stops.map(stopNorm);
+  for (const a of await coordPending(env, ["stop"])) stopEditApply(list, a.body || {});
+  return { stops: list };
+}
+
+const stopKind = (t) => t === "Depart" ? "depart" : t === "Arrival" ? "arrival" : "pickup";
+
+/* What one change does to the stops table. A stop switched off leaves it, as
+   the sheet's push would leave it out; one added or switched on goes in after
+   the last of its route timed no later than it. */
+function stopSql(env, b, pins) {
+  const set = b.set || {};
+  const id = String(b.id || "");
+  if (set.active === false) return [env.DB.prepare("DELETE FROM stops WHERE stop_id=?").bind(id)];
+  if (b.add || set.active === true) {
+    const f = b.full || {};
+    const k = stopKind(f.type);
+    const r = f.route === "South" ? "South" : "North";
+    const t = String(f.time || "");
+    const seq = k === "depart" ? "(SELECT MIN(seq) FROM stops WHERE route=?1 AND stop_id<>?2) - 0.5"
+              : k === "arrival" ? "(SELECT MAX(seq) FROM stops WHERE route=?1 AND stop_id<>?2) + 0.5"
+              : "COALESCE((SELECT MAX(seq) FROM stops WHERE route=?1 AND stop_id<>?2 AND kind<>'arrival' " +
+                "AND (kind='depart' OR time<=?3)) + 0.5, (SELECT MIN(seq) FROM stops WHERE route=?1 AND stop_id<>?2) - 0.5)";
+    const vals = "?2, ?1, ?3, ?4, ?5, ?6, ?7, COALESCE(" + seq + ", (SELECT MAX(seq) FROM stops) + 1, 0)" +
+                 (pins ? ", ?8, ?9" : "");
+    const st = env.DB.prepare("INSERT OR REPLACE INTO stops (stop_id, route, time, stop, postcode, place, kind, seq" +
+                              (pins ? ", lat, lng" : "") + ") VALUES (" + vals + ")");
+    const binds = [r, id, t, String(f.stop || ""), String(f.postcode || ""), String(f.where || ""), k];
+    if (pins) binds.push(b.pinCleared ? null : numOrNull(f.lat), b.pinCleared ? null : numOrNull(f.lng));
+    return [st.bind(...binds)];
+  }
+  const cols = [], vals = [];
+  if (set.time !== undefined) { cols.push("time=?"); vals.push(String(set.time)); }
+  if (set.stop !== undefined) { cols.push("stop=?"); vals.push(String(set.stop)); }
+  if (set.postcode !== undefined) { cols.push("postcode=?"); vals.push(String(set.postcode)); }
+  if (set.where !== undefined) { cols.push("place=?"); vals.push(String(set.where)); }
+  if (set.type !== undefined) { cols.push("kind=?"); vals.push(stopKind(set.type)); }
+  if (b.pinCleared && pins) cols.push("lat=NULL", "lng=NULL");
+  if (!cols.length) return [];
+  return [env.DB.prepare("UPDATE stops SET " + cols.join(", ") + " WHERE stop_id=?").bind(...vals, id)];
+}
+
+async function reapplyStops(env) {
+  const acts = await coordPending(env, ["stop"]);
+  if (!acts.length) return 0;
+  const pins = await ensureStopPins(env);
+  let n = 0;
+  /* One at a time: a stop going in takes its place from the rows already
+     there, the one before it included. */
+  for (const a of acts) {
+    for (const st of stopSql(env, a.body || {}, pins)) { await st.run(); n++; }
+  }
+  return n;
+}
+
+async function actStop(env, me, act) {
+  const view = await coordStopsView(env);
+  if (!view) return { ok: false, error: "The Bus Stops tab has not reached the live server yet. Try again in a few minutes." };
+  const list = view.stops;
+  const add = !!act.add;
+  const inp = act.set || {};
+  let id, x = null;
+  if (add) {
+    if (["North", "South"].indexOf(inp.route) === -1) return { ok: false, error: "Pick North or South." };
+    id = nextStopId(list, inp.route);
+  } else {
+    /* stopId: act.id is the action's own. */
+    id = String(act.stopId || "").toUpperCase().trim();
+    x = list.find((s) => s.id.toUpperCase() === id) || null;
+    if (!x) return { ok: false, error: (id || "That stop") + " is not on the live server's list. Refresh and try again." };
+    id = x.id;
+  }
+  const set = {};
+  if (inp.time !== undefined) {
+    const m = STOP_TIME.exec(String(inp.time || "").trim());
+    if (!m) return { ok: false, error: "Type the time as 10:35." };
+    set.time = m[1].padStart(2, "0") + ":" + m[2];
+  }
+  if (inp.stop !== undefined) {
+    const t = String(inp.stop || "").replace(/\s+/g, " ").trim();
+    if (t.length < 2 || t.length > 120) return { ok: false, error: "Type the stop's name." };
+    set.stop = t;
+  }
+  if (inp.postcode !== undefined) {
+    const p = String(inp.postcode || "").toUpperCase().replace(/\s+/g, "");
+    if (p && !STOP_POSTCODE.test(p)) return { ok: false, error: "Check the postcode." };
+    set.postcode = p ? p.slice(0, -3) + " " + p.slice(-3) : "";
+  }
+  if (inp.where !== undefined) {
+    const w = String(inp.where || "").replace(/\s+/g, " ").trim();
+    if (w.length > 200) return { ok: false, error: "Where is 200 characters at most." };
+    set.where = w;
+  }
+  if (inp.active !== undefined) set.active = inp.active === true;
+  if (inp.type !== undefined) {
+    if (STOP_TYPES.indexOf(inp.type) === -1) return { ok: false, error: "Pick Pickup, Arrival or Depart." };
+    set.type = inp.type;
+  }
+  if (add) {
+    if (!set.time) return { ok: false, error: "Type the time as 10:35." };
+    if (!set.stop) return { ok: false, error: "Type the stop's name." };
+    set.route = inp.route;
+    if (set.active === undefined) set.active = true;
+    if (!set.type) set.type = "Pickup";
+    if (set.postcode === undefined) set.postcode = "";
+    if (set.where === undefined) set.where = "";
+  } else {
+    for (const k of Object.keys(set)) if (set[k] === x[k]) delete set[k];
+    if (!Object.keys(set).length) return { ok: false, error: "Nothing to change." };
+  }
+
+  /* The stop as it would be, in its place on the route. */
+  const next = Object.assign(x ? Object.assign({}, x) : stopNorm({ id: id, route: inp.route }), set);
+  const trial = list.slice();
+  if (x) trial[trial.indexOf(x)] = next;
+  else trial.splice(stopInsertIndex(list, next.route, next.time, next.type), 0, next);
+  const wrong = stopOrderProblem(trial, next);
+  if (wrong) return { ok: false, error: wrong };
+
+  /* Seats booked there: a stop nobody can be picked up at any more would
+     leave them standing. */
+  if (x && x.active && x.type === "Pickup" && (set.active === false || (set.type && set.type !== "Pickup"))) {
+    const q = await env.DB.prepare(
+      "SELECT COALESCE(SUM(seats),0) AS n FROM bookings WHERE stop_id=? AND sunday>=? AND lower(status)='booked'")
+      .bind(x.id, runSunday()).first();
+    const n = Number(q && q.n) || 0;
+    if (n) return { ok: false, error: seatWord(n) + " booked at " + x.id + ". Cancel " + (n === 1 ? "it" : "them") + " on Bookings first." };
+  }
+
+  const pinCleared = !add && set.postcode !== undefined && !!x.hasPin;
+  const body = { id: id, add: add, set: set };
+  if (pinCleared) body.pinCleared = true;
+  if (add || set.active === true) {
+    body.full = { route: next.route, time: next.time, stop: next.stop, postcode: next.postcode, where: next.where,
+                  type: next.type, lat: next.lat, lng: next.lng };
+  }
+  const pins = await ensureStopPins(env);
+  const words = [];
+  if (add) words.push(next.time, next.stop);
+  else {
+    if (set.time !== undefined) words.push("at " + set.time);
+    if (set.stop !== undefined) words.push("now " + set.stop);
+    if (set.postcode !== undefined) words.push(set.postcode ? "postcode " + set.postcode : "postcode taken off");
+    if (set.where !== undefined) words.push(set.where ? "where changed" : "where taken off");
+    if (set.type !== undefined) words.push(set.type);
+    if (set.active !== undefined) words.push(set.active ? "active" : "not active");
+    if (pinCleared) words.push("pin cleared");
+  }
+  if (add && next.type !== "Pickup") words.push(next.type);
+  return { ok: true, sunday: "", stmts: stopSql(env, body, pins), body: body,
+           words: (add ? id + " added: " : id + ": ") + words.join(", ") + "." };
 }
 
 const ROTA_OFF = ["North cancelled", "South cancelled", "Cancelled/declined"];
@@ -7071,8 +7331,25 @@ function rotaApplySet(n0, body) {
     if (lines.indexOf(note) === -1) n.notes = n.notes ? n.notes + "\n" + note : note;
     rotaEditRule(n, false);
   }
+  /* A note changed or taken off, from w2.35.0. Applied twice, the second
+     finds nothing to change. */
+  const ed = body && body.noteEdit;
+  if (ed && ed.was) {
+    const lines = String(n.notes || "").split("\n");
+    const i = lines.map(noteLine).indexOf(noteLine(ed.was));
+    if (i !== -1) {
+      if (noteLine(ed.now)) lines[i] = noteLine(ed.now); else lines.splice(i, 1);
+      n.notes = lines.join("\n");
+    }
+    rotaEditRule(n, false);
+  }
   return n;
 }
+
+/* One line of a Sunday's Notes, as the app and the sheet compare it. */
+function noteLine(x) { return String(x == null ? "" : x).replace(/\s+/g, " ").trim(); }
+/* The lines the sheet writes and reads back: swaps, and a protected Sunday. */
+const ROTA_NOTE_OWN = /^(swapped\s*:|protected\b)/i;
 
 /* onEditRequests in Code.gs. A swap moves two Sundays and is left to the
    sheet, which answers in seconds. A Sunday that has been called off keeps
@@ -7197,6 +7474,21 @@ async function reapplyRawRota(env, onlySundays) {
     if (!raw) continue;          /* further ahead than the table holds; nothing reads it */
     let n = rotaNorm(raw, false);
     for (const a of by[key]) n = a.kind === "rota" ? rotaApplySet(n, a.body) : decideApply(n, a.body, routes);
+    /* A note changed or taken off, from w2.35.0. The row here may already
+       carry every change, and a note added then changed would come back if
+       laid over it again, so the Notes are laid over the sheet's own copy
+       instead, which has none of them yet. */
+    if (by[key].some((a) => a.body && a.body.noteEdit)) {
+      try {
+        const c = await cacheGet(env, "cache_rota");
+        const row = c && c.payload && (c.payload.rows || []).find((x) => x.date === key);
+        if (row) {
+          let m = rotaNorm(row, true);
+          for (const a of by[key]) if (a.kind === "rota") m = rotaApplySet(m, a.body);
+          n.notes = m.notes;
+        }
+      } catch (e) {}
+    }
     stmts.push(env.DB.prepare(
       "UPDATE rota SET north=?, north_cover=?, north_bus=?, south=?, south_cover=?, south_bus=?, " +
       "status=?, notes=? WHERE sunday=?").bind(n.north, n.northCover, n.northBus, n.south,
@@ -7418,7 +7710,7 @@ function isSundayKey(key) {
 }
 const seatWord = (n) => n + (Number(n) === 1 ? " seat" : " seats");
 
-function rotaWords(key, cur, set, note) {
+function rotaWords(key, cur, set, note, noteEdit) {
   const day = shortDay(key);
   const bits = [];
   const name = { north: "North", northCover: "North", south: "South", southCover: "South" };
@@ -7449,6 +7741,7 @@ function rotaWords(key, cur, set, note) {
             : "Both routes running.");
   }
   if (note) bits.push("Note added.");
+  if (noteEdit) bits.push(noteEdit.now ? "Note changed." : "Note taken off.");
   return day + ". " + bits.join(" ");
 }
 
@@ -7498,6 +7791,11 @@ async function coordLoad(env, me) {
                                   oddRoute: b.oddRoute || "", notes: b.notes || "", noNotes: !!b.noNotes,
                                   waiting: !!b.waiting }));
   out.busEdits = true;
+  /* From w2.35.0 a note on the rota can be changed or taken off. */
+  out.noteEdits = true;
+  /* From w2.35.0: the Bus Stops tab, for the Bus stops screen. null until a
+     v1.98.0 sheet has sent it. */
+  try { out.stopsReg = await coordStopsView(env); } catch (e) { out.stopsReg = null; }
 
   out.requests = await coordRequestsView(env);
   out.defects = await coordDefectsView(env);
@@ -7929,7 +8227,20 @@ async function actRota(env, me, act) {
     set.status = v;
   }
   const note = String(act.note || "").replace(/\s+/g, " ").trim().slice(0, 300);
-  if (!Object.keys(set).length && !note) return { ok: false, error: "Nothing to change." };
+  /* From w2.35.0 a note already there, changed or taken off. The sheet's own
+     lines are left to the sheet: a Swapped line is what the rota reads a
+     swap back from, and PROTECTED is what keeps a Sunday as it is. */
+  let noteEdit = null;
+  if (act.noteEdit && typeof act.noteEdit === "object") {
+    const was = noteLine(act.noteEdit.was), now = noteLine(act.noteEdit.now).slice(0, 300);
+    if (!was) return { ok: false, error: "Pick a note." };
+    if (ROTA_NOTE_OWN.test(was) || ROTA_NOTE_OWN.test(now)) {
+      return { ok: false, error: "Swapped and PROTECTED lines are changed on the Rota tab." };
+    }
+    if (now === was) return { ok: false, error: "Nothing to change." };
+    noteEdit = { was: was, now: now };
+  }
+  if (!Object.keys(set).length && !note && !noteEdit) return { ok: false, error: "Nothing to change." };
 
   const cur = await currentRota(env, key);
   if (!cur) {
@@ -7941,7 +8252,10 @@ async function actRota(env, me, act) {
     set.status = runningStatus(rotaApplySet(cur, { set: Object.assign({}, set, { status: cur.status }) }),
                                reqs.some((r) => r.sunday === key && r.status === "Pending"));
   }
-  const next = rotaApplySet(cur, { set: set, note: note });
+  if (noteEdit && String(cur.notes || "").split("\n").map(noteLine).indexOf(noteEdit.was) === -1) {
+    return { ok: false, error: "That note is not on the live server's copy. Refresh and try again." };
+  }
+  const next = rotaApplySet(cur, { set: set, note: note, noteEdit: noteEdit });
 
   /* One man, one bus, one morning. */
   const nDrv = next.northCover || next.north, sDrv = next.southCover || next.south;
@@ -7954,8 +8268,10 @@ async function actRota(env, me, act) {
              error: nBus + " is already on " + ("northBus" in set ? "South" : "North") + " that Sunday. Swap the two buses instead." };
   }
 
-  return { ok: true, sunday: key, body: { sunday: key, set: set, note: note },
-           words: rotaWords(key, cur, set, note),
+  const body = { sunday: key, set: set, note: note };
+  if (noteEdit) body.noteEdit = noteEdit;
+  return { ok: true, sunday: key, body: body,
+           words: rotaWords(key, cur, set, note, noteEdit),
            after: () => reapplyRawRota(env, [key]) };
 }
 
@@ -8258,6 +8574,7 @@ async function coordAct(env, me, act) {
   else if (kind === "job") r = await actJob(env, me, act);
   else if (kind === "driver") r = await actDriver(env, me, act);
   else if (kind === "bus") r = await actBus(env, me, act);
+  else if (kind === "stop") r = await actStop(env, me, act);
   else if (kind === "rehearsal") r = await rehearsalPlan(env, String(act.op || ""), String(act.shape || ""));
   else return { ok: false, error: "unknown kind" };
   if (!r || !r.ok) return r || { ok: false, error: "refused" };
