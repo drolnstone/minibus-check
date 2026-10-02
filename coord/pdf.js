@@ -27,6 +27,19 @@
     return s.replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, "?");
   }
 
+  /* What each report is called on paper, and what it covers, so somebody
+     outside the transport team can tell what they are holding. */
+  var TITLES = {
+    outstanding: ["Minibus: outstanding actions",
+                  "Buses stopped, renewals due, open defects, garage bookings, rota gaps and rota requests waiting."],
+    fleet: ["Minibus: fleet and safety record",
+            "Each bus's due dates, walkaround checks, defects, Vehicle Log work and recorded changes."],
+    sunday: ["Minibus: Sunday service transport report",
+             "The rota, each route's run, stops, seats booked, walkaround checks and defects for one Sunday."],
+    summary: ["Minibus: transport summary for the period",
+              "Sundays, runs, seats booked, checks, defects and costs, by route and by driver."]
+  };
+
   var M = 14;            /* margin, mm */
   var FOOT = 10;         /* room kept at the bottom for the footer */
   var PAD = 1.4;         /* inside each cell */
@@ -64,30 +77,47 @@
     var doc = new J({ orientation: land ? "landscape" : "portrait", unit: "mm", format: "a4", compress: opt.compress !== false });
     var W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
     var avail = W - 2 * M;
-    var title = clean(rep.title), period = clean(rep.period);
+    var named = TITLES[rep.name] || [rep.title, ""];
+    var title = clean(named[0]), what = clean(named[1]), period = clean(rep.period);
     doc.setProperties({ title: title + " - " + period, subject: "Contains names",
                         author: clean(opt.church || ""), creator: "Minibus coordinator app" });
 
-    /* ---- the top of the first page ---- */
-    var y = M, tx = M, lh = 18;
+    /* ---- the top of the first page: the app's own banner, then the title,
+       what the report covers, its period, and who made it ---- */
+    var bh = 24, lh = 16, tx = M;
+    doc.setFillColor(27, 34, 44);
+    doc.rect(0, 0, W, bh, "F");
     if (opt.logo) {
       try {
         var lw = lh * (Number(opt.logoW) || 1);
-        doc.addImage(opt.logo, "JPEG", M, y, lw, lh);
-        tx = M + lw + 5;
+        doc.addImage(opt.logo, "JPEG", M, (bh - lh) / 2, lw, lh);
+        tx = M + lw + 4;
       } catch (e) {}
     }
-    doc.setTextColor(90);
-    doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-    doc.text(clean(opt.church || ""), tx, y + 3);
+    doc.setTextColor(255);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(15);
+    doc.text(clean(opt.church || "RCCG Dominion Assembly"), tx, bh / 2 - 0.5);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(190);
+    doc.text(clean(opt.place || "Liverpool - Transport"), tx, bh / 2 + 5);
     doc.setTextColor(0);
-    doc.setFontSize(17); doc.text(title, tx, y + 10);
-    doc.setFont("helvetica", "normal"); doc.setFontSize(10);
-    doc.text(period, tx, y + 15.5);
-    doc.setFontSize(8); doc.setTextColor(90);
-    doc.text(clean("Made " + (opt.made || "") + (opt.who ? " by " + opt.who : "")), tx, y + 19.5);
+    var y = bh + 10;
+    doc.setFont("helvetica", "bold"); doc.setFontSize(18);
+    doc.text(title, M, y);
+    y += 6;
+    if (what) {
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(60);
+      var wl = doc.splitTextToSize(what, avail);
+      doc.text(wl, M, y);
+      y += wl.length * 4.6;
+      doc.setTextColor(0);
+    }
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+    doc.text(period, M, y + 0.5);
+    y += 4.8;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(90);
+    doc.text(clean("Made " + (opt.made || "") + (opt.who ? " by " + opt.who : "")), M, y);
     doc.setTextColor(0);
-    y += Math.max(lh, 20) + 3;
+    y += 3;
     doc.setDrawColor(150); doc.setLineWidth(0.4); doc.line(M, y, W - M, y);
     y += 6;
 
@@ -159,7 +189,8 @@
      sorts and reads. */
   function reportFileName(rep) {
     var when = rep.name === "outstanding" || rep.from === rep.to ? (rep.from || "") : rep.from + " to " + rep.to;
-    return "Minibus - " + clean(rep.title) + " - " + when + ".pdf";
+    var t = (TITLES[rep.name] || [rep.title])[0].replace(/^Minibus: /, "");
+    return "Minibus - " + clean(t.charAt(0).toUpperCase() + t.slice(1)) + " - " + when + ".pdf";
   }
 
   root.reportPdf = reportPdf;

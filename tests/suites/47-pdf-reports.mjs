@@ -228,11 +228,13 @@ export default async function (root) {
     a.eq(out.slice(0, 5), "%PDF-");
     for (let p = 1; p <= n; p++) a.ok(out.indexOf("(Page " + p + " of " + n + ")") !== -1, "no Page " + p + " of " + n);
     a.eq(out.split("(Contains names)").length - 1, n + 1, "Contains names on every page and in the file's subject");
-    a.ok(out.indexOf("(Fleet and safety record)") !== -1);
+    a.ok(out.indexOf("(Minibus: fleet and safety record)") !== -1, "the title does not say what it is");
+    a.ok(out.indexOf("(RCCG Dominion Assembly Liverpool)") !== -1, "no banner");
+    a.ok(out.indexOf("Each bus's due dates") !== -1 || out.indexOf("Each bus\\'s due dates") !== -1, "no line saying what it covers");
     a.ok(out.indexOf("Tyres - a long note") !== -1, "the dash was lost");
     a.ok(/\/Orientation|\/MediaBox \[0 0 841/.test(out), "the fleet record is not landscape");
     a.eq(ctx.reportFileName(rep), "Minibus - Fleet and safety record - 2026-09-01 to 2026-09-30.pdf");
-    a.eq(ctx.reportFileName({ name: "outstanding", title: "Outstanding", from: "2026-10-01", to: "2026-10-01" }), "Minibus - Outstanding - 2026-10-01.pdf");
+    a.eq(ctx.reportFileName({ name: "outstanding", title: "Outstanding", from: "2026-10-01", to: "2026-10-01" }), "Minibus - Outstanding actions - 2026-10-01.pdf");
   });
 
   s.test("the coordinator's app: PDF reports on the first screen, the two files beside it", (a) => {
@@ -240,6 +242,9 @@ export default async function (root) {
     a.ok(/D && D\.pdf \? item\("pdf", "PDF reports"/.test(html));
     a.ok(html.indexOf('pdfScript("jspdf.umd.min.js') !== -1 && html.indexOf('pdfScript("pdf.js') !== -1);
     a.ok(html.indexOf('api("pdfsave"') !== -1);
+    a.ok(html.indexOf("PDF.q === q[0] ? ' class=\"on\"'") !== -1, "a period button does not light up");
+    a.ok(html.indexOf("PDF.busy || PDF.made === pdfAsk() ? ' disabled'") !== -1, "Make the PDF stays on after it is made");
+    a.ok(/\.field input\[type=date\]\{[^}]*max-width:100%/.test(html), "the date boxes can run past the card");
   });
 
   return s;
