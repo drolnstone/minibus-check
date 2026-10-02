@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.100.0";
+var SCRIPT_VERSION = "v1.101.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -11281,6 +11281,78 @@ function weeklyDigest() {
     htmlBody: htmlShell(title, colour, lines, "Open spreadsheet", CHECKS_SHEET)
   });
 
+  /* From v1.101.0: the month, and the year, after their last Sunday. */
+  try { periodDigests(sunday, new Date()); } catch (err) {}
+
+  return title;
+}
+
+/* MONTHLY AND YEARLY SUMMARIES, from v1.101.0. Sent by the weekly summary's
+   own Sunday evening run, so there is nothing new to schedule. After the last
+   Sunday of a month, a monthly one; after the last Sunday of the year, a
+   yearly one as well. Each covers the day after the previous last Sunday up
+   to this one, so no day is left out or counted twice. Same people as the
+   weekly summary, same figures as the Period summary PDF. Sent once each: a
+   second run of the weekly summary does not repeat them. */
+function periodDigests(sunday, now) {
+  if (!COORDINATOR_EMAIL) return [];
+  var next = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() + 7);
+  if (next.getMonth() === sunday.getMonth()) return [];
+  /* Not before the evening of that Sunday: the day is not over. */
+  var evening = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate(), 18);
+  if ((now || new Date()) < evening) return [];
+  var y = sunday.getFullYear(), m = sunday.getMonth();
+  var to = dateToKey(sunday);
+  var months = ["January", "February", "March", "April", "May", "June", "July",
+                "August", "September", "October", "November", "December"];
+  var dayAfter = function (d) { return dateToKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)); };
+  var want = [{ key: "month:" + to, kind: "monthly", from: dayAfter(lastSunday(new Date(y, m, 0))), to: to,
+                name: months[m] + " " + y }];
+  if (next.getFullYear() !== y)
+    want.push({ key: "year:" + to, kind: "yearly", from: dayAfter(lastSunday(new Date(y, 0, 0))), to: to, name: String(y) });
+
+  var props = PropertiesService.getScriptProperties();
+  var sent = {};
+  try { sent = JSON.parse(props.getProperty("periodSent") || "{}") || {}; } catch (err) { sent = {}; }
+  var done = [];
+  want.forEach(function (p) {
+    if (sent[p.key]) return;
+    periodDigest(p);
+    sent[p.key] = new Date().toISOString();
+    done.push(p.key);
+  });
+  if (done.length) {
+    var keys = Object.keys(sent).sort();
+    while (keys.length > 40) { delete sent[keys.shift()]; }
+    props.setProperty("periodSent", JSON.stringify(sent));
+  }
+  return done;
+}
+
+/* One summary email, built from the Period summary's tables. */
+function periodDigest(p) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sections = pdfSummary(ss, p.from, p.to);
+  var span = pdfDay(p.from) + " to " + pdfDay(p.to);
+  var lines = [esc(span)];
+  sections.forEach(function (sec) {
+    lines.push("&nbsp;");
+    lines.push("<b>" + esc(sec.head) + "</b>");
+    if (!sec.rows.length) { lines.push(esc(sec.empty)); return; }
+    sec.rows.forEach(function (r) {
+      if (sec.cols.length === 2 && !sec.cols[0]) { lines.push("&bull; " + esc(r[0]) + ": " + esc(r[1])); return; }
+      var rest = [];
+      for (var i = 1; i < r.length; i++) if (String(r[i]) !== "") rest.push(esc(sec.cols[i]) + " " + esc(r[i]));
+      lines.push("&bull; <b>" + esc(r[0]) + "</b>" + (rest.length ? " &middot; " + rest.join(" &middot; ") : ""));
+    });
+  });
+  var title = (p.kind === "yearly" ? "Year " : "") + p.name + ": transport summary";
+  sendMail({
+    to: COORDINATOR_EMAIL,
+    subject: "Minibus " + p.kind + " summary \u2014 " + p.name,
+    body: title + "\n\n" + lines.join("\n").replace(/<[^>]+>/g, "").replace(/&[a-z]+;/g, " "),
+    htmlBody: htmlShell(title, "#1B222C", lines, "Open spreadsheet", CHECKS_SHEET)
+  });
   return title;
 }
 

@@ -1,0 +1,66 @@
+MINIBUS
+=======
+  pages v1.95.2 · server w2.37.0 · sheet v1.101.0
+
+Final touches: Thanksgiving in the samples, the driver app's buttons fade
+while sending, monthly and yearly summary emails.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.95.1         v1.95.2
+  Worker  w2.37.0         w2.37.0   (no paste)
+  Code.gs v1.100.0        v1.101.0
+
+
+IN THIS ORDER
+-------------
+
+1. CODE.GS. Paste the whole file from this branch into the Apps Script
+   editor and save:
+   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/final-touches-hdkwd8/Code.gs
+   Then Deploy, Manage deployments, the pencil, Version: New version,
+   Deploy, so the sheet version on the foot updates. No new trigger and no
+   Set up: the weekly summary's Sunday run sends the new emails.
+
+2. PAGES. Merge the pull request.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.95.2 · server w2.37.0 · sheet
+   v1.101.0 .
+
+B. Coordinator app, Rota notes, Add a note: the faded sample reads
+   "e.g. Thanksgiving service, more people expected".
+
+C. Sunday 25 October, evening: the weekly summary, then
+   "Minibus monthly summary — October 2026" (28/09/2026 to 25/10/2026).
+   Sunday 27 December: the weekly, December, and
+   "Minibus yearly summary — 2026".
+
+
+WHAT CHANGED
+------------
+
+1. Code.gs: periodDigests and periodDigest, called at the end of
+   weeklyDigest. After a month's last Sunday (from 18:00) a monthly summary;
+   after the year's last Sunday a yearly one too. Each covers the day after
+   the previous last Sunday up to this one, with the Period summary PDF's
+   figures (pdfSummary), to COORDINATOR_EMAIL. Sent once each (Script
+   Properties periodSent), so running the weekly summary again repeats
+   nothing.
+
+2. coord/index.html: the Rota notes samples say Thanksgiving.
+
+3. index.html: any disabled button fades (it was only the main one), so
+   Authorise and Send request fade while sending. Start and End MOT run
+   fade and send once per tap.
+
+4. sunday/: version only. It already lit the chosen stop, kept Confirm
+   off until something changed, and has no date boxes. The driver app has
+   no date boxes either, and its job chips already light up.
+
+5. manual/shots.mjs: the sample rota note says Thanksgiving.
+
+6. Tests. tests/suites/48-final-touches.mjs.

@@ -453,7 +453,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   align-items:center;justify-content:center;border:1.5px solid transparent;transition:transform .08s,opacity .15s}
 .btn:active{transform:scale(.98)}
 .btn-main{background:var(--steel);color:var(--on-accent);flex:1}
-.btn-main[disabled]{opacity:.38;pointer-events:none}
+.btn[disabled]{opacity:.38;pointer-events:none}
 /* A blocked button keeps the faded look but stays tappable, so it can explain
    itself. Doing nothing at all reads as a broken app. */
 .btn.is-off{opacity:.42}
@@ -1570,7 +1570,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.95.1";
+var APP_VERSION = "v1.95.2";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2311,9 +2311,14 @@ function myMotRun(){
   });
   return got;
 }
+/* One MOT run tap at a time: its buttons fade until the answer comes. */
+var motRunBusy=false;
 function motRunSend(reg, step){
+  if(motRunBusy) return;
   if(pinGateNeeded()){ pinGateFocus(); return; }
   if(!LIVE){ toast("No signal to the live server."); return; }
+  motRunBusy=true;
+  Array.prototype.forEach.call(document.querySelectorAll("[data-motrun]"),function(b){ b.disabled=true; });
   toast(step==="start" ? "Starting the MOT run\u2026" : "Ending the MOT run\u2026");
   callFetch(LIVE_ENDPOINT,{
     method:"POST", redirect:"follow",
@@ -2321,6 +2326,7 @@ function motRunSend(reg, step){
     body: JSON.stringify({ token: CFG.token||"", action:"motrun",
       motrun:{ reg:reg, step:step, who:(st.driver||"").trim() } })
   }).then(function(r){ return r.text(); }).then(function(t){
+    motRunDone();
     var out=JSON.parse(t);
     if(out && out.ok && out.motRun){
       tripMotRuns[String(reg).toUpperCase()]=out.motRun;
@@ -2332,7 +2338,11 @@ function motRunSend(reg, step){
         : out && out.error==="started" ? out.driver+" has started this MOT run."
         : out && out.error==="no mot run" ? "No MOT run is authorised for "+reg+" today. Ring "+coordName()+"."
         : "The live server did not take that. Try again.");
-  }).catch(function(){ toast("No answer. Try again."); });
+  }).catch(function(){ motRunDone(); toast("No answer. Try again."); });
+}
+function motRunDone(){
+  motRunBusy=false;
+  Array.prototype.forEach.call(document.querySelectorAll("[data-motrun]"),function(b){ b.disabled=false; });
 }
 
 /* The MOT run, on the run screen whatever the day: the test is usually on a
