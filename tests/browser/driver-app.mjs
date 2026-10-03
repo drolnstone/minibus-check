@@ -804,6 +804,42 @@ if (want("T23")) {
   await me.ctx.close();
 }
 
+/* T24 — v1.96.1. Keyed straight through, each PIN box hands on to the next
+   once its four digits are in, and the last one does not send by itself. A
+   refusal is said in bold red, and an ordinary line is not. */
+if (want("T24")) {
+  const me = await phone({ clock: "2026-09-26T19:00:00+01:00" });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn(); await me.close();
+  await toHub(me);
+  await me.clickId("toPinChange"); await me.wait(400);
+  const focused = () => me.pg.evaluate(() => document.activeElement && document.activeElement.id);
+  await me.pg.focus("#pinOld");
+  await me.pg.keyboard.type("1234"); const a1 = await focused();
+  await me.pg.keyboard.type("2580"); const a2 = await focused();
+  await me.pg.keyboard.type("2581"); const a3 = await focused();
+  const sentEarly = me.posted.filter((p) => p.action === "pinchange").length;
+  const vals = await me.pg.evaluate(() => ["pinOld","pinNew","pinAgain"].map((id) => document.getElementById(id).value));
+  await me.clickId("pinSave"); await me.wait(300);
+  const look = () => me.pg.evaluate(() => {
+    const e = document.getElementById("pinSaySet"), cs = getComputedStyle(e);
+    const red = getComputedStyle(document.documentElement).getPropertyValue("--stop").trim();
+    const probe = document.createElement("i"); probe.style.color = red; document.body.appendChild(probe);
+    const want = getComputedStyle(probe).color; probe.remove();
+    return { t: e.textContent, w: Number(cs.fontWeight), red: cs.color === want };
+  });
+  const wrong = await look();
+  await me.shot("T24-red");
+  await me.pg.evaluate(() => pinSaySet("Sending\u2026")); const plain = await look();
+  check("T24", "the PIN boxes move on as each is filled, and a refusal is bold red",
+        a1 === "pinNew" && a2 === "pinAgain" && a3 === "pinAgain" && sentEarly === 0 &&
+        vals.join() === "1234,2580,2581" &&
+        /do not match/.test(wrong.t) && wrong.w >= 700 && wrong.red &&
+        plain.w < 700 && !plain.red && !me.errs.length,
+        JSON.stringify({ a1, a2, a3, sentEarly, vals, wrong, plain, errors: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");
