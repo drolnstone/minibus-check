@@ -1660,6 +1660,69 @@ if (want("C49")) {
   await ctx.close();
 }
 
+/* C50 — v1.96.6. Asked once to turn alerts on, and never again after Not now. */
+if (want("C50")) {
+  const p = await page(env, { ask: true });
+  await p.pg.addInitScript(() => {
+    const reg = { active: {}, pushManager: { getSubscription: async () => null, subscribe: async () => null } };
+    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: {
+      getRegistration: async () => reg, register: async () => reg, addEventListener: () => {} } });
+    if (!window.PushManager) window.PushManager = function () {};
+    try { Object.defineProperty(Notification, "permission", { get: () => "default", configurable: true }); } catch (e) {}
+  });
+  await p.pg.reload({ waitUntil: "domcontentloaded" });
+  await p.wait(400);
+  await p.signIn(PIN);
+  await p.wait(500);
+  const asked = await p.sheetUp();
+  const title = await p.text("#sheetTitle");
+  await p.shot("C50-asked");
+  const why = asked ? "" : await p.pg.evaluate(() => JSON.stringify({ hash: location.hash, on: BELL.on, busy: BELL.busy,
+    sheet: SHEET.open, kept: localStorage.getItem("coord.alertask.v1"), able: pushAble(), D: !!D, say: $("signSay").textContent, name: $("signName").value }));
+  if (asked) await p.pg.click("#sheetNot");
+  await p.wait(300);
+  await p.pg.reload({ waitUntil: "domcontentloaded" });
+  await p.wait(400);
+  await p.signIn(PIN);
+  await p.wait(800);
+  const again = await p.sheetUp();
+  await p.ctx.close();
+  check("C50", "a coordinator without alerts is asked once, on the first screen, and not again after Not now",
+        asked && /turn on alerts/i.test(title) && !again && !p.errs.length,
+        JSON.stringify({ asked, title, again, why, errors: p.errs }));
+}
+
+/* C51 — v1.96.6. A new coordinator alert while the app is open: the count on
+   the bell and the first screen, a strip at the foot, and Alerts reads it. */
+if (want("C51")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  await W.default.fetch(new Request("https://worker.test/", { method: "POST", body: JSON.stringify({
+    action: "coordAlert", token: "minibusapp", alert: { id: "c51-" + Date.now(), kind: "stopped", urgent: true,
+      title: "BUS STOPPED: YS70 PWE", body: "Critical defect on Bro Trevor's check." } }) }), env, {});
+  await p.pg.evaluate(() => refresh());
+  await p.wait(1200);
+  const count = await p.text("#bellN");
+  const menu = await p.text("#homeBody .menu");
+  const strip = await p.pg.$eval("#aStrip", (el) => el.classList.contains("is-on"));
+  const stripText = await p.text("#aStrip");
+  const pad = await p.pg.evaluate(() => document.body.classList.contains("strip-on"));
+  await p.shot("C51-strip");
+  await p.pg.click("#aStripOpen");
+  await p.wait(1200);
+  const onAlerts = await p.on("alerts");
+  const list = await p.text("#alertsBody");
+  const after = await p.pg.$eval("#bellN", (el) => el.hidden);
+  await p.shot("C51-alerts");
+  const read = await (await W.default.fetch(new Request("https://worker.test/", { method: "POST", body: JSON.stringify({
+    action: "coord", token: "minibusapp", who: "Bro Arthur", pin: PIN, op: "alerts" }) }), env, {})).json();
+  await p.ctx.close();
+  check("C51", "a new alert shows a count on the bell and the first screen and a strip at the foot; opening it reads it",
+        count === "1" && /Alerts 1 new/.test(menu) && strip && /BUS STOPPED/.test(stripText) && pad &&
+        onAlerts && /BUS STOPPED/.test(list) && /New/.test(list) && after && read.alerts.unread === 0 && !p.errs.length,
+        JSON.stringify({ count, menu: menu.slice(-40), strip, stripText, pad, onAlerts, list: list.slice(0, 80), after, unread: read.alerts && read.alerts.unread, errors: p.errs }));
+}
+
 /* C48 — v1.96.2: Change your PIN in the coordinator app, the driver app's
    one PIN on the live server. The boxes hand on, the last one sends, a
    mismatch is bold red and empties the new boxes, and the app goes on
@@ -1725,67 +1788,6 @@ if (want("C48")) {
         after.steel.toUpperCase() === "#28166F" && after.bar.toUpperCase() === "#28166F" && !p.errs.length,
         JSON.stringify({ before, after, errors: p.errs }));
   await p.ctx.close();
-}
-
-/* C50 — v1.96.6. Asked once to turn alerts on, and never again after Not now. */
-if (want("C50")) {
-  const p = await page(env, { ask: true });
-  await p.pg.addInitScript(() => {
-    const reg = { active: {}, pushManager: { getSubscription: async () => null, subscribe: async () => null } };
-    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: {
-      getRegistration: async () => reg, register: async () => reg, addEventListener: () => {} } });
-    if (!window.PushManager) window.PushManager = function () {};
-    try { Object.defineProperty(Notification, "permission", { get: () => "default", configurable: true }); } catch (e) {}
-  });
-  await p.pg.reload({ waitUntil: "domcontentloaded" });
-  await p.wait(400);
-  await p.signIn(PIN);
-  await p.wait(500);
-  const asked = await p.sheetUp();
-  const title = await p.text("#sheetTitle");
-  await p.shot("C50-asked");
-  await p.pg.click("#sheetNot");
-  await p.wait(300);
-  await p.pg.reload({ waitUntil: "domcontentloaded" });
-  await p.wait(400);
-  await p.signIn(PIN);
-  await p.wait(800);
-  const again = await p.sheetUp();
-  await p.ctx.close();
-  check("C50", "a coordinator without alerts is asked once, on the first screen, and not again after Not now",
-        asked && /turn on alerts/i.test(title) && !again && !p.errs.length,
-        JSON.stringify({ asked, title, again, errors: p.errs }));
-}
-
-/* C51 — v1.96.6. A new coordinator alert while the app is open: the count on
-   the bell and the first screen, a strip at the foot, and Alerts reads it. */
-if (want("C51")) {
-  const p = await page(env);
-  await p.signIn(PIN);
-  await W.default.fetch(new Request("https://worker.test/", { method: "POST", body: JSON.stringify({
-    action: "coordAlert", token: "minibusapp", alert: { id: "c51-" + Date.now(), kind: "stopped", urgent: true,
-      title: "BUS STOPPED: YS70 PWE", body: "Critical defect on Bro Trevor's check." } }) }), env, {});
-  await p.pg.evaluate(() => refresh());
-  await p.wait(1200);
-  const count = await p.text("#bellN");
-  const menu = await p.text("#homeBody .menu");
-  const strip = await p.pg.$eval("#aStrip", (el) => el.classList.contains("is-on"));
-  const stripText = await p.text("#aStrip");
-  const pad = await p.pg.evaluate(() => document.body.classList.contains("strip-on"));
-  await p.shot("C51-strip");
-  await p.pg.click("#aStripOpen");
-  await p.wait(1200);
-  const onAlerts = await p.on("alerts");
-  const list = await p.text("#alertsBody");
-  const after = await p.pg.$eval("#bellN", (el) => el.hidden);
-  await p.shot("C51-alerts");
-  const read = await (await W.default.fetch(new Request("https://worker.test/", { method: "POST", body: JSON.stringify({
-    action: "coord", token: "minibusapp", who: "Bro Arthur", pin: PIN, op: "alerts" }) }), env, {})).json();
-  await p.ctx.close();
-  check("C51", "a new alert shows a count on the bell and the first screen and a strip at the foot; opening it reads it",
-        count === "1" && /Alerts 1 new/.test(menu) && strip && /BUS STOPPED/.test(stripText) && pad &&
-        onAlerts && /BUS STOPPED/.test(list) && /New/.test(list) && after && read.alerts.unread === 0 && !p.errs.length,
-        JSON.stringify({ count, menu: menu.slice(-40), strip, stripText, pad, onAlerts, list: list.slice(0, 80), after, unread: read.alerts && read.alerts.unread, errors: p.errs }));
 }
 
 await done();
