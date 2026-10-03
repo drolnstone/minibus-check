@@ -1165,7 +1165,7 @@ name is chosen, whether the live server answered, who can open the page, whether
 the name has a PIN on the Drivers tab, how this visit was opened, the lock and
 refresh settings, and after a sign-in what is on the way to the sheet and when
 the live server's clock last ticked. The theme chips sit under the numbers and
-set the driver app's own setting for Auto, Light and Dark. From v1.96.2 each
+set the driver app's own setting for Auto, Light and Dark. From v1.96.3 each
 app has one colour of its own, the colour of its home screen icon: Indigo here,
 Navy in the driver app, Green on the passenger page. The other app's colour
 reads as Auto. The

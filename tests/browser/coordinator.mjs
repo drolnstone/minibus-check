@@ -1577,7 +1577,7 @@ if (want("C47")) {
 
 check("C0", "no script error on the page throughout", me && !me.errs.length, JSON.stringify(me && me.errs));
 if (me) await me.ctx.close();
-/* C48 — v1.96.2. Auto, Light, Dark and the indigo of this app's own icon,
+/* C48 — v1.96.3. Auto, Light, Dark and the indigo of this app's own icon,
    and nothing else. The driver app's navy, kept under the same key, reads as
    Auto here and is left where it is for the driver app. */
 if (want("C48")) {

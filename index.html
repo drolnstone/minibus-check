@@ -245,7 +245,7 @@ html[data-theme="dark"] .field select{
         active tab. Deliberately that narrow: it is the one part of the
         screen that carries no meaning.
 
-        From v1.96.2 each app keeps one colour, the colour of its own home
+        From v1.96.3 each app keeps one colour, the colour of its own home
         screen icon, so the three can be told apart at a glance: navy here,
         green on the passenger page, indigo in the coordinator's app. ---- */
 html[data-theme="navy"]{
@@ -1616,7 +1616,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.96.2";
+var APP_VERSION = "v1.96.3";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -9573,7 +9573,7 @@ var THEME_KEY="fleet.theme.v1";
 var THEME_BAR={light:"#1B222C",dark:"#0E1216",navy:"#1E3260"};
 
 /* A choice this app does not carry (the coordinator's indigo, or green from
-   before v1.96.2) reads as Auto. It is not overwritten: the coordinator's
+   before v1.96.3) reads as Auto. It is not overwritten: the coordinator's
    app still wants its indigo back. */
 function themeChoice(){
   var t="auto";

@@ -840,7 +840,7 @@ if (want("T24")) {
   await me.ctx.close();
 }
 
-/* T25 — v1.96.2. Auto, Light, Dark and the navy of the driver app's own
+/* T25 — v1.96.3. Auto, Light, Dark and the navy of the driver app's own
    icon, and nothing else. The coordinator's indigo, kept under the same key
    on a coordinator's phone, reads as Auto here and is left where it is. */
 if (want("T25")) {

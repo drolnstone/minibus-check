@@ -246,7 +246,7 @@ if (want("P8")) {
         (text.indexOf(S03.stop) > -1) + ", gone after the run " + gone);
 }
 
-/* P9 — v1.96.2. Auto, Light, Dark and the green of this page's own icon,
+/* P9 — v1.96.3. Auto, Light, Dark and the green of this page's own icon,
    and nothing else. A phone left on navy from before follows the phone. */
 if (want("P9")) {
   const me = await passenger({ theme: "navy", wait: 600 });
