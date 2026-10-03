@@ -1575,6 +1575,45 @@ if (want("C47")) {
   await p.ctx.close();
 }
 
+/* C48 — v1.96.2: Change your PIN in the coordinator app, the driver app's
+   one PIN on the live server. The boxes hand on, the last one sends, a
+   mismatch is bold red and empties the new boxes, and the app goes on
+   working with the new PIN. Last, because it changes the PIN. */
+if (want("C48")) {
+  const p = await page(env);
+  try {
+    await p.signIn(PIN);
+    await p.pg.click('#homeBody [data-do="mypin"]');
+    await p.wait(400);
+    const focused = () => p.pg.evaluate(() => document.activeElement && document.activeElement.id);
+    const f0 = await focused();
+    await p.pg.keyboard.type(PIN); const a1 = await focused();
+    await p.pg.keyboard.type("9137"); const a2 = await focused();
+    await p.pg.keyboard.type("9138"); await p.wait(300);
+    const a3 = await focused();
+    const wrong = await p.pg.evaluate(() => {
+      const e = document.getElementById("sheetSay"), cs = getComputedStyle(e);
+      return { t: e.textContent, w: Number(cs.fontWeight), bad: e.classList.contains("bad"),
+               vals: ["myPinOld", "myPinNew", "myPinAgain"].map((id) => document.getElementById(id).value) };
+    });
+    await p.shot("C48-mismatch");
+    await p.pg.keyboard.type("9137");
+    await p.pg.keyboard.type("9137");
+    await p.wait(1500);
+    const toast = await p.text("#toast");
+    const open = await p.pg.evaluate(() => document.getElementById("sheet").classList.contains("is-on"));
+    await p.pg.click('#homeBody [data-go="drivers"]');
+    await p.wait(900);
+    const still = await p.pg.evaluate(() => ({ hash: location.hash, sign: getComputedStyle(document.getElementById("s-sign") || document.body).display }));
+    check("C48", "Change your PIN: the boxes hand on, the last sends, a mismatch is bold red, and the new PIN carries on",
+          f0 === "myPinOld" && a1 === "myPinNew" && a2 === "myPinAgain" && a3 === "myPinNew" &&
+          /do not match/.test(wrong.t) && wrong.bad && wrong.w >= 700 && wrong.vals.join() === PIN + ",," &&
+          /PIN changed/.test(toast) && !open && still.hash === "#drivers" && !p.errs.length,
+          JSON.stringify({ f0, a1, a2, a3, wrong, toast, open, still, errors: p.errs }));
+  } catch (e) { stopped("C48", e); }
+  await p.ctx.close();
+}
+
 check("C0", "no script error on the page throughout", me && !me.errs.length, JSON.stringify(me && me.errs));
 if (me) await me.ctx.close();
 /* C48 — v1.96.3. Auto, Light, Dark and the indigo of this app's own icon,

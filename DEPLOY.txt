@@ -6,12 +6,12 @@ Each app keeps four themes: Auto, Light, Dark and the one colour of its
 own home screen icon. Passenger page Green, driver app Navy, coordinator's
 app Indigo. Pages only.
 
-This follows v1.96.1 · w2.39.0 · v1.103.0, or v1.96.2 if the red warnings
-and PIN auto-skip pull request (#38) went first.
+This follows v1.96.2 · w2.39.0 · v1.103.0 (Change PIN sends itself, and
+the coordinator's Change your PIN).
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.96.1/2       v1.96.3
+  Pages   v1.96.2         v1.96.3
   Worker  w2.39.0         w2.39.0   (no paste)
   Code.gs v1.103.0        v1.103.0  (no paste)
 
@@ -26,7 +26,7 @@ AFTER IT
 --------
 
 A. The foot of all three apps reads  app v1.96.3 · server w2.39.0 · sheet
-   v1.103.0 . If a phone still shows an older number, close the app and open it
+   v1.103.0 . If a phone still shows v1.96.2, close the app and open it
    again.
 
 B. Passenger page, foot of the page: AUTO, LIGHT, DARK, GREEN. Tap Green:

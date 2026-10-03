@@ -9386,7 +9386,7 @@ function pinScreenSet(mode){
 }
 function pinSaySet(t,bad){ tell("pinSaySet", t, bad); }
 
-function pinPost(action, body, then){
+function pinPost(action, body, then, wrong){
   if(!(LIVE_ENDPOINT && navigator.onLine)){ pinSaySet("No signal. Try again when you have one.", true); return; }
   if(pinBusy) return;
   pinBusy = true;
@@ -9410,6 +9410,7 @@ function pinPost(action, body, then){
       if(out.valid !== true){
         pinSaySet("That PIN is not right." + (out.left > 0
           ? " " + out.left + (out.left === 1 ? " more try" : " more tries") + " before it pauses." : ""), true);
+        if(wrong) wrong();
         return;
       }
       then(out);
@@ -9425,24 +9426,34 @@ $("pinKeep").addEventListener("click",function(){
     show("hub");
   });
 });
-/* From v1.96.1, each box hands on to the next once its four digits are in,
-   so the driver keys straight through. The last one stops there: Change PIN
-   is still his own tap. */
+/* From v1.96.1, each box hands on to the next empty one once its four
+   digits are in, so the driver keys straight through. From v1.96.2, once all
+   three are full it sends, as a tap on Change PIN would. */
 ["pinOld","pinNew","pinAgain"].forEach(function(id,i,all){
   $(id).addEventListener("input",function(){
     var v=this.value.replace(/\D/g,"").slice(0,4);
     if(this.value!==v) this.value=v;
-    if(v.length===4 && all[i+1]) $(all[i+1]).focus();
+    if(v.length!==4) return;
+    var next=all.filter(function(x){ return $(x).value.length!==4; })[0];
+    if(next) $(next).focus(); else pinSave();
   });
 });
-$("pinSave").addEventListener("click",function(){
+/* After a refusal, the boxes that were wrong are emptied and the cursor put
+   in the first of them, so keying again is all it takes. */
+function pinRetry(ids){
+  ids.forEach(function(id){ $(id).value = ""; });
+  try{ $(ids[0]).focus(); }catch(e){}
+}
+$("pinSave").addEventListener("click",function(){ pinSave(); });
+function pinSave(){
   var old=$("pinOld").value, nw=$("pinNew").value, again=$("pinAgain").value;
-  if(old.length < 4){ pinSaySet("Key your "+(pinScreenMode==="forced" ? "default" : "current")+" PIN.", true); return; }
-  if(nw.length !== 4){ pinSaySet("A PIN is exactly 4 digits.", true); return; }
-  if(nw !== again){ pinSaySet("The new PINs do not match.", true); return; }
+  if(old.length < 4){ pinSaySet("Key your "+(pinScreenMode==="forced" ? "default" : "current")+" PIN.", true); pinRetry(["pinOld"]); return; }
+  if(nw.length !== 4){ pinSaySet("A PIN is exactly 4 digits.", true); pinRetry(["pinNew","pinAgain"]); return; }
+  if(nw !== again){ pinSaySet("The new PINs do not match.", true); pinRetry(["pinNew","pinAgain"]); return; }
   pinPost("pinchange", { pin: old, newPin: nw }, function(out){
     if(!out.changed){
       pinSaySet(out.error === "same pin" ? "Choose a different PIN." : "A PIN is exactly 4 digits.", true);
+      pinRetry(["pinNew","pinAgain"]);
       return;
     }
     /* The new one is the one he is signed in with, and this phone's copy. */
@@ -9455,8 +9466,8 @@ $("pinSave").addEventListener("click",function(){
     ["pinOld","pinNew","pinAgain"].forEach(function(id){ $(id).value = ""; });
     pinSaySet("PIN changed.");
     setTimeout(function(){ if(st.screen === "pin") show("hub"); }, 900);
-  });
-});
+  }, function(){ pinRetry(["pinOld"]); });
+}
 
 /* No signal, or the record did not answer in time. */
 function pinOffline(tried){

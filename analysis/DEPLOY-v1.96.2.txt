@@ -1,0 +1,61 @@
+MINIBUS
+=======
+  pages v1.96.2 · server w2.39.0 · sheet v1.103.0
+
+Change PIN sends itself once the last box is full: no tap on Change PIN.
+If it is refused, the bold red message shows, the boxes that were wrong
+are emptied and the cursor goes back to the first of them. And the
+coordinator app gets "Change your PIN" at the foot of its first screen:
+the same single PIN as the driver app, changed the same way. Pages only.
+
+This follows v1.96.1 (bold red warnings), already merged.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.96.1         v1.96.2
+  Worker  w2.39.0         w2.39.0   (no paste)
+  Code.gs v1.103.0        v1.103.0  (no paste)
+
+
+IN THIS ORDER
+-------------
+
+1. PAGES. Merge the pull request. Nothing else.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.96.2 · server w2.39.0 · sheet
+   v1.103.0 . If a phone still shows v1.96.1, close the app and open it
+   again.
+
+B. Driver app, Change PIN on the hub. Key your current PIN, then a new
+   PIN, then a different one in "New PIN again". As the last digit goes
+   in, "The new PINs do not match." shows in bold red, the two new boxes
+   empty, and the cursor is back in New PIN.
+
+C. Key the new PIN in both boxes. As the last digit goes in it sends by
+   itself and says "PIN changed.", then goes back to the hub. A wrong
+   current PIN empties only the Current PIN box.
+
+D. Coordinator app: at the foot of the first screen, under Driver app and
+   Vehicle check, tap "Change your PIN". The same three boxes, working the
+   same way. Once changed, the app carries on with the new PIN, and the
+   driver app takes the new PIN too (it is the same PIN).
+
+
+WHAT CHANGED
+------------
+
+1. index.html: once all three Change PIN boxes hold four digits it calls
+   pinSave(), the same as the button. Each box moves on to the next empty
+   one. A refusal calls pinRetry() on the boxes that were wrong. The
+   button is still there for anyone who taps it.
+
+2. coord/index.html: myPin(), a sheet with the three boxes that posts the
+   driver app's own pinchange action under the signed-in name, then uses
+   the new PIN for every call after. Opened by data-do="mypin" on home.
+
+3. Tests. tests/browser/driver-app.mjs T23 (no tap) and T24 (fails on
+   v1.96.1); tests/browser/coordinator.mjs C48, against the real Worker.
