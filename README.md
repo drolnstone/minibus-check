@@ -1083,7 +1083,7 @@ everything working?** names the side that is missing it.
 | Tab | Holds |
 |---|---|
 | `Rota` | who drives, which route, which bus, per Sunday. **Status** is also where a route is marked not running |
-| `Drivers` | the register — name, role, route, order, active, **PIN**, **Phone**. The row with Role **Coordinator** is who every page tells people to ring, on its Phone |
+| `Drivers` | the register — name, role, route, order, active, **Phone** (whose last four digits are the default PIN; there is no PIN column from v1.96.0). The row with Role **Coordinator** is who every page tells people to ring, on its Phone |
 | `Buses` | registration, seats, active, and from v1.87.0 **MOT due**, **Service due**, **Insurance due**, **Permit due** and **Route in odd months**. The dates are what the driver app warns about (30 days ahead, red once passed; blank is not tracked) and the only place they are kept: a renewal is a cell, not a code change. **Route in odd months** is North or South, the route that bus takes in January, March and so on; even months swap. A Sunday's Rota row naming a bus still wins for that Sunday. Without exactly one active North and one active South, the pairing written in the code is used rather than a guess. The columns were filled once, the first *Set up / refresh rota* after v1.87.0, and never again. From v1.92.0 the four date columns take a date and nothing else, and every change to one, from the app or typed here, is written on History with what it was |
 | `Bus Stops` | route, stop, time, postcode, and from v1.71.0 **Lat** and **Lng** — the kerb itself, used for the driver's map link and for working out what passing a stop saves. *Set up / refresh rota* fills any blank one it recognises from `STOP_PINS` in `Code.gs` and never overwrites one you have typed. A stop it does not recognise stays blank, which everything downstream already handles |
 | `Checks` | every safety check. **Outcome** is a dropdown, and picking **Authorised to run** on today's row lets a stopped bus out |
@@ -1098,10 +1098,12 @@ The Worker's own database holds the same stops, rota, buses and drivers (a
 copy, pushed from here), the bookings and taps as they happen, the shelf, and
 `push_subs` — one row per phone that has asked to be told things.
 
-**Give every active driver a PIN.** The PIN is what puts a name on a record. A
-driver without one is waved through every gate in the app, and because a
-sign-in now survives a page reload, that matters on a handset somebody else
-picks up later. **Is everything working?** names anyone missing one.
+**Give every active driver a phone number.** Its last four digits are his
+default PIN, and the PIN is what puts a name on a record. A driver without
+one (and no PIN of his own) is waved through every gate in the app, and
+because a sign-in now survives a page reload, that matters on a handset
+somebody else picks up later. **Is everything working?** names anyone missing
+one.
 
 ### Scheduled jobs
 
@@ -1193,7 +1195,7 @@ name. On Bookings and the Run record **the row of Sundays stays under the
 bar** while the list scrolls, and **switching Sunday is not a step**: one Back
 leaves the screen however many Sundays were looked at.
 
-Left in the spreadsheet on purpose: setting or seeing a PIN, setup, and
+Left in the spreadsheet on purpose: setup, and
 free-form editing of any tab. The rehearsal controls are in the app from
 v1.79.0, on the Rehearsal screen; the sheet's menu items still work. The app
 does not work without a signal: a change kept on the phone and sent later
@@ -2100,41 +2102,42 @@ Worker, in the same process, on a real SQLite database seeded from
 
 Keyed once, at the point of writing, and good for the rest of the morning.
 
-**Answered by the Worker**, in well under a tenth of a second. It used to be
-Apps Script, which takes two to eight, at the one moment a man is standing
-beside a bus with people waiting to get on it.
+**From v1.96.0 the live server is the only thing that knows a PIN**, copied
+from the Ushers app:
 
-The four digits never leave the spreadsheet. Apps Script computes a **salted
-one way hash** and posts only that to the Worker's `drivers` table on every
-sync. The Worker compares hashes.
+- **The default PIN** is the last four digits of the driver's Phone on the
+  Drivers tab. Apps Script works it out and sends the Worker only a
+  **salted one way hash** on every sync. There is no PIN column; delete it.
+- **His own PIN.** The driver app's hub has **Change PIN**: current PIN, new
+  PIN twice. Four digits, never the one he has, never his default. Kept in
+  the Worker's `driver_pins` table only: a random salt per driver,
+  PBKDF2-SHA-256, with `PIN_SALT` as the secret pepper.
+- **Asked once.** Right after the default (first sign-in, or after a reset)
+  the hub asks "Do you wish to keep your default PIN?". Keep, or change it.
+  Nothing is blocked while he decides.
+- **Reset PIN**, on a driver in the coordinator app's Drivers screen, puts
+  him back on the default and clears a lockout.
+- Each change, keep and reset is a line on the History tab. Never the PIN.
 
 | Where | What |
 |---|---|
 | Apps Script → Script Properties | `PIN_SALT` |
 | Cloudflare → Worker → Variables | `PIN_SALT`, the **same value** |
 
-**If the two ever differ, every PIN is refused by the Worker.** The app falls
-back to Apps Script so nobody is locked out, but it is slow again and nothing
-on screen says why. That is the first thing to check if PINs go slow.
+**If the two ever differ, every default PIN is refused by the Worker.** Never
+change `PIN_SALT` once drivers have their own PINs: it is their pepper too.
 
-It falls back on anything the Worker cannot answer: a name it has not been told
-about, a sync that has not run, a refusal, a timeout, no signal. Worst case is
-the behaviour that shipped before it.
+The sheet no longer answers a PIN. When the Worker cannot (no signal, a name
+it has not been told about yet), the app uses this phone's own copy, or lets
+him through and records that it could not check.
 
 **Three tries, then five minutes.** That lockout lives in the Worker now and
 had to move with the check. Verifying in one place while counting in the other
 gives six tries wearing the label of three.
 
 There is also a per-handset cache: a hash of `driver:pin` kept on the phone,
-which short-circuits a repeat. It is a nicety now rather than the thing holding
-the experience up, which is the right place for it.
-
-**One PIN call still goes to Apps Script on purpose.** When a driver gets in on
-that cached hash, a quiet re-check runs behind him to catch a PIN you have
-since changed. That is a question about authority, and the spreadsheet is the
-authority: the Worker's copy is a hash pushed on a five minute sync, so asking
-it would hand back a gate you had already taken away. Nobody is waiting on that
-call, so slow is the right answer for it.
+which short-circuits a repeat. When a driver gets in on it, a quiet re-check
+asks the Worker behind him, to catch a PIN changed or reset since.
 
 **The PIN confirms your name on a record. It does not protect information.**
 Reading the rota and the stop list writes nothing and stays open to anybody who

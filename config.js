@@ -141,18 +141,16 @@ window.CONFIG = {
 
   /* Drivers key in a four digit PIN before they can start a check.
 
-     Set them in the PIN column of the Drivers tab in the spreadsheet, never
-     here. The four digits never leave the spreadsheet. The app sends what is
-     keyed to the server, which compares it with a salted one-way fingerprint
-     and answers yes or no. No phone is ever sent a fingerprint.
+     Never set here. From v1.96.0 every driver starts on the default PIN, the
+     last four digits of the Phone on the Drivers tab, and can change it in
+     the driver app; the coordinator's app resets it to the default. The live
+     server is the only thing that knows a PIN: it keeps the default as a
+     salted one-way fingerprint and a driver's own PIN the same way, and
+     answers yes or no. No phone is ever sent a fingerprint.
 
-     Choose four digits that are not derived from anything else about the
-     person. This file is downloaded by every phone that opens the app, so
-     write nothing here or in the Drivers tab that would let one PIN be
-     worked out from another.
-
-     A driver with no PIN in the sheet is not asked for one, so adding
-     somebody never locks them out. Set false to turn the whole thing off. */
+     A driver with no phone number and no PIN of his own is not asked for
+     one, so adding somebody never locks them out. Set false to turn the
+     whole thing off. */
   requirePin: true,
 
   /* Who is offered the full inspection as well as the pre-drive check, and

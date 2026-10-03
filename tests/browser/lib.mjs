@@ -149,6 +149,9 @@ export async function phone(opts = {}) {
     for (const rt of ["North", "South"]) seats[rt].left = seats[rt].seats - seats[rt].booked;
     if (world.seats) Object.assign(seats, world.seats);
     if (post.action === "pin") body = world.pin(post);
+    /* A driver's own PIN, from v1.96.0. */
+    else if (post.action === "pinchange") body = world.pinchange ? world.pinchange(post) : { ok: true, valid: true, changed: true };
+    else if (post.action === "pinkeep") body = { ok: true, valid: true, kept: true };
     else if (post.action === "trip") {
       /* Echoed back the way the Worker does, so the board and the phone agree
          about the run and the board can carry the timetable offset. A tap

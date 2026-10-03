@@ -76,18 +76,18 @@ CREATE TABLE IF NOT EXISTS drivers (
   route    TEXT DEFAULT 'North',
   ord      INTEGER DEFAULT 0,
   active   INTEGER DEFAULT 1,
-  -- A SALTED ONE WAY HASH OF THE PIN, AND NEVER THE PIN.
+  -- A SALTED ONE WAY HASH OF THE DEFAULT PIN, AND NEVER THE PIN.
   --
-  -- Apps Script computes it from the Drivers tab and posts it here on every
-  -- sync. The four digits stay in the spreadsheet, which is the promise
-  -- config.js has always made and this does not break it.
+  -- The default PIN is the last four digits of the Phone on the Drivers tab
+  -- (from w2.39.0; there is no PIN column). Apps Script works it out and
+  -- posts only this hash on every sync. A driver's own PIN is in driver_pins.
   --
   -- It is here so that keying a PIN is answered by this server in well under
   -- a tenth of a second instead of by Apps Script in two to eight, at the one
   -- moment a man is standing beside a bus with people waiting to get on it.
   --
-  -- Empty means no PIN against that name, which is how somebody without one
-  -- gets in. It is not a failure.
+  -- Empty means no default PIN (no phone number). With no own PIN either,
+  -- that is how somebody without one gets in. It is not a failure.
   pin_hash TEXT NOT NULL DEFAULT ''
 );
 
@@ -322,7 +322,7 @@ CREATE INDEX IF NOT EXISTS links_pending ON links(kind, used, synced);
 CREATE TABLE IF NOT EXISTS coord_actions (
   seq     INTEGER PRIMARY KEY AUTOINCREMENT,
   id      TEXT NOT NULL UNIQUE,
-  kind    TEXT NOT NULL,             -- rota | decide | booking | defect | fix | vlog | vfix | job
+  kind    TEXT NOT NULL,             -- rota | decide | booking | defect | fix | vlog | vfix | job | pin ...
   sunday  TEXT NOT NULL DEFAULT '',
   body    TEXT NOT NULL,             -- the change as checked here, JSON
   by_name TEXT NOT NULL DEFAULT '',  -- the coordinator whose PIN matched
@@ -336,3 +336,23 @@ CREATE TABLE IF NOT EXISTS coord_actions (
 );
 CREATE INDEX IF NOT EXISTS coord_sync ON coord_actions(synced);
 CREATE INDEX IF NOT EXISTS coord_open ON coord_actions(seen, kind);
+
+-- A DRIVER'S OWN PIN, from w2.39.0, copied from the Ushers app. Only the
+-- driver sets it, from the driver app; a coordinator's reset deletes the row,
+-- which puts him back on the default PIN in drivers.pin_hash. Never touched
+-- by the sync, so it outlives every push of the Drivers tab.
+--   name      the driver's name, lower case
+--   pin_salt  random, one per driver, hex
+--   pin_hash  PBKDF2-SHA-256 of PIN_SALT:pin, hex. Empty when he kept the
+--             default rather than set his own
+--   kept      1 when he was asked and kept the default PIN, so he is not
+--             asked again
+-- Created by the Worker on first use, so a live database needs no console step.
+CREATE TABLE IF NOT EXISTS driver_pins (
+  name     TEXT PRIMARY KEY,
+  pin_salt TEXT DEFAULT '',
+  pin_hash TEXT DEFAULT '',
+  pin_iter INTEGER DEFAULT 0,
+  set_at   INTEGER,
+  kept     INTEGER DEFAULT 0
+);
