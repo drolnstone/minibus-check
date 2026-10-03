@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.96.1 · THE COORDINATOR'S APP.
+<!-- BUILD v1.96.2 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -657,7 +657,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.96.1";
+var PAGE_VERSION = "v1.96.2";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1317,7 +1317,8 @@ function paintHome(){
      for the driver app: to its hub, or straight to choosing a bus. */
   h += '<div class="foot-links">' +
        '<a class="foot-link" href="../" data-do="driverapp">Driver app</a>' +
-       '<a class="foot-link" href="../" data-do="check">Vehicle check</a></div>';
+       '<a class="foot-link" href="../" data-do="check">Vehicle check</a></div>' +
+       '<button class="foot-link" type="button" data-do="mypin" style="background:none;border:0;padding:0">Change your PIN</button>';
   $("homeBody").innerHTML = h;
 }
 
@@ -1949,6 +1950,75 @@ function editDriver(name){
       };
     });
   });
+}
+
+/* ---- your own PIN, from v1.96.2 ---------------------------------------------
+
+   The same PIN as the driver app: one per person, on the live server. This
+   is the driver app's Change PIN, here so a coordinator need not leave this
+   app for it. The boxes hand on as each fills and the last one sends; a
+   refusal empties the boxes that were wrong and puts the cursor back. */
+function myPin(){
+  var box = function(id, lab){
+    return '<div class="field"><label for="' + id + '">' + lab + '</label>' +
+           '<input id="' + id + '" type="password" inputmode="numeric" maxlength="4" autocomplete="off" ' +
+           'class="mono pinbox" placeholder="&bull;&bull;&bull;&bull;"></div>';
+  };
+  var ids = ["myPinOld", "myPinNew", "myPinAgain"];
+  openSheet({ eyebrow: "Your PIN", title: "Change your PIN",
+    line: "The PIN you sign in with, here and in the driver app.",
+    body: box("myPinOld", "Current PIN") + box("myPinNew", "New PIN (4 digits)") + box("myPinAgain", "New PIN again"),
+    go: "Change PIN", onGo: function(){ send(); } });
+  /* Not wiped on every key: the red line after a refusal stays until the
+     box it is about is keyed again. */
+  $("sheetBody").oninput = null;
+  var retry = function(list){
+    list.forEach(function(id){ $(id).value = ""; });
+    try{ $(list[0]).focus(); }catch(e){}
+  };
+  var send = function(){
+    if(busy) return;
+    var old = $("myPinOld").value, nw = $("myPinNew").value, again = $("myPinAgain").value;
+    if(old.length < 4){ sheetSay("Key your current PIN.", true); retry(["myPinOld"]); return; }
+    if(nw.length !== 4){ sheetSay("A PIN is exactly 4 digits.", true); retry(["myPinNew", "myPinAgain"]); return; }
+    if(nw !== again){ sheetSay("The new PINs do not match.", true); retry(["myPinNew", "myPinAgain"]); return; }
+    busy = true; sheetBusy(true); sheetSay("Sending…");
+    post({ token: TOKEN, action: "pinchange", pin: { driver: who, pin: old, newPin: nw } }).then(function(out){
+      busy = false; sheetBusy(false);
+      if(!out || out.ok !== true){
+        sheetSay(out && out.error === "no pin" ? "You have no PIN yet: put your phone number on the Drivers tab."
+                                               : "The live server did not take that. Try again.", true);
+        return;
+      }
+      if(out.locked){ sheetSay("Too many wrong tries. Wait " + (out.minutes || 5) + " minutes.", true); return; }
+      if(out.valid !== true){
+        sheetSay("That PIN is not right." + (out.left > 0
+          ? " " + out.left + (out.left === 1 ? " more try" : " more tries") + " before it pauses." : ""), true);
+        retry(["myPinOld"]);
+        return;
+      }
+      if(!out.changed){
+        sheetSay(out.error === "same pin" ? "Choose a different PIN." : "A PIN is exactly 4 digits.", true);
+        retry(["myPinNew", "myPinAgain"]);
+        return;
+      }
+      /* Every call after this one carries the new PIN. */
+      pin = nw;
+      closeSheet();
+      toast("PIN changed. Use it here and in the driver app.");
+    }, function(){ busy = false; sheetBusy(false); sheetSay("No connection. Try again.", true); });
+  };
+  ids.forEach(function(id){
+    $(id).addEventListener("input", function(){
+      var v = this.value.replace(/\D/g, "").slice(0, 4);
+      if(this.value !== v) this.value = v;
+      if(!busy) sheetSay("");
+      if(v.length !== 4) return;
+      var next = ids.filter(function(x){ return $(x).value.length !== 4; })[0];
+      if(next) $(next).focus(); else send();
+    });
+  });
+  setTimeout(function(){ try{ $("myPinOld").focus(); }catch(e){} }, 120);
 }
 
 /* ---- bus stops: the Bus Stops tab, from v1.93.0 ------------------------------
@@ -3228,6 +3298,7 @@ document.addEventListener("click", function(e){
   var key = t.getAttribute("data-key");
   if(d === "driverapp"){ e.preventDefault(); toDriver("hub"); return; }
   if(d === "check"){ e.preventDefault(); toDriver("check"); return; }
+  if(d === "mypin"){ myPin(); return; }
   if(d === "authorise") authorise(t.getAttribute("data-reg"));
   else if(d === "motrun") motRun(t.getAttribute("data-reg"));
   else if(d === "endrun") endRun(t.getAttribute("data-route"));
