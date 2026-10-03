@@ -785,12 +785,11 @@ if (want("T23")) {
       const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event("input"));
     }
   }, [o, n, g]);
-  await fill("1234", "2580", "2581");
-  await me.clickId("pinSave"); await me.wait(300);
+  /* From v1.96.2 the last box sends by itself: no tap on Change PIN. */
+  await fill("1234", "2580", "2581"); await me.wait(300);
   const mismatch = await me.text("#pinSaySet");
   const sentEarly = me.posted.filter((p) => p.action === "pinchange").length;
-  await fill("1234", "2580", "2580");
-  await me.clickId("pinSave"); await me.wait(700);
+  await fill("1234", "2580", "2580"); await me.wait(700);
   const said = await me.text("#pinSaySet");
   const sent = me.posted.filter((p) => p.action === "pinchange");
   await me.wait(900);
@@ -804,9 +803,11 @@ if (want("T23")) {
   await me.ctx.close();
 }
 
-/* T24 — v1.96.1. Keyed straight through, each PIN box hands on to the next
-   once its four digits are in, and the last one does not send by itself. A
-   refusal is said in bold red, and an ordinary line is not. */
+/* T24 — v1.96.1 and v1.96.2. Keyed straight through, each PIN box hands on
+   to the next once its four digits are in, and the last one sends it. A
+   mismatch is said in bold red, the two new boxes are emptied with the
+   cursor back in the first, and keying them again sends it. An ordinary
+   line is not red. */
 if (want("T24")) {
   const me = await phone({ clock: "2026-09-26T19:00:00+01:00" });
   await me.load(); await me.close(["howDone"]);
@@ -814,13 +815,14 @@ if (want("T24")) {
   await toHub(me);
   await me.clickId("toPinChange"); await me.wait(400);
   const focused = () => me.pg.evaluate(() => document.activeElement && document.activeElement.id);
+  const sends = () => me.posted.filter((p) => p.action === "pinchange").length;
   await me.pg.focus("#pinOld");
   await me.pg.keyboard.type("1234"); const a1 = await focused();
   await me.pg.keyboard.type("2580"); const a2 = await focused();
-  await me.pg.keyboard.type("2581"); const a3 = await focused();
-  const sentEarly = me.posted.filter((p) => p.action === "pinchange").length;
+  await me.pg.keyboard.type("2581"); await me.wait(300);
+  const a3 = await focused();
+  const sentEarly = sends();
   const vals = await me.pg.evaluate(() => ["pinOld","pinNew","pinAgain"].map((id) => document.getElementById(id).value));
-  await me.clickId("pinSave"); await me.wait(300);
   const look = () => me.pg.evaluate(() => {
     const e = document.getElementById("pinSaySet"), cs = getComputedStyle(e);
     const red = getComputedStyle(document.documentElement).getPropertyValue("--stop").trim();
@@ -830,13 +832,17 @@ if (want("T24")) {
   });
   const wrong = await look();
   await me.shot("T24-red");
-  await me.pg.evaluate(() => pinSaySet("Sending\u2026")); const plain = await look();
-  check("T24", "the PIN boxes move on as each is filled, and a refusal is bold red",
-        a1 === "pinNew" && a2 === "pinAgain" && a3 === "pinAgain" && sentEarly === 0 &&
-        vals.join() === "1234,2580,2581" &&
+  await me.pg.keyboard.type("2580"); const a4 = await focused();
+  await me.pg.keyboard.type("2580"); await me.wait(700);
+  const sent = me.posted.filter((p) => p.action === "pinchange");
+  const said = await look();
+  check("T24", "the PIN boxes move on as each is filled, the last one sends, and a refusal is bold red",
+        a1 === "pinNew" && a2 === "pinAgain" && a3 === "pinNew" && sentEarly === 0 &&
+        vals.join() === "1234,," &&
         /do not match/.test(wrong.t) && wrong.w >= 700 && wrong.red &&
-        plain.w < 700 && !plain.red && !me.errs.length,
-        JSON.stringify({ a1, a2, a3, sentEarly, vals, wrong, plain, errors: me.errs }));
+        a4 === "pinAgain" && sent.length === 1 && sent[0].pin.pin === "1234" && sent[0].pin.newPin === "2580" &&
+        /PIN changed/.test(said.t) && said.w < 700 && !said.red && !me.errs.length,
+        JSON.stringify({ a1, a2, a3, a4, sentEarly, vals, wrong, sent: sent.map((p) => p.pin), said, errors: me.errs }));
   await me.ctx.close();
 }
 
