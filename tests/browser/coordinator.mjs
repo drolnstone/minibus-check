@@ -751,6 +751,10 @@ if (want("C21")) {
   await p.pg.click('#homeBody [data-do="driverapp"]');
   await p.pg.waitForURL((u) => !/\/coord\//.test(String(u)), { timeout: 8000 }).catch(() => {});
   await p.wait(3500);
+  /* From v1.96.0 a driver on the default PIN is asked once, on the way to
+     the hub, whether to keep it. Kept, against the live server. */
+  const asked = await p.pg.$eval("#s-pin", (el) => el.classList.contains("is-on")).catch(() => false);
+  if (asked) { await p.pg.evaluate(() => document.getElementById("pinKeep").click()); await p.wait(1500); }
   const onHub = await p.pg.$eval("#s-hub", (el) => el.classList.contains("is-on")).catch(() => false);
   const state = await p.pg.evaluate(() => typeof st !== "undefined" ? { driver: st.driver, pinOk: st.pinOk } : {});
   const left = await p.pg.evaluate(() => { try { return sessionStorage.getItem("fleet.hand.v1"); } catch (e) { return "unreadable"; } });
