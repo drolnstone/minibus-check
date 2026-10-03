@@ -1,0 +1,49 @@
+MINIBUS
+=======
+  pages v1.96.5 · server w2.39.0 · sheet v1.103.0
+
+The driver app's logo goes navy: the field behind the church logo on its
+home screen icon, tab icon and notification icon is now #1E3260, the same
+navy as the driver app's Navy theme. It was charcoal (#1B222C). Pages only.
+
+This follows v1.96.4 · w2.39.0 · v1.103.0.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.96.4         v1.96.5
+  Worker  w2.39.0         w2.39.0   (no paste)
+  Code.gs v1.103.0        v1.103.0  (no paste)
+
+
+IN THIS ORDER
+-------------
+
+1. PAGES. Merge the pull request. Nothing else.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.96.5 · server w2.39.0 · sheet
+   v1.103.0 . If a phone still shows v1.96.4, close the app and open it
+   again.
+
+B. Open the driver app in a browser tab: the tab icon is the logo on navy.
+
+C. A phone that already has the driver app on its home screen keeps the
+   charcoal icon it was given when it was added; phones choose that icon
+   once. To see the navy one, remove the app from the home screen and add
+   it again (Add to your phone on the sign-in screen). New installs get
+   navy straight away.
+
+
+WHAT CHANGED
+------------
+
+1. icon-driver-180.png, icon-192.png, icon-512.png, icon-512-maskable.png:
+   the charcoal field, and its soft edge against the white ring, recoloured
+   to navy #1E3260. The logo itself (white ring, red lines, green lettering,
+   indigo centre) is untouched.
+
+2. Version numbers only elsewhere (the service workers' caches move, so the
+   new icons are fetched).

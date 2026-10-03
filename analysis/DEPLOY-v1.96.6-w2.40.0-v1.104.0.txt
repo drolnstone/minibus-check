@@ -23,13 +23,11 @@ Coordinator alerts, after the Ushers app's notifications (its PRs #18 and
     COORDINATOR_EMAIL names already gets the full email and is not sent it
     twice. Never for the menu's test.
 
-This follows v1.96.4 · w2.39.0 · v1.103.0 (the coordinator app opening with
-no connection). PR #41 (driver logo, v1.96.5) touches the same version
-lines, so whichever merges second needs its numbers settled first.
+This follows v1.96.5 · w2.39.0 · v1.103.0 (the driver app's logo on navy).
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.96.4         v1.96.6
+  Pages   v1.96.5         v1.96.6
   Worker  w2.39.0         w2.40.0
   Code.gs v1.103.0        v1.104.0
 
@@ -53,7 +51,7 @@ AFTER IT
 --------
 
 A. The foot of all three apps reads  app v1.96.6 · server w2.40.0 · sheet
-   v1.104.0 . If a phone still shows v1.96.4, close the app and open it
+   v1.104.0 . If a phone still shows v1.96.5, close the app and open it
    again.
 
 B. The coordinator app's first screen has an Alerts line at the end of the
