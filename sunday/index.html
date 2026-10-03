@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.96.1 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.96.2 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -187,10 +187,14 @@ html[data-theme="dark"]{
   --veil:rgba(14,18,22,.97);
   --scrim:rgba(0,0,0,.62);
 }
-html[data-theme="green"]{ --steel:#14532D;--paper:#F2F6F3;--accent-ink:#14532D; }
-html[data-theme="navy"]{  --steel:#1E3260;--paper:#F2F4F9;--accent-ink:#1E3260; }
+/* From v1.96.2 the one colour is the green of this page's own home screen
+   icon, #00923F, so it is not mistaken for the driver app (navy) or the
+   coordinator's (indigo). White on it is 4.05 to 1, which is why text set
+   in the accent on the page itself takes a deeper step of the same green,
+   5.0 to 1 on this paper. */
+html[data-theme="green"]{ --steel:#00923F;--paper:#F2F6F3;--accent-ink:#007A35; }
 
-/* The picker. Five words at the foot of the page, in the same shape as the
+/* The picker. Four words at the foot of the page, in the same shape as the
    route tabs, so it is not a new kind of control. */
 .themes{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:16px 0 4px}
 .themes button{min-height:32px;padding:0 11px;border:1.5px solid var(--hair);
@@ -229,8 +233,8 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 
    Drawn with stroke="currentColor" and no fill of its own, so it takes the
    colour the theme has already set on the row it sits in. Both apps carry five
-   themes (auto, light, dark, green, navy), and this is one rule covering all
-   ten combinations rather than ten rules.
+   themes, four each (auto, light, dark and the app's own colour), and this is
+   one rule covering every combination rather than a rule per theme.
 
    Colour is never the only signal: it also carries an aria-label and a title,
    so a screen reader and a long press both say what it does. */
@@ -585,6 +589,9 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 (function(){
   var t="auto";
   try{ t=localStorage.getItem("bus.theme.v1")||"auto"; }catch(e){}
+  /* Only this page's own four. A phone left on navy from before v1.96.2
+     follows the phone again. */
+  if(!/^(auto|light|dark|green)$/.test(t)) t="auto";
   var m=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
   document.documentElement.setAttribute("data-theme",
     t!=="auto" ? t : ((m&&m.matches)?"dark":"light"));
@@ -657,7 +664,6 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
     <button type="button" data-theme-set="light">Light</button>
     <button type="button" data-theme-set="dark">Dark</button>
     <button type="button" data-theme-set="green">Green</button>
-    <button type="button" data-theme-set="navy">Navy</button>
   </div>
 </div>
 
@@ -745,7 +751,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.96.1";
+var PAGE_VERSION = "v1.96.2";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -3468,11 +3474,12 @@ $("alertAskGo").addEventListener("click",function(){
    handset that turns dark at dusk moves this page with it, without a
    reload. */
 var THEME_KEY="bus.theme.v1";
-var THEME_BAR={light:"#1B222C",dark:"#0E1216",green:"#14532D",navy:"#1E3260"};
+var THEME_BAR={light:"#1B222C",dark:"#0E1216",green:"#00923F"};
 
 function themeApply(){
   var pick="auto";
   try{ pick=localStorage.getItem(THEME_KEY)||"auto"; }catch(e){}
+  if(!THEME_BAR[pick]) pick="auto";
   var r=pick;
   if(pick==="auto"){
     var mq=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");

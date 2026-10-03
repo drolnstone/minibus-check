@@ -624,11 +624,11 @@ if (want("C18")) {
   const report = await p.text("#sheetBody");
   await p.shot("C18a-report");
   await p.pg.click("#sheetNot");
-  await p.pg.click('#themes [data-theme-set="navy"]');
+  await p.pg.click('#themes [data-theme-set="indigo"]');
   await p.wait(150);
   const theme = await p.pg.evaluate(() => [document.documentElement.getAttribute("data-theme"),
                                            localStorage.getItem("fleet.theme.v1")]);
-  await p.shot("C18b-landing-navy");
+  await p.shot("C18b-landing-indigo");
   await p.signIn(PIN);
   const homeLine = await p.pg.evaluate(() => !!document.querySelector("#homeBody .version"));
   check("C18", "the landing page carries all three numbers and, under a tap, what decides whether it opens; the first screen does not",
@@ -637,7 +637,7 @@ if (want("C18")) {
         /answered at/.test(report) && !homeLine && !p.errs.length,
         "line '" + line + "', report '" + report.slice(0, 160) + "', on the first screen " + homeLine);
   check("C18a", "the theme chips sit under the numbers and set the driver app's own setting",
-        order && theme[0] === "navy" && theme[1] === "navy", "order " + order + ", theme " + JSON.stringify(theme));
+        order && theme[0] === "indigo" && theme[1] === "indigo", "order " + order + ", theme " + JSON.stringify(theme));
   await p.ctx.close();
 }
 
@@ -1577,6 +1577,32 @@ if (want("C47")) {
 
 check("C0", "no script error on the page throughout", me && !me.errs.length, JSON.stringify(me && me.errs));
 if (me) await me.ctx.close();
+/* C48 — v1.96.2. Auto, Light, Dark and the indigo of this app's own icon,
+   and nothing else. The driver app's navy, kept under the same key, reads as
+   Auto here and is left where it is for the driver app. */
+if (want("C48")) {
+  const p = await page(env, { theme: "navy" });
+  await p.wait(400);
+  const look = () => p.pg.evaluate(() => ({
+    chips: Array.prototype.map.call(document.querySelectorAll("#themes [data-theme-set]"), (b) => b.getAttribute("data-theme-set")).join(),
+    on: Array.prototype.map.call(document.querySelectorAll("#themes .on"), (b) => b.getAttribute("data-theme-set")).join(),
+    theme: document.documentElement.getAttribute("data-theme"),
+    kept: localStorage.getItem("fleet.theme.v1"),
+    bar: document.querySelector('meta[name="theme-color"]').getAttribute("content"),
+    steel: getComputedStyle(document.documentElement).getPropertyValue("--steel").trim() }));
+  const before = await look();
+  await p.pg.click('#themes [data-theme-set="indigo"]');
+  await p.wait(150);
+  const after = await look();
+  await p.shot("C48-indigo");
+  check("C48", "the coordinator's app offers Auto, Light, Dark and Indigo, the colour of its own icon",
+        before.chips === "auto,light,dark,indigo" && before.on === "auto" && before.theme === "light" &&
+        before.kept === "navy" && after.theme === "indigo" && after.on === "indigo" &&
+        after.steel.toUpperCase() === "#28166F" && after.bar.toUpperCase() === "#28166F" && !p.errs.length,
+        JSON.stringify({ before, after, errors: p.errs }));
+  await p.ctx.close();
+}
+
 await done();
 cleanup(ROOT);
 const bad = results.filter((r) => !r.ok);

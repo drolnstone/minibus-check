@@ -46,6 +46,7 @@ async function passenger(o) {
       Object.defineProperty(navigator.serviceWorker, "ready", { get: () => Promise.resolve({ pushManager: pm }), configurable: true });
       navigator.serviceWorker.register = async () => ({ pushManager: pm });
     } catch (e) {}` : ""}
+    ${o.theme ? `try { localStorage.setItem("bus.theme.v1", ${JSON.stringify(o.theme)}); } catch (e) {}` : ""}
     ${o.pid ? 'try { localStorage.setItem("bus.pid.v1", "pid-me"); localStorage.setItem("bus.phone.v1", "07700900123"); } catch (e) {}' : ""}
     try { Object.defineProperty(Notification, "permission", { get: () => "default", configurable: true }); } catch (e) {}
     if (window.PushManager) PushManager.prototype.getSubscription = async function () { return null; };
@@ -243,6 +244,29 @@ if (want("P8")) {
         text.indexOf(S03.stop) > -1 && gone,
         "shown " + btn.shown + ", '" + btn.text + "', " + (btn.href || "").slice(0, 40) + ", says stop " +
         (text.indexOf(S03.stop) > -1) + ", gone after the run " + gone);
+}
+
+/* P9 — v1.96.2. Auto, Light, Dark and the green of this page's own icon,
+   and nothing else. A phone left on navy from before follows the phone. */
+if (want("P9")) {
+  const me = await passenger({ theme: "navy", wait: 600 });
+  const look = () => me.pg.evaluate(() => ({
+    chips: Array.prototype.map.call(document.querySelectorAll("#themes [data-theme-set]"), (b) => b.getAttribute("data-theme-set")).join(),
+    on: Array.prototype.map.call(document.querySelectorAll("#themes .on"), (b) => b.getAttribute("data-theme-set")).join(),
+    theme: document.documentElement.getAttribute("data-theme"),
+    bar: document.querySelector('meta[name="theme-color"]').getAttribute("content"),
+    steel: getComputedStyle(document.documentElement).getPropertyValue("--steel").trim() }));
+  const before = await look();
+  await me.pg.evaluate(() => document.querySelector('#themes [data-theme-set="green"]').click());
+  await me.pg.waitForTimeout(150);
+  const after = await look();
+  await me.shot("P9-green");
+  await me.ctx.close();
+  check("P9", "the passenger page offers Auto, Light, Dark and Green, the colour of its own icon",
+        before.chips === "auto,light,dark,green" && before.on === "auto" && before.theme === "light" &&
+        after.theme === "green" && after.on === "green" && after.steel.toUpperCase() === "#00923F" &&
+        after.bar.toUpperCase() === "#00923F" && !me.errs.length,
+        JSON.stringify({ before, after, errors: me.errs }));
 }
 
 const bad = results.filter((r) => !r.ok);
