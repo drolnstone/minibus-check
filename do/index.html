@@ -430,7 +430,7 @@ function send(choice){
       return;
     }
     if (out && out.error === "no pin") {
-      say("There is no PIN against your name in the spreadsheet.", true); return;
+      say("No coordinator has a PIN yet. Put their phone numbers on the Drivers tab.", true); return;
     }
     if (out && out.error === "not authorised") {
       say("Only a coordinator can make this decision.", true); return;

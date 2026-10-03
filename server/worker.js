@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.38.0";
+const SCRIPT_VERSION = "w2.39.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -527,9 +527,10 @@ async function handleLinkWhat(env, body) {
   try {
     const rules = await authRules(env);
     const people = await env.DB.prepare(
-      "SELECT role, pin_hash FROM drivers WHERE active = 1").all();
+      "SELECT name, role, pin_hash FROM drivers WHERE active = 1").all();
+    const own = await ownPinsAll(env);
     out.canDecide = (people.results || []).filter((d) =>
-      String(d.pin_hash || "") &&
+      pinWantedOf(d, own[pinKey(d.name)]) &&
       rules.roles.indexOf(String(d.role || "").trim().toLowerCase()) !== -1).length;
   } catch (e) { out.canDecide = null; }
 
@@ -576,8 +577,9 @@ async function handleLinkDo(env, body) {
   const rules = await authRules(env);
   const people = await env.DB.prepare(
     "SELECT name, role, pin_hash FROM drivers WHERE active = 1").all();
+  const own = await ownPinsAll(env);
   const may = (people.results || []).filter((d) =>
-    String(d.pin_hash || "") &&
+    pinWantedOf(d, own[pinKey(d.name)]) &&
     rules.roles.indexOf(String(d.role || "").trim().toLowerCase()) !== -1);
   if (!may.length) return json({ ok: false, error: "no pin" });
 
@@ -591,7 +593,7 @@ async function handleLinkDo(env, body) {
   let driver = null;
   if (pin) {
     for (const d of may) {
-      if (await pinHashOf(env, d.name, pin) === d.pin_hash) { driver = d; break; }
+      if (await pinMatchesOf(env, d, own[pinKey(d.name)], pin)) { driver = d; break; }
     }
   }
   if (!driver) {
@@ -3630,6 +3632,16 @@ async function cachedRota(env, from, weeks) {
   out.from = want;
   out.weeks = n;
 
+  /* A driver's own PIN, which the sheet cannot know about, from w2.39.0:
+     he is asked for it even with no phone number on the tab. */
+  try {
+    if (Array.isArray(out.drivers)) {
+      const own = await ownPinsAll(env);
+      out.drivers = out.drivers.map((d) =>
+        hasOwnPin(own[pinKey(d && d.name)]) ? Object.assign({}, d, { hasPin: true }) : d);
+    }
+  } catch (e) { /* the shelf as it stands */ }
+
   /* REQUESTS THE SHEET HAS NOT FILED YET, laid onto the shelf's rows.
 
      A request is taken here first and reaches the Rota Requests tab a few
@@ -5996,35 +6008,215 @@ async function handlePin(env, body) {
   const row = await env.DB.prepare(
     "SELECT name, pin_hash FROM drivers WHERE lower(name)=lower(?)").bind(name).first();
 
-  /* Not a name this server has, or a name it has no hash for. Either way it
-     cannot answer, and saying so sends the app to Apps Script rather than
-     letting a man through on a shrug. */
+  /* Not a name this server has. It cannot answer, and saying so sends the
+     app to its own copy on the phone rather than letting a man through on a
+     shrug. */
   if (!row) return json({ ok: false, error: "unknown driver" });
-  if (!row.pin_hash) return json({ ok: true, valid: true, noPin: true });
+  const own = await ownPinOf(env, row.name);
+  if (!pinWantedOf(row, own)) return json({ ok: true, valid: true, noPin: true });
 
-  /* THE LOCKOUT LIVES HERE NOW, and it had to move with the check.
+  const gate = await pinTry(env, row, own, pin);
+  if (gate.locked) return json({ ok: true, valid: false, locked: true, minutes: PIN_LOCK_MINUTES });
+  if (!gate.ok) return json({ ok: true, valid: false, left: gate.left });
+  /* askPinChange: on the default PIN and never asked, so the app asks once
+     whether to keep it. Only ever on a right PIN. */
+  return json({ ok: true, valid: true, askPinChange: onDefaultUnasked(row, own) });
+}
 
-     Leave it on Apps Script while verifying here and the two count
-     separately, which is six tries wearing the label of three. */
-  const tkey = pinTriesKey(name);
+/* ==========================================================================
+   A DRIVER'S OWN PIN, from w2.39.0
+   ==========================================================================
+
+   Copied from the Ushers app (drolnstone/ushers, server/worker.js:
+   pinHash, phoneDefaultPin, aPinChange, aPinKeep, aUsherResetPin), changed
+   only where this system has no sessions.
+
+   THE DEFAULT PIN is the last four digits of the driver's Phone on the
+   Drivers tab. The sheet works it out and sends only its salted hash, in
+   drivers.pin_hash, exactly as it sent the PIN column's before. There is no
+   PIN column any more.
+
+   HIS OWN PIN lives here and nowhere else, in driver_pins: a random salt for
+   each driver, PBKDF2-SHA-256, and PIN_SALT as the secret pepper, which is
+   the Ushers app's PIN_PEPPER under the name this Worker already has. Four
+   digits, never the one he has, never his default.
+
+   A RESET, from the coordinator's app, deletes his row, so he is back on the
+   default and asked again.
+
+   ASKED ONCE. On the default and never asked, the sign-in answer carries
+   askPinChange and the app asks "Do you wish to keep your default PIN?".
+   Unlike Ushers, nothing here refuses other work until he answers: a
+   question must never hold up a bus at the kerb.
+
+   The sync never touches driver_pins, so a driver's own PIN outlives every
+   push of the Drivers tab. Keyed by the name, lower case: a driver renamed
+   on the tab is a new name, on the default. */
+let pinsReady = false;
+async function ensurePins(env) {
+  if (pinsReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS driver_pins (" +
+    "name TEXT PRIMARY KEY, pin_salt TEXT DEFAULT '', pin_hash TEXT DEFAULT '', " +
+    "pin_iter INTEGER DEFAULT 0, set_at INTEGER, kept INTEGER DEFAULT 0)").run();
+  pinsReady = true;
+}
+
+function pinKey(name) { return String(name || "").trim().toLowerCase(); }
+
+async function ownPinOf(env, name) {
+  await ensurePins(env);
+  return await env.DB.prepare("SELECT * FROM driver_pins WHERE name=?").bind(pinKey(name)).first();
+}
+
+async function ownPinsAll(env) {
+  await ensurePins(env);
+  const q = await env.DB.prepare("SELECT * FROM driver_pins").all();
+  const out = {};
+  for (const r of (q.results || [])) out[r.name] = r;
+  return out;
+}
+
+function hasOwnPin(own) { return !!(own && own.pin_hash); }
+/* Whether anybody is asked for a PIN under this name: his own, or a default. */
+function pinWantedOf(row, own) { return !!(row && row.pin_hash) || hasOwnPin(own); }
+function onDefaultUnasked(row, own) {
+  return !!(row && row.pin_hash) && !hasOwnPin(own) && !(own && Number(own.kept));
+}
+
+const PIN_ITERATIONS = 20000;   /* the Ushers default. Workers cap PBKDF2 at 100000 */
+const PIN_LENGTH = 4;
+
+function bytesHex(buf) {
+  return Array.from(new Uint8Array(buf)).map((b) => ("0" + b.toString(16)).slice(-2)).join("");
+}
+function hexBytes(h) {
+  const s = String(h || "");
+  const out = new Uint8Array(s.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(s.substr(i * 2, 2), 16);
+  return out;
+}
+
+async function ownPinHash(env, pin, saltHex, iterations) {
+  /* No pepper, no match, as with pinHashOf. */
+  if (!pinSaltOf(env)) return "no PIN_SALT " + crypto.randomUUID();
+  const key = await crypto.subtle.importKey("raw",
+    new TextEncoder().encode(pinSaltOf(env) + ":" + String(pin || "").replace(/\D/g, "")),
+    "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt: hexBytes(saltHex), iterations: Number(iterations) || PIN_ITERATIONS },
+    key, 256);
+  return bytesHex(bits);
+}
+
+/* His own PIN when he has one, and then the default is no longer his. */
+async function pinMatchesOf(env, row, own, pin) {
+  const p = String(pin || "").replace(/\D/g, "");
+  if (!p || !row) return false;
+  if (hasOwnPin(own)) return (await ownPinHash(env, p, own.pin_salt, own.pin_iter)) === own.pin_hash;
+  return !!row.pin_hash && (await pinHashOf(env, row.name, p)) === row.pin_hash;
+}
+
+/* The three tries and five minutes, around one check. */
+async function pinTry(env, row, own, pin) {
+  const tkey = pinTriesKey(row.name);
   const held = await cacheGet(env, tkey);
   const now = Date.now();
   let tries = 0;
-  if (held && now - (Number(held.at) || 0) < PIN_LOCK_MINUTES * 60000) {
-    tries = Number(held.n) || 0;
+  if (held && now - (Number(held.at) || 0) < PIN_LOCK_MINUTES * 60000) tries = Number(held.n) || 0;
+  if (tries >= PIN_MAX_TRIES) return { locked: true };
+  if (await pinMatchesOf(env, row, own, pin)) {
+    if (held) { try { await env.DB.prepare("DELETE FROM settings WHERE k=?").bind(tkey).run(); } catch (e) {} }
+    return { ok: true };
   }
-  if (tries >= PIN_MAX_TRIES) {
-    return json({ ok: true, valid: false, locked: true, minutes: PIN_LOCK_MINUTES });
-  }
-
-  const got = await pinHashOf(env, row.name, pin);
-  if (pin && got === row.pin_hash) {
-    try { await env.DB.prepare("DELETE FROM settings WHERE k=?").bind(tkey).run(); } catch (e) {}
-    return json({ ok: true, valid: true });
-  }
-
   try { await cachePut(env, tkey, { n: tries + 1, at: now }).run(); } catch (e) {}
-  return json({ ok: true, valid: false, left: Math.max(0, PIN_MAX_TRIES - tries - 1) });
+  return { ok: false, left: Math.max(0, PIN_MAX_TRIES - tries - 1) };
+}
+
+/* A line for the History tab, through the coordinator's queue, which the
+   drain already carries to the sheet. Never the PIN. */
+function pinHistoryStmt(env, name, what, by, words) {
+  return env.DB.prepare(
+    "INSERT OR IGNORE INTO coord_actions (id, kind, sunday, body, by_name, made, words) VALUES (?,?,?,?,?,?,?)")
+    .bind("pin-" + crypto.randomUUID(), "pin", "", JSON.stringify({ name: name, what: what }),
+          by, Date.now(), words);
+}
+
+/* The driver app's two: { driver, pin, newPin } and { driver, pin }. Both
+   check the PIN he has now, under the same lockout as signing in. */
+async function pinDriverOf(env, body) {
+  const name = String((body && body.driver) || "").trim();
+  if (!name) return { error: { ok: false, error: "no driver" } };
+  const row = await env.DB.prepare(
+    "SELECT name, pin_hash FROM drivers WHERE lower(name)=lower(?)").bind(name).first();
+  if (!row) return { error: { ok: false, error: "unknown driver" } };
+  const own = await ownPinOf(env, row.name);
+  /* Nothing to prove who he is, so nothing may be set: anybody could pick
+     his name and lock him out. The coordinator puts a phone number in. */
+  if (!pinWantedOf(row, own)) return { error: { ok: false, error: "no pin" } };
+  const gate = await pinTry(env, row, own, body.pin);
+  if (gate.locked) return { error: { ok: true, valid: false, locked: true, minutes: PIN_LOCK_MINUTES } };
+  if (!gate.ok) return { error: { ok: true, valid: false, left: gate.left } };
+  return { row: row, own: own };
+}
+
+async function handlePinChange(env, body) {
+  const who = await pinDriverOf(env, body || {});
+  if (who.error) return json(who.error);
+  const row = who.row;
+  const next = String((body && body.newPin) || "");
+  if (!new RegExp("^\\d{" + PIN_LENGTH + "}$").test(next)) {
+    return json({ ok: true, valid: true, changed: false, error: "pin shape" });
+  }
+  if (next === String(body.pin || "").replace(/\D/g, "") ||
+      (row.pin_hash && (await pinHashOf(env, row.name, next)) === row.pin_hash)) {
+    return json({ ok: true, valid: true, changed: false, error: "same pin" });
+  }
+  await ensureCoord(env);
+  const salt = bytesHex(crypto.getRandomValues(new Uint8Array(16)));
+  const hash = await ownPinHash(env, next, salt, PIN_ITERATIONS);
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO driver_pins (name, pin_salt, pin_hash, pin_iter, set_at, kept) VALUES (?,?,?,?,?,0) " +
+      "ON CONFLICT(name) DO UPDATE SET pin_salt=excluded.pin_salt, pin_hash=excluded.pin_hash, " +
+      "pin_iter=excluded.pin_iter, set_at=excluded.set_at, kept=0")
+      .bind(pinKey(row.name), salt, hash, PIN_ITERATIONS, Date.now()),
+    pinHistoryStmt(env, row.name, "changed", row.name, row.name + " changed their PIN.")
+  ]);
+  return json({ ok: true, valid: true, changed: true });
+}
+
+async function handlePinKeep(env, body) {
+  const who = await pinDriverOf(env, body || {});
+  if (who.error) return json(who.error);
+  if (!onDefaultUnasked(who.row, who.own)) return json({ ok: true, valid: true, kept: true });
+  await ensureCoord(env);
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO driver_pins (name, set_at, kept) VALUES (?,?,1) " +
+      "ON CONFLICT(name) DO UPDATE SET kept=1 WHERE driver_pins.pin_hash=''")
+      .bind(pinKey(who.row.name), Date.now()),
+    pinHistoryStmt(env, who.row.name, "kept", who.row.name, who.row.name + " kept the default PIN.")
+  ]);
+  return json({ ok: true, valid: true, kept: true });
+}
+
+/* The coordinator's app: back to the default PIN, and asked again. The
+   lockout goes too, which is usually why he was rung. */
+async function actPinReset(env, me, act) {
+  const name = String((act && act.name) || "").trim();
+  const row = name ? await env.DB.prepare(
+    "SELECT name, pin_hash FROM drivers WHERE lower(name)=lower(?)").bind(name).first() : null;
+  if (!row) return { ok: false, error: "That driver is not on the Drivers tab." };
+  if (!row.pin_hash) {
+    return { ok: false, error: row.name + " has no phone number on the Drivers tab, so there is no default PIN to go back to." };
+  }
+  await ensurePins(env);
+  return { ok: true, sunday: "",
+           stmts: [env.DB.prepare("DELETE FROM driver_pins WHERE name=?").bind(pinKey(row.name)),
+                   env.DB.prepare("DELETE FROM settings WHERE k=?").bind(pinTriesKey(row.name))],
+           body: { name: row.name, what: "reset" },
+           words: row.name + ": PIN reset to the default." };
 }
 
 /* ==========================================================================
@@ -6096,7 +6288,8 @@ async function handleAuthorise(env, body) {
      alternative is a man locked out at a kerb with a check to do. This is the
      opposite case: it lets a bus out with a fault on it, so a name with
      nothing to check against cannot do it. */
-  if (!row.pin_hash) return json({ ok: false, error: "no pin" });
+  const own = await ownPinOf(env, row.name);
+  if (!pinWantedOf(row, own)) return json({ ok: false, error: "no pin" });
 
   const tkey = pinTriesKey(row.name);
   const held = await cacheGet(env, tkey);
@@ -6107,8 +6300,7 @@ async function handleAuthorise(env, body) {
     return json({ ok: false, locked: true, minutes: PIN_LOCK_MINUTES });
   }
 
-  const got = await pinHashOf(env, row.name, pin);
-  if (!pin || got !== row.pin_hash) {
+  if (!(await pinMatchesOf(env, row, own, pin))) {
     try { await cachePut(env, tkey, { n: tries + 1, at: now }).run(); } catch (e) {}
     return json({ ok: false, error: "bad pin", left: Math.max(0, PIN_MAX_TRIES - tries - 1) });
   }
@@ -6179,7 +6371,8 @@ async function handleEndRun(env, body) {
     return json({ ok: false, error: "your own run", hint: "End trip" });
   }
 
-  if (!row.pin_hash) return json({ ok: false, error: "no pin" });
+  const own = await ownPinOf(env, row.name);
+  if (!pinWantedOf(row, own)) return json({ ok: false, error: "no pin" });
 
   const tkey = pinTriesKey(row.name);
   const held = await cacheGet(env, tkey);
@@ -6188,8 +6381,7 @@ async function handleEndRun(env, body) {
   if (held && now - (Number(held.at) || 0) < PIN_LOCK_MINUTES * 60000) tries = Number(held.n) || 0;
   if (tries >= PIN_MAX_TRIES) return json({ ok: false, locked: true, minutes: PIN_LOCK_MINUTES });
 
-  const got = await pinHashOf(env, row.name, pin);
-  if (!pin || got !== row.pin_hash) {
+  if (!(await pinMatchesOf(env, row, own, pin))) {
     try { await cachePut(env, tkey, { n: tries + 1, at: now }).run(); } catch (err) {}
     return json({ ok: false, error: "bad pin", left: Math.max(0, PIN_MAX_TRIES - tries - 1) });
   }
@@ -6895,7 +7087,8 @@ async function handleMotrun(env, body) {
    A change to a driver, or a new one. The drivers table is changed at once,
    so the rota's name lists and the sign-in screens have it now; the sheet
    files it on the Drivers tab at its next drain, and laid back over each push
-   until then. The PIN is never here: it is set on the sheet. */
+   until then. The PIN is not set here: a reset is its own change (kind
+   "pin"), and only the driver sets his own. */
 const DRIVER_ROUTES = ["North", "South"];
 const DRIVER_NAME = /^[A-Za-z][A-Za-z .'-]{1,39}$/;
 const DRIVER_EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -6914,6 +7107,11 @@ async function coordDriversView(env) {
       order: Number(x.ord) || 0, route: String(x.route || "").toUpperCase().charAt(0) === "S" ? "South" : "North",
       email: "", phone: "", hasPin: !!x.pin_hash, noContact: true }));
   }
+  /* His own PIN counts, from w2.39.0, phone number or not. */
+  try {
+    const own = await ownPinsAll(env);
+    for (const d of list) if (hasOwnPin(own[pinKey(d.name)])) d.hasPin = true;
+  } catch (e) {}
   for (const a of await coordPending(env, ["driver"])) {
     const b = a.body || {};
     let d = list.find((x) => x.name.toLowerCase() === String(b.name || "").toLowerCase());
@@ -7448,7 +7646,8 @@ async function coordAuth(env, body) {
   if (rules.roles.indexOf(String(row.role || "").trim().toLowerCase()) === -1) {
     return { error: { ok: false, error: "not authorised" } };
   }
-  if (!row.pin_hash) return { error: { ok: false, error: "no pin" } };
+  const own = await ownPinOf(env, row.name);
+  if (!pinWantedOf(row, own)) return { error: { ok: false, error: "no pin" } };
 
   const tkey = pinTriesKey(row.name);
   const held = await cacheGet(env, tkey);
@@ -7457,8 +7656,7 @@ async function coordAuth(env, body) {
   if (held && now - (Number(held.at) || 0) < PIN_LOCK_MINUTES * 60000) tries = Number(held.n) || 0;
   if (tries >= PIN_MAX_TRIES) return { error: { ok: false, locked: true, minutes: PIN_LOCK_MINUTES } };
 
-  const got = await pinHashOf(env, row.name, pin);
-  if (!pin || got !== row.pin_hash) {
+  if (!(await pinMatchesOf(env, row, own, pin))) {
     try { await cachePut(env, tkey, { n: tries + 1, at: now }).run(); } catch (e) {}
     return { error: { ok: false, error: "bad pin", left: Math.max(0, PIN_MAX_TRIES - tries - 1) } };
   }
@@ -8817,6 +9015,7 @@ async function coordAct(env, me, act) {
   else if (kind === "bus") r = await actBus(env, me, act);
   else if (kind === "stop") r = await actStop(env, me, act);
   else if (kind === "motrun") r = await actMotrun(env, me, act);
+  else if (kind === "pin") r = await actPinReset(env, me, act);
   else if (kind === "rehearsal") r = await rehearsalPlan(env, String(act.op || ""), String(act.shape || ""));
   else return { ok: false, error: "unknown kind" };
   if (!r || !r.ok) return r || { ok: false, error: "refused" };
@@ -8960,6 +9159,9 @@ export default {
         /* Token checked, like every other write-adjacent action. The PIN
            itself is never stored here and never returned; only yes or no. */
         if (action === "pin") return await handlePin(env, body.pin || body);
+        /* A driver's own PIN, from w2.39.0. Each checks the PIN he has now. */
+        if (action === "pinchange") return knock(await handlePinChange(env, body.pin || {}), "pin");
+        if (action === "pinkeep") return knock(await handlePinKeep(env, body.pin || {}), "pin");
 
         if (action === "trip") return knock(await handleTrip(env, body.trip), "trip");
         /* A driver asking for a swap or cover. Same body as Apps Script's

@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.95.4 · THE COORDINATOR'S APP.
+<!-- BUILD v1.96.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -657,7 +657,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.95.4";
+var PAGE_VERSION = "v1.96.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -831,7 +831,7 @@ function authWords(out){
     (out.left > 0 ? " " + out.left + (out.left === 1 ? " try" : " tries") + " left." : "");
   if(out.error === "not authorised") return "Only a coordinator can open this.";
   if(out.error === "unknown driver") return "That name is not on the Drivers tab.";
-  if(out.error === "no pin") return "There is no PIN against your name on the Drivers tab.";
+  if(out.error === "no pin") return "You have no PIN. Put your phone number on the Drivers tab.";
   if(out.error === "no driver") return "Choose your name.";
   return "";
 }
@@ -1857,8 +1857,10 @@ function updateDefect(gk){
 
 /* ---- drivers: the Drivers tab, from v1.92.0 ---------------------------------
 
-   Role, route, active, primary order, email and phone, and a new driver. The
-   PIN is set on the sheet. */
+   Role, route, active, primary order, email and phone, and a new driver.
+   From v1.96.0 a driver's default PIN is the last four digits of the phone
+   number; he can set his own in the driver app, and Reset PIN puts him back
+   on the default. */
 function regDriver(name){
   var l = (D && D.register && D.register.drivers) || [];
   for(var i = 0; i < l.length; i++) if(l[i].name === name) return l[i];
@@ -1908,7 +1910,9 @@ function editDriver(name){
           (x && x.noContact ? '' :
           '<div class="field"><label for="drEmail">Email</label><input id="drEmail" type="email" autocomplete="off" maxlength="100" placeholder="e.g. john.smith@gmail.com" value="' + esc(v.email) + '"></div>' +
           '<div class="field"><label for="drPhone">Phone</label><input id="drPhone" type="tel" inputmode="tel" autocomplete="off" maxlength="20" placeholder="e.g. 07700 900123" value="' + esc(v.phone) + '"></div>') +
-          (add ? '<p class="tiny">PIN: set it on the Drivers tab.</p>' : ''),
+          (add ? '<p class="tiny">They start on their default PIN; at their first sign-in they are asked whether to keep it.</p>'
+               : '<p class="tiny" style="margin:14px 0 4px">Reset PIN sets it back to their default PIN; at their next sign-in they are asked whether to keep it.</p>' +
+                 '<button class="btn btn-ghost btn-wide" type="button" id="drPinReset">Reset PIN</button>'),
     go: add ? "Add" : "Save",
     onGo: function(){
       var nm = add ? String($("drName").value || "").replace(/\s+/g, " ").trim() : x.name;
@@ -1931,6 +1935,11 @@ function editDriver(name){
       if(!add && !Object.keys(set).length){ sheetSay("Nothing has changed.", true); return; }
       act({ kind: "driver", name: nm, add: add, set: set });
     } });
+  if($("drPinReset")) $("drPinReset").onclick = function(){
+    if(busy) return;
+    if(!confirm("Reset " + x.name + "'s PIN to their default PIN?")) return;
+    act({ kind: "pin", name: x.name });
+  };
   [["drRoute", "route"], ["drRole", "role"], ["drActive", "active"]].forEach(function(f){
     Array.prototype.forEach.call(document.querySelectorAll("#" + f[0] + " button"), function(b){
       b.onclick = function(){
@@ -3173,7 +3182,7 @@ function diagnosis(){
     var me = null; reg.forEach(function(d){ if(d && same(d.name, picked)) me = d; });
     li("The name picked", !REGLIVE ? picked + "."
       : !me ? picked + " is not on the Drivers tab."
-      : me.hasPin ? picked + " has a PIN on the Drivers tab." : picked + " has NO PIN on the Drivers tab.");
+      : me.hasPin ? picked + " has a PIN." : picked + " has NO PIN: no phone number on the Drivers tab.");
     li("This visit", pin ? (HOW === "carried" ? "Opened from the driver app, with the PIN keyed there." : "PIN keyed here.")
       : HOW === "idle" ? "Locked after " + SET.idleMinutes + " minutes untouched." : "Not open yet.");
     li("Lock and refresh", "Locks after " + SET.idleMinutes + " minutes untouched. An open screen asks again every " +

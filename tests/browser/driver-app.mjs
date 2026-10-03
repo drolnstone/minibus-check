@@ -748,6 +748,62 @@ if (want("T21")) {
   await me.ctx.close();
 }
 
+/* T22 — v1.96.0, from the Ushers app. Just given the default PIN, he is
+   asked once on the way to the hub whether to keep it, and Yes goes on. */
+if (want("T22")) {
+  const me = await phone({ clock: "2026-09-26T19:00:00+01:00",
+                           world: { pin: () => ({ ok: true, valid: true, askPinChange: true }) } });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn(); await me.close();
+  const at = await me.where();
+  const asks = await me.text("#pinAskCard");
+  await me.shot("T22-ask");
+  await me.clickId("pinKeep"); await me.wait(900);
+  const after = await me.where();
+  const kept = me.posted.filter((p) => p.action === "pinkeep").length;
+  await me.pg.evaluate(() => { show("hub"); }); await me.wait(300);
+  check("T22", "asked «Do you wish to keep your default PIN?» once, and Yes goes to the hub",
+        at === "s-pin" && /keep your default PIN/.test(asks) && after === "s-hub" && kept === 1 &&
+        (await me.where()) === "s-hub" && !me.errs.length,
+        JSON.stringify({ at, asks, after, kept, again: await me.where(), errors: me.errs }));
+  await me.ctx.close();
+}
+
+/* T23 — Change PIN from the hub: the new PIN twice, sent with the current
+   one, and a mismatch is caught on the phone. Never asked about a default
+   he was not given. */
+if (want("T23")) {
+  const me = await phone({ clock: "2026-09-26T19:00:00+01:00" });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn(); await me.close();
+  await toHub(me);
+  const hubFirst = await me.where();
+  await me.clickId("toPinChange"); await me.wait(400);
+  const at = await me.where();
+  const fill = (o, n, g) => me.pg.evaluate(([a, b, c]) => {
+    for (const [id, v] of [["pinOld", a], ["pinNew", b], ["pinAgain", c]]) {
+      const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event("input"));
+    }
+  }, [o, n, g]);
+  await fill("1234", "2580", "2581");
+  await me.clickId("pinSave"); await me.wait(300);
+  const mismatch = await me.text("#pinSaySet");
+  const sentEarly = me.posted.filter((p) => p.action === "pinchange").length;
+  await fill("1234", "2580", "2580");
+  await me.clickId("pinSave"); await me.wait(700);
+  const said = await me.text("#pinSaySet");
+  const sent = me.posted.filter((p) => p.action === "pinchange");
+  await me.wait(900);
+  const back = await me.where();
+  const nowPin = await me.pg.evaluate(() => st.pin);
+  check("T23", "Change PIN sends the current PIN and the new one, once they match",
+        hubFirst === "s-hub" && at === "s-pin" && /do not match/.test(mismatch) && sentEarly === 0 &&
+        sent.length === 1 && sent[0].pin.pin === "1234" && sent[0].pin.newPin === "2580" &&
+        /PIN changed/.test(said) && back === "s-hub" && nowPin === "2580" && !me.errs.length,
+        JSON.stringify({ hubFirst, at, mismatch, sentEarly, sent: sent.map((p) => p.pin), said, back, nowPin, errors: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

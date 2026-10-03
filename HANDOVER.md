@@ -84,7 +84,7 @@ There is no quarterly email: the app makes a PDF for any period.
 
 **Samples.** Every typing box in all three apps has a faded sample starting "e.g." that fits the box (for example, Jobs to arrange, wash: "e.g. Washed after the service"). This is a sample, not explaining text. PIN boxes and date pickers stay blank. Never strip samples in a wording sweep (PR #18 did, without asking, and upset him). Samples say **Thanksgiving, never Harvest**.
 
-**Sheet rules.** Every fixed-choice cell on every tab has a drop-down (case corrected, anything off the list refused). Set up locks every tab with no manual step, tabs are relocked at 3am, and the health check names any unlocked tab. PINs stay on the Drivers tab only.
+**Sheet rules.** Every fixed-choice cell on every tab has a drop-down (case corrected, anything off the list refused). Set up locks every tab with no manual step, tabs are relocked at 3am, and the health check names any unlocked tab. PINs are not on the sheet: the default PIN is the last four digits of the Phone, and a driver's own PIN is on the live server only (from v1.96.0).
 
 **MOT and insurance (#29).** Expired insurance stops the bus with no override until the renewal is recorded. Expired MOT also stops it, except a coordinator can authorise one "MOT run" that day to a Vehicle Log MOT booking, with no passengers. Service or permit overdue only warns. Renewal alerts at 60, 30, 7 and 0 days, then weekly, at 08:00.
 

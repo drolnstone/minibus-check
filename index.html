@@ -1292,7 +1292,42 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       <button class="btn btn-main btn-wide" id="toCheck" type="button">Vehicle check</button>
     </div>
     <p class="tiny" id="modeNote"></p>
+    <!-- From v1.96.0. Only once his PIN has been checked. -->
+    <button class="how-link" id="toPinChange" type="button" style="display:none">Change PIN</button>
     <div class="footer-brand"><img src="logo.png" alt=""><span>RCCG Dominion Assembly Liverpool</span></div>
+  </section>
+
+  <!-- YOUR PIN, from v1.96.0, copied from the Ushers app. Asked once after
+       the default PIN, whether to keep it; changed from the hub whenever he
+       likes. -->
+  <section class="screen" id="s-pin">
+    <h1 id="pinTitle">Change PIN</h1>
+    <div class="card" id="pinAskCard">
+      <p style="margin:0 0 12px"><b>Do you wish to keep your default PIN?</b></p>
+      <div style="display:grid;gap:10px">
+        <button class="btn btn-ghost btn-wide" id="pinToChange" type="button">No, change it</button>
+        <button class="btn btn-main btn-wide" id="pinKeep" type="button">Yes, keep it</button>
+      </div>
+    </div>
+    <div class="card" id="pinChangeCard">
+      <div class="field">
+        <label for="pinOld" id="pinOldLab">Current PIN</label>
+        <input id="pinOld" type="password" inputmode="numeric" maxlength="4"
+               class="mono pinbox" placeholder="&bull;&bull;&bull;&bull;" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="pinNew">New PIN (4 digits)</label>
+        <input id="pinNew" type="password" inputmode="numeric" maxlength="4"
+               class="mono pinbox" placeholder="&bull;&bull;&bull;&bull;" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="pinAgain">New PIN again</label>
+        <input id="pinAgain" type="password" inputmode="numeric" maxlength="4"
+               class="mono pinbox" placeholder="&bull;&bull;&bull;&bull;" autocomplete="off">
+      </div>
+      <button class="btn btn-main btn-wide" id="pinSave" type="button">Change PIN</button>
+    </div>
+    <p class="trip-note" id="pinSaySet" style="margin-top:12px"></p>
   </section>
 
   <!-- 9. PENDING -->
@@ -1574,7 +1609,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.95.4";
+var APP_VERSION = "v1.96.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2730,6 +2765,9 @@ function paintLinks(){
      diagnosis line, and nobody is a coordinator of an empty register. */
   var co=$("toCoord");
   if(co) co.style.display = (st.driver.trim() && REGISTER.length && pinCoordinator()) ? "" : "none";
+  /* Only with a PIN checked by the live server, which is where it changes. */
+  var pc=$("toPinChange");
+  if(pc) pc.style.display = (LIVE_ENDPOINT && st.driver.trim() && pinNeeded() && st.pinOk && st.pinState==="ok") ? "" : "none";
 
   var live = tripClosed && !!rotaStops.length;
   var stops=$("toStops"), rota=$("toRota"), check=$("toCheck");
@@ -2881,7 +2919,7 @@ function paintDash(){
 }
 
 /* ---------------- screens ---------------- */
-var SCREENS = ["driver","hub","vehicle","prep","stage","review","sent","rota","stops","pending"];
+var SCREENS = ["driver","hub","vehicle","prep","stage","review","sent","rota","stops","pending","pin"];
 var syncToTop=function(){};
 /* How tall the instrument strip is, published to CSS as --dashH.
 
@@ -2924,6 +2962,8 @@ if(window.ResizeObserver && $("footbar")){
 window.addEventListener("orientationchange", function(){ setTimeout(dashHeightSync,150); });
 
 function show(n){
+  /* Just given the default PIN: asked once, on the way to the hub. */
+  if(n==="hub" && pinKeepDue()){ pinKeepAsked[st.driver]=true; pinScreenSet("ask"); n="pin"; }
   st.screen=n;
   SCREENS.forEach(function(x){ $("s-"+x).classList.toggle("is-on", x===n); });
   window.scrollTo(0,0);
@@ -3106,6 +3146,10 @@ function btn(label,cls,fn,dis,why){
     }
     else if(ready && !lastReady) goOnFocus();
     lastReady = ready;
+    return;
+  }
+  if(st.screen==="pin"){
+    btn("Back","btn-ghost",function(){ show("hub"); });
     return;
   }
   if(st.screen==="hub"){
@@ -4892,7 +4936,7 @@ function authEndSend(pin){
       } else if(out && out.error==="not authorised"){
         $("authSay").textContent="Only a coordinator can end somebody else's run.";
       } else if(out && out.error==="no pin"){
-        $("authSay").textContent="There is no PIN against your name in the spreadsheet.";
+        $("authSay").textContent="You have no PIN. Put your phone number on the Drivers tab.";
       } else if(out && out.error==="your own run"){
         authClose();
         toast("That is your own run. Use End trip.");
@@ -4974,7 +5018,7 @@ function authSend(){
         : e === "not authorised" ? "That name cannot authorise a bus."
         : e === "same hand" ? "The person who did the check cannot authorise it."
         : e === "no check" ? "No stopped check on record for that bus yet. Try again in a minute."
-        : e === "no pin" ? "No PIN on the Drivers tab for that name."
+        : e === "no pin" ? "No PIN for that name: no phone number on the Drivers tab."
         : "Could not authorise it here. Use the Checks tab instead.";
     })
     .catch(function(){
@@ -8916,11 +8960,11 @@ function pinDiagnosis(){
   L.push("");
   L.push("3. Register loaded from the spreadsheet");
   L.push("   " + REGISTER.length + " names, " + withPin + " with a PIN set" +
-         (withPin ? "" : "  <-- fill the PIN column, then redeploy Code.gs as a New version"));
+         (withPin ? "" : "  <-- fill the Phone column on the Drivers tab"));
   L.push("");
   L.push("4. The name you picked");
   L.push("   " + (st.driver
-        ? (hasPin(st.driver) ? st.driver + " has a PIN" : st.driver + " has NO PIN in the sheet")
+        ? (hasPin(st.driver) ? st.driver + " has a PIN" : st.driver + " has NO PIN: no phone number on the Drivers tab")
         : "none chosen yet"));
   L.push("");
   L.push("5. This visit");
@@ -9189,10 +9233,11 @@ function checkPin(){
   pinAsk(tried, stillTyping, answered);
 }
 
-/* Fast server, then the sheet. One name, so every caller gets both. */
+/* The live server, then this phone's own copy. From v1.96.0 the sheet cannot
+   answer: the live server is the only thing that knows a PIN. */
 function pinAsk(tried, stillTyping, answered){
   pinAskLive(tried, stillTyping, answered, function(){
-    pinAskSheet(tried, stillTyping, answered);
+    if(stillTyping()) pinOffline(tried);
   });
 }
 
@@ -9204,22 +9249,12 @@ function pinAsk(tried, stillTyping, answered){
    the Drivers tab since he last keyed it — and when that happens it takes the
    gate back and says so. */
 function pinConfirmQuietly(tried){
-  if(!(LIVE && navigator.onLine)) return;
-  /* THE SHEET, DELIBERATELY, AND NOT THE FAST SERVER.
-
-     I pointed this at the Worker for speed and that was the wrong instinct.
-     Speed is not what this call is for. It runs behind a driver who is
-     already through the gate, nobody is waiting on it, and its entire job is
-     to catch a PIN the coordinator has changed. That is a question about
-     authority, and the spreadsheet is the authority.
-
-     The Worker's copy is a hash pushed on a five minute sync. Ask it and a
-     PIN changed a minute ago still reads as good, so a driver let in on a
-     cached hash keeps the gate for up to five minutes after you took it off
-     him. Apps Script knows the moment you type it.
-
-     Slow is fine here. It is the one PIN call where it is. */
-  callFetch(CFG.endpoint, {
+  if(!(LIVE_ENDPOINT && navigator.onLine)) return;
+  /* THE LIVE SERVER, from v1.96.0, because it is now the authority on a
+     PIN: a driver's own PIN is kept there and nowhere else, and a reset
+     happens there. Its job is unchanged: catch a PIN changed since this
+     phone last saw it. */
+  callFetch(LIVE_ENDPOINT, {
     method:"POST", redirect:"follow",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
     body: JSON.stringify({ token: CFG.token||"", action:"pin",
@@ -9231,12 +9266,13 @@ function pinConfirmQuietly(tried){
       if(!out || out.ok !== true) return;              /* no answer, no change */
       if(st.driver + ":" + st.pin !== tried) return;   /* moved on since */
       if(out.valid === true){
+        pinKeepNote(out);
         /* Agreed. Refresh this phone's copy so it stays current. */
         if(canHash()) sha256Hex(tried).then(function(h){ pinRemember(st.driver, h); },
                                             function(){});
         return;
       }
-      /* The sheet says no to a PIN this phone said yes to: it has been
+      /* The live server says no to a PIN this phone said yes to: it has been
          changed. Take it back rather than let a record be filed under it. */
       st.pinOk = false; st.pinState = "";
       pinLast = ""; pinLastOk = false;
@@ -9244,7 +9280,7 @@ function pinConfirmQuietly(tried){
       pinSay("That PIN has been changed. Key the new one.");
       paintFoot();
     })
-    .catch(function(){ /* silent: he is already in, on an answer from the sheet */ });
+    .catch(function(){ /* silent: he is already in, on an answer from the live server */ });
 }
 
 /* The original path, unchanged, lifted out so both callers reach the same
@@ -9278,7 +9314,8 @@ function pinAskLive(tried, stillTyping, answered, thenSheet){
       var out = JSON.parse(t);
       if(!stillTyping()) return;
       /* ok:false is this server saying it cannot answer, not that the PIN is
-         wrong. Unknown name, no hash yet, nothing synced. The sheet knows. */
+         wrong: a name it has not been told about yet. This phone's own copy,
+         as with no signal. */
       if(!out || out.ok !== true){ thenSheet(); return; }
       pinApply(out, tried, answered);
     })
@@ -9297,6 +9334,7 @@ function pinApply(out, tried, answered){
   st.pinState = st.pinOk ? "ok" : "";
   answered(st.pinOk);
   if(st.pinOk){
+    pinKeepNote(out);
     pinSay("");
     /* Kept so this phone works without signal next time. Made here, never
        received and never sent. */
@@ -9312,30 +9350,100 @@ function pinApply(out, tried, answered){
   paintFoot();
 }
 
-function pinAskSheet(tried, stillTyping, answered){
-  if(LIVE && navigator.onLine){
-    pinSay("Checking\u2026");
-    callFetch(CFG.endpoint, {
-      method:"POST", redirect:"follow",
-      headers:{ "Content-Type":"text/plain;charset=utf-8" },
-      body: JSON.stringify({ token: CFG.token||"", action:"pin",
-                             pin:{ driver: st.driver, pin: st.pin } })
-    }, PIN_TIMEOUT)
-      .then(function(r){ return r.text(); })
-      .then(function(t){
-        var out = JSON.parse(t);
-        if(!stillTyping()) return;
-        if(!out || out.ok !== true) throw new Error("no answer");
-        /* Same hands that read the live server's answer. "1 more tries" is
-           the sort of thing a driver notices and nobody fixes, and it is
-           fixed in one place rather than two. */
-        pinApply(out, tried, answered);
-      })
-      .catch(function(){ if(stillTyping()) pinOffline(tried); });
-    return;
-  }
-  pinOffline(tried);
+/* ---- your PIN, from v1.96.0 ---------------------------------------------
+
+   Copied from the Ushers app (index.html: pinQuestion, pinScreen). The live
+   server is the only thing that knows a PIN. Every driver starts on the
+   default PIN; right after it (first time, or after a coordinator's reset)
+   the hub asks once whether to keep it. He can change it from the hub
+   whenever he likes. The asking never stops anything: Back goes to the hub
+   and he is asked again next time he signs in. */
+var pinKeepFor = "", pinKeepAsked = {};
+function pinKeepNote(out){ if(out && out.askPinChange === true) pinKeepFor = st.driver; }
+function pinKeepDue(){
+  return !!LIVE_ENDPOINT && !!pinKeepFor && pinKeepFor === st.driver && !pinKeepAsked[st.driver] &&
+         st.pinOk && st.pinState === "ok" && /^\d{4,8}$/.test(String(st.pin || ""));
 }
+
+var pinScreenMode = "change", pinBusy = false;
+function pinScreenSet(mode){
+  pinScreenMode = mode;
+  $("pinTitle").textContent = mode === "ask" ? "Your PIN" : (mode === "forced" ? "Change your default PIN" : "Change PIN");
+  $("pinAskCard").style.display = mode === "ask" ? "" : "none";
+  $("pinChangeCard").style.display = mode === "ask" ? "none" : "";
+  $("pinOldLab").textContent = mode === "forced" ? "Default PIN" : "Current PIN";
+  ["pinOld","pinNew","pinAgain"].forEach(function(id){ $(id).value = ""; });
+  pinSaySet("");
+}
+function pinSaySet(t){ $("pinSaySet").textContent = t || ""; }
+
+function pinPost(action, body, then){
+  if(!(LIVE_ENDPOINT && navigator.onLine)){ pinSaySet("No signal. Try again when you have one."); return; }
+  if(pinBusy) return;
+  pinBusy = true;
+  pinSaySet("Sending\u2026");
+  body.driver = st.driver;
+  callFetch(LIVE_ENDPOINT, {
+    method:"POST", redirect:"follow",
+    headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: CFG.token||"", action: action, pin: body })
+  }, PIN_TIMEOUT)
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      pinBusy = false;
+      var out = JSON.parse(t);
+      if(!out || out.ok !== true){
+        pinSaySet(out && out.error === "no pin" ? "You have no PIN yet. Ring the coordinator."
+                                                 : "The live server did not take that. Try again.");
+        return;
+      }
+      if(out.locked){ pinSaySet("Too many wrong tries. Wait "+(out.minutes||5)+" minutes, or ring the coordinator."); return; }
+      if(out.valid !== true){
+        pinSaySet("That PIN is not right." + (out.left > 0
+          ? " " + out.left + (out.left === 1 ? " more try" : " more tries") + " before it pauses." : ""));
+        return;
+      }
+      then(out);
+    })
+    .catch(function(){ pinBusy = false; pinSaySet("No connection. Try again."); });
+}
+
+$("toPinChange").addEventListener("click",function(){ pinScreenSet("change"); show("pin"); });
+$("pinToChange").addEventListener("click",function(){ pinScreenSet("forced"); });
+$("pinKeep").addEventListener("click",function(){
+  pinPost("pinkeep", { pin: st.pin }, function(){
+    pinKeepFor = "";
+    show("hub");
+  });
+});
+["pinOld","pinNew","pinAgain"].forEach(function(id){
+  $(id).addEventListener("input",function(){
+    var v=this.value.replace(/\D/g,"").slice(0,4);
+    if(this.value!==v) this.value=v;
+  });
+});
+$("pinSave").addEventListener("click",function(){
+  var old=$("pinOld").value, nw=$("pinNew").value, again=$("pinAgain").value;
+  if(old.length < 4){ pinSaySet("Key your "+(pinScreenMode==="forced" ? "default" : "current")+" PIN."); return; }
+  if(nw.length !== 4){ pinSaySet("A PIN is exactly 4 digits."); return; }
+  if(nw !== again){ pinSaySet("The new PINs do not match."); return; }
+  pinPost("pinchange", { pin: old, newPin: nw }, function(out){
+    if(!out.changed){
+      pinSaySet(out.error === "same pin" ? "Choose a different PIN." : "A PIN is exactly 4 digits.");
+      return;
+    }
+    /* The new one is the one he is signed in with, and this phone's copy. */
+    var who = st.driver;
+    st.pin = nw; st.pinOk = true; st.pinState = "ok";
+    pinLast = who + ":" + nw; pinLastOk = true;
+    pinKeepFor = "";
+    if($("pin")) $("pin").value = nw;
+    if(canHash()) sha256Hex(who + ":" + nw).then(function(h){ pinRemember(who, h); }, function(){});
+    ["pinOld","pinNew","pinAgain"].forEach(function(id){ $(id).value = ""; });
+    pinSaySet("PIN changed.");
+    setTimeout(function(){ if(st.screen === "pin") show("hub"); }, 900);
+  });
+});
 
 /* No signal, or the record did not answer in time. */
 function pinOffline(tried){

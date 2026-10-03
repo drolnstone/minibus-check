@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.102.0";
+var SCRIPT_VERSION = "v1.103.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1744,6 +1744,20 @@ function coordMotrun(ss, a, b, by) {
                 title: reg + ": MOT run authorised",
                 body: "By " + by + (b.garage ? ", to " + b.garage : "") + " at " + b.time + ". One trip, no passengers.",
                 tab: HISTORY_SHEET });
+  return { done: true, ok: true, push: true, result: "On the History tab." };
+}
+
+/* A driver's PIN, from v1.103.0: changed or kept by the driver, or reset by a
+   coordinator. Only that it happened; the PIN itself is never here. */
+function coordPin(ss, a, b, by) {
+  var name = String(b.name || "").trim();
+  var what = String(b.what || "");
+  var line = what === "reset"
+    ? { who: by, where: "Coordinator's app", what: "PIN reset", from: "", to: "Default PIN", why: name }
+    : what === "kept"
+      ? { who: name, where: "Driver app", what: "Default PIN kept", from: "", to: "Default PIN", why: "" }
+      : { who: name, where: "Driver app", what: "PIN changed", from: "", to: "Own PIN", why: "" };
+  historyAdd(ss, [line]);
   return { done: true, ok: true, push: true, result: "On the History tab." };
 }
 
@@ -3536,10 +3550,9 @@ function pushToWorker() {
   var drivers = readDrivers(ss).map(function (d) {
     return { name: d.name, role: d.role, route: d.route,
              order: d.order, active: d.active,
-             /* The only thing about a PIN that ever leaves this spreadsheet,
-                and it leaves one way and salted. Empty for a driver with no
-                PIN, which the live server reads as "no PIN wanted" rather
-                than as a failure, exactly as this file does. */
+             /* The default PIN, from the phone number, one way and salted.
+                Empty for a driver with no phone number, which the live
+                server reads as "no default" rather than as a failure. */
              pinHash: pinHashLive(d.name, d.pin) };
   });
 
@@ -3956,8 +3969,8 @@ function driverRoleList(ss) {
 }
 
 /* One driver's row, changed or added. b: { name, add, set: { role, route,
-   active, order, email, phone } }, each one missing for no change. The PIN
-   is set on the sheet and nowhere else. */
+   active, order, email, phone } }, each one missing for no change. A new
+   phone number is a new default PIN, sent with the next push. */
 var DRIVER_FIELDS = [["role", "Role"], ["route", "Route"], ["active", "Active"], ["order", "Primary order"],
                      ["email", "Email"], ["phone", "Phone"]];
 function coordDriver(ss, a, b, by) {
@@ -4393,6 +4406,7 @@ function applyCoordAction(ss, a, ctx) {
   if (kind === "bus") return coordBus(ss, a, b, by);
   if (kind === "stop") return coordStop(ss, a, b, by);
   if (kind === "motrun") return coordMotrun(ss, a, b, by);
+  if (kind === "pin") return coordPin(ss, a, b, by);
   if (kind === "booking") {
     return coordOnTab(ss, BOOKINGS_SHEET, b.bookingId, a, ctx || {},
                       "On the Bus Bookings tab.", "That booking is not on the Bus Bookings tab.");
@@ -6017,35 +6031,28 @@ function readDriversFresh(ss) {
       role: String(at1(r, c.role) || "").trim(),
       active: yes(at1(r, c.active)),
       order: Number(at1(r, c.order)) || 0,
-      pin: String(at1(r, c.pin) || "").replace(/\D/g, ""),
+      /* The default PIN, from v1.103.0: the last four digits of Phone. There
+         is no PIN column; a driver's own PIN is on the live server only. */
+      pin: phoneDefaultPin(at1(r, c.phone)),
       email: String(at1(r, c.email) || "").trim(),
       /* Blank counts as North. The route column did not exist until the South
          run started, so every row written before then is a North row, and
          reading blank as North means nobody has to go back and fill it in. */
       route: (String(at1(r, c.route) || "").trim().toUpperCase().charAt(0) === "S")
         ? "South" : "North",
-      /* Set in the sheet, never in a file, exactly as the PIN is. A driver
-         with no number simply has no WhatsApp button on the passenger page,
-         so leaving this blank is a working answer rather than a fault. */
+      /* Set in the sheet, never in a file. A driver with no number has no
+         WhatsApp button on the passenger page and, from v1.103.0, no default
+         PIN, which the health check names. */
       phone: String(at1(r, c.phone) || "").trim()
     });
   });
   return out;
 }
 
-/**
- * A one-way fingerprint of a PIN. Salted with the name, so two people who
- * happen to pick the same four digits do not produce the same fingerprint.
- *
- * Both sides of the comparison in handlePinCheck are made here, so the two
- * are never compared as plain digits and nothing that resembles a PIN is
- * held in a variable any longer than it takes to hash it.
- */
 /* THE SALTED HASH THE LIVE SERVER COMPARES AGAINST.
 
-   Separate from pinHash below, which stays exactly as it was for this file's
-   own comparison. This one is the only thing about a PIN that ever leaves the
-   spreadsheet, and it leaves as a one way hash with a salt on it.
+   Of the default PIN, from v1.103.0, worked out from the phone number. It
+   leaves the spreadsheet only as a one way hash with a salt on it.
 
    Why salted: a PIN is four digits, so ten thousand possibilities. An
    unsalted SHA-256 of a four digit number is looked up in a second, not
@@ -6082,73 +6089,17 @@ function pinHashLive(name, pin) {
   return raw.map(function (b) { return ("0" + (b & 0xFF).toString(16)).slice(-2); }).join("");
 }
 
-function pinHash(name, pin) {
-  if (!pin) return "";
-  var raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
-                                    name + ":" + pin, Utilities.Charset.UTF_8);
-  return raw.map(function (b) { return ("0" + (b & 0xFF).toString(16)).slice(-2); }).join("");
-}
-
 /* ---- checking a PIN -----------------------------------------------------
 
-   The phone sends a name and four digits and is told yes or no. Nothing
-   about the PIN goes back, and no fingerprint is published with the rota any
-   more, which is what lets the endpoint stay open and the PIN still mean
-   something.
-
-   Ten wrong tries in ten minutes and that name pauses for ten minutes.
-   Guessing here is the only attack left once the fingerprints stop being
-   handed out, and ten thousand combinations at one round trip each is slow
-   rather than impossible. Held per NAME, because the device is whatever the
-   guesser says it is.
-
-   Counted in the cache rather than in a script property, deliberately. It
-   expires by itself and costs nothing to write, and if the cache is ever
-   dropped the worst case is that a guesser gets their ten tries back. A
-   lockout that outlived a real driver's fumble would be the worse failure:
-   he is standing at a bus with people waiting to get on it. */
-/* Three, not ten. Ten is a number that suits a password; a PIN is four digits
-   a man has known for months, and somebody who has got it wrong three times
-   running is not close to remembering it — he is on the wrong name, or the
-   sheet has the wrong number against him. The pause is what makes guessing
-   slow, and it is the only thing that does, because the endpoint is open. */
-var PIN_MAX_TRIES = 3;
-var PIN_LOCK_MINUTES = 5;
-
-function pinTriesKey(name) {
-  return "pinfail_" + String(name || "").replace(/[^A-Za-z0-9]/g, "").substring(0, 40);
-}
-
+   From v1.103.0 the live server is the only thing that knows a PIN: the
+   default comes from the Phone column, a driver's own PIN is kept there and
+   nowhere else, and this sheet cannot tell the two apart. So it never
+   answers yes or no. ok:false is "cannot answer", which sends the driver app
+   to its own copy on the phone, as with no signal: written down beats
+   blocked at the kerb. Kept so an older copy of the app still gets an answer
+   it understands. */
 function handlePinCheck(p) {
-  var name = String((p && p.driver) || "").trim();
-  var pin  = String((p && p.pin) || "").replace(/\D/g, "");
-  if (!name) return reply({ ok: false, error: "no driver" });
-
-  var cache = CacheService.getScriptCache();
-  var key = pinTriesKey(name);
-  var tries = 0;
-  try { tries = Number(cache.get(key)) || 0; } catch (err) { tries = 0; }
-
-  if (tries >= PIN_MAX_TRIES) {
-    return reply({ ok: true, valid: false, locked: true, minutes: PIN_LOCK_MINUTES });
-  }
-
-  var found = null;
-  readDrivers(SpreadsheetApp.getActiveSpreadsheet()).forEach(function (d) {
-    if (d.name === name) found = d;
-  });
-
-  /* No PIN against that name is not a failure. It is how somebody without
-     one gets in, exactly as before. */
-  if (!found || !found.pin) return reply({ ok: true, valid: true, noPin: true });
-
-  if (pin && pinHash(name, pin) === pinHash(name, found.pin)) {
-    try { cache.remove(key); } catch (err) {}
-    return reply({ ok: true, valid: true });
-  }
-
-  try { cache.put(key, String(tries + 1), PIN_LOCK_MINUTES * 60); } catch (err) {}
-  return reply({ ok: true, valid: false, left: Math.max(0, PIN_MAX_TRIES - tries - 1) });
+  return reply({ ok: false, error: "the live server checks PINs" });
 }
 
 function yes(v) {
@@ -6322,7 +6273,16 @@ function stamp(sh, row, who) {
    read past; a heading renamed or deleted stops the script with a sentence
    naming it. driversHeaderWarning is the smoke alarm beside that: it repairs
    nothing, it only tells a human which heading has gone missing. */
-var DRIVERS_HEADERS = ["Name", "Role", "Active", "Primary order", "PIN", "Email", "Route", "Phone"];
+var DRIVERS_HEADERS = ["Name", "Role", "Active", "Primary order", "Email", "Route", "Phone"];
+
+/* THE DEFAULT PIN, from v1.103.0, copied from the Ushers app's
+   phoneDefaultPin: the last four digits of the phone number, or none with
+   fewer than four. Every driver starts on it and every reset goes back to
+   it. Same rule as the Worker's. */
+function phoneDefaultPin(phone) {
+  var d = String(phone == null ? "" : phone).replace(/\D/g, "");
+  return d.length >= 4 ? d.slice(-4) : "";
+}
 
 /* Two time columns on purpose. Logged is when the sheet received it, Happened
    is when the driver's phone recorded the tap. They differ whenever there was
@@ -6768,7 +6728,7 @@ function checkDriversTab() {
     "\u2713  Columns are in the right order.\n\n" +
     active.length + " active drivers.\n" +
     withEmail + " have an email address (needed for duty reminders).\n" +
-    withPin + " have a PIN (the rest are not asked for one)."
+    withPin + " have a phone number, so a default PIN (the rest are not asked for one)."
   );
 }
 
@@ -12870,12 +12830,12 @@ function healthReport() {
       .filter(function (d) { return d.active && !d.pin; })
       .map(function (d) { return d.name; });
     if (noPin.length) {
-      bad.push("No PIN set for: " + noPin.join(", ") +
-               ". They are not asked to confirm their name, so anything done " +
-               "on a phone they are signed in on is recorded as them. Put a " +
-               "four digit number in the PIN column on the Drivers tab.");
+      bad.push("No phone number, so no default PIN, for: " + noPin.join(", ") +
+               ". Unless they have set their own PIN, they are not asked to " +
+               "confirm their name. Put their phone number in the Phone " +
+               "column on the Drivers tab.");
     } else {
-      good.push("Every active driver has a PIN.");
+      good.push("Every active driver has a phone number, so a default PIN.");
     }
   } catch (err) { /* the Drivers tab has its own check above */ }
 
@@ -14161,7 +14121,7 @@ FIELDS[BOOKINGS_SHEET] = {
 };
 FIELDS[DRIVERS_SHEET] = {
   name: "Name", role: "Role", active: "Active", order: "Primary order",
-  pin: "PIN", email: "Email", route: "Route", phone: "Phone"
+  email: "Email", route: "Route", phone: "Phone"
 };
 FIELDS[BUSES_SHEET] = {
   reg: "Registration", seats: "Seats for passengers",

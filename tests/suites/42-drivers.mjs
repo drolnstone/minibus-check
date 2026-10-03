@@ -118,10 +118,10 @@ export default async function (root) {
     });
   });
 
-  s.test("the sheet writes the cells and a History line each, adds a row, and leaves the PIN", async (a) => {
+  s.test("the sheet writes the cells and a History line each, adds a row, and a phone is a default PIN", async (a) => {
     await atTime(THU, async () => {
       const L = loadCodeGs(root, { tabs: { "Drivers": tab("Drivers", [
-        { Name: "Bro Trevor", Role: "Driver", Active: "YES", "Primary order": 2, PIN: "4321", Email: "", Route: "North", Phone: "" }]) },
+        { Name: "Bro Trevor", Role: "Driver", Active: "YES", "Primary order": 2, Email: "", Route: "North", Phone: "07700 904321" }]) },
         props: { PIN_SALT: "salt" } });
       const ss = L.gas.ss;
       const A = (id, body) => ({ id, kind: "driver", sunday: "", by: "Bro Arthur", made: Date.now(), body });
@@ -132,10 +132,10 @@ export default async function (root) {
       const g = ss.getSheetByName("Drivers").getDataRange().getValues();
       const objs = g.slice(1).map((r) => { const o = {}; g[0].forEach((h, i) => { o[h] = r[i]; }); return o; });
       const t = objs.find((x) => x.Name === "Bro Trevor"), m = objs.find((x) => x.Name === "Sis Ama");
-      a.eq([t.Route, t.Active, t.Email, String(t.PIN)].join("|"), "South|NO|t@x.org|4321");
+      a.eq([t.Route, t.Active, t.Email, t.Phone].join("|"), "South|NO|t@x.org|07700 904321");
       a.ok(m, "no row for the new driver");
       const ORDER = TABS["Drivers"][TABS["Drivers"].indexOf("Primary order")];
-      a.eq([m.Route, m.Active, m.Role, m[ORDER], m.PIN].join("|"), "South|YES|Driver|1|");
+      a.eq([m.Route, m.Active, m.Role, m[ORDER]].join("|"), "South|YES|Driver|1");
       const hg = ss.getSheetByName("History").getDataRange().getValues();
       const what = hg.slice(1).map((r) => r[hg[0].indexOf("What changed")]);
       a.ok(what.indexOf("Driver: Bro Trevor — Route") !== -1 && what.indexOf("Driver: Bro Trevor — Active") !== -1 &&
@@ -144,7 +144,9 @@ export default async function (root) {
       a.not(r3.ok, "a second Sis Ama was added");
       const shelf = call(L, "coordDriversList", ss);
       a.ok(shelf.every((d) => !("pin" in d)), "a PIN in the shelf");
+      /* A phone number is a default PIN; none, none. */
       a.eq(shelf.find((d) => d.name === "Bro Trevor").hasPin, true);
+      a.eq(shelf.find((d) => d.name === "Sis Ama").hasPin, false);
     });
   });
 
