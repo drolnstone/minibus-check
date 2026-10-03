@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.96.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.96.1 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -150,7 +150,7 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .mono{font-family:"IBM Plex Mono",monospace}
 .empty{text-align:center;padding:28px 12px;color:var(--muted)}
 .say{min-height:1.3em;margin:10px 0 0;font-size:14px;color:var(--muted)}
-.say.bad{color:var(--stop)}
+.say.bad{color:var(--stop);font-weight:700}
 .version{display:block;width:100%;text-align:center;margin-top:18px;font-family:"Barlow Condensed",sans-serif;
   font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding:4px 0}
 .version .vpart{white-space:nowrap}
@@ -453,7 +453,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .rep li{padding:8px 12px;border-top:1px solid var(--hair);font-size:15px;white-space:pre-line}
 .rep li:first-child{border-top:none}
 .lead{font-size:17px;font-weight:600;margin:0 0 4px}
-.lead.bad{color:var(--stop)}
+.lead.bad{color:var(--stop);font-weight:700}
 
 /* ---- the sheet that rises for every change ---- */
 .sheet-wrap{position:fixed;inset:0;z-index:120;background:var(--scrim);display:none;align-items:flex-end;justify-content:center}
@@ -470,7 +470,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
   background:var(--steel);color:var(--on-accent);padding:11px 16px;border-radius:8px;font-size:14px;opacity:0;
   pointer-events:none;transition:.25s;z-index:200;width:max-content;max-width:92vw;text-align:center}
 .toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
-.toast.bad{background:var(--stop);color:var(--stop-on)}
+.toast.bad{background:var(--stop);color:var(--stop-on);font-weight:700}
 .toast.top{top:calc(12px + var(--safe-t));bottom:auto}
 /* Back to top, the same button the driver app and the passenger page have.
    The Rota, Bookings, Run record and the rest grow with every Sunday, so the
@@ -657,7 +657,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.96.0";
+var PAGE_VERSION = "v1.96.1";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");

@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.96.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.96.1 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -424,7 +424,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .ask-input:focus{outline:3px solid var(--steel);outline-offset:1px}
 .ask-input.is-ok{border-color:var(--pass);box-shadow:0 0 0 1px var(--pass) inset}
 .ask-say{min-height:19px;margin:9px 0 0;font-size:13px;line-height:1.45;color:var(--muted)}
-.ask-say.is-bad{color:var(--stop);font-weight:600}
+.ask-say.is-bad{color:var(--stop);font-weight:700}
 .ask-btns{display:flex;gap:8px;margin-top:14px}
 /* The line on the alerts offer: the booking, or the prompt to make one. */
 .ask-line{margin:-4px 0 0;font-size:15px;line-height:1.45;color:var(--ink)}
@@ -460,6 +460,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
   background:var(--steel);color:var(--on-accent);padding:11px 16px;border-radius:9px;font-size:14px;
   opacity:0;pointer-events:none;transition:.25s;z-index:90;max-width:90vw;text-align:center}
 .toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.bad{background:var(--stop);color:var(--chip-ink);font-weight:700}
 /* The call button, shaped like the driver's.
 
    The COLOUR is deliberately not the driver's. Red there means "this bus
@@ -744,7 +745,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.96.0";
+var PAGE_VERSION = "v1.96.1";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -940,9 +941,10 @@ function callFetch(url, opts){
 }
 
 var toastTimer;
-function toast(msg){
-  var t=$("toast"); t.textContent=msg; t.classList.add("is-on");
-  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ t.classList.remove("is-on"); },3600);
+/* bad, from v1.96.1: a wrong entry or a refusal, shown red and bold. */
+function toast(msg,bad){
+  var t=$("toast"); t.textContent=msg; t.classList.toggle("bad",!!bad); t.classList.add("is-on");
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ t.classList.remove("is-on"); },bad?5200:3600);
 }
 
 /* A handle this browser makes up for itself. It is random and it says
@@ -1676,7 +1678,7 @@ function pushTest(){
     /* The server's own words. It is the only thing here that can tell a phone
        the push service has disowned from a key that is wrong, and the two look
        identical from this page otherwise. */
-    toast((out && out.error) ? "Not sent: "+out.error : "Not sent.");
+    toast((out && out.error) ? "Not sent: "+out.error : "Not sent.", true);
     /* Only when the push service has disowned this phone. That row is deleted
        server side, so the offer to turn alerts on has to come back. Every
        other failure leaves the subscription alone: a bad minute at Google is
@@ -1684,7 +1686,7 @@ function pushTest(){
     if(out && out.gone){ pushOn = false; paintAlerts(); }
   }).catch(function(){
     pushBusy = false;
-    toast("Could not ask for a test.");
+    toast("Could not ask for a test.", true);
   });
 }
 
@@ -1734,7 +1736,7 @@ function pushTurnOn(){
     });
   }).catch(function(){
     pushBusy = false;
-    toast("Could not turn alerts on.");
+    toast("Could not turn alerts on.", true);
     paintAlerts();
   });
 }
@@ -2743,14 +2745,14 @@ function wireIdentityFoot(){
   if($("idInstall")) $("idInstall").addEventListener("click",function(){ howOpen(false); });
   if($("idFind")) $("idFind").addEventListener("click",function(){
     askOpen({ then:function(out){
-      toast(out && out.mine ? "Found it." : "No booking under that number.");
+      toast(out && out.mine ? "Found it." : "No booking under that number.", !(out && out.mine));
     }});
   });
   if($("idChange")) $("idChange").addEventListener("click",function(){
     askOpen({
       title:"Whose booking should this show?",
       then:function(out){
-        toast(out && out.mine ? "Found it." : "No booking under that number.");
+        toast(out && out.mine ? "Found it." : "No booking under that number.", !(out && out.mine));
       }
     });
   });
@@ -3062,7 +3064,7 @@ function send(payload, done){
         return;
       }
 
-      toast(plainError(err));
+      toast(plainError(err), true);
       return;
     }
 
@@ -3106,7 +3108,7 @@ function verifySend(payload, done){
       if(cancelAsk || CLOSED) paint(); else paintBar();
       toast(cancelAsk
         ? "That did not save. Check your signal and tap Yes again."
-        : "That did not save. Check your signal and tap Confirm again.");
+        : "That did not save. Check your signal and tap Confirm again.", true);
     });
 }
 
