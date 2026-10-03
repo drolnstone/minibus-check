@@ -214,8 +214,10 @@ async function page(env, o) {
      the sign-in screen. Said no to, as a returning coordinator would have,
      unless a check is about the guide itself. */
   if (!o.install) await pg.addInitScript(`try { localStorage.setItem("coord.install.v1", "1"); } catch (e) {}`);
-  /* From v1.96.6 the first screen asks once to turn alerts on; C50 asks for it. */
-  if (!o.ask) await pg.addInitScript(`try { localStorage.setItem("coord.alertask.v1", "1"); } catch (e) {}`);
+  /* From v1.96.6 the first screen asks to turn alerts on, each time the app
+     opens (v1.96.7). A phone that has refused alerts is never asked, so that
+     is what every check is, unless it is about the question (C50). */
+  if (!o.ask) await pg.addInitScript(`try { Object.defineProperty(Notification, "permission", { get: () => window.__perm || "denied", configurable: true }); } catch (e) {}`);
   if (o.theme) await pg.addInitScript(`try { localStorage.setItem("fleet.theme.v1", ${JSON.stringify(o.theme)}); } catch (e) {}`);
   if (o.name) await pg.addInitScript(`try { localStorage.setItem("coord.name.v1", ${JSON.stringify(o.name)}); } catch (e) {}`);
   /* What the driver app's Coordinator button leaves in the tab, as it leaves
@@ -790,7 +792,7 @@ if (want("C22")) {
 if (want("C23")) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
   const pg = await ctx.newPage();
-  await pg.addInitScript(`try { localStorage.setItem("coord.alertask.v1", "1"); } catch (e) {}`);
+  await pg.addInitScript(`try { Object.defineProperty(Notification, "permission", { get: () => window.__perm || "denied", configurable: true }); } catch (e) {}`);
   const errs = [];
   pg.on("pageerror", (e) => errs.push(String(e.message)));
   await pg.route("**://fonts.googleapis.com/**", (r) => r.abort());
@@ -863,6 +865,9 @@ if (want("C25")) {
   await p.wait(400);
   const hiddenSignedOut = await p.pg.$eval("#barBell", (el) => el.hidden);
   await p.signIn(PIN);
+  /* From v1.96.7 this phone is asked on every opening; the bell is the test. */
+  await p.wait(400);
+  if (await p.sheetUp()) { await p.pg.click("#sheetNot"); await p.wait(300); }
   const shown = !(await p.pg.$eval("#barBell", (el) => el.hidden));
   await p.pg.click("#barBell");
   await p.wait(1500);
@@ -891,7 +896,7 @@ if (want("C25")) {
 if (want("C20b")) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
   const pg = await ctx.newPage();
-  await pg.addInitScript(`try { localStorage.setItem("coord.alertask.v1", "1"); } catch (e) {}`);
+  await pg.addInitScript(`try { Object.defineProperty(Notification, "permission", { get: () => window.__perm || "denied", configurable: true }); } catch (e) {}`);
   const errs = [];
   pg.on("pageerror", (e) => errs.push(String(e.message)));
   await pg.route("**://fonts.googleapis.com/**", (r) => r.abort());
@@ -941,7 +946,7 @@ if (want("C27")) {
   const run = async (standalone, kept) => {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
     const pg = await ctx.newPage();
-    await pg.addInitScript(`try { localStorage.setItem("coord.alertask.v1", "1"); } catch (e) {}`);
+    await pg.addInitScript(`try { Object.defineProperty(Notification, "permission", { get: () => window.__perm || "denied", configurable: true }); } catch (e) {}`);
     const errs = [];
     pg.on("pageerror", (e) => errs.push(String(e.message)));
     await pg.route("**://*.workers.dev/**", (r) => r.abort());
@@ -1596,7 +1601,7 @@ if (want("C47")) {
 if (want("C49")) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const pg = await ctx.newPage();
-  await pg.addInitScript(`try { localStorage.setItem("coord.alertask.v1", "1"); } catch (e) {}`);
+  await pg.addInitScript(`try { Object.defineProperty(Notification, "permission", { get: () => window.__perm || "denied", configurable: true }); } catch (e) {}`);
   const errs = [];
   let down = false;                   /* a route answers even offline, so it is told */
   pg.on("pageerror", (e) => errs.push(String(e.message)));
@@ -1660,7 +1665,9 @@ if (want("C49")) {
   await ctx.close();
 }
 
-/* C50 — v1.96.6. Asked once to turn alerts on, and never again after Not now. */
+/* C50 — v1.96.7. Asked to turn alerts on each time the app is opened, until
+   they are on, as the driver app asks drivers. Once per opening: signing in
+   again after Lock does not ask twice. */
 if (want("C50")) {
   const p = await page(env, { ask: true });
   await p.pg.addInitScript(() => {
@@ -1677,19 +1684,22 @@ if (want("C50")) {
   const asked = await p.sheetUp();
   const title = await p.text("#sheetTitle");
   await p.shot("C50-asked");
-  const why = asked ? "" : await p.pg.evaluate(() => JSON.stringify({ hash: location.hash, on: BELL.on, busy: BELL.busy,
-    sheet: SHEET.open, kept: localStorage.getItem("coord.alertask.v1"), able: pushAble(), D: !!D, say: $("signSay").textContent, name: $("signName").value }));
   if (asked) await p.pg.click("#sheetNot");
   await p.wait(300);
+  await p.pg.click("#barLock");
+  await p.wait(300);
+  await p.signIn(PIN);
+  await p.wait(800);
+  const twice = await p.sheetUp();
   await p.pg.reload({ waitUntil: "domcontentloaded" });
   await p.wait(400);
   await p.signIn(PIN);
   await p.wait(800);
   const again = await p.sheetUp();
   await p.ctx.close();
-  check("C50", "a coordinator without alerts is asked once, on the first screen, and not again after Not now",
-        asked && /turn on alerts/i.test(title) && !again && !p.errs.length,
-        JSON.stringify({ asked, title, again, why, errors: p.errs }));
+  check("C50", "a coordinator without alerts is asked on the first screen each time the app opens, once per opening",
+        asked && /turn on alerts/i.test(title) && !twice && again && !p.errs.length,
+        JSON.stringify({ asked, title, twice, again, errors: p.errs }));
 }
 
 /* C51 — v1.96.6. A new coordinator alert while the app is open: the count on

@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.96.6 · THE COORDINATOR'S APP.
+<!-- BUILD v1.96.7 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -687,7 +687,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.96.6";
+var PAGE_VERSION = "v1.96.7";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -3596,29 +3596,29 @@ function bellOn(test){
 }
 $("barBell").addEventListener("click", bellTap);
 
-/* ---- asked once, from v1.96.6 --------------------------------------------
-   After the Ushers app's "nobody left unalerted", but asked ONCE per phone,
-   never again after Not now (the Ushers app asks again three days later,
-   and Asim did not want that here). Only on the first screen, only over
-   nothing else, only when this phone could take alerts at all and has not
-   got them. The bell is the way back for anybody who said Not now. An
-   iPhone in Safari is asked to put the app on its Home Screen first, since
-   that is the only place an iPhone takes alerts. */
-var ASK_KEY = "coord.alertask.v1";
+/* ---- asked, from v1.96.6 --------------------------------------------------
+   After the Ushers app's "nobody left unalerted". From v1.96.7 it is asked
+   once each time the app is opened, until alerts are on, as the driver app
+   asks drivers and the passenger page asks passengers: Asim's rule for
+   everyone (v1.96.6 asked once per phone). Only on the first screen, only
+   over nothing else, only when this phone could take alerts at all and has
+   not got them. An iPhone in Safari is asked to put the app on its Home
+   Screen first, since that is the only place an iPhone takes alerts. */
+var ASKED = false;   /* once per app open */
 function alertAskMaybe(){
   if(!pin || !D || !LIVE || BELL.on || BELL.busy) return;
   if(current().name !== "home" && current().name !== "") return;
   if(SHEET.open || ($("howModal") && $("howModal").classList.contains("is-on"))) return;
-  if(storeGet(ASK_KEY)) return;
+  if(ASKED) return;
   var ios = iosBrowser();
   if(!ios && !pushAble()) return;
   if(!ios && Notification.permission === "denied") return;
-  storeSet(ASK_KEY, String(Date.now()));
+  ASKED = true;
   openSheet({
     eyebrow: "Coordinator",
     title: ios ? "Add this app to your Home Screen" : "Turn on alerts on this phone?",
     line: ios ? "An iPhone only gives alerts to an app on its Home Screen. Then tap the bell at the top."
-              : "You will be told at once when a bus is stopped or a driver asks for something. You will not be asked again: the bell at the top does it any time.",
+              : "You will be told at once when a bus is stopped or a driver asks for something.",
     keep: "Not now", go: ios ? "Show me how" : "Turn on",
     onGo: function(){ closeSheet(); if(ios) howOpen(false); else bellOn(false); }
   });
