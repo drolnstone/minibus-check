@@ -952,7 +952,11 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
    was a real journey. */
 /* Clear of the bottom bar. It sat at 20px, which put it behind the bar on
    any screen that has one, so half the arrow was unreachable. */
-.totop{position:fixed;right:calc(14px + var(--safe-r));bottom:calc(88px + var(--safe-b));z-index:65;
+/* From v1.95.4 it is on every screen after sign-in, and the bar can stand
+   taller than 88px (two rows of buttons on the review), so it rides 14px
+   above whatever the bar measures, and never lower than it always sat. */
+.totop{position:fixed;right:calc(14px + var(--safe-r));z-index:65;
+  bottom:calc(88px + var(--safe-b));bottom:max(calc(88px + var(--safe-b)), calc(var(--footH,0px) + 14px));
   width:48px;height:48px;border-radius:50%;background:var(--steel);color:var(--on-accent);
   font-size:20px;line-height:1;box-shadow:0 3px 12px rgba(22,25,31,.32);
   display:none;align-items:center;justify-content:center}
@@ -1570,7 +1574,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.95.3";
+var APP_VERSION = "v1.95.4";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -8771,8 +8775,11 @@ $("stopsBack").addEventListener("click",stopsClose);
      that corner, and two floating controls in one place is exactly the
      crowding this pass exists to remove. */
   function sync(){
-    var wants = st.screen==="rota" ||
-                (st.screen==="stops" && !(trip.started && !trip.ended));
+    /* From v1.95.4 every screen after sign-in, not just the rota and the
+       stops: a long walkaround stage, the review and the sent summary are
+       all a long way down by the end. 460 keeps it off the short ones. */
+    var wants = st.screen!=="driver" &&
+                !(st.screen==="stops" && trip.started && !trip.ended);
     b.classList.toggle("is-on", wants && window.scrollY>460);
   }
   window.addEventListener("scroll",sync,{passive:true});
