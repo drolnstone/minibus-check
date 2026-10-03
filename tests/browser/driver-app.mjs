@@ -846,6 +846,31 @@ if (want("T24")) {
   await me.ctx.close();
 }
 
+/* T25 — v1.96.3. Auto, Light, Dark and the navy of the driver app's own
+   icon, and nothing else. The coordinator's indigo, kept under the same key
+   on a coordinator's phone, reads as Auto here and is left where it is. */
+if (want("T25")) {
+  const me = await phone({ clock: "2026-09-26T19:00:00+01:00" });
+  await me.pg.addInitScript(() => { try { localStorage.setItem("fleet.theme.v1", "indigo"); } catch (e) {} });
+  await me.load(); await me.close(["howDone"]);
+  const look = () => me.pg.evaluate(() => ({
+    chips: Array.prototype.map.call(document.querySelectorAll("#themes [data-theme-set]"), (b) => b.getAttribute("data-theme-set")).join(),
+    on: Array.prototype.map.call(document.querySelectorAll("#themes .on"), (b) => b.getAttribute("data-theme-set")).join(),
+    theme: document.documentElement.getAttribute("data-theme"),
+    kept: localStorage.getItem("fleet.theme.v1"),
+    bar: document.querySelector('meta[name="theme-color"]').getAttribute("content") }));
+  const before = await look();
+  await me.pg.click('#themes [data-theme-set="navy"]'); await me.wait(150);
+  const after = await look();
+  await me.shot("T25-navy");
+  check("T25", "the driver app offers Auto, Light, Dark and Navy, and the coordinator's indigo reads as Auto",
+        before.chips === "auto,light,dark,navy" && before.on === "auto" && before.theme === "light" &&
+        before.kept === "indigo" && after.theme === "navy" && after.on === "navy" &&
+        after.bar.toUpperCase() === "#1E3260" && !me.errs.length,
+        JSON.stringify({ before, after, errors: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

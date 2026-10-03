@@ -1165,7 +1165,10 @@ name is chosen, whether the live server answered, who can open the page, whether
 the name has a PIN on the Drivers tab, how this visit was opened, the lock and
 refresh settings, and after a sign-in what is on the way to the sheet and when
 the live server's clock last ticked. The theme chips sit under the numbers and
-set the driver app's own setting, so the two apps always look the same. The
+set the driver app's own setting for Auto, Light and Dark. From v1.96.3 each
+app has one colour of its own, the colour of its home screen icon: Indigo here,
+Navy in the driver app, Green on the passenger page. The other app's colour
+reads as Auto. The
 first screen after the sign-in has no numbers on it.
 
 Each change is made under the coordinator's PIN:
@@ -1899,7 +1902,7 @@ pane**. Tapping it sends a test to that one phone and a toast says what came
 back. No label, no explanation.
 
 The icon is inline SVG drawn on `currentColor`, so it takes whichever of the
-five themes is set without a rule per theme. It carries an `aria-label` and a
+four themes is set without a rule per theme. It carries an `aria-label` and a
 `title`, so colour is never the only signal.
 
 On the driver app it sits in the hub header, above the three buttons and

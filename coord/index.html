@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.96.2 · THE COORDINATOR'S APP.
+<!-- BUILD v1.96.3 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -71,8 +71,10 @@ html[data-theme="dark"]{
   --accent-ink:#9DB4CC;--ink-2:#CAD1DA;--faint:#7E8996;--press:#232A33;
   --scrim:rgba(0,0,0,.62);
 }
-html[data-theme="green"]{--steel:#14532D;--steel-2:#1E6B3C;--paper:#F2F6F3;--accent-ink:#14532D}
-html[data-theme="navy"]{--steel:#1E3260;--steel-2:#2C4680;--paper:#F2F4F9;--accent-ink:#1E3260}
+/* From v1.96.3 the one colour is the indigo of this app's own home screen
+   icon, #28166F, so it is not mistaken for the driver app (navy) or the
+   passenger page (green). */
+html[data-theme="indigo"]{--steel:#28166F;--steel-2:#3A2690;--paper:#F4F3F9;--accent-ink:#28166F}
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html,body{margin:0;padding:0}
@@ -500,10 +502,12 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 }
 </style>
 <script>
-/* The theme the driver app keeps on this phone, before the first paint. */
+/* The theme the driver app keeps on this phone, before the first paint.
+   Only this app's own four: the driver app's navy reads as Auto here. */
 (function(){
   var t="auto";
   try{ t=localStorage.getItem("fleet.theme.v1")||"auto"; }catch(e){}
+  if(!/^(auto|light|dark|indigo)$/.test(t)) t="auto";
   var m=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
   document.documentElement.setAttribute("data-theme", t!=="auto" ? t : ((m&&m.matches)?"dark":"light"));
 })();
@@ -603,8 +607,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
       <button type="button" data-theme-set="auto">Auto</button>
       <button type="button" data-theme-set="light">Light</button>
       <button type="button" data-theme-set="dark">Dark</button>
-      <button type="button" data-theme-set="green">Green</button>
-      <button type="button" data-theme-set="navy">Navy</button>
+      <button type="button" data-theme-set="indigo">Indigo</button>
     </div>
     <button class="how-link" id="howLink" type="button" style="display:none">Add to your phone</button>
   </section>
@@ -657,7 +660,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.96.2";
+var PAGE_VERSION = "v1.96.3";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -3270,8 +3273,15 @@ function diagnosis(){
 /* The appearance, which is the driver app's: one key, one setting, whichever
    of the two it was set in. */
 var THEME_KEY = "fleet.theme.v1";
-var THEME_BAR = { light:"#1B222C", dark:"#0E1216", green:"#14532D", navy:"#1E3260" };
-function themeChoice(){ try{ return localStorage.getItem(THEME_KEY) || "auto"; }catch(e){ return "auto"; } }
+var THEME_BAR = { light:"#1B222C", dark:"#0E1216", indigo:"#28166F" };
+/* Light, dark and auto are shared with the driver app. Each app has its own
+   colour, so the other app's colour reads as Auto here, without being
+   overwritten. */
+function themeChoice(){
+  var t = "auto";
+  try{ t = localStorage.getItem(THEME_KEY) || "auto"; }catch(e){}
+  return (THEME_BAR[t] || t === "auto") ? t : "auto";
+}
 function themeApply(){
   var pick = themeChoice(), r = pick;
   if(pick === "auto"){

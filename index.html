@@ -240,13 +240,14 @@ html[data-theme="dark"] .field select{
   letter-spacing:.06em;text-transform:uppercase}
 .themes button.on{background:var(--steel);border-color:var(--steel);color:var(--on-accent)}
 
-/* ---- Two colour choices. Light, and identical to the default in every
+/* ---- One colour choice. Light, and identical to the default in every
         respect except the colour of the header, the primary button and the
         active tab. Deliberately that narrow: it is the one part of the
-        screen that carries no meaning. ---- */
-html[data-theme="green"]{
-  --steel:#14532D;--steel-2:#1E6B3C;--paper:#F2F6F3;--accent-ink:#14532D;
-}
+        screen that carries no meaning.
+
+        From v1.96.3 each app keeps one colour, the colour of its own home
+        screen icon, so the three can be told apart at a glance: navy here,
+        green on the passenger page, indigo in the coordinator's app. ---- */
 html[data-theme="navy"]{
   --steel:#1E3260;--steel-2:#2C4680;--paper:#F2F4F9;--accent-ink:#1E3260;
 }
@@ -777,8 +778,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 
    Drawn with stroke="currentColor" and no fill of its own, so it takes the
    colour the theme has already set on the row it sits in. Both apps carry five
-   themes (auto, light, dark, green, navy), and this is one rule covering all
-   ten combinations rather than ten rules.
+   themes, four each (auto, light, dark and the app's own colour), and this is
+   one rule covering every combination rather than a rule per theme.
 
    Colour is never the only signal: it also carries an aria-label and a title,
    so a screen reader and a long press both say what it does. */
@@ -1014,6 +1015,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 (function(){
   var t="auto";
   try{ t=localStorage.getItem("fleet.theme.v1")||"auto"; }catch(e){}
+  /* Only this app's own four. The coordinator's app shares the key and has
+     a colour this one does not, and an old phone may still hold green. */
+  if(!/^(auto|light|dark|navy)$/.test(t)) t="auto";
   var m=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
   document.documentElement.setAttribute("data-theme",
     t!=="auto" ? t : ((m&&m.matches)?"dark":"light"));
@@ -1098,7 +1102,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
       <button type="button" data-theme-set="auto">Auto</button>
       <button type="button" data-theme-set="light">Light</button>
       <button type="button" data-theme-set="dark">Dark</button>
-      <button type="button" data-theme-set="green">Green</button>
       <button type="button" data-theme-set="navy">Navy</button>
     </div>
     <div class="version" id="appVersion"></div>
@@ -1613,7 +1616,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.96.2";
+var APP_VERSION = "v1.96.3";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -9578,10 +9581,15 @@ $("modeNote").hidden = LIVE;
 var THEME_KEY="fleet.theme.v1";
 /* The colour the phone paints its own status bar with, so the strip above
    the app matches the app. */
-var THEME_BAR={light:"#1B222C",dark:"#0E1216",green:"#14532D",navy:"#1E3260"};
+var THEME_BAR={light:"#1B222C",dark:"#0E1216",navy:"#1E3260"};
 
+/* A choice this app does not carry (the coordinator's indigo, or green from
+   before v1.96.3) reads as Auto. It is not overwritten: the coordinator's
+   app still wants its indigo back. */
 function themeChoice(){
-  try{ return localStorage.getItem(THEME_KEY)||"auto"; }catch(e){ return "auto"; }
+  var t="auto";
+  try{ t=localStorage.getItem(THEME_KEY)||"auto"; }catch(e){}
+  return (THEME_BAR[t]||t==="auto") ? t : "auto";
 }
 function themeApply(){
   var pick=themeChoice(), r=pick;
