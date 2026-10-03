@@ -149,7 +149,7 @@ The home screen icons live in the repo root and are not in a release unless
 one is new. Each app has the church logo on a field of its own:
 
 ```
-icon-driver-180.png, icon-192.png,       the driver app, navy (#1B222C)
+icon-driver-180.png, icon-192.png,       the driver app, navy (#1E3260, its Navy theme)
   icon-512.png, icon-512-maskable.png
 icon-sunday-180.png, icon-sunday-512.png the passenger page, green (#00923F)
 alt-indigo-180.png, alt-indigo-512.png   the coordinator's app, indigo
