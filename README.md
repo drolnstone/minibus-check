@@ -1698,6 +1698,16 @@ many times Apps Script hands it over. **Send an email now, Test email and
 coordinators' phones** tests both. The weekly summary and the test email are
 the two rows below with no phone alert of their own; the test sends one.
 
+From v1.96.6 / w2.40.0 / v1.104.0, after the Ushers app: the coordinator's
+app asks once per phone to turn alerts on (never again after Not now), its
+bell carries a count of alerts not yet seen (also on the first screen's
+Alerts line and, where the phone allows, the home-screen icon), the filled
+bell opens **Alerts** (the last two days, with Send a test alert), and an
+alert that lands while the app is open shows in a strip at the foot. A
+coordinator with alerts on no phone is emailed each alert's short words at
+their Drivers-tab Email, unless that is `COORDINATOR_EMAIL`, which has the
+full email already.
+
 | What | When | Why | Held |
 |---|---|---|---|
 | A walkaround came in — stopped / defect but driveable / advisory only / nothing wrong but something to arrange / already authorised | the second a driver signs and sends | it is the record that a bus went out, and the stopped one needs a decision in minutes | yes |

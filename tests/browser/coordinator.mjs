@@ -214,6 +214,8 @@ async function page(env, o) {
      the sign-in screen. Said no to, as a returning coordinator would have,
      unless a check is about the guide itself. */
   if (!o.install) await pg.addInitScript(`try { localStorage.setItem("coord.install.v1", "1"); } catch (e) {}`);
+  /* From v1.96.6 the first screen asks once to turn alerts on; C50 asks for it. */
+  if (!o.ask) await pg.addInitScript(`try { localStorage.setItem("coord.alertask.v1", "1"); } catch (e) {}`);
   if (o.theme) await pg.addInitScript(`try { localStorage.setItem("fleet.theme.v1", ${JSON.stringify(o.theme)}); } catch (e) {}`);
   if (o.name) await pg.addInitScript(`try { localStorage.setItem("coord.name.v1", ${JSON.stringify(o.name)}); } catch (e) {}`);
   /* What the driver app's Coordinator button leaves in the tab, as it leaves
@@ -788,6 +790,7 @@ if (want("C22")) {
 if (want("C23")) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
   const pg = await ctx.newPage();
+  await pg.addInitScript(`try { localStorage.setItem("coord.alertask.v1", "1"); } catch (e) {}`);
   const errs = [];
   pg.on("pageerror", (e) => errs.push(String(e.message)));
   await pg.route("**://fonts.googleapis.com/**", (r) => r.abort());
@@ -868,22 +871,27 @@ if (want("C25")) {
   const registered = await p.pg.evaluate(() => window.__registered || "");
   const on = await p.pg.$eval("#barBell", (el) => el.classList.contains("on"));
   await p.shot("C25-bell-on");
+  /* From v1.96.6 the filled bell opens Alerts, and the test is there. */
   await p.pg.click("#barBell");
+  await p.wait(800);
+  const onAlerts = await p.on("alerts");
+  await p.pg.click('[data-do="alerttest"]');
   await p.wait(1500);
   const second = await p.text("#toast");
   const test = db._one("SELECT v FROM settings WHERE k=?", "test:https://push.example/coord-phone");
   await p.ctx.close();
-  check("C25", "the bell is there once signed in, turns coordinator alerts on for this phone under the signed-in name, and a second tap sends a test",
+  check("C25", "the bell is there once signed in, turns coordinator alerts on for this phone under the signed-in name, then opens Alerts, where the test is",
         hiddenSignedOut && shown && /alerts are on/i.test(first) && row && row.role === "driver" && row.driver === "Bro Arthur" &&
-        /^\.\.\/sw\.js \.\.\/$/.test(registered) && on && /test alert/i.test(second) && !!test && !p.errs.length,
+        /^\.\.\/sw\.js \.\.\/$/.test(registered) && on && onAlerts && /test alert/i.test(second) && !!test && !p.errs.length,
         "hidden before sign-in " + hiddenSignedOut + ", shown " + shown + ", first '" + first + "', row " + JSON.stringify(row) +
-        ", registered '" + registered + "', on " + on + ", second '" + second + "', test " + !!test + ", errors " + JSON.stringify(p.errs));
+        ", registered '" + registered + "', on " + on + ", alerts " + onAlerts + ", second '" + second + "', test " + !!test + ", errors " + JSON.stringify(p.errs));
 }
 
 /* C20b — a PIN handed over that is wrong is still refused by the driver app */
 if (want("C20b")) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
   const pg = await ctx.newPage();
+  await pg.addInitScript(`try { localStorage.setItem("coord.alertask.v1", "1"); } catch (e) {}`);
   const errs = [];
   pg.on("pageerror", (e) => errs.push(String(e.message)));
   await pg.route("**://fonts.googleapis.com/**", (r) => r.abort());
@@ -933,6 +941,7 @@ if (want("C27")) {
   const run = async (standalone, kept) => {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
     const pg = await ctx.newPage();
+    await pg.addInitScript(`try { localStorage.setItem("coord.alertask.v1", "1"); } catch (e) {}`);
     const errs = [];
     pg.on("pageerror", (e) => errs.push(String(e.message)));
     await pg.route("**://*.workers.dev/**", (r) => r.abort());
@@ -1587,6 +1596,7 @@ if (want("C47")) {
 if (want("C49")) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const pg = await ctx.newPage();
+  await pg.addInitScript(`try { localStorage.setItem("coord.alertask.v1", "1"); } catch (e) {}`);
   const errs = [];
   let down = false;                   /* a route answers even offline, so it is told */
   pg.on("pageerror", (e) => errs.push(String(e.message)));
@@ -1715,6 +1725,67 @@ if (want("C48")) {
         after.steel.toUpperCase() === "#28166F" && after.bar.toUpperCase() === "#28166F" && !p.errs.length,
         JSON.stringify({ before, after, errors: p.errs }));
   await p.ctx.close();
+}
+
+/* C50 — v1.96.6. Asked once to turn alerts on, and never again after Not now. */
+if (want("C50")) {
+  const p = await page(env, { ask: true });
+  await p.pg.addInitScript(() => {
+    const reg = { active: {}, pushManager: { getSubscription: async () => null, subscribe: async () => null } };
+    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: {
+      getRegistration: async () => reg, register: async () => reg, addEventListener: () => {} } });
+    if (!window.PushManager) window.PushManager = function () {};
+    try { Object.defineProperty(Notification, "permission", { get: () => "default", configurable: true }); } catch (e) {}
+  });
+  await p.pg.reload({ waitUntil: "domcontentloaded" });
+  await p.wait(400);
+  await p.signIn(PIN);
+  await p.wait(500);
+  const asked = await p.sheetUp();
+  const title = await p.text("#sheetTitle");
+  await p.shot("C50-asked");
+  await p.pg.click("#sheetNot");
+  await p.wait(300);
+  await p.pg.reload({ waitUntil: "domcontentloaded" });
+  await p.wait(400);
+  await p.signIn(PIN);
+  await p.wait(800);
+  const again = await p.sheetUp();
+  await p.ctx.close();
+  check("C50", "a coordinator without alerts is asked once, on the first screen, and not again after Not now",
+        asked && /turn on alerts/i.test(title) && !again && !p.errs.length,
+        JSON.stringify({ asked, title, again, errors: p.errs }));
+}
+
+/* C51 — v1.96.6. A new coordinator alert while the app is open: the count on
+   the bell and the first screen, a strip at the foot, and Alerts reads it. */
+if (want("C51")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  await W.default.fetch(new Request("https://worker.test/", { method: "POST", body: JSON.stringify({
+    action: "coordAlert", token: "minibusapp", alert: { id: "c51-" + Date.now(), kind: "stopped", urgent: true,
+      title: "BUS STOPPED: YS70 PWE", body: "Critical defect on Bro Trevor's check." } }) }), env, {});
+  await p.pg.evaluate(() => refresh());
+  await p.wait(1200);
+  const count = await p.text("#bellN");
+  const menu = await p.text("#homeBody .menu");
+  const strip = await p.pg.$eval("#aStrip", (el) => el.classList.contains("is-on"));
+  const stripText = await p.text("#aStrip");
+  const pad = await p.pg.evaluate(() => document.body.classList.contains("strip-on"));
+  await p.shot("C51-strip");
+  await p.pg.click("#aStripOpen");
+  await p.wait(1200);
+  const onAlerts = await p.on("alerts");
+  const list = await p.text("#alertsBody");
+  const after = await p.pg.$eval("#bellN", (el) => el.hidden);
+  await p.shot("C51-alerts");
+  const read = await (await W.default.fetch(new Request("https://worker.test/", { method: "POST", body: JSON.stringify({
+    action: "coord", token: "minibusapp", who: "Bro Arthur", pin: PIN, op: "alerts" }) }), env, {})).json();
+  await p.ctx.close();
+  check("C51", "a new alert shows a count on the bell and the first screen and a strip at the foot; opening it reads it",
+        count === "1" && /Alerts 1 new/.test(menu) && strip && /BUS STOPPED/.test(stripText) && pad &&
+        onAlerts && /BUS STOPPED/.test(list) && /New/.test(list) && after && read.alerts.unread === 0 && !p.errs.length,
+        JSON.stringify({ count, menu: menu.slice(-40), strip, stripText, pad, onAlerts, list: list.slice(0, 80), after, unread: read.alerts && read.alerts.unread, errors: p.errs }));
 }
 
 await done();
