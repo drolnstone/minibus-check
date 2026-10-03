@@ -847,7 +847,11 @@ if (want("C25")) {
     const reg = { active: {}, pushManager: { getSubscription: async () => have, subscribe: async () => { have = sub; return sub; } } };
     Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: {
       getRegistration: async () => window.__reg || null,
-      register: async (url, o) => { window.__registered = url + " " + (o && o.scope); window.__reg = reg; return reg; } } });
+      /* From v1.96.4 the page registers its own offline worker, sw.js in its
+         own folder, as it loads. That is not the bell's, and is not counted. */
+      register: async (url, o) => { if (url === "sw.js") return { update: async () => {} };
+                                    window.__registered = url + " " + (o && o.scope); window.__reg = reg; return reg; },
+      addEventListener: () => {} } });
     if (!window.PushManager) window.PushManager = function () {};
     try { Object.defineProperty(Notification, "permission", { get: () => window.__perm || "default", configurable: true }); } catch (e) {}
     Notification.requestPermission = async () => { window.__perm = "granted"; return "granted"; };
@@ -1573,6 +1577,77 @@ if (want("C47")) {
           JSON.stringify({ onSign, atTop, down, after, errors: p.errs }));
   } catch (e) { stopped("C47", e); }
   await p.ctx.close();
+}
+
+/* C49 — v1.96.4. With no connection the app still opens, from its own
+   worker's cache, and says so plainly; signing in says there is no
+   connection rather than anything about the PIN; and when the signal comes
+   back the page carries on by itself, and signing in works. The only check
+   here run with service workers allowed, because the worker is the point. */
+if (want("C49")) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const pg = await ctx.newPage();
+  const errs = [];
+  let down = false;                   /* a route answers even offline, so it is told */
+  pg.on("pageerror", (e) => errs.push(String(e.message)));
+  await ctx.route("**://fonts.googleapis.com/**", (r) => r.abort());
+  await ctx.route("**://fonts.gstatic.com/**", (r) => r.abort());
+  await ctx.route("**://drolnstone.github.io/**", (r) => r.abort());
+  await ctx.route("**://*.workers.dev/**", async (route) => {
+    const req = route.request();
+    if (down) return route.abort("internetdisconnected");
+    if (req.method() === "OPTIONS") return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*" } });
+    const res = await W.default.fetch(new Request(req.url(), { method: req.method(),
+      body: req.method() === "POST" ? req.postData() : undefined }), env, { waitUntil: () => {} });
+    await route.fulfill({ status: res.status, contentType: "application/json", body: await res.text(),
+                          headers: { "access-control-allow-origin": "*" } });
+  });
+  await pg.addInitScript(`try { localStorage.setItem("coord.install.v1", "1"); } catch (e) {}`);
+  const url = "http://127.0.0.1:" + PORT + "/coord/";
+  await pg.goto(url, { waitUntil: "load" });
+  /* The first visit, online: the worker installs and takes charge. */
+  const scope = await pg.evaluate(() => Promise.race([navigator.serviceWorker.ready.then((r) => r.scope),
+    new Promise((ok) => setTimeout(() => ok("no worker"), 8000))]));
+  await pg.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 10000 }).catch(() => {});
+  await pg.waitForTimeout(800);
+
+  await ctx.setOffline(true); down = true;
+  let opened = true;
+  await pg.reload({ waitUntil: "load" }).catch(() => { opened = false; });
+  await pg.waitForTimeout(800);
+  /* Before v1.96.4 this is where it ended: the browser's own "no internet"
+     page, with none of the app on it. */
+  const page = await pg.evaluate(() => !!document.getElementById("s-sign"));
+  if (!page) {
+    check("C49", "with no connection the app opens, says so, and carries on by itself when the signal is back",
+          false, "offline, the app did not open at all (worker: " + scope + ")");
+  } else {
+  const off = await pg.evaluate(() => ({
+    sign: document.getElementById("s-sign").classList.contains("is-on"),
+    banner: document.getElementById("banner").textContent,
+    names: document.querySelectorAll("#signName option").length }));
+  await pg.screenshot({ path: OUT + "/C49-offline.png" });
+  await pg.selectOption("#signName", "Bro Arthur");
+  await pg.type("#signPin", PIN, { delay: 30 });
+  await pg.waitForTimeout(1300);
+  const tried = await pg.evaluate(() => ({ say: document.getElementById("signSay").textContent,
+    bad: document.getElementById("signSay").classList.contains("bad"),
+    sign: document.getElementById("s-sign").classList.contains("is-on") }));
+
+  await ctx.setOffline(false); down = false;
+  await pg.waitForTimeout(1500);
+  const back = await pg.evaluate(() => document.getElementById("banner").textContent);
+  await pg.fill("#signPin", "");
+  await pg.type("#signPin", PIN, { delay: 30 });
+  await pg.waitForTimeout(1500);
+  const home = await pg.evaluate(() => document.getElementById("s-home").classList.contains("is-on"));
+  check("C49", "with no connection the app opens, says so, and carries on by itself when the signal is back",
+        scope === url && opened && off.sign && /No connection just now/.test(off.banner) && off.names > 1 &&
+        /No connection just now\. Sign in once there is a signal\./.test(tried.say) && tried.bad && tried.sign &&
+        back === "" && home && !errs.length,
+        JSON.stringify({ scope, opened, off, tried, back, home, errors: errs }));
+  }
+  await ctx.close();
 }
 
 /* C48 — v1.96.2: Change your PIN in the coordinator app, the driver app's

@@ -109,8 +109,10 @@ sunday/sw.js            its offline shell  — separate on purpose, see below
 sunday/manifest.webmanifest
 do/index.html           the page an email links to. No worker, no manifest,
                         no config.js: opened once from a message and closed
-coord/index.html        the coordinator's app. No service worker: every
-                        screen is read from the live server as it opens
+coord/index.html        the coordinator's app. Every screen is read from the
+                        live server as it opens
+coord/sw.js             its offline shell, from v1.96.4: the page opens with
+                        no signal and says so. Never caches the live server
 coord/manifest.webmanifest
 Code.gs                 everything on the Apps Script side
 server/worker.js        everything on the Cloudflare side

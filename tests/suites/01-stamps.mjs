@@ -43,6 +43,8 @@ export default function (root) {
   const coord = (() => { try { return read("coord/index.html"); } catch (e) { return ""; } })();
   const coordV = () => grab(coord, /PAGE_VERSION\s*=\s*"([^"]+)"/, "PAGE_VERSION in coord/index.html");
   const coordBuildV = () => grab(coord, /BUILD\s+(v[\d.]+)/, "the BUILD comment in coord/index.html");
+  const coordSw = (() => { try { return read("coord/sw.js"); } catch (e) { return ""; } })();
+  const coordSwV = () => grab(coordSw, /CACHE\s*=\s*CACHE_PREFIX\s*\+\s*"([^"]+)"/, "CACHE in coord/sw.js");
 
 
 
@@ -152,16 +154,26 @@ export default function (root) {
   s.test("both pages are at the same version", (a) => {
     a.eq(pageV(), appV(), "the two pages deploy together and must not differ");
   });
-  /* From v1.77.0 there is a third page. It has no service worker, so no
-     cache name to agree with, but it deploys with the other two and prints
-     its number beside theirs. */
+  /* From v1.77.0 there is a third page. It deploys with the other two and
+     prints its number beside theirs; from v1.96.4 it has its own worker and
+     cache name as well. */
   s.test("the coordinator's page is at the same version as the other two", (a) => {
     a.eq(coordV(), appV(), "coord/index.html is " + coordV() + " and the driver app is " + appV());
     a.eq(coordBuildV(), coordV(), "its BUILD comment and its PAGE_VERSION disagree");
   });
-  s.test("the coordinator's page reads the live server from config.js, and never caches itself", (a) => {
+  s.test("the coordinator's page and its service worker carry the same version", (a) => {
+    a.eq(coordSwV(), coordV(), "coord/sw.js CACHE is " + coordSwV() + " and PAGE_VERSION is " + coordV());
+  });
+  /* From v1.96.4 the coordinator's page keeps ITSELF for opening with no
+     signal, so the phone shows something rather than nothing. The record
+     never comes out of that cache: the live server is another origin and
+     its worker hands every such call to the network untouched. */
+  s.test("the coordinator's page reads the live server from config.js, and caches only itself", (a) => {
     a.has(coord, '<script src="../config.js"></script>');
-    a.hasnt(coord, "serviceWorker.register", "a page that changes the record must not be served from a cache");
+    a.has(coord, 'navigator.serviceWorker.register("sw.js")', "the page registers its own worker, from its own folder");
+    a.has(coordSw, "if (url.origin !== self.location.origin) return;", "the live server must never be answered from a cache");
+    a.has(coordSw, 'freshFirst(e.request, "./index.html")', "its page falls back to its own index.html");
+    a.ok(/CACHE_PREFIX\s*=\s*"minibus-coord-"/.test(coordSw), "its cache prefix is its own, so it never deletes the other apps' caches");
     a.has(sw, 'indexOf("/coord/") !== -1) return;',
           "the driver app's worker would answer for the coordinator's page, and fall back to the driver app");
   });

@@ -31,7 +31,7 @@ const paint = process.stdout.isTTY ? (c, s) => c + s + OFF : (c, s) => s;
 
 /* ---- the files this release is made of ---------------------------------- */
 
-const PARSE_JS = ["server/worker.js", "sw.js", "sunday/sw.js", "config.js", "Code.gs"];
+const PARSE_JS = ["server/worker.js", "sw.js", "sunday/sw.js", "coord/sw.js", "config.js", "Code.gs"];
 const PARSE_JSON = ["manifest.webmanifest", "sunday/manifest.webmanifest", "coord/manifest.webmanifest"];
 /* do/index.html is the page an email links to. It is small, standalone and
    has no service worker of its own, and it is checked exactly like the other

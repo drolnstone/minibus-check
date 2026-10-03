@@ -1,7 +1,7 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
 const CACHE_PREFIX = "minibus-check-";
-const CACHE = CACHE_PREFIX + "v1.96.3";
+const CACHE = CACHE_PREFIX + "v1.96.4";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -211,9 +211,10 @@ self.addEventListener("fetch", (e) => {
   // that does not load is a far better answer here than one that loads and is
   // wrong.
   if (url.pathname.indexOf("/do/") !== -1) return;
-  // The coordinator's app, likewise. It changes the record, so it is only ever
-  // the network's copy, and its navigation must never fall back to this
-  // app's index.html, which is a different app.
+  // The coordinator's app, likewise. From v1.96.4 it has its own worker at
+  // ./coord/sw.js, which keeps its page for opening with no signal, and its
+  // navigation must never fall back to this app's index.html, which is a
+  // different app.
   if (url.pathname.indexOf("/coord/") !== -1) return;
 
   // config.js: always try the network first so endpoint and rota changes
