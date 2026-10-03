@@ -1252,7 +1252,7 @@ Save, and the live server works it out again and keeps its own answer:
 |---|---|
 | Service | twelve months from the day it was done. Due 30 September, done 14 October: next due 14 October next year |
 | MOT | tested within a month (less a day) before it ran out: it keeps its date, a year on. Earlier than that, or after it ran out: a year from the test, less a day, which is the date the certificate carries |
-| Insurance, parking permit | renewed in the two months up to its expiry: the anniversary, a year on. After it lapsed, or earlier than that (a new policy): twelve months from the renewal |
+| Insurance, parking permit | renewed in the two months up to its expiry: the anniversary, a year on. After it lapsed, or earlier than that (a new policy): a year from the renewal, less a day (a policy starting 5 March runs to 4 March) |
 
 A date typed from the certificate or the policy always wins. The app shows
 the next due date and how many days early or late it was done; how the date
