@@ -1544,6 +1544,33 @@ if (want("C46")) {
   await p.ctx.close();
 }
 
+/* C47 — v1.95.4: the back to top button the driver app and the passenger
+   page have, on the coordinator's long screens too. Not on the sign-in, not
+   until the page is well down, and one tap is the top again. */
+if (want("C47")) {
+  const p = await page(env);
+  try {
+    const onSign = await p.pg.evaluate(() => { window.scrollTo(0, 99999); window.dispatchEvent(new Event("scroll"));
+                                                 return document.getElementById("toTop").classList.contains("is-on"); });
+    await p.signIn(PIN);
+    await p.pg.click('#homeBody [data-go="runs"]');
+    await p.wait(900);
+    const atTop = await p.pg.$eval("#toTop", (b) => getComputedStyle(b).display);
+    await p.pg.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await p.wait(300);
+    const down = await p.pg.evaluate(() => ({ y: window.scrollY, shown: getComputedStyle(document.getElementById("toTop")).display }));
+    await p.shot("C47-runs-totop");
+    await p.pg.click("#toTop");
+    await p.wait(1200);
+    const after = await p.pg.evaluate(() => ({ y: window.scrollY, shown: getComputedStyle(document.getElementById("toTop")).display }));
+    check("C47", "on a long screen the back to top button shows once well down and one tap is the top; never on the sign-in",
+          !onSign && atTop === "none" && down.y > 460 && down.shown === "flex" &&
+          after.y === 0 && after.shown === "none" && !p.errs.length,
+          JSON.stringify({ onSign, atTop, down, after, errors: p.errs }));
+  } catch (e) { stopped("C47", e); }
+  await p.ctx.close();
+}
+
 check("C0", "no script error on the page throughout", me && !me.errs.length, JSON.stringify(me && me.errs));
 if (me) await me.ctx.close();
 await done();

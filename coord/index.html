@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.95.3 · THE COORDINATOR'S APP.
+<!-- BUILD v1.95.4 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -472,6 +472,18 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.bad{background:var(--stop);color:var(--stop-on)}
 .toast.top{top:calc(12px + var(--safe-t));bottom:auto}
+/* Back to top, the same button the driver app and the passenger page have.
+   The Rota, Bookings, Run record and the rest grow with every Sunday, so the
+   way back up from the bottom of one was a long thumb journey. Nothing else
+   sits in this corner here: there is no bottom bar, and the toast is in the
+   middle. */
+.totop{position:fixed;right:calc(14px + var(--safe-r));bottom:calc(20px + var(--safe-b));
+  z-index:65;width:48px;height:48px;border-radius:50%;
+  background:var(--steel);color:var(--on-accent);border:0;
+  font-size:20px;line-height:1;box-shadow:0 3px 12px rgba(20,25,32,.34);
+  display:none;align-items:center;justify-content:center;cursor:pointer}
+.totop.is-on{display:flex}
+.totop:focus-visible{outline:3px solid var(--steel);outline-offset:3px}
 
 /* ---- turn it upright, as the driver app does ----------------------------
    iOS ignores the manifest's orientation: portrait, so a phone turned on its
@@ -636,6 +648,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 </div>
 <div class="upright" aria-hidden="true"><b>Turn your phone upright.</b></div>
 
+<button class="totop" id="toTop" type="button" aria-label="Back to top">&#8593;</button>
 <div class="toast" id="toast"></div>
 
 <script src="../config.js"></script>
@@ -644,7 +657,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.95.3";
+var PAGE_VERSION = "v1.95.4";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1011,6 +1024,21 @@ function barHeight(){
   if(b && b.offsetHeight) document.documentElement.style.setProperty("--bar-h", b.offsetHeight + "px");
 }
 window.addEventListener("resize", barHeight);
+
+/* Back to top. Shown on every screen but the sign-in once the page is well
+   down, at the driver app's 460. route() calls it too, because a screen
+   change goes back to the top without always firing a scroll. */
+function syncToTop(){
+  var b = $("toTop"); if(!b) return;
+  b.classList.toggle("is-on", !$("s-sign").classList.contains("is-on") && window.pageYOffset > 460);
+}
+window.addEventListener("scroll", syncToTop, { passive: true });
+$("toTop").addEventListener("click", function(){
+  var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  try{ window.scrollTo(still ? { top: 0 } : { top: 0, behavior: "smooth" }); }
+  catch(e){ window.scrollTo(0, 0); }
+  this.classList.remove("is-on");
+});
 function back(){
   if(history.state && history.state.n > 0) history.back();
   else { history.replaceState({ n: 0 }, "", "#home"); route(); }
@@ -1035,6 +1063,7 @@ function route(){
   paint(name, arg);
   barHeight();
   window.scrollTo(0, 0);
+  syncToTop();
 }
 
 function current(){
