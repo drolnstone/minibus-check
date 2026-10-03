@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.37.0";
+const SCRIPT_VERSION = "w2.38.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1191,7 +1191,7 @@ async function getBuses(env) {
         if (!reg || !item || !rnParts(next)) return;
         (over[String(reg).toUpperCase()] = over[String(reg).toUpperCase()] || {})[item] = next;
       };
-      if (a.kind === "vlog" && b.status === "Done") set(b.reg, VLOG_ITEM[b.what], b.next);
+      if (a.kind === "vlog" && b.status === "Done" && b.moves !== false) set(b.reg, VLOG_ITEM[b.what], b.next);
       if (a.kind === "vfix") for (const t of b.targets || []) set(t.reg, t.item, t.next);
     }
   } catch (e) {}
@@ -6456,9 +6456,12 @@ const DEFECT_KINDS = ["Defect", "Advisory"];
                 certificate carries.
      insurance  renewed in the two months up to its expiry: the policy's
                 anniversary, a year on. After it lapsed, or more than two
-                months early (a new policy, not a renewal): twelve months from
-                the renewal. The anniversary is never carried further than
-                that, so a date is never shown later than the cover runs.
+                months early (a new policy, not a renewal): a year from the
+                renewal, less a day, as a policy starting 5 March runs to 4
+                March (from w2.38.0; it was the 5th, a day past the cover,
+                which matters now an expired policy stops the bus). The
+                anniversary is never carried further than that, so a date is
+                never shown later than the cover runs.
      permit     the same as insurance.
 
    A date typed from the certificate or the policy always wins, and is said
@@ -6539,9 +6542,9 @@ function rnNextDue(item, done, was, given) {
   if (prior && done <= prior && done >= rnAddMonths(prior, -2)) {
     return { next: rnAddMonths(prior, 12), how: "a year on from the old expiry" };
   }
-  return { next: rnAddMonths(done, 12), how: !prior ? "twelve months from the renewal"
-                                          : done > prior ? "twelve months from the renewal: it had lapsed"
-                                          : "twelve months from the renewal: more than two months before the old one ran out" };
+  return { next: rnYearLessDay(done), how: !prior ? "a year from the renewal, less a day"
+                                          : done > prior ? "a year from the renewal, less a day: it had lapsed"
+                                          : "a year from the renewal, less a day: more than two months before the old one ran out" };
 }
 
 /* ---- the vehicle log, on the live server --------------------------------
@@ -6687,14 +6690,22 @@ async function actVlog(env, me, act, id) {
       if (defectNames.indexOf(d.item) === -1) defectNames.push(d.item);
     }
   }
+  /* From w2.38.0 an older job recorded late (last year's MOT, say) goes on
+     the log without moving the bus's date, which a later entry has set. The
+     sheet decides the same way (vlogIsLatest). */
+  let moves = !!(item && !booking && nd.next);
+  if (moves) {
+    const latest = vlogLatestIn((await coordVehiclesView(env)).log[reg], item);
+    if (latest && latest.done > done) moves = false;
+  }
   const body = {
-    logId: "L-" + id, reg: reg, what: what, status: booking ? "Booked" : "Done",
+    logId: "L-" + id, reg: reg, what: what, status: booking ? "Booked" : "Done", moves: moves,
     done: done, bookedFor: bookedFor, was: was, early: was && done ? rnDays(was, done) : null,
     next: nd.next, how: nd.how, given: given, miles: miles, garage: vlogText(act.garage, 80), cost: cost,
     defects: defects, defectNames: defectNames, notes: vlogText(act.notes, 500)
   };
   const words = reg + ": " + what + (booking ? " booked for " + rnUk(bookedFor) : " done " + rnUk(done)) +
-                (nd.next ? ". Next due " + rnUk(nd.next) : "") +
+                (nd.next ? ". Next due " + rnUk(nd.next) + (moves ? "" : ", but a later entry stands, so the bus keeps its date") : "") +
                 (defectNames.length ? ". Put right: " + defectNames.join(", ") : "") + ".";
   return { ok: true, sunday: "", body: body, words: words };
 }

@@ -83,13 +83,13 @@ export default async function (root) {
     ["mot", "2026-04-20", "2026-05-15", "2027-05-16", "2027-05-16", "the date on the certificate"],
     ["insurance", "2026-07-01", "2026-07-08", "", "2027-07-08", "a year on from the old expiry"],
     ["insurance", "2026-07-08", "2026-07-08", "", "2027-07-08", "a year on from the old expiry"],
-    ["insurance", "2026-07-20", "2026-07-08", "", "2027-07-20", "it had lapsed"],
-    ["insurance", "2026-07-20", "", "", "2027-07-20", "twelve months from the renewal"],
+    ["insurance", "2026-07-20", "2026-07-08", "", "2027-07-19", "it had lapsed"],
+    ["insurance", "2026-07-20", "", "", "2027-07-19", "a year from the renewal, less a day"],
     ["insurance", "2026-05-08", "2026-07-08", "", "2027-07-08", "a year on from the old expiry"],
-    ["insurance", "2026-05-07", "2026-07-08", "", "2027-05-07", "more than two months before"],
-    ["insurance", "2026-03-01", "2026-07-08", "", "2027-03-01", "more than two months before"],
+    ["insurance", "2026-05-07", "2026-07-08", "", "2027-05-06", "more than two months before"],
+    ["insurance", "2026-03-01", "2026-07-08", "", "2027-02-28", "more than two months before"],
     ["permit", "2026-01-15", "2026-01-31", "", "2027-01-31", "a year on from the old expiry"],
-    ["permit", "2026-02-03", "2026-01-31", "", "2027-02-03", "it had lapsed"],
+    ["permit", "2026-02-03", "2026-01-31", "", "2027-02-02", "it had lapsed"],
     ["permit", "2026-01-15", "2026-01-31", "2026-12-31", "2026-12-31", "the date given"]
   ];
 
@@ -111,9 +111,9 @@ export default async function (root) {
     a.eq(W.rnNextDue("mot", "2026-04-15", "2026-05-15", "").next, "2027-04-14");
   });
 
-  s.test("insurance is never shown running later than it does: an early new policy is twelve months from its start", (a) => {
+  s.test("insurance is never shown running later than it does: an early new policy runs a year from its start, less a day", (a) => {
     const x = W.rnNextDue("insurance", "2026-10-01", "2027-07-08", "");
-    a.eq(x.next, "2027-10-01");
+    a.eq(x.next, "2027-09-30");
     a.ok(x.next < "2028-07-08");
   });
 
@@ -593,10 +593,10 @@ export default async function (root) {
       const r = objs(L, "Vehicle Log")[0];
       a.ok(/^H-/.test(r["Log ID"]), "no Log ID: " + r["Log ID"]);
       a.eq(r.Status, "Done");
-      a.eq(iso(L, r["Next due"]), "2027-09-29", "a new policy nine months early runs twelve months from its start");
+      a.eq(iso(L, r["Next due"]), "2027-09-28", "a new policy nine months early runs a year from its start, less a day");
       a.eq(iso(L, r["Was due"]), "2027-07-08");
       a.eq(r.Source, "Typed on the sheet");
-      a.eq(iso(L, busCell(L, "NH56 FWP", "Insurance due")), "2027-09-29");
+      a.eq(iso(L, busCell(L, "NH56 FWP", "Insurance due")), "2027-09-28");
       /* And a row that is already a record: the edit is written down. */
       const cell = sh.getRange(2, TABS["Vehicle Log"].indexOf("Garage") + 1);
       cell.setValue("Another garage");
@@ -742,6 +742,95 @@ export default async function (root) {
       a.hasnt(bad, "Bus records", bad);
       a.has([].concat(r.good || []).join(" | "), "the phones have every bus's due dates and the Vehicle Log");
     });
+  });
+
+  /* ---- from w2.38.0 / v1.102.0 / v1.95.3: three gaps closed ------------- */
+
+  s.test("an older job recorded late goes on the log without moving the bus's date, on the live server", async (a) => {
+    await atTime(THU, async () => {
+      const { env } = await fresh();
+      /* Last year's MOT, recorded as new when the Estimated row says 21/10/2025. */
+      const old = await act(env, { kind: "vlog", reg: "YS70 PWE", what: "MOT", status: "Done", done: "2024-10-18" });
+      a.ok(old.ok, JSON.stringify(old));
+      a.has(old.action && old.action.words, "a later entry stands");
+      const load = await coord(env, { op: "load" });
+      a.eq(busOf(load, "YS70 PWE").dates.mot, "2026-10-20", "an older entry moved the bus's MOT date");
+      a.ok(load.vehicles.log["YS70 PWE"].some((x) => x.done === "2024-10-18"), "the older entry is not on the log");
+      /* A newer one still moves it. */
+      const now = await act(env, { kind: "vlog", reg: "YS70 PWE", what: "MOT", status: "Done", done: "2026-09-28" });
+      a.ok(now.ok, JSON.stringify(now));
+      a.hasnt(now.action && now.action.words, "a later entry stands");
+      a.eq(busOf(await coord(env, { op: "load" }), "YS70 PWE").dates.mot, "2027-10-20");
+    });
+  });
+
+  s.test("and on the sheet: the older entry is written, the Buses tab keeps its date, History says why", async (a) => {
+    await atTime(THU, async () => {
+      const L = sheet();
+      call(L, "vlogBoot", ss(L));
+      const out = call(L, "applyCoordAction", ss(L), A("a9", "vlog",
+        vlogBody({ logId: "L-a9", done: "2024-10-18", next: "2025-10-17", how: "a year from the test, less a day" })), {});
+      a.ok(out.done && out.ok, JSON.stringify(out));
+      a.ok(objs(L, "Vehicle Log").some((r) => r["Log ID"] === "L-a9"), "the older entry is not on the tab");
+      a.eq(iso(L, busCell(L, "YS70 PWE", "MOT due")), "2026-10-20", "an older entry moved the Buses tab's date");
+      a.ok(objs(L, "History").some((x) => /later entry stands/.test(String(x.Why || x["Why"] || JSON.stringify(x)))),
+           "History does not say why the date stayed");
+      /* The latest one still moves it. */
+      call(L, "applyCoordAction", ss(L), A("a10", "vlog", vlogBody({ logId: "L-a10" })), {});
+      a.eq(iso(L, busCell(L, "YS70 PWE", "MOT due")), "2027-10-20");
+    });
+  });
+
+  s.test("a row typed on the Vehicle Log for an older job leaves the Buses tab's date", async (a) => {
+    await atTime(THU, async () => {
+      const L = sheet();
+      call(L, "vlogBoot", ss(L));
+      call(L, "busDatesAudit", ss(L), "x", "");
+      const sh = ss(L).getSheetByName("Vehicle Log");
+      const row = sh.getLastRow() + 1;
+      const col = (h) => TABS["Vehicle Log"].indexOf(h) + 1;
+      sh.getRange(row, col("Registration")).setValue("NH56 FWP");
+      sh.getRange(row, col("What")).setValue("Insurance");
+      sh.getRange(row, col("Date done")).setValue(day(2025, 3, 1));
+      call(L, "onEdit", { range: sh.getRange(row, col("Date done")), value: "01/03/2025" });
+      a.eq(iso(L, busCell(L, "NH56 FWP", "Insurance due")), "2027-07-08", "an older typed row moved the date");
+    });
+  });
+
+  s.test("Is everything working? names a bus in use with no MOT or insurance date the app can read", async (a) => {
+    await atTime(THU, async () => {
+      const L = sheet();
+      const sh = ss(L).getSheetByName("Buses");
+      sh.getRange(2, TABS["Buses"].indexOf("Insurance due") + 1).setValue("");
+      sh.getRange(3, TABS["Buses"].indexOf("MOT due") + 1).setValue("April");
+      const r = health(L, liveOf(L));
+      a.has(r.bad, "YS70 PWE Insurance due (blank)");
+      a.has(r.bad, "NH56 FWP MOT due (it reads");
+      a.has(r.bad, "never stopped");
+      a.hasnt(r.todo, "NH56 FWP MOT due", "said twice, once as a thing to do");
+      a.hasnt(r.good, "Bus records");
+      /* A bus out of use is not named. */
+      sh.getRange(2, TABS["Buses"].indexOf("Active") + 1).setValue("NO");
+      a.hasnt(health(L, liveOf(L)).bad, "YS70 PWE");
+    });
+  });
+
+  s.test("the coordinator's home says so too, for a bus in use with no MOT or insurance date", (a) => {
+    const file = "coord/index.html";
+    const src = readFileSync(join(root, file), "utf8");
+    const code = [cutBlock(src, src.indexOf("var RENEWALS = {"), file, "RENEWALS") + ";",
+                  cutBlock(src, src.indexOf("function rnParts("), file, "rnParts"),
+                  cutBlock(src, src.indexOf("function needs("), file, "needs")].join("\n");
+    const ctx = vm.createContext({ String, Number, Math, Date, JSON, Object, Array, encodeURIComponent,
+      D: { buses: [{ reg: "YS70 PWE", active: true, dates: { mot: "2027-10-20" } },
+                   { reg: "NH56 FWP", active: true, dates: { mot: "2027-04-28", insurance: "2027-07-08" } },
+                   { reg: "AB12 CDE", active: false, dates: {} }] },
+      busList: () => ctx.D.buses, esc: (x) => String(x), defectGroups: () => [] });
+    new vm.Script(code, { filename: file }).runInContext(ctx);
+    const out = JSON.stringify(ctx.needs());
+    a.has(out, "YS70 PWE: no Insurance date");
+    a.hasnt(out, "NH56 FWP", "a bus with both dates is named");
+    a.hasnt(out, "AB12 CDE", "a bus out of use is named");
   });
 
   return s;

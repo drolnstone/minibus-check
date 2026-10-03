@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.101.0";
+var SCRIPT_VERSION = "v1.102.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1040,6 +1040,8 @@ var HISTORY_HEADERS = ["When", "Who", "Where", "Registration", "What changed", "
 var VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Other"];
 var VLOG_ITEM = { "MOT": "mot", "Service": "service", "Insurance": "insurance", "Parking permit": "permit" };
 var RENEW_KEYS = ["mot", "service", "insurance", "permit"];
+/* The two that stop a bus once past, as the live server's PAPERS_STOP. */
+var PAPERS_STOP_KEYS = ["insurance", "mot"];
 
 /* ---- when each renewal next falls due ---------------------------------
    The same rules as rnNextDue in worker.js and coord/index.html. Read the
@@ -1099,9 +1101,9 @@ function rnNextDue(item, done, was, given) {
   if (prior && done <= prior && done >= rnAddMonths(prior, -2)) {
     return { next: rnAddMonths(prior, 12), how: "a year on from the old expiry" };
   }
-  return { next: rnAddMonths(done, 12), how: !prior ? "twelve months from the renewal"
-                                          : done > prior ? "twelve months from the renewal: it had lapsed"
-                                          : "twelve months from the renewal: more than two months before the old one ran out" };
+  return { next: rnYearLessDay(done), how: !prior ? "a year from the renewal, less a day"
+                                          : done > prior ? "a year from the renewal, less a day: it had lapsed"
+                                          : "a year from the renewal, less a day: more than two months before the old one ran out" };
 }
 
 /* 17/06/2027 from 2027-06-17, as every tab and email writes a day. */
@@ -1626,6 +1628,15 @@ function vlogLatest(rows, reg, item) {
   return best;
 }
 
+/* Whether the row with this id is the one the bus's date comes from: the
+   latest standing entry for that renewal. From v1.102.0. An older job
+   recorded late (last year's MOT, say) goes on the log without moving the
+   date on the Buses tab, which a later entry has already set. */
+function vlogIsLatest(ss, reg, item, id) {
+  var latest = vlogLatest(vlogRows(ss), reg, item);
+  return !latest || latest.id === id;
+}
+
 function coordVlog(ss, a, b, by) {
   var reg = String(b.reg || "").trim().toUpperCase();
   var onTab = readBusesFresh(ss).some(function (x) { return String(x.reg || "").trim().toUpperCase() === reg; });
@@ -1639,10 +1650,14 @@ function coordVlog(ss, a, b, by) {
                    done: b.done, bookedFor: b.bookedFor, was: b.was, early: b.early, next: b.next, how: b.how,
                    given: b.given, miles: b.miles, garage: b.garage, cost: b.cost, defectNames: b.defectNames,
                    notes: b.notes, by: by, source: where });
-  historyAdd(ss, [{ who: by, where: where, reg: reg, what: "Vehicle Log: " + b.what, from: "",
-                    to: vlogSummary(b), why: b.notes || "", ref: b.logId }]);
   var item = VLOG_ITEM[b.what];
-  if (b.status === "Done" && item && rnParts(b.next)) {
+  var moves = b.status === "Done" && item && rnParts(b.next) && vlogIsLatest(ss, reg, item, b.logId);
+  var older = b.status === "Done" && item && rnParts(b.next) && !moves;
+  historyAdd(ss, [{ who: by, where: where, reg: reg, what: "Vehicle Log: " + b.what, from: "",
+                    to: vlogSummary(b), ref: b.logId,
+                    why: [b.notes || "", older ? "A later entry stands, so the Buses tab keeps its date." : ""]
+                           .filter(function (x) { return x; }).join(". ") }]);
+  if (moves) {
     busDateWrite(ss, reg, item, b.next, { who: by, where: where, ref: b.logId,
       why: b.what + " done " + ukDay(b.done) + ": " + b.how });
   }
@@ -1836,11 +1851,20 @@ function vehicleHealth(ss, lv, good, bad, todo) {
       return;
     }
     var tab = busDatesNow(ss);
-    var differ = [], unreadable = [];
+    /* From v1.102.0. An expired MOT or insurance stops the bus, so a bus in
+       use with no readable date for either is never stopped, and nobody would
+       know. Said under Needs attention, not To do. */
+    var inUse = {};
+    readBusesFresh(ss).forEach(function (b) { if (b && b.active) inUse[String(b.reg || "").trim().toUpperCase()] = true; });
+    var differ = [], unreadable = [], noPapers = [];
     Object.keys(tab).forEach(function (reg) {
       var live = (lv.busDates || {})[reg] || {};
       RENEW_KEYS.forEach(function (k) {
         var t = tab[reg][k] || "";
+        if (inUse[reg] && PAPERS_STOP_KEYS.indexOf(k) !== -1 && !rnParts(t)) {
+          noPapers.push(reg + " " + RENEWALS[k].column + (t ? " (it reads \u201C" + t.slice(1) + "\u201D)" : " (blank)"));
+          if (t.charAt(0) === "?") return;
+        }
         if (t.charAt(0) === "?") { unreadable.push(reg + " " + RENEWALS[k].column); return; }
         var l = String(live[k] || "");
         if (l !== t) differ.push(reg + " " + RENEWALS[k].label + " (the tab says " + (t ? ukDay(t) : "nothing") +
@@ -1851,6 +1875,11 @@ function vehicleHealth(ss, lv, good, bad, todo) {
     vlogRows(ss).forEach(function (x) { if (x.reg) { onTab[x.reg] = (onTab[x.reg] || 0) + 1; entries++; } });
     var missing = Object.keys(onTab).filter(function (reg) { return !Number((lv.vlogHeld || {})[reg] || 0); });
 
+    if (noPapers.length) {
+      bad.push("Bus records: no date the app can read for " + noPapers.join("; ") +
+               ", so that bus is never stopped when it runs out. Type the date from the certificate or " +
+               "policy on the Buses tab, like 17/06/2027.");
+    }
     if (differ.length) {
       bad.push("Bus records: the drivers are warned from different due dates than the Buses tab: " +
                differ.join("; ") + ". Use Send everything to the live server now.");
@@ -1864,7 +1893,7 @@ function vehicleHealth(ss, lv, good, bad, todo) {
       todo.push("Bus records: " + unreadable.join(", ") + " cannot be read as a date, so no driver is " +
                 "warned about it. Type it like 17/06/2027.");
     }
-    if (!differ.length && !missing.length) {
+    if (!differ.length && !missing.length && !noPapers.length) {
       good.push("Bus records: the phones have every bus's due dates" +
                 (entries ? " and the Vehicle Log (" + entries + " entr" + (entries === 1 ? "y" : "ies") + ")" : "") + ".");
     }
@@ -1928,7 +1957,7 @@ function onEditVlog(e, sh) {
     historyAdd(ss, [{ who: who, where: "On the Vehicle Log tab", reg: reg, what: "Vehicle Log: " + what, from: "",
                       to: vlogSummary({ what: what, status: status, done: done, bookedFor: booked, next: next }),
                       why: "Typed on the sheet", ref: newId }]);
-    if (status === "Done" && item && rnParts(next)) {
+    if (status === "Done" && item && rnParts(next) && vlogIsLatest(ss, reg, item, newId)) {
       busDateWrite(ss, reg, item, next, { who: who, where: "On the Vehicle Log tab", ref: newId,
         why: what + " done " + ukDay(done) + ": " + (nd.how || "the date typed") });
     }

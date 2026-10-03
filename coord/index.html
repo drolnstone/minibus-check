@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.95.2 · THE COORDINATOR'S APP.
+<!-- BUILD v1.95.3 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -644,7 +644,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.95.2";
+var PAGE_VERSION = "v1.95.3";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1197,6 +1197,16 @@ function needs(){
                           (r.started ? ", under way." : ", authorised by " + r.by + "."), btn:"Record", data: rec });
     else if(motBookingOn(reg, calToday())) out.push({ tone:"stop", text: head + " MOT booked today.", btn:"MOT run", data:'data-do="motrun" data-reg="'+esc(reg)+'"' });
     else out.push({ tone:"stop", text: head + " Record the MOT or its booking.", btn:"Record", data: rec });
+  });
+  /* From v1.95.3: a bus in use with no MOT or insurance date is never
+     stopped when it runs out, so say so until one is typed. */
+  busList().forEach(function(b){
+    if(!b || !b.active || pap[String(b.reg || "").toUpperCase()]) return;
+    var d = b.dates || {};
+    var none = ["mot", "insurance"].filter(function(k){ return !rnParts(d[k]); })
+                                 .map(function(k){ return RENEWALS[k].label; });
+    if(none.length) out.push({ tone:"stop", text: b.reg + ": no " + none.join(" or ") + " date. Type it on the Buses tab.",
+                               go:"bus/" + encodeURIComponent(b.reg) });
   });
   var runs = (D && D.runs) || {};
   Object.keys(runs).forEach(function(rt){
@@ -2087,9 +2097,9 @@ function rnNextDue(item, done, was, given){
   if(prior && done <= prior && done >= rnAddMonths(prior, -2)){
     return { next: rnAddMonths(prior, 12), how: "a year on from the old expiry" };
   }
-  return { next: rnAddMonths(done, 12), how: !prior ? "twelve months from the renewal"
-                                          : done > prior ? "twelve months from the renewal: it had lapsed"
-                                          : "twelve months from the renewal: more than two months before the old one ran out" };
+  return { next: rnYearLessDay(done), how: !prior ? "a year from the renewal, less a day"
+                                          : done > prior ? "a year from the renewal, less a day: it had lapsed"
+                                          : "a year from the renewal, less a day: more than two months before the old one ran out" };
 }
 
 /* Whether a service done on done may be lined up with an MOT due on mot:
