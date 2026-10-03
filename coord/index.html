@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.96.5 · THE COORDINATOR'S APP.
+<!-- BUILD v1.96.6 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -104,6 +104,27 @@ input,textarea,select{font:inherit;color:inherit}
 .bar-bell svg{width:20px;height:20px;display:block}
 .bar-bell.on svg{fill:currentColor}
 .bar-bell:disabled{opacity:.5}
+/* The unread count on the bell, from v1.96.6, as the Ushers app has it. */
+.bar-bell{position:relative}
+.bell-n{position:absolute;top:-6px;right:-6px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;
+  background:var(--stop);color:var(--stop-on);font-size:11px;font-weight:700;line-height:19px;text-align:center;
+  box-shadow:0 0 0 2px var(--steel)}
+.bell-n[hidden]{display:none}
+/* Something new while the app is open, from v1.96.6: a strip at the foot.
+   The page gets that much more room at its own foot while it shows, so
+   nothing is ever stuck under it (the Ushers app's PR #20). */
+.astrip{position:fixed;left:calc(12px + var(--safe-l, 0px));right:calc(12px + var(--safe-r));bottom:calc(12px + var(--safe-b));
+  z-index:70;display:none;align-items:center;gap:10px;padding:11px 12px;border-radius:10px;
+  background:var(--steel);color:var(--on-accent);box-shadow:0 4px 16px rgba(20,25,32,.34)}
+.astrip.is-on{display:flex}
+.astrip.stop{background:var(--stop);color:var(--stop-on)}
+.astrip button.open{flex:1;min-width:0;background:none;border:0;color:inherit;text-align:left;padding:0;font:inherit;cursor:pointer}
+.astrip b{display:block;font-size:15px}
+.astrip small{display:block;font-size:13px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.astrip button.x{flex:none;width:34px;height:34px;border-radius:8px;border:1.5px solid rgba(255,255,255,.45);
+  background:none;color:inherit;font-size:18px;line-height:1;cursor:pointer}
+body.strip-on .wrap{padding-bottom:calc(var(--strip-h, 0px) + 48px + var(--safe-b))}
+body.strip-on .totop{bottom:calc(var(--strip-h, 0px) + 28px + var(--safe-b))}
 .bar-btn{flex:none;min-height:36px;padding:0 12px;border:1.5px solid rgba(255,255,255,.35);border-radius:8px;
   color:var(--dash-ink);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:14px;
   letter-spacing:.08em;text-transform:uppercase}
@@ -561,10 +582,11 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
     </button>
     <div class="bar-id"><b id="barTitle">Coordinator</b><span id="barSub">RCCG Dominion Assembly Liverpool</span></div>
-    <!-- Coordinator alerts on this phone, from v1.84.0. Hollow until they are on;
-         then filled, and a tap sends a test. -->
+    <!-- Coordinator alerts on this phone, from v1.84.0. Hollow until they are on,
+         and a tap turns them on; then filled, and from v1.96.6 a tap opens
+         Alerts, where the test is. The red number is what is unread. -->
     <button class="bar-bell" id="barBell" type="button" hidden aria-pressed="false"
-            aria-label="Coordinator alerts on this phone" title="Coordinator alerts on this phone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>
+            aria-label="Coordinator alerts on this phone" title="Coordinator alerts on this phone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="bell-n" id="bellN" hidden></span></button>
     <button class="bar-btn" id="barLock" type="button" hidden>Lock</button>
   </div>
 </header>
@@ -628,6 +650,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
   <section class="screen" id="s-pdf"><div id="pdfBody"></div></section>
   <section class="screen" id="s-activity"><div id="activityBody"></div></section>
   <section class="screen" id="s-rehearsal"><div id="rehearsalBody"></div></section>
+  <section class="screen" id="s-alerts"><div id="alertsBody"></div></section>
 </main>
 
 <div class="sheet-wrap" id="sheet" aria-hidden="true">
@@ -652,6 +675,10 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 <div class="upright" aria-hidden="true"><b>Turn your phone upright.</b></div>
 
 <button class="totop" id="toTop" type="button" aria-label="Back to top">&#8593;</button>
+<div class="astrip" id="aStrip" role="status" aria-live="polite">
+  <button class="open" type="button" id="aStripOpen"><b id="aStripTitle"></b><small id="aStripBody"></small></button>
+  <button class="x" type="button" id="aStripX" aria-label="Close">&times;</button>
+</div>
 <div class="toast" id="toast"></div>
 
 <script src="../config.js"></script>
@@ -660,7 +687,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.96.5";
+var PAGE_VERSION = "v1.96.6";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -969,6 +996,7 @@ function openAs(n, p, how){
     $("signPin").value = "";
     say("signSay","");
     D = out; touched = Date.now();
+    alertsSeen(out.alerts);
     bellLook();
     if(!location.hash || location.hash === "#sign") history.replaceState({ n: 0 }, "", "#home");
     route();
@@ -1013,7 +1041,7 @@ function say(id, t, bad){
 
 var TITLES = { home:"Coordinator", rota:"Rota", sunday:"Rota", requests:"Rota requests", bookings:"Bookings",
                defects:"Defects", buses:"Buses", bus:"Bus", drivers:"Drivers", stops:"Bus stops", runs:"Run record", look:"Have a look", report:"Have a look", pdf:"PDF reports",
-               activity:"What has been done", rehearsal:"Rehearsal", sign:"Coordinator" };
+               activity:"What has been done", rehearsal:"Rehearsal", alerts:"Alerts", sign:"Coordinator" };
 
 /* Each screen is a step in the phone's own history, so its back gesture
    works. The bar's back arrow never leaves the app: at the first step it
@@ -1101,6 +1129,7 @@ function paint(name, arg){
   if(name === "pdf") return paintPdf();
   if(name === "activity") return paintActivity();
   if(name === "rehearsal") return paintRehearsal();
+  if(name === "alerts") return paintAlerts();
 }
 
 /* Each part kept whole, and the dot goes with the part after it, so a
@@ -1123,6 +1152,7 @@ function refresh(){
   api("load", {}).then(function(out){
     if(!out || !out.ok) return;
     D = out;
+    alertsSeen(out.alerts);
     /* These two carry their own data, fetched again in the background and
        drawn when it lands, so the list does not blank while it does. */
     if(c.name === "bookings") loadBookings(c.arg || D.today);
@@ -1321,6 +1351,8 @@ function paintHome(){
        (D && D.pdf ? item("pdf", "PDF reports", "") : "") +
        item("look", "Have a look", "") +
        item("activity", "What has been done", waiting ? waiting + " on the way" : "", waiting ? "warn" : "") +
+       /* A live server from before w2.40.0 keeps no list. */
+       (ALERTS.known ? item("alerts", "Alerts", ALERTS.unread ? ALERTS.unread + " new" : "", ALERTS.unread ? "stop" : "") : "") +
        '</ul>';
   /* Signed in, so the way back carries him: to the driver app's hub, not its
      name screen. The link on the sign-in screen has no PIN to carry and stays
@@ -3395,6 +3427,8 @@ document.addEventListener("click", function(e){
   else if(d === "rehstart") rehearsalStart(false);
   else if(d === "rehover") rehearsalStart(true);
   else if(d === "rehend") rehearsalEnd();
+  else if(d === "alerttest") bellOn(true);
+  else if(d === "alertson") bellTap();
 });
 
 $("barBack").addEventListener("click", back);
@@ -3491,19 +3525,33 @@ function bellPaint(name){
   b.classList.toggle("on", BELL.on);
   b.setAttribute("aria-pressed", BELL.on ? "true" : "false");
   b.disabled = BELL.busy;
+  var n = $("bellN");
+  if(n){
+    n.hidden = !ALERTS.unread;
+    n.textContent = ALERTS.unread > 99 ? "99+" : String(ALERTS.unread || "");
+  }
+  b.setAttribute("aria-label", "Coordinator alerts on this phone" +
+    (ALERTS.unread ? ", " + ALERTS.unread + " unread" : ""));
 }
 /* On signing in: whether this phone is already signed up. Only looks: it
    never registers anything just to find out. */
 function bellLook(){
-  if(!pushAble() || !navigator.serviceWorker.getRegistration) return;
+  if(!pushAble() || !navigator.serviceWorker.getRegistration){ setTimeout(alertAskMaybe, 0); return; }
   navigator.serviceWorker.getRegistration("../").then(function(r){
     return r && r.pushManager ? r.pushManager.getSubscription() : null;
   }).then(function(sub){
     BELL.on = !!sub && Notification.permission === "granted";
     bellPaint();
+    alertAskMaybe();
   }, function(){});
 }
+/* Hollow, it turns alerts on. Filled, from v1.96.6, it opens Alerts, which
+   is where the test now is: the Ushers app's bell, which was this one's. */
 function bellTap(){
+  if(BELL.on && !iosBrowser()){ go("alerts"); return; }
+  bellOn(false);
+}
+function bellOn(test){
   if(BELL.busy || !who) return;
   if(iosBrowser()){
     toast("On an iPhone, alerts need this app on your Home Screen first.");
@@ -3514,7 +3562,7 @@ function bellTap(){
   if(Notification.permission === "denied"){
     toast("Alerts are blocked for this site in the phone's settings.", true); return;
   }
-  var was = BELL.on;
+  var was = BELL.on && !!test;
   BELL.busy = true; bellPaint();
   var endpoint = "";
   Notification.requestPermission().then(function(p){
@@ -3539,6 +3587,7 @@ function bellTap(){
     return out;
   }).then(function(){
     BELL.on = true; BELL.busy = false; bellPaint();
+    if(current().name === "alerts") paintAlerts();
     toast(was ? "A test alert is on its way to this phone." : "Coordinator alerts are on for this phone.");
   }, function(err){
     BELL.busy = false; bellPaint();
@@ -3546,6 +3595,113 @@ function bellTap(){
   });
 }
 $("barBell").addEventListener("click", bellTap);
+
+/* ---- asked once, from v1.96.6 --------------------------------------------
+   After the Ushers app's "nobody left unalerted", but asked ONCE per phone,
+   never again after Not now (the Ushers app asks again three days later,
+   and Asim did not want that here). Only on the first screen, only over
+   nothing else, only when this phone could take alerts at all and has not
+   got them. The bell is the way back for anybody who said Not now. An
+   iPhone in Safari is asked to put the app on its Home Screen first, since
+   that is the only place an iPhone takes alerts. */
+var ASK_KEY = "coord.alertask.v1";
+function alertAskMaybe(){
+  if(!pin || !D || !LIVE || BELL.on || BELL.busy) return;
+  if(current().name !== "home" && current().name !== "") return;
+  if(SHEET.open || ($("howModal") && $("howModal").classList.contains("is-on"))) return;
+  if(storeGet(ASK_KEY)) return;
+  var ios = iosBrowser();
+  if(!ios && !pushAble()) return;
+  if(!ios && Notification.permission === "denied") return;
+  storeSet(ASK_KEY, String(Date.now()));
+  openSheet({
+    eyebrow: "Coordinator",
+    title: ios ? "Add this app to your Home Screen" : "Turn on alerts on this phone?",
+    line: ios ? "An iPhone only gives alerts to an app on its Home Screen. Then tap the bell at the top."
+              : "You will be told at once when a bus is stopped or a driver asks for something. You will not be asked again: the bell at the top does it any time.",
+    keep: "Not now", go: ios ? "Show me how" : "Turn on",
+    onGo: function(){ closeSheet(); if(ios) howOpen(false); else bellOn(false); }
+  });
+}
+
+/* ---- alerts, from v1.96.6 ------------------------------------------------
+   The Ushers app's notifications, for coordinators. The live server keeps
+   the last two days of coordinator alerts and when each coordinator last
+   opened this screen; every load (every thirty seconds while the app is
+   open, at once when a phone alert lands) brings the unread count and the
+   list. Something new shows in a strip at the foot until tapped or closed. */
+var ALERTS = { known: false, unread: 0, list: [] };
+var STRIP_KEY = "coord.alertstrip.v1";
+
+function alertsSeen(a){
+  if(!a || !Array.isArray(a.list)) return;
+  ALERTS.known = true;
+  ALERTS.unread = Number(a.unread) || 0;
+  ALERTS.list = a.list;
+  bellPaint();
+  appBadge(ALERTS.unread);
+  var top = a.list[0];
+  if(current().name === "alerts"){ if(ALERTS.unread) alertsRead(); return; }
+  if(top && top.unread && storeGet(STRIP_KEY) !== top.id) stripShow(top);
+}
+function appBadge(n){
+  try{
+    if(n > 0 && navigator.setAppBadge) navigator.setAppBadge(n).catch(function(){});
+    else if(!n && navigator.clearAppBadge) navigator.clearAppBadge().catch(function(){});
+  }catch(e){}
+}
+function alertsRead(){
+  ALERTS.unread = 0;
+  bellPaint(); appBadge(0); stripHide();
+  api("alerts", { read: true }).then(function(out){
+    if(out && out.alerts){ ALERTS.unread = Number(out.alerts.unread) || 0; bellPaint(); }
+  }, function(){});
+}
+
+function stripShow(m){
+  var st = $("aStrip");
+  storeSet(STRIP_KEY, m.id);
+  $("aStripTitle").textContent = m.title;
+  $("aStripBody").textContent = m.body || "";
+  st.classList.toggle("stop", m.kind === "stopped" && !!m.urgent);
+  st.classList.add("is-on");
+  document.documentElement.style.setProperty("--strip-h", st.offsetHeight + "px");
+  document.body.classList.add("strip-on");
+}
+function stripHide(){
+  $("aStrip").classList.remove("is-on");
+  document.body.classList.remove("strip-on");
+}
+$("aStripOpen").addEventListener("click", function(){ stripHide(); if(pin && D) go("alerts"); });
+$("aStripX").addEventListener("click", stripHide);
+
+function paintAlerts(){
+  var h = '';
+  if(!ALERTS.known){
+    $("alertsBody").innerHTML = '<div class="card"><p class="tiny" style="margin:0">The live server is ' +
+      esc(lastSeen.server || "an older copy") + '. Alerts are listed here from w2.40.0.</p></div>';
+    return;
+  }
+  if(!ALERTS.list.length) h += '<div class="card"><p class="tiny" style="margin:0">No alerts in the last two days.</p></div>';
+  else h += '<ul class="list">' + ALERTS.list.map(function(m){
+    var tone = m.kind === "stopped" ? "stop" : (m.kind === "authorised" ? "pass" : "warn");
+    return '<li>' + (m.unread ? '<span class="tag ' + tone + '">New</span> ' : '') + '<b>' + esc(m.title) + '</b>' +
+           (m.body ? '<br>' + esc(m.body) : '') + '<small>' + esc(when(m.at)) + '</small></li>';
+  }).join("") + '</ul>';
+  /* What this phone does about them. */
+  if(BELL.on) h += '<button class="btn btn-ghost btn-wide" type="button" data-do="alerttest" style="margin-top:12px">Send a test alert to this phone</button>';
+  else if(pushAble() || iosBrowser()) h += '<button class="btn btn-main btn-wide" type="button" data-do="alertson" style="margin-top:12px">Turn on alerts</button>';
+  $("alertsBody").innerHTML = h;
+  if(ALERTS.unread) alertsRead();
+}
+
+/* The driver app's worker tells every open page when a coordinator alert
+   lands, so the bell does not wait for the next thirty-second look. */
+try{
+  if("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", function(e){
+    if(e && e.data && e.data.type === "minibus:coordalert") refresh();
+  });
+}catch(e){}
 
 /* ---- how to put it on a phone, from v1.83.0 ------------------------------
    The driver app's, word for word, so the three apps give one set of steps.

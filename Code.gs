@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.103.0";
+var SCRIPT_VERSION = "v1.104.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -13697,8 +13697,43 @@ function decidePlain(url, minutes) {
 function tellCoordinatorPhones(alert) {
   try {
     if (!WORKER_URL || !alert || !alert.id || !alert.title) return;
-    workerCall("coordAlert", { alert: alert });
+    var out = workerCall("coordAlert", { alert: alert });
+    if (out && out.ok && out.unalerted && out.unalerted.length) emailUnalerted(alert, out.unalerted);
   } catch (err) {}
+}
+
+/* NOBODY LEFT UNALERTED. From v1.104.0, after the Ushers app.
+
+   A coordinator who has never turned alerts on, on any phone, heard of a
+   stopped bus only if they were the one COORDINATOR_EMAIL names. The live
+   server answers each alert with the names of every coordinator it could
+   not wake (never for the same alert twice, so this is once each), and
+   they are emailed the alert's own short words, at once. COORDINATOR_EMAIL
+   has the full email already and is not sent this as well. Nobody without
+   an Email on the Drivers tab, and never for the menu's test. */
+function emailUnalerted(alert, names) {
+  if (!alert || alert.kind === "test") return 0;
+  var want = {};
+  (names || []).forEach(function (n) { want[String(n || "").trim().toLowerCase()] = true; });
+  var skip = String(COORDINATOR_EMAIL || "").trim().toLowerCase();
+  var sent = 0;
+  readDrivers(SpreadsheetApp.getActive()).forEach(function (d) {
+    var to = String(d.email || "").trim();
+    if (!d.active || !to || !want[String(d.name || "").trim().toLowerCase()]) return;
+    if (to.toLowerCase() === skip) return;
+    try {
+      sendMail({
+        to: to,
+        subject: String(alert.title).substring(0, 140),
+        body: alert.title + (alert.body ? "\n" + alert.body : "") + "\n\n" +
+              "Open the coordinator app for the details.\n\n" +
+              "You were emailed because alerts are not on for you on any phone. To be told " +
+              "on your phone instead, open the coordinator app and tap the bell at the top."
+      });
+      sent++;
+    } catch (err) {}
+  });
+  return sent;
 }
 
 /* The phone's version of notifyCheck's subject, for the same five cases. */

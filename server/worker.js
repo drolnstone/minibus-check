@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.39.0";
+const SCRIPT_VERSION = "w2.40.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5478,13 +5478,81 @@ async function handleCoordAlert(env, body) {
   while (seen.length > 200) seen.shift();
   await cachePut(env, COORD_SEEN_KEY, seen).run();
 
+  try { await coordLogAdd(env, msg); } catch (e) { /* the phones still go */ }
+  let unalerted = [];
+  try { if (msg.kind !== "test") unalerted = await coordUnalerted(env, msg.not); } catch (e) {}
+
   if (!msg.urgent && quietNow(await passengerRules(env))) {
     const held = ((await cacheGet(env, COORD_HELD_KEY)) || []).slice(-49);
     held.push(msg);
     await cachePut(env, COORD_HELD_KEY, held).run();
-    return json({ ok: true, held: true });
+    return json({ ok: true, held: true, unalerted });
   }
-  return json({ ok: true, sent: await deliverCoordAlert(env, msg) });
+  return json({ ok: true, sent: await deliverCoordAlert(env, msg), unalerted });
+}
+
+/* ---- WHAT THE COORDINATOR'S APP SHOWS, from w2.40.0 ----------------------
+
+   Copied from the Ushers app's bell (its PR #18). The box above is per
+   phone and is emptied as each phone reads it, so it cannot say what a
+   coordinator has not yet looked at. This keeps the last two days of
+   coordinator alerts in one list, and for each coordinator the moment they
+   last opened Alerts in the coordinator's app. Whatever came after that,
+   and was not about them, is their unread count: on the bell, on the
+   first screen, and on the home-screen icon where the phone allows it.
+
+   Logged as they arrive, held or not, so a coordinator looking at the app
+   in the quiet hours sees what is waiting even though no phone was woken. */
+const COORD_LOG_KEY = "calert_log";
+const COORD_LOG_MAX = 30;
+const COORD_LOG_AGE_MS = 48 * 3600 * 1000;
+const coordReadKey = (name) => "calert_read:" + String(name || "").trim().toLowerCase();
+
+async function coordLogAdd(env, msg) {
+  const log = ((await cacheGet(env, COORD_LOG_KEY)) || [])
+    .filter((m) => m && Date.now() - (Number(m.at) || 0) < COORD_LOG_AGE_MS);
+  log.push({ id: msg.id, kind: msg.kind, title: msg.title, body: msg.body, reg: msg.reg,
+             urgent: msg.urgent, not: msg.not, at: msg.at });
+  while (log.length > COORD_LOG_MAX) log.shift();
+  await cachePut(env, COORD_LOG_KEY, log).run();
+}
+
+/* One coordinator's view of the list, newest first. The menu's test alert
+   is left out: it proves the phones and is not news. */
+async function coordAlertsFor(env, name) {
+  const me = String(name || "").trim().toLowerCase();
+  const read = Number(await cacheGet(env, coordReadKey(me))) || 0;
+  const list = ((await cacheGet(env, COORD_LOG_KEY)) || [])
+    .filter((m) => m && m.kind !== "test" && Date.now() - (Number(m.at) || 0) < COORD_LOG_AGE_MS)
+    .filter((m) => (m.not || []).map((n) => String(n || "").trim().toLowerCase()).indexOf(me) === -1)
+    .reverse()
+    .map((m) => ({ id: m.id, kind: m.kind || "", title: m.title, body: m.body || "", at: m.at,
+                   urgent: !!m.urgent, unread: (Number(m.at) || 0) > read }));
+  return { unread: list.filter((m) => m.unread).length, list: list.slice(0, 20) };
+}
+
+/* EVERY COORDINATOR WITH ALERTS ON NO PHONE, by name, for the sheet to
+   email. From w2.40.0, after the Ushers app's "nobody left unalerted". The
+   same question the waking asks (DRIVER_SUB_MATCH), so a coordinator is
+   emailed exactly when no phone of theirs was going to be woken. Whoever the
+   alert is about is left out, as they are from the phones. */
+async function coordUnalerted(env, not) {
+  const rules = await authRules(env);
+  if (!rules.roles.length) return [];
+  const marks = rules.roles.map(() => "?").join(",");
+  const { results } = await env.DB.prepare(
+    "SELECT name FROM drivers WHERE active = 1 AND lower(trim(role)) IN (" + marks + ") ORDER BY ord, name"
+  ).bind(...rules.roles).all();
+  const skip = (Array.isArray(not) ? not : []).map((n) => String(n || "").trim().toLowerCase());
+  const out = [];
+  for (const r of results || []) {
+    const name = String(r.name || "");
+    if (!name || skip.indexOf(name.trim().toLowerCase()) !== -1) continue;
+    const hit = await env.DB.prepare(
+      "SELECT 1 AS n FROM push_subs WHERE " + DRIVER_SUB_MATCH + " LIMIT 1").bind(name).first();
+    if (!hit) out.push(name);
+  }
+  return out;
 }
 
 /* On the clock: whatever the quiet hours held, once they are over. Taken off
@@ -5554,7 +5622,15 @@ async function pushWhat(env, endpoint) {
      who is not driving today would otherwise be told "Nothing outstanding". */
   try {
     const c = await coordAlertNext(env, endpoint);
-    if (c) return c;
+    if (c) {
+      /* The unread count, for the home-screen icon, from w2.40.0. */
+      try {
+        const own = await env.DB.prepare("SELECT driver FROM push_subs WHERE endpoint=?")
+          .bind(String(endpoint || "")).first();
+        if (own && own.driver) c.unread = (await coordAlertsFor(env, own.driver)).unread;
+      } catch (e) {}
+      return c;
+    }
   } catch (e) { /* the ordinary answer, below */ }
 
   const sub = await env.DB.prepare(
@@ -9048,7 +9124,18 @@ async function handleCoord(env, body) {
   catch (e) { return { body: { ok: false, error: "The live server could not open its coordinator table." } }; }
   const me = auth.me;
   const op = String((body && body.op) || "load");
-  if (op === "load") return { body: await coordLoad(env, me) };
+  if (op === "load") {
+    const out = await coordLoad(env, me);
+    /* Alerts ride on every load, which the app asks for every thirty
+       seconds while it is open: that is how its bell keeps listening. */
+    if (out && out.ok) { try { out.alerts = await coordAlertsFor(env, me.name); } catch (e) {} }
+    return { body: out };
+  }
+  /* Alerts opened: everything up to now is read. From w2.40.0. */
+  if (op === "alerts") {
+    if (body.read) await cachePut(env, coordReadKey(me.name), Date.now()).run();
+    return { body: { ok: true, alerts: await coordAlertsFor(env, me.name) } };
+  }
   if (op === "bookings") return { body: await coordBookings(env, me, body.sunday) };
   if (op === "runs") return { body: await coordRuns(env, me, body.sunday) };
   if (op === "report") return { body: await coordReport(env, me, String(body.name || "")) };

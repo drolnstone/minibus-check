@@ -1,7 +1,7 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
 const CACHE_PREFIX = "minibus-check-";
-const CACHE = CACHE_PREFIX + "v1.96.5";
+const CACHE = CACHE_PREFIX + "v1.96.6";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -289,6 +289,21 @@ self.addEventListener("push", (e) => {
       badge: "./icon-192.png",
       data: { url: say.url || "./" }
     });
+
+    /* A coordinator's alert, from v1.96.6, after the Ushers app: the unread
+       count on the home-screen icon where the phone allows it, and any open
+       copy of the coordinator's app told at once, so its bell and strip do
+       not wait for its next look. Nothing for a driver's own alerts. */
+    if (String(say.tag || "").indexOf("c|") === 0) {
+      try {
+        const n = Number(say.unread);
+        if (n > 0 && self.navigator.setAppBadge) await self.navigator.setAppBadge(n);
+      } catch (err) {}
+      try {
+        const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        all.forEach((c) => c.postMessage({ type: "minibus:coordalert" }));
+      } catch (err) {}
+    }
   })());
 });
 
