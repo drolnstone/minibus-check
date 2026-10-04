@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.104.0";
+var SCRIPT_VERSION = "v1.105.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -310,7 +310,35 @@ function sendMail(o) {
   var name = senderName();
   if (name && !m.name) m.name = name;
   if (COORDINATOR_EMAIL && !m.replyTo) m.replyTo = COORDINATOR_EMAIL;
-  return MailApp.sendEmail(m);
+  var out = MailApp.sendEmail(m);
+  noteSentMail(m);
+  return out;
+}
+
+/* WHAT WENT OUT, from v1.105.0 (Asim): each email, once sent, is listed on
+   the coordinator app's Alerts screen with who it went to, by name where
+   the Drivers tab knows the address. Never allowed to fail the email. */
+function noteSentMail(m) {
+  try {
+    if (!WORKER_URL || !m || !m.subject) return;
+    var byMail = {};
+    try {
+      readDrivers(SpreadsheetApp.getActive()).forEach(function (d) {
+        var e = String(d.email || "").trim().toLowerCase();
+        if (e && d.name && !byMail[e]) byMail[e] = String(d.name);
+      });
+    } catch (err) {}
+    var to = [];
+    [m.to, m.cc, m.bcc].forEach(function (list) {
+      String(list || "").split(/[,;]/).forEach(function (a) {
+        var e = a.replace(/^.*</, "").replace(/>.*$/, "").trim();
+        if (!e) return;
+        var who = byMail[e.toLowerCase()] || e;
+        if (to.indexOf(who) === -1) to.push(who);
+      });
+    });
+    workerCall("sentMail", { mail: { subject: String(m.subject).substring(0, 140), to: to } });
+  } catch (err) {}
 }
 
 var CHECKS_SHEET   = "Checks";

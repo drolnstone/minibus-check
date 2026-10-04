@@ -1,55 +1,61 @@
 MINIBUS
 =======
-  pages v1.97.1 · server w2.43.0 · sheet v1.104.0
+  pages v1.98.0 · server w2.45.0 · sheet v1.105.0
 
-A coordinator with both apps is alerted once, not twice (Asim):
+What went out shows on the coordinator app's Alerts list (Asim):
 
-  - Coordinator alerts go to the coordinator app when the person has it,
-    and to the driver app only when they do not.
-  - A driver's own reminders (set off, End trip, Sunday morning) go to the
-    driver app only.
-  - Each app tells the server which one it is when it opens, so the
-    doubles stop once both apps have been opened after the merge.
+  - Every alert a passenger's or a driver's phone is sent, one line per
+    message, with who it went to (drivers by name, passengers as a count
+    of phones and their stops).
+  - Every email the sheet sends, marked Email, with who it went to.
+  - Marked Sent or Email. Never counted on the bell, never in the strip,
+    never a push of its own.
 
-This follows v1.97.0 · w2.42.0 · v1.104.0 (no End this run in the driver
-app).
+This follows #50 (w2.44.0). If #50 is merged first, this one carries it.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.97.0         v1.97.1
-  Worker  w2.42.0         w2.43.0
-  Code.gs v1.104.0        v1.104.0  (no paste)
+  Pages   v1.97.1         v1.98.0
+  Worker  w2.43.0/44.0    w2.45.0
+  Code.gs v1.104.0        v1.105.0
 
 
 IN THIS ORDER
 -------------
 
 1. WORKER. Paste the whole file into the Cloudflare editor and deploy:
-   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/project-thread-syc8i0/server/worker.js
-   No new variables. The database gains one column by itself.
+   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/sent-messages-on-alerts-b6wwbo/server/worker.js
+   No new variables.
 
-2. Merge the pull request.
+2. CODE.GS. Paste the whole file into Apps Script, save, then Deploy,
+   Manage deployments, edit, New version, Deploy:
+   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/sent-messages-on-alerts-b6wwbo/Code.gs
+
+3. Merge the pull request.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.97.1 · server w2.43.0 · sheet
-   v1.104.0 .
+A. The foot of all three apps reads  app v1.98.0 · server w2.45.0 · sheet
+   v1.105.0 .
 
-B. Open both apps once. The next coordinator alert arrives on the phone
-   once, from the coordinator app.
+B. The next alert or email to go out shows on Alerts in the coordinator
+   app.
 
 
 WHAT CHANGED
 ------------
 
-1. server/worker.js: push_subs.app (driver, coord, both), the pushapp
-   action, coordinatorSubs and wakeDrivers. server/schema.sql: the column.
+1. server/worker.js: sent_log, sentNote, sentPushes, the sentMail action;
+   wake() and the emergency-contact driver alerts note what they sent; the
+   Alerts list carries both.
 
-2. index.html and coord/index.html: each says which app holds the phone's
-   alerts, on sign-up and on every open.
+2. Code.gs: sendMail tells the live server each email it sent (noteSentMail).
 
-3. sw.js, coord/sw.js, sunday/: the version only.
+3. coord/index.html: Sent and Email tags on the list; the strip shows the
+   newest unread alert, never a sent line.
 
-4. Tests: tests/suites/52-one-alert-per-person.mjs.
+4. index.html, sw.js, coord/sw.js, sunday/: the version only.
+
+5. Tests: tests/suites/53-what-went-out.mjs.

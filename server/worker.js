@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.43.0";
+const SCRIPT_VERSION = "w2.45.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -200,7 +200,7 @@ const tokenOf = (env) => (env && env.TOKEN) || TOKEN_FALLBACK;
    keeps working. "Is the live server working?" says when it is missing. */
 const sheetTokenOf = (env) => String((env && env.SHEET_TOKEN) || "");
 const SHEET_ONLY_ACTIONS = ["ping", "mint", "outcome", "cleartrips", "rehearsal", "sync",
-                            "coordAlert", "drain", "drained", "sheetbookings"];
+                            "coordAlert", "drain", "drained", "sheetbookings", "sentMail"];
 function sheetTokenOk(env, body) {
   const want = sheetTokenOf(env);
   return !want || String((body && body.sheetToken) || "") === want;
@@ -4607,10 +4607,11 @@ async function pushOne(env, sub, keys) {
    twice. It is stored against the subscription rather than counted centrally,
    because the question is always "has THIS person been told THIS" and never
    "how many went out". */
-async function wake(env, subs, tag) {
+async function wake(env, subs, tag, where) {
   if (!subs || !subs.length) return 0;
   const keys = await vapidKeys(env);
   let sent = 0;
+  const heard = [];
   for (const s of subs) {
     if (tag && s.last === tag) continue;
     if (tag) {
@@ -4622,8 +4623,11 @@ async function wake(env, subs, tag) {
         .bind(tag, s.id, tag).run();
       if (r && r.meta && typeof r.meta.changes === "number" && r.meta.changes === 0) continue;
     }
-    if (await pushOne(env, s, keys)) sent++;
+    if (await pushOne(env, s, keys)) { sent++; heard.push(s); }
   }
+  /* On the coordinator's Alerts list, from w2.45.0. Never the reason a
+     send fails. */
+  if (heard.length) { try { await sentPushes(env, tag, heard, where); } catch (e) {} }
   return sent;
 }
 
@@ -4758,7 +4762,7 @@ async function wakeCancelled(env) {
       for (const sub of await subsAtStop(env, key, s.id)) {
         if (seen[sub.id]) continue;
         seen[sub.id] = 1;
-        n += await wake(env, [sub], "off|" + key + "|" + route);
+        n += await wake(env, [sub], "off|" + key + "|" + route, { route, stop: s.stop });
       }
     }
   }
@@ -4809,7 +4813,7 @@ async function wakeNotLeft(env) {
       for (const sub of await subsAtStop(env, key, s.id)) {
         if (seen[sub.id]) continue;
         seen[sub.id] = 1;
-        n += await wake(env, [sub], "late|" + key + "|" + route);
+        n += await wake(env, [sub], "late|" + key + "|" + route, { route, stop: s.stop });
       }
     }
   }
@@ -4820,7 +4824,8 @@ async function wakeNotLeft(env) {
 async function wakeDeparture(env, key, route, stops) {
   let n = 0;
   for (const s of stops.filter((x) => x.route === route && !x.arrival)) {
-    n += await wake(env, await subsAtStop(env, key, s.id), "left|" + key + "|" + route);
+    n += await wake(env, await subsAtStop(env, key, s.id), "left|" + key + "|" + route,
+                  { route, stop: s.stop });
   }
   return n;
 }
@@ -4910,7 +4915,8 @@ async function wakeAfterTap(env, key, route, all, stops, stopId, marked) {
          twice, and the remembered estimate is written whether or not the push
          itself gets through — a phone that is unreachable has still had its
          chance at this message and should not collect a backlog of them. */
-      const sent = await wake(env, [sub], "next|" + key + "|" + line[i].id + "|" + at);
+      const sent = await wake(env, [sub], "next|" + key + "|" + line[i].id + "|" + at,
+                             { route, stop: line[i].stop });
       if (mins !== null) {
         try {
           await env.DB.prepare("UPDATE push_subs SET last_eta=? WHERE id=?")
@@ -4923,7 +4929,8 @@ async function wakeAfterTap(env, key, route, all, stops, stopId, marked) {
 
   for (let i = 0; i < at; i++) {
     if (marked[line[i].id]) continue;
-    n += await wake(env, await subsAtStop(env, key, line[i].id), "past|" + key + "|" + line[i].id);
+    n += await wake(env, await subsAtStop(env, key, line[i].id), "past|" + key + "|" + line[i].id,
+                    { route, stop: line[i].stop });
   }
   return n;
 }
@@ -5079,7 +5086,8 @@ async function wakeMorning(env) {
   for (const route of routeNames(stops)) {
     if (off.indexOf(route) !== -1) continue;
     for (const s of stops.filter((x) => x.route === route && !x.arrival)) {
-      n += await wake(env, await subsAtStop(env, key, s.id), "morn|" + key + "|" + route);
+      n += await wake(env, await subsAtStop(env, key, s.id), "morn|" + key + "|" + route,
+                      { route, stop: s.stop });
     }
   }
   return n;
@@ -5631,7 +5639,123 @@ async function coordAlertsFor(env, name) {
     .reverse()
     .map((m) => ({ id: m.id, kind: m.kind || "", title: m.title, body: m.body || "", at: m.at,
                    urgent: !!m.urgent, unread: (Number(m.at) || 0) > read }));
-  return { unread: list.filter((m) => m.unread).length, list: list.slice(0, 20) };
+  const unread = list.filter((m) => m.unread).length;
+  const all = list.slice(0, 20).concat(await sentList(env))
+    .sort((x, y) => (Number(y.at) || 0) - (Number(x.at) || 0));
+  return { unread, list: all.slice(0, 80) };
+}
+
+/* ---- WHAT WENT OUT, from w2.45.0 (Asim) ----------------------------------
+
+   Every alert a passenger's or a driver's phone was sent, and every email
+   the sheet sends, listed on the coordinator's Alerts screen as it goes, so
+   a coordinator can see what was sent without having to ask. One line per
+   message: the same message to more phones within the hour adds to its
+   line. Never unread, so never on the bell's count, in the strip or a push
+   of its own. Coordinator alerts are on the list already, as themselves.
+
+   Taken after the push service has accepted the push, so a phone that
+   could not be reached is not listed as told. */
+const SENT_LOG_KEY = "sent_log";
+const SENT_LOG_MAX = 80;
+const SENT_JOIN_MS = 60 * 60000;
+
+async function sentNote(env, n) {
+  const now = Date.now();
+  const log = ((await cacheGet(env, SENT_LOG_KEY)) || [])
+    .filter((m) => m && now - (Number(m.at) || 0) < COORD_LOG_AGE_MS);
+  let e = log.find((m) => m.g === n.g && now - (Number(m.first) || 0) < SENT_JOIN_MS);
+  if (!e) {
+    e = { id: "s" + now.toString(36) + Math.random().toString(36).slice(2, 6), g: n.g,
+          title: String(n.title || "").slice(0, 140), mail: !!n.mail, first: now, at: now,
+          phones: 0, who: [], stops: [] };
+    log.push(e);
+  }
+  e.at = now;
+  e.phones = (Number(e.phones) || 0) + (Number(n.phones) || 0);
+  const add = (into, xs) => {
+    for (const x of xs || []) {
+      const v = String(x || "").trim();
+      if (v && into.length < 40 && into.indexOf(v) === -1) into.push(v);
+    }
+  };
+  add(e.who, n.who);
+  add(e.stops, n.stops);
+  log.sort((x, y) => (Number(x.at) || 0) - (Number(y.at) || 0));
+  while (log.length > SENT_LOG_MAX) log.shift();
+  await cachePut(env, SENT_LOG_KEY, log).run();
+}
+
+/* The words for one line, after the push's own title (pushWhat), which is
+   worked out on each phone and so cannot be copied from here. */
+function sentTitle(tag, driver, where) {
+  const p = String(tag || "").split("|");
+  const k = p[0];
+  if (driver) {
+    const rt = p[2] || "";
+    if (k === "off") return rt + " is not running today";
+    if (k === "stopped") return rt + " was stopped by today\u2019s check";
+    if (k === "clear") return rt + " is authorised to run";
+    if (k === "go") return rt + ": Time to set off";
+    if (k === "starta" || k === "startb") return rt + ": The bus has not gone out";
+    if (k === "enda" || k === "endb") return rt + ": End the trip";
+    if (k === "duty") return rt + ": You are driving today";
+    return "Driver alert";
+  }
+  const route = (where && where.route) || "";
+  const pre = (t) => (route ? route + ": " : "") + t;
+  if (k === "off") return pre("No bus today");
+  if (k === "late") return pre("No word yet that the bus has left church");
+  if (k === "left") return pre("The bus has left church");
+  if (k === "next") return pre("The bus is on its way");
+  if (k === "past") return pre("The bus has gone past");
+  if (k === "morn") return pre("Your bus today");
+  if (k === "book") return "Book your seat for Sunday";
+  if (k === "booked") return "You are booked for Sunday";
+  return pre("Passenger alert");
+}
+
+async function sentPushes(env, tag, subs, where) {
+  const p = String(tag || "").split("|");
+  const drivers = subs.filter((s) => s.role === "driver");
+  const riders = subs.filter((s) => s.role !== "driver");
+  /* Each stop tapped is its own line of "on its way"; everything else is
+     one line for the route, or for the reminder. */
+  const g = p[0] + "|" + (p[1] || "") + "|" + ((where && where.route) || p[2] || "") +
+            (p[0] === "next" ? "|" + (p[4] || "") : "");
+  if (drivers.length) {
+    await sentNote(env, { g: "d|" + g, title: sentTitle(tag, true, where),
+                          who: drivers.map((s) => s.driver) });
+  }
+  if (riders.length) {
+    await sentNote(env, { g: "p|" + g, title: sentTitle(tag, false, where), phones: riders.length,
+                          stops: where && where.stop ? [where.stop] : [] });
+  }
+}
+
+/* An email the sheet has just sent (Code.gs sendMail). */
+async function handleSentMail(env, body) {
+  const m = (body && body.mail) || {};
+  const subject = String(m.subject || "").trim();
+  if (!subject) return json({ ok: false, error: "no subject" });
+  const to = (Array.isArray(m.to) ? m.to : []).map((x) => String(x || "").slice(0, 80));
+  await sentNote(env, { g: "m|" + subject, title: subject, mail: true, who: to });
+  return json({ ok: true });
+}
+
+async function sentList(env) {
+  return ((await cacheGet(env, SENT_LOG_KEY)) || [])
+    .filter((m) => m && Date.now() - (Number(m.at) || 0) < COORD_LOG_AGE_MS)
+    .map((m) => {
+      const n = Number(m.phones) || 0;
+      const stops = (m.stops || []).join(", ");
+      const who = (m.who || []).join(", ");
+      const to = m.mail ? "Email to " + (who || "the coordinator") + "."
+        : who ? "To " + who + "."
+        : "To " + n + " passenger phone" + (n === 1 ? "" : "s") + (stops ? ": " + stops : "") + ".";
+      return { id: m.id, kind: "sent", mail: !!m.mail, title: m.title, body: to, at: m.at,
+               urgent: false, unread: false };
+    });
 }
 
 /* EVERY COORDINATOR WITH ALERTS ON NO PHONE, by name, for the sheet to
@@ -8404,6 +8528,7 @@ async function contactTellDrivers(env, me, msg, d) {
   const one = Object.assign({}, msg, { id: msg.id + "-d", body: d.body, url: "./" });
   const keys = await vapidKeys(env);
   let sent = 0;
+  const heard = [];
   for (const n of names) {
     for (const sub of await subsWhere(env, DRIVER_SUB_MATCH, [n])) {
       const box = ((await cacheGet(env, coordBoxKey(sub.endpoint))) || [])
@@ -8411,8 +8536,11 @@ async function contactTellDrivers(env, me, msg, d) {
       box.push(one);
       while (box.length > COORD_BOX_MAX) box.shift();
       await cachePut(env, coordBoxKey(sub.endpoint), box).run();
-      if (await pushOne(env, sub, keys)) sent++;
+      if (await pushOne(env, sub, keys)) { sent++; if (heard.indexOf(n) === -1) heard.push(n); }
     }
+  }
+  if (heard.length) {
+    try { await sentNote(env, { g: "contact|" + one.id, title: one.title, who: heard }); } catch (e) {}
   }
   return sent;
 }
@@ -9535,6 +9663,8 @@ export default {
         if (action === "sync") return await handleSync(env, body);
         /* An alert Apps Script has just emailed, for the coordinators' phones. */
         if (action === "coordAlert") return await handleCoordAlert(env, body);
+        /* An email the spreadsheet has just sent, for the Alerts list. */
+        if (action === "sentMail") return await handleSentMail(env, body);
         if (action === "drain") return await handleDrain(env, body);
         if (action === "drained") return await handleDrained(env, body);
         /* A booking edited by hand on the Bus Bookings tab. Token checked. */
