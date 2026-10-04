@@ -413,7 +413,7 @@ if (want("C7")) {
   await me.shot("C7-bookings-after");
   check("C7", "bookings show the numbers to ring; one is cancelled and one made for somebody who rang",
         tel.indexOf("tel:07700900123") !== -1 && left === 1 && made && made.seats === 2 && made.phone === "07700900999" &&
-        /Bro Arthur/.test(made.note) && /By phone/i.test(after) && label === "Book 2 seats" && oneLine,
+        /Bro Arthur/.test(made.note) && /By Bro Arthur/.test(after) && !/By phone/i.test(after) && label === "Book 2 seats" && oneLine,
         "tel " + JSON.stringify(tel) + ", cancelled " + left + ", made " + JSON.stringify(made) + ", label '" + label + "'");
   check("C7a", "the booked stops come first, the empty ones a tap away, and the book button at the top",
         layout.bookFirst && layout.empty === 0 && layout.shown === 4 && /stops with nobody booked/.test(layout.more) &&

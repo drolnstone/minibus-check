@@ -1,0 +1,46 @@
+MINIBUS
+=======
+  pages v1.100.2 · server w2.45.0 · sheet v1.105.0
+
+Coordinator app, Bookings (Asim): a seat booked in the coordinator app is
+marked with the name of the coordinator who booked it, "By Bro Asim",
+instead of "By phone".
+
+Pages only.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.100.1        v1.100.2  (by the merge)
+  Worker  w2.45.0         w2.45.0  (no paste)
+  Code.gs v1.105.0        v1.105.0  (no paste)
+
+
+IN THIS ORDER
+-------------
+
+1. Merge this pull request. Nothing to paste.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.100.2 · server w2.45.0 · sheet
+   v1.105.0 .
+
+B. Coordinator app, Bookings: the seat you booked for a passenger now reads
+   "By Bro Asim" (your name as on the Drivers tab) where it said "By phone".
+
+
+WHAT CHANGED
+------------
+
+1. coord/index.html: the badge takes the name from the note the server
+   already writes on such a booking ("Booked by Bro Asim in the
+   coordinator's app."). If a note ever lacks it, the badge reads "By
+   coordinator". Seats passengers book themselves have no badge, as before.
+
+2. sw.js, sunday/sw.js, coord/sw.js, index.html, sunday/index.html: the
+   version only.
+
+3. Tests. tests/browser/coordinator.mjs C7 checks the badge shows the
+   coordinator's name and no longer says "By phone".
