@@ -1,51 +1,77 @@
 MINIBUS
 =======
-  pages v1.100.1 · server w2.45.0 · sheet v1.105.0
+  pages v1.101.0 · server w2.46.0 · sheet v1.105.0
 
-Coordinator app, no signal (Asim): the notice is the passenger page's card,
-in the page under "Who is it?", instead of a strip along the very top that
-ran under the clock and battery on an iPhone.
+Driver app, the pickup pop-up (Asim): once the next booked stop reads "Be at
+your stop" on the passenger page, a pop-up comes up in the middle of the
+driver's screen, over everything: the stop, how many are booked, Call
+passenger for each booking with a number, Picked up and Nobody here. Call
+passenger leaves it up; Picked up or Nobody here takes it down. The Picked up
+and Nobody there buttons fixed at the foot of the list are gone.
 
-Pages only.
+Worker and pages. Code.gs is unchanged.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.100.0        v1.100.1  (by the merge)
-  Worker  w2.45.0         w2.45.0  (no paste)
+  Pages   v1.100.2        v1.101.0  (by the merge)
+  Worker  w2.45.0         w2.46.0  (paste)
   Code.gs v1.105.0        v1.105.0  (no paste)
 
 
 IN THIS ORDER
 -------------
 
-1. Merge this pull request. Nothing to paste.
+1. Cloudflare: paste server/worker.js from this pull request into the
+   Worker and Deploy. Nothing else in Cloudflare changes.
+
+2. Merge this pull request.
+
+Either order works. Until the Worker is pasted, the pop-up comes up without
+Call passenger.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.100.1 · server w2.45.0 · sheet
+A. The foot of all three apps reads  app v1.101.0 · server w2.46.0 · sheet
    v1.105.0 .
 
-B. Open the coordinator app once with a signal. Then aeroplane mode on and
-   open it again: under "Who is it?" a card reads "No signal just now. Sign
-   in once signal returns." Nothing along the top.
-
-C. Aeroplane mode off: the card goes by itself, and signing in works.
+B. Next run: about a minute before each booked stop the driver's phone puts
+   the pop-up up. While the bus moves its buttons are grey under a red "Not
+   while the bus is moving."; pulled up, they work.
 
 
 WHAT CHANGED
 ------------
 
-1. coord/index.html: on the sign-in screen, no signal (or a live server not
-   answering) shows as a card under "Who is it?", in the passenger page's
-   words and style. The red line under the PIN says "No signal just now.
-   Sign in once signal returns." Signed in, the strip along the top is as
-   before, and with the bar away it now clears the clock and battery.
+1. index.html (driver app):
+   - The pickup pop-up. It comes up when the next booked stop's estimate is
+     a minute or less away, the same test that turns the passenger page red
+     with "Be at your stop", read off the estimate the board already
+     carries. Once up for a stop it stays up until Picked up or Nobody here,
+     through every poll. Only on the phone driving the run.
+   - A bus ahead of its estimate: tap the next stop in the list and the
+     pop-up comes up there and then.
+   - A next stop with no estimate (no signal, or a run with no offset yet)
+     cannot say when "Be at your stop" comes, so that stop's own row keeps
+     Nobody there and Picked up, as a stop gone past already does.
+   - Picked up and Nobody here are the same taps as before: same PIN gate,
+     same refusal while the bus moves, same record.
+   - Call passenger rings the number booked with the seat. Refused while
+     the bus moves. A booking with no number (some coordinator bookings)
+     has no button.
+   - The strip at the foot of the list keeps its line ("2 people waiting at
+     ...") and loses its two buttons.
 
-2. sw.js, sunday/sw.js, coord/sw.js, index.html, sunday/index.html: the
-   version only. The driver app is otherwise unchanged: it has no notice
-   along the top at sign-in, since it opens and works with no signal.
+2. server/worker.js w2.46.0: a new action, stoppeople. It hands the numbers
+   booked on a route this Sunday to one phone only: the driver of the run
+   out on that route now, with his PIN. A wrong PIN, another driver, the
+   other route, no run or an ended run get nothing. The board every phone
+   reads still carries no number.
 
-3. Tests. tests/browser/coordinator.mjs C49 checks the card, where it sits,
-   and that it goes when the signal is back.
+3. sw.js, sunday/sw.js, coord/sw.js, sunday/index.html, coord/index.html:
+   the version only.
+
+4. Tests. tests/suites/55-stop-people.mjs (the server's half). Browser
+   check T27 (the pop-up, start to finish); T4 rewritten for the foot of the
+   list with no buttons in it.

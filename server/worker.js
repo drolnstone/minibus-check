@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.45.0";
+const SCRIPT_VERSION = "w2.46.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -6350,6 +6350,50 @@ async function handlePin(env, body) {
   return json({ ok: true, valid: true, askPinChange: onDefaultUnasked(row, own) });
 }
 
+/* ---- WHO IS BOOKED AT HIS STOPS, from w2.46.0 (Asim) --------------------
+
+   The driver app's pickup pop-up names the stop and offers Call passenger for
+   each booking there that has a number. The numbers go to one phone only:
+   the one signed in as the driver of the run that is out on that route now,
+   with his PIN. The board every phone can read never carries them.
+
+   { driver, pin, route }. Answers { people: { stopId: [{ phone, seats }] } }
+   for the route's bookings this Sunday, numbers or not. */
+async function handleStopPeople(env, body) {
+  const name = String((body && body.driver) || "").trim();
+  const pin  = String((body && body.pin) || "").replace(/\D/g, "");
+  const route = String((body && body.route) || "").trim();
+  if (!name) return json({ ok: false, error: "no driver" });
+  if (!route) return json({ ok: false, error: "no route" });
+
+  const row = await env.DB.prepare(
+    "SELECT name, pin_hash FROM drivers WHERE lower(name)=lower(?)").bind(name).first();
+  if (!row) return json({ ok: false, error: "unknown driver" });
+  const own = await ownPinOf(env, row.name);
+  if (pinWantedOf(row, own)) {
+    const gate = await pinTry(env, row, own, pin);
+    if (gate.locked) return json({ ok: false, error: "locked", minutes: PIN_LOCK_MINUTES });
+    if (!gate.ok) return json({ ok: false, error: "bad pin" });
+  }
+
+  const key = runSunday();
+  const state = await tripState(env, key, route);
+  if (!state.started || state.ended || !sameName(state.driver, row.name)) {
+    return json({ ok: false, error: "not your run" });
+  }
+
+  const stops = pickupsAndArrivals(await getStops(env));
+  const onRoute = {};
+  for (const s of stops) if (s.route === route && !s.arrival) onRoute[s.id] = true;
+  const people = {};
+  for (const b of await liveBookings(env, key)) {
+    if (!onRoute[b.stopId] || !(b.seats > 0)) continue;
+    (people[b.stopId] = people[b.stopId] || []).push({
+      phone: String(b.phone || "").trim(), seats: b.seats });
+  }
+  return json({ ok: true, date: key, route: route, trip: state.trip, people: people });
+}
+
 /* ==========================================================================
    A DRIVER'S OWN PIN, from w2.39.0
    ==========================================================================
@@ -9653,6 +9697,9 @@ export default {
         /* Token checked, like every other write-adjacent action. The PIN
            itself is never stored here and never returned; only yes or no. */
         if (action === "pin") return await handlePin(env, body.pin || body);
+        /* The numbers behind Call passenger, from w2.46.0. The driver of the
+           run on that route only, with his PIN. */
+        if (action === "stoppeople") return await handleStopPeople(env, body.who || body);
         /* A driver's own PIN, from w2.39.0. Each checks the PIN he has now. */
         if (action === "pinchange") return knock(await handlePinChange(env, body.pin || {}), "pin");
         if (action === "pinkeep") return knock(await handlePinKeep(env, body.pin || {}), "pin");
