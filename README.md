@@ -1101,7 +1101,7 @@ everything working?** names the side that is missing it.
 | `Buses` | registration, seats, active, and from v1.87.0 **MOT due**, **Service due**, **Insurance due**, **Permit due** and **Route in odd months**. The dates are what the driver app warns about (30 days ahead, red once passed; blank is not tracked) and the only place they are kept: a renewal is a cell, not a code change. **Route in odd months** is North or South, the route that bus takes in January, March and so on; even months swap. A Sunday's Rota row naming a bus still wins for that Sunday. Without exactly one active North and one active South, the pairing written in the code is used rather than a guess. The columns were filled once, the first *Set up / refresh rota* after v1.87.0, and never again. From v1.92.0 the four date columns take a date and nothing else, and every change to one, from the app or typed here, is written on History with what it was |
 | `Bus Stops` | route, stop, time, postcode, and from v1.71.0 **Lat** and **Lng** — the kerb itself, used for the driver's map link and for working out what passing a stop saves. *Set up / refresh rota* fills any blank one it recognises from `STOP_PINS` in `Code.gs` and never overwrites one you have typed. A stop it does not recognise stays blank, which everything downstream already handles |
 | `Checks` | every safety check. **Outcome** is a dropdown, and picking **Authorised to run** on today's row lets a stopped bus out |
-| `Defects` | one row per defect and one per advisory, told apart by **Kind**, so they can be chased |
+| `Defects` | one row per defect and one per advisory, told apart by **Kind**, so they can be chased. **Kind** is what the driver called it at the walkaround (a coordinator can change it on the tab); **Status** is what has been done about it since. **Critical** says whether the item is one that can stop the bus, so an item marked Critical YES with Kind Advisory is a critical item the driver judged fit to run |
 | `Bus Bookings` | passenger bookings |
 | `Trip Events` | every stop tap. **Ended by** is filled on the end row only, and differs from **Driver** when a coordinator closed somebody else's run |
 | `Vehicle Log` | from v1.92.0, one row for every MOT, service, insurance or permit renewal, repair, tyres or other job, and every one booked ahead: the day it was done, the date it had been due and how early or late that was, the next due date and how it was worked out, and whatever else was known (mileage, garage, cost, the defects it put right). Rows are never edited or removed: a mistake is put right with a new row naming the old one under **Corrects**, and the old one is struck through. A row typed here with a Registration, What and Date done is completed as the app would have: Log ID, next due date, the Buses tab. See *The vehicle log* |
@@ -1111,6 +1111,23 @@ everything working?** names the side that is missing it.
 The Worker's own database holds the same stops, rota, buses and drivers (a
 copy, pushed from here), the bookings and taps as they happen, the shelf, and
 `push_subs` — one row per phone that has asked to be told things.
+
+### What moves to the archive
+
+The 3am job moves old rows off five tabs into a tab of the same name with
+` (archive)` on the end, in this spreadsheet unless `ARCHIVE_SHEET_ID` names
+another. Each row keeps the columns it had.
+
+| Tab | Moves after | Never moves |
+|---|---|---|
+| `Trip Events` | 13 weeks | |
+| `Bus Bookings` | 6 weeks | |
+| `Rota Requests` | 26 weeks | a request still Pending |
+| `Checks` | a year | the newest check on each bus |
+| `Defects` | 26 weeks | anything not Fixed or Not a defect |
+
+`Rota`, `Drivers`, `Buses`, `Bus Stops`, `Vehicle Log` and `History` are never
+archived.
 
 **Give every active driver a phone number.** Its last four digits are his
 default PIN, and the PIN is what puts a name on a record. A driver without
