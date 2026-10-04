@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.41.0";
+const SCRIPT_VERSION = "w2.41.1";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -8283,13 +8283,34 @@ function contactView(now) {
            chosen: o ? { name: o.name, phone: o.phone, until: o.until, by: o.by, at: o.at } : null };
 }
 
+/* EVERYBODY WITH A COORDINATOR TITLE IS TOLD, from w2.41.1, on their phones
+   and in the coordinator app's Alerts, except whoever made the change. The
+   person picked most of all: being put on the calls without knowing is the
+   one way this can go wrong. Urgent, so it is never held for the quiet
+   hours: a choice made at seven on a Sunday morning is for that morning.
+   Fenced: the choice is made whether or not a phone could be woken. */
+async function contactTell(env, me, id, title, body) {
+  try {
+    const msg = coordAlertOf({ id: "contact-" + id, kind: "contact", urgent: true,
+                               title: title, body: body, not: [me.name] });
+    if (!msg) return;
+    await coordLogAdd(env, msg);
+    await deliverCoordAlert(env, msg);
+  } catch (e) { /* the choice stands; the alert is a courtesy on top */ }
+}
+
 async function actContact(env, me, act) {
   const usual = (coordinator && coordinator.name) || "the usual coordinator";
   if (act && act.clear) {
     return { ok: true, local: "On the live server.", body: { clear: true },
              words: "Emergency calls go back to " + usual + ".",
              stmts: [env.DB.prepare("DELETE FROM settings WHERE k='contact_override'")],
-             after: async () => { contactOverride = null; },
+             after: async () => {
+               contactOverride = null;
+               await contactTell(env, me, String(act.id || Date.now()),
+                 "Emergency calls: back to " + usual,
+                 me.name + " has put emergency calls back to " + usual + ". Every Call button shows them again.");
+             },
              reply: { contact: Object.assign(contactView(), { chosen: null }) } };
   }
   const name = String((act && act.name) || "").trim();
@@ -8314,7 +8335,14 @@ async function actContact(env, me, act) {
   return { ok: true, local: "On the live server.", body: { name: pick.name, until: until },
            words: "Emergency calls go to " + pick.name + (until ? " until midnight." : " until changed back."),
            stmts: [cachePut(env, "contact_override", o)],
-           after: async () => { contactOverride = contactOverrideOf(o); },
+           after: async () => {
+             contactOverride = contactOverrideOf(o);
+             const till = until ? "until midnight" : "until it is changed back";
+             await contactTell(env, me, String(act.id || now),
+               "Emergency calls: " + pick.name + " " + (until ? "today" : "from now"),
+               me.name + " has put " + pick.name + " on emergency calls " + till +
+               ". Every Call button shows " + pick.name + " \u00B7 " + pick.phone + ".");
+           },
            reply: { contact: { usual: coordinator || { name: "", phone: "" }, chosen: o } } };
 }
 
