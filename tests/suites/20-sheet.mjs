@@ -626,33 +626,42 @@ export default function (root) {
 
   const to = (mail, who) => mail.filter((m) => String(m.to || "").indexOf(who) === 0);
 
-  s.test("turning a request down tells the man who asked", (a) => {
-    const mail = byHand(deciding(), "Rejected");
-    const his = to(mail, "ade@b.c");
-    a.eq(his.length, 1, "got " + mail.length + " emails, " + his.length + " to him");
-    a.has(his[0].subject, "not approved");
-    a.has(his[0].body, "still down to drive",
-          "the sentence he actually wants: " + his[0].body);
+  s.test("turning a request down tells the man who asked", async (a) => {
+    /* On the Saturday before SUN, so the Sunday is still to come. */
+    await atTime("2026-10-03T12:00:00+01:00", () => {
+      const mail = byHand(deciding(), "Rejected");
+      const his = to(mail, "ade@b.c");
+      a.eq(his.length, 1, "got " + mail.length + " emails, " + his.length + " to him");
+      a.has(his[0].subject, "not approved");
+      a.has(his[0].body, "still down to drive",
+            "the sentence he actually wants: " + his[0].body);
+    });
   });
 
-  s.test("and the same decision from the email link tells him too", (a) => {
-    /* THE WHOLE POINT OF THE FIX. An Apps Script write fires no installed
-       trigger, so the drain has to call both by name. It called one. */
-    const his = to(byLink(deciding(), "Rejected"), "ade@b.c");
-    a.eq(his.length, 1, "a decision made on a phone has to reach him too");
-    a.has(his[0].subject, "not approved");
+  s.test("and the same decision from the email link tells him too", async (a) => {
+    /* On the Saturday before SUN, so the Sunday is still to come. */
+    await atTime("2026-10-03T12:00:00+01:00", () => {
+      /* THE WHOLE POINT OF THE FIX. An Apps Script write fires no installed
+         trigger, so the drain has to call both by name. It called one. */
+      const his = to(byLink(deciding(), "Rejected"), "ade@b.c");
+      a.eq(his.length, 1, "a decision made on a phone has to reach him too");
+      a.has(his[0].subject, "not approved");
+    });
   });
 
-  s.test("approving with nobody assigned yet still answers him", (a) => {
-    /* No longer every approval from the link — the page can name a cover
-       now — but still the one that has to be said out loud, because
-       "approved" on its own reads as "sorted". */
-    const his = to(byLink(deciding(), "Approved"), "ade@b.c");
-    a.eq(his.length, 1, "approved and told nobody is the same silence");
-    a.has(his[0].subject, "has been approved");
-    a.has(his[0].body, "Nobody is covering it yet", "got: " + his[0].body);
-    a.hasnt(his[0].body, "You will get an email",
-            "a promise about our own plumbing, in a message to a driver");
+  s.test("approving with nobody assigned yet still answers him", async (a) => {
+    /* On the Saturday before SUN, so the Sunday is still to come. */
+    await atTime("2026-10-03T12:00:00+01:00", () => {
+      /* No longer every approval from the link — the page can name a cover
+         now — but still the one that has to be said out loud, because
+         "approved" on its own reads as "sorted". */
+      const his = to(byLink(deciding(), "Approved"), "ade@b.c");
+      a.eq(his.length, 1, "approved and told nobody is the same silence");
+      a.has(his[0].subject, "has been approved");
+      a.has(his[0].body, "Nobody is covering it yet", "got: " + his[0].body);
+      a.hasnt(his[0].body, "You will get an email",
+              "a promise about our own plumbing, in a message to a driver");
+    });
   });
 
   s.test("an approval that names a cover emails both men, by either route", (a) => {
@@ -684,13 +693,16 @@ export default function (root) {
     a.eq(to(mail, "trevor@b.c").length, 0, "ten weeks out, nobody has been told anything yet");
   });
 
-  s.test("a rejection does not tell the other driver in a swap", (a) => {
-    /* He was never told it had been proposed, so a note saying it had been
-       refused would be the first he heard of the whole thing. */
-    const mail = byHand(deciding({ type: "Request a swap", swapWith: "Bro Trevor",
-                                   theirSunday: new Date(2026, 9, 18) }), "Rejected");
-    a.eq(to(mail, "trevor@b.c").length, 0, "got " + JSON.stringify(mail.map((m) => m.to)));
-    a.eq(to(mail, "ade@b.c").length, 1);
+  s.test("a rejection does not tell the other driver in a swap", async (a) => {
+    /* On the Saturday before SUN, so the Sunday is still to come. */
+    await atTime("2026-10-03T12:00:00+01:00", () => {
+      /* He was never told it had been proposed, so a note saying it had been
+         refused would be the first he heard of the whole thing. */
+      const mail = byHand(deciding({ type: "Request a swap", swapWith: "Bro Trevor",
+                                     theirSunday: new Date(2026, 9, 18) }), "Rejected");
+      a.eq(to(mail, "trevor@b.c").length, 0, "got " + JSON.stringify(mail.map((m) => m.to)));
+      a.eq(to(mail, "ade@b.c").length, 1);
+    });
   });
 
   s.test("an approved swap is not also told cover is being arranged", (a) => {
@@ -702,13 +714,16 @@ export default function (root) {
           "got " + JSON.stringify(mail.map((m) => m.subject)));
   });
 
-  s.test("it does not say he is still driving when the rota says otherwise", (a) => {
-    /* Refused on a Sunday somebody else has since picked up. Telling him to
-       turn up to a morning he is not on is worse than sending nothing. */
-    const his = to(byHand(deciding({ on: "Bro Trevor" }), "Rejected"), "ade@b.c");
-    a.eq(his.length, 1);
-    a.hasnt(his[0].body, "still down to drive", "got: " + his[0].body);
-    a.has(his[0].body, "Open the app");
+  s.test("it does not say he is still driving when the rota says otherwise", async (a) => {
+    /* On the Saturday before SUN, so the Sunday is still to come. */
+    await atTime("2026-10-03T12:00:00+01:00", () => {
+      /* Refused on a Sunday somebody else has since picked up. Telling him to
+         turn up to a morning he is not on is worse than sending nothing. */
+      const his = to(byHand(deciding({ on: "Bro Trevor" }), "Rejected"), "ade@b.c");
+      a.eq(his.length, 1);
+      a.hasnt(his[0].body, "still down to drive", "got: " + his[0].body);
+      a.has(his[0].body, "Open the app");
+    });
   });
 
   s.test("an answer is sent however far away the Sunday is", (a) => {

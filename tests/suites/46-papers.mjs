@@ -126,14 +126,15 @@ export default async function (root) {
       a.eq(call(L, "renewalStage", 61), "");
       a.eq([60, 31, 30, 8, 7, 1, 0, -1, -7, -8].map((d) => call(L, "renewalStage", d)).join(","),
            "60,60,30,30,7,7,0,over0,over0,over1");
-      a.eq(call(L, "safetyTo"), "coord@b.c,arthur@b.c,kenneth@b.c");
+      a.eq(call(L, "safetyTo"), "coord@b.c", "a coordinator's driver address was added to COORDINATOR_EMAIL");
+      a.eq(call(sheet({ COORDINATOR_EMAIL: "" }), "safetyTo"), "arthur@b.c,kenneth@b.c");
       call(L, "renewalAlerts", ss);
       const subj = L.gas.mail.map((m) => m.subject);
       a.ok(subj.some((x) => x === "Minibus: YS70 PWE: MOT due in 30 days"), subj.join(" / "));
       a.ok(subj.some((x) => x === "Minibus: BUS STOPPED: YS70 PWE: Insurance expired 30/09/2026"), subj.join(" / "));
       a.ok(subj.some((x) => /NH56 FWP: Service date unreadable/.test(x)), subj.join(" / "));
       a.not(subj.some((x) => /NH56 FWP: MOT/.test(x)), "an MOT five months off was sent");
-      a.eq(L.gas.mail[0].to, "coord@b.c,arthur@b.c,kenneth@b.c");
+      a.eq(L.gas.mail[0].to, "coord@b.c");
       const was = L.gas.mail.length;
       call(L, "renewalAlerts", ss);
       a.eq(L.gas.mail.length, was, "the same alerts went twice");

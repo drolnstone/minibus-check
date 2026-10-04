@@ -144,6 +144,12 @@ export default async function (root) {
     a.has(L.gas.mail[0].body, "tap the bell");
   });
 
+  s.test("a COORDINATOR_EMAIL listing several addresses skips each of them", (a) => {
+    const L = sheet({ COORDINATOR_EMAIL: "coord@b.c, Kenneth@b.c; x@y.z" }, ["Bro Arthur", "Pst Kenneth", "Sis Nomail"]);
+    call(L, "tellCoordinatorPhones", alert());
+    a.eq(L.gas.mail.length, 0, JSON.stringify(L.gas.mail.map((m) => m.to)));
+  });
+
   s.test("nobody is emailed when everyone has alerts on", (a) => {
     const L = sheet({ COORDINATOR_EMAIL: "coord@b.c" }, []);
     call(L, "tellCoordinatorPhones", alert());
