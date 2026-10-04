@@ -219,6 +219,11 @@ export async function phone(opts = {}) {
         seats
       };
     }
+    /* The passenger's stop answer, which the driver app also asks for a stop
+       it is following (v1.99.0). world.watch(stopId) gives the answer. */
+    else if (p.get("trip") && world.watch) {
+      body = world.watch(p.get("s") || "");
+    }
     else if (p.get("board")) {
       const r = String(p.get("route") || "North");
       /* The rehearsal's run while one is on, the real one otherwise. */

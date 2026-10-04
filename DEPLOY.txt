@@ -1,62 +1,48 @@
 MINIBUS
 =======
-  pages v1.98.0 · server w2.45.0 · sheet v1.105.0
+  pages v1.99.0 · server w2.45.0 · sheet v1.105.0
 
-What went out shows on the coordinator app's Alerts list (Asim):
+Driver app, Stops and bookings (Asim): a driver who is not driving that
+route taps a stop and follows the bus to it, on North or South, the way a
+passenger without a booking can on the passenger page.
 
-  - Every alert a passenger's or a driver's phone is sent, one line per
-    message, with who it went to (drivers by name, passengers as a count
-    of phones and their stops).
-  - Every email the sheet sends, marked Email, with who it went to.
-  - Marked Sent or Email. Never counted on the bell, never in the strip,
-    never a push of its own.
+  - The panel above the list says what the passenger page says about that
+    stop: minutes away, Be at your stop, gone past, picked up.
+  - Tap the stop again, or Stop following, to stop. Kept for the Sunday.
+  - Not on the route this phone is driving, and not during a rehearsal.
 
-This follows v1.97.2 · w2.44.0 · v1.104.0 (#50, stop list order and the
-church estimate), which this Worker carries.
+Pages only. It follows #50 and #51, both merged.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.97.2         v1.98.0
-  Worker  w2.44.0         w2.45.0
-  Code.gs v1.104.0        v1.105.0
+  Pages   v1.98.0         v1.99.0  (by the merge)
+  Worker  w2.45.0         w2.45.0  (no paste)
+  Code.gs v1.105.0        v1.105.0  (no paste)
 
 
 IN THIS ORDER
 -------------
 
-1. WORKER. Paste the whole file into the Cloudflare editor and deploy:
-   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/sent-messages-on-alerts-b6wwbo/server/worker.js
-   No new variables.
-
-2. CODE.GS. Paste the whole file into Apps Script, save, then Deploy,
-   Manage deployments, edit, New version, Deploy:
-   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/sent-messages-on-alerts-b6wwbo/Code.gs
-
-3. Merge the pull request.
+1. Merge this pull request. Nothing to paste.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.98.0 · server w2.45.0 · sheet
+A. The foot of all three apps reads  app v1.99.0 · server w2.45.0 · sheet
    v1.105.0 .
 
-B. The next alert or email to go out shows on Alerts in the coordinator
-   app.
+B. On a Sunday after bookings close, a driver not driving opens Stops and
+   bookings, taps a stop, and sees the panel.
 
 
 WHAT CHANGED
 ------------
 
-1. server/worker.js: sent_log, sentNote, sentPushes, the sentMail action;
-   wake() and the emergency-contact driver alerts note what they sent; the
-   Alerts list carries both.
+1. index.html: dwHtml, dwFetch and the stop rows in rotaPaintStops. The
+   panel asks the live server the passenger page's question (?trip=1&s=),
+   so the two apps give one answer about a stop.
 
-2. Code.gs: sendMail tells the live server each email it sent (noteSentMail).
+2. Version v1.99.0 in index.html, sw.js, sunday/ and coord/.
 
-3. coord/index.html: Sent and Email tags on the list; the strip shows the
-   newest unread alert, never a sent line.
-
-4. index.html, sw.js, coord/sw.js, sunday/: the version only.
-
-5. Tests: tests/suites/54-what-went-out.mjs.
+3. Tests: T26 in tests/browser/driver-app.mjs.
