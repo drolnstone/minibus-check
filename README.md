@@ -78,6 +78,14 @@ name or a phone number. The Drivers tab is the one place for them:
   everything to the live server. From v1.81.0 the pages take the titles from
   the live server too; `fullInspectionRoles` in `config.js` is only what they
   use before it has answered.
+- **Someone else for a day.** From v1.96.8 / w2.41.0, after the Ushers app's
+  Settings: the coordinator app's first screen says who takes emergency
+  calls, and **Change** picks anybody active with a coordinator title and a
+  Phone, for **Today only** (back at midnight London time by itself) or
+  **Until changed back**. The live server keeps the choice
+  (`contact_override`) and puts it on every answer in place of the Drivers
+  tab's person, who comes back when it runs out or the usual person is
+  picked again. Emails still go to `COORDINATOR_EMAIL`.
 - **The register** is the rows marked Active, with their roles.
 - **The rota order** is the **Primary order** column, counted separately for
   North and South.

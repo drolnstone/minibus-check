@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.96.7 · THE COORDINATOR'S APP.
+<!-- BUILD v1.96.8 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -687,7 +687,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.96.7";
+var PAGE_VERSION = "v1.96.8";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1320,6 +1320,7 @@ function paintHome(){
   if(D.open && D.open !== D.today) h += sunCard(D.open, false, true);
 
   h += renewalsHtml();
+  h += contactHtml();
 
   var pend = (D.requests || []).filter(function(q){ return q.status === "Pending"; }).length;
   var bk = D.open || D.today;
@@ -1364,6 +1365,65 @@ function paintHome(){
        '<a class="foot-link" href="../" data-do="check">Vehicle check</a></div>' +
        '<button class="foot-link" type="button" data-do="mypin" style="background:none;border:0;padding:0">Change your PIN</button>';
   $("homeBody").innerHTML = h;
+}
+
+/* ---- who takes emergency calls, from v1.96.8 --------------------------------
+
+   After the Ushers app's Settings: a choice made here, kept on the live
+   server, with who made it. Every "Call ..." button in all three apps shows
+   whoever is picked. Today only runs out at midnight by itself; Until changed
+   back stays. Picking the usual person puts it back to the Drivers tab's
+   answer. A live server from before w2.41.0 sends no contact, and nothing
+   is shown. */
+function contactHtml(){
+  var c = D && D.contact;
+  if(!c) return '';
+  var u = c.usual || {}, o = c.chosen;
+  if(o){
+    var till = o.until ? "until midnight" : "until changed back";
+    return '<div class="need"><p>Emergency calls go to <b>'+esc(o.name)+'</b> · '+esc(phoneWords(o.phone))+', '+till +
+           (o.by ? '. Set by '+esc(o.by)+'.' : '.')+'</p><button class="mini" type="button" data-do="contact">Change</button></div>';
+  }
+  return '<div class="card" style="margin-top:10px"><div class="def-foot"><p class="tiny" style="margin:0">Emergency calls go to ' +
+         (u.name ? '<b>'+esc(u.name)+'</b>' + (u.phone ? ' · '+esc(phoneWords(u.phone)) : '') : 'nobody yet') + '.</p>' +
+         '<button class="mini" type="button" data-do="contact">Change</button></div></div>';
+}
+function pickContact(){
+  var c = D && D.contact;
+  if(!c) return;
+  var u = c.usual || {}, o = c.chosen;
+  var opts = '<option value="">'+esc(u.name ? u.name+" (usual)" : "The usual coordinator")+'</option>' +
+    (c.can || []).filter(function(x){ return !same(x.name, u.name); }).map(function(x){
+      return '<option value="'+esc(x.name)+'"'+(o && same(o.name, x.name) ? ' selected' : '')+'>'+esc(x.name+" · "+phoneWords(x.phone))+'</option>';
+    }).join("");
+  var how = o && !o.until ? "changed" : "today";
+  openSheet({ eyebrow: "Emergency calls", title: "Who takes emergency calls",
+    body: '<div class="field"><label for="ctName">Every Call button shows</label><select id="ctName">'+opts+'</select></div>' +
+          '<div id="ctHowBox"><p class="tiny" style="margin:0 0 4px">For how long</p><div class="chips" id="ctHow">' +
+          '<button type="button" data-v="today" class="'+(how === "today" ? "on" : "")+'">Today only</button>' +
+          '<button type="button" data-v="changed" class="'+(how === "changed" ? "on" : "")+'">Until changed back</button></div>' +
+          '<p class="tiny">Today only goes back to the usual person at midnight by itself.</p></div>' +
+          '<p class="tiny">Only people with a coordinator title, Active YES and a phone number on the Drivers tab are listed.</p>',
+    go: "Save",
+    onGo: function(){
+      var nm = $("ctName").value;
+      if(!nm){
+        if(!o){ sheetSay("That is already who takes the calls.", true); return; }
+        act({ kind: "contact", clear: true });
+        return;
+      }
+      act({ kind: "contact", name: nm, until: how });
+    } });
+  var showHow = function(){ $("ctHowBox").style.display = $("ctName").value ? "" : "none"; };
+  $("ctName").onchange = function(){ showHow(); if(!busy) sheetSay(""); };
+  showHow();
+  Array.prototype.forEach.call(document.querySelectorAll("#ctHow button"), function(b){
+    b.onclick = function(){
+      how = b.getAttribute("data-v");
+      Array.prototype.forEach.call(document.querySelectorAll("#ctHow button"), function(y){ y.classList.toggle("on", y === b); });
+      if(!busy) sheetSay("");
+    };
+  });
 }
 
 /* ---- the rota -------------------------------------------------------------- */
@@ -3389,6 +3449,7 @@ document.addEventListener("click", function(e){
   if(d === "driverapp"){ e.preventDefault(); toDriver("hub"); return; }
   if(d === "check"){ e.preventDefault(); toDriver("check"); return; }
   if(d === "mypin"){ myPin(); return; }
+  if(d === "contact"){ pickContact(); return; }
   if(d === "authorise") authorise(t.getAttribute("data-reg"));
   else if(d === "motrun") motRun(t.getAttribute("data-reg"));
   else if(d === "endrun") endRun(t.getAttribute("data-route"));

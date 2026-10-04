@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.40.0";
+const SCRIPT_VERSION = "w2.41.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -81,6 +81,43 @@ function driverWaOf(v) {
   return out;
 }
 
+/* WHO TAKES EMERGENCY CALLS INSTEAD, from w2.41.0. After the Ushers app,
+   where a setting is changed in the admin app, kept on the server and
+   recorded with who changed it.
+
+   A coordinator away for a Sunday picks somebody else in the coordinator's
+   app, and every "Call ..." button on every page shows that person until the
+   choice runs out. "Today only" runs out at midnight London time, so nobody
+   has to remember to put it back. The sheet's own answer (coordinator above)
+   is left alone underneath and comes back by itself.
+
+   Kept in settings as contact_override and loaded with the version below,
+   so another isolate has it within the same five minutes. */
+let contactOverride = null;
+
+function contactOverrideOf(v) {
+  if (!v || typeof v !== "object") return null;
+  const name = String(v.name || "").trim().slice(0, 60);
+  const phone = String(v.phone || "").trim().slice(0, 24);
+  if (!name || !phone) return null;
+  return { name: name, phone: phone, until: Number(v.until) || 0,
+           by: String(v.by || "").slice(0, 60), at: Number(v.at) || 0 };
+}
+
+/* The choice if it has not run out, else null. until 0 is "until changed". */
+function contactOverrideLive(now) {
+  const o = contactOverride;
+  if (!o) return null;
+  if (o.until && (now || Date.now()) >= o.until) return null;
+  return o;
+}
+
+/* Who people ring, as every answer carries it. */
+function contactNow() {
+  const o = contactOverrideLive();
+  return o ? { name: o.name, phone: o.phone } : coordinator;
+}
+
 function coordinatorOf(v) {
   if (!v || typeof v !== "object") return null;
   return { name: String(v.name || "").trim().slice(0, 60),
@@ -104,7 +141,7 @@ async function sheetVersionLoad(env) {
   const asked = Date.now();
   try {
     const rows = await env.DB.prepare(
-      "SELECT k, v FROM settings WHERE k IN ('sheet_version','coordinator','auth_rules')").all();
+      "SELECT k, v FROM settings WHERE k IN ('sheet_version','coordinator','auth_rules','contact_override')").all();
     const got = {};
     for (const r of (rows && rows.results) || []) got[r.k] = r.v;
     if (sheetVersionAt <= asked) {
@@ -112,6 +149,9 @@ async function sheetVersionLoad(env) {
       let c = null;
       try { c = got.coordinator ? JSON.parse(got.coordinator) : null; } catch (e) { c = null; }
       coordinator = coordinatorOf(c);
+      let o = null;
+      try { o = got.contact_override ? JSON.parse(got.contact_override) : null; } catch (e) { o = null; }
+      contactOverride = contactOverrideOf(o);
       let r = null;
       try { r = got.auth_rules ? JSON.parse(got.auth_rules) : null; } catch (e) { r = null; }
       leadRoles = rolesOf(r && r.roles);
@@ -1056,8 +1096,9 @@ function json(obj, status) {
   /* Over the top of anything already there, including a copy on the shelved
      rota: that was built up to an hour ago, and this was told on the last
      sync, which a Drivers tab edit sends within seconds. */
-  if (coordinator && obj && typeof obj === "object" && !Array.isArray(obj)) {
-    obj.coordinator = coordinator;
+  const ring = contactNow();
+  if (ring && obj && typeof obj === "object" && !Array.isArray(obj)) {
+    obj.coordinator = ring;
   }
   if (leadRoles && obj && typeof obj === "object" && !Array.isArray(obj)) {
     obj.leadRoles = leadRoles;
@@ -8221,6 +8262,62 @@ function rotaWords(key, cur, set, note, noteEdit) {
 
 /* ---- the reads ----------------------------------------------------------- */
 
+/* ---- who takes emergency calls, from w2.41.0 --------------------------
+
+   Anybody active holding a coordinator title, with a phone number on the
+   Drivers tab, may be picked. "today" runs out at midnight London time;
+   "changed" stays until somebody changes it back. clear goes back to the
+   sheet's own answer at once. */
+async function contactCandidates(env) {
+  const R = await coordDriversView(env);
+  const rules = await authRules(env);
+  return ((R && R.drivers) || []).filter((d) => d.active &&
+      rules.roles.indexOf(String(d.role || "").trim().toLowerCase()) !== -1)
+    .map((d) => ({ name: d.name, role: d.role || "", phone: normalisePhone(d.phone) }))
+    .filter((d) => d.phone);
+}
+
+function contactView(now) {
+  const o = contactOverrideLive(now);
+  return { usual: coordinator || { name: "", phone: "" },
+           chosen: o ? { name: o.name, phone: o.phone, until: o.until, by: o.by, at: o.at } : null };
+}
+
+async function actContact(env, me, act) {
+  const usual = (coordinator && coordinator.name) || "the usual coordinator";
+  if (act && act.clear) {
+    return { ok: true, local: "On the live server.", body: { clear: true },
+             words: "Emergency calls go back to " + usual + ".",
+             stmts: [env.DB.prepare("DELETE FROM settings WHERE k='contact_override'")],
+             after: async () => { contactOverride = null; },
+             reply: { contact: Object.assign(contactView(), { chosen: null }) } };
+  }
+  const name = String((act && act.name) || "").trim();
+  if (!name) return { ok: false, error: "Pick who takes the calls." };
+  const pick = (await contactCandidates(env)).find((d) => d.name.toLowerCase() === name.toLowerCase());
+  if (!pick) {
+    return { ok: false, error: name + " cannot take the calls: they need a coordinator title, Active YES and a phone number on the Drivers tab." };
+  }
+  const how = String((act && act.until) || "today");
+  if (how !== "today" && how !== "changed") return { ok: false, error: "Pick today only or until changed back." };
+  const now = Date.now();
+  let until = 0;
+  if (how === "today") {
+    const today = londonKey(new Date(now));
+    const [y, m, d] = today.split("-").map(Number);
+    const x = new Date(Date.UTC(y, m - 1, d + 1));
+    const tomorrow = x.getUTCFullYear() + "-" + p2(x.getUTCMonth() + 1) + "-" + p2(x.getUTCDate());
+    const end = londonMoment(tomorrow, "00:00");
+    until = end ? end.getTime() : now + 24 * 3600000;
+  }
+  const o = { name: pick.name, phone: pick.phone, until: until, by: me.name, at: now };
+  return { ok: true, local: "On the live server.", body: { name: pick.name, until: until },
+           words: "Emergency calls go to " + pick.name + (until ? " until midnight." : " until changed back."),
+           stmts: [cachePut(env, "contact_override", o)],
+           after: async () => { contactOverride = contactOverrideOf(o); },
+           reply: { contact: { usual: coordinator || { name: "", phone: "" }, chosen: o } } };
+}
+
 async function coordLoad(env, me) {
   const out = { ok: true, me: me, now: Date.now() };
   const today = runSunday();
@@ -8277,6 +8374,9 @@ async function coordLoad(env, me) {
   out.defects = await coordDefectsView(env);
   /* From w2.34.0: the Drivers tab, for the Drivers screen. */
   try { out.register = await coordDriversView(env); } catch (e) { out.register = null; }
+  /* From w2.41.0: who takes emergency calls, and who may be picked. */
+  try { out.contact = Object.assign(contactView(), { can: await contactCandidates(env) }); }
+  catch (e) { out.contact = null; }
   /* From w2.30.0: each bus's Vehicle Log and jobs to arrange, and the last
      mileage a walkaround read, for the Record form. */
   try { out.vehicles = await coordVehiclesView(env); } catch (e) { out.vehicles = { log: {}, jobs: {} }; }
@@ -9092,14 +9192,23 @@ async function coordAct(env, me, act) {
   else if (kind === "stop") r = await actStop(env, me, act);
   else if (kind === "motrun") r = await actMotrun(env, me, act);
   else if (kind === "pin") r = await actPinReset(env, me, act);
+  else if (kind === "contact") r = await actContact(env, me, act);
   else if (kind === "rehearsal") r = await rehearsalPlan(env, String(act.op || ""), String(act.shape || ""));
   else return { ok: false, error: "unknown kind" };
   if (!r || !r.ok) return r || { ok: false, error: "refused" };
 
   const stmts = (r.stmts || []).slice();
-  stmts.push(env.DB.prepare(
-    "INSERT OR IGNORE INTO coord_actions (id, kind, sunday, body, by_name, made, words) VALUES (?,?,?,?,?,?,?)")
-    .bind(id, kind, r.sunday || "", JSON.stringify(r.body || {}), me.name, Date.now(), r.words || ""));
+  /* A change that lives on this server alone (local) is done as it is made,
+     so it is never offered to a sheet that has nothing to file. */
+  stmts.push(r.local
+    ? env.DB.prepare(
+        "INSERT OR IGNORE INTO coord_actions (id, kind, sunday, body, by_name, made, words, synced, ok, result, done_at) " +
+        "VALUES (?,?,?,?,?,?,?,1,1,?,?)")
+        .bind(id, kind, r.sunday || "", JSON.stringify(r.body || {}), me.name, Date.now(), r.words || "",
+              String(r.local), Date.now())
+    : env.DB.prepare(
+        "INSERT OR IGNORE INTO coord_actions (id, kind, sunday, body, by_name, made, words) VALUES (?,?,?,?,?,?,?)")
+        .bind(id, kind, r.sunday || "", JSON.stringify(r.body || {}), me.name, Date.now(), r.words || ""));
   await env.DB.batch(stmts);
 
   if (r.after) {
