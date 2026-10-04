@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.100.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.100.1 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -131,6 +131,14 @@ body.strip-on .totop{bottom:calc(var(--strip-h, 0px) + 28px + var(--safe-b))}
 .banner{display:none;background:var(--warn-bg);border-bottom:1px solid var(--warn);color:var(--warn-ink);
   padding:9px calc(14px + var(--safe-r)) 9px calc(14px + var(--safe-l));font-size:14px;text-align:center}
 .banner.is-on{display:block}
+/* With the bar away (the sign-in screen) the banner is the first thing on the
+   page, and on an iPhone it ran up under the clock and the battery. */
+body.bar-away .banner{padding-top:calc(9px + var(--safe-t))}
+/* The passenger page's notice, as it has it: a card in the page, not a strip
+   along the top. Used for no signal on the sign-in screen, from v1.100.1. */
+.note{border-radius:9px;padding:12px 13px;font-size:14px;line-height:1.5;margin:0 0 14px}
+.note b{font-weight:600}
+.note-warn{background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn-ink)}
 
 /* ---- the page ---- */
 .wrap{max-width:640px;margin:0 auto;
@@ -604,6 +612,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
     </div>
     <p class="eyebrow">Coordinator</p>
     <h1>Who is it?</h1>
+    <div class="note note-warn" id="signNote" role="status" hidden></div>
     <div class="card">
       <div class="idrow">
         <div class="field grow">
@@ -687,7 +696,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.100.0";
+var PAGE_VERSION = "v1.100.1";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -851,8 +860,8 @@ function api(op, extra, ms){
   }, function(err){
     /* Not signed in yet, there are no changes to speak of: the sign-in
        screen's own words, as it opened with. */
-    banner(!D && noSignal(err) ? OFFLINE_WORDS
-         : navigator.onLine === false ? "No signal. Changes need a connection." : "The live server is not answering.");
+    if(!D) outage(noSignal(err) ? "off" : "slow");
+    else banner(navigator.onLine === false ? "No signal. Changes need a connection." : "The live server is not answering.");
     throw err;
   });
 }
@@ -3341,13 +3350,13 @@ function peek(){
       try{ localStorage.setItem(REG_KEY, JSON.stringify(REGLIVE)); }catch(e){}
     }
     if(current().name === "sign" || !pin) route();
-    banner("");
+    banner(""); outage("");
   }, function(err){
     PEEK = { at: Date.now(), ok: false };
     /* Signed in, the next refresh says it in its own words. On the sign-in
        screen nothing else would, and a page that opens with no signal and
        says nothing reads as a page that is broken. */
-    if(!pin) banner(noSignal(err) ? OFFLINE_WORDS : "The live server is not answering yet. This will carry on once it does.");
+    if(!pin) outage(noSignal(err) ? "off" : "slow");
   });
 }
 
@@ -3358,8 +3367,18 @@ function peek(){
    the phone notices, and a quiet ask every twenty seconds for the times it
    does not, which is most of them. Never while the page is out of sight, and
    never once the live server has answered. */
-var OFFLINE_WORDS = "No connection just now. This will carry on by itself once there is a signal.";
-var OFFLINE_SIGN = "No connection just now. Sign in once there is a signal.";
+var OFFLINE_SIGN = "No signal just now. Sign in once signal returns.";
+/* On the sign-in screen, in the passenger page's own words and the same card,
+   in the page under "Who is it?" rather than along the top. "" takes it away.
+   It goes by itself once the live server answers (peek, above). */
+function outage(kind){
+  var n = $("signNote");
+  if(!n) return;
+  n.innerHTML = kind === "off" ? "<b>No signal just now.</b><br>Sign in once signal returns."
+              : kind === "slow" ? "<b>The live server is not answering.</b><br>Sign in once it does."
+              : "";
+  n.hidden = !kind;
+}
 var HAND_WAIT = null;
 function noSignal(err){
   if(navigator.onLine === false) return true;
@@ -3377,7 +3396,8 @@ function offlineWatch(){
 }
 window.addEventListener("online", offlineWatch);
 window.addEventListener("offline", function(){
-  banner(pin ? "No signal. Changes need a connection." : OFFLINE_WORDS);
+  if(pin) banner("No signal. Changes need a connection.");
+  else outage("off");
 });
 setInterval(function(){
   if(navigator.onLine === false) return;
@@ -3889,7 +3909,7 @@ if(!LIVE){
 }
 themeApply();
 history.replaceState({ n: 0 }, "", location.hash || "#home");
-if(LIVE && navigator.onLine === false) banner(OFFLINE_WORDS);
+if(LIVE && navigator.onLine === false) outage("off");
 var HAND = handTake();
 /* A PIN left for the driver app and never taken, because that page did not
    load, goes as soon as this page is back. */
