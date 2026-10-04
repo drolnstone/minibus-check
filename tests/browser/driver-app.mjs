@@ -174,7 +174,10 @@ if (want("T3b")) {
   await me.ctx.close();
 }
 
-/* T4 — Nobody there is where a thumb can reach it, on three phone sizes */
+/* T4 — the line at the foot of the list is where it can be read, on three
+   phone sizes. From v1.101.0 it holds no buttons: Picked up and Nobody here
+   are asked in the pickup pop-up (T27), and a next stop with no estimate keeps
+   them on its own row, where a thumb can reach them. */
 if (want("T4")) {
   let all = true; const notes = [];
   for (const vp of [{ width: 390, height: 844 }, { width: 360, height: 740 }, { width: 414, height: 896 }]) {
@@ -184,19 +187,32 @@ if (want("T4")) {
     for (const y of [0, 300]) {
       await me.pg.evaluate(v => window.scrollTo(0, v), y); await me.wait(300);
       const r = await me.pg.evaluate(() => {
-        const nb = [...document.querySelectorAll(".trip-actions button")].find(x => x.textContent.trim() === "Nobody there");
-        const pu = [...document.querySelectorAll(".trip-actions button")].find(x => /^Picked up/.test(x.textContent.trim()));
+        const bar = document.querySelector(".trip-actions");
+        const line = bar.querySelector(".trip-waiting");
         const ft = document.getElementById("footbar").getBoundingClientRect().top;
-        const c = nb.getBoundingClientRect();
-        const hit = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
-        return { hit: hit === nb, nbBottom: c.bottom, puBottom: pu.getBoundingClientRect().bottom, ft };
+        const l = line.getBoundingClientRect();
+        const hit = document.elementFromPoint(l.left + l.width / 2, l.top + l.height / 2);
+        return { bar: bar.querySelectorAll("button").length, hit: !!hit && line.contains(hit),
+                 lineBottom: l.bottom, ft };
       });
-      const ok = r.hit && r.nbBottom <= r.ft + 0.5 && r.puBottom <= r.ft + 0.5;
+      const ok = r.bar === 0 && r.hit && r.lineBottom <= r.ft + 0.5;
       if (!ok) { all = false; notes.push(vp.width + "x" + vp.height + "@" + y + " " + JSON.stringify(r)); }
     }
+    /* No estimate on the board: the next stop's own row carries the two. */
+    const row = await me.pg.evaluate(() => {
+      const nb = document.querySelector('[data-triptap="N01"][data-tripkind="empty"]');
+      const pu = document.querySelector('[data-triptap="N01"][data-tripkind="pickup"]');
+      if (!nb || !pu) return { found: false };
+      nb.scrollIntoView({ block: "center" });
+      const ft = document.getElementById("footbar").getBoundingClientRect().top;
+      const c = nb.getBoundingClientRect();
+      const hit = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
+      return { found: true, hit: hit === nb, bottom: Math.max(c.bottom, pu.getBoundingClientRect().bottom), ft };
+    });
+    if (!(row.found && row.hit && row.bottom <= row.ft + 0.5)) { all = false; notes.push(vp.width + " row " + JSON.stringify(row)); }
     await me.ctx.close();
   }
-  check("T4", "«Nobody there» and «Picked up» sit clear of the bottom bar, at any scroll", all, notes.join("; "));
+  check("T4", "the line under the list sits clear of the bottom bar with no buttons in it, and a stop with no estimate has its own", all, notes.join("; "));
 }
 
 /* T5 — the bus sheet's heading */
@@ -935,6 +951,73 @@ if (want("T26")) {
         /^South/.test(south) && /Following/.test(southPanel) && own === 0 && !me.errs.length && !dr.errs.length,
         JSON.stringify({ hint, tapped, first, near, kept, gone, south, southPanel, own, errs: me.errs.concat(dr.errs) }));
   await dr.ctx.close();
+}
+
+/* T27 — v1.101.0 (Asim). Once the next booked stop reads "Be at your stop"
+   on the passenger page, the pickup pop-up comes up over everything on the
+   driver's phone: the stop, how many are booked, Call passenger for each
+   booking with a number, Picked up and Nobody here. It stays through polls
+   and while the bus moves (its buttons waiting, with the red refusal), Call
+   passenger does not take it down, and Picked up or Nobody here does. */
+if (want("T27")) {
+  const etas = { North: {}, South: {} };
+  const asked = [];
+  const world = { checks: okCheck(), etas, trips: { North: null, South: null },
+    people: (post) => { asked.push(post.who || {}); return { ok: true, route: "North", people: {
+      N01: [{ phone: "07700 900123", seats: 1 }, { phone: "", seats: 1 }],
+      N02: [{ phone: "07700 900456", seats: 2 }, { phone: "07700 900789", seats: 1 }] } }; } };
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world });
+  await startRun(me);
+  const pop = () => me.pg.evaluate(() => {
+    const m = document.getElementById("pickModal");
+    const r = m.getBoundingClientRect(), b = document.getElementById("pickBody").getBoundingClientRect();
+    return { up: m.classList.contains("is-on"), text: m.textContent.replace(/\s+/g, " ").trim(),
+      calls: [...m.querySelectorAll("[data-pickcall]")].map(x => x.getAttribute("data-pickcall")),
+      dead: [...m.querySelectorAll("[data-pick]")].map(x => x.disabled),
+      moving: !!(document.getElementById("pickMoving") || {}).classList?.contains("is-on"),
+      centred: Math.abs((b.top + b.bottom) / 2 - (r.top + r.bottom) / 2) < 40 };
+  });
+  const again = async () => { await me.clickId("stopsBack"); await me.toStops(); await me.close(); await me.wait(1500); };
+  /* Ten minutes out: no pop-up, and the stop itself opens it early. */
+  etas.North.N01 = T("10:14");
+  await again();
+  const early = await pop();
+  const rowOpens = await me.pg.evaluate(() => !!document.querySelector('[data-pickopen="N01"]'));
+  const rowBtns = await me.pg.evaluate(() => !!document.querySelector('[data-triptap="N01"]'));
+  /* A minute away. */
+  await me.jump(9); await again();
+  const due = await pop();
+  await me.shot("T27-popup");
+  await me.wait(11000);
+  const stays = await pop();
+  await moveFor(me, 6);
+  const moving = await pop();
+  await stopFor(me, 4);
+  const still = await pop();
+  await me.pg.click("[data-pick='pickup']"); await me.wait(1200);
+  const after = await pop();
+  const sent = (world.trips.North || { served: {} }).served.N01 || {};
+  /* The next stop, by tapping its row, and Nobody here. */
+  etas.North.N02 = T("10:25");
+  await again();
+  await me.pg.click('[data-pickopen="N02"]'); await me.wait(1200);
+  const two = await pop();
+  await me.pg.click("[data-pick='empty']"); await me.wait(1200);
+  const twoAfter = await pop();
+  const sent2 = (world.trips.North || { served: {} }).served.N02 || {};
+  const who = asked[0] || {};
+  check("T27", "«Be at your stop» puts the pickup pop-up over the screen with Call passenger; Picked up or Nobody here takes it down",
+        !early.up && rowOpens && !rowBtns &&
+        due.up && due.centred && /Scarisbrick Drive/.test(due.text) && /10:15/.test(due.text) &&
+        /2 people booked/.test(due.text) && /Picked up/.test(due.text) && /Nobody here/.test(due.text) &&
+        JSON.stringify(due.calls) === JSON.stringify(["tel:07700900123"]) &&
+        stays.up && moving.up && moving.moving && moving.dead.every(Boolean) &&
+        still.up && !still.moving && still.dead.every(x => !x) &&
+        !after.up && sent.event === "pickup" &&
+        two.up && two.calls.length === 2 && /2 seats/.test(two.text) && !twoAfter.up && sent2.event === "empty" &&
+        who.driver === SAMPLE && who.route === "North" && who.pin === "1234" && !me.errs.length,
+        JSON.stringify({ early, rowOpens, rowBtns, due, stays: stays.up, moving, still, after: after.up, sent, two, twoAfter: twoAfter.up, sent2, who, errs: me.errs }));
+  await me.ctx.close();
 }
 
 await done();

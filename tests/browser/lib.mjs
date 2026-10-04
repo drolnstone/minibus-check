@@ -196,6 +196,8 @@ export async function phone(opts = {}) {
     else if (post.action === "authorise") body = world.authorise ? world.authorise(post)
       : { ok: true, authorised: true, by: (post.authorise || {}).who || COORDINATOR, checkId: "", at: sNow() };
     else if (post.action === "endrun") body = world.endrun ? world.endrun(post) : { ok: true };
+    /* The numbers behind the pickup pop-up's Call passenger, from v1.101.0. */
+    else if (post.action === "stoppeople") body = world.people ? world.people(post) : { ok: false, error: "not your run" };
     else if (post.action === "rotaRequest" || post.request) {
       if (world.requestOk) {
         const q = post.request || {};
