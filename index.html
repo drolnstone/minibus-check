@@ -5705,7 +5705,8 @@ function mapHref(where){
    estimate, and is bold like any other. */
 function stopTimeHtml(s, done){
   var plan = esc(s.time);
-  if(done || s.arrival || s.depart) return '<span class="stop-time">'+plan+'</span>';
+  /* From v1.97.2 the church arrival takes the estimate too (Asim). */
+  if(done || s.depart) return '<span class="stop-time">'+plan+'</span>';
   var at = rotaStopEtas ? rotaStopEtas[s.id] : null;
   if(!at) return '<span class="stop-time">'+plan+'</span>';
   return '<span class="stop-time stop-time-eta">'+esc(tripClock(Number(at)))+'</span>';

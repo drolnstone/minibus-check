@@ -11,13 +11,13 @@ What went out shows on the coordinator app's Alerts list (Asim):
   - Marked Sent or Email. Never counted on the bell, never in the strip,
     never a push of its own.
 
-Merge #50 (w2.44.0) first; this branch then takes it in, so the Worker
-pasted below carries both.
+This follows v1.97.2 · w2.44.0 · v1.104.0 (#50, stop list order and the
+church estimate), which this Worker carries.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.97.1         v1.98.0
-  Worker  w2.43.0/44.0    w2.45.0
+  Pages   v1.97.2         v1.98.0
+  Worker  w2.44.0         w2.45.0
   Code.gs v1.104.0        v1.105.0
 
 
