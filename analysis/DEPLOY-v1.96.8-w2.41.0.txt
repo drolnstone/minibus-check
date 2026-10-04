@@ -67,10 +67,12 @@ D. Back in the coordinator app, Change, pick the top of the list (usual),
 IF YOU USED THE SCRIPT PROPERTY TODAY
 -------------------------------------
 
-On 4 October COORDINATOR_EMAIL was pointed at Bro Calvin by hand. Put it
-back to your own address (Apps Script, Project Settings, Script
+On 4 October COORDINATOR_ROLES was reordered by hand to put Assistant
+Coordinator first, so Bro Calvin was the one people ring. (COORDINATOR_EMAIL
+holds three addresses, so it never picks the person; the role order does.)
+Put COORDINATOR_ROLES back as it was (Apps Script, Project Settings, Script
 Properties), then Minibus, Send everything to the live server now. From
-this release the chooser does that job instead, without touching emails.
+this release the chooser does that job instead, without touching settings.
 
 
 WHAT CHANGED
