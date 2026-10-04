@@ -1,6 +1,6 @@
 MINIBUS
 =======
-  pages v1.99.0 · server w2.44.0 · sheet v1.104.0
+  pages v1.99.0 · server and sheet unchanged
 
 Driver app, Stops and bookings (Asim): a driver who is not driving that
 route taps a stop and follows the bus to it, on North or South, the way a
@@ -11,31 +11,29 @@ passenger without a booking can on the passenger page.
   - Tap the stop again, or Stop following, to stop. Kept for the Sunday.
   - Not on the route this phone is driving, and not during a rehearsal.
 
-This sits on top of w2.44.0 (stop list keeps timetable order, PR #50).
+Pages only. It follows #50 (v1.97.2 · w2.44.0) and #51 (v1.98.0 · w2.45.0
+· v1.105.0), and carries #50's changes with it.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.97.1         v1.99.0  (merging is enough)
-  Worker  w2.43.0/44.0    w2.44.0  (paste only if #50's was not pasted)
-  Code.gs v1.104.0        v1.104.0  (no paste)
+  Pages   v1.98.0         v1.99.0  (by the merge)
+  Worker  as #50/#51 left it        (no paste)
+  Code.gs as #51 left it            (no paste)
 
 
 IN THIS ORDER
 -------------
 
-1. WORKER, only if the footer does not already say server w2.44.0. Paste
-   the whole file into the Cloudflare editor and deploy:
-   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/driver-live-stops-klf2cw/server/worker.js
-   No new variables.
+1. Merge #50 (and paste its Worker) and #51 first, as their own notes say.
+   If this one shows a conflict after that, it is the version numbers only.
 
-2. Merge the pull request.
+2. Merge this pull request.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.99.0 · server w2.44.0 · sheet
-   v1.104.0 .
+A. The foot of the apps reads  app v1.99.0 .
 
 B. On a Sunday after bookings close, a driver not driving opens Stops and
    bookings, taps a stop, and sees the panel.
