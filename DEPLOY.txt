@@ -1,27 +1,31 @@
 MINIBUS
 =======
-  pages v1.97.1 · server w2.44.0 · sheet v1.104.0
+  pages v1.99.0 · server w2.44.0 · sheet v1.104.0
 
-Stops and bookings stays in timetable order while a run is out (Asim):
+Driver app, Stops and bookings (Asim): a driver who is not driving that
+route taps a stop and follows the bus to it, on North or South, the way a
+passenger without a booking can on the passenger page.
 
-  - A stop nobody booked is never shown later than the stop after it.
-    On 4 Oct North showed Pym Street 10:59 above Wilburn Street 10:58.
-  - Booked stops, and the passenger's estimate, are unchanged.
+  - The panel above the list says what the passenger page says about that
+    stop: minutes away, Be at your stop, gone past, picked up.
+  - Tap the stop again, or Stop following, to stop. Kept for the Sunday.
+  - Not on the route this phone is driving, and not during a rehearsal.
 
-This follows v1.97.1 · w2.43.0 · v1.104.0 (one alert per person).
+This sits on top of w2.44.0 (stop list keeps timetable order, PR #50).
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.97.1         v1.97.1  (nothing to do)
-  Worker  w2.43.0         w2.44.0
+  Pages   v1.97.1         v1.99.0  (merging is enough)
+  Worker  w2.43.0/44.0    w2.44.0  (paste only if #50's was not pasted)
   Code.gs v1.104.0        v1.104.0  (no paste)
 
 
 IN THIS ORDER
 -------------
 
-1. WORKER. Paste the whole file into the Cloudflare editor and deploy:
-   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/project-thread-2n4c59/server/worker.js
+1. WORKER, only if the footer does not already say server w2.44.0. Paste
+   the whole file into the Cloudflare editor and deploy:
+   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/driver-live-stops-klf2cw/server/worker.js
    No new variables.
 
 2. Merge the pull request.
@@ -30,13 +34,20 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.97.1 · server w2.44.0 · sheet
+A. The foot of all three apps reads  app v1.99.0 · server w2.44.0 · sheet
    v1.104.0 .
+
+B. On a Sunday after bookings close, a driver not driving opens Stops and
+   bookings, taps a stop, and sees the panel.
 
 
 WHAT CHANGED
 ------------
 
-1. server/worker.js: boardPayload, the per-stop estimates.
+1. index.html: dwHtml, dwFetch and the stop rows in rotaPaintStops. The
+   panel asks the live server the passenger page's question (?trip=1&s=),
+   so the two apps give one answer about a stop.
 
-2. Tests: tests/suites/53-stop-order.mjs.
+2. Version v1.99.0 in index.html, sw.js, sunday/ and coord/.
+
+3. Tests: T26 in tests/browser/driver-app.mjs.

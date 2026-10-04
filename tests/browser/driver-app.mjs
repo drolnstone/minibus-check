@@ -871,6 +871,56 @@ if (want("T25")) {
   await me.ctx.close();
 }
 
+/* T26 — v1.99.0 (Asim). A driver who is not driving today taps a stop and
+   follows the bus to it, the way a passenger without a booking can, on North
+   or South. The rostered driver's own route offers nothing of the kind. */
+if (want("T26")) {
+  const ans = { N06: { ok: true, live: true, watching: true, route: "North", stop: "Bedford Road by Stuart Hotel",
+    stopId: "N06", scheduled: "10:38", started: true, ended: false, startedAtWords: "10:05",
+    lastStop: "Grace Road bus stop, Walton Vale", lastAtWords: "10:18", mine: "eta",
+    offset: 3, etaWords: "10:34", minutes: 12, imminent: false } };
+  const run = { trip: "t1", route: "North", reg: "NH56 FWP", driver: "Bro Adrian", started: T("10:05"), ended: 0,
+    served: { N01: { event: "pickup", at: T("10:12") }, N02: { event: "pickup", at: T("10:18") } },
+    lastStop: "Grace Road bus stop, Walton Vale", lastAt: T("10:18"), offset: 3 };
+  const world = { trips: { North: run, South: null },
+    watch: (id) => ans[id] || { ok: true, live: true, watching: true, stopId: id, started: false } };
+  const me = await phone({ clock: "2026-09-27T10:22:00+01:00", world });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn("Bro Cedric"); await me.toStops(); await me.close(); await me.wait(800);
+  const panel = () => me.pg.evaluate(() => { const e = document.querySelector("#dwPanel .dw"); return e ? e.textContent : ""; });
+  const tapRow = (id) => me.pg.evaluate(i => { const r = document.querySelector('[data-dwstop="' + i + '"]'); if (r) { r.click(); return true; } return false; }, id);
+  const hint = /Tap a stop to follow the bus/.test(await me.text("#stopsBody"));
+  const tapped = await tapRow("N06"); await me.wait(800);
+  const first = await panel();
+  await me.shot("T26-following");
+  ans.N06 = Object.assign({}, ans.N06, { minutes: 1, imminent: true });
+  await me.wait(6000);
+  const near = await panel();
+  ans.N06 = Object.assign({}, ans.N06, { mine: "served", servedEvent: "pickup", servedAt: "10:35" });
+  await me.load(); await me.close(["howDone"]); await me.toStops(); await me.close(); await me.wait(1200);
+  const kept = await panel();
+  await me.pg.click("#dwOff"); await me.wait(300);
+  const gone = !(await panel()) && /Tap a stop/.test(await me.text("#stopsBody"));
+  /* South: follow a South stop, and the screen opens on South next time. */
+  await me.pg.click('[data-stoproute="South"]'); await me.wait(600);
+  await tapRow("S03"); await me.wait(600);
+  await me.clickId("stopsBack"); await me.toStops(); await me.close(); await me.wait(800);
+  const south = await me.pg.evaluate(() => (document.querySelector(".stop-tab.is-active") || {}).textContent || "");
+  const southPanel = await panel();
+  await me.ctx.close();
+  /* The rostered North driver on his own route: nothing to follow. */
+  const dr = await phone({ clock: "2026-09-27T10:22:00+01:00", world });
+  await dr.load(); await dr.close(["howDone"]);
+  await dr.signIn("Bro Sample"); await dr.toStops(); await dr.close(); await dr.wait(800);
+  const own = await dr.pg.evaluate(() => document.querySelectorAll('[data-dwstop]').length);
+  check("T26", "a driver not driving taps a stop and follows the bus to it, on North or South",
+        hint && tapped && /Following Bedford Road/.test(first) && /12 min/.test(first) && /About 10:34/.test(first) &&
+        /Be at your stop/.test(near) && /Picked up at 10:35/.test(kept) && gone &&
+        /^South/.test(south) && /Following/.test(southPanel) && own === 0 && !me.errs.length && !dr.errs.length,
+        JSON.stringify({ hint, tapped, first, near, kept, gone, south, southPanel, own, errs: me.errs.concat(dr.errs) }));
+  await dr.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

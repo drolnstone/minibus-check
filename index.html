@@ -792,6 +792,26 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .headrow{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .headrow>:first-child{flex:1 1 auto;min-width:0}
 .trip-strip{border:1px solid var(--hair);border-radius:var(--r);padding:13px;margin:0 0 12px;background:var(--card)}
+/* Following a stop from a route this phone is not driving, from v1.99.0.
+   The passenger page's panel, in this app's colours: green once the bus has
+   been, amber when it has gone past or gone quiet, red for be at your stop. */
+.dw-row{cursor:pointer}
+.dw-on{box-shadow:inset 0 0 0 2px var(--accent-ink)}
+.dw-hint{font-size:13px;color:var(--muted);margin:0 0 6px}
+.dw{border:1px solid var(--hair);border-radius:var(--r);padding:9px 12px;margin:0 0 8px;background:var(--card)}
+.dw-eyebrow{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+.dw-big{font-family:"Barlow Condensed",sans-serif;font-size:24px;font-weight:700;line-height:1.15;margin:1px 0 2px}
+.dw-sub{font-size:13px;line-height:1.45;color:var(--muted);margin:0}
+.dw-sub b{color:var(--ink)}
+.dw-off{background:none;border:0;padding:0;margin-top:4px;font:inherit;font-size:13px;
+  color:var(--muted);text-decoration:underline;cursor:pointer}
+.dw-go{background:var(--pass-bg);border-color:var(--pass)}
+.dw-go .dw-big{color:var(--pass)}
+.dw-warn{background:var(--warn-bg);border-color:var(--warn)}
+.dw-warn .dw-big{color:var(--warn)}
+.dw-now{background:var(--stop-bg);border-color:var(--stop)}
+.dw-now .dw-big{color:var(--stop)}
 /* The confirm-it-is-you panel, in the trip strip and in the request form. */
 .pingate{margin-top:11px;padding-top:11px;border-top:1px solid var(--hair)}
 .pingate .pinbox{width:120px;margin-top:6px}
@@ -1616,7 +1636,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.97.1";
+var APP_VERSION = "v1.99.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -5619,6 +5639,120 @@ function tripMayWatch(){
   return true;
 }
 
+/* ---- following one stop, from a route he is not driving (v1.99.0) ------
+   Asim: a driver who is not out today should be able to follow the bus to a
+   stop the way a passenger without a booking can. He taps a stop on a route
+   he cannot tap, and the panel above the list says what the passenger page
+   says about that stop: how many minutes, be at your stop, gone past, picked
+   up. The answer comes from the same server call the passenger page makes
+   (?trip=1&s=), so the two phones cannot disagree about the same kerb.
+
+   Kept for the Sunday on this phone, one stop at a time. Not offered during a
+   rehearsal: the server lends a phone with no booking a test seat then, not
+   the stop it asked about. */
+var DW_KEY = "driver.watch.v1";
+var dwLive = null, dwBusy = false;
+function dwLoad(){
+  try{
+    var w = JSON.parse(localStorage.getItem(DW_KEY) || "null");
+    return (w && w.date && w.stopId) ? w : null;
+  }catch(e){ return null; }
+}
+function dwSave(stopId){
+  try{
+    if(stopId) localStorage.setItem(DW_KEY, JSON.stringify({ date:rotaKey(rotaBaseSunday(0)), stopId:stopId }));
+    else localStorage.removeItem(DW_KEY);
+  }catch(e){}
+}
+/* The stop this phone is following, only for the Sunday on screen and only
+   while it is still on the timetable. */
+function dwStopNow(){
+  if(tripRoundNow()) return null;
+  var w = dwLoad();
+  if(!w || w.date !== rotaKey(rotaBaseSunday(0))) return null;
+  var hit = null;
+  (rotaStops||[]).forEach(function(s){ if(s.id===w.stopId && !s.arrival && !s.depart) hit = s; });
+  return hit;
+}
+function dwFetch(cb){
+  var s = dwStopNow();
+  if(!s || !LIVE || !navigator.onLine || dwBusy){ if(cb) cb(false); return; }
+  dwBusy = true;
+  callFetch(LIVE_ENDPOINT+"?trip=1&s="+encodeURIComponent(s.id),
+            {method:"GET",redirect:"follow"}, POLL_TIMEOUT)
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      dwBusy = false;
+      var out = JSON.parse(t);
+      if(!out || out.ok!==true) throw new Error("no answer");
+      out.forStop = s.id;
+      dwLive = out;
+      if(cb) cb(true);
+    })
+    .catch(function(){ dwBusy = false; if(cb) cb(false); });
+}
+/* Redraws the panel alone, so a poll never rebuilds the list under a thumb. */
+function dwPaint(){
+  var box = $("dwPanel");
+  if(box) box.innerHTML = dwHtml();
+  dwWire();
+}
+function dwWire(){
+  var off = $("dwOff");
+  if(off) off.onclick = function(){ dwSave(""); dwLive = null; tripPaint(); };
+}
+function dwHtml(){
+  var s = dwStopNow();
+  if(!s || s.route !== rotaStopsRoute || tripMayTap(s.route)) return "";
+  var L = (dwLive && dwLive.forStop === s.id) ? dwLive : null;
+  var head = "", sub = "", cls = "";
+  var stop = esc(s.stop), sched = esc(s.time);
+  if(!L){
+    head = sched; sub = "Checking…";
+  } else if(L.live === false){
+    if(L.why === "cancelled"){ cls = "dw-warn"; head = "Not running"; sub = "No bus to "+stop+" today."; }
+    else { head = "Not set off yet"; sub = "Timetabled "+sched+"."; }
+  } else if(L.mine === "served"){
+    var empty = L.servedEvent === "empty";
+    cls = empty ? "dw-warn" : "dw-go";
+    head = (empty ? "Nobody there at " : "Picked up at ")+esc(L.servedAt);
+    sub = empty ? "Nobody was waiting at "+stop+"." : "The bus has been to "+stop+".";
+  } else if(L.mine === "passed"){
+    cls = "dw-warn"; head = "The bus has gone past";
+    sub = "It was at "+esc(L.passedStop)+" at "+esc(L.passedAtWords)+
+          ". No pickup recorded at "+stop+".";
+  } else if(!L.started){
+    head = "Not set off yet"; sub = "Timetabled "+sched+".";
+  } else if(L.mine === "eta"){
+    var close = L.imminent || L.minutes <= 0;
+    cls = close ? "dw-now" : "";
+    head = close ? "Be at your stop" : (L.minutes+" min");
+    sub = "About <b>"+esc(L.etaWords)+"</b> \u00B7 "+scheduleWords(L.offset)+
+          (L.lastStop
+            ? ". Left "+esc(L.lastStop)+(L.lastAtWords ? " "+esc(L.lastAtWords) : "")+"."
+            : ". Left church"+(L.startedAtWords ? " "+esc(L.startedAtWords) : "")+".");
+  } else if(L.mine === "ended" || L.ended){
+    head = "The bus has finished its run"; sub = stop+" was never marked.";
+  } else if(L.mine === "silent"){
+    cls = "dw-warn"; head = "No update since it left";
+    sub = "Left church"+(L.startedAtWords ? " at "+esc(L.startedAtWords) : "")+
+          ". Timetabled "+sched+".";
+  } else if(!L.lastStop){
+    head = "On its way";
+    sub = "Left church"+(L.startedAtWords ? " at "+esc(L.startedAtWords) : "")+
+          ". Timetabled "+sched+".";
+  } else {
+    cls = "dw-warn"; head = "No update yet";
+    sub = "Last seen at "+esc(L.lastStop)+", "+esc(L.lastAtWords)+". Timetabled "+sched+".";
+  }
+  return '<div class="dw '+cls+'">'+
+           '<p class="dw-eyebrow">Following '+stop+'</p>'+
+           '<p class="dw-big">'+head+'</p>'+
+           '<p class="dw-sub">'+sub+'</p>'+
+           '<button type="button" class="dw-off" id="dwOff">Stop following</button>'+
+         '</div>';
+}
+
 /* ---- opening a stop in a map ------------------------------------------
    Whatever map app the phone has, rather than the one we happen to prefer.
 
@@ -6585,6 +6719,8 @@ function rotaCountsStart(){
        rotaStopsRoute on every open and it is not set again until the first
        paint, so a poll landing in that gap asked about North on a South
        driver's phone. Passing nothing lets the one chain answer. */
+    /* The stop he is following, if any, on the same five seconds. */
+    dwFetch(function(ok){ if(ok && rotaStopsOpen) dwPaint(); });
     rotaCountsFetch(null,function(changed){
       if(!rotaStopsOpen) return;
       /* Not on top of a thumb. This is the last thing left that can rebuild
@@ -7037,6 +7173,8 @@ function rotaOpenStops(){
      end it with. */
   rotaCountsFetch(rotaStopsRoute||rotaHomeRoute()||"North",
                   function(){ if(rotaStopsOpen) tripPaint(); });
+  dwLive=null;
+  dwFetch(function(ok){ if(ok && rotaStopsOpen) dwPaint(); });
   tripFlush();
   rotaCountsStart();
 
@@ -7131,7 +7269,10 @@ function rotaPaintStops(){
      only re-derived when the current route was INVALID, and North is always
      valid. So the wrong answer was permanent, and tapping a tab made it
      permanent for everybody, because nothing was ever reset on close. */
-  if(!rotaRouteChosen && mine && routes.indexOf(mine)>=0) rotaStopsRoute=mine;
+  /* Not driving today and following a stop: open on that stop's route. */
+  var dwS=dwStopNow();
+  var land=(!onDuty && dwS && !tripMayTap(dwS.route)) ? dwS.route : mine;
+  if(!rotaRouteChosen && land && routes.indexOf(land)>=0) rotaStopsRoute=land;
   if(rotaStopsRoute===null || routes.indexOf(rotaStopsRoute)<0) rotaStopsRoute=routes[0];
   var route=rotaStopsRoute;
 
@@ -7253,6 +7394,10 @@ function rotaPaintStops(){
               ? '<span class="stop-whose">'+esc(tripWhoDrives(route))+'</span>'
               : ''))+'</p>';
 
+  /* The stop being followed, frozen with the rest so it stays in sight
+     while the list scrolls. */
+  html+='<div id="dwPanel">'+dwHtml()+'</div>';
+
   /* End of the frozen block. The live strip and the stops themselves scroll
      normally from here down. */
   html+='</div>';
@@ -7269,6 +7414,9 @@ function rotaPaintStops(){
   var mayTap   = tripMayTap(route);
   var watching = !mayTap && tripMayWatch();
   var queued   = tripLoadQ().length;
+  /* Any pickup on a route he cannot tap can be followed, outside a rehearsal. */
+  var dwOk     = watching && !tripRoundNow();
+  var dwOn     = dwOk ? dwStopNow() : null;
 
   if(tripRoundNow()){
     /* Unmissable on purpose. A driver who opens the app during a rehearsal
@@ -7286,6 +7434,9 @@ function rotaPaintStops(){
   pinWhy="";
   if(mayTap || watching){
     html+=tripHeaderHtml(route,mayTap,onThis,queued,view);
+  }
+  if(dwOk && !(dwOn && dwOn.route===route)){
+    html+='<p class="dw-hint">Tap a stop to follow the bus.</p>';
   }
 
   /* How far along the route he actually is: the LAST stop he marked, not the
@@ -7369,13 +7520,18 @@ function rotaPaintStops(){
     var n=(!s.arrival && showCounts) ? (rotaStopCounts[s.id]||0) : null;
     var done=(!s.arrival && (mayTap||watching)) ? view.served[s.id] : null;
     var cls="stop-row"+(s.arrival?" stop-arrival":"");
+    var dwAttr="";
+    if(dwOk && !s.arrival && !s.depart){
+      cls+=" dw-row"+(dwOn && dwOn.id===s.id ? " dw-on" : "");
+      dwAttr=' data-dwstop="'+esc(s.id)+'" role="button" tabindex="0"';
+    }
     if(!s.arrival && (onThis || (watching && view.started))){
       if(done) cls+=" trip-done";
       else if(missedIds[s.id]) cls+=" trip-missed-row";
       else if(n===0) cls+=" trip-clear";
       else if(nextStop && s.id===nextStop.id) cls+=" trip-next";
     }
-    html+='<div class="'+cls+'">'+
+    html+='<div class="'+cls+'"'+dwAttr+'>'+
             stopTimeHtml(s, done)+
             '<span class="stop-name">'+esc(s.stop)+
               (s.arrival?' <b>(arrive)</b>':'')+
@@ -7449,6 +7605,20 @@ function rotaPaintStops(){
   }
 
   $("stopsBody").innerHTML=html;
+
+  /* Tap a stop to follow it; tap it again to stop. */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-dwstop]"),function(r){
+    r.addEventListener("click",function(e){
+      if(e.target && e.target.closest && e.target.closest("a,button")) return;
+      var id=this.getAttribute("data-dwstop");
+      var cur=dwStopNow();
+      dwLive=null;
+      dwSave(cur && cur.id===id ? "" : id);
+      tripPaint();
+      dwFetch(function(ok){ if(ok && rotaStopsOpen) dwPaint(); });
+    });
+  });
+  dwWire();
 
   Array.prototype.forEach.call(document.querySelectorAll("[data-stoproute]"),function(b){
     b.addEventListener("click",function(){
