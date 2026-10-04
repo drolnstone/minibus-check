@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.105.0";
+var SCRIPT_VERSION = "v1.105.2";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -13738,17 +13738,25 @@ function tellCoordinatorPhones(alert) {
    not wake (never for the same alert twice, so this is once each), and
    they are emailed the alert's own short words, at once. COORDINATOR_EMAIL
    has the full email already and is not sent this as well. Nobody without
-   an Email on the Drivers tab, and never for the menu's test. */
+   an Email on the Drivers tab, and never for the menu's test.
+
+   COORDINATOR_EMAIL may list several addresses. Until v1.105.2 it was
+   compared whole, so with all three coordinators listed nobody matched and
+   a listed coordinator with alerts off got both emails. Each one counts. */
 function emailUnalerted(alert, names) {
   if (!alert || alert.kind === "test") return 0;
   var want = {};
   (names || []).forEach(function (n) { want[String(n || "").trim().toLowerCase()] = true; });
-  var skip = String(COORDINATOR_EMAIL || "").trim().toLowerCase();
+  var skip = {};
+  String(COORDINATOR_EMAIL || "").split(/[,;]/).forEach(function (e) {
+    e = String(e || "").trim().toLowerCase();
+    if (e) skip[e] = true;
+  });
   var sent = 0;
   readDrivers(SpreadsheetApp.getActive()).forEach(function (d) {
     var to = String(d.email || "").trim();
     if (!d.active || !to || !want[String(d.name || "").trim().toLowerCase()]) return;
-    if (to.toLowerCase() === skip) return;
+    if (skip[to.toLowerCase()]) return;
     try {
       sendMail({
         to: to,
