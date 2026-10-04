@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.96.8 · THE COORDINATOR'S APP.
+<!-- BUILD v1.96.9 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -687,7 +687,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.96.8";
+var PAGE_VERSION = "v1.96.9";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1399,11 +1399,10 @@ function pickContact(){
   var how = o && !o.until ? "changed" : "today";
   openSheet({ eyebrow: "Emergency calls", title: "Who takes emergency calls",
     body: '<div class="field"><label for="ctName">Every Call button shows</label><select id="ctName">'+opts+'</select></div>' +
-          '<div id="ctHowBox"><p class="tiny" style="margin:0 0 4px">For how long</p><div class="chips" id="ctHow">' +
+          '<div id="ctHowBox"><p class="tiny" style="margin:14px 0 4px">For how long</p><div class="chips" id="ctHow">' +
           '<button type="button" data-v="today" class="'+(how === "today" ? "on" : "")+'">Today only</button>' +
           '<button type="button" data-v="changed" class="'+(how === "changed" ? "on" : "")+'">Until changed back</button></div>' +
-          '<p class="tiny">Today only goes back to the usual person at midnight by itself.</p></div>' +
-          '<p class="tiny">Only people with a coordinator title, Active YES and a phone number on the Drivers tab are listed.</p>',
+          '</div>',
     go: "Save",
     onGo: function(){
       var nm = $("ctName").value;
