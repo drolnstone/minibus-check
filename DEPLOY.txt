@@ -1,6 +1,6 @@
 MINIBUS
 =======
-  pages v1.99.0 · server and sheet unchanged
+  pages v1.99.0 · server w2.45.0 · sheet v1.105.0
 
 Driver app, Stops and bookings (Asim): a driver who is not driving that
 route taps a stop and follows the bus to it, on North or South, the way a
@@ -11,29 +11,26 @@ passenger without a booking can on the passenger page.
   - Tap the stop again, or Stop following, to stop. Kept for the Sunday.
   - Not on the route this phone is driving, and not during a rehearsal.
 
-Pages only. It follows #50 (v1.97.2 · w2.44.0) and #51 (v1.98.0 · w2.45.0
-· v1.105.0), and carries #50's changes with it.
+Pages only. It follows #50 and #51, both merged.
 
 
 YOU ARE ON              GOING TO
   Pages   v1.98.0         v1.99.0  (by the merge)
-  Worker  as #50/#51 left it        (no paste)
-  Code.gs as #51 left it            (no paste)
+  Worker  w2.45.0         w2.45.0  (no paste)
+  Code.gs v1.105.0        v1.105.0  (no paste)
 
 
 IN THIS ORDER
 -------------
 
-1. Merge #50 (and paste its Worker) and #51 first, as their own notes say.
-   If this one shows a conflict after that, it is the version numbers only.
-
-2. Merge this pull request.
+1. Merge this pull request. Nothing to paste.
 
 
 AFTER IT
 --------
 
-A. The foot of the apps reads  app v1.99.0 .
+A. The foot of all three apps reads  app v1.99.0 · server w2.45.0 · sheet
+   v1.105.0 .
 
 B. On a Sunday after bookings close, a driver not driving opens Stops and
    bookings, taps a stop, and sees the panel.
