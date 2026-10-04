@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.100.1 · THE COORDINATOR'S APP.
+<!-- BUILD v1.100.2 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -696,7 +696,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.100.1";
+var PAGE_VERSION = "v1.100.2";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1708,6 +1708,13 @@ function loadBookings(key){
   }, function(){ BOOK.loading = ""; });
 }
 
+/* Who keyed in a seat booked in this app, from the note the server writes
+   on it: "Booked by Bro Asim in the coordinator's app." */
+function bookedBy(note){
+  var m = /^Booked by (.+) in the coordinator's app\.$/.exec(String(note || "").trim());
+  return m ? "By " + m[1] : "By coordinator";
+}
+
 function paintBookings(key){
   var chips = [D.today, plusWeeks(D.today, 1)];
   var h = '<div class="chips stick">' + chips.map(function(k){
@@ -1740,7 +1747,7 @@ function paintBookings(key){
         var moved = k.stop && !sameStop(k.stop, s.stop);
         h += '<div class="bk"><span class="who"><span class="n">'+esc(seatWords(k.seats))+'</span>' +
              (k.phone ? '<a href="tel:'+esc(k.phone)+'">'+esc(phoneWords(k.phone))+'</a>' : '<span>no number</span>') +
-             (k.coord ? '<span class="tag info">By phone</span>' : '') +
+             (k.coord ? '<span class="tag info">'+esc(bookedBy(k.note))+'</span>' : '') +
              (moved ? '<small class="moved">Booked when '+esc(s.id)+' was '+esc(k.stop)+'</small>' : '') + '</span>' +
              (b.mayAct && !k.rehearsal ? '<button class="mini warn" type="button" data-do="cancel" data-id="'+k.id+'">Cancel</button>' : '') + '</div>';
       });
