@@ -236,7 +236,10 @@ CREATE TABLE IF NOT EXISTS push_subs (
   -- equality, so a minute's drift would read as a change and nothing would
   -- ever be held back. NULL means nothing has been said yet.
   -- Added to a live database by the Worker on first use.
-  last_eta INTEGER
+  last_eta INTEGER,
+  -- Which app signed this endpoint up: driver, coord, both, or '' (before
+  -- w2.43.0). Added to a live database by the Worker on first use.
+  app      TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS push_role ON push_subs(role);
 CREATE INDEX IF NOT EXISTS push_ref  ON push_subs(ref);
