@@ -994,6 +994,24 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-sheet h2{margin-bottom:10px}
 .rota-sheet .field{margin-bottom:12px}
 .rota-modal-actions{display:flex;gap:8px;margin-top:12px}
+/* The pickup pop-up (v1.101.0). Centred on every phone, not a sheet from the
+   bottom, and above the request sheet; the PIN sheet and the red refusals
+   still come above it. */
+.pick-modal{z-index:130;align-items:center;padding:16px}
+.pick-modal .pick-sheet{border-radius:14px;max-height:calc(100vh - 32px);
+  padding:18px calc(16px + var(--safe-r)) 18px calc(16px + var(--safe-l))}
+.pick-sheet h2{margin-bottom:4px}
+.pick-n{margin:0 0 14px;font-size:15px;color:var(--muted)}
+.pick-n b{color:var(--ink)}
+.pick-btns{display:flex;flex-direction:column;gap:8px}
+.pick-btns .btn{width:100%}
+.pick-call{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:58px;line-height:1.15}
+.pick-call small{font-family:inherit;font-size:13px;font-weight:400;color:var(--muted);letter-spacing:0}
+.pick-moving{display:none;margin:0 0 10px;padding:11px 12px;border-radius:8px;
+  background:var(--stop);color:var(--stop-on);font-weight:700;text-align:center}
+.pick-moving.is-on{display:block}
+.pick-row{cursor:pointer}
 .rota-modal-actions .btn{flex:1}
 @media (min-width:641px){.rota-modal{align-items:center}.rota-sheet{border-radius:14px;max-height:80vh}}
 
@@ -1422,6 +1440,15 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   </div>
 </div>
 
+<!-- The pickup pop-up, from v1.101.0 (Asim). Over everything on Stops and
+     bookings, in the middle of the screen, once the next booked stop reads
+     "Be at your stop" on the passenger page. It goes only when the driver
+     answers it: Picked up or Nobody here. Call passenger leaves it up.
+     Filled by pickPaint. -->
+<div class="rota-modal pick-modal" id="pickModal" aria-hidden="true">
+  <div class="rota-sheet pick-sheet" role="dialog" aria-modal="true" aria-labelledby="pickTitle" id="pickBody"></div>
+</div>
+
 <!-- Authorising a stopped bus. Behind a PIN because it is the one action in
      this app that lets a bus out with a fault on it, and the name that goes on
      the record has to be a name somebody can be asked about on Monday. -->
@@ -1636,7 +1663,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.100.2";
+var APP_VERSION = "v1.101.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -7200,11 +7227,13 @@ function stopsClose(){
      would find pinGateWasUp still true and never ask again. */
   pinModalClose();
   pinGateWasUp=false; pinWhy="";
+  pickNext=null; pickSync();
   show(stopsFrom||"driver");
 }
 
 function rotaPaintStops(){
   var stops=(rotaStops||[]).slice();
+  pickNext=null;
 
   if(!stops.length){
     /* Reached straight from the home screen, the rota may never have been
@@ -7471,6 +7500,10 @@ function rotaPaintStops(){
      better context than a card floating above, and one block less to read. */
   var missedIds={};
   missed.forEach(function(m){ missedIds[m.id]=true; });
+  /* The stop the pickup pop-up is about. A stop with no estimate cannot say
+     when "Be at your stop" comes, so its own row keeps the two buttons. */
+  pickNext=nextStop;
+  var pickRowBtns = !!(nextStop && !pickTimed(nextStop));
 
   /* THE STOP HE HAS GONE PAST WITHOUT MARKING.
 
@@ -7530,7 +7563,11 @@ function rotaPaintStops(){
       if(done) cls+=" trip-done";
       else if(missedIds[s.id]) cls+=" trip-missed-row";
       else if(n===0) cls+=" trip-clear";
-      else if(nextStop && s.id===nextStop.id) cls+=" trip-next";
+      else if(nextStop && s.id===nextStop.id){
+        cls+=" trip-next";
+        /* Tapped, it puts the pop-up up early: a bus ahead of its estimate. */
+        if(!pickRowBtns){ cls+=" pick-row"; dwAttr=' data-pickopen="'+esc(s.id)+'" role="button" tabindex="0"'; }
+      }
     }
     html+='<div class="'+cls+'"'+dwAttr+'>'+
             stopTimeHtml(s, done)+
@@ -7570,7 +7607,8 @@ function rotaPaintStops(){
              appear on every booked stop including ones miles ahead, which a
              driver never needs and which put a pair of buttons on most rows.
              The big button covers the stop in front of him. */
-          ((onThis&&mayTap&&!done&&!s.arrival&&(missedIds[s.id]||!showCounts)&&
+          ((onThis&&mayTap&&!done&&!s.arrival&&
+            (missedIds[s.id]||!showCounts||(pickRowBtns&&s.id===nextStop.id))&&
             !(askStop&&askStop.id===s.id))
             ? '<div class="trip-row-btns">'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="empty">Nobody there</button>'+
@@ -7620,6 +7658,13 @@ function rotaPaintStops(){
     });
   });
   dwWire();
+  Array.prototype.forEach.call(document.querySelectorAll("[data-pickopen]"),function(r){
+    r.addEventListener("click",function(e){
+      if(e.target && e.target.closest && e.target.closest("a,button")) return;
+      pickStopId=this.getAttribute("data-pickopen");
+      pickSync();
+    });
+  });
 
   Array.prototype.forEach.call(document.querySelectorAll("[data-stoproute]"),function(b){
     b.addEventListener("click",function(){
@@ -7727,6 +7772,7 @@ function rotaPaintStops(){
      CHANGED since it last drew. A repaint while the bus was moving therefore
      brought the buttons back to life and the banner back to blank, halfway
      down the road. */
+  pickSync();
   tripMovingPainted=null;
   tripPaintMoving();
   pinGateAutoFocus();
@@ -8300,19 +8346,154 @@ function pinGateFocus(){
   try{ i.focus(); }catch(e){}
 }
 
+/* ---- the pickup pop-up, from v1.101.0 (Asim) ----------------------------
+
+   Asim, 4 October 2026: passengers are told "Be at your stop" and still leave
+   the driver at the kerb wondering who he is waiting for, and drivers were
+   unsure whether to press the Picked up button fixed at the foot of the list.
+   So the question comes to him instead.
+
+   WHEN. The moment the next booked stop reads "Be at your stop" on the
+   passenger page: its estimate a minute or less away, the same test as the
+   passenger page's (TRIP_IMMINENT_MINUTES on the server), read off the same
+   estimate the board already carries. A minute out the bus is usually still
+   moving, so the pop-up comes up then, says who is booked, and its buttons
+   wait for him to pull up, as every stop tap already does. A bus ahead of its
+   estimate: he taps the stop in the list and it comes up there and then.
+
+   WHAT. The stop, how many are booked, Call passenger for each booking with
+   a number, Picked up and Nobody here. Call passenger leaves it up; the other
+   two are the stop taps they always were and take it down. It never goes on
+   its own while the stop is waiting for an answer.
+
+   WHO. Only the phone driving the run (onThis and mayTap in rotaPaintStops).
+   The numbers come from the live server, to that driver's PIN only. */
+var PICK_CLOSE_MIN = 1;     /* TRIP_IMMINENT_MINUTES on the server */
+var pickNext = null;        /* the next booked stop, as of the last paint */
+var pickStopId = "";        /* the stop the pop-up is up for, until answered */
+var pickPeople = null;      /* { trip, at, people:{ stopId:[{phone,seats}] } } */
+var pickBusy = false;
+var pickDrawn = "";         /* what is on it, so a poll never rebuilds it under a thumb */
+
+/* The estimate for a stop, in ms, or 0 when the board has none. */
+function pickEta(s){
+  var at = s && rotaStopEtas ? Number(rotaStopEtas[s.id]) : 0;
+  return at > 0 ? at : 0;
+}
+function pickTimed(s){ return !!pickEta(s); }
+function pickDue(s){
+  var at = pickEta(s);
+  return !!at && Math.round((at - tripNow())/60000) <= PICK_CLOSE_MIN;
+}
+
+function pickUp(){
+  var b = $("pickModal");
+  return !!(b && b.classList.contains("is-on"));
+}
+
+function pickClose(){
+  var box = $("pickModal");
+  if(!box) return;
+  pickDrawn = "";
+  if(!pickUp()) return;
+  box.classList.remove("is-on");
+  box.setAttribute("aria-hidden","true");
+  $("pickBody").innerHTML = "";
+}
+
+/* Up, down or left alone. Called on every paint of the list and every ten
+   seconds while it is open, because "a minute away" arrives between polls. */
+function pickSync(){
+  var s = rotaStopsOpen ? pickNext : null;
+  if(!s){ pickStopId = ""; pickClose(); return; }
+  /* Once up for a stop it stays up for it, whatever the estimate does next.
+     Only an answer, or the stop no longer being next, takes it down. */
+  if(pickStopId !== s.id) pickStopId = pickDue(s) ? s.id : "";
+  if(!pickStopId){ pickClose(); return; }
+  pickPaint(s);
+}
+
+function pickPhoneHref(p){ return "tel:" + String(p||"").replace(/[^\d+]/g,""); }
+
+function pickPaint(s){
+  var n = rotaStopCounts[s.id] || 0;
+  var fresh = pickPeople && pickPeople.trip === trip.id;
+  var list = (fresh && pickPeople.people && pickPeople.people[s.id]) || [];
+  var calls = list.filter(function(p){ return p && p.phone; });
+  var sig = s.id + "|" + n + "|" + calls.map(function(p){ return p.phone + ":" + p.seats; }).join(",");
+  if(!fresh || Date.now() - pickPeople.at > 60000) pickFetch();
+  var box = $("pickModal");
+  if(sig !== pickDrawn){
+    pickDrawn = sig;
+    var h = '<p class="eyebrow">'+esc(s.time)+'</p>'+
+            '<h2 id="pickTitle">'+esc(s.stop)+'</h2>'+
+            '<p class="pick-n"><b>'+n+(n===1?' person':' people')+'</b> booked</p>'+
+            '<p class="pick-moving" id="pickMoving">Not while the bus is moving.</p>'+
+            '<div class="pick-btns">';
+    calls.forEach(function(p){
+      h += '<button class="btn btn-ghost pick-call" type="button" data-pickcall="'+esc(pickPhoneHref(p.phone))+'">'+
+             'Call passenger<small>'+esc(p.phone)+(p.seats>1 ? ' · '+p.seats+' seats' : '')+'</small></button>';
+    });
+    h += '<button class="btn btn-tap" type="button" data-pick="pickup">Picked up</button>'+
+         '<button class="btn btn-ghost" type="button" data-pick="empty">Nobody here</button>'+
+         '</div>';
+    $("pickBody").innerHTML = h;
+    Array.prototype.forEach.call(box.querySelectorAll("[data-pick]"), function(b){
+      b.addEventListener("click", function(){
+        var stop = null, id = pickStopId;
+        (rotaStops||[]).forEach(function(x){ if(x.id===id) stop = x; });
+        if(stop) tripTap(stop, this.getAttribute("data-pick"));
+      });
+    });
+    Array.prototype.forEach.call(box.querySelectorAll("[data-pickcall]"), function(b){
+      b.addEventListener("click", function(){
+        if(tripMoving()){ toast("Not while the bus is moving.", true); return; }
+        window.location.href = this.getAttribute("data-pickcall");
+      });
+    });
+    tripMovingPainted = null;
+    tripPaintMoving();
+  }
+  if(!pickUp()){
+    box.classList.add("is-on");
+    box.setAttribute("aria-hidden","false");
+  }
+}
+
+/* The numbers behind Call passenger, for every stop on his route at once. */
+function pickFetch(){
+  if(pickBusy || !LIVE_ENDPOINT || !navigator.onLine || !trip.id || pinGateNeeded()) return;
+  pickBusy = true;
+  var forTrip = trip.id;
+  callFetch(LIVE_ENDPOINT, {
+    method:"POST", redirect:"follow",
+    headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: CFG.token||"", action:"stoppeople",
+                           who:{ driver: st.driver, pin: st.pin, route: trip.route } })
+  }, POLL_TIMEOUT)
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      pickBusy = false;
+      var out = JSON.parse(t);
+      /* Kept even when refused, so a refusal is not asked again every paint. */
+      pickPeople = { trip: forTrip, at: Date.now(),
+                     people: (out && out.ok === true && out.people) ? out.people : {} };
+      if(rotaStopsOpen) pickSync();
+    })
+    .catch(function(){ pickBusy = false; });
+}
+
+setInterval(function(){ if(rotaStopsOpen) pickSync(); }, 10000);
+
 function tripActionHtml(nextStop, showCounts){
   var waiting=nextStop?(rotaStopCounts[nextStop.id]||0):0;
-  /* Off, not disabled, so the tap is the prompt and the toast can say what is
-     wanted. Same bargain the bus buttons already make. */
-  var off=pinGateNeeded()?" is-off":"";
   var h='<div class="trip-actions">';
+  /* The line only, from v1.101.0. Picked up and Nobody here are asked in the
+     pickup pop-up now (Asim): a button fixed at the foot was pressed, or not
+     pressed, as the driver happened to remember it. */
   if(nextStop){
     h+='<p class="trip-waiting"><b>'+waiting+(waiting===1?' person':' people')+
-       '</b> waiting at '+esc(nextStop.stop)+'</p>'+
-       '<button class="btn btn-tap'+off+'" data-triptap="'+esc(nextStop.id)+'" data-tripkind="pickup">'+
-       'Picked up: '+esc(nextStop.stop)+'</button>'+
-       '<button class="btn btn-ghost'+off+'" data-triptap="'+esc(nextStop.id)+'" data-tripkind="empty">'+
-       'Nobody there</button>';
+       '</b> waiting at '+esc(nextStop.stop)+'</p>';
   } else if(showCounts===false){
     /* No numbers for today, so no idea which stop is next. Said plainly, and
        the list above carries a pair of buttons on every stop instead. */
@@ -8340,8 +8521,10 @@ function tripPaintMoving(){
   if(note) note.innerHTML = moving
     ? '<b class="trip-stopme">The bus is moving.</b> Taps come back when you pull up.'
     : '';
+  var pm=$("pickMoving");
+  if(pm) pm.classList.toggle("is-on", moving);
   Array.prototype.forEach.call(
-    document.querySelectorAll("[data-triptap],[data-tripundo],#tripEnd,[data-tripstart],#tripStartAnyway"),
+    document.querySelectorAll("[data-triptap],[data-tripundo],#tripEnd,[data-tripstart],#tripStartAnyway,[data-pick],[data-pickcall]"),
     function(b){ b.disabled=moving; b.classList.toggle("is-dead",moving); });
 }
 
