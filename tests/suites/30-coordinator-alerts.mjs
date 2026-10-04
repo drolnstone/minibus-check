@@ -203,26 +203,29 @@ export default async function (root) {
     a.eq(JSON.stringify(alerts()[0].not), JSON.stringify(["Bro Arthur"]));
   });
 
-  s.test("a rota request from the drain tells the phones as well as the inbox", (a) => {
-    const { L, alerts } = sheet({ COORDINATOR_EMAIL: "coord@b.c" });
-    L.ctx.UrlFetchApp = { fetch(url, opts) {
-      const body = JSON.parse((opts && opts.payload) || "{}");
-      (L._sent = L._sent || []).push(body);
-      const out = body.action === "drain"
-        ? { ok: true, claim: -9, bookings: [], trips: [], checks: [], auths: [], decisions: [],
-            requests: [{ id: "rq1", date: "2026-10-04", driver: "Bro Trevor", type: "Request cover",
-                         reason: "Away", swapWith: "", swapDate: "", agreed: false }] }
-        : { ok: true };
-      return { getResponseCode: () => 200, getContentText: () => JSON.stringify(out), getAllHeaders: () => ({}) };
-    } };
-    call(L, "drainFromWorker");
-    const got = (L._sent || []).filter((b) => b.action === "coordAlert").map((b) => b.alert);
-    a.eq(got.length, 1, "no phone alert for the request");
-    a.eq(got[0].kind, "request");
-    a.has(got[0].title, "Bro Trevor");
-    a.hasnt(got[0].body, "Away", "the reason went to a phone that joined the list without a PIN");
-    a.ok(L.gas.mail.some((m) => String(m.to).indexOf("coord@") === 0), "the email stopped");
-    void alerts;
+  s.test("a rota request from the drain tells the phones as well as the inbox", async (a) => {
+    /* On the Saturday before SUN, so the Sunday is still to come. */
+    await atTime("2026-10-03T12:00:00+01:00", () => {
+      const { L, alerts } = sheet({ COORDINATOR_EMAIL: "coord@b.c" });
+      L.ctx.UrlFetchApp = { fetch(url, opts) {
+        const body = JSON.parse((opts && opts.payload) || "{}");
+        (L._sent = L._sent || []).push(body);
+        const out = body.action === "drain"
+          ? { ok: true, claim: -9, bookings: [], trips: [], checks: [], auths: [], decisions: [],
+              requests: [{ id: "rq1", date: "2026-10-04", driver: "Bro Trevor", type: "Request cover",
+                           reason: "Away", swapWith: "", swapDate: "", agreed: false }] }
+          : { ok: true };
+        return { getResponseCode: () => 200, getContentText: () => JSON.stringify(out), getAllHeaders: () => ({}) };
+      } };
+      call(L, "drainFromWorker");
+      const got = (L._sent || []).filter((b) => b.action === "coordAlert").map((b) => b.alert);
+      a.eq(got.length, 1, "no phone alert for the request");
+      a.eq(got[0].kind, "request");
+      a.has(got[0].title, "Bro Trevor");
+      a.hasnt(got[0].body, "Away", "the reason went to a phone that joined the list without a PIN");
+      a.ok(L.gas.mail.some((m) => String(m.to).indexOf("coord@") === 0), "the email stopped");
+      void alerts;
+    });
   });
 
   s.test("with SENDER_NAME set, every email says it is from that name, and replies go to the coordinator", (a) => {

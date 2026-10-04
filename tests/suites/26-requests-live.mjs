@@ -143,29 +143,35 @@ export default async function (root) {
   const drainWith = (reqs) => ({ ok: true, claim: -9, bookings: [], trips: [], checks: [], auths: [],
                                  decisions: [], requests: reqs });
 
-  s.test("the drain files a live-server request on the tab, tells the coordinator, and reports it done", (a) => {
-    const L = sheet();
-    const sent = worker(L, { drain: drainWith([ask()]) });
-    call(L, "drainFromWorker");
-    const rsh = L.gas.ss.getSheetByName("Rota Requests");
-    a.eq(rsh.getLastRow(), 2, "no row on the Rota Requests tab");
-    a.eq(rsh.getRange(2, TABS["Rota Requests"].indexOf("Request ID") + 1).getValue(), "rq1");
-    a.ok(L.gas.mail.some((m) => String(m.to).indexOf("coord@") === 0), "the coordinator was not told");
-    const done = sent.find((b) => b.action === "drained");
-    a.ok(done && (done.requests || []).indexOf("rq1") > -1, "the request was not reported done");
-    a.eq(done.claim, -9);
+  s.test("the drain files a live-server request on the tab, tells the coordinator, and reports it done", async (a) => {
+    /* On the Saturday before SUN, so the Sunday is still to come. */
+    await atTime("2026-10-03T12:00:00+01:00", () => {
+      const L = sheet();
+      const sent = worker(L, { drain: drainWith([ask()]) });
+      call(L, "drainFromWorker");
+      const rsh = L.gas.ss.getSheetByName("Rota Requests");
+      a.eq(rsh.getLastRow(), 2, "no row on the Rota Requests tab");
+      a.eq(rsh.getRange(2, TABS["Rota Requests"].indexOf("Request ID") + 1).getValue(), "rq1");
+      a.ok(L.gas.mail.some((m) => String(m.to).indexOf("coord@") === 0), "the coordinator was not told");
+      const done = sent.find((b) => b.action === "drained");
+      a.ok(done && (done.requests || []).indexOf("rq1") > -1, "the request was not reported done");
+      a.eq(done.claim, -9);
+    });
   });
 
-  s.test("a request the tab already holds is reported done without a second row", (a) => {
-    const L = sheet();
-    const sent = worker(L, { drain: drainWith([ask()]) });
-    call(L, "drainFromWorker");
-    call(L, "drainFromWorker");
-    const rsh = L.gas.ss.getSheetByName("Rota Requests");
-    a.eq(rsh.getLastRow(), 2, "the same request was filed twice");
-    const dones = sent.filter((b) => b.action === "drained");
-    a.eq(dones.length, 2);
-    a.ok((dones[1].requests || []).indexOf("rq1") > -1);
+  s.test("a request the tab already holds is reported done without a second row", async (a) => {
+    /* On the Saturday before SUN, so the Sunday is still to come. */
+    await atTime("2026-10-03T12:00:00+01:00", () => {
+      const L = sheet();
+      const sent = worker(L, { drain: drainWith([ask()]) });
+      call(L, "drainFromWorker");
+      call(L, "drainFromWorker");
+      const rsh = L.gas.ss.getSheetByName("Rota Requests");
+      a.eq(rsh.getLastRow(), 2, "the same request was filed twice");
+      const dones = sent.filter((b) => b.action === "drained");
+      a.eq(dones.length, 2);
+      a.ok((dones[1].requests || []).indexOf("rq1") > -1);
+    });
   });
 
   s.test("a request on a Sunday that has been called off leaves the Status as it is", (a) => {
