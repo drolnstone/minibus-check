@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.43.0";
+const SCRIPT_VERSION = "w2.44.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -2582,6 +2582,19 @@ async function boardPayload(env, route) {
         const saved = etaSavedMinutes(key, ordered, st.lastStopId, stop.id, booked, set);
         etas[stop.id] = Math.round(
           (sched.getTime() + Number(st.offset) * 60000 - saved * 60000) / 60000) * 60000;
+      }
+      /* From w2.44.0: never later than the stop after it. A stop nobody
+         booked was timed as if the bus pulls in there, but the stop after
+         it is timed with that one skipped, so on 4 Oct 2026 North showed
+         Pym Street 10:59 above Wilburn Street 10:58. The bus passes an
+         empty stop before it reaches the next one. Booked stops are never
+         changed by this, so the passenger's estimate stays the same. */
+      let next = null;
+      for (let i = ordered.length - 1; i >= 0; i--) {
+        const id = ordered[i].id;
+        if (!(id in etas)) continue;
+        if (next !== null && etas[id] > next) etas[id] = next;
+        next = etas[id];
       }
       out.etas = etas;
       out.etaAt = Date.now();
