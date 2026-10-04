@@ -1,49 +1,62 @@
 MINIBUS
 =======
-  pages v1.97.2 · server w2.44.0 · sheet v1.104.0
+  pages v1.98.0 · server w2.45.0 · sheet v1.105.0
 
-Stops and bookings stays in timetable order while a run is out (Asim):
+What went out shows on the coordinator app's Alerts list (Asim):
 
-  - A stop nobody booked is never shown later than the stop after it.
-    On 4 Oct North showed Pym Street 10:59 above Wilburn Street 10:58.
-  - The church arrival shows an estimate too, so a late run no longer
-    shows 11:00 under a later pickup.
-  - Booked stops, and the passenger's estimate, are unchanged.
+  - Every alert a passenger's or a driver's phone is sent, one line per
+    message, with who it went to (drivers by name, passengers as a count
+    of phones and their stops).
+  - Every email the sheet sends, marked Email, with who it went to.
+  - Marked Sent or Email. Never counted on the bell, never in the strip,
+    never a push of its own.
 
-This follows v1.97.1 · w2.43.0 · v1.104.0 (one alert per person).
+This follows v1.97.2 · w2.44.0 · v1.104.0 (#50, stop list order and the
+church estimate), which this Worker carries.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.97.1         v1.97.2  (by the merge)
-  Worker  w2.43.0         w2.44.0
-  Code.gs v1.104.0        v1.104.0  (no paste)
+  Pages   v1.97.2         v1.98.0
+  Worker  w2.44.0         w2.45.0
+  Code.gs v1.104.0        v1.105.0
 
 
 IN THIS ORDER
 -------------
 
 1. WORKER. Paste the whole file into the Cloudflare editor and deploy:
-   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/project-thread-2n4c59/server/worker.js
+   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/sent-messages-on-alerts-b6wwbo/server/worker.js
    No new variables.
 
-2. Merge the pull request.
+2. CODE.GS. Paste the whole file into Apps Script, save, then Deploy,
+   Manage deployments, edit, New version, Deploy:
+   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/sent-messages-on-alerts-b6wwbo/Code.gs
+
+3. Merge the pull request.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.97.2 · server w2.44.0 · sheet
-   v1.104.0 .
+A. The foot of all three apps reads  app v1.98.0 · server w2.45.0 · sheet
+   v1.105.0 .
+
+B. The next alert or email to go out shows on Alerts in the coordinator
+   app.
 
 
 WHAT CHANGED
 ------------
 
-1. server/worker.js: boardPayload, the per-stop estimates, now with the
-   church arrival.
+1. server/worker.js: sent_log, sentNote, sentPushes, the sentMail action;
+   wake() and the emergency-contact driver alerts note what they sent; the
+   Alerts list carries both.
 
-2. index.html: the arrival row draws its estimate (stopTimeHtml).
+2. Code.gs: sendMail tells the live server each email it sent (noteSentMail).
 
-3. sw.js, coord/sw.js, coord/, sunday/: the version only.
+3. coord/index.html: Sent and Email tags on the list; the strip shows the
+   newest unread alert, never a sent line.
 
-4. Tests: tests/suites/53-stop-order.mjs, browser check T10b.
+4. index.html, sw.js, coord/sw.js, sunday/: the version only.
+
+5. Tests: tests/suites/54-what-went-out.mjs.

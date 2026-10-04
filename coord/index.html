@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.97.2 · THE COORDINATOR'S APP.
+<!-- BUILD v1.98.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -687,7 +687,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.97.2";
+var PAGE_VERSION = "v1.98.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -3712,7 +3712,7 @@ function alertsSeen(a){
   ALERTS.list = a.list;
   bellPaint();
   appBadge(ALERTS.unread);
-  var top = a.list[0];
+  var top = a.list.filter(function(m){ return m.unread; })[0];
   if(current().name === "alerts"){ if(ALERTS.unread) alertsRead(); return; }
   if(top && top.unread && storeGet(STRIP_KEY) !== top.id) stripShow(top);
 }
@@ -3757,7 +3757,9 @@ function paintAlerts(){
   if(!ALERTS.list.length) h += '<div class="card"><p class="tiny" style="margin:0">No alerts in the last two days.</p></div>';
   else h += '<ul class="list">' + ALERTS.list.map(function(m){
     var tone = m.kind === "stopped" ? "stop" : (m.kind === "authorised" ? "pass" : "warn");
-    return '<li>' + (m.unread ? '<span class="tag ' + tone + '">New</span> ' : '') + '<b>' + esc(m.title) + '</b>' +
+    /* What went out, from v1.98.0 (Asim): every push and email, never new. */
+    var sent = m.kind === "sent" ? '<span class="tag info">' + (m.mail ? "Email" : "Sent") + '</span> ' : '';
+    return '<li>' + sent + (m.unread ? '<span class="tag ' + tone + '">New</span> ' : '') + '<b>' + esc(m.title) + '</b>' +
            (m.body ? '<br>' + esc(m.body) : '') + '<small>' + esc(when(m.at)) + '</small></li>';
   }).join("") + '</ul>';
   /* What this phone does about them. */
