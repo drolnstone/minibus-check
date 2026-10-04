@@ -1640,6 +1640,11 @@ if (want("C49")) {
   const off = await pg.evaluate(() => ({
     sign: document.getElementById("s-sign").classList.contains("is-on"),
     banner: document.getElementById("banner").textContent,
+    /* From v1.100.1 the passenger page's card, in the page under "Who is
+       it?", not a strip along the top. */
+    note: document.getElementById("signNote").hidden ? "" : document.getElementById("signNote").textContent,
+    noteBelowTitle: document.getElementById("signNote").getBoundingClientRect().top >
+                    document.querySelector("#s-sign h1").getBoundingClientRect().bottom,
     names: document.querySelectorAll("#signName option").length }));
   await pg.screenshot({ path: OUT + "/C49-offline.png" });
   await pg.selectOption("#signName", "Bro Arthur");
@@ -1651,14 +1656,16 @@ if (want("C49")) {
 
   await ctx.setOffline(false); down = false;
   await pg.waitForTimeout(1500);
-  const back = await pg.evaluate(() => document.getElementById("banner").textContent);
+  const back = await pg.evaluate(() => document.getElementById("banner").textContent +
+    (document.getElementById("signNote").hidden ? "" : document.getElementById("signNote").textContent));
   await pg.fill("#signPin", "");
   await pg.type("#signPin", PIN, { delay: 30 });
   await pg.waitForTimeout(1500);
   const home = await pg.evaluate(() => document.getElementById("s-home").classList.contains("is-on"));
   check("C49", "with no connection the app opens, says so, and carries on by itself when the signal is back",
-        scope === url && opened && off.sign && /No connection just now/.test(off.banner) && off.names > 1 &&
-        /No connection just now\. Sign in once there is a signal\./.test(tried.say) && tried.bad && tried.sign &&
+        scope === url && opened && off.sign && off.banner === "" && off.note === "No signal just now.Sign in once signal returns." &&
+        off.noteBelowTitle && off.names > 1 &&
+        /No signal just now\. Sign in once signal returns\./.test(tried.say) && tried.bad && tried.sign &&
         back === "" && home && !errs.length,
         JSON.stringify({ scope, opened, off, tried, back, home, errors: errs }));
   }
