@@ -1847,6 +1847,37 @@ if (want("C48")) {
   await p.ctx.close();
 }
 
+/* C53 — v1.100.0 (Asim). As on the driver app: no name, the name box has the
+   whole width and there is no PIN box; a name chosen, the PIN box comes in
+   and has the cursor; back to no name, it goes again. */
+if (want("C53")) {
+  const p = await page(env);
+  await p.wait(700);
+  const look = () => p.pg.evaluate(() => {
+    const row = document.querySelector("#s-sign .idrow").getBoundingClientRect();
+    const name = document.getElementById("signName").getBoundingClientRect();
+    return { name: document.getElementById("signName").value,
+             pin: getComputedStyle(document.getElementById("signPinF")).display !== "none",
+             full: Math.abs(row.width - name.width) < 2,
+             focus: document.activeElement && document.activeElement.id };
+  });
+  const before = await look();
+  await p.shot("C53-no-name");
+  await p.pg.selectOption("#signName", "Bro Arthur");
+  const chosen = await look();
+  await p.shot("C53-name");
+  await p.pg.type("#signPin", "12", { delay: 30 });
+  await p.pg.selectOption("#signName", "");
+  const back = await look();
+  const kept = await p.pg.$eval("#signPin", (el) => el.value);
+  check("C53", "no name chosen: the name box has the whole width and no PIN box; a name chosen: the PIN box shows with the cursor in it",
+        before.name === "" && !before.pin && before.full &&
+        chosen.pin && !chosen.full && chosen.focus === "signPin" &&
+        !back.pin && back.full && kept === "" && !p.errs.length,
+        JSON.stringify({ before, chosen, back, kept, errors: p.errs }));
+  await p.ctx.close();
+}
+
 await done();
 cleanup(ROOT);
 const bad = results.filter((r) => !r.ok);
