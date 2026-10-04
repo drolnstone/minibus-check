@@ -359,6 +359,22 @@ if (want("T10")) {
   await me.ctx.close();
 }
 
+/* T10b — from v1.97.2 (Asim, 4 October 2026): the church arrival takes the
+   estimate too, so a late run does not show 11:00 under a later pickup. */
+if (want("T10b")) {
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00",
+    world: { checks: okCheck(), etas: { North: { N02: T("10:27"), N09: T("11:06") } }, offset: { North: 5 } } });
+  await startRun(me);
+  await me.wait(5600);
+  const church = await me.pg.$$eval("#s-stops .stop-row.stop-arrival", rs => rs.filter(r => r.offsetParent).map(r => {
+    const t = r.querySelector(".stop-time");
+    return { time: t ? t.textContent.trim() : "", weight: t ? Number(getComputedStyle(t).fontWeight) : 0 };
+  })[0] || {});
+  check("T10b", "the church arrival shows its estimate in bold",
+        church.time === "11:06" && church.weight >= 700, "church " + JSON.stringify(church));
+  await me.ctx.close();
+}
+
 /* T12 — a rota request goes to the live server first, and the Sunday shows
    it on this phone at once rather than after the sheet has filed it. */
 if (want("T12")) {
