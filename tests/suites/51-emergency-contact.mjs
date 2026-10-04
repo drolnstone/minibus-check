@@ -7,7 +7,7 @@
    midnight London time; Until changed back stays. A push from the sheet
    does not undo it, and putting it back returns the Drivers tab's answer.
 
-   Everything here fails on w2.40.0. */
+   Everything here fails on w2.40.0; the telling fails on w2.41.0. */
 
 import { join } from "node:path";
 import { Suite } from "../lib/t.mjs";
@@ -88,6 +88,31 @@ export default async function (root) {
     });
     await atTime("2026-10-04T23:59:00+01:00", async () => { a.eq((await ringing(env)).name, "Bro Calvin", "still him a minute before midnight"); });
     await atTime("2026-10-05T00:00:30+01:00", async () => { a.eq((await ringing(env)).name, "Bro Asim", "back to the usual person after midnight, by itself"); });
+  });
+
+  s.test("the other coordinators are told at once, on their phones and in Alerts, and the one who chose is not", async (a) => {
+    const { db, env } = await fresh();
+    const EP = (w) => "https://push.test/" + w;
+    for (const who of ["Bro Asim", "Bro Calvin"]) {
+      await db.prepare("INSERT INTO push_subs (endpoint, p256dh, auth, role, driver, made) VALUES (?,?,?,?,?,?)")
+        .bind(EP(who), "p", "a", "driver", who, Date.now()).run();
+    }
+    await atTime(SUN, async () => {
+      await act(env, { kind: "contact", name: "Bro Calvin", until: "today" });
+      const box = (await W.cacheGet(env, "calert:" + EP("Bro Calvin"))) || [];
+      const mine = (await W.cacheGet(env, "calert:" + EP("Bro Asim"))) || [];
+      const told = box.find((m) => m.kind === "contact");
+      a.ok(told, "Bro Calvin's phone was not told");
+      a.has(told.title, "Bro Calvin today");
+      a.has(told.body, "Bro Asim has put Bro Calvin on emergency calls until midnight");
+      a.ok(told.urgent, "held for the quiet hours, which run until eight");
+      a.not(mine.some((m) => m.kind === "contact" && /Bro Calvin today/.test(m.title)), "the one who chose was told");
+      const alerts = (await coord(env, { op: "alerts" }, "Bro Calvin")).alerts;
+      a.ok(alerts && JSON.stringify(alerts).indexOf("Bro Calvin today") !== -1, "not in the coordinator app's Alerts");
+      await act(env, { kind: "contact", clear: true }, "Bro Calvin");
+      const back = ((await W.cacheGet(env, "calert:" + EP("Bro Asim"))) || []).find((m) => /back to Bro Asim/.test(m.title));
+      a.ok(back, "putting it back is not told");
+    });
   });
 
   s.test("a push from the sheet does not undo the choice, and stays underneath it", async (a) => {
