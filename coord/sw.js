@@ -18,7 +18,7 @@
    BUMP CACHE below after editing index.html in this folder, or phones keep
    the old copy. */
 const CACHE_PREFIX = "minibus-coord-";
-const CACHE = CACHE_PREFIX + "v1.96.9";
+const CACHE = CACHE_PREFIX + "v1.97.0";
 
 /* What the coordinator needs to see the page at all.
 
