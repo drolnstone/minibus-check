@@ -1733,6 +1733,53 @@ if (want("C51")) {
         JSON.stringify({ count, menu: menu.slice(-40), strip, stripText, pad, onAlerts, list: list.slice(0, 80), after, unread: read.alerts && read.alerts.unread, errors: p.errs }));
 }
 
+/* C52 — v1.96.8 · w2.41.0. Who takes emergency calls, picked on the first
+   screen: the live server's answer carries the person picked until midnight,
+   and picking the usual person puts it back. */
+if (want("C52")) {
+  const shelf = await W.cacheGet(env, "coord_shelf");
+  const was = shelf.drivers;
+  shelf.drivers = REAL.drivers.map((d) => ({ name: d.name, role: d.role, active: true, order: 0, route: "North",
+    email: "", phone: d.name === "Bro Arthur" ? "07700 900001" : d.name === "Pst Kenneth" ? "+44 7700 900002" : "07700 900003", hasPin: true }));
+  await W.cachePut(env, "coord_shelf", shelf).run();
+  await W.handleSync(env, { coordinator: { name: "Bro Arthur", phone: "07700900001" } });
+  const ring = async () => (await (await W.default.fetch(new Request("https://worker.test/?rota=1&weeks=1"), env, {})).json()).coordinator;
+  const p = await page(env);
+  try {
+    await p.signIn(PIN);
+    await p.wait(600);
+    const before = await p.text("#homeBody");
+    await p.pg.click('#homeBody [data-do="contact"]');
+    await p.wait(300);
+    const names = await p.pg.$$eval("#ctName option", (o) => o.map((x) => x.textContent));
+    await p.pg.selectOption("#ctName", "Pst Kenneth");
+    await p.shot("C52-pick");
+    await p.pg.click("#sheetGo");
+    await p.wait(1500);
+    const picked = await p.text("#homeBody");
+    const r1 = await ring();
+    await p.shot("C52-picked");
+    await p.pg.click('#homeBody [data-do="contact"]');
+    await p.wait(300);
+    await p.pg.selectOption("#ctName", "");
+    await p.pg.click("#sheetGo");
+    await p.wait(1500);
+    const back = await p.text("#homeBody");
+    const r2 = await ring();
+    check("C52", "who takes emergency calls is picked on the first screen, lasts until midnight, and goes back",
+          /Emergency calls go to Bro Arthur/.test(before) &&
+          names.length === 2 && /Bro Arthur \(usual\)/.test(names[0]) && /Pst Kenneth/.test(names[1]) &&
+          /Emergency calls go to Pst Kenneth · 07700 900002, until midnight/.test(picked) &&
+          r1.name === "Pst Kenneth" && r1.phone === "07700900002" &&
+          /Emergency calls go to Bro Arthur/.test(back) && r2.name === "Bro Arthur" && !p.errs.length,
+          JSON.stringify({ before: before.slice(0, 0), names, picked: (picked.match(/Emergency[^.]*\./) || [""])[0],
+                           r1, r2, back: (back.match(/Emergency[^.]*\./) || [""])[0], errors: p.errs }));
+  } catch (e) { check("C52", "could not finish", false, e.message); }
+  await p.ctx.close();
+  shelf.drivers = was;
+  await W.cachePut(env, "coord_shelf", shelf).run();
+}
+
 /* C48 — v1.96.2: Change your PIN in the coordinator app, the driver app's
    one PIN on the live server. The boxes hand on, the last one sends, a
    mismatch is bold red and empties the new boxes, and the app goes on
