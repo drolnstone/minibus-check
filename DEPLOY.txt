@@ -1,18 +1,20 @@
 MINIBUS
 =======
-  pages v1.97.1 · server w2.44.0 · sheet v1.104.0
+  pages v1.97.2 · server w2.44.0 · sheet v1.104.0
 
 Stops and bookings stays in timetable order while a run is out (Asim):
 
   - A stop nobody booked is never shown later than the stop after it.
     On 4 Oct North showed Pym Street 10:59 above Wilburn Street 10:58.
+  - The church arrival shows an estimate too, so a late run no longer
+    shows 11:00 under a later pickup.
   - Booked stops, and the passenger's estimate, are unchanged.
 
 This follows v1.97.1 · w2.43.0 · v1.104.0 (one alert per person).
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.97.1         v1.97.1  (nothing to do)
+  Pages   v1.97.1         v1.97.2  (by the merge)
   Worker  w2.43.0         w2.44.0
   Code.gs v1.104.0        v1.104.0  (no paste)
 
@@ -30,13 +32,18 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.97.1 · server w2.44.0 · sheet
+A. The foot of all three apps reads  app v1.97.2 · server w2.44.0 · sheet
    v1.104.0 .
 
 
 WHAT CHANGED
 ------------
 
-1. server/worker.js: boardPayload, the per-stop estimates.
+1. server/worker.js: boardPayload, the per-stop estimates, now with the
+   church arrival.
 
-2. Tests: tests/suites/53-stop-order.mjs.
+2. index.html: the arrival row draws its estimate (stopTimeHtml).
+
+3. sw.js, coord/sw.js, coord/, sunday/: the version only.
+
+4. Tests: tests/suites/53-stop-order.mjs, browser check T10b.

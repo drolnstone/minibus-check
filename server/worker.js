@@ -2576,7 +2576,10 @@ async function boardPayload(env, route) {
       const booked = new Set(Object.keys(counts).filter((id) => Number(counts[id]) > 0));
       const etas = {};
       for (const stop of ordered) {
-        if (String(stop.kind || "pickup") !== "pickup") continue;
+        /* From w2.44.0 the church arrival too, so a late run does not show
+           11:00 under a pickup at 11:04. */
+        const kind = String(stop.kind || "pickup");
+        if (kind !== "pickup" && kind !== "arrival") continue;
         const sched = londonMoment(key, stop.time);
         if (!sched) continue;
         const saved = etaSavedMinutes(key, ordered, st.lastStopId, stop.id, booked, set);

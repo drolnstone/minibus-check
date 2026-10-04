@@ -3,7 +3,8 @@
    From w2.44.0 (Asim, 4 October 2026). North, late, showed Pym Street 10:59
    above Wilburn Street 10:58. Neither was booked: Pym Street was timed as if
    the bus pulls in there, and Wilburn Street was timed with Pym Street
-   skipped. An empty stop is now never later than the stop after it. */
+   skipped. An empty stop is now never later than the stop after it, and the
+   church arrival is estimated too. */
 
 import { join } from "node:path";
 import { Suite } from "../lib/t.mjs";
@@ -42,7 +43,7 @@ export default async function (root) {
   s.test("no empty stop is shown later than the stop after it", async (a) => {
     const board = await lateNorth();
     a.ok(board.etas, "no estimates on the board: " + (board.etaError || board.tripError || ""));
-    const ids = ["N05", "N06", "N07", "N08"];
+    const ids = ["N05", "N06", "N07", "N08", "N09"];
     for (let i = 1; i < ids.length; i++) {
       a.ok(board.etas[ids[i - 1]] <= board.etas[ids[i]],
            ids[i - 1] + " is shown after " + ids[i]);
@@ -56,6 +57,13 @@ export default async function (root) {
        so nothing is skipped on the way: timetable plus the run's offset. */
     const sched = mod.londonMoment(KEY, "10:39").getTime();
     a.eq(board.etas.N05, Math.round((sched + board.trip.offset * 60000) / 60000) * 60000);
+  });
+
+  s.test("the church arrival is estimated too, after every pickup", async (a) => {
+    const board = await lateNorth();
+    const sched = mod.londonMoment(KEY, "11:00").getTime();
+    a.ok(board.etas.N09 > sched, "a late run still shows church at 11:00");
+    a.ok(!("N00" in board.etas), "the departure row has no estimate");
   });
 
   return s;
