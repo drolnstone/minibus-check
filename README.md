@@ -507,7 +507,9 @@ once after a deploy and can be skipped on an ordinary week.**
     not run or the two `PIN_SALT` values do not match. Go to Stops and
     bookings, then **Start trip**.
 
-11. **Tap two stops**, one **Picked up** and one **Nobody there**.
+11. **Tap two stops**, one **Picked up** and one **Nobody here**. On a
+    booked stop the pickup pop-up asks for it once the stop is a minute away;
+    tap the stop in the list to bring it up sooner.
 
 12. **The estimate should lead.** Once a stop is marked, the times down the
     left of the stop list are the **estimate**, with the timetable time small
@@ -1395,6 +1397,27 @@ stop the bus) or **Defect**. A critical defect stops the bus and nothing will
 start a run on it until a coordinator authorises it. He picks his bus,
 starts the trip, and taps each stop as he pulls away. Every tap reaches the
 passenger page in about five seconds.
+
+**The pickup pop-up, from v1.101.0.** When the next booked stop reads **Be at
+your stop** on the passenger page (its estimate a minute or less away), a
+pop-up comes up in the middle of the driver's screen, over everything: the
+stop, how many are booked, a **Call passenger** button for each booking with a
+number, then **Picked up** and **Nobody here**. Call passenger leaves it up;
+Picked up or Nobody here takes it down, and nothing else does. Several
+families booked separately at one stop get a button each; one Picked up
+covers the stop. While the bus moves its buttons are grey under a red *Not
+while the bus is moving.* A bus ahead of its estimate: tap the next stop in
+the list and it comes up there and then. A next stop with no estimate (no
+signal) keeps the two buttons on its own row instead. Only the phone driving
+that run gets it, and the numbers come from the live server to that driver's
+PIN only (`stoppeople`, w2.46.0); the board every phone reads carries none.
+The two buttons that used to be fixed at the foot of the list are gone.
+
+**Undo stays on every marked stop** (Asim, 4 October 2026), not just the
+last one. A driver who goes back for somebody left at a stop he marked
+Nobody here undoes that stop, and its Picked up button comes back so the
+record can be put right. Undo is refused while the bus moves and needs the
+PIN, like every stop tap.
 
 If he moves on without marking a booked stop, the app **asks him about it** —
 the earliest one behind him, once, with the same two buttons the row carries.
