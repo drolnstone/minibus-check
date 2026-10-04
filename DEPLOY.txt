@@ -11,7 +11,8 @@ What went out shows on the coordinator app's Alerts list (Asim):
   - Marked Sent or Email. Never counted on the bell, never in the strip,
     never a push of its own.
 
-This follows #50 (w2.44.0). If #50 is merged first, this one carries it.
+Merge #50 (w2.44.0) first; this branch then takes it in, so the Worker
+pasted below carries both.
 
 
 YOU ARE ON              GOING TO
@@ -58,4 +59,4 @@ WHAT CHANGED
 
 4. index.html, sw.js, coord/sw.js, sunday/: the version only.
 
-5. Tests: tests/suites/53-what-went-out.mjs.
+5. Tests: tests/suites/54-what-went-out.mjs.
