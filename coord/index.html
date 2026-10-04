@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.99.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.100.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -610,7 +610,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
           <label for="signName">Name</label>
           <select id="signName"></select>
         </div>
-        <div class="field pinf">
+        <div class="field pinf" id="signPinF" style="display:none">
           <label for="signPin">PIN</label>
           <input id="signPin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"
                  class="mono pinbox" placeholder="&bull;&bull;&bull;&bull;">
@@ -687,7 +687,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.99.0";
+var PAGE_VERSION = "v1.100.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -938,6 +938,15 @@ function signNames(){
   }).join("");
   if(had && list.some(function(d){ return d.name === had; })) sel.value = had;
   else if(list.length === 1) sel.value = list[0].name;
+  pinFieldSync();
+}
+
+/* As on the driver app: no name chosen, the name box has the whole width and
+   there is no PIN box; a name chosen, the PIN box comes in beside it. */
+function pinFieldSync(){
+  var on = !!$("signName").value;
+  $("signPinF").style.display = on ? "" : "none";
+  if(!on){ clearTimeout(signT); $("signPin").value = ""; }
 }
 
 var signT = null;
@@ -3361,6 +3370,7 @@ function offlineWatch(){
   if(HAND_WAIT && !pin && !busy){
     var h = HAND_WAIT; HAND_WAIT = null;
     $("signName").value = h.name;
+    pinFieldSync();
     openAs(h.name, h.pin, "carried");
   }
   if(PEEK.ok === false) peek();
@@ -3496,7 +3506,7 @@ $("barLock").addEventListener("click", function(){ lock(""); });
 $("sheet").addEventListener("click", function(e){ if(e.target === $("sheet") && !busy) closeSheet(); });
 $("signGo").addEventListener("click", signIn);
 /* Straight into the PIN box once a name is chosen, as on the driver app. */
-$("signName").addEventListener("change", function(){ say("signSay", ""); focusPin(); });
+$("signName").addEventListener("change", function(){ say("signSay", ""); pinFieldSync(); focusPin(); });
 $("signVersion").addEventListener("click", function(){
   openSheet({ eyebrow: "Coordinator", title: "This page", body: diagnosis(), only: "Close" });
 });
@@ -3887,6 +3897,7 @@ try{ sessionStorage.removeItem(DRIVER_HAND_KEY); }catch(e){}
 route();
 if(HAND && LIVE){
   $("signName").value = HAND.name;
+  pinFieldSync();
   openAs(HAND.name, HAND.pin, "carried");
 }
 peek();

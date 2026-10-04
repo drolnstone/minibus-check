@@ -1,21 +1,19 @@
 MINIBUS
 =======
-  pages v1.99.0 · server w2.45.0 · sheet v1.105.0
+  pages v1.100.0 · server w2.45.0 · sheet v1.105.0
 
-Driver app, Stops and bookings (Asim): a driver who is not driving that
-route taps a stop and follows the bus to it, on North or South, the way a
-passenger without a booking can on the passenger page.
+Coordinator app, sign-in (Asim): it lands the way the driver app does.
 
-  - The panel above the list says what the passenger page says about that
-    stop: minutes away, Be at your stop, gone past, picked up.
-  - Tap the stop again, or Stop following, to stop. Kept for the Sunday.
-  - Not on the route this phone is driving, and not during a rehearsal.
+  - No name chosen: Choose your name has the whole width, no PIN box.
+  - A name chosen: the PIN box comes in beside it with the cursor in it,
+    and four digits open the app as before.
+  - Back to Choose your name: the PIN box goes again, emptied.
 
-Pages only. It follows #50 and #51, both merged.
+Pages only.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.98.0         v1.99.0  (by the merge)
+  Pages   v1.99.0         v1.100.0  (by the merge)
   Worker  w2.45.0         w2.45.0  (no paste)
   Code.gs v1.105.0        v1.105.0  (no paste)
 
@@ -29,20 +27,20 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.99.0 · server w2.45.0 · sheet
+A. The foot of all three apps reads  app v1.100.0 · server w2.45.0 · sheet
    v1.105.0 .
 
-B. On a Sunday after bookings close, a driver not driving opens Stops and
-   bookings, taps a stop, and sees the panel.
+B. Lock the coordinator app, or open it on a phone that has never signed
+   in: Choose your name is the whole width and there is no PIN box until a
+   name is chosen.
 
 
 WHAT CHANGED
 ------------
 
-1. index.html: dwHtml, dwFetch and the stop rows in rotaPaintStops. The
-   panel asks the live server the passenger page's question (?trip=1&s=),
-   so the two apps give one answer about a stop.
+1. coord/index.html: pinFieldSync, called from signNames, the name box's
+   change, and the two places a name is filled in for you.
 
-2. Version v1.99.0 in index.html, sw.js, sunday/ and coord/.
+2. Version v1.100.0 in index.html, sw.js, sunday/ and coord/.
 
-3. Tests: T26 in tests/browser/driver-app.mjs.
+3. Tests: C53 in tests/browser/coordinator.mjs.
