@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.42.0";
+const SCRIPT_VERSION = "w2.43.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -4648,6 +4648,58 @@ async function wake(env, subs, tag) {
    once, or not at all. */
 const DRIVER_SUB_MATCH = "role = 'driver' AND lower(trim(driver)) = lower(trim(?))";
 
+/* WHICH APP SIGNED THIS PHONE UP, from w2.43.0 (Asim).
+
+   The driver app and the coordinator app each sign a phone up under the same
+   name. Where the two are separate installs (an iPhone with both on the home
+   screen) that is two endpoints, and a coordinator was woken twice for every
+   alert. push_subs.app says which app holds an endpoint:
+
+     driver   the driver app only
+     coord    the coordinator app only
+     both     one endpoint shared by the two (same browser)
+     ''       signed up before w2.43.0, not known
+
+   A driver's own reminders skip 'coord'. A coordinator alert goes to the
+   coordinator app's endpoints when that person has one, and to the rest
+   only when they have none. */
+const DRIVER_WAKE_MATCH = DRIVER_SUB_MATCH + " AND app <> 'coord'";
+const PUSH_APPS = ["driver", "coord", "both"];
+let pushAppReady = false;
+async function ensurePushApp(env) {
+  if (pushAppReady) return true;
+  try {
+    await env.DB.prepare("ALTER TABLE push_subs ADD COLUMN app TEXT NOT NULL DEFAULT ''").run();
+  } catch (e) { /* already there */ }
+  try {
+    await env.DB.prepare("SELECT app FROM push_subs LIMIT 1").all();
+    pushAppReady = true;
+  } catch (e) { pushAppReady = false; }
+  return pushAppReady;
+}
+/* What one app saying "this endpoint is mine" makes of what was there. */
+function pushAppMerge(was, said) {
+  was = String(was || ""); said = String(said || "");
+  if (PUSH_APPS.indexOf(said) === -1) return was;
+  if (!was || was === said || said === "both") return said;
+  return "both";
+}
+async function notePushApp(env, endpoint, said) {
+  if (!(await ensurePushApp(env))) return;
+  const row = await env.DB.prepare("SELECT app FROM push_subs WHERE endpoint=?").bind(endpoint).first();
+  if (!row) return;
+  const next = pushAppMerge(row.app, said);
+  if (next !== String(row.app || "")) {
+    await env.DB.prepare("UPDATE push_subs SET app=? WHERE endpoint=?").bind(next, endpoint).run();
+  }
+}
+async function handlePushApp(env, body) {
+  const endpoint = String((body && body.endpoint) || "").trim();
+  if (!endpoint) return json({ ok: false, error: "no endpoint" });
+  try { await notePushApp(env, endpoint, String((body && body.app) || "")); } catch (e) {}
+  return json({ ok: true });
+}
+
 async function subsWhere(env, where, binds) {
   const { results } = await env.DB.prepare(
     "SELECT * FROM push_subs WHERE " + where).bind(...binds).all();
@@ -5215,7 +5267,9 @@ async function wakeDrivers(env) {
        way the Drivers tab spells it: a cover typed in by hand on a Saturday
        night is the usual way the two drift apart. A bare = here meant that
        driver was never woken, and nothing anywhere said so. */
-    const subs = await subsWhere(env, DRIVER_SUB_MATCH, [nudge.who]);
+    const subs = (await ensurePushApp(env))
+      ? await subsWhere(env, DRIVER_WAKE_MATCH, [nudge.who])
+      : await subsWhere(env, DRIVER_SUB_MATCH, [nudge.who]);
 
     /* Mend the stored route on the way past. pushWhat no longer trusts it, so
        nothing depends on this being right; it just stops the column drifting
@@ -5455,6 +5509,7 @@ const coordBoxKey = (endpoint) => "calert:" + String(endpoint || "");
 async function coordinatorSubs(env, not) {
   const rules = await authRules(env);
   if (!rules.roles.length) return [];
+  await ensurePushApp(env);
   const marks = rules.roles.map(() => "?").join(",");
   const { results } = await env.DB.prepare(
     "SELECT p.* FROM push_subs p JOIN drivers d ON lower(trim(d.name)) = lower(trim(p.driver)) " +
@@ -5463,11 +5518,18 @@ async function coordinatorSubs(env, not) {
   const skip = (Array.isArray(not) ? not : [])
     .map((n) => String(n || "").trim().toLowerCase()).filter(Boolean);
   const seen = {};
-  return (results || []).filter((sub) => {
+  const subs = (results || []).filter((sub) => {
     if (seen[sub.id]) return false;
     seen[sub.id] = 1;
     return skip.indexOf(String(sub.driver || "").trim().toLowerCase()) === -1;
   });
+  /* From w2.43.0: once, to the coordinator app, when this person has it. */
+  const inApp = {};
+  for (const sub of subs) {
+    if (sub.app === "coord" || sub.app === "both") inApp[String(sub.driver || "").trim().toLowerCase()] = 1;
+  }
+  return subs.filter((sub) => !inApp[String(sub.driver || "").trim().toLowerCase()] ||
+                              sub.app === "coord" || sub.app === "both");
 }
 
 function coordAlertOf(a) {
@@ -6015,10 +6077,12 @@ async function alertRoll(env) {
     const names = (reg.results || []).map((r) => String(r.name || "")).filter(Boolean);
     out.onRegister = names.length;
 
+    const appKnown = await ensurePushApp(env);
     const off = [];
     for (const name of names) {
       const hit = await env.DB.prepare(
-        "SELECT 1 AS n FROM push_subs WHERE " + DRIVER_SUB_MATCH + " LIMIT 1").bind(name).first();
+        "SELECT 1 AS n FROM push_subs WHERE " + (appKnown ? DRIVER_WAKE_MATCH : DRIVER_SUB_MATCH) +
+        " LIMIT 1").bind(name).first();
       if (hit) out.driversOn++;
       else off.push(name);
     }
@@ -6088,6 +6152,9 @@ async function handleSubscribe(env, body) {
          String((body && body.ref) || ""), String((body && body.pid) || ""),
          String((body && body.driver) || ""), String((body && body.route) || ""),
          Date.now()).run();
+  if (role === "driver" && body && body.app) {
+    try { await notePushApp(env, endpoint, String(body.app)); } catch (e) {}
+  }
   return json({ ok: true });
 }
 
@@ -9421,6 +9488,7 @@ export default {
         if (action === "linkdo")   return knock(await handleLinkDo(env, body), "linkdo");
 
         if (action === "subscribe")   return await handleSubscribe(env, body);
+        if (action === "pushapp")     return await handlePushApp(env, body);
         if (action === "unsubscribe") return await handleUnsubscribe(env, body);
         if (action === "pushwhat")    return json(await pushWhat(env, body.endpoint));
         /* Same reasoning, plus: it only ever pushes to an endpoint that is

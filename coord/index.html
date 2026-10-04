@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.97.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.97.1 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -687,7 +687,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.97.0";
+var PAGE_VERSION = "v1.97.1";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -3593,6 +3593,16 @@ function bellPaint(name){
   b.setAttribute("aria-label", "Coordinator alerts on this phone" +
     (ALERTS.unread ? ", " + ALERTS.unread + " unread" : ""));
 }
+/* From v1.97.1: "both" when the driver app on this phone holds the same
+   endpoint, so one phone with both apps is alerted once. With no mark yet,
+   a driver app signed in here shares this endpoint. */
+function pushAppOf(endpoint){
+  var mark = "", signed = "";
+  try{ mark = localStorage.getItem("fleet.pushapp.v1") || "";
+       signed = localStorage.getItem("fleet.signin.v1") || ""; }catch(e){}
+  if(mark) return mark === endpoint ? "both" : "coord";
+  return signed ? "both" : "coord";
+}
 /* On signing in: whether this phone is already signed up. Only looks: it
    never registers anything just to find out. */
 function bellLook(){
@@ -3601,6 +3611,7 @@ function bellLook(){
     return r && r.pushManager ? r.pushManager.getSubscription() : null;
   }).then(function(sub){
     BELL.on = !!sub && Notification.permission === "granted";
+    if(BELL.on) post({ action: "pushapp", endpoint: sub.endpoint, app: pushAppOf(sub.endpoint) }).then(null, function(){});
     bellPaint();
     alertAskMaybe();
   }, function(){});
@@ -3640,7 +3651,8 @@ function bellOn(test){
     var j = sub.toJSON();
     endpoint = j.endpoint;
     /* Every time, so the phone is under the name signed in now. */
-    return post({ action: "subscribe", endpoint: j.endpoint, keys: j.keys, role: "driver", driver: who, route: "" });
+    return post({ action: "subscribe", endpoint: j.endpoint, keys: j.keys, role: "driver", driver: who, route: "",
+                  app: pushAppOf(j.endpoint) });
   }).then(function(out){
     if(!out || !out.ok) throw new Error("not taken");
     if(was) return post({ action: "testpush", endpoint: endpoint });

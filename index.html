@@ -1616,7 +1616,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.97.0";
+var APP_VERSION = "v1.97.1";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2569,10 +2569,11 @@ function pushTurnOn(){
         })
         .then(function(sub){
           var j = sub.toJSON();
+          pushAppMark(j.endpoint);
           return callFetch(LIVE_ENDPOINT, {
             method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
             body: JSON.stringify({ action:"subscribe", endpoint:j.endpoint, keys:j.keys,
-                                   role:"driver", driver: me,
+                                   role:"driver", driver: me, app:"driver",
                                    route: myRouteToday() || "North" })
           });
         })
@@ -2636,6 +2637,25 @@ function pushTest(){
    other way is never being asked. */
 var PUSH_LOOK_WAIT = 4000;
 
+/* WHICH APP THIS ENDPOINT BELONGS TO, from v1.97.1 (Asim): so a coordinator
+   with both apps is alerted once. Kept on the phone too: the coordinator
+   app reads it to tell an endpoint it shares with this app from its own. */
+var PUSHAPP_KEY = "fleet.pushapp.v1";
+function pushAppMark(endpoint){
+  try{ if(endpoint) localStorage.setItem(PUSHAPP_KEY, endpoint); }catch(e){}
+}
+function pushAppSay(endpoint){
+  if(!endpoint) return;
+  pushAppMark(endpoint);
+  if(!LIVE_ENDPOINT || !navigator.onLine) return;
+  try{
+    callFetch(LIVE_ENDPOINT, {
+      method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify({ action:"pushapp", endpoint:endpoint, app:"driver" })
+    }).catch(function(){});
+  }catch(e){}
+}
+
 function pushLook(){
   /* However this goes, and whether or not it goes at all, the page stops
      waiting. pushDone is safe to run twice. */
@@ -2651,7 +2671,7 @@ function pushLook(){
     navigator.serviceWorker.ready.then(function(reg){
       return reg.pushManager.getSubscription();
     }).then(function(sub){
-      if(sub){ pushOn = true; safely(paintLinks); }
+      if(sub){ pushOn = true; safely(paintLinks); pushAppSay(sub.endpoint); }
       pushDone();
     }).catch(pushDone);
   }catch(e){ pushDone(); }
