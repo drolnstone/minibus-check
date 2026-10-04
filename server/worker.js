@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.41.1";
+const SCRIPT_VERSION = "w2.42.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5634,7 +5634,10 @@ async function coordAlertNext(env, endpoint) {
       }
     } catch (e) { /* the words as sent */ }
   }
-  return { ok: true, tag: "c|" + m.id, url: "coord/", title, body: text };
+  const out = { ok: true, tag: "c|" + m.id, url: m.url || "coord/", title, body: text };
+  /* A driver's copy (from w2.42.0) carries no coordinator count. */
+  if (m.url) Object.defineProperty(out, "forDriver", { value: true, enumerable: false });
+  return out;
 }
 
 async function pushWhat(env, endpoint) {
@@ -5668,7 +5671,7 @@ async function pushWhat(env, endpoint) {
       try {
         const own = await env.DB.prepare("SELECT driver FROM push_subs WHERE endpoint=?")
           .bind(String(endpoint || "")).first();
-        if (own && own.driver) c.unread = (await coordAlertsFor(env, own.driver)).unread;
+        if (own && own.driver && !c.forDriver) c.unread = (await coordAlertsFor(env, own.driver)).unread;
       } catch (e) {}
       return c;
     }
@@ -8289,18 +8292,67 @@ function contactView(now) {
    one way this can go wrong. Urgent, so it is never held for the quiet
    hours: a choice made at seven on a Sunday morning is for that morning.
    Fenced: the choice is made whether or not a phone could be woken. */
-async function contactTell(env, me, id, title, body) {
+async function contactTell(env, me, id, title, body, drivers) {
   try {
     const msg = coordAlertOf({ id: "contact-" + id, kind: "contact", urgent: true,
                                title: title, body: body, not: [me.name] });
     if (!msg) return;
     await coordLogAdd(env, msg);
     await deliverCoordAlert(env, msg);
+    if (drivers) await contactTellDrivers(env, me, msg, drivers);
   } catch (e) { /* the choice stands; the alert is a courtesy on top */ }
+}
+
+/* THE DRIVERS TOO, from w2.42.0 (Asim): who to ring is worth knowing before
+   anything goes wrong. Today only tells the drivers on today's rota, cover
+   first; Until changed back tells every active driver. Coordinators were
+   told above and are not told twice. The driver's alert opens the driver
+   app, not the coordinator's. */
+async function contactDriverNames(env, scope) {
+  const rules = await authRules(env);
+  const lead = (r) => rules.roles.indexOf(String(r || "").trim().toLowerCase()) !== -1;
+  const q = await env.DB.prepare("SELECT name, role, active FROM drivers").all();
+  const active = (q.results || []).filter((d) => Number(d.active) !== 0);
+  let names;
+  if (scope === "today") {
+    const row = await getRotaRow(env, londonKey(new Date()));
+    names = row ? ["North", "South"].map((rt) => rotaDriverFor(row, rt)).filter(Boolean) : [];
+  } else {
+    names = active.map((d) => d.name);
+  }
+  const seen = {};
+  return names.filter((n) => {
+    const k = String(n).trim().toLowerCase();
+    if (!k || seen[k]) return false;
+    seen[k] = 1;
+    const d = active.find((x) => String(x.name).trim().toLowerCase() === k);
+    return !(d && lead(d.role));
+  });
+}
+
+async function contactTellDrivers(env, me, msg, d) {
+  const names = (await contactDriverNames(env, d.scope))
+    .filter((n) => n.trim().toLowerCase() !== String(me.name || "").trim().toLowerCase());
+  if (!names.length) return 0;
+  const one = Object.assign({}, msg, { id: msg.id + "-d", body: d.body, url: "./" });
+  const keys = await vapidKeys(env);
+  let sent = 0;
+  for (const n of names) {
+    for (const sub of await subsWhere(env, DRIVER_SUB_MATCH, [n])) {
+      const box = ((await cacheGet(env, coordBoxKey(sub.endpoint))) || [])
+        .filter((m) => m && Date.now() - (Number(m.at) || 0) < COORD_ALERT_MAX_AGE_MS);
+      box.push(one);
+      while (box.length > COORD_BOX_MAX) box.shift();
+      await cachePut(env, coordBoxKey(sub.endpoint), box).run();
+      if (await pushOne(env, sub, keys)) sent++;
+    }
+  }
+  return sent;
 }
 
 async function actContact(env, me, act) {
   const usual = (coordinator && coordinator.name) || "the usual coordinator";
+  const was = contactOverrideLive();
   if (act && act.clear) {
     return { ok: true, local: "On the live server.", body: { clear: true },
              words: "Emergency calls go back to " + usual + ".",
@@ -8309,7 +8361,10 @@ async function actContact(env, me, act) {
                contactOverride = null;
                await contactTell(env, me, String(act.id || Date.now()),
                  "Emergency calls: back to " + usual,
-                 me.name + " has put emergency calls back to " + usual + ". Every Call button shows them again.");
+                 me.name + " has put emergency calls back to " + usual + ". Every Call button shows them again.",
+                 was ? { scope: was.until ? "today" : "all",
+                         body: "Ring " + usual + (coordinator && coordinator.phone ? " \u00B7 " + coordinator.phone : "") +
+                               " for anything to do with the bus." } : null);
              },
              reply: { contact: Object.assign(contactView(), { chosen: null }) } };
   }
@@ -8341,7 +8396,10 @@ async function actContact(env, me, act) {
              await contactTell(env, me, String(act.id || now),
                "Emergency calls: " + pick.name + " " + (until ? "today" : "from now"),
                me.name + " has put " + pick.name + " on emergency calls " + till +
-               ". Every Call button shows " + pick.name + " \u00B7 " + pick.phone + ".");
+               ". Every Call button shows " + pick.name + " \u00B7 " + pick.phone + ".",
+               { scope: until ? "today" : "all",
+                 body: "Ring " + pick.name + " \u00B7 " + pick.phone + " for anything to do with the bus" +
+                       (until ? " today." : ".") });
            },
            reply: { contact: { usual: coordinator || { name: "", phone: "" }, chosen: o } } };
 }

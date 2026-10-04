@@ -7,7 +7,7 @@
    midnight London time; Until changed back stays. A push from the sheet
    does not undo it, and putting it back returns the Drivers tab's answer.
 
-   Everything here fails on w2.40.0; the telling fails on w2.41.0. */
+   Everything here fails on w2.40.0; the telling fails on w2.41.0; the drivers' copy on w2.41.1. */
 
 import { join } from "node:path";
 import { Suite } from "../lib/t.mjs";
@@ -32,12 +32,14 @@ export default async function (root) {
     { name: "Bro Calvin", role: "Assistant Coordinator", active: true, order: 0, route: "North", email: "c@x.org", phone: "447399671575", hasPin: true },
     { name: "Bro Moses", role: "Driver", active: true, order: 3, route: "North", email: "", phone: "447395626955", hasPin: true },
     { name: "Bro Gone", role: "Coordinator", active: false, order: 0, route: "North", email: "", phone: "07000000000", hasPin: true },
-    { name: "Pst Nophone", role: "Minister in Charge", active: true, order: 0, route: "North", email: "", phone: "", hasPin: false }];
+    { name: "Pst Nophone", role: "Minister in Charge", active: true, order: 0, route: "North", email: "", phone: "", hasPin: false },
+    { name: "Bro Tunde", role: "Driver", active: true, order: 1, route: "South", email: "", phone: "447752221412", hasPin: true },
+    { name: "Bro Adesina", role: "Driver", active: true, order: 3, route: "South", email: "", phone: "447717194643", hasPin: true }];
 
   async function fresh() {
     const db = makeDB(join(root, "server", "schema.sql"));
     const env = makeEnv(db);
-    await seedSunday(db, KEY);
+    await seedSunday(db, KEY, { north: "Bro Moses", south: "Bro Tunde" });
     await db.prepare("DELETE FROM drivers").run();
     for (const d of REGISTER) {
       await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,?,?,?)")
@@ -112,6 +114,38 @@ export default async function (root) {
       await act(env, { kind: "contact", clear: true }, "Bro Calvin");
       const back = ((await W.cacheGet(env, "calert:" + EP("Bro Asim"))) || []).find((m) => /back to Bro Asim/.test(m.title));
       a.ok(back, "putting it back is not told");
+    });
+  });
+
+  s.test("today only tells today's two drivers; until changed back tells every active driver", async (a) => {
+    const { db, env } = await fresh();
+    const EP = (w) => "https://push.test/" + w;
+    for (const who of ["Bro Asim", "Bro Calvin", "Bro Moses", "Bro Tunde", "Bro Adesina"]) {
+      await db.prepare("INSERT INTO push_subs (endpoint, p256dh, auth, role, driver, made) VALUES (?,?,?,?,?,?)")
+        .bind(EP(who), "p", "a", "driver", who, Date.now()).run();
+    }
+    const boxOf = async (who) => ((await W.cacheGet(env, "calert:" + EP(who))) || []);
+    const driverMsgs = async (who) => (await boxOf(who)).filter((m) => m.url === "./");
+    await atTime(SUN, async () => {
+      await act(env, { kind: "contact", name: "Bro Calvin", until: "today" });
+      for (const who of ["Bro Moses", "Bro Tunde"]) {
+        const m = (await driverMsgs(who))[0];
+        a.ok(m, who + " on today's rota was not told");
+        a.has(m.body, "Ring Bro Calvin \u00B7 07399671575");
+      }
+      a.eq((await driverMsgs("Bro Adesina")).length, 0, "a driver not on today's rota was told about today");
+      a.eq((await driverMsgs("Bro Calvin")).length, 0, "a coordinator was told twice");
+      const what = await W.pushWhat(env, EP("Bro Moses"));
+      a.eq(what.url, "./", "the driver's alert opens the coordinator app");
+      a.has(what.title, "Bro Calvin today");
+      a.eq(what.unread, undefined, "a coordinator count on a driver's icon");
+
+      await act(env, { kind: "contact", clear: true });
+      a.ok((await driverMsgs("Bro Tunde")).some((m) => /Ring Bro Asim/.test(m.body)), "putting it back was not told to today's drivers");
+      a.eq((await driverMsgs("Bro Adesina")).length, 0);
+
+      await act(env, { kind: "contact", name: "Bro Calvin", until: "changed" });
+      a.ok((await driverMsgs("Bro Adesina")).some((m) => /Ring Bro Calvin/.test(m.body)), "every active driver for until changed back");
     });
   });
 

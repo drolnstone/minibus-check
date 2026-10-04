@@ -86,7 +86,9 @@ name or a phone number. The Drivers tab is the one place for them:
   (`contact_override`) and puts it on every answer in place of the Drivers
   tab's person, who comes back when it runs out or the usual person is
   picked again. From w2.41.1 every coordinator but the one who made the change
-  is told at once, by phone alert and in Alerts. Emails still go to
+  is told at once, by phone alert and in Alerts. From w2.42.0 the drivers
+  are told too: today's rota for Today only, every active driver for Until
+  changed back. Emails still go to
   `COORDINATOR_EMAIL`.
 - **The register** is the rows marked Active, with their roles.
 - **The rota order** is the **Primary order** column, counted separately for
