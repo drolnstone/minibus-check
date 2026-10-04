@@ -10613,7 +10613,13 @@ function openDefectsByReg(ss) {
 
    Each goes once (by its id) to every coordinator's phone and by email to
    safetyTo(). One that cannot be sent where it happens (an edit on the sheet)
-   waits on a list and goes with the next five-minute sync. */
+   waits on a list and goes with the next five-minute sync.
+
+   From v1.105.2 (Asim): COORDINATOR_EMAIL is where coordinator emails go,
+   and a coordinator's Email on the Drivers tab is for their driver emails,
+   so someone can keep the two in different inboxes. Until then these went to
+   both, and a coordinator whose two addresses differ got each one twice. The
+   Drivers tab addresses are used only when COORDINATOR_EMAIL is blank. */
 function safetyTo() {
   var seen = {}, out = [];
   var add = function (e) {
@@ -10623,6 +10629,7 @@ function safetyTo() {
     out.push(e);
   };
   String(COORDINATOR_EMAIL || "").split(/[,;]/).forEach(add);
+  if (out.length) return out.join(",");
   var roles = (AUTHORISER_ROLES || []).map(function (r) { return String(r || "").trim().toLowerCase(); });
   try {
     readDrivers(SpreadsheetApp.getActiveSpreadsheet()).forEach(function (d) {

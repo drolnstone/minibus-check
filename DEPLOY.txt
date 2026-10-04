@@ -2,9 +2,12 @@ MINIBUS
 =======
   pages v1.100.2 · server w2.45.0 · sheet v1.105.2
 
-Coordinator emails (Asim): a coordinator listed in COORDINATOR_EMAIL whose
-alerts are off on every phone got each alert twice, the full email and the
-short one. Now only the full email.
+Coordinator emails (Asim): coordinator emails go only to the addresses in
+COORDINATOR_EMAIL. A coordinator's Email on the Drivers tab gets only their
+driver emails, so the two can be different inboxes. Safety alerts (defects,
+renewals, a stopped bus) used to go to both. Also, a coordinator listed in
+COORDINATOR_EMAIL whose alerts are off on every phone no longer gets each
+alert twice.
 
 Code.gs only.
 
@@ -34,5 +37,7 @@ A. The foot of all three apps reads  app v1.100.2 · server w2.45.0 · sheet
 WHAT CHANGED
 ------------
 
-1. Code.gs emailUnalerted: COORDINATOR_EMAIL is read as a list, so every
+1. Code.gs safetyTo: the Drivers tab addresses are used only when
+   COORDINATOR_EMAIL is blank.
+2. Code.gs emailUnalerted: COORDINATOR_EMAIL is read as a list, so every
    address in it is skipped, not only a single address on its own.
