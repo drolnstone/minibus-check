@@ -1616,7 +1616,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.96.9";
+var APP_VERSION = "v1.97.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -4869,99 +4869,12 @@ function authOpen(reg, inspector){
   box.setAttribute("aria-hidden","false");
   setTimeout(function(){ try{ $("authPin").focus(); }catch(e){} },120);
 }
-/* THE SAME SHEET, FOR CLOSING SOMEBODY ELSE'S RUN.
-
-   One PIN box, two purposes, on purpose: a coordinator has one gesture for
-   "this is me, and I am taking responsibility for what happens next", and
-   learning it twice in two shapes is how a man ends up tapping through the
-   one that matters.
-
-   The words change because the act does. Nothing here mentions the defect,
-   and nothing in the other mentions the run. */
-function authOpenEnd(route, driver){
-  var box=$("authModal");
-  if(!box) return;
-  authFor = { kind:"endrun", route:route||"", driver:driver||"" };
-  $("authTitle").textContent = "End this run";
-  $("authGo").textContent = "End the run";
-  $("authWhat").textContent =
-    (driver ? driver + "\u2019s " : "") + (route||"") +
-    " run. It closes for everybody, and the record will say you ended it.";
-  $("authPin").value="";
-  tell("authSay", "");
-  $("authGo").disabled=false;
-  box.classList.add("is-on");
-  box.setAttribute("aria-hidden","false");
-  setTimeout(function(){ try{ $("authPin").focus(); }catch(e){} },120);
-}
-
 function authClose(){
   var box=$("authModal");
   if(!box) return;
   box.classList.remove("is-on");
   box.setAttribute("aria-hidden","true");
   authFor=null;
-}
-
-/* CLOSING ANOTHER MAN'S RUN. Live server only, never queued, for exactly the
-   same reason as an authorisation: a queued end is a run that this phone says
-   is finished and the record says is still out, and the passenger page would
-   go on showing a bus that nobody is driving.
-
-   There is no offline fallback and there should not be one. If this cannot
-   reach the server, the run is still open and the honest thing to say is that
-   it is still open. */
-function authEndSend(pin){
-  if(!LIVE_ENDPOINT || !navigator.onLine){
-    tell("authSay", "No connection. The run is still open.", true);
-    return;
-  }
-  $("authGo").disabled=true;
-  tell("authSay", "Checking\u2026");
-  var route=authFor.route||"", who=(st.driver||"").trim();
-  callFetch(LIVE_ENDPOINT, {
-    method:"POST", redirect:"follow",
-    headers:{ "Content-Type":"text/plain;charset=utf-8" },
-    body: JSON.stringify({ token: CFG.token||"", action:"endrun",
-                           endrun:{ route:route, who:who, pin:pin } })
-  }, PIN_TIMEOUT)
-    .then(function(r){ return r.text(); })
-    .then(function(t){
-      var out=JSON.parse(t);
-      if(out && out.ok===true){
-        authClose();
-        toast(out.already ? "That run was already finished."
-                          : (route+" run ended. The record says you ended it."));
-        try{ rotaCountsFetch(); }catch(e){}
-        tripPaint();
-        return;
-      }
-      $("authGo").disabled=false;
-      if(out && out.locked){
-        tell("authSay", "Too many tries. Wait "+(out.minutes||5)+" minutes.", true);
-      } else if(out && out.error==="bad pin"){
-        tell("authSay", (out.left>0)
-          ? "That PIN is not right. "+out.left+" tr"+(out.left===1?"y":"ies")+" left."
-          : "That PIN is not right.", true);
-      } else if(out && out.error==="not authorised"){
-        tell("authSay", "Only a coordinator can end somebody else's run.", true);
-      } else if(out && out.error==="no pin"){
-        tell("authSay", "You have no PIN. Put your phone number on the Drivers tab.", true);
-      } else if(out && out.error==="your own run"){
-        authClose();
-        toast("That is your own run. Use End trip.", true);
-      } else if(out && out.error==="no run"){
-        authClose();
-        toast("Nothing is out on "+route+".", true);
-        try{ rotaCountsFetch(); }catch(e){}
-      } else {
-        tell("authSay", "The live server would not do that. The run is still open.", true);
-      }
-    })
-    .catch(function(){
-      $("authGo").disabled=false;
-      tell("authSay", "Could not reach the live server. The run is still open.", true);
-    });
 }
 
 /* The one call. It goes to the live server and nowhere else, and it is never
@@ -4976,7 +4889,6 @@ function authSend(){
   if(!authFor) return;
   var pin=String($("authPin").value||"").trim();
   if(pin.length<4){ tell("authSay", "Key your PIN.", true); return; }
-  if(authFor.kind==="endrun") return authEndSend(pin);
   if(!LIVE_ENDPOINT || !navigator.onLine){
     tell("authSay", "No connection. Authorise it on the Checks tab of the spreadsheet instead.", true);
     return;
@@ -7617,10 +7529,6 @@ function rotaPaintStops(){
     toast("Covering "+route+". Pick your bus.");
     tripPaint();
   });
-  if($("tripEndOther")) $("tripEndOther").addEventListener("click",function(){
-    var rt=this.getAttribute("data-endroute")||"";
-    authOpenEnd(rt, tripWhoDrives(rt)||tripOpenBy(rt)||"");
-  });
   if($("tripSignIn")) $("tripSignIn").addEventListener("click",toSignIn);
   if($("stopNotMe")) $("stopNotMe").addEventListener("click",toSignIn);
   /* Forced. Every button and the banner above were built fresh a moment ago,
@@ -7840,27 +7748,6 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
     h+='<p class="trip-note trip-signin"><b>Nobody is signed in.</b> '+
        'Your run is still going.</p>'+
        '<button class="btn btn-main" id="tripSignIn">Sign in</button>';
-  }
-
-  /* CLOSING SOMEBODY ELSE'S RUN.
-
-     A driver ends his own run and nobody else's — that rule is now enforced
-     on the server as well as here, because on 20 September a run was ended
-     from the wrong phone and the app was the only thing guarding it.
-
-     This is the one deliberate way round it, and it is deliberately not a
-     confirmation dialog in front of the ordinary button. "Are you sure" in
-     front of a destructive act that belongs to another man is a speed bump,
-     and the morning it matters is the morning somebody taps through it. A
-     coordinator, his own PIN, and his name on the row instead.
-
-     Drawn only for a coordinator, only on a route that is out, only when it
-     is not his own run. A driver looking at his colleague's route sees
-     nothing new. */
-  if(!mayTap && !onThis && pinCoordinator() && tripOpenBy(route) &&
-     t.started && !t.ended){
-    h+='<button class="btn btn-ghost btn-wide" id="tripEndOther" '+
-       'data-endroute="'+esc(route)+'">End this run</button>';
   }
 
   /* Cover, for the one case that reaches this branch: a run out with no
