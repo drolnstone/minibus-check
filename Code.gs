@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.107.0";
+var SCRIPT_VERSION = "v1.108.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -381,7 +381,13 @@ function withoutSheetLinks(m, link, to) {
 
 /* WHAT WENT OUT, from v1.105.0 (Asim): each email, once sent, is listed on
    the coordinator app's Alerts screen with who it went to, by name where
-   the Drivers tab knows the address. Never allowed to fail the email. */
+   the Drivers tab knows the address. Never allowed to fail the email.
+
+   From v1.108.0 (Asim) an email with anybody but the coordinators on it is
+   outward, and the Worker puts it on the coordinators' phones as well (the
+   trail). The duty emails go there as one batch instead (dutyReminders),
+   which is what MAIL_TRAIL_HELD is for. */
+var MAIL_TRAIL_HELD = false;
 function noteSentMail(m) {
   try {
     if (!WORKER_URL || !m || !m.subject) return;
@@ -392,16 +398,23 @@ function noteSentMail(m) {
         if (e && d.name && !byMail[e]) byMail[e] = String(d.name);
       });
     } catch (err) {}
-    var to = [];
+    var coords = {};
+    String(safetyTo() || "").split(/[,;]/).forEach(function (a) {
+      a = a.trim().toLowerCase();
+      if (a) coords[a] = true;
+    });
+    var to = [], outward = false;
     [m.to, m.cc, m.bcc].forEach(function (list) {
       String(list || "").split(/[,;]/).forEach(function (a) {
         var e = a.replace(/^.*</, "").replace(/>.*$/, "").trim();
         if (!e) return;
+        if (!coords[e.toLowerCase()]) outward = true;
         var who = byMail[e.toLowerCase()] || e;
         if (to.indexOf(who) === -1) to.push(who);
       });
     });
-    workerCall("sentMail", { mail: { subject: String(m.subject).substring(0, 140), to: to } });
+    workerCall("sentMail", { mail: { subject: String(m.subject).substring(0, 140), to: to,
+                                     outward: outward && !MAIL_TRAIL_HELD } });
   } catch (err) {}
 }
 
@@ -11566,6 +11579,9 @@ function dutyReminders() {
 
   var today = new Date();
   today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  /* For the coordinators' trail (v1.108.0): the Sundays due today, and each
+     driver who could not be emailed. */
+  var due = [], missing = [], names = [];
 
   REMIND_DAYS.forEach(function (days) {
     var target = new Date(today);
@@ -11574,6 +11590,7 @@ function dutyReminders() {
 
     var key = dateToKey(target);
     var row = byDate[key];
+    due.push(key + "|" + days);
 
     /* Both routes. A South driver has exactly the same need to be reminded
        as a North one, and reminding only one route would have been a quiet
@@ -11586,7 +11603,13 @@ function dutyReminders() {
         who: String((row ? (row.actual2 || row.primary2) : southDriver(target, pattern.south)) || "").trim(),
         was: (row && row.actual2 && row.primary2 && row.actual2 !== row.primary2) ? row.primary2 : "" }
     ].forEach(function (slot) {
-      if (!slot.who || !emails[slot.who]) return;   // nobody assigned, or no address
+      if (!slot.who || !emails[slot.who]) {        // nobody assigned, or no address
+        if (!(row && dutyIsOff(row.status, slot.route))) {
+          missing.push(slot.who ? slot.who + ", " + slot.route + ": no email address"
+                                : slot.route + ": nobody on the rota");
+        }
+        return;
+      }
 
       /* THE COLUMN SAID HIS NAME AND NOBODY ASKED THE STATUS.
 
@@ -11618,7 +11641,11 @@ function dutyReminders() {
          anything at all. */
       var busNow = "";
       try { busNow = busFor(ss, key, slot.route).reg || ""; } catch (err) { busNow = ""; }
-      sendDutyEmail(emails[slot.who], slot.who, target, days, slot.was, slot.route, busNow);
+      MAIL_TRAIL_HELD = true;
+      try {
+        sendDutyEmail(emails[slot.who], slot.who, target, days, slot.was, slot.route, busNow);
+      } finally { MAIL_TRAIL_HELD = false; }
+      if (names.indexOf(slot.who) === -1) names.push(slot.who);
       sent[stamp] = true;
       report.sent.push(slot.who + ", " + slot.route);
     });
@@ -11627,7 +11654,31 @@ function dutyReminders() {
   var keys = Object.keys(sent).sort();
   while (keys.length > 300) { delete sent[keys.shift()]; }
   props.setProperty("remindersSent", JSON.stringify(sent));
+  try { dutyTrail(due, report, missing, names); } catch (err) {}
   return report;
+}
+
+/* THE DUTY EMAILS ON THE COORDINATORS' PHONES, from v1.108.0 (Asim): one
+   notification for the day's batch, saying who was emailed, or that nobody
+   was and why. Nothing on a day nothing is due, or when everything due had
+   gone already (a second run by hand). */
+function dutyTrail(due, report, missing, names) {
+  if (!due.length || !WORKER_URL) return;
+  var words = [];
+  if (report.sent.length) {
+    words.push(report.sent.join(". ") + ".");
+  } else {
+    if (report.already.length) return;
+    words.push("None sent.");
+  }
+  if (report.off.length) words.push("Off: " + report.off.join(". ") + ".");
+  if (missing.length) words.push(missing.join(". ") + ".");
+  workerCall("trail", { trail: {
+    once: report.sent.length ? "" : "mail|duty|" + due.join(","),
+    title: "Duty emails",
+    body: words.join(" ").substring(0, 300),
+    not: names
+  } });
 }
 
 /**

@@ -1,17 +1,21 @@
 MINIBUS
 =======
-  pages v1.101.1 · server w2.47.0 · sheet v1.107.0
+  pages v1.102.0 · server w2.48.0 · sheet v1.108.0
 
-Plain alerts and emails (Asim): every push and email says only what
-happened and what to do. No explanations, reassurance or pleasantries.
+What went out, on the coordinators' phones (Asim): every batch sent to
+passengers or drivers also puts one notification on every coordinator's
+phone, saying what went and how many it reached.
 
-Worker and Code.gs.
+And the driver's pickup pop-up (Asim): it also comes up when the bus pulls
+up at the next booked stop, so a bus ahead of its estimate gets it too.
+
+Worker, Code.gs and pages.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.101.1        v1.101.1  (no change)
-  Worker  w2.46.0         w2.47.0  (paste)
-  Code.gs v1.106.0        v1.107.0  (paste; carries #60 too)
+  Pages   v1.101.1        v1.102.0  (live on merge)
+  Worker  w2.46.0/47.0    w2.48.0  (paste)
+  Code.gs v1.105.2+       v1.108.0  (paste; carries #60 and #62 too)
 
 
 IN THIS ORDER
@@ -31,57 +35,56 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.101.1 · server w2.47.0 · sheet
-   v1.107.0 .
+A. The foot of all three apps reads  app v1.102.0 · server w2.48.0 · sheet
+   v1.108.0 .
+B. Each notification starts "Sent:". The next ones due: the Wednesday
+   booking reminder (18:00), the Friday duty emails (08:00), the Saturday
+   booking reminder (18:00), and Sunday's 07:30 reminders.
 
 
-WHAT CHANGED
-------------
+WHAT GOES TO THE COORDINATORS
+-----------------------------
 
-Before → after, push or email:
+Title, then words, for each batch:
 
-1. Bus paper expired (service, permit, tax): "Warning only. Record it in
-   the coordinator app when done." → "Record it in the coordinator app when
-   done."
-2. Insurance expired: "The bus is stopped until the renewal is recorded in
-   the coordinator app." → "Record the renewal in the coordinator app."
-   MOT expired: "The bus is stopped until the new MOT is recorded. For a
-   booked test, ..." → "Record the new MOT in the coordinator app. For a
-   booked test, authorise an MOT run there." The title still says BUS
-   STOPPED.
-3. Test push from the sheet: "... Nothing has happened to a bus." → "Test
-   from the spreadsheet." Test from the app: "Nothing has happened to the
-   bus." → "Test." Test email: "If you can read this, notifications are
-   working." → "Emails are working."
-4. Overbooked email: "Swapping the two buses fits both: ..." → "Swap the
-   buses: ..."; "X is on neither route that day and seats N, which would
-   take them all." → "Spare bus: X, N seats."; "No swap in the register
-   fits them all. It needs ..." → "No bus fits them all. Arrange a second
-   trip or another vehicle, or ring the N who booked last." Rehearsal line
-   → "REHEARSAL. Test bookings."
-5. Weekly summary with no checks ever: → "No checks recorded yet."
-6. Duty emails and calendar entry: "Buses can change during the week,
-   check the app on the day." → "Check the app on the day for the bus."
-7. Driver taken off a Sunday: "That has changed. X is driving instead.
-   ... Nothing is needed from you." → "X is driving instead."
-8. Coordinator with alerts off, emailed: "Open the coordinator app for the
-   details. You were emailed because alerts are not on ..." → "Open the
-   coordinator app. Tap the bell to get alerts on your phone."
-9. Rota request email: "This is a protected Sunday. Swaps are refused on
-   it. A cover is still possible, but think about who takes it." →
-   "Protected Sunday. No swaps. Cover only."; "They have already agreed
-   this between themselves." → "Both have agreed."
-10. Passenger, route called off: "... is not running. Sorry." → "... is not
-    running."
-11. Passenger, picked up: "Have a good service." → the time it was marked,
-    or nothing.
-12. Passenger, bus not left: "... We will message you as soon as it sets
-    off." → cut.
-13. Emergency calls: "... Every Call button shows them again." and "Every
-    Call button shows X · phone." → "X · phone." or cut.
+  Sent: Booking reminders        Book your seat: 12 passenger phones.
+                                 (Saturday adds) You are booked: 5
+                                 passenger phones.
+  Sent: Your bus today           North: 5 passenger phones. South: 3
+                                 passenger phones.
+  Sent: North: You are driving   To Bro Moses: 1 phone.
+  today                          (and the same for each other driver
+                                 reminder: time to set off, not gone out,
+                                 end the trip, stopped, authorised, off)
+  Sent: North: No bus today      To 6 passenger phones.
+  Sent: North: No word yet that  To 6 passenger phones.
+  the bus has left church        (5 minutes past departure, no Start)
+  Sent: North: The bus has gone  To 1 passenger phone.
+  past Grace Rd                  (a booked stop passed unmarked, once a
+                                 stop, booked with the app or without)
+  Sent: Duty emails              Bro Moses, North Liverpool. Bro Adesina,
+                                 South Liverpool.
+                                 (or "None sent." and why)
+  Sent: <the email's subject>    Email to Bro Moses.
+                                 (any other email to a driver)
 
-14. Every email: the grey "Sent by the minibus app." line at the foot is
-    gone.
+- Once each: a batch swept again a minute later is not reported twice.
+- A batch that reached nobody still comes, with 0.
+- Of the live updates during a run, only the two critical ones above.
+  The bus has left church and on its way go to passengers only.
+- Whoever the send went to is left out (a coordinator driving that day).
+- Emails only to coordinator addresses are not repeated.
+- Not held for the quiet hours, as the send itself was not.
+- The Alerts list still shows each one under What went out; these add
+  nothing to the bell's count.
 
-Tests: suite 57 keeps every phrase above out of Code.gs and the Worker.
-Four existing checks follow the new words.
+THE PICKUP POP-UP
+-----------------
+
+Up a minute out by the estimate, as before, or when the phone has been
+stopped for three seconds within 150 metres of the next booked stop's pin,
+whichever comes first. Not while moving, on a fix vaguer than 150 metres,
+on a phone that does not report its speed, or at a stop with no pin.
+Tapping the stop's row still opens it too. Browser check T30.
+
+Tests: suite 58. One existing check follows the new email note.
