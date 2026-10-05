@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.105.2";
+var SCRIPT_VERSION = "v1.106.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -303,16 +303,80 @@ function senderName() {
 }
 
 /* Every email goes through here, so the sender name and the reply address
-   are on all of them and cannot be forgotten on the next one written. */
+   are on all of them and cannot be forgotten on the next one written.
+
+   THE SPREADSHEET'S LINK IS THE OWNER'S ALONE, from v1.106.0 (Asim). The
+   other coordinators work in the coordinator app and are not shared on the
+   sheet, so an Open spreadsheet button only led them to Google's "You need
+   access" page. An email carrying a link to this sheet goes as two: the
+   whole of it to OWNER_EMAIL (Script Properties), and a copy with every
+   sheet link taken out to everybody else. OWNER_EMAIL blank means nobody
+   gets the link. Done here rather than in each email, so the next one
+   written cannot forget. */
 function sendMail(o) {
   var m = {};
   for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) m[k] = o[k];
   var name = senderName();
   if (name && !m.name) m.name = name;
   if (COORDINATOR_EMAIL && !m.replyTo) m.replyTo = COORDINATOR_EMAIL;
-  var out = MailApp.sendEmail(m);
+  var out;
+  var link = sheetLinkBase();
+  if (!link || (String(m.body || "").indexOf(link) === -1 &&
+                String(m.htmlBody || "").indexOf(link) === -1)) {
+    out = MailApp.sendEmail(m);
+  } else {
+    var owner = ownerEmail(), mine = [], rest = [];
+    String(m.to || "").split(/[,;]/).forEach(function (a) {
+      a = a.trim();
+      if (!a) return;
+      var e = a.replace(/^.*</, "").replace(/>.*$/, "").trim().toLowerCase();
+      (owner && e === owner ? mine : rest).push(a);
+    });
+    if (mine.length) {
+      var full = {};
+      for (var f in m) if (Object.prototype.hasOwnProperty.call(m, f)) full[f] = m[f];
+      full.to = mine.join(",");
+      out = MailApp.sendEmail(full);
+    }
+    if (rest.length) out = MailApp.sendEmail(withoutSheetLinks(m, link, rest.join(",")));
+  }
   noteSentMail(m);
   return out;
+}
+
+function ownerEmail() {
+  try {
+    return String(PropertiesService.getScriptProperties().getProperty("OWNER_EMAIL") || "")
+      .trim().toLowerCase();
+  } catch (err) { return ""; }
+}
+
+/* The sheet's address up to /edit, which every link to it or a tab starts with. */
+function sheetLinkBase() {
+  var u = String(sheetUrl() || "").split("#")[0].split("?")[0];
+  return /^https:\/\/docs\.google\.com\/spreadsheets\//.test(u) ? u : "";
+}
+
+/* A copy of m for `to`, with the Open spreadsheet button and every plain
+   line holding the sheet's address taken out, and the blank line before
+   such a line with it. */
+function withoutSheetLinks(m, link, to) {
+  var c = {};
+  for (var k in m) if (Object.prototype.hasOwnProperty.call(m, k)) c[k] = m[k];
+  c.to = to;
+  var at = link.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&");
+  if (c.htmlBody) {
+    c.htmlBody = String(c.htmlBody)
+      .replace(new RegExp('<p[^>]*><a href="' + at + '[^"]*"[^>]*>[^<]*</a></p>', "g"), "");
+  }
+  if (c.body) {
+    c.body = String(c.body).split("\n").reduce(function (out, line) {
+      if (line.indexOf(link) === -1) out.push(line);
+      else if (out.length && out[out.length - 1] === "") out.pop();
+      return out;
+    }, []).join("\n");
+  }
+  return c;
 }
 
 /* WHAT WENT OUT, from v1.105.0 (Asim): each email, once sent, is listed on
@@ -549,7 +613,7 @@ var PASSENGER_RULES = {
    years and a link that still works in March is a way into the record nobody
    is watching.
 
-     on          false puts every email back to "open the spreadsheet"
+     on          false puts every email back to "open the coordinator app"
      ttlMinutes  how long a link lasts
      pagesUrl    where the pages are published. The link is this plus
                  do/?t=<token>. Change it if the site ever moves.
@@ -13590,7 +13654,7 @@ function htmlShell(title, colour, lines, buttonLabel, tabName) {
    one to be had.
 
    Empty is a perfectly good answer and the callers are all written for it: an
-   email without a link says "open the spreadsheet", which is exactly what
+   email without a link says "open the coordinator app", which is what
    every one of these messages said until now. So a live server that is down,
    an older Worker that does not know the action, or LINK_RULES turned off all
    land in the same place, and none of them costs anybody the email.
@@ -13609,7 +13673,7 @@ function htmlShell(title, colour, lines, buttonLabel, tabName) {
    spreadsheet where nobody has filled in the Email column should still
    produce a working link rather than a dead one. Returns "" when there is no
    such person at all, and an empty name makes actionLink hand back no link,
-   which puts the email back to "open the spreadsheet". */
+   which puts the email back to "open the coordinator app". */
 function coordinatorName() {
   var want = String(COORDINATOR_EMAIL || "").trim().toLowerCase();
   var roles = (AUTHORISER_ROLES || []).map(function (r) {
@@ -13704,7 +13768,7 @@ function actionLink(kind, subject) {
    spreadsheet stays quiet, because it is the way round, not the way. */
 function decideHtml(url, words, minutes, colour) {
   if (!url) {
-    return "<b>Open the spreadsheet to decide.</b>";
+    return "<b>Open the coordinator app to decide.</b>";
   }
   return '<a href="' + esc(url) + '" style="display:inline-block;padding:13px 22px;' +
          'background:' + (colour || "#1B222C") + ';color:#fff;text-decoration:none;' +

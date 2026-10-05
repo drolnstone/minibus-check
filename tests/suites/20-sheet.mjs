@@ -285,11 +285,11 @@ export default function (root) {
     const L2 = loadCodeGs(root, { tabs: t, props: { COORDINATOR_EMAIL: "a@b.c" } });
     a.eq(call(L2, "coordinatorName"), "",
          "and an empty name makes actionLink hand back no link, which puts the "
-       + "email back to \"open the spreadsheet\"");
+       + "email back to \"open the coordinator app\"");
   });
 
   s.test("an email without a link says what to do instead", (a) => {
-    a.has(call(L, "decideHtml", "", "Authorise", 60), "Open the spreadsheet",
+    a.has(call(L, "decideHtml", "", "Authorise", 60), "Open the coordinator app",
           "a live server that is down must not cost anybody the message");
     a.eq(call(L, "decidePlain", "", 60), "");
   });
@@ -1561,7 +1561,7 @@ export default function (root) {
     /* The live server being down must never be able to stop a coordinator
        finding out that a bus is off the road, or acting on it. */
     const out = call(L, "decideHtml", "", "Authorise this bus to run", 60, "#A8231B");
-    a.has(out, "Open the spreadsheet");
+    a.has(out, "Open the coordinator app");
     a.hasnt(out, "<a href");
   });
 
