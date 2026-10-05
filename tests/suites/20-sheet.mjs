@@ -285,13 +285,23 @@ export default function (root) {
     const L2 = loadCodeGs(root, { tabs: t, props: { COORDINATOR_EMAIL: "a@b.c" } });
     a.eq(call(L2, "coordinatorName"), "",
          "and an empty name makes actionLink hand back no link, which puts the "
-       + "email back to \"open the spreadsheet\"");
+       + "email back to \"open the coordinator app\"");
   });
 
   s.test("an email without a link says what to do instead", (a) => {
-    a.has(call(L, "decideHtml", "", "Authorise", 60), "Open the spreadsheet",
+    a.has(call(L, "decideHtml", "", "Authorise", 60), "Open the coordinator app",
           "a live server that is down must not cost anybody the message");
     a.eq(call(L, "decidePlain", "", 60), "");
+  });
+
+  s.test("no email links to the spreadsheet", (a) => {
+    /* From v1.106.0 (Asim): the sheet is the owner's alone. Coordinators work
+       in the coordinator app and are not shared on the sheet. */
+    a.hasnt(call(L, "htmlShell", "Defect reported", "#B26B00", ["x"]), "<a href",
+            "the email frame offers no button of its own");
+    const src = readFileSync(join(root, "Code.gs"), "utf8");
+    a.hasnt(src, "getActiveSpreadsheet().getUrl()", "nothing reads the sheet's own address");
+    a.hasnt(src, "docs.google.com/spreadsheets", "nor has it written out");
   });
 
   s.test("an email's button is a button and says nothing else", (a) => {
@@ -1561,7 +1571,7 @@ export default function (root) {
     /* The live server being down must never be able to stop a coordinator
        finding out that a bus is off the road, or acting on it. */
     const out = call(L, "decideHtml", "", "Authorise this bus to run", 60, "#A8231B");
-    a.has(out, "Open the spreadsheet");
+    a.has(out, "Open the coordinator app");
     a.hasnt(out, "<a href");
   });
 

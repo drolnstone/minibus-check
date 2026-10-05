@@ -1,13 +1,10 @@
 MINIBUS
 =======
-  pages v1.101.0 · server w2.46.0 · sheet v1.105.2
+  pages v1.101.0 · server w2.46.0 · sheet v1.106.0
 
-Coordinator emails (Asim): coordinator emails go only to the addresses in
-COORDINATOR_EMAIL. A coordinator's Email on the Drivers tab gets only their
-driver emails, so the two can be different inboxes. Safety alerts (defects,
-renewals, a stopped bus) used to go to both. Also, a coordinator listed in
-COORDINATOR_EMAIL whose alerts are off on every phone no longer gets each
-alert twice.
+No sheet links in emails (Asim): the spreadsheet is the owner's alone. No
+email has an Open spreadsheet button or a link to a tab any more; one with
+no decision link says Open the coordinator app to decide.
 
 Code.gs only.
 
@@ -15,7 +12,7 @@ Code.gs only.
 YOU ARE ON              GOING TO
   Pages   v1.101.0        v1.101.0  (no change)
   Worker  w2.46.0         w2.46.0  (no paste)
-  Code.gs v1.105.0        v1.105.2  (paste)
+  Code.gs v1.105.2        v1.106.0  (paste)
 
 
 IN THIS ORDER
@@ -31,13 +28,13 @@ AFTER IT
 --------
 
 A. The foot of all three apps reads  app v1.101.0 · server w2.46.0 · sheet
-   v1.105.2 .
+   v1.106.0 .
 
 
 WHAT CHANGED
 ------------
 
-1. Code.gs safetyTo: the Drivers tab addresses are used only when
-   COORDINATOR_EMAIL is blank.
-2. Code.gs emailUnalerted: COORDINATOR_EMAIL is read as a list, so every
-   address in it is skipped, not only a single address on its own.
+1. Code.gs htmlShell: no Open spreadsheet button. sheetUrl, tabUrl and
+   openButton are gone, and no plain-text email ends with a sheet link.
+2. Code.gs decideHtml: with no decision link the email says Open the
+   coordinator app to decide.

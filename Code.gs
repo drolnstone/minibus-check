@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.105.2";
+var SCRIPT_VERSION = "v1.106.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -549,7 +549,7 @@ var PASSENGER_RULES = {
    years and a link that still works in March is a way into the record nobody
    is watching.
 
-     on          false puts every email back to "open the spreadsheet"
+     on          false puts every email back to "open the coordinator app"
      ttlMinutes  how long a link lasts
      pagesUrl    where the pages are published. The link is this plus
                  do/?t=<token>. Change it if the site ever moves.
@@ -10479,13 +10479,11 @@ function sendTestEmail() {
     sendMail({
       to: COORDINATOR_EMAIL,
       subject: "Minibus app test",
-      body: "Test from the minibus app. If you can read this, notifications are working.\n\n" +
-            sheetUrl(),
+      body: "Test from the minibus app. If you can read this, notifications are working.",
       htmlBody: htmlShell("Minibus app test", "#1B3A57",
         ["If you can read this, notifications are working.",
          "&nbsp;",
-         "Emails this account can still send today: <b>" + (left < 0 ? "unknown" : left - 1) + "</b>"],
-        "Open spreadsheet", CHECKS_SHEET)
+         "Emails this account can still send today: <b>" + (left < 0 ? "unknown" : left - 1) + "</b>"])
     });
     msg = "Sent to " + COORDINATOR_EMAIL + ".\n\n" +
           "Emails left today: " + (left < 0 ? "unknown" : left - 1) + "\n\n" +
@@ -10667,9 +10665,8 @@ function safetySend(a) {
     sendMail({
       to: to,
       subject: "Minibus: " + a.title,
-      body: a.title + "\n\n" + (a.body || "") + (a.tab ? "\n\n" + tabUrl(a.tab) : ""),
-      htmlBody: htmlShell(a.title, a.colour || (a.urgent ? "#A8231B" : "#8A6116"), [esc(a.body || "")],
-                          a.tab ? "Open the " + a.tab + " tab" : "Open spreadsheet", a.tab || CHECKS_SHEET)
+      body: a.title + "\n\n" + (a.body || ""),
+      htmlBody: htmlShell(a.title, a.colour || (a.urgent ? "#A8231B" : "#8A6116"), [esc(a.body || "")])
     });
   }
   tellCoordinatorPhones({ id: "safety|" + a.id, kind: a.kind || "renewal", urgent: !!a.urgent,
@@ -10856,7 +10853,7 @@ function missingCheckAlert() {
     body: plain.join("\n"),
     /* Amber, not red. A late check is usually a late check, not a crisis,
        and the red shell belongs to a bus that has been stopped. */
-    htmlBody: htmlShell("Went out unchecked", "#8A6116", lines, "Open the checks", CHECKS_SHEET)
+    htmlBody: htmlShell("Went out unchecked", "#8A6116", lines)
   });
 }
 
@@ -11131,8 +11128,7 @@ function overbookingAlert(force) {
              }).join("; ") + ", " + when,
     body: plain.join("\n"),
     /* Amber. Something to arrange, not a bus that has been stopped. */
-    htmlBody: htmlShell("More booked than seats", "#8A6116", lines,
-                        "Open the rota", ROTA_SHEET)
+    htmlBody: htmlShell("More booked than seats", "#8A6116", lines)
   });
 
   /* A rehearsal's numbers are not remembered. Writing them down would let a
@@ -11302,7 +11298,7 @@ function weeklyDigest() {
     to: COORDINATOR_EMAIL,
     subject: "Minibus weekly summary \u2014 " + pretty,
     body: title + "\n\n" + lines.join("\n").replace(/<[^>]+>/g, "").replace(/&[a-z]+;/g, " "),
-    htmlBody: htmlShell(title, colour, lines, "Open spreadsheet", CHECKS_SHEET)
+    htmlBody: htmlShell(title, colour, lines)
   });
 
   /* From v1.101.0: the month, and the year, after their last Sunday. */
@@ -11375,7 +11371,7 @@ function periodDigest(p) {
     to: COORDINATOR_EMAIL,
     subject: "Minibus " + p.kind + " summary \u2014 " + p.name,
     body: title + "\n\n" + lines.join("\n").replace(/<[^>]+>/g, "").replace(/&[a-z]+;/g, " "),
-    htmlBody: htmlShell(title, "#1B222C", lines, "Open spreadsheet", CHECKS_SHEET)
+    htmlBody: htmlShell(title, "#1B222C", lines)
   });
   return title;
 }
@@ -11656,7 +11652,7 @@ function sendDutyEmail(to, who, sunday, daysAhead, covering, route, bus) {
     subject: "Minibus duty" + (route ? ": " + route : "") + " " +
              (daysAhead === 1 ? "tomorrow" : "on " + when),
     body: plain,
-    htmlBody: htmlShell("Your minibus duty", "#1B3A57", lines, ""),
+    htmlBody: htmlShell("Your minibus duty", "#1B3A57", lines),
     attachments: [{
       fileName: "minibus-duty.ics",
       mimeType: "text/calendar",
@@ -12055,7 +12051,7 @@ function notifyDutyChange(ss, key, before, after, route) {
       body: "You were down to drive on " + when + onPlain + ".\n\n" +
             (after ? after + " is driving instead." : "Somebody else is driving instead.") +
             "\n\nNothing is needed from you.",
-      htmlBody: htmlShell("Duty changed", "#5C6672", offLines, "")
+      htmlBody: htmlShell("Duty changed", "#5C6672", offLines)
     });
   }
 
@@ -12081,7 +12077,7 @@ function notifyDutyChange(ss, key, before, after, route) {
                       "check the app on the day.\n\n" : "") +
             (before ? "Covering for " + before + ".\n\n" : "") +
             "If you cannot make it, ask in the app or ring the coordinator.",
-      htmlBody: htmlShell("You are now driving", "#1B3A57", onLines, ""),
+      htmlBody: htmlShell("You are now driving", "#1B3A57", onLines),
       attachments: [{
         fileName: "minibus-duty.ics",
         mimeType: "text/calendar",
@@ -12200,7 +12196,7 @@ function notifyRequestDecided(ss, key, who, sh, row, qc, decision) {
              (no ? " was not approved" : " has been approved"),
     body: plain.join("\n"),
     htmlBody: htmlShell(no ? "Request not approved" : "Request approved",
-                        no ? "#5C6672" : "#1B3A57", lines, "")
+                        no ? "#5C6672" : "#1B3A57", lines)
   });
 }
 
@@ -13494,61 +13490,16 @@ function onEditDefects(e, sh) {
 
 /* ---- emails ------------------------------------------------------------ */
 
-/**
- * The link that appears in coordinator emails.
- *
- * The script asks the spreadsheet it is attached to for its own address, so
- * the link cannot go stale even if the sheet is renamed or moved.
- *
- * Deliberately left blank. It used to hold the address written out in full,
- * which put the spreadsheet's id into a file, and a file can be copied,
- * shared or published in ways nobody intended. The live lookup below is not
- * a fallback for that line, it is the whole mechanism: a container-bound
- * script always knows its own sheet.
- *
- * If you ever need a backstop, put the address in Script Properties as
- * SHEET_URL rather than typing it here.
- */
-var SHEET_URL = (function () {
-  try {
-    return PropertiesService.getScriptProperties().getProperty("SHEET_URL") || "";
-  } catch (err) { return ""; }
-})();
-
-function sheetUrl() {
-  try {
-    var live = SpreadsheetApp.getActiveSpreadsheet().getUrl();
-    if (live) return live;
-  } catch (err) { /* fall through */ }
-  return SHEET_URL;
-}
-
-/**
- * Links straight to one tab, so the button lands on the work rather than on
- * whichever tab happened to be open last. The tab's id is read live, so it
- * stays right even if you reorder the tabs.
- */
-function tabUrl(tabName) {
-  var url = sheetUrl();
-  if (!url) return "";
-  url = url.split("#")[0].split("?")[0];
-  try {
-    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(tabName);
-    if (sh) return url + "#gid=" + sh.getSheetId();
-  } catch (err) { /* fall back to the plain sheet link */ }
-  return url;
-}
-
+/* No email carries a link to this spreadsheet, from v1.106.0 (Asim). It is
+   the owner's alone: the other coordinators work in the coordinator app and
+   are not shared on it, so a button to it only ever led them to Google's
+   "You need access" page and its Request access button. */
 function bigLink(url, label, colour) {
   if (!url) return "";
   return '<p style="margin:22px 0 6px"><a href="' + url + '" ' +
     'style="background:' + (colour || "#1B222C") + ';color:#ffffff;text-decoration:none;' +
     'font-family:Helvetica,Arial,sans-serif;font-weight:bold;font-size:16px;' +
     'padding:13px 22px;border-radius:8px;display:inline-block">' + label + '</a></p>';
-}
-
-function openButton(label, tabName) {
-  return bigLink(tabName ? tabUrl(tabName) : sheetUrl(), label);
 }
 
 /**
@@ -13578,11 +13529,10 @@ function calendarLink(sunday, covering, route, bus) {
          "&location=" + encodeURIComponent(BUS_ADDRESS);
 }
 
-function htmlShell(title, colour, lines, buttonLabel, tabName) {
+function htmlShell(title, colour, lines) {
   return '<div style="font-family:Helvetica,Arial,sans-serif;font-size:15px;color:#16191F;line-height:1.5">' +
     '<p style="font-size:19px;font-weight:bold;color:' + colour + ';margin:0 0 14px">' + title + '</p>' +
     lines.map(function (l) { return '<p style="margin:0 0 6px">' + l + '</p>'; }).join("") +
-    (buttonLabel ? openButton(buttonLabel, tabName) : "") +
     '<p style="color:#5C6672;font-size:13px;margin-top:18px">Sent by the minibus app.</p></div>';
 }
 
@@ -13590,7 +13540,7 @@ function htmlShell(title, colour, lines, buttonLabel, tabName) {
    one to be had.
 
    Empty is a perfectly good answer and the callers are all written for it: an
-   email without a link says "open the spreadsheet", which is exactly what
+   email without a link says "open the coordinator app", which is what
    every one of these messages said until now. So a live server that is down,
    an older Worker that does not know the action, or LINK_RULES turned off all
    land in the same place, and none of them costs anybody the email.
@@ -13609,7 +13559,7 @@ function htmlShell(title, colour, lines, buttonLabel, tabName) {
    spreadsheet where nobody has filled in the Email column should still
    produce a working link rather than a dead one. Returns "" when there is no
    such person at all, and an empty name makes actionLink hand back no link,
-   which puts the email back to "open the spreadsheet". */
+   which puts the email back to "open the coordinator app". */
 function coordinatorName() {
   var want = String(COORDINATOR_EMAIL || "").trim().toLowerCase();
   var roles = (AUTHORISER_ROLES || []).map(function (r) {
@@ -13700,11 +13650,10 @@ function actionLink(kind, subject) {
 
    The colour is the SUBJECT'S, taken from the band at the top of the same
    message, so the eye is drawn down one thread rather than told a new thing:
-   the deep red of a stopped bus, the amber of a rota request. Opening the
-   spreadsheet stays quiet, because it is the way round, not the way. */
+   the deep red of a stopped bus, the amber of a rota request. */
 function decideHtml(url, words, minutes, colour) {
   if (!url) {
-    return "<b>Open the spreadsheet to decide.</b>";
+    return "<b>Open the coordinator app to decide.</b>";
   }
   return '<a href="' + esc(url) + '" style="display:inline-block;padding:13px 22px;' +
          'background:' + (colour || "#1B222C") + ';color:#fff;text-decoration:none;' +
@@ -13915,7 +13864,7 @@ function notifyCheck(c, outcome, defectText) {
    .concat(jobs.length
       ? ["", "To arrange:"].concat(jobs.map(function (j) { return "  - " + j; }))
       : [])
-   .concat(["", "Signed: " + c.sign, "", tabUrl(DEFECTS_SHEET)])
+   .concat(["", "Signed: " + c.sign])
    .concat(stopped ? [decidePlain(link, LINK_RULES.ttlMinutes)] : [])
    .join("\n");
 
@@ -13930,7 +13879,7 @@ function notifyCheck(c, outcome, defectText) {
                         : "Defect reported",
                         stopped ? "#A8231B" : authorised ? "#A8231B"
                         : advOnly ? "#2C6FA8" : clean ? "#146B41" : "#B26B00",
-                        lines, "Open the defect record", DEFECTS_SHEET)
+                        lines)
   });
 }
 
@@ -13961,8 +13910,7 @@ function notifyAuthorised(a) {
     a.reg + " authorised to run by " + who + ".",
     "The defect stays open.", "",
     "Walkaround by: " + (a.inspector || "not recorded"),
-    "Authorised:    " + when + (a.via === "sheet" ? " on the spreadsheet" : " in the app"),
-    "", tabUrl(DEFECTS_SHEET)
+    "Authorised:    " + when + (a.via === "sheet" ? " on the spreadsheet" : " in the app")
   ].join("\n");
   try {
     sendMail({
@@ -13970,7 +13918,7 @@ function notifyAuthorised(a) {
       subject: "Authorised to run: " + a.reg,
       body: plain,
       htmlBody: htmlShell("Authorised to run, defect open", "#A8231B",
-                          lines, "Open the defect record", DEFECTS_SHEET)
+                          lines)
     });
   } catch (err) { /* an email must never undo an authorisation */ }
 }
@@ -14057,7 +14005,7 @@ function notifyRotaRequest(rq, sunday) {
                "Reason:  " + (rq.reason || "")];
   if (rq.swapWith) prows.push("Swap with: " + rq.swapWith);
   if (rq.swapDate) prows.push("Taking their Sunday: " + rq.swapDate);
-  prows.push("", "The rota has not changed.", "", tabUrl(REQUESTS_SHEET));
+  prows.push("", "The rota has not changed.");
   var dp = decidePlain(link, LINK_RULES.ttlMinutes);
   if (dp) prows.push(dp);
   var plain = prows.join("\n");
@@ -14066,8 +14014,7 @@ function notifyRotaRequest(rq, sunday) {
     to: COORDINATOR_EMAIL,
     subject: "Rota request: " + rq.driver + " \u2014 " + when,
     body: plain,
-    htmlBody: htmlShell("Minibus rota change request", "#B26B00", lines,
-                        "Open the request", REQUESTS_SHEET)
+    htmlBody: htmlShell("Minibus rota change request", "#B26B00", lines)
   });
 }
 
