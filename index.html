@@ -443,6 +443,17 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   background:var(--card);font-size:16px;resize:vertical}
 .note .lbl{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.11em;
   text-transform:uppercase;color:var(--warn);margin-bottom:5px}
+/* Photos on a report, from v1.104.0. */
+.pics{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px;align-items:center}
+.pic{position:relative;width:64px;height:64px;border-radius:8px;overflow:hidden;border:1.5px solid var(--hair);flex:none}
+.pic img{width:100%;height:100%;object-fit:cover;display:block}
+.pic button{position:absolute;top:2px;right:2px;width:24px;height:24px;border-radius:50%;border:0;
+  background:rgba(0,0,0,.65);color:#fff;font-size:14px;line-height:24px;padding:0}
+.addpic{min-height:var(--tap);padding:0 16px;border:1.5px dashed var(--warn);border-radius:8px;background:var(--card);
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:18px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--warn);display:inline-flex;align-items:center;justify-content:center}
+.note.is-adv .addpic{border-color:var(--info);color:var(--info)}
+.addpic.busy{opacity:.45;pointer-events:none}
 
 /* ---------- footer ---------- */
 .footbar{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--veil);
@@ -1672,7 +1683,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.103.2";
+var APP_VERSION = "v1.104.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -1997,7 +2008,7 @@ function advStops(){ return OVR.criticalAdvisory === "authorise"; }
 /* ---------------- the shared checklist ---------------- */
 var STAGES = [
   { title:"Outside the bus", lede:"Walk clockwise from the driver's door.", items:[
-    { id:"keys", name:"Keys and remote", what:"Key turns in the door and the ignition. Remote locks and unlocks every door from a normal distance. If you have to stand right up against the bus, report it." },
+    { id:"keys", nophoto:true, name:"Keys and remote", what:"Key turns in the door and the ignition. Remote locks and unlocks every door from a normal distance. If you have to stand right up against the bus, report it." },
     { id:"tyres", name:"Tyres", crit:true, what:"At least 1mm of tread across the full width. Edge wear, deep cuts or bulges in the sidewall, any cord showing, pressures. Look for flat spots from standing." },
     { id:"nuts", name:"Wheel nuts", crit:true, what:"All present and tight. Position marker arrows still lined up. Report rust weeping from a nut." },
     { id:"spare", full:true, name:"Spare wheel, jack and brace", what:"Spare secure in its carrier, not hanging loose, and with air in it. A flat spare is no spare. Jack and wheelbrace stowed with it." },
@@ -2036,22 +2047,22 @@ var STAGES = [
     { id:"intlights", name:"Interior and step lighting", what:"Saloon lights and the light over the step both working." },
     { id:"wheelchair", full:true, name:"Wheelchair ramp and restraints", what:"Ramp or lift deploys and stows. Tie-down webbing not frayed, buckles latch, floor anchorages clear of grit and not damaged. Occupant belt works. If this bus has none, mark it not on this bus." },
     { id:"extinguisher", name:"Fire extinguisher", what:"Present, in date, gauge in the green, seal unbroken, bracket tight." },
-    { id:"firstaid", name:"First aid kit", what:"Present, sealed, contents in date." },
+    { id:"firstaid", nophoto:true, name:"First aid kit", what:"Present, sealed, contents in date." },
     { id:"cabin", full:true, name:"General condition", what:"No sharp edges, exposed metal or loose wiring." }
   ]},
   { title:"In the cab", lede:"Engine running, before anyone gets on.", items:[
     { id:"abs", name:"ABS warning lamp", crit:true, what:"Must come on at ignition then go out. If it stays on, the bus does not run." },
     { id:"lamps", name:"Other warning lights", what:"All lamps come on then go out. Report an amber engine or DPF light before loading passengers." },
-    { id:"brakes", name:"Brakes and pedals", crit:true, what:"Firm pedal, no sinking to the floor. Handbrake holds on a slope. Controlled stop at low speed before the first pick up. Listen for grinding or pulling to one side. Footwell clear, nothing able to slide under a pedal, tread on the pedals not worn smooth or missing." },
-    { id:"steering", name:"Steering", crit:true, what:"No excess free play. No knocking on full lock. Power assistance working, not heavy at low speed." },
-    { id:"clutch", name:"Clutch and gears", what:"Bite point where you expect it, not right at the top of the pedal. All gears select cleanly, including reverse. No slipping when you pull away." },
+    { id:"brakes", nophoto:true, name:"Brakes and pedals", crit:true, what:"Firm pedal, no sinking to the floor. Handbrake holds on a slope. Controlled stop at low speed before the first pick up. Listen for grinding or pulling to one side. Footwell clear, nothing able to slide under a pedal, tread on the pedals not worn smooth or missing." },
+    { id:"steering", nophoto:true, name:"Steering", crit:true, what:"No excess free play. No knocking on full lock. Power assistance working, not heavy at low speed." },
+    { id:"clutch", nophoto:true, name:"Clutch and gears", what:"Bite point where you expect it, not right at the top of the pedal. All gears select cleanly, including reverse. No slipping when you pull away." },
     { id:"reverse_aid", name:"Reversing camera and sensors", what:"Select reverse with the engine running. Picture clear and not fogged or frozen. Sensors and reversing sounder audible. Never rely on them alone: they are an aid, not a substitute for looking." },
     { id:"mirrors", name:"Mirrors, wipers and washers", what:"All mirrors clean, adjusted, secure and folded out. Blades not torn or smearing. Washers reaching the screen." },
-    { id:"limiter", full:true, name:"Speed limiter", what:"If this bus has one: no warning lamp, and it is not cutting in below its set speed. If none is fitted, mark it not on this bus." },
+    { id:"limiter", nophoto:true, full:true, name:"Speed limiter", what:"If this bus has one: no warning lamp, and it is not cutting in below its set speed. If none is fitted, mark it not on this bus." },
     { id:"infotainment", full:true, name:"Radio and dash display", what:"Radio and speakers working front and rear. Dash display readable and not stuck on a warning screen." },
-    { id:"cab", name:"Horn, heater, demist", what:"All working. Demist clears the whole screen, not just a patch in front of you." },
-    { id:"dseat", name:"Driver's seat and belt", what:"Seat adjusts and locks in place with no movement on its runners when you brace against it. Your own belt pulls out, locks when jerked, and clicks in and releases." },
-    { id:"docs", full:true, name:"Documents on board", what:"Insurance in date. Any permit or paperwork this bus must carry. Breakdown number somewhere you could find it in the dark." }
+    { id:"cab", nophoto:true, name:"Horn, heater, demist", what:"All working. Demist clears the whole screen, not just a patch in front of you." },
+    { id:"dseat", nophoto:true, name:"Driver's seat and belt", what:"Seat adjusts and locks in place with no movement on its runners when you brace against it. Your own belt pulls out, locks when jerked, and clicks in and releases." },
+    { id:"docs", nophoto:true, full:true, name:"Documents on board", what:"Insurance in date. Any permit or paperwork this bus must carry. Breakdown number somewhere you could find it in the dark." }
   ]}
 ];
 
@@ -2168,7 +2179,7 @@ function buildFor(v){
       if(it.full && !full && !(v.watch && v.watch[it.id])) return false;
       return !(v.skip||[]).length || (v.skip||[]).indexOf(it.id) === -1;
     }).map(function(it){
-      var copy = { id:it.id, name:it.name, what:it.what, crit:!!it.crit, dvsa:!!DVSA_DAILY[it.id] };
+      var copy = { id:it.id, name:it.name, what:it.what, crit:!!it.crit, dvsa:!!DVSA_DAILY[it.id], nophoto:!!it.nophoto };
       var ov = v.override && v.override[it.id];
       if(ov){
         if(ov.name) copy.name = ov.name;
@@ -3301,10 +3312,14 @@ function btn(label,cls,fn,dis,why){
       var r=st.res[it.id];
       return needsNote(r) && (!r.note || r.note.trim().length < 3);
     });
+    var nopic=s.items.filter(function(it){ return needsPhoto(it, st.res[it.id]); });
     if(left>0) c.textContent = left+" left in this stage";
     else if(blank.length) c.textContent = blank.length===1
       ? "Describe what you found on " + blank[0].name
       : blank.length + " items still need a note";
+    else if(nopic.length) c.textContent = nopic.length===1
+      ? "Add a photo of " + nopic[0].name
+      : nopic.length + " defects still need a photo";
     else c.textContent = "Stage complete";
 
     btn("Back","btn-ghost",function(){
@@ -3314,7 +3329,7 @@ function btn(label,cls,fn,dis,why){
     btn(last?"Review":"Next stage","btn-main",function(){
       if(last){ renderReview(); show("review"); }
       else { st.stage++; renderStage(); show("stage"); }
-    }, left>0 || blank.length>0);
+    }, left>0 || blank.length>0 || nopic.length>0);
     return;
   }
   if(st.screen==="review"){
@@ -3864,18 +3879,25 @@ function renderStage(){
       '<div class="note'+(r&&needsNote(r)?" is-on":"")+(r&&r.v==="adv"?" is-adv":"")+'">'+
         '<div class="lbl">What did you find?</div>'+
         '<textarea placeholder="e.g. Nearside rear tyre worn on the edge"></textarea>'+
+        (it.nophoto ? '' :
+          '<div class="pics"><button type="button" class="addpic">Add photo</button>'+
+          '<input type="file" accept="image/*" hidden></div>')+
       '</div>';
 
     var bOk=el.querySelector(".ok"), bDef=el.querySelector(".def"),
         bNa=el.querySelector(".na"), bAdv=el.querySelector(".adv");
     var note=el.querySelector(".note"), ta=el.querySelector("textarea");
     if(r&&r.note) ta.value=r.note;
+    var pics=el.querySelector(".pics");
+    if(pics) paintPics(it, pics);
 
     function pick(v){
       /* An advisory carries a note for the same reason a defect does: without
          one the record says somebody looked at a tyre and felt something
          about it. */
-      st.res[it.id] = (v==="def"||v==="adv") ? { v:v, note:ta.value } : { v:v };
+      var had = (st.res[it.id] && st.res[it.id].photos) || [];
+      st.res[it.id] = (v==="def"||v==="adv") ? { v:v, note:ta.value, photos:had } : { v:v };
+      if(pics) paintPics(it, pics);
       bOk.classList.toggle("on", v==="ok");
       bDef.classList.toggle("on", v==="def");
       if(bAdv) bAdv.classList.toggle("on", v==="adv");
@@ -3953,10 +3975,194 @@ function checkCounts(state){ return state==="ok" || state==="authorised"; }
    the renderer, the footer and the sheet all have to agree about it. */
 function needsNote(r){ return !!r && (r.v==="def" || r.v==="adv"); }
 
+/* ---------------- photos on a report, from v1.104.0 ----------------
+
+   Asim, 5 October 2026: a Defect needs at least one photo, an Advisory may
+   have one, Fine never asks, and an item a photo cannot show (a missing
+   first aid kit, a key fob, how the brakes feel) never asks either: those
+   are marked nophoto on the list. Up to three an item.
+
+   The phone's own picker takes it: the camera, or a photo already taken.
+   Each is shrunk here before it goes anywhere, to 1600 pixels on the long
+   side (about 250 KB) and a 200 pixel thumbnail for the coordinator's card,
+   because a phone photo is 3 to 5 MB and a car park has one bar of signal.
+
+   The check goes first and never waits on a photo. The photos follow, one
+   at a time, to the live server only, and wait on this phone (IndexedDB,
+   which holds far more than the check queue's storage) until each is in. */
+var PHOTO_MAX = 3;
+function needsPhoto(it, r){
+  return !!r && r.v==="def" && !it.nophoto && !(r.photos && r.photos.length);
+}
+function photoCount(it){
+  var r=st.res[it.id];
+  return (r && (r.v==="def"||r.v==="adv") && r.photos) ? r.photos.length : 0;
+}
+
+/* One photo, shrunk. Resolves { data, thumb }, both JPEG data URLs. */
+function shrinkPhoto(file){
+  return new Promise(function(yes, no){
+    var url;
+    try{ url = URL.createObjectURL(file); }catch(e){ no(e); return; }
+    var img = new Image();
+    img.onload = function(){
+      try{
+        var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+        if(!w || !h) throw new Error("no picture");
+        var draw = function(side, q){
+          var k = Math.min(1, side / Math.max(w, h));
+          var c = document.createElement("canvas");
+          c.width = Math.max(1, Math.round(w*k)); c.height = Math.max(1, Math.round(h*k));
+          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+          return c.toDataURL("image/jpeg", q);
+        };
+        var data = draw(1600, 0.7);
+        if(data.length > 1300000) data = draw(1280, 0.6);
+        if(data.length > 1300000) data = draw(1024, 0.5);
+        var thumb = draw(200, 0.6);
+        URL.revokeObjectURL(url);
+        if(data.indexOf("data:image/jpeg")!==0) throw new Error("not a photo");
+        yes({ data:data, thumb:thumb });
+      }catch(e){ try{ URL.revokeObjectURL(url); }catch(x){} no(e); }
+    };
+    img.onerror = function(){ try{ URL.revokeObjectURL(url); }catch(x){} no(new Error("not a photo")); };
+    img.src = url;
+  });
+}
+
+function paintPics(it, box){
+  var r = st.res[it.id], list = (r && r.photos) || [];
+  var add = box.querySelector(".addpic"), input = box.querySelector("input");
+  Array.prototype.forEach.call(box.querySelectorAll(".pic"), function(x){ x.remove(); });
+  list.forEach(function(ph, i){
+    var d = document.createElement("div");
+    d.className = "pic";
+    d.innerHTML = '<img alt="">'+'<button type="button" aria-label="Remove photo">\u2715</button>';
+    d.querySelector("img").src = ph.thumb;
+    d.querySelector("button").onclick = function(){
+      var rr = st.res[it.id];
+      if(rr && rr.photos) rr.photos.splice(i, 1);
+      paintPics(it, box); paintFoot();
+    };
+    box.insertBefore(d, add);
+  });
+  add.style.display = list.length >= PHOTO_MAX ? "none" : "";
+  add.onclick = function(){ input.value = ""; input.click(); };
+  input.onchange = function(){
+    var f = input.files && input.files[0];
+    if(!f) return;
+    add.classList.add("busy");
+    shrinkPhoto(f).then(function(ph){
+      add.classList.remove("busy");
+      var rr = st.res[it.id];
+      if(!rr || (rr.v!=="def" && rr.v!=="adv")) return;
+      rr.photos = rr.photos || [];
+      if(rr.photos.length >= PHOTO_MAX) return;
+      rr.photos.push(ph);
+      paintPics(it, box); paintFoot();
+    }, function(){
+      add.classList.remove("busy");
+      toast("That photo could not be used. Take another.", true);
+    });
+  };
+}
+
+/* The waiting photos, on this phone. IndexedDB where there is one, this
+   page's memory where there is not. */
+var PHOTO_DB = null, PHOTO_MEM = [], PHOTO_WAIT = 0, photoSending = false;
+function photoStore(){
+  if(PHOTO_DB) return PHOTO_DB;
+  PHOTO_DB = new Promise(function(yes){
+    try{
+      var rq = indexedDB.open("minibus-photos", 1);
+      rq.onupgradeneeded = function(){ rq.result.createObjectStore("out", { keyPath:"id" }); };
+      rq.onsuccess = function(){ yes(rq.result); };
+      rq.onerror = function(){ yes(null); };
+    }catch(e){ yes(null); }
+  });
+  return PHOTO_DB;
+}
+function photoTx(mode, fn){
+  return photoStore().then(function(db){
+    return new Promise(function(yes){
+      if(!db){ yes(fn(null)); return; }
+      try{
+        var tx = db.transaction("out", mode), out = fn(tx.objectStore("out"));
+        tx.oncomplete = function(){ yes(out && out.result !== undefined ? out.result : out); };
+        tx.onerror = tx.onabort = function(){ yes(null); };
+      }catch(e){ yes(fn(null)); }
+    });
+  });
+}
+function photoPut(list){
+  return photoTx("readwrite", function(os){
+    list.forEach(function(p){
+      if(os){ try{ os.put(p); return; }catch(e){} }
+      if(!PHOTO_MEM.some(function(x){ return x.id===p.id; })) PHOTO_MEM.push(p);
+    });
+    return null;
+  });
+}
+function photoAll(){
+  return photoTx("readonly", function(os){ return os ? os.getAll() : null; }).then(function(got){
+    var all = (got || []).concat(PHOTO_MEM.filter(function(m){
+      return !(got || []).some(function(g){ return g.id===m.id; }); }));
+    return all.sort(function(a, b){ return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
+  });
+}
+function photoDel(id){
+  PHOTO_MEM = PHOTO_MEM.filter(function(x){ return x.id!==id; });
+  return photoTx("readwrite", function(os){ if(os) os.delete(id); return null; });
+}
+
+/* The photos a check carries, ready to send. */
+function photosOf(rec){
+  var out = [];
+  ALL.forEach(function(it){
+    var r = st.res[it.id];
+    if(!r || (r.v!=="def" && r.v!=="adv") || !r.photos) return;
+    r.photos.forEach(function(ph, i){
+      out.push({ id: rec.id+"-"+it.id+"-"+(i+1), checkId: rec.id, item: it.name, n: i+1,
+                 reg: rec.reg, data: ph.data, thumb: ph.thumb });
+    });
+  });
+  return out;
+}
+
+/* One at a time, to the live server only: Apps Script has nowhere to keep
+   them. Stops at the first one that does not get through, and tries again
+   on the next signal, the next Send now and the next time the app opens.
+   One the server refuses outright is dropped: it would be refused forever. */
+function sendPhotos(){
+  if(photoSending || !LIVE || LIVE_ENDPOINT===CFG.endpoint) return Promise.resolve();
+  photoSending = true;
+  return photoAll().then(function(all){
+    PHOTO_WAIT = all.length; paintBanner();
+    var i = 0;
+    function next(){
+      if(i >= all.length) return null;
+      var ph = all[i++];
+      return callFetch(LIVE_ENDPOINT, {
+        method:"POST", redirect:"follow",
+        headers:{ "Content-Type":"text/plain;charset=utf-8" },
+        body: JSON.stringify({ token: CFG.token || "", action: "photo", photo: ph })
+      }, 45000).then(function(res){
+        if(!res.ok) throw new Error("http "+res.status);
+        return res.json();
+      }).then(function(out){
+        if(out && out.ok === true) return photoDel(ph.id).then(function(){ PHOTO_WAIT--; paintBanner(); return next(); });
+        if(out && out.error === "bad photo") return photoDel(ph.id).then(function(){ PHOTO_WAIT--; paintBanner(); return next(); });
+        throw new Error("rejected");
+      });
+    }
+    return next();
+  }).catch(function(){}).then(function(){ photoSending = false; paintBanner(); });
+}
+
 /* ---------------- review ---------------- */
 function defectList(){
   return ALL.filter(function(it){ var r=st.res[it.id]; return r&&r.v==="def"; })
-    .map(function(it){ return { name:it.name, crit:!!it.crit, note:(st.res[it.id].note||"").trim() }; });
+    .map(function(it){ return { name:it.name, crit:!!it.crit, note:(st.res[it.id].note||"").trim(), photos:photoCount(it) }; });
 }
 /* Recorded so the sheet shows what was looked at and found not to apply,
    rather than leaving a silent gap that reads like a missed item. */
@@ -3965,7 +4171,7 @@ function defectList(){
    count is the number somebody books work against. */
 function advisoryList(){
   return ALL.filter(function(it){ var r=st.res[it.id]; return r&&r.v==="adv"; })
-    .map(function(it){ return { name:it.name, crit:!!it.crit, note:(st.res[it.id].note||"").trim() }; });
+    .map(function(it){ return { name:it.name, crit:!!it.crit, note:(st.res[it.id].note||"").trim(), photos:photoCount(it) }; });
 }
 function naList(){
   return ALL.filter(function(it){ var r=st.res[it.id]; return r&&r.v==="na"; })
@@ -4012,6 +4218,9 @@ function verdictHTML(lv,defs,advs,auth){
   }
   return '<div class="verdict v-go"><h2>No defects found</h2><p>Everything checked and clear. Sign below and the bus is good to go.</p></div>';
 }
+function picsIn(r){
+  return (r.defects||[]).concat(r.advisories||[]).reduce(function(n, d){ return n + (Number(d.photos)||0); }, 0);
+}
 function sumHTML(rec){
   var t=tally(), now=new Date();
   var r = rec || { date:ukDate(now), time:ukTime(now), reg:st.veh?st.veh.reg:"", driver:st.driver,
@@ -4029,6 +4238,7 @@ function sumHTML(rec){
          row("Items checked", r.checked+" of "+r.total) +
          row("Defects", r.defects.length?String(r.defects.length):"None") +
          (((r.advisories||[]).length)?row("Advisory", String(r.advisories.length)):"") +
+         (picsIn(r)?row("Photos", String(picsIn(r))):"") +
          ((r.authorisedBy||r.authorisedAt)?row("Authorised to run",
             (OVR.showWhoAuthorised && r.authorisedBy) ? r.authorisedBy : "Yes"):"") +
          ((r.na&&r.na.length)?row("Not applicable", r.na.join(", ")):"") +
@@ -4054,9 +4264,11 @@ function queueUp(rec){ var q=loadQ(); q.push(rec); saveQ(q); paintBanner(); }
 function dropFromQ(id){ saveQ(loadQ().filter(function(r){ return r.id!==id; })); paintBanner(); }
 
 function paintBanner(){
-  var n=loadQ().length, b=$("banner");
-  b.classList.toggle("is-on", n>0);
-  if(n>0) $("bannerText").textContent = n+" check"+(n>1?"s":"")+" not sent yet.";
+  var n=loadQ().length, p=Math.max(0, PHOTO_WAIT), b=$("banner");
+  b.classList.toggle("is-on", n>0 || p>0);
+  if(n>0 || p>0) $("bannerText").textContent = [
+    n>0 ? n+" check"+(n>1?"s":"") : "", p>0 ? p+" photo"+(p>1?"s":"") : ""
+  ].filter(Boolean).join(" and ")+" not sent yet.";
 }
 
 /* ---------------- send ----------------
@@ -4218,6 +4430,7 @@ function submit(){
     renewals: dueItems(st.veh).map(function(x){ return x.label+": "+x.words+" ("+prettyDate(x.date)+")"; }).join(" | ")
   };
   lastRec = rec;
+  var pics = photosOf(rec);
 
   noteCheckDone(rec);   /* before any sending: a queued check still counts */
   sendingNow = true;   /* set before the screen paints, or the fresh state
@@ -4230,6 +4443,8 @@ function submit(){
   show("sent");
 
   if(!LIVE){ sendingNow=false; queueUp(rec); paintSend("practice"); return; }
+  var picsSaved = pics.length ? photoPut(pics) : null;
+  if(picsSaved){ PHOTO_WAIT += pics.length; paintBanner(); }
 
   LASTMILES[rec.reg] = { miles: rec.miles, date: rec.date, driver: rec.driver };
   store.set(MKEY, JSON.stringify(LASTMILES));
@@ -4238,6 +4453,7 @@ function submit(){
   sendRec(rec, true).then(function(){
     sendingNow = false;
     paintSend("ok");
+    if(picsSaved) picsSaved.then(sendPhotos);
     fetchLastMiles();
     if(rec.level==="stop") toast("Sent. Now ring the coordinator.");
   }).catch(function(err){
@@ -4254,6 +4470,7 @@ var flushing = false;
 
 function flush(){
   var q=loadQ();
+  if(!q.length && PHOTO_WAIT>0){ sendPhotos(); toast("Sending."); return; }
   if(!q.length){ toast("Nothing waiting."); return; }
   if(!LIVE){ toast("No record address set up yet.", true); return; }
   if(flushing){ toast("Still sending."); return; }
@@ -4276,6 +4493,7 @@ function flush(){
      were made, with one connection open and nothing racing anything. */
   function finish(){
     flushing = false;
+    sendPhotos();
     renderPending(); paintBanner();
     if(done && !failed) toast(done+" sent.");
     else if(done && failed) toast(done+" sent, "+failed+" still waiting.");
@@ -9241,7 +9459,7 @@ $("share").addEventListener("click",function(){
   else toast("Screenshot this page to share it.");
 });
 
-window.addEventListener("online",function(){ fetchLastMiles(); if(loadQ().length) flush(); });
+window.addEventListener("online",function(){ fetchLastMiles(); if(loadQ().length) flush(); else sendPhotos(); });
 
 /* driver register: entries may be "Name" or { name, role, hasPin }.
 
@@ -10225,6 +10443,9 @@ if(LIVE && navigator.onLine){
 }
 if(LIVE && navigator.onLine && loadQ().length){
   setTimeout(function(){ safely(flush); }, 1200);
+} else if(LIVE){
+  /* Photos left from a check sent with no signal. */
+  setTimeout(function(){ safely(sendPhotos); }, 1500);
 }
 
 if("serviceWorker" in navigator){

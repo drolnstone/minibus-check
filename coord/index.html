@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.103.2 · THE COORDINATOR'S APP.
+<!-- BUILD v1.104.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -407,6 +407,15 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .def p{margin:5px 0 0;font-size:15px}
 .def .did{white-space:pre-line;color:var(--ink-2)}
 .def-foot{display:flex;align-items:center;gap:8px;margin-top:6px}
+/* Photos on a defect, from v1.104.0. */
+.def-pics{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.def-pic{width:64px;height:64px;padding:0;border:1px solid var(--hair);border-radius:8px;overflow:hidden;
+  background:var(--hair)}
+.def-pic img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-view{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.92);display:none;
+  align-items:center;justify-content:center;padding:12px}
+.photo-view.is-on{display:flex}
+.photo-view img{max-width:100%;max-height:100%;object-fit:contain}
 .def-foot .tiny{flex:1;min-width:0;margin:0;overflow-wrap:anywhere}
 .def-foot .mini{min-height:36px}
 .def .def-age{font-size:13px;color:var(--muted);margin-top:3px}
@@ -662,6 +671,8 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
   <section class="screen" id="s-alerts"><div id="alertsBody"></div></section>
 </main>
 
+<div class="photo-view" id="photoView" aria-hidden="true"><img id="photoBig" alt=""></div>
+
 <div class="sheet-wrap" id="sheet" aria-hidden="true">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
     <p class="eyebrow" id="sheetEyebrow"></p>
@@ -696,7 +707,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.103.2";
+var PAGE_VERSION = "v1.104.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1871,6 +1882,7 @@ function defectGroups(list){
     g.trail = [].concat.apply([], g.reports.map(function(d){ return d.trail || []; }))
       .sort(function(a, b){ return (Number(a.when) || 0) - (Number(b.when) || 0); });
     g.dvsa = isDvsa(g.item);
+    g.photos = [].concat.apply([], g.reports.map(function(d){ return d.photos || []; }));
   });
   /* Critical first, then a defect before an advisory, then the oldest. */
   return out.sort(function(a, b){
@@ -1905,6 +1917,10 @@ function paintDefects(){
            '<span class="tag '+(g.status === "Open" ? 'warn' : '')+'">'+esc(g.status || "Open")+'</span></div>' +
            (g.dvsa ? '<p class="def-dvsa"><span class="tag dvsa">DVSA daily check</span></p>' : '') +
            (g.found ? '<p>“'+esc(g.found)+'”</p>' : '') +
+           (g.photos.length ? '<div class="def-pics">' + g.photos.map(function(id){
+             return '<button class="def-pic" type="button" data-do="photo" data-key="'+esc(id)+'" aria-label="Photo">' +
+                    '<img alt="" data-pid="'+esc(id)+'"'+(THUMBS[id] ? ' src="'+THUMBS[id]+'"' : '')+'></button>';
+           }).join("") + '</div>' : '') +
            '<p class="def-age">'+esc([n > 1 ? n + " reports since " + shortDay(g.oldest) : "", openFor(g)].filter(Boolean).join(", "))+'</p>' +
            (g.action ? '<p class="did">'+esc(g.action)+'</p>' : '') +
            trailHTML(g.trail) +
@@ -1914,6 +1930,41 @@ function paintDefects(){
     });
   });
   $("defectsBody").innerHTML = h;
+  loadThumbs();
+}
+
+/* PHOTOS ON A DEFECT, from v1.104.0: taken in the driver app, kept on the
+   live server, fetched here under this PIN. Thumbnails once each, and a
+   photo in full on a tap. */
+var THUMBS = {}, THUMB_ASKED = {};
+function loadThumbs(){
+  var want = Array.prototype.map.call(document.querySelectorAll("#defectsBody img[data-pid]"), function(x){
+    return x.getAttribute("data-pid"); }).filter(function(id, i, a){ return !THUMBS[id] && !THUMB_ASKED[id] && a.indexOf(id) === i; });
+  if(!want.length) return;
+  want.forEach(function(id){ THUMB_ASKED[id] = 1; });
+  api("photos", { ids: want.slice(0, 30) }).then(function(out){
+    var got = (out && out.photos) || {};
+    Object.keys(got).forEach(function(id){ THUMBS[id] = got[id]; });
+    Array.prototype.forEach.call(document.querySelectorAll("#defectsBody img[data-pid]"), function(x){
+      var id = x.getAttribute("data-pid");
+      if(THUMBS[id] && !x.getAttribute("src")) x.src = THUMBS[id];
+    });
+  }, function(){ want.forEach(function(id){ delete THUMB_ASKED[id]; }); });
+}
+function openPhoto(id){
+  var v = $("photoView"), img = $("photoBig");
+  img.src = THUMBS[id] || "";
+  v.classList.add("is-on"); v.setAttribute("aria-hidden", "false");
+  api("photos", { ids: [id], full: true }).then(function(out){
+    var pic = out && out.photos && out.photos[id];
+    if(pic && v.classList.contains("is-on")) img.src = pic;
+    else if(!pic) toast("That photo has gone.", true);
+  }, function(){});
+}
+function closePhoto(){
+  var v = $("photoView");
+  v.classList.remove("is-on"); v.setAttribute("aria-hidden", "true");
+  $("photoBig").src = "";
 }
 
 function defectByKey(k){ var a = (D && D.defects) || []; for(var i=0;i<a.length;i++) if(a[i].key === k) return a[i]; return null; }
@@ -3477,6 +3528,7 @@ function themeApply(){
 /* ---- taps ------------------------------------------------------------------------------ */
 
 document.addEventListener("click", function(e){
+  if(e.target.closest && e.target.closest("#photoView")){ closePhoto(); return; }
   var t = e.target.closest ? e.target.closest("[data-go],[data-do]") : null;
   if(!t || t.disabled) return;
   if(t.closest("#sheet")) return;
@@ -3504,6 +3556,7 @@ document.addEventListener("click", function(e){
   else if(d === "empties"){ var er = t.getAttribute("data-route"); BOOK_ALL[er] = !BOOK_ALL[er]; paintBookings(BOOK.sunday); }
   else if(d === "book") bookFor(key);
   else if(d === "defect") updateDefect(key);
+  else if(d === "photo") openPhoto(key);
   else if(d === "editdriver") editDriver(t.getAttribute("data-name"));
   else if(d === "adddriver") editDriver("");
   else if(d === "editbus") editBus(t.getAttribute("data-reg"));

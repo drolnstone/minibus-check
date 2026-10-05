@@ -1103,7 +1103,7 @@ everything working?** names the side that is missing it.
 | `Buses` | registration, seats, active, and from v1.87.0 **MOT due**, **Service due**, **Insurance due**, **Permit due** and **Route in odd months**. The dates are what the driver app warns about (30 days ahead, red once passed; blank is not tracked) and the only place they are kept: a renewal is a cell, not a code change. **Route in odd months** is North or South, the route that bus takes in January, March and so on; even months swap. A Sunday's Rota row naming a bus still wins for that Sunday. Without exactly one active North and one active South, the pairing written in the code is used rather than a guess. The columns were filled once, the first *Set up / refresh rota* after v1.87.0, and never again. From v1.92.0 the four date columns take a date and nothing else, and every change to one, from the app or typed here, is written on History with what it was |
 | `Bus Stops` | route, stop, time, postcode, and from v1.71.0 **Lat** and **Lng** — the kerb itself, used for the driver's map link and for working out what passing a stop saves. *Set up / refresh rota* fills any blank one it recognises from `STOP_PINS` in `Code.gs` and never overwrites one you have typed. A stop it does not recognise stays blank, which everything downstream already handles |
 | `Checks` | every safety check. **Outcome** is a dropdown, and picking **Authorised to run** on today's row lets a stopped bus out |
-| `Defects` | one row per defect and one per advisory, told apart by **Kind**, so they can be chased. **Kind** is what the driver called it at the walkaround (a coordinator can change it on the tab); **Status** is what has been done about it since. **Critical** says whether the item is one that can stop the bus, so an item marked Critical YES with Kind Advisory is a critical item the driver judged fit to run |
+| `Defects` | one row per defect and one per advisory, told apart by **Kind**, so they can be chased. **Kind** is what the driver called it at the walkaround (a coordinator can change it on the tab); **Status** is what has been done about it since. **Critical** says whether the item is one that can stop the bus, so an item marked Critical YES with Kind Advisory is a critical item the driver judged fit to run. **Photos** (from v1.109.0) is how many photos the driver took of it; they are shown in the coordinator's app |
 | `Bus Bookings` | passenger bookings |
 | `Trip Events` | every stop tap. **Ended by** is filled on the end row only, and differs from **Driver** when a coordinator closed somebody else's run |
 | `Vehicle Log` | from v1.92.0, one row for every MOT, service, insurance or permit renewal, repair, tyres or other job, and every one booked ahead: the day it was done, the date it had been due and how early or late that was, the next due date and how it was worked out, and whatever else was known (mileage, garage, cost, the defects it put right). Rows are never edited or removed: a mistake is put right with a new row naming the old one under **Corrects**, and the old one is struck through. A row typed here with a Registration, What and Date done is completed as the app would have: Log ID, next due date, the Buses tab. See *The vehicle log* |
@@ -1394,7 +1394,23 @@ get an email while there is still time to do something.
 **Morning.** The driver signs in, keys his PIN, walks round the bus. Every item
 takes one of three answers: **Fine**, **Advisory** (worth watching, does not
 stop the bus) or **Defect**. A critical defect stops the bus and nothing will
-start a run on it until a coordinator authorises it. He picks his bus,
+start a run on it until a coordinator authorises it.
+
+**Photos on a report, from v1.104.0.** A Defect needs at least one photo
+before the stage moves on; an Advisory may have up to three; Fine never asks,
+and neither do the items a photo cannot show (marked `nophoto` in the list in
+`index.html`: keys, first aid kit, documents, brakes, steering, clutch, horn,
+driver's seat, speed limiter). **Add photo** opens the phone's own picker,
+camera or photos. The phone shrinks each to 1600 pixels on the long side
+(about 250 KB) plus a 200 pixel thumbnail, and sends them one at a time to
+the live server after the check, waiting in IndexedDB when there is no
+signal. The Worker keeps them in D1 (`photos`), keyed by check and item as
+the Defects tab is, and hands them only to the coordinator's app under a PIN:
+thumbnails on the defect's card, the photo in full on a tap. The Defects tab
+has only a **Photos** count. Kept while the defect is open, otherwise 26
+weeks.
+
+He picks his bus,
 starts the trip, and taps each stop as he pulls away. Every tap reaches the
 passenger page in about five seconds.
 

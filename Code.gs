@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.108.0";
+var SCRIPT_VERSION = "v1.109.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -512,8 +512,11 @@ var CHECK_HEADERS = [
 var DEFECT_HEADERS = [
   "Received", "Check ID", "Date", "Registration", "Driver",
   "Item", "Critical", "What the driver found", "Status", "Action taken",
-  "Closed on", "Kind"
+  "Closed on", "Kind", "Photos"
 ];
+/* Photos, from v1.109.0: how many the driver took of it. The photos
+   themselves are on the live server and shown in the coordinator's app;
+   none is on this sheet or in Drive. */
 
 /* ---- authorising a stopped bus -----------------------------------------
    Which roles on the Drivers tab may let a bus out with a fault on it, and
@@ -1709,6 +1712,11 @@ function vlogBoot(ss) {
   if (bs) pretty("Buses due dates", function () { busDateRules(bs); });
   vlogSeed(ss);
   busDatesAudit(ss, "On the Buses tab", "");
+  /* From v1.109.0, once per version: a column added to the Defects tab
+     (Photos) is there before the health check looks for it, not only
+     after the next defect is written. */
+  var df = ss.getSheetByName(DEFECTS_SHEET);
+  if (df) pretty("Defects columns", function () { ensureCols(df, DEFECT_HEADERS); });
   props.setProperty("vlogReady", SCRIPT_VERSION);
 }
 
@@ -2677,6 +2685,7 @@ function handleCheckLocked(c) {
       dput(dfc.found,    safeText(d.note));
       dput(dfc.status,   "Open");
       dput(dfc.kind,     kind);
+      dput(dfc.photos,   Number(d.photos) > 0 ? Math.min(3, Math.floor(Number(d.photos))) : "");
       defs.getRange(defs.getLastRow() + 1, 1, 1, dfw).setValues([drow]);
       applyStatusDropdown(defs, defs.getLastRow());
     };
@@ -14349,7 +14358,7 @@ FIELDS[DEFECTS_SHEET] = {
   received: "Received", id: "Check ID", date: "Date", reg: "Registration",
   driver: "Driver", item: "Item", critical: "Critical",
   found: "What the driver found", status: "Status",
-  action: "Action taken", closed: "Closed on", kind: "Kind"
+  action: "Action taken", closed: "Closed on", kind: "Kind", photos: "Photos"
 };
 
 /* Strict: throws on the first heading that is not there. */

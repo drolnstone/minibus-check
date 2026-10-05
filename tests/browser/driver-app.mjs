@@ -1124,6 +1124,52 @@ if (want("T32")) {
   await me.ctx.close();
 }
 
+/* T33 — v1.104.0 (Asim). A Defect needs a photo, an Advisory may have one.
+   The photo is taken through the phone's picker, shrunk on the phone, and
+   sent to the live server after the check, with the check's id and the
+   item's name. */
+if (want("T33")) {
+  const me = await phone({ clock: "2026-09-27T09:40:00+01:00" });
+  await me.load(); await me.close(["howDone"]); await me.signIn();
+  await me.click("Vehicle check", "#s-hub"); await me.pickBus("NH56 FWP"); await me.onward(); await me.close(["busAskStay"]);
+  await me.setInput("miles", "48262"); await me.fuel(6); await me.onward();
+  await me.answerStage({ "Keys and remote": { a: "Defect", note: "Remote is defected" } });
+  const keysNoPic = await me.pg.evaluate(() => {
+    const c = [...document.querySelectorAll("#itemList .item")].find(x => /Keys and remote/.test(x.textContent));
+    return !c.querySelector(".addpic");
+  });
+  await me.onward();
+  await me.answerStage({ "Engine oil": { a: "Defect", note: "Engine oil needs top up" },
+                         "Coolant": { a: "Advisory", note: "A little low" } });
+  const asked = await me.text("#count");
+  const held = await me.pg.evaluate(() => { const bs = [...document.querySelectorAll("#footbar button")].filter(b => b.offsetParent); const g = bs[bs.length - 1]; return g.disabled || g.classList.contains("is-off"); });
+  const coolantOffered = await me.pg.evaluate(() => {
+    const c = [...document.querySelectorAll("#itemList .item")].find(x => /Coolant/.test(x.textContent));
+    return !!c.querySelector(".addpic") && c.querySelector(".addpic").offsetParent !== null;
+  });
+  const input = await me.pg.evaluateHandle(() => [...document.querySelectorAll("#itemList .item")].find(x => /Engine oil/.test(x.textContent)).querySelector("input[type=file]"));
+  await input.asElement().setInputFiles(new URL("../../icon-512.png", import.meta.url).pathname);
+  await me.wait(1500);
+  const thumbs = await me.pg.evaluate(() => [...document.querySelectorAll("#itemList .item")].find(x => /Engine oil/.test(x.textContent)).querySelectorAll(".pic img").length);
+  const after = await me.text("#count");
+  await me.onward();
+  await me.walkaround({});
+  await me.pg.evaluate(() => { const b = [...document.querySelectorAll("#jobChips button")].find(x => (x.textContent || "").trim() === "Nothing needed"); if (b) b.click(); });
+  await me.setInput("sign", "Sample");
+  await me.onward(); await me.wait(2500);
+  const chk = me.posted.find(p => p.action === "check");
+  const pics = me.posted.filter(p => p.action === "photo").map(p => p.photo);
+  const oil = chk && (chk.check.defects || []).find(d => d.name === "Engine oil");
+  const ok = keysNoPic && /Add a photo of Engine oil/.test(asked) && held && coolantOffered && thumbs === 1 &&
+    after === "Stage complete" && oil && oil.photos === 1 && pics.length === 1 &&
+    pics[0].checkId === chk.check.id && pics[0].item === "Engine oil" && pics[0].n === 1 &&
+    /^data:image\/jpeg;base64,/.test(pics[0].data) && pics[0].data.length < 1300000 &&
+    /^data:image\/jpeg;base64,/.test(pics[0].thumb) && pics[0].thumb.length < 60000 && !me.errs.length;
+  check("T33", "a Defect waits for a photo, an Advisory offers one, and the photo follows the check to the live server",
+        ok, JSON.stringify({ keysNoPic, asked, held, coolantOffered, thumbs, after, oil, pics: pics.map(p => [p.item, p.n, p.data.length, p.thumb.length]), errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

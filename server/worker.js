@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.49.0";
+const SCRIPT_VERSION = "w2.50.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -4014,6 +4014,120 @@ async function ensureChecksIn(env) {
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS checks_in_sync ON checks_in(synced)").run();
   checksInReady = hasColumn;
+}
+
+/* ---- PHOTOS ON A REPORT, from w2.50.0 (Asim, 5 October 2026) -------------
+
+   A Defect needs at least one photo and an Advisory may carry up to three,
+   taken in the driver app as it reports the item. The phone shrinks each
+   one to about 250 KB and a thumbnail of a few KB before it sends them, one
+   at a time, after the check itself. They live here and nowhere else: not
+   on the sheet, not in Drive, so a coordinator sees them in the coordinator
+   app under his PIN and nobody needs the sheet. The sheet's Defects tab
+   only counts them.
+
+   Keyed by the check and the item's name, which is what a defect row on
+   the sheet is keyed by too, so the coordinator's defect card finds its
+   own. Kept while the defect is open, and for 26 weeks after the check
+   otherwise, which is when the sheet archives a closed defect row. */
+const PHOTO_MAX = 3;
+const PHOTO_JPEG = "data:image/jpeg;base64,";
+const PHOTO_CHARS = 1400000;
+const THUMB_CHARS = 60000;
+const PHOTO_KEEP_MS = 26 * 7 * 86400000;
+let photosReady = false;
+let photosPruned = 0;
+
+async function ensurePhotos(env) {
+  if (photosReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS photos (" +
+    "id TEXT PRIMARY KEY, check_id TEXT NOT NULL, item TEXT NOT NULL, n INTEGER NOT NULL, " +
+    "reg TEXT NOT NULL DEFAULT '', made INTEGER NOT NULL, thumb TEXT NOT NULL, data TEXT NOT NULL, " +
+    "UNIQUE (check_id, item, n))").run();
+  photosReady = true;
+}
+
+function photoOk(pic, max) {
+  pic = String(pic || "");
+  return pic.indexOf(PHOTO_JPEG) === 0 && pic.length > PHOTO_JPEG.length && pic.length <= max &&
+    /^[A-Za-z0-9+/]+=*$/.test(pic.slice(PHOTO_JPEG.length));
+}
+
+async function handlePhoto(env, p) {
+  if (!p || typeof p !== "object") return json({ ok: false, error: "no photo" });
+  const id = String(p.id || "").trim();
+  const checkId = String(p.checkId || "").trim();
+  const item = String(p.item || "").trim();
+  const n = Math.floor(Number(p.n));
+  if (!/^[\w.-]{1,80}$/.test(id) || !checkId || checkId.length > 80 || !item || item.length > 80 ||
+      !(n >= 1 && n <= PHOTO_MAX)) return json({ ok: false, error: "bad photo" });
+  if (!photoOk(p.data, PHOTO_CHARS) || !photoOk(p.thumb, THUMB_CHARS)) {
+    return json({ ok: false, error: "bad photo" });
+  }
+  await ensurePhotos(env);
+  /* A ceiling, because the token is in config.js for anyone to read: a
+     Sunday brings a handful, so 200 in a day is somebody filling the
+     database, not drivers. */
+  const day = await env.DB.prepare("SELECT COUNT(*) AS n FROM photos WHERE made > ?")
+    .bind(Date.now() - 86400000).first();
+  if (day && Number(day.n) >= 200) return json({ ok: false, error: "too many photos" });
+  /* OR IGNORE: a phone that never heard the answer sends the same photo
+     again, and the first copy stands. */
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO photos (id, check_id, item, n, reg, made, thumb, data) VALUES (?,?,?,?,?,?,?,?)"
+  ).bind(id, checkId, item, n, String(p.reg || "").trim().slice(0, 12), Date.now(),
+         String(p.thumb), String(p.data)).run();
+  try { await prunePhotos(env); } catch (e) { /* the photo is in */ }
+  return json({ ok: true });
+}
+
+function photoKey(checkId, item) {
+  return String(checkId || "") + "|" + String(item || "").trim().toLowerCase();
+}
+
+/* Once a day at most, on the next photo in. Only with the coordinator's
+   list of open defects to hand: without it nothing is cleared. */
+async function prunePhotos(env, now) {
+  if (!now && Date.now() - photosPruned < 86400000) return;
+  const shelf = await cacheGet(env, "coord_shelf");
+  if (!shelf || !Array.isArray(shelf.defects)) return;
+  photosPruned = Date.now();
+  const open = {};
+  for (const d of await coordDefectsView(env)) open[photoKey(d.checkId, d.item)] = 1;
+  const old = await env.DB.prepare("SELECT id, check_id, item FROM photos WHERE made < ?")
+    .bind(Date.now() - PHOTO_KEEP_MS).all();
+  const gone = ((old && old.results) || []).filter((r) => !open[photoKey(r.check_id, r.item)]);
+  for (const r of gone) await env.DB.prepare("DELETE FROM photos WHERE id=?").bind(r.id).run();
+}
+
+/* Each open defect's photos, by id, in the order they were taken. */
+async function attachPhotos(env, list) {
+  if (!list.length) return;
+  await ensurePhotos(env);
+  const q = await env.DB.prepare("SELECT id, check_id, item, n FROM photos ORDER BY check_id, item, n").all();
+  const by = {};
+  for (const r of (q && q.results) || []) (by[photoKey(r.check_id, r.item)] = by[photoKey(r.check_id, r.item)] || []).push(r.id);
+  for (const d of list) {
+    const ids = by[photoKey(d.checkId, d.item)];
+    if (ids) d.photos = ids;
+  }
+}
+
+/* The coordinator's app asking for pictures: thumbnails for a card, or one
+   photo in full. PIN checked by handleCoord before this is reached. */
+async function coordPhotos(env, body) {
+  const full = !!(body && body.full);
+  const ids = (Array.isArray(body && body.ids) ? body.ids : [])
+    .map((x) => String(x || "")).filter((x) => /^[\w.-]{1,80}$/.test(x)).slice(0, full ? 1 : 30);
+  const photos = {};
+  if (!ids.length) return { ok: true, photos };
+  await ensurePhotos(env);
+  const q = await env.DB.prepare(
+    "SELECT id, " + (full ? "data" : "thumb") + " AS pic FROM photos WHERE id IN (" +
+    ids.map(() => "?").join(",") + ")").bind(...ids).all();
+  for (const r of (q && q.results) || []) photos[r.id] = r.pic;
+  return { ok: true, photos };
 }
 
 async function handleCheck(env, check) {
@@ -8565,7 +8679,9 @@ async function coordDefectsView(env) {
       if (d) d.status = "Fixed";
     }
   }
-  return list.filter((d) => DEFECT_CLOSED.indexOf(d.status) === -1);
+  const open = list.filter((d) => DEFECT_CLOSED.indexOf(d.status) === -1);
+  try { await attachPhotos(env, open); } catch (e) { /* the cards still show */ }
+  return open;
 }
 
 /* ---- words ------------------------------------------------------------- */
@@ -9708,6 +9824,8 @@ async function handleCoord(env, body) {
   if (op === "report") return { body: await coordReport(env, me, String(body.name || "")) };
   if (op === "pdf") return { body: await coordPdf(env, me, body) };
   if (op === "pdfsave") return { body: await coordPdfSave(env, me, body) };
+  /* Photos on a defect, from w2.50.0. */
+  if (op === "photos") return { body: await coordPhotos(env, body) };
   if (op === "act") {
     const out = await coordAct(env, me, body.act || {});
     return { body: out, knock: !!(out && out.ok && !out.duplicate) };
@@ -9827,6 +9945,9 @@ export default {
         if (action === "rotaRequest") return knock(await handleRotaRequest(env, body.request), "request");
         /* The walkaround. Token checked like every other write. */
         if (action === "check") return knock(await handleCheck(env, body.check), "check");
+        /* A photo on a reported item, from w2.50.0. Nothing for the sheet
+           to collect, so no knock. */
+        if (action === "photo") return await handlePhoto(env, body.photo);
         /* Letting a bus out with a fault on it. Checks its own PIN. */
         if (action === "authorise") return knock(await handleAuthorise(env, body), "authorise");
         if (action === "endrun") return knock(await handleEndRun(env, body), "endrun");
