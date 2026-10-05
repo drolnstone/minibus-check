@@ -106,7 +106,7 @@ export default async function (root) {
       const told = box.find((m) => m.kind === "contact");
       a.ok(told, "Bro Calvin's phone was not told");
       a.has(told.title, "Bro Calvin today");
-      a.has(told.body, "Bro Asim has put Bro Calvin on emergency calls until midnight");
+      a.has(told.body, "Bro Asim put Bro Calvin on emergency calls until midnight");
       a.ok(told.urgent, "held for the quiet hours, which run until eight");
       a.not(mine.some((m) => m.kind === "contact" && /Bro Calvin today/.test(m.title)), "the one who chose was told");
       const alerts = (await coord(env, { op: "alerts" }, "Bro Calvin")).alerts;

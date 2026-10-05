@@ -94,7 +94,8 @@ export default async function (root) {
       a.eq(out.title, "No word yet that your bus has left church");
       a.has(out.body, "09:52");
       a.has(out.body, "10:52", "his own time was lost");
-      a.has(out.body, "as soon as it sets off");
+      a.has(out.body, "It was due to leave at");
+      a.hasnt(out.body, "as soon as", "no promise, only the facts");
       a.hasnt(out.title + out.body, "late", "it guesses at lateness, which the server cannot know");
       a.hasnt(out.title + out.body, "driver", "it blames the driver");
     });
