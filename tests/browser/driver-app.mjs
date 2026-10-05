@@ -1020,6 +1020,34 @@ if (want("T27")) {
   await me.ctx.close();
 }
 
+/* T29 — v1.101.1 (Asim). The next booked stop comes into view by itself
+   when the list opens and each time it moves on; the driver never scrolls to
+   find it. A poll that changes nothing leaves the list where he put it. */
+if (want("T29")) {
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck() } });
+  await me.pg.setViewportSize({ width: 360, height: 640 });
+  await startRun(me);
+  const seen = () => me.pg.evaluate(() => {
+    const r = document.querySelector("#stopsBody .stop-row.trip-next");
+    if (!r) return { id: "", inView: false };
+    const b = r.getBoundingClientRect(), ft = document.getElementById("footbar").getBoundingClientRect().top;
+    return { name: r.textContent.slice(0, 40), inView: b.top >= 0 && b.bottom <= ft + 0.5 };
+  });
+  const atOpen = await seen();
+  await me.pg.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); await me.wait(300);
+  const away = await seen();
+  await me.jump(11); await tap(me, "pickup", "N01"); await me.wait(1500);
+  const afterTap = await seen();
+  /* He scrolls away; a repaint with no change leaves him there. */
+  await me.pg.evaluate(() => window.scrollTo(0, 0)); await me.wait(300);
+  await me.pg.evaluate(() => { try { tripPaint(); } catch (e) {} }); await me.wait(800);
+  const y = await me.pg.evaluate(() => window.scrollY);
+  check("T29", "the next booked stop is brought into view when the list opens and when it moves on, and a repaint leaves the scroll alone",
+        atOpen.inView && !away.inView && afterTap.inView && /Grace Road/.test(afterTap.name) && y === 0 && !me.errs.length,
+        JSON.stringify({ atOpen, away, afterTap, y, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

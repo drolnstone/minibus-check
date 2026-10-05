@@ -1663,7 +1663,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.101.0";
+var APP_VERSION = "v1.101.1";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -7219,6 +7219,7 @@ function rotaOpenStops(){
 /* Redrawing only. Switching route tabs and the poll both come back through
    here, and neither should reopen anything or start a second timer. */
 var stopsFrom="driver";     /* where Back should return to */
+var stopsAutoNext="";      /* the next stop last brought into view */
 
 function stopsClose(){
   rotaStopsOpen=false;
@@ -7228,6 +7229,7 @@ function stopsClose(){
   pinModalClose();
   pinGateWasUp=false; pinWhy="";
   pickNext=null; pickSync();
+  stopsAutoNext="";
   show(stopsFrom||"driver");
 }
 
@@ -7644,6 +7646,21 @@ function rotaPaintStops(){
   }
 
   $("stopsBody").innerHTML=html;
+
+  /* THE NEXT BOOKED STOP COMES INTO VIEW BY ITSELF, from v1.101.1 (Asim:
+     "I don't want drivers scrolling up to find out who the next person is").
+     Each time the next stop changes, and when the screen opens, never on a
+     poll that changes nothing, so a driver looking further down the list is
+     not pulled away from it every thirty seconds. */
+  if(onThis && mayTap && nextStop){
+    if(nextStop.id!==stopsAutoNext){
+      stopsAutoNext=nextStop.id;
+      var nr=document.querySelector("#stopsBody .stop-row.trip-next");
+      if(nr) setTimeout(function(){
+        try{ nr.scrollIntoView({block:"center",behavior:"smooth"}); }catch(e){ try{ nr.scrollIntoView(); }catch(e2){} }
+      },60);
+    }
+  } else stopsAutoNext="";
 
   /* Tap a stop to follow it; tap it again to stop. */
   Array.prototype.forEach.call(document.querySelectorAll("[data-dwstop]"),function(r){
