@@ -1885,6 +1885,39 @@ if (want("C53")) {
   await p.ctx.close();
 }
 
+/* C54 — v1.104.0 (Asim). A photo the driver took shows on its defect's
+   card as a thumbnail, and opens in full on a tap. */
+if (want("C54")) {
+  const JPEG = "data:image/jpeg;base64,";
+  const tiny = "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=";
+  await W.handlePhoto(env, { id: "chk-b-wipers-1", checkId: "chk-b", item: "Wiper blades", n: 1, reg: "NH56 FWP",
+                             data: JPEG + tiny, thumb: JPEG + tiny.slice(0, 64) });
+  const p = await page(env, { hash: "#defects" });
+  await p.signIn(PIN);
+  await p.pg.evaluate(() => { location.hash = "defects"; });
+  await p.wait(1500);
+  const card = await p.pg.evaluate(() => {
+    const c = [...document.querySelectorAll("#defectsBody .def")].find((x) => /Wiper blades/.test(x.textContent));
+    const img = c && c.querySelector(".def-pic img");
+    const others = [...document.querySelectorAll("#defectsBody .def")].filter((x) => x !== c && x.querySelector(".def-pic")).length;
+    return { img: img ? img.getAttribute("src") || "" : null, others };
+  });
+  await p.shot("C54a-photo-thumb");
+  await p.pg.click('#defectsBody [data-do="photo"]');
+  await p.wait(800);
+  const big = await p.pg.evaluate(() => ({ on: document.getElementById("photoView").classList.contains("is-on"),
+                                           src: document.getElementById("photoBig").getAttribute("src") || "" }));
+  await p.shot("C54b-photo-full");
+  await p.pg.click("#photoView");
+  await p.wait(200);
+  const shut = await p.pg.evaluate(() => !document.getElementById("photoView").classList.contains("is-on"));
+  const sheetUp = await p.sheetUp();
+  check("C54", "a defect's photo shows on its card, opens in full on a tap and closes on another",
+        card.img === JPEG + tiny.slice(0, 64) && card.others === 0 && big.on && big.src === JPEG + tiny && shut && !sheetUp && !p.errs.length,
+        JSON.stringify({ img: card.img && card.img.length, others: card.others, big: [big.on, big.src.length], shut, sheetUp, errs: p.errs }));
+  await p.ctx.close();
+}
+
 await done();
 cleanup(ROOT);
 const bad = results.filter((r) => !r.ok);

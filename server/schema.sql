@@ -15,7 +15,7 @@
 --               the Checks tab. The Outcome column on that tab changes it
 --               through the Worker's outcome action.
 --
---   OWNED HERE  bookings, trip_events, checks_in, settings, push_subs
+--   OWNED HERE  bookings, trip_events, checks_in, settings, push_subs, photos
 --               Written by phones during a Sunday. Apps Script pulls copies
 --               back into the Sheet for the record, the emails, the reports
 --               and the archiver. settings also holds the day's signatures
@@ -358,4 +358,23 @@ CREATE TABLE IF NOT EXISTS driver_pins (
   pin_iter INTEGER DEFAULT 0,
   set_at   INTEGER,
   kept     INTEGER DEFAULT 0
+);
+
+-- PHOTOS ON A REPORT, from w2.50.0. Taken in the driver app on a Defect
+-- (at least one) or an Advisory (up to three), keyed by the check and the
+-- item's name as the Defects tab is. Only the coordinator's app shows them,
+-- under a PIN. Kept while the defect is open, else 26 weeks.
+--   thumb  a small copy for the defect card, data:image/jpeg;base64,...
+--   data   the photo itself, about 250 KB, the same form
+-- Created by the Worker on first use, so a live database needs no console step.
+CREATE TABLE IF NOT EXISTS photos (
+  id       TEXT PRIMARY KEY,          -- made on the handset, so a retry is the same row
+  check_id TEXT NOT NULL,
+  item     TEXT NOT NULL,
+  n        INTEGER NOT NULL,          -- 1 to 3, in the order taken
+  reg      TEXT NOT NULL DEFAULT '',
+  made     INTEGER NOT NULL,          -- ms, when it arrived here
+  thumb    TEXT NOT NULL,
+  data     TEXT NOT NULL,
+  UNIQUE (check_id, item, n)
 );

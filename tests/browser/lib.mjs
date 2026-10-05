@@ -207,6 +207,8 @@ export async function phone(opts = {}) {
         body = { ok: true };
       } else body = { ok: false, error: world.requestError || "rejected" };
     }
+    /* A photo on a reported item, from v1.104.0. */
+    else if (post.action === "photo") body = world.photoFails ? { ok: false } : { ok: true };
     else if (post.check || post.action === "check") body = world.checkFails ? { ok: false } : { ok: true, id: "chk-" + posted.length };
     else if (post.action === "subscribe" || post.action === "testpush") body = { ok: true };
     else if (p.get("vapid")) body = { ok: true, key: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" };
