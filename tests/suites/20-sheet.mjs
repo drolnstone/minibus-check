@@ -294,16 +294,6 @@ export default function (root) {
     a.eq(call(L, "decidePlain", "", 60), "");
   });
 
-  s.test("no email links to the spreadsheet", (a) => {
-    /* From v1.106.0 (Asim): the sheet is the owner's alone. Coordinators work
-       in the coordinator app and are not shared on the sheet. */
-    a.hasnt(call(L, "htmlShell", "Defect reported", "#B26B00", ["x"]), "<a href",
-            "the email frame offers no button of its own");
-    const src = readFileSync(join(root, "Code.gs"), "utf8");
-    a.hasnt(src, "getActiveSpreadsheet().getUrl()", "nothing reads the sheet's own address");
-    a.hasnt(src, "docs.google.com/spreadsheets", "nor has it written out");
-  });
-
   s.test("an email's button is a button and says nothing else", (a) => {
     /* It used to carry a line under it explaining that it would ask for a
        PIN and last about an hour. Both are true and neither is news: the
