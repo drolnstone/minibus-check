@@ -518,8 +518,8 @@ if (want("C11")) {
   await me.wait(300);
   const home = await me.text("#homeBody");
   await me.shot("C11b-home-refused");
-  check("C11", "each change says whether it is on the sheet, and one the sheet refused says why",
-        /On the sheet/.test(body) && /Not taken/.test(body) && /no Status column/.test(body) &&
+  check("C11", "a change the sheet filed carries no badge, and one the sheet refused says why",
+        !/On the sheet|On the way/.test(body) && /Not taken/.test(body) && /no Status column/.test(body) &&
         /did not take a change/.test(home),
         "activity '" + body.slice(0, 200).replace(/\n/g, " | ") + "', home '" + home.slice(0, 120).replace(/\n/g, " | ") + "'");
 }

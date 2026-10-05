@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.103.1 · THE COORDINATOR'S APP.
+<!-- BUILD v1.103.2 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -696,7 +696,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.103.1";
+var PAGE_VERSION = "v1.103.2";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -3173,10 +3173,12 @@ function paintActivity(){
   var h = '';
   if(!list.length){ $("activityBody").innerHTML = h + '<div class="card"><p class="tiny" style="margin:0">Nothing yet.</p></div>'; return; }
   h += '<ul class="list">' + list.map(function(x){
-    var tag = x.state === "done" ? '<span class="tag pass">On the sheet</span>'
-            : x.state === "refused" ? '<span class="tag stop">Not taken</span>'
-            : '<span class="tag warn">On the way</span>';
-    return '<li>'+tag+' '+esc(x.words)+'<small>'+esc(x.by)+', '+esc(when(x.made))+
+    /* From v1.103.2 a change the sheet has filed is plain, and one still on
+       its way says To the sheet, as on every other screen in this app. */
+    var tag = x.state === "done" ? ''
+            : x.state === "refused" ? '<span class="tag stop">Not taken</span> '
+            : '<span class="tag info">To the sheet</span> ';
+    return '<li>'+tag+esc(x.words)+'<small>'+esc(x.by)+', '+esc(when(x.made))+
            (x.state === "refused" && x.result ? '. '+esc(x.result) : '')+'</small></li>';
   }).join("") + '</ul>';
   $("activityBody").innerHTML = h;
