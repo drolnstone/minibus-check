@@ -113,7 +113,7 @@ export default async function (root) {
     a.eq(L.gas.mail.length, 1);
     const m = told.find((t) => t.action === "sentMail");
     a.ok(m, JSON.stringify(told));
-    a.eq(JSON.stringify(m.mail), JSON.stringify({ subject: "Hello", to: ["Bro Arthur", "other@x.y"] }));
+    a.eq(JSON.stringify(m.mail), JSON.stringify({ subject: "Hello", to: ["Bro Arthur", "other@x.y"], outward: true }));
   });
 
   return s;

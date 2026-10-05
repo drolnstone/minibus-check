@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.47.0";
+const SCRIPT_VERSION = "w2.48.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -200,7 +200,8 @@ const tokenOf = (env) => (env && env.TOKEN) || TOKEN_FALLBACK;
    keeps working. "Is the live server working?" says when it is missing. */
 const sheetTokenOf = (env) => String((env && env.SHEET_TOKEN) || "");
 const SHEET_ONLY_ACTIONS = ["ping", "mint", "outcome", "cleartrips", "rehearsal", "sync",
-                            "coordAlert", "drain", "drained", "sheetbookings", "sentMail"];
+                            "coordAlert", "drain", "drained", "sheetbookings", "sentMail",
+                            "trail"];
 function sheetTokenOk(env, body) {
   const want = sheetTokenOf(env);
   return !want || String((body && body.sheetToken) || "") === want;
@@ -3175,9 +3176,9 @@ async function handleTrip(env, payload) {
       for (const ev of events) {
         const kind = String(ev.event || "").trim().toLowerCase();
         if (kind === "start") {
-          await wakeDeparture(env, key, route, stops, null);
+          await wakeDeparture(env, key, route, stops, who);
         } else if (isStopTap(kind)) {
-          await wakeAfterTap(env, key, route, all, stops, String(ev.stopId || "").trim(), marked);
+          await wakeAfterTap(env, key, route, all, stops, String(ev.stopId || "").trim(), marked, who);
         }
       }
     }
@@ -4774,13 +4775,17 @@ async function wakeCancelled(env) {
   let n = 0;
   for (const route of cancelledRoutes(rotaRow, stops)) {
     const seen = {};
+    let r = 0;
     for (const s of stops.filter((x) => x.route === route && !x.arrival)) {
       for (const sub of await subsAtStop(env, key, s.id)) {
         if (seen[sub.id]) continue;
         seen[sub.id] = 1;
-        n += await wake(env, [sub], "off|" + key + "|" + route, { route, stop: s.stop });
+        r += await wake(env, [sub], "off|" + key + "|" + route, { route, stop: s.stop });
       }
     }
+    n += r;
+    await trail(env, { once: "p|off|" + key + "|" + route, title: route + ": No bus today",
+                       body: "To " + trailPhones(r, "passenger") + "." });
   }
   return n;
 }
@@ -4825,24 +4830,32 @@ async function wakeNotLeft(env) {
     try { state = await tripState(env, key, route, "real"); } catch (e) { continue; }
     if (state && state.started) continue;
     const seen = {};
+    let r = 0;
     for (const s of stops.filter((x) => x.route === route && !x.arrival)) {
       for (const sub of await subsAtStop(env, key, s.id)) {
         if (seen[sub.id]) continue;
         seen[sub.id] = 1;
-        n += await wake(env, [sub], "late|" + key + "|" + route, { route, stop: s.stop });
+        r += await wake(env, [sub], "late|" + key + "|" + route, { route, stop: s.stop });
       }
     }
+    n += r;
+    await trail(env, { once: "p|late|" + key + "|" + route,
+                       title: route + ": No word yet that the bus has left church",
+                       body: "To " + trailPhones(r, "passenger") + "." });
   }
   return n;
 }
 
-/* The bus has left church. Everybody booked on that route, once each. */
-async function wakeDeparture(env, key, route, stops) {
+/* The bus has left church. Everybody booked on that route, once each.
+   driver is whoever tapped Start, left off the trail. */
+async function wakeDeparture(env, key, route, stops, driver) {
   let n = 0;
   for (const s of stops.filter((x) => x.route === route && !x.arrival)) {
     n += await wake(env, await subsAtStop(env, key, s.id), "left|" + key + "|" + route,
                   { route, stop: s.stop });
   }
+  await trail(env, { once: "p|left|" + key + "|" + route, title: route + ": The bus has left church",
+                     body: "To " + trailPhones(n, "passenger") + ".", not: driver ? [driver] : [] });
   return n;
 }
 
@@ -4902,7 +4915,7 @@ async function minutesToStop(env, key, route, all, state, stopId) {
    subject to any of this: somebody standing at a kerb the bus has driven by
    is not receiving an update, he is receiving the only message that will ever
    reach him. */
-async function wakeAfterTap(env, key, route, all, stops, stopId, marked) {
+async function wakeAfterTap(env, key, route, all, stops, stopId, marked, driver) {
   const line = stops.filter((s) => s.route === route && !s.arrival);
   const at = line.findIndex((s) => s.id === stopId);
   if (at < 0) return 0;
@@ -4912,6 +4925,8 @@ async function wakeAfterTap(env, key, route, all, stops, stopId, marked) {
   try { state = await tripState(env, key, route); } catch (e) {}
 
   let n = 0;
+  /* For the coordinators' trail: phones tried, and reached, each way. */
+  let tried = 0, nNext = 0, nPast = 0;
 
   for (let i = at + 1; i < line.length; i++) {
     const subs = await subsAtStop(env, key, line[i].id);
@@ -4931,8 +4946,10 @@ async function wakeAfterTap(env, key, route, all, stops, stopId, marked) {
          twice, and the remembered estimate is written whether or not the push
          itself gets through — a phone that is unreachable has still had its
          chance at this message and should not collect a backlog of them. */
+      tried++;
       const sent = await wake(env, [sub], "next|" + key + "|" + line[i].id + "|" + at,
                              { route, stop: line[i].stop });
+      nNext += sent;
       if (mins !== null) {
         try {
           await env.DB.prepare("UPDATE push_subs SET last_eta=? WHERE id=?")
@@ -4945,8 +4962,23 @@ async function wakeAfterTap(env, key, route, all, stops, stopId, marked) {
 
   for (let i = 0; i < at; i++) {
     if (marked[line[i].id]) continue;
-    n += await wake(env, await subsAtStop(env, key, line[i].id), "past|" + key + "|" + line[i].id,
-                    { route, stop: line[i].stop });
+    const pastTag = "past|" + key + "|" + line[i].id;
+    const behind = await subsAtStop(env, key, line[i].id);
+    tried += behind.filter((x) => x.last !== pastTag).length;
+    const sent = await wake(env, behind, pastTag, { route, stop: line[i].stop });
+    nPast += sent;
+    n += sent;
+  }
+
+  /* Every stop tap that had a passenger to tell, once (a retried tap is not
+     a second one). */
+  if (tried) {
+    const words = [];
+    if (nNext || !nPast) words.push("After " + line[at].stop + ": " + trailPhones(nNext, "passenger") + ".");
+    if (nPast) words.push("Gone past: " + trailPhones(nPast, "passenger") + ".");
+    await trail(env, { once: "p|tap|" + key + "|" + route + "|" + stopId,
+                       title: route + ": " + (nNext || !nPast ? "The bus is on its way" : "The bus has gone past"),
+                       body: words.join(" "), not: driver ? [driver] : [] });
   }
   return n;
 }
@@ -5053,16 +5085,21 @@ async function wakeBookingReminders(env) {
 
   const bookedTag = "booked|" + target + "|d" + hit.day;
 
-  let n = 0;
+  let n = 0, nBook = 0, nBooked = 0;
   for (const sub of subs) {
     const has = (sub.ref && booked["d:" + sub.ref]) || (sub.pid && booked["p:" + sub.pid]);
     if (has) {
       const hold = (sub.ref && held["d:" + sub.ref]) || (sub.pid && held["p:" + sub.pid]);
-      if (hit.booked && !hold) n += await wake(env, [sub], bookedTag);
+      if (hit.booked && !hold) nBooked += await wake(env, [sub], bookedTag);
       continue;
     }
-    n += await wake(env, [sub], tag);
+    nBook += await wake(env, [sub], tag);
   }
+  n = nBook + nBooked;
+  /* Once a window, from its first sweep, whatever it reached. */
+  await trail(env, { once: "p|book|" + target + "|d" + hit.day, title: "Booking reminders",
+                     body: "Book your seat: " + trailPhones(nBook, "passenger") + "." +
+                           (hit.booked ? " You are booked: " + trailPhones(nBooked, "passenger") + "." : "") });
   return n;
 }
 
@@ -5099,12 +5136,19 @@ async function wakeMorning(env) {
   const off = cancelledRoutes(rotaRow, stops);
 
   let n = 0;
+  const words = [];
   for (const route of routeNames(stops)) {
     if (off.indexOf(route) !== -1) continue;
+    let r = 0;
     for (const s of stops.filter((x) => x.route === route && !x.arrival)) {
-      n += await wake(env, await subsAtStop(env, key, s.id), "morn|" + key + "|" + route,
+      r += await wake(env, await subsAtStop(env, key, s.id), "morn|" + key + "|" + route,
                       { route, stop: s.stop });
     }
+    n += r;
+    words.push(route + ": " + trailPhones(r, "passenger") + ".");
+  }
+  if (words.length) {
+    await trail(env, { once: "p|morn|" + key, title: "Your bus today", body: words.join(" ") });
   }
   return n;
 }
@@ -5306,7 +5350,10 @@ async function wakeDrivers(env) {
       } catch (e) {}
     }
 
-    n += await wake(env, subs, nudge.tag);
+    const r = await wake(env, subs, nudge.tag);
+    n += r;
+    await trail(env, { once: "d|" + nudge.tag, title: sentTitle(nudge.tag, true),
+                       body: "To " + nudge.who + ": " + trailPhones(r) + ".", not: [nudge.who] });
   }
   return n;
 }
@@ -5756,6 +5803,12 @@ async function handleSentMail(env, body) {
   if (!subject) return json({ ok: false, error: "no subject" });
   const to = (Array.isArray(m.to) ? m.to : []).map((x) => String(x || "").slice(0, 80));
   await sentNote(env, { g: "m|" + subject, title: subject, mail: true, who: to });
+  /* To a driver, on the trail too (from w2.48.0). Code.gs says which:
+     an email only to coordinator addresses is theirs already. */
+  if (m.outward === true) {
+    await trail(env, { title: subject, body: "Email to " + (to.join(", ") || "a driver") + ".",
+                       not: to });
+  }
   return json({ ok: true });
 }
 
@@ -5772,6 +5825,62 @@ async function sentList(env) {
       return { id: m.id, kind: "sent", mail: !!m.mail, title: m.title, body: to, at: m.at,
                urgent: false, unread: false };
     });
+}
+
+/* ---- THE TRAIL, from w2.48.0 (Asim) -------------------------------------
+
+   Each batch that goes to passengers or drivers also puts one notification
+   on every coordinator's phone: what went and how many it reached, a batch
+   that reached nobody included. The booking reminders, the Sunday morning
+   reminders, each driver reminder, each stop tap on a run, a route called
+   off, and every email to a driver.
+
+   Not on the coordinator's Alerts list as an alert of its own: the line in
+   What went out is already there. Not held for the quiet hours, because the
+   send it reports was not. Never the reason a send fails. Whoever the send
+   went to (a coordinator driving that Sunday) is left out.
+
+   once is the batch's own name, so a batch that is swept again on the next
+   minute (a window, a retried tap) is reported only the first time. */
+const TRAIL_ONCE_KEY = "trail_once";
+const TRAIL_ONCE_MAX = 300;
+
+async function trailClaim(env, once) {
+  const done = (await cacheGet(env, TRAIL_ONCE_KEY)) || [];
+  if (done.indexOf(once) !== -1) return false;
+  done.push(once);
+  while (done.length > TRAIL_ONCE_MAX) done.shift();
+  await cachePut(env, TRAIL_ONCE_KEY, done).run();
+  return true;
+}
+
+async function trail(env, t) {
+  try {
+    if (!t || !t.title) return 0;
+    if (t.once && !(await trailClaim(env, String(t.once)))) return 0;
+    const msg = coordAlertOf({
+      id: "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      kind: "trail", title: "Sent: " + t.title, body: t.body || "",
+      not: Array.isArray(t.not) ? t.not : []
+    });
+    if (!msg) return 0;
+    return await deliverCoordAlert(env, msg);
+  } catch (e) { return 0; }
+}
+
+const trailPhones = (n, who) => n + " " + (who ? who + " " : "") + "phone" + (n === 1 ? "" : "s");
+
+/* An email the sheet has sent, or its batch of duty emails (Code.gs). */
+async function handleTrail(env, body) {
+  const t = (body && body.trail) || {};
+  const title = String(t.title || "").trim().slice(0, 110);
+  if (!title) return json({ ok: false, error: "no title" });
+  const sent = await trail(env, {
+    once: t.once ? String(t.once).slice(0, 120) : "",
+    title, body: String(t.body || "").slice(0, 300),
+    not: (Array.isArray(t.not) ? t.not : []).map((n) => String(n || "").slice(0, 60))
+  });
+  return json({ ok: true, sent });
 }
 
 /* EVERY COORDINATOR WITH ALERTS ON NO PHONE, by name, for the sheet to
@@ -9727,6 +9836,8 @@ export default {
         if (action === "coordAlert") return await handleCoordAlert(env, body);
         /* An email the spreadsheet has just sent, for the Alerts list. */
         if (action === "sentMail") return await handleSentMail(env, body);
+        /* A batch the spreadsheet sent, for the coordinators' trail. */
+        if (action === "trail") return await handleTrail(env, body);
         if (action === "drain") return await handleDrain(env, body);
         if (action === "drained") return await handleDrained(env, body);
         /* A booking edited by hand on the Bus Bookings tab. Token checked. */
