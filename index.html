@@ -1012,6 +1012,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   background:var(--stop);color:var(--stop-on);font-weight:700;text-align:center}
 .pick-moving.is-on{display:block}
 .pick-row{cursor:pointer}
+/* Undo's confirm (v1.103.0), centred like the pickup pop-up and above it. */
+.undo-modal{z-index:135}
 .rota-modal-actions .btn{flex:1}
 @media (min-width:641px){.rota-modal{align-items:center}.rota-sheet{border-radius:14px;max-height:80vh}}
 
@@ -1449,6 +1451,13 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   <div class="rota-sheet pick-sheet" role="dialog" aria-modal="true" aria-labelledby="pickTitle" id="pickBody"></div>
 </div>
 
+<!-- Undo, asked first, from v1.103.0 (Asim). One tap on Undo used to take a
+     stop back on the spot, next to the row's own buttons. Filled by
+     tripUndoAsk. -->
+<div class="rota-modal pick-modal undo-modal" id="undoModal" aria-hidden="true">
+  <div class="rota-sheet pick-sheet" role="dialog" aria-modal="true" aria-labelledby="undoTitle" id="undoBody"></div>
+</div>
+
 <!-- Authorising a stopped bus. Behind a PIN because it is the one action in
      this app that lets a bus out with a fault on it, and the name that goes on
      the record has to be a name somebody can be asked about on Monday. -->
@@ -1663,7 +1672,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.102.0";
+var APP_VERSION = "v1.103.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -6118,7 +6127,7 @@ function tripTap(stop,kind){
   /* Too early to be standing there. Said once, and the very next tap on the
      same stop goes through: a driver who knows better must never be locked
      out of his own record. */
-  var soon = tripTooSoon(stop);
+  var soon = trip.served[stop.id] ? "" : tripTooSoon(stop);
   if(soon){
     var again = tripSoonAsked.id===stop.id && (Date.now()-tripSoonAsked.at) < 12000;
     if(!again){
@@ -6148,11 +6157,56 @@ function tripTap(stop,kind){
 
   tripTapAt=Date.now();
   var at=tripNow();
+  /* The other answer on a marked stop (v1.103.0, Asim: he went back for
+     somebody). The first answer is taken back on the record, as an Undo
+     would, so a stop never carries two live answers. */
+  if(had) tripQueue({ event:"undo", undoes:had.event, stopId:stop.id, at:at });
   trip.served[stop.id]={ at:at, event:kind };
   trip.lastAt=at; trip.lastStop=stop.stop;
   tripSaveState();
   tripQueue({ event:kind, stopId:stop.id, at:at });
   tripPaint();
+}
+
+/* Undo asks before it does anything (v1.103.0, Asim). The same refusals as
+   the Undo itself, so a driver is never asked a question he cannot answer. */
+var undoAskId="";
+function tripUndoAsk(stop){
+  if(tripRoundTick()) return;
+  var was=trip.served[stop.id];
+  if(!was) return;
+  if(tripMoving()){ toast("Not while the bus is moving. Tap it when you pull up.", true); return; }
+  if(pinGateNeeded()){ pinGateFocus(); return; }
+  undoAskId=stop.id;
+  $("undoBody").innerHTML=
+    '<p class="eyebrow">'+esc(stop.time||"")+'</p>'+
+    '<h2 id="undoTitle">Undo '+(was.event==="empty" ? "Nobody here" : "Picked up")+
+      ' at '+esc(stop.stop)+'?</h2>'+
+    '<div class="pick-btns" style="margin-top:14px">'+
+      '<button class="btn btn-ghost" type="button" id="undoKeep">Keep it</button>'+
+      '<button class="btn btn-stop" type="button" id="undoYes" data-undoyes="1">Undo</button>'+
+    '</div>';
+  $("undoKeep").addEventListener("click", tripUndoClose);
+  $("undoYes").addEventListener("click", function(){
+    var s=null, id=undoAskId;
+    (rotaStops||[]).forEach(function(x){ if(x.id===id) s=x; });
+    tripUndoClose();
+    if(s) tripUndo(s);
+  });
+  var box=$("undoModal");
+  box.classList.add("is-on");
+  box.setAttribute("aria-hidden","false");
+  tripMovingPainted=null;
+  tripPaintMoving();
+}
+
+function tripUndoClose(){
+  undoAskId="";
+  var box=$("undoModal");
+  if(!box || !box.classList.contains("is-on")) return;
+  box.classList.remove("is-on");
+  box.setAttribute("aria-hidden","true");
+  $("undoBody").innerHTML="";
 }
 
 function tripUndo(stop){
@@ -7232,6 +7286,7 @@ function stopsClose(){
   pinModalClose();
   pinGateWasUp=false; pinWhy="";
   pickNext=null; pickSync();
+  tripUndoClose();
   stopsAutoNext="";
   show(stopsFrom||"driver");
 }
@@ -7608,6 +7663,14 @@ function rotaPaintStops(){
                 'aria-label="Undo '+esc(s.stop)+'">Undo</button>'
               : '')+
           '</div>'+
+          /* The other answer on a stop he has marked (v1.103.0, Asim). */
+          ((onThis&&mayTap&&done&&!s.arrival&&!(n===0&&done.event!=="empty"))
+            ? '<div class="trip-row-btns">'+
+                (done.event==="empty"
+                  ? '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="pickup">Picked up</button>'
+                  : '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="empty">Nobody there</button>')+
+              '</div>'
+            : '')+
           /* Only on a stop he has gone PAST without marking. It used to
              appear on every booked stop including ones miles ahead, which a
              driver never needs and which put a pair of buttons on most rows.
@@ -7717,7 +7780,7 @@ function rotaPaintStops(){
     b.addEventListener("click",function(){
       var id=this.getAttribute("data-tripundo");
       var s=null; stops.forEach(function(x){ if(x.id===id) s=x; });
-      if(s) tripUndo(s);
+      if(s) tripUndoAsk(s);
     });
   });
   pinGateWire();
@@ -8569,7 +8632,7 @@ function tripPaintMoving(){
   var pm=$("pickMoving");
   if(pm) pm.classList.toggle("is-on", moving);
   Array.prototype.forEach.call(
-    document.querySelectorAll("[data-triptap],[data-tripundo],#tripEnd,[data-tripstart],#tripStartAnyway,[data-pick],[data-pickcall]"),
+    document.querySelectorAll("[data-triptap],[data-tripundo],#tripEnd,[data-tripstart],#tripStartAnyway,[data-pick],[data-pickcall],[data-undoyes]"),
     function(b){ b.disabled=moving; b.classList.toggle("is-dead",moving); });
 }
 
@@ -8912,6 +8975,7 @@ $("rotaModal").addEventListener("click",function(e){if(e.target===this)rotaClose
    the PIN is answered, exactly as they did when the box was inline. */
 $("pinModalNot").addEventListener("click",pinModalClose);
 $("pinModal").addEventListener("click",function(e){ if(e.target===this) pinModalClose(); });
+$("undoModal").addEventListener("click",function(e){ if(e.target===this) tripUndoClose(); });
 document.addEventListener("keydown",function(e){
   if(e.key!=="Escape" && e.keyCode!==27) return;
   if(pinModalUp()) pinModalClose();

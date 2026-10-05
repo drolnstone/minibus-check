@@ -1075,6 +1075,55 @@ if (want("T30")) {
   await me.ctx.close();
 }
 
+/* T31 — v1.103.0 (Asim). Undo asks first. Keep it changes nothing; only
+   the Undo in the question takes the stop back. */
+if (want("T31")) {
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck() } });
+  await startRun(me);
+  await me.jump(11); await me.wait(300);
+  await tap(me, "pickup", "N01"); await me.wait(2000);
+  const undos = () => me.posted.filter(p => p.action === "trip" && (p.trip.events || []).some(e => e.event === "undo")).length;
+  const up = () => me.pg.evaluate(() => document.getElementById("undoModal").classList.contains("is-on"));
+  const marked = async () => /picked up 10:1/i.test(await me.text("#stopsBody"));
+  await me.pg.click('[data-tripundo="N01"]'); await me.wait(800);
+  const asked = await up();
+  const words = (await me.text("#undoBody")).replace(/\s+/g, " ");
+  const sentOnAsk = undos();
+  await me.pg.click("#undoKeep"); await me.wait(800);
+  const keptUp = await up(), keptMarked = await marked(), sentOnKeep = undos();
+  await me.pg.click('[data-tripundo="N01"]'); await me.wait(800);
+  await me.pg.click("#undoYes"); await me.wait(2500);
+  const doneUp = await up(), doneMarked = await marked(), sentOnUndo = undos();
+  check("T31", "Undo asks «Undo Picked up at …?»; Keep it changes nothing, Undo takes the stop back",
+        asked && /Undo Picked up at Scarisbrick Drive[^?]*\?/.test(words) && sentOnAsk === 0 &&
+        !keptUp && keptMarked && sentOnKeep === 0 && !doneUp && !doneMarked && sentOnUndo === 1 && !me.errs.length,
+        JSON.stringify({ asked, words, sentOnAsk, keptUp, keptMarked, sentOnKeep, doneUp, doneMarked, sentOnUndo, errs: me.errs }));
+  await me.ctx.close();
+}
+
+/* T32 — v1.103.0 (Asim). A stop marked Nobody there can be changed to
+   Picked up straight away (he went back for somebody), and the other way.
+   The first answer is taken back on the record, so the stop has one. */
+if (want("T32")) {
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck() } });
+  await startRun(me);
+  await me.jump(11); await me.wait(300);
+  await tap(me, "empty", "N01"); await me.wait(2000);
+  const sent = () => [].concat(...me.posted.filter(p => p.action === "trip").map(p => p.trip.events || []))
+    .filter(e => e.stopId === "N01").map(e => e.event + (e.undoes ? ":" + e.undoes : ""));
+  const first = sent().join(",");
+  await me.pg.click('.trip-row-btns [data-triptap="N01"][data-tripkind="pickup"]'); await me.wait(2500);
+  const row = await me.text("#stopsBody");
+  const after = sent();
+  const asked = await me.pg.evaluate(() => document.getElementById("undoModal").classList.contains("is-on"));
+  const back = await me.pg.$('.trip-row-btns [data-triptap="N01"][data-tripkind="empty"]');
+  check("T32", "Nobody there changes to Picked up in one tap, the first answer taken back on the record",
+        first === "empty" && after.slice(-2).join(",") === "undo:empty,pickup" && /picked up 10:1/i.test(row) &&
+        !asked && !!back && !me.errs.length,
+        JSON.stringify({ first, after, asked, back: !!back, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");
