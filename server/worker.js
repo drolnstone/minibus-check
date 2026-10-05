@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.48.0";
+const SCRIPT_VERSION = "w2.49.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -3036,9 +3036,23 @@ async function handleTrip(env, payload) {
        because a driver who taps and untaps four times should leave a trace. */
     if (kind === "undo") {
       const target = String(ev.undoes || "").trim().toLowerCase();
+      /* When, as well (w2.49.0, Asim): the 4 Oct South run had two stops
+         taken back and nothing said at what time. Written as a note on the
+         Happened cell, added to rather than replaced, so a stop taken back
+         twice says so twice. */
+      const when = "Undone at " + londonHHMM(new Date(at)) + ".";
+      if (!(await ensureFixCol(env))) {
+        stmts.push(env.DB.prepare(
+          "UPDATE trip_events SET status='Undone', synced=0 WHERE trip=? AND event=? AND stop_id=?"
+        ).bind(trip, target, stopId));
+        undone++;
+        continue;
+      }
       stmts.push(env.DB.prepare(
-        "UPDATE trip_events SET status='Undone', synced=0 WHERE trip=? AND event=? AND stop_id=?"
-      ).bind(trip, target, stopId));
+        "UPDATE trip_events SET status='Undone', " +
+        "fix_note=CASE WHEN fix_note='' THEN ? ELSE fix_note || ' ' || ? END, synced=0 " +
+        "WHERE trip=? AND event=? AND stop_id=? AND status<>'Undone'"
+      ).bind(when, when, trip, target, stopId));
       undone++;
       continue;
     }

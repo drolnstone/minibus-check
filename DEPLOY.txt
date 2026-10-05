@@ -1,21 +1,28 @@
 MINIBUS
 =======
-  pages v1.102.0 · server w2.48.0 · sheet v1.108.0
+  pages v1.103.0 · server w2.49.0 · sheet v1.108.0
 
-What went out, on the coordinators' phones (Asim): every batch sent to
-passengers or drivers also puts one notification on every coordinator's
-phone, saying what went and how many it reached.
+Undo asks first (Asim): tapping Undo on a marked stop puts up a box in the
+middle of the screen, "Undo Picked up at <stop>?" (or "Undo Nobody here at
+<stop>?"), with Keep it and Undo. Only Undo in the box takes the stop back.
 
-And the driver's pickup pop-up (Asim): it also comes up when the bus pulls
-up at the next booked stop, so a bus ahead of its estimate gets it too.
+And the sheet says when: an Undo now puts "Undone at HH:MM." on the stop's
+Happened cell in Trip Events. A stop taken back twice says so twice. The
+Status still reads Undone.
 
-Worker, Code.gs and pages.
+And a marked stop can be changed straight to the other answer (Asim: he
+went back for somebody): under a stop marked Nobody there is a Picked up
+button, and under Picked up a Nobody there button. One tap, no box; the
+first answer is taken back on the record with the same "Undone at" note.
+
+Worker and pages. Code.gs is unchanged by this one.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.101.1        v1.102.0  (live on merge)
-  Worker  w2.46.0/47.0    w2.48.0  (paste)
-  Code.gs v1.105.2+       v1.108.0  (paste; carries #60 and #62 too)
+  Pages   v1.102.0        v1.103.0  (live on merge)
+  Worker  w2.48.0 or older  w2.49.0  (paste; carries #63's server too)
+  Code.gs v1.108.0        v1.108.0  (no change; if #63's paste was never
+                                     done, do it as #63's DEPLOY.txt said)
 
 
 IN THIS ORDER
@@ -23,68 +30,29 @@ IN THIS ORDER
 
 1. Cloudflare, the minibus-api Worker, Edit code. Select everything,
    paste this pull request's server/worker.js over it, Deploy.
-2. Open the sheet, Extensions, Apps Script. Select everything in Code.gs,
-   paste this pull request's Code.gs over it, Save.
-3. If #60's step was never done: Project Settings (the cog), Script
-   Properties, Add script property OWNER_EMAIL, with the address you get
-   coordinator emails at. Save.
-4. Deploy, Manage deployments, the pencil, Version: New version, Deploy.
-5. Merge this pull request.
+2. If Code.gs is not yet v1.108.0: paste it, add Script Property
+   OWNER_EMAIL if missing, Deploy, Manage deployments, New version.
+3. Merge this pull request.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.102.0 · server w2.48.0 · sheet
+A. The foot of all three apps reads  app v1.103.0 · server w2.49.0 · sheet
    v1.108.0 .
-B. Each notification starts "Sent:". The next ones due: the Wednesday
-   booking reminder (18:00), the Friday duty emails (08:00), the Saturday
-   booking reminder (18:00), and Sunday's 07:30 reminders.
+B. On the driver app, Undo on a marked stop asks first. Keep it leaves the
+   stop marked.
 
 
-WHAT GOES TO THE COORDINATORS
------------------------------
+THE CONFIRM BOX
+---------------
 
-Title, then words, for each batch:
+- Refused while the bus is moving, as Undo always was; the Undo in the box
+  is grey while moving too.
+- Tapping outside the box is the same as Keep it.
+- After an Undo, the stop's Picked up and Nobody here come back, so it can
+  be marked again at any time; the record shows the new time and keeps the
+  Undo note.
 
-  Sent: Booking reminders        Book your seat: 12 passenger phones.
-                                 (Saturday adds) You are booked: 5
-                                 passenger phones.
-  Sent: Your bus today           North: 5 passenger phones. South: 3
-                                 passenger phones.
-  Sent: North: You are driving   To Bro Moses: 1 phone.
-  today                          (and the same for each other driver
-                                 reminder: time to set off, not gone out,
-                                 end the trip, stopped, authorised, off)
-  Sent: North: No bus today      To 6 passenger phones.
-  Sent: North: No word yet that  To 6 passenger phones.
-  the bus has left church        (5 minutes past departure, no Start)
-  Sent: North: The bus has gone  To 1 passenger phone.
-  past Grace Rd                  (a booked stop passed unmarked, once a
-                                 stop, booked with the app or without)
-  Sent: Duty emails              Bro Moses, North Liverpool. Bro Adesina,
-                                 South Liverpool.
-                                 (or "None sent." and why)
-  Sent: <the email's subject>    Email to Bro Moses.
-                                 (any other email to a driver)
-
-- Once each: a batch swept again a minute later is not reported twice.
-- A batch that reached nobody still comes, with 0.
-- Of the live updates during a run, only the two critical ones above.
-  The bus has left church and on its way go to passengers only.
-- Whoever the send went to is left out (a coordinator driving that day).
-- Emails only to coordinator addresses are not repeated.
-- Not held for the quiet hours, as the send itself was not.
-- The Alerts list still shows each one under What went out; these add
-  nothing to the bell's count.
-
-THE PICKUP POP-UP
------------------
-
-Up a minute out by the estimate, as before, or when the phone has been
-stopped for three seconds within 150 metres of the next booked stop's pin,
-whichever comes first. Not while moving, on a fix vaguer than 150 metres,
-on a phone that does not report its speed, or at a stop with no pin.
-Tapping the stop's row still opens it too. Browser check T30.
-
-Tests: suite 58. One existing check follows the new email note.
+Tests: browser checks T31 (the box) and T32 (the other answer); server
+suite 11 has the Undone-at note and the change of answer.

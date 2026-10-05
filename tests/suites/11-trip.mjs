@@ -113,6 +113,37 @@ export default async function (root) {
     a.eq(db._rows("SELECT * FROM trip_events WHERE stop_id='N01' AND event='picked'").length, 1);
   });
 
+  s.test("an undo says when it happened, and a second undo adds to it", async (a) => {
+    const { db, env, key } = await fresh();
+    const t1 = Date.UTC(2026, 9, 4, 9, 49, 56), t2 = Date.UTC(2026, 9, 4, 9, 52, 10);
+    const one = (ev) => W.handleTrip(env, post({ sunday: key, events: [ev] }));
+    await one({ event: "picked", stopId: "N01", at: t1 - 60000 });
+    await one({ event: "undo", undoes: "picked", stopId: "N01", at: t1 });
+    let row = db._one("SELECT * FROM trip_events WHERE stop_id='N01' AND event='picked'");
+    a.eq(row.status, "Undone", "the status words are compared exactly, so they must not change");
+    a.eq(row.fix_note, "Undone at 10:49.", "London time, on the note the sheet puts on Happened");
+    await one({ event: "undo", undoes: "picked", stopId: "N01", at: t1 + 5000 });
+    a.eq(db._one("SELECT fix_note FROM trip_events WHERE stop_id='N01'").fix_note, "Undone at 10:49.",
+         "a resent undo is the same undo");
+    await one({ event: "picked", stopId: "N01", at: t2 - 60000 });
+    await one({ event: "undo", undoes: "picked", stopId: "N01", at: t2 });
+    row = db._one("SELECT * FROM trip_events WHERE stop_id='N01' AND event='picked'");
+    a.eq(row.fix_note, "Undone at 10:49. Undone at 10:52.");
+  });
+
+  s.test("Nobody here changed to Picked up leaves one live answer on the stop", async (a) => {
+    const { db, env, key } = await fresh();
+    const t = Date.UTC(2026, 9, 4, 9, 50, 0);
+    await W.handleTrip(env, post({ sunday: key, events: [{ event: "empty", stopId: "N01", at: t - 120000 }] }));
+    await W.handleTrip(env, post({ sunday: key, events: [
+      { event: "undo", undoes: "empty", stopId: "N01", at: t },
+      { event: "pickup", stopId: "N01", at: t }] }));
+    const live = db._rows("SELECT * FROM trip_events WHERE stop_id='N01' AND status<>'Undone'");
+    a.eq(live.length, 1);
+    a.eq(live[0].event, "pickup");
+    a.eq(db._one("SELECT fix_note FROM trip_events WHERE stop_id='N01' AND event='empty'").fix_note, "Undone at 10:50.");
+  });
+
   s.test("a run driven by somebody the rota does not name is marked Cover", async (a) => {
     const { db, env, key } = await fresh();
     await W.handleTrip(env, post({ sunday: key, driver: "Bro Cedric", events: [{ event: "start", at: Date.now() }] }));
