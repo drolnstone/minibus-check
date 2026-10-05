@@ -53,13 +53,7 @@ Title, then words, for each batch:
   today                          (and the same for each other driver
                                  reminder: time to set off, not gone out,
                                  end the trip, stopped, authorised, off)
-  Sent: North: The bus has left  To 8 passenger phones.
-  church
-  Sent: North: The bus is on     After Grace Rd: 3 passenger phones.
-  its way                        Gone past: 1 passenger phone.
   Sent: North: No bus today      To 6 passenger phones.
-  Sent: North: No word yet that  To 6 passenger phones.
-  the bus has left church
   Sent: Duty emails              Bro Moses, North Liverpool. Bro Adesina,
                                  South Liverpool.
                                  (or "None sent." and why)
@@ -68,7 +62,8 @@ Title, then words, for each batch:
 
 - Once each: a batch swept again a minute later is not reported twice.
 - A batch that reached nobody still comes, with 0.
-- A stop tap comes only when a passenger was told something.
+- Not the live updates during a run (the bus has left, on its way, gone
+  past, not left yet): those go to passengers only.
 - Whoever the send went to is left out (a coordinator driving that day).
 - Emails only to coordinator addresses are not repeated.
 - Not held for the quiet hours, as the send itself was not.

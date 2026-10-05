@@ -3176,9 +3176,9 @@ async function handleTrip(env, payload) {
       for (const ev of events) {
         const kind = String(ev.event || "").trim().toLowerCase();
         if (kind === "start") {
-          await wakeDeparture(env, key, route, stops, who);
+          await wakeDeparture(env, key, route, stops, null);
         } else if (isStopTap(kind)) {
-          await wakeAfterTap(env, key, route, all, stops, String(ev.stopId || "").trim(), marked, who);
+          await wakeAfterTap(env, key, route, all, stops, String(ev.stopId || "").trim(), marked);
         }
       }
     }
@@ -4830,32 +4830,24 @@ async function wakeNotLeft(env) {
     try { state = await tripState(env, key, route, "real"); } catch (e) { continue; }
     if (state && state.started) continue;
     const seen = {};
-    let r = 0;
     for (const s of stops.filter((x) => x.route === route && !x.arrival)) {
       for (const sub of await subsAtStop(env, key, s.id)) {
         if (seen[sub.id]) continue;
         seen[sub.id] = 1;
-        r += await wake(env, [sub], "late|" + key + "|" + route, { route, stop: s.stop });
+        n += await wake(env, [sub], "late|" + key + "|" + route, { route, stop: s.stop });
       }
     }
-    n += r;
-    await trail(env, { once: "p|late|" + key + "|" + route,
-                       title: route + ": No word yet that the bus has left church",
-                       body: "To " + trailPhones(r, "passenger") + "." });
   }
   return n;
 }
 
-/* The bus has left church. Everybody booked on that route, once each.
-   driver is whoever tapped Start, left off the trail. */
-async function wakeDeparture(env, key, route, stops, driver) {
+/* The bus has left church. Everybody booked on that route, once each. */
+async function wakeDeparture(env, key, route, stops) {
   let n = 0;
   for (const s of stops.filter((x) => x.route === route && !x.arrival)) {
     n += await wake(env, await subsAtStop(env, key, s.id), "left|" + key + "|" + route,
                   { route, stop: s.stop });
   }
-  await trail(env, { once: "p|left|" + key + "|" + route, title: route + ": The bus has left church",
-                     body: "To " + trailPhones(n, "passenger") + ".", not: driver ? [driver] : [] });
   return n;
 }
 
@@ -4915,7 +4907,7 @@ async function minutesToStop(env, key, route, all, state, stopId) {
    subject to any of this: somebody standing at a kerb the bus has driven by
    is not receiving an update, he is receiving the only message that will ever
    reach him. */
-async function wakeAfterTap(env, key, route, all, stops, stopId, marked, driver) {
+async function wakeAfterTap(env, key, route, all, stops, stopId, marked) {
   const line = stops.filter((s) => s.route === route && !s.arrival);
   const at = line.findIndex((s) => s.id === stopId);
   if (at < 0) return 0;
@@ -4925,8 +4917,6 @@ async function wakeAfterTap(env, key, route, all, stops, stopId, marked, driver)
   try { state = await tripState(env, key, route); } catch (e) {}
 
   let n = 0;
-  /* For the coordinators' trail: phones tried, and reached, each way. */
-  let tried = 0, nNext = 0, nPast = 0;
 
   for (let i = at + 1; i < line.length; i++) {
     const subs = await subsAtStop(env, key, line[i].id);
@@ -4946,10 +4936,8 @@ async function wakeAfterTap(env, key, route, all, stops, stopId, marked, driver)
          twice, and the remembered estimate is written whether or not the push
          itself gets through — a phone that is unreachable has still had its
          chance at this message and should not collect a backlog of them. */
-      tried++;
       const sent = await wake(env, [sub], "next|" + key + "|" + line[i].id + "|" + at,
                              { route, stop: line[i].stop });
-      nNext += sent;
       if (mins !== null) {
         try {
           await env.DB.prepare("UPDATE push_subs SET last_eta=? WHERE id=?")
@@ -4962,23 +4950,8 @@ async function wakeAfterTap(env, key, route, all, stops, stopId, marked, driver)
 
   for (let i = 0; i < at; i++) {
     if (marked[line[i].id]) continue;
-    const pastTag = "past|" + key + "|" + line[i].id;
-    const behind = await subsAtStop(env, key, line[i].id);
-    tried += behind.filter((x) => x.last !== pastTag).length;
-    const sent = await wake(env, behind, pastTag, { route, stop: line[i].stop });
-    nPast += sent;
-    n += sent;
-  }
-
-  /* Every stop tap that had a passenger to tell, once (a retried tap is not
-     a second one). */
-  if (tried) {
-    const words = [];
-    if (nNext || !nPast) words.push("After " + line[at].stop + ": " + trailPhones(nNext, "passenger") + ".");
-    if (nPast) words.push("Gone past: " + trailPhones(nPast, "passenger") + ".");
-    await trail(env, { once: "p|tap|" + key + "|" + route + "|" + stopId,
-                       title: route + ": " + (nNext || !nPast ? "The bus is on its way" : "The bus has gone past"),
-                       body: words.join(" "), not: driver ? [driver] : [] });
+    n += await wake(env, await subsAtStop(env, key, line[i].id), "past|" + key + "|" + line[i].id,
+                    { route, stop: line[i].stop });
   }
   return n;
 }
@@ -5832,8 +5805,9 @@ async function sentList(env) {
    Each batch that goes to passengers or drivers also puts one notification
    on every coordinator's phone: what went and how many it reached, a batch
    that reached nobody included. The booking reminders, the Sunday morning
-   reminders, each driver reminder, each stop tap on a run, a route called
-   off, and every email to a driver.
+   reminders, each driver reminder, a route called off, and every email to
+   a driver. Not the live updates during a run (the bus has left, on its
+   way, gone past, not left yet): those are for the passengers (Asim).
 
    Not on the coordinator's Alerts list as an alert of its own: the line in
    What went out is already there. Not held for the quiet hours, because the

@@ -97,27 +97,17 @@ export default async function (root) {
     a.eq(t.length, 3);
   });
 
-  s.test("a stop tap is one notification, once, and none with nobody to tell", async (a) => {
+  s.test("the live updates during a run go to passengers only", async (a) => {
     const { db, env, key } = await fresh();
     await seedBookings(db, key, [{ route: "North", stopId: "N05" }, { route: "North", stopId: "N02" }]);
     await passenger(db, "N05"); await passenger(db, "N02");
+    G.reset();
     await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian", reg: "YS70 PWE",
                               sunday: key, events: [{ event: "start", at: Date.now() - 900000 }] });
-    let t = await trailOf(env);
-    a.eq(t.length, 1, JSON.stringify(t));
-    a.eq(t[0].title, "Sent: North: The bus has left church");
-    a.eq(t[0].body, "To 2 passenger phones.");
     const all = await W.getStops(env);
-    const line = W.pickupsAndArrivals(all);
-    await W.wakeAfterTap(env, key, "North", all, line, "N03", {});
-    await W.wakeAfterTap(env, key, "North", all, line, "N03", {});
-    t = await trailOf(env);
-    a.eq(t.length, 2, JSON.stringify(t));
-    a.eq(t[1].title, "Sent: North: The bus is on its way");
-    a.eq(t[1].body, "After Litherland Rd: 1 passenger phone. Gone past: 1 passenger phone.");
-    /* N02 has been told it was passed, and nobody is booked past N06. */
-    await W.wakeAfterTap(env, key, "North", all, line, "N06", { N05: 1 });
-    a.eq((await trailOf(env)).length, 2, "nothing went, so nothing on the trail");
+    await W.wakeAfterTap(env, key, "North", all, W.pickupsAndArrivals(all), "N03", {});
+    a.ok(G.calls.length >= 2, "the passengers were told");
+    a.eq((await trailOf(env)).length, 0, "nothing for the coordinators");
   });
 
   s.test("a coordinator driving is not told of their own reminder", async (a) => {
