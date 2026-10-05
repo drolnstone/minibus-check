@@ -1101,7 +1101,7 @@ if (want("T31")) {
   await me.ctx.close();
 }
 
-/* T32 — v1.103.0 (Asim). A stop marked Nobody there can be changed to
+/* T32 — v1.103.0 (Asim). A stop marked Nobody here can be changed to
    Picked up straight away (he went back for somebody), and the other way.
    The first answer is taken back on the record, so the stop has one. */
 if (want("T32")) {
@@ -1117,7 +1117,7 @@ if (want("T32")) {
   const after = sent();
   const asked = await me.pg.evaluate(() => document.getElementById("undoModal").classList.contains("is-on"));
   const back = await me.pg.$('.trip-row-btns [data-triptap="N01"][data-tripkind="empty"]');
-  check("T32", "Nobody there changes to Picked up in one tap, the first answer taken back on the record",
+  check("T32", "Nobody here changes to Picked up in one tap, the first answer taken back on the record",
         first === "empty" && after.slice(-2).join(",") === "undo:empty,pickup" && /picked up 10:1/i.test(row) &&
         !asked && !!back && !me.errs.length,
         JSON.stringify({ first, after, asked, back: !!back, errs: me.errs }));
