@@ -1,46 +1,42 @@
 MINIBUS
 =======
-  pages v1.101.0 · server w2.46.0 · sheet v1.106.0
+  pages v1.101.1 · server w2.46.0 · sheet v1.106.0
 
-Sheet links for the owner only (Asim): an email with an Open spreadsheet
-button or a link to a tab goes in full to OWNER_EMAIL, and to the other
-coordinators without any link to the sheet. One with no decision link says
-Open the coordinator app to decide.
+Driver app, the next stop in view (Asim): during his own run the driver's
+stop list brings the next booked stop into view by itself, when the list
+opens and each time a stop is marked. He never scrolls to find who is next.
 
-Code.gs only.
+Pages only.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.101.0        v1.101.0  (no change)
+  Pages   v1.101.0        v1.101.1  (by the merge)
   Worker  w2.46.0         w2.46.0  (no paste)
-  Code.gs v1.105.2        v1.106.0  (paste)
+  Code.gs v1.106.0        v1.106.0  (no paste; #60's paste if not done yet)
 
 
 IN THIS ORDER
 -------------
 
-1. Open the sheet, Extensions, Apps Script. Select everything in Code.gs,
-   paste this pull request's Code.gs over it, Save.
-2. Project Settings (the cog), Script Properties, Add script property:
-   OWNER_EMAIL, with the address you get coordinator emails at. Save.
-   Left out, nobody's email has the sheet link.
-3. Deploy, Manage deployments, the pencil, Version: New version, Deploy.
-4. Merge this pull request.
+1. Merge this pull request. Nothing to paste.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.101.0 · server w2.46.0 · sheet
+A. The foot of all three apps reads  app v1.101.1 · server w2.46.0 · sheet
    v1.106.0 .
 
 
 WHAT CHANGED
 ------------
 
-1. Code.gs sendMail: an email holding the sheet's address goes as two, in
-   full to OWNER_EMAIL and with every sheet link taken out to the rest
-   (withoutSheetLinks). Every email goes through sendMail, so a new one
-   cannot forget.
-2. Code.gs decideHtml: with no decision link the email says Open the
-   coordinator app to decide.
+1. index.html: on Stops and bookings, during the driver's own run, the row
+   of the next booked stop is scrolled to the middle of the screen when the
+   list opens and whenever the next stop changes. A poll that changes
+   nothing leaves the list where the driver put it.
+
+2. sw.js, sunday/sw.js, coord/sw.js, sunday/index.html, coord/index.html:
+   the version only.
+
+3. Tests. Browser check T29.
