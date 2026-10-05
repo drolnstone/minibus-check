@@ -97,17 +97,38 @@ export default async function (root) {
     a.eq(t.length, 3);
   });
 
-  s.test("the live updates during a run go to passengers only", async (a) => {
+  s.test("of the live updates, only the critical two reach the coordinators", async (a) => {
     const { db, env, key } = await fresh();
-    await seedBookings(db, key, [{ route: "North", stopId: "N05" }, { route: "North", stopId: "N02" }]);
+    await seedBookings(db, key, [{ route: "North", stopId: "N05" }, { route: "North", stopId: "N02" },
+                                 { route: "North", stopId: "N01" }]);
     await passenger(db, "N05"); await passenger(db, "N02");
     G.reset();
     await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian", reg: "YS70 PWE",
                               sunday: key, events: [{ event: "start", at: Date.now() - 900000 }] });
+    a.eq((await trailOf(env)).length, 0, "the bus leaving is the passengers' alone");
     const all = await W.getStops(env);
-    await W.wakeAfterTap(env, key, "North", all, W.pickupsAndArrivals(all), "N03", {});
-    a.ok(G.calls.length >= 2, "the passengers were told");
-    a.eq((await trailOf(env)).length, 0, "nothing for the coordinators");
+    const line = W.pickupsAndArrivals(all);
+    await W.wakeAfterTap(env, key, "North", all, line, "N03", {});
+    await W.wakeAfterTap(env, key, "North", all, line, "N04", { N03: 1 });
+    a.ok(G.calls.length >= 3, "the passengers were told");
+    const t = await trailOf(env);
+    a.eq(t.map((m) => m.title).sort().join(" | "),
+         "Sent: North: The bus has gone past Grace Rd | Sent: North: The bus has gone past Scarisbrick Dr",
+         "each stop passed once, a booking with no app included; on its way is not sent");
+    a.eq(t.find((m) => m.title.indexOf("Grace") !== -1).body, "To 1 passenger phone.");
+    a.eq(t.find((m) => m.title.indexOf("Scarisbrick") !== -1).body, "To 0 passenger phones.");
+  });
+
+  s.test("no word that the bus has left reaches the coordinators", async (a) => {
+    const AT = "2026-10-11T09:59:00+01:00";
+    const { db, env, key } = await fresh(AT);
+    await seedBookings(db, key, [{ route: "North", stopId: "N03" }]);
+    await passenger(db, "N03");
+    await atTime(AT, () => W.wakeNotLeft(env));
+    await atTime("2026-10-11T10:00:00+01:00", () => W.wakeNotLeft(env));
+    const t = (await trailOf(env)).filter((m) => m.title === "Sent: North: No word yet that the bus has left church");
+    a.eq(t.length, 1, JSON.stringify(await trailOf(env)));
+    a.eq(t[0].body, "To 1 passenger phone.");
   });
 
   s.test("a coordinator driving is not told of their own reminder", async (a) => {

@@ -4830,13 +4830,20 @@ async function wakeNotLeft(env) {
     try { state = await tripState(env, key, route, "real"); } catch (e) { continue; }
     if (state && state.started) continue;
     const seen = {};
+    let r = 0;
     for (const s of stops.filter((x) => x.route === route && !x.arrival)) {
       for (const sub of await subsAtStop(env, key, s.id)) {
         if (seen[sub.id]) continue;
         seen[sub.id] = 1;
-        n += await wake(env, [sub], "late|" + key + "|" + route, { route, stop: s.stop });
+        r += await wake(env, [sub], "late|" + key + "|" + route, { route, stop: s.stop });
       }
     }
+    n += r;
+    /* Critical, so on the coordinators' trail (Asim): someone may need to
+       ring the driver. */
+    await trail(env, { once: "p|late|" + key + "|" + route,
+                       title: route + ": No word yet that the bus has left church",
+                       body: "To " + trailPhones(r, "passenger") + "." });
   }
   return n;
 }
@@ -4948,10 +4955,23 @@ async function wakeAfterTap(env, key, route, all, stops, stopId, marked) {
     }
   }
 
+  let bookedHere = null;
   for (let i = 0; i < at; i++) {
     if (marked[line[i].id]) continue;
-    n += await wake(env, await subsAtStop(env, key, line[i].id), "past|" + key + "|" + line[i].id,
-                    { route, stop: line[i].stop });
+    const subs = await subsAtStop(env, key, line[i].id);
+    const r = await wake(env, subs, "past|" + key + "|" + line[i].id, { route, stop: line[i].stop });
+    n += r;
+    /* Critical, so on the coordinators' trail (Asim): someone booked may be
+       left standing. Once a stop, and only where somebody is booked,
+       with the app or without it. */
+    if (!bookedHere) {
+      try { bookedHere = await bookedStopIds(env, key, route); } catch (e) { bookedHere = new Set(); }
+    }
+    if (bookedHere.has(String(line[i].id))) {
+      await trail(env, { once: "p|past|" + key + "|" + line[i].id,
+                         title: route + ": The bus has gone past " + line[i].stop,
+                         body: "To " + trailPhones(r, "passenger") + "." });
+    }
   }
   return n;
 }
@@ -5806,8 +5826,9 @@ async function sentList(env) {
    on every coordinator's phone: what went and how many it reached, a batch
    that reached nobody included. The booking reminders, the Sunday morning
    reminders, each driver reminder, a route called off, and every email to
-   a driver. Not the live updates during a run (the bus has left, on its
-   way, gone past, not left yet): those are for the passengers (Asim).
+   a driver. Of the live updates during a run, only the two critical ones:
+   no word yet that the bus has left, and the bus gone past a booked stop
+   unmarked. The bus has left and on its way are for the passengers (Asim).
 
    Not on the coordinator's Alerts list as an alert of its own: the line in
    What went out is already there. Not held for the quiet hours, because the

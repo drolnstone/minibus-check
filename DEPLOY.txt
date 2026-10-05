@@ -54,6 +54,11 @@ Title, then words, for each batch:
                                  reminder: time to set off, not gone out,
                                  end the trip, stopped, authorised, off)
   Sent: North: No bus today      To 6 passenger phones.
+  Sent: North: No word yet that  To 6 passenger phones.
+  the bus has left church        (5 minutes past departure, no Start)
+  Sent: North: The bus has gone  To 1 passenger phone.
+  past Grace Rd                  (a booked stop passed unmarked, once a
+                                 stop, booked with the app or without)
   Sent: Duty emails              Bro Moses, North Liverpool. Bro Adesina,
                                  South Liverpool.
                                  (or "None sent." and why)
@@ -62,8 +67,8 @@ Title, then words, for each batch:
 
 - Once each: a batch swept again a minute later is not reported twice.
 - A batch that reached nobody still comes, with 0.
-- Not the live updates during a run (the bus has left, on its way, gone
-  past, not left yet): those go to passengers only.
+- Of the live updates during a run, only the two critical ones above.
+  The bus has left church and on its way go to passengers only.
 - Whoever the send went to is left out (a coordinator driving that day).
 - Emails only to coordinator addresses are not repeated.
 - Not held for the quiet hours, as the send itself was not.
