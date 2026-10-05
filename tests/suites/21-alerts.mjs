@@ -665,7 +665,7 @@ export default async function (root) {
     call(L, "sendTestEmail");
     const got = toCoord(L);
     a.eq(got.length, 1, "the one email whose entire job is to arrive did not");
-    a.ok(bothSay(got[0], "notifications are working"));
+    a.ok(bothSay(got[0], "Emails are working"));
   });
 
   /* ---- THE ONE THIS SUITE WAS WORTH WRITING FOR ------------------------

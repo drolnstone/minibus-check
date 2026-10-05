@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.106.0";
+var SCRIPT_VERSION = "v1.107.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -10528,7 +10528,7 @@ function sendTestEmail() {
      and urgent, so a test at night is not held until the morning. */
   tellCoordinatorPhones({ id: "test|" + Date.now(), kind: "test", urgent: true,
     title: "Coordinator alerts are working",
-    body: "A test from the spreadsheet. Nothing has happened to a bus." });
+    body: "Test from the spreadsheet." });
   var msg;
   var left = -1;
   try { left = MailApp.getRemainingDailyQuota(); } catch (err) { left = -1; }
@@ -10543,10 +10543,10 @@ function sendTestEmail() {
     sendMail({
       to: COORDINATOR_EMAIL,
       subject: "Minibus app test",
-      body: "Test from the minibus app. If you can read this, notifications are working.\n\n" +
+      body: "Emails are working.\n\n" +
             sheetUrl(),
       htmlBody: htmlShell("Minibus app test", "#1B3A57",
-        ["If you can read this, notifications are working.",
+        ["Emails are working.",
          "&nbsp;",
          "Emails this account can still send today: <b>" + (left < 0 ? "unknown" : left - 1) + "</b>"],
         "Open spreadsheet", CHECKS_SHEET)
@@ -10800,9 +10800,9 @@ function renewalAlerts(ss) {
               : x.days === 0 ? x.reg + ": " + x.label + " due today"
               : x.reg + ": " + x.label + " due in " + x.days + " days";
     var body = x.days >= 0 ? "Due " + ukDay(x.date) + ". Record it in the coordinator app when done."
-             : x.item === "insurance" ? "The bus is stopped until the renewal is recorded in the coordinator app."
-             : x.item === "mot" ? "The bus is stopped until the new MOT is recorded. For a booked test, authorise an MOT run in the coordinator app."
-             : "Warning only. Record it in the coordinator app when done.";
+             : x.item === "insurance" ? "Record the renewal in the coordinator app."
+             : x.item === "mot" ? "Record the new MOT in the coordinator app. For a booked test, authorise an MOT run there."
+             : "Record it in the coordinator app when done.";
     safetyAlert({ id: "renew|" + x.reg + "|" + x.item + "|" + x.date + "|" + stage, kind: x.stop ? "stopped" : "renewal",
                   urgent: x.stop, reg: x.reg, title: title, body: body,
                   colour: x.days <= 7 ? "#A8231B" : "#8A6116", tab: BUSES_SHEET });
@@ -11083,9 +11083,8 @@ function overbookingAlert(force) {
 
   var lines = [], plain = [];
   if (rehearsing) {
-    lines.push("<b>REHEARSAL. These are test bookings and none of these people exist.</b>",
-               "&nbsp;");
-    plain.push("REHEARSAL. These are test bookings and none of these people exist.", "");
+    lines.push("<b>REHEARSAL. Test bookings.</b>", "&nbsp;");
+    plain.push("REHEARSAL. Test bookings.", "");
   }
   lines.push("<b>More people are booked than the bus holds</b> for " + esc(lead) + ".",
              "&nbsp;");
@@ -11109,7 +11108,7 @@ function overbookingAlert(force) {
     if (other && other.reg && other.seats &&
         String(other.reg).toUpperCase() !== String(t.reg).toUpperCase() &&
         other.seats >= t.booked && t.seats >= other.booked) {
-      said = "Swapping the two buses fits both: " + other.reg + " on " + t.route +
+      said = "Swap the buses: " + other.reg + " on " + t.route +
              " (" + other.seats + " seats, " + t.booked + " booked) and " +
              t.reg + " on " + other.route +
              " (" + t.seats + " seats, " + other.booked + " booked).";
@@ -11126,17 +11125,15 @@ function overbookingAlert(force) {
         if (other && other.reg && R === String(other.reg).toUpperCase()) return;
         if (b.seats >= t.booked) spare = b;
       });
-      if (spare) said = spare.reg + " is on neither route that day and seats " +
-                        spare.seats + ", which would take them all.";
+      if (spare) said = "Spare bus: " + spare.reg + ", " + spare.seats + " seats.";
     }
 
     /* 3. Nothing in the register fits. Said out loud, because silence here
           reads as "no action needed" and the action is a second trip or a
           phone call, neither of which this app can make. */
     if (!said) {
-      said = "No swap in the register fits them all. It needs a second trip, " +
-             "another vehicle, or a word with the " + t.over +
-             " who booked last.";
+      said = "No bus fits them all. Arrange a second trip or another vehicle, " +
+             "or ring the " + t.over + " who booked last.";
     }
 
     lines.push("&nbsp;&nbsp;&nbsp;" + esc(said));
@@ -11297,7 +11294,7 @@ function weeklyDigest() {
     }
   });
 
-  if (!regs.length) lines.push("No checks have ever been recorded, so there is nothing to report yet.");
+  if (!regs.length) lines.push("No checks recorded yet.");
 
   var colour = missed.length ? "#A8231B" : "#146B41";
   var title = missed.length
@@ -11694,7 +11691,7 @@ function sendDutyEmail(to, who, sunday, daysAhead, covering, route, bus) {
   if (covering) lines.push("Covering for " + esc(covering) + ".");
   lines.push("&nbsp;");
   if (bus) {
-    lines.push("Buses can change during the week \u2014 check the app on the day.");
+    lines.push("Check the app on the day for the bus.");
     lines.push("&nbsp;");
   }
   lines.push(bigLink(calendarLink(sunday, covering, route, bus), "Add to my calendar"));
@@ -11711,7 +11708,7 @@ function sendDutyEmail(to, who, sunday, daysAhead, covering, route, bus) {
               "", when];
   if (bus) rows.push("Bus: " + bus);
   if (covering) rows.push("Covering for " + covering + ".");
-  if (bus) rows.push("", "Buses can change during the week \u2014 check the app on the day.");
+  if (bus) rows.push("", "Check the app on the day for the bus.");
   rows.push("", "If you cannot make it, ask in the app or ring the coordinator.");
   var plain = rows.join("\n");
 
@@ -11749,7 +11746,7 @@ function dutyIcs(sunday, who, covering, route, bus) {
              (route ? " on " + route : "") + "." +
              (bus ? " Bus: " + bus + "." : "") +
              (covering ? " Covering for " + covering + "." : "") +
-             (bus ? " Buses can change during the week: check the app on the day." : "");
+             (bus ? " Check the app on the day for the bus." : "");
 
   /* THE REAL DEPARTURE TIME, WHEN THE TAB HAS ONE.
 
@@ -12108,17 +12105,13 @@ function notifyDutyChange(ss, key, before, after, route) {
     var offLines = [
       "You were down to drive on <b>" + esc(when) + "</b>" + on + ".",
       "&nbsp;",
-      after ? ("That has changed. " + esc(after) + " is driving instead.")
-            : "That has changed and somebody else will be driving.",
-      "&nbsp;",
-      "Nothing is needed from you."
+      after ? (esc(after) + " is driving instead.") : "Somebody else is driving instead."
     ];
     sendMail({
       to: emails[before],
       subject: "Minibus: you are no longer driving on " + when,
       body: "You were down to drive on " + when + onPlain + ".\n\n" +
-            (after ? after + " is driving instead." : "Somebody else is driving instead.") +
-            "\n\nNothing is needed from you.",
+            (after ? after + " is driving instead." : "Somebody else is driving instead."),
       htmlBody: htmlShell("Duty changed", "#5C6672", offLines, "")
     });
   }
@@ -12130,7 +12123,7 @@ function notifyDutyChange(ss, key, before, after, route) {
       busNow ? ("Bus: <b>" + esc(busNow) + "</b>") : "",
       /* The caveat goes wherever the registration goes: the man picking up a
          cover has had the least warning and the most chance of it moving. */
-      busNow ? "Buses can change during the week \u2014 check the app on the day." : "",
+      busNow ? "Check the app on the day for the bus." : "",
       before ? ("Covering for " + esc(before) + ".") : "",
       "&nbsp;",
       bigLink(calendarLink(sunday, before, route, busNow), "Add to my calendar"),
@@ -12141,8 +12134,7 @@ function notifyDutyChange(ss, key, before, after, route) {
       to: emails[after],
       subject: "Minibus duty" + (route ? ": " + route : "") + " on " + when,
       body: "You are now down to drive the minibus on " + when + onPlain + ".\n\n" +
-            (busNow ? "Bus: " + busNow + ". Buses can change during the week \u2014 " +
-                      "check the app on the day.\n\n" : "") +
+            (busNow ? "Bus: " + busNow + ". Check the app on the day for the bus.\n\n" : "") +
             (before ? "Covering for " + before + ".\n\n" : "") +
             "If you cannot make it, ask in the app or ring the coordinator.",
       htmlBody: htmlShell("You are now driving", "#1B3A57", onLines, ""),
@@ -13633,7 +13625,7 @@ function calendarLink(sunday, covering, route, bus) {
                 (route ? " on " + route : "") + "." +
                 (bus ? " Bus: " + bus + "." : "") +
                 (covering ? " Covering for " + covering + "." : "") +
-                (bus ? " Buses can change during the week: check the app on the day." : "");
+                (bus ? " Check the app on the day for the bus." : "");
   return "https://calendar.google.com/calendar/render?action=TEMPLATE" +
          "&text=" + encodeURIComponent((route ? "Minibus duty: " + route : "Minibus driving duty") +
                                        (bus ? " (" + bus + ")" : "")) +
@@ -13833,9 +13825,7 @@ function emailUnalerted(alert, names) {
         to: to,
         subject: String(alert.title).substring(0, 140),
         body: alert.title + (alert.body ? "\n" + alert.body : "") + "\n\n" +
-              "Open the coordinator app for the details.\n\n" +
-              "You were emailed because alerts are not on for you on any phone. To be told " +
-              "on your phone instead, open the coordinator app and tap the bell at the top."
+              "Open the coordinator app. Tap the bell to get alerts on your phone."
       });
       sent++;
     } catch (err) {}
@@ -14064,15 +14054,14 @@ function notifyRotaRequest(rq, sunday) {
   var prot = protectedNoteFor(rq.date);
   if (prot.on) {
     lines.push("&nbsp;");
-    lines.push("<b>This is a protected Sunday" +
+    lines.push("<b>Protected Sunday" +
                (prot.reason ? ": " + esc(prot.reason) : "") + ".</b> " +
-               "Swaps are refused on it. A cover is still possible, but " +
-               "think about who takes it.");
+               "No swaps. Cover only.");
   }
   if (rq.swapWith) lines.push("<b>Swap with:</b> " + esc(rq.swapWith));
   if (rq.swapDate) lines.push("<b>Taking their Sunday:</b> " + esc(rq.swapDate));
   if (rq.swapWith) lines.push(rq.agreed
-    ? "They have already agreed this between themselves."
+    ? "Both have agreed."
     : "<b>Not marked as agreed.</b> Check with both before approving.");
   /* THE DECISION, FROM HERE. Both answers on one page, behind his PIN.
 

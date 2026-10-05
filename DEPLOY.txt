@@ -1,42 +1,84 @@
 MINIBUS
 =======
-  pages v1.101.1 · server w2.46.0 · sheet v1.106.0
+  pages v1.101.1 · server w2.47.0 · sheet v1.107.0
 
-Driver app, the next stop in view (Asim): during his own run the driver's
-stop list brings the next booked stop into view by itself, when the list
-opens and each time a stop is marked. He never scrolls to find who is next.
+Plain alerts and emails (Asim): every push and email says only what
+happened and what to do. No explanations, reassurance or pleasantries.
 
-Pages only.
+Worker and Code.gs.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.101.0        v1.101.1  (by the merge)
-  Worker  w2.46.0         w2.46.0  (no paste)
-  Code.gs v1.106.0        v1.106.0  (no paste; #60's paste if not done yet)
+  Pages   v1.101.1        v1.101.1  (no change)
+  Worker  w2.46.0         w2.47.0  (paste)
+  Code.gs v1.106.0        v1.107.0  (paste; carries #60 too)
 
 
 IN THIS ORDER
 -------------
 
-1. Merge this pull request. Nothing to paste.
+1. Cloudflare, the minibus-api Worker, Edit code. Select everything,
+   paste this pull request's server/worker.js over it, Deploy.
+2. Open the sheet, Extensions, Apps Script. Select everything in Code.gs,
+   paste this pull request's Code.gs over it, Save.
+3. If #60's step was never done: Project Settings (the cog), Script
+   Properties, Add script property OWNER_EMAIL, with the address you get
+   coordinator emails at. Save.
+4. Deploy, Manage deployments, the pencil, Version: New version, Deploy.
+5. Merge this pull request.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.101.1 · server w2.46.0 · sheet
-   v1.106.0 .
+A. The foot of all three apps reads  app v1.101.1 · server w2.47.0 · sheet
+   v1.107.0 .
 
 
 WHAT CHANGED
 ------------
 
-1. index.html: on Stops and bookings, during the driver's own run, the row
-   of the next booked stop is scrolled to the middle of the screen when the
-   list opens and whenever the next stop changes. A poll that changes
-   nothing leaves the list where the driver put it.
+Before → after, push or email:
 
-2. sw.js, sunday/sw.js, coord/sw.js, sunday/index.html, coord/index.html:
-   the version only.
+1. Bus paper expired (service, permit, tax): "Warning only. Record it in
+   the coordinator app when done." → "Record it in the coordinator app when
+   done."
+2. Insurance expired: "The bus is stopped until the renewal is recorded in
+   the coordinator app." → "Record the renewal in the coordinator app."
+   MOT expired: "The bus is stopped until the new MOT is recorded. For a
+   booked test, ..." → "Record the new MOT in the coordinator app. For a
+   booked test, authorise an MOT run there." The title still says BUS
+   STOPPED.
+3. Test push from the sheet: "... Nothing has happened to a bus." → "Test
+   from the spreadsheet." Test from the app: "Nothing has happened to the
+   bus." → "Test." Test email: "If you can read this, notifications are
+   working." → "Emails are working."
+4. Overbooked email: "Swapping the two buses fits both: ..." → "Swap the
+   buses: ..."; "X is on neither route that day and seats N, which would
+   take them all." → "Spare bus: X, N seats."; "No swap in the register
+   fits them all. It needs ..." → "No bus fits them all. Arrange a second
+   trip or another vehicle, or ring the N who booked last." Rehearsal line
+   → "REHEARSAL. Test bookings."
+5. Weekly summary with no checks ever: → "No checks recorded yet."
+6. Duty emails and calendar entry: "Buses can change during the week,
+   check the app on the day." → "Check the app on the day for the bus."
+7. Driver taken off a Sunday: "That has changed. X is driving instead.
+   ... Nothing is needed from you." → "X is driving instead."
+8. Coordinator with alerts off, emailed: "Open the coordinator app for the
+   details. You were emailed because alerts are not on ..." → "Open the
+   coordinator app. Tap the bell to get alerts on your phone."
+9. Rota request email: "This is a protected Sunday. Swaps are refused on
+   it. A cover is still possible, but think about who takes it." →
+   "Protected Sunday. No swaps. Cover only."; "They have already agreed
+   this between themselves." → "Both have agreed."
+10. Passenger, route called off: "... is not running. Sorry." → "... is not
+    running."
+11. Passenger, picked up: "Have a good service." → the time it was marked,
+    or nothing.
+12. Passenger, bus not left: "... We will message you as soon as it sets
+    off." → cut.
+13. Emergency calls: "... Every Call button shows them again." and "Every
+    Call button shows X · phone." → "X · phone." or cut.
 
-3. Tests. Browser check T29.
+Tests: suite 57 keeps every phrase above out of Code.gs and the Worker.
+Four existing checks follow the new words.

@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.46.0";
+const SCRIPT_VERSION = "w2.47.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5414,7 +5414,7 @@ function offWords(stop, route, date) {
   return { ok: true, tag: "bus", url: "./",
            title: "No bus to " + String(stop || "your stop") + (itsToday ? " today" : " on Sunday"),
            body: "The " + String(route || "") + " bus is not running" +
-                 (itsToday ? "" : " this Sunday") + ". Sorry." };
+                 (itsToday ? "" : " this Sunday") + "." };
 }
 
 /* WHAT TO SAY TO A PHONE WHEN THERE IS NO BUS ON THE ROAD FOR IT.
@@ -5859,7 +5859,7 @@ async function pushWhat(env, endpoint) {
     if (Date.now() - (Number(test.at) || 0) < 5 * 60000) {
       return { ok: true, tag: "test", url: "./",
                title: "Alerts are working",
-               body: "Nothing has happened to the bus." };
+               body: "Test." };
     }
   }
 
@@ -6111,7 +6111,7 @@ async function pushWhat(env, endpoint) {
   }
   if (p.mine === "served") {
     return { ok: true, tag: "bus", url: "./",
-             title: "Picked up at " + stop, body: "Have a good service." };
+             title: "Picked up at " + stop, body: p.servedAt ? "At " + p.servedAt + "." : "" };
   }
   /* BE AT YOUR STOP, IN THE BOLD LINE.
 
@@ -6157,8 +6157,7 @@ async function pushWhat(env, endpoint) {
       return { ok: true, tag: "bus", url: "./",
                title: "No word yet that your bus has left church",
                body: "It was due to leave at " + dueAt + "." +
-                     (p.scheduled ? " Yours is timetabled " + p.scheduled + " at " + String(p.stop || "your stop") + "." : "") +
-                     " We will message you as soon as it sets off." };
+                     (p.scheduled ? " Yours is timetabled " + p.scheduled + " at " + String(p.stop || "your stop") + "." : "") };
     }
   }
 
@@ -8616,7 +8615,7 @@ async function actContact(env, me, act) {
                contactOverride = null;
                await contactTell(env, me, String(act.id || Date.now()),
                  "Emergency calls: back to " + usual,
-                 me.name + " has put emergency calls back to " + usual + ". Every Call button shows them again.",
+                 me.name + " put emergency calls back to " + usual + ".",
                  was ? { scope: was.until ? "today" : "all",
                          body: "Ring " + usual + (coordinator && coordinator.phone ? " \u00B7 " + coordinator.phone : "") +
                                " for anything to do with the bus." } : null);
@@ -8650,8 +8649,8 @@ async function actContact(env, me, act) {
              const till = until ? "until midnight" : "until it is changed back";
              await contactTell(env, me, String(act.id || now),
                "Emergency calls: " + pick.name + " " + (until ? "today" : "from now"),
-               me.name + " has put " + pick.name + " on emergency calls " + till +
-               ". Every Call button shows " + pick.name + " \u00B7 " + pick.phone + ".",
+               me.name + " put " + pick.name + " on emergency calls " + till +
+               ". " + pick.name + " \u00B7 " + pick.phone + ".",
                { scope: until ? "today" : "all",
                  body: "Ring " + pick.name + " \u00B7 " + pick.phone + " for anything to do with the bus" +
                        (until ? " today." : ".") });
