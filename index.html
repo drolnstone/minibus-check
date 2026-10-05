@@ -1663,7 +1663,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.101.1";
+var APP_VERSION = "v1.102.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -5295,7 +5295,10 @@ function tripWatchStart(){
     tripSpeed = (p.coords && typeof p.coords.speed==="number" && p.coords.speed>=0)
                 ? p.coords.speed : null;
     tripSpeedAt = Date.now();
+    if(p.coords) pickFix = { lat:p.coords.latitude, lng:p.coords.longitude,
+                             acc:Number(p.coords.accuracy)||0, speed:tripSpeed, at:Date.now() };
     tripPaintMoving();
+    safely(function(){ if(rotaStopsOpen && pickNext && !pickStopId) pickSync(); });
     safely(function(){ tripAutoArrive(p); });
   }, function(){
     tripSpeed=null; tripPaintMoving();
@@ -8377,6 +8380,10 @@ function pinGateFocus(){
    moving, so the pop-up comes up then, says who is booked, and its buttons
    wait for him to pull up, as every stop tap already does. A bus ahead of its
    estimate: he taps the stop in the list and it comes up there and then.
+   And from v1.102.0 (Asim: the estimate is not exact enough to rely on) it
+   also comes up when the bus pulls up near the stop: the phone stopped and
+   within PICK_NEAR_M of the stop's pin, on a fix that sure. Whichever comes
+   first.
 
    WHAT. The stop, how many are booked, Call passenger for each booking with
    a number, Picked up and Nobody here. Call passenger leaves it up; the other
@@ -8391,6 +8398,9 @@ var pickStopId = "";        /* the stop the pop-up is up for, until answered */
 var pickPeople = null;      /* { trip, at, people:{ stopId:[{phone,seats}] } } */
 var pickBusy = false;
 var pickDrawn = "";         /* what is on it, so a poll never rebuilds it under a thumb */
+var PICK_NEAR_M = 150;      /* pulled up at the stop: this close to its pin */
+var pickFix = null;         /* the last location fix while driving: { lat, lng, acc, speed, at } */
+var pickNear = { id:"", since:0 };  /* stopped near this stop since */
 
 /* The estimate for a stop, in ms, or 0 when the board has none. */
 function pickEta(s){
@@ -8400,7 +8410,25 @@ function pickEta(s){
 function pickTimed(s){ return !!pickEta(s); }
 function pickDue(s){
   var at = pickEta(s);
-  return !!at && Math.round((at - tripNow())/60000) <= PICK_CLOSE_MIN;
+  if(at && Math.round((at - tripNow())/60000) <= PICK_CLOSE_MIN) return true;
+  return pickHere(s);
+}
+/* Stopped at the stop, by the phone's location, for three seconds. Not on
+   a stale fix, a fix too vague to say, a phone that does not report its
+   speed, or a stop with no pin. */
+function pickHere(s){
+  var f = pickFix, ok = false;
+  var lat = Number(s && s.lat), lng = Number(s && s.lng);
+  if(f && Date.now() - f.at <= 15000 && f.acc <= PICK_NEAR_M &&
+     f.speed !== null && f.speed <= TRIP_MOVING_MS && !tripMoving() &&
+     s && s.lat !== "" && s.lat != null && s.lng !== "" && s.lng != null &&
+     isFinite(lat) && isFinite(lng)){
+    var m = geoTo(f.lat, f.lng, { lat:lat, lng:lng });
+    ok = m !== null && m <= PICK_NEAR_M;
+  }
+  if(!ok){ pickNear = { id:"", since:0 }; return false; }
+  if(pickNear.id !== s.id) pickNear = { id:s.id, since:Date.now() };
+  return Date.now() - pickNear.since >= 3000;
 }
 
 function pickUp(){

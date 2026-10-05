@@ -1,16 +1,19 @@
 MINIBUS
 =======
-  pages v1.101.1 · server w2.48.0 · sheet v1.108.0
+  pages v1.102.0 · server w2.48.0 · sheet v1.108.0
 
 What went out, on the coordinators' phones (Asim): every batch sent to
 passengers or drivers also puts one notification on every coordinator's
 phone, saying what went and how many it reached.
 
-Worker and Code.gs.
+And the driver's pickup pop-up (Asim): it also comes up when the bus pulls
+up at the next booked stop, so a bus ahead of its estimate gets it too.
+
+Worker, Code.gs and pages.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.101.1        v1.101.1  (no change)
+  Pages   v1.101.1        v1.102.0  (live on merge)
   Worker  w2.46.0/47.0    w2.48.0  (paste)
   Code.gs v1.105.2+       v1.108.0  (paste; carries #60 and #62 too)
 
@@ -32,7 +35,7 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.101.1 · server w2.48.0 · sheet
+A. The foot of all three apps reads  app v1.102.0 · server w2.48.0 · sheet
    v1.108.0 .
 B. Each notification starts "Sent:". The next ones due: the Wednesday
    booking reminder (18:00), the Friday duty emails (08:00), the Saturday
@@ -74,5 +77,14 @@ Title, then words, for each batch:
 - Not held for the quiet hours, as the send itself was not.
 - The Alerts list still shows each one under What went out; these add
   nothing to the bell's count.
+
+THE PICKUP POP-UP
+-----------------
+
+Up a minute out by the estimate, as before, or when the phone has been
+stopped for three seconds within 150 metres of the next booked stop's pin,
+whichever comes first. Not while moving, on a fix vaguer than 150 metres,
+on a phone that does not report its speed, or at a stop with no pin.
+Tapping the stop's row still opens it too. Browser check T30.
 
 Tests: suite 58. One existing check follows the new email note.

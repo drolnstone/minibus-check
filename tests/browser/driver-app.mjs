@@ -1048,6 +1048,33 @@ if (want("T29")) {
   await me.ctx.close();
 }
 
+/* T30 — v1.102.0 (Asim: the estimate is not exact enough to rely on). A
+   bus ahead of its estimate gets the pickup pop-up when it pulls up at the
+   stop: stopped, within 150 m of the stop's pin. Driving past near it, or a
+   vague fix, does not bring it up. */
+if (want("T30")) {
+  const etas = { North: { N01: T("10:14") }, South: {} };
+  const world = { checks: okCheck(), etas, trips: { North: null, South: null },
+    people: () => ({ ok: true, route: "North", people: { N01: [{ phone: "07700 900123", seats: 1 }] } }) };
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world });
+  await startRun(me);
+  await me.clickId("stopsBack"); await me.toStops(); await me.close(); await me.wait(1500);
+  const up = () => me.pg.evaluate(() => document.getElementById("pickModal").classList.contains("is-on"));
+  const AT = { lat: 53.4497, lng: -2.9365 };
+  const far = await up();
+  for (let i = 0; i < 8; i++) { await me.emit(Object.assign({ acc: 8, speed: 11 }, AT)); await me.wait(500); }
+  const passing = await up();
+  for (let i = 0; i < 8; i++) { await me.emit(Object.assign({ acc: 400, speed: 0 }, AT)); await me.wait(500); }
+  const vague = await up();
+  for (let i = 0; i < 8; i++) { await me.emit(Object.assign({ acc: 8, speed: 0 }, AT)); await me.wait(500); }
+  const pulled = await up();
+  const text = await me.pg.evaluate(() => document.getElementById("pickModal").textContent);
+  check("T30", "a bus ahead of its estimate gets the pickup pop-up when it pulls up at the stop",
+        !far && !passing && !vague && pulled && /Scarisbrick Drive/.test(text) && !me.errs.length,
+        JSON.stringify({ far, passing, vague, pulled, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");
