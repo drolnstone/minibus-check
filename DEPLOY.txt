@@ -80,5 +80,8 @@ Before → after, push or email:
 13. Emergency calls: "... Every Call button shows them again." and "Every
     Call button shows X · phone." → "X · phone." or cut.
 
+14. Every email: the grey "Sent by the minibus app." line at the foot is
+    gone.
+
 Tests: suite 57 keeps every phrase above out of Code.gs and the Worker.
 Four existing checks follow the new words.

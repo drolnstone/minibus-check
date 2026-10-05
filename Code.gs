@@ -13638,8 +13638,7 @@ function htmlShell(title, colour, lines, buttonLabel, tabName) {
   return '<div style="font-family:Helvetica,Arial,sans-serif;font-size:15px;color:#16191F;line-height:1.5">' +
     '<p style="font-size:19px;font-weight:bold;color:' + colour + ';margin:0 0 14px">' + title + '</p>' +
     lines.map(function (l) { return '<p style="margin:0 0 6px">' + l + '</p>'; }).join("") +
-    (buttonLabel ? openButton(buttonLabel, tabName) : "") +
-    '<p style="color:#5C6672;font-size:13px;margin-top:18px">Sent by the minibus app.</p></div>';
+    (buttonLabel ? openButton(buttonLabel, tabName) : "") + '</div>';
 }
 
 /* A LINK TO THE PAGE WHERE A DECISION CAN BE MADE, or "" when there is not

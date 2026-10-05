@@ -13,7 +13,7 @@ const GONE = [
   "Have a good service", "as soon as it sets off", ". Sorry.", "Every Call button shows them",
   "Nothing is needed from you", "You were emailed because", "Buses can change during the week",
   "none of these people exist", "think about who takes it", "between themselves",
-  "nothing to report yet", "That has changed"
+  "nothing to report yet", "That has changed", "Sent by the minibus app"
 ];
 
 export default function (root) {
