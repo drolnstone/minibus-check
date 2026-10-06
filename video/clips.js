@@ -277,7 +277,7 @@
       when("Bus 5 minutes late leaving?");
       a.write(["You are told that too."], CX, CY + 44, { size: 34 });
       lock("10:10", "Sunday 27 September");
-      a.note(90, 480, 360, "No word yet that your bus has left church", "It was due to leave at 10:05. Yours is timetabled 10:36 at Fountains Road by Stanley Close. We will message you as soon as it sets off.");
+      a.note(90, 480, 360, "No word yet that your bus has left church", "It was due to leave at 10:05. Yours is timetabled 10:36 at Fountains Road by Stanley Close.");
       a.hold(4);
     });
 
@@ -321,7 +321,7 @@
       when("If a bus is called off");
       a.write(["You are told within minutes,", "whatever day it is."], CX, CY + 44, { size: 34 });
       lock("6:20", "Friday 25 September");
-      a.note(90, 480, 360, "No bus to Fountains Road by Stanley Close on Sunday", "The North bus is not running this Sunday. Sorry.");
+      a.note(90, 480, 360, "No bus to Fountains Road by Stanley Close on Sunday", "The North bus is not running this Sunday.");
       a.hold(3.6);
     });
 

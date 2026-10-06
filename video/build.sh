@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# THE PASSENGER VIDEOS, from the repo to three MP4s.
+# THE DOODLE VIDEOS, from the repo to MP4s: the three for passengers and the driver's.
 #
-#   video/build.sh                 word check, photographs, a still of every scene, all three videos
+#   video/build.sh                 word check, photographs, a still of every scene, all four videos
 #   video/build.sh preview         the same but stills only: a couple of minutes, to look before the long part
 #   video/build.sh 3               only the third video (or 1,3)
+#   video/build.sh driver          only the driver video (preview-driver for its stills only)
 #   NOSHOTS=1 video/build.sh ...   keep last time's photographs (only captions or timing changed)
 #
-# Leaves video/build/out/Sunday-Bus-*.mp4 and video/build/preview/. See README.md.
+# Leaves video/build/out/*.mp4 and video/build/preview/. See README.md.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 B="$HERE/build"
-WHAT="${1:-1,2,3}"
+WHAT="${1:-1,2,3,driver}"
+CLIPS="$WHAT"
+case "$WHAT" in preview) CLIPS=1,2,3,driver ;; preview-driver) CLIPS=driver ;; esac
 mkdir -p "$B/shots" "$B/fonts"
 
 if [ -z "${PLAYWRIGHT_CORE:-}" ]; then
@@ -49,8 +52,9 @@ export FFMPEG
 
 python3 "$HERE/check_words.py"
 if [ -z "${NOSHOTS:-}" ]; then
-  rm -f "$B/shots/marks.json"
-  SHOTS="$B/shots" MINIBUS_PORT="${MINIBUS_PORT:-8133}" node "$HERE/shots.mjs"
+  [ "$CLIPS" != "1,2,3,driver" ] || rm -f "$B/shots/marks.json"
+  [ "$CLIPS" = driver ] || SHOTS="$B/shots" MINIBUS_PORT="${MINIBUS_PORT:-8133}" node "$HERE/shots.mjs"
+  case ",$CLIPS," in *,driver,*) SHOTS="$B/shots" MINIBUS_PORT="${MINIBUS_PORT:-8133}" node "$HERE/shots-driver.mjs" ;; esac
 fi
-node "$HERE/render.mjs" preview "$([ "$WHAT" = preview ] && echo 1,2,3 || echo "$WHAT")"
-[ "$WHAT" = preview ] || node "$HERE/render.mjs" video "$WHAT"
+node "$HERE/render.mjs" preview "$CLIPS"
+case "$WHAT" in preview*) ;; *) node "$HERE/render.mjs" video "$CLIPS" ;; esac

@@ -31,7 +31,12 @@ svg { display: block; }
     document.fonts.load('300 36px Barlow'), document.fonts.load('16px Barlow'), document.fonts.load('700 18px Barlow')
   ]).then(() => document.fonts.ready).then(() => {
     const add = (src) => new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => no(new Error("could not load " + src)); document.body.appendChild(s); });
-    return add("engine.js").then(() => add("clips.js"));
+    /* Only the clips asked for (render.mjs says which), so the driver video
+       can be made without the passenger photographs, and the other way. */
+    const want = (new URLSearchParams(location.search).get("clips") || "1,2,3,driver").split(",");
+    return add("engine.js")
+      .then(() => want.some((c) => /^[123]$/.test(c)) ? add("clips.js") : null)
+      .then(() => want.indexOf("driver") !== -1 ? add("clips-driver.js") : null);
   }).then(() => { window.READY = true; }, (e) => { window.FAILED = String(e && e.message || e); });
   window.addEventListener("error", (e) => { window.FAILED = String(e.message); });
 </script>

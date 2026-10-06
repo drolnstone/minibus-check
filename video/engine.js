@@ -175,7 +175,8 @@
   }
 
   /* A phone notification: the app's icon, its name, and the words the
-     server sends, word for word. */
+     server sends, word for word. o.app and o.icon name another app than
+     Sunday Bus (the driver video's notifications come from Driver). */
   function noteItem(x, y, w, title, body, o) {
     o = o || {};
     const g = el("g", { opacity: 0 }, cur.g);
@@ -184,8 +185,8 @@
     const hgt = 52 + tlines.length * 23 + lines.length * 21 + 10;
     el("rect", { x: x + 3, y: y + 5, width: w, height: hgt, rx: 16, fill: "rgba(0,0,0,0.16)" }, g);
     el("rect", { x, y, width: w, height: hgt, rx: 16, fill: "#ffffff", stroke: "#c9ced4", "stroke-width": 1.2 }, g);
-    el("image", { href: "../icon-192.png", x: x + 12, y: y + 11, width: 22, height: 22 }, g);
-    el("text", { x: x + 42, y: y + 27, "font-family": "Barlow", "font-size": 13.5, fill: SOFT }, g).textContent = "Sunday Bus" + (o.when ? " · " + o.when : "");
+    el("image", { href: o.icon || "../icon-192.png", x: x + 12, y: y + 11, width: 22, height: 22 }, g);
+    el("text", { x: x + 42, y: y + 27, "font-family": "Barlow", "font-size": 13.5, fill: SOFT }, g).textContent = (o.app || "Sunday Bus") + (o.when ? " · " + o.when : "");
     tlines.forEach((ln, i) => {
       el("text", { x: x + 14, y: y + 58 + i * 23, "font-family": "Barlow", "font-size": 18, "font-weight": 700, fill: INK }, g).textContent = ln;
     });
