@@ -4,7 +4,8 @@
      node video/render.mjs video   [1,2,3,driver]   every frame through ffmpeg, to build/out/
 
    Portrait 1080 x 1920 (the 540 x 960 stage at twice the pixels), 25 frames a
-   second, H.264 in an MP4 that WhatsApp plays without converting. FFMPEG
+   second, H.264 in an MP4 that WhatsApp plays without converting. The
+   driver video is longer, so it is squeezed a little harder to stay under 5 MB. FFMPEG
    names the ffmpeg to use; build.sh fetches one. Stops on a page error, or on
    a caption line that runs off the edge of the stage. */
 import { spawn } from "node:child_process";
@@ -64,7 +65,7 @@ for (const id of which) {
   const out = join(BUILD, "out"); mkdirSync(out, { recursive: true });
   const file = join(out, NAMES[id] + ".mp4");
   const ff = spawn(ffmpeg, ["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(FPS), "-c:v", "mjpeg", "-i", "-",
-    "-c:v", "libx264", "-preset", "slow", "-crf", "24", "-tune", "animation", "-pix_fmt", "yuv420p",
+    "-c:v", "libx264", "-preset", "slow", "-crf", id === "driver" ? "27" : "24", "-tune", "animation", "-pix_fmt", "yuv420p",
     "-r", String(FPS), "-movflags", "+faststart", file], { stdio: ["pipe", "inherit", "inherit"] });
   const frames = Math.ceil(len * FPS);
   const started = Date.now();
