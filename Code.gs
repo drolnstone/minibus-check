@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.109.0";
+var SCRIPT_VERSION = "v1.110.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -3382,45 +3382,69 @@ function archiveTab(spec, dryRun) {
   }
   ensureCols(dest, head.filter(function (h) { return !!h; }));
 
-  /* Refuse rather than misalign. ensureCols only ever inserts, so the orders
-     should already agree; if they somehow do not, writing live rows into an
-     archive laid out differently would file a driver's name under a stop and
-     nothing would ever say so. */
-  var destHead = headerRow(dest);
-  for (var h = 0; h < head.length; h++) {
-    if (!head[h]) continue;
-    if (destHead[h] !== head[h]) {
+  /* Matched by heading, not by position. ensureCols puts a missing heading
+     beside its neighbours, but a live tab whose columns have been moved
+     about keeps its own order, and the archive keeps the order it was
+     made in. Bus Bookings was the first to part company: Scheduled sits
+     after Seats on the live tab and Live ID before Passenger ID, the
+     archive the other way round, and every row copied by position would
+     have filed a phone number under a fingerprint.
+
+     Still refused, and nothing moved, where heading cannot decide it: a
+     column with no heading that has something in it, or the same heading
+     twice on the live tab. */
+  var destMap = headerMap(dest);
+  var place = [], seen = {};
+  for (var h = 0; h < wide; h++) {
+    var name0 = head[h] || "";
+    if (!name0) {
+      for (var q = 0; q < rows.length; q++) {
+        if (String(rows[q][h] == null ? "" : rows[q][h]) !== "") {
+          out.moved = 0;
+          out.note = "a column with no heading has entries \u2014 nothing moved";
+          return out;
+        }
+      }
+      place.push(0);
+      continue;
+    }
+    if (seen[name0] || !destMap[name0]) {
       out.moved = 0;
-      out.note = "archive columns do not line up with the live tab — nothing moved";
+      out.note = "archive columns do not line up with the live tab \u2014 nothing moved";
       return out;
     }
+    seen[name0] = true;
+    place.push(destMap[name0]);
   }
+  var destWide = Math.max(dest.getLastColumn(), 1);
+  var copies = rows.map(function (r) {
+    var c2 = [];
+    for (var x = 0; x < destWide; x++) c2.push("");
+    for (var y = 0; y < wide; y++) if (place[y]) c2[place[y] - 1] = r[y];
+    return c2;
+  });
 
-  /* A new tab is 26 columns wide and a live tab can be wider — Checks is 25
-     before anybody adds anything. setValues past the edge throws, and it
-     would throw AFTER the rows had been selected and before anything was
-     verified, which is the one place an exception is least welcome. */
-  if (dest.getMaxColumns() < wide) {
-    dest.insertColumnsAfter(dest.getMaxColumns(), wide - dest.getMaxColumns());
+  if (dest.getMaxColumns() < destWide) {
+    dest.insertColumnsAfter(dest.getMaxColumns(), destWide - dest.getMaxColumns());
   }
 
   var at = dest.getLastRow() + 1;
-  dest.getRange(at, 1, rows.length, wide).setValues(rows);
+  dest.getRange(at, 1, copies.length, destWide).setValues(copies);
 
   /* Committed before it is checked, and checked before anything is deleted. */
   SpreadsheetApp.flush();
 
-  var back = dest.getRange(at, 1, rows.length, wide).getValues();
-  var same = back.length === rows.length;
-  for (var v = 0; same && v < rows.length; v++) {
-    same = archiveSig(rows[v]) === archiveSig(back[v]);
+  var back = dest.getRange(at, 1, copies.length, destWide).getValues();
+  var same = back.length === copies.length;
+  for (var v = 0; same && v < copies.length; v++) {
+    same = archiveSig(copies[v]) === archiveSig(back[v]);
   }
   if (!same) {
     /* Duplicated history is recoverable by hand in a minute. Deleted and not
        copied is not recoverable at all. So: nothing is deleted, the run says
        so, and healthCheck repeats it until somebody looks. */
     out.moved = 0;
-    out.note = "the copy did not verify — nothing deleted";
+    out.note = "the copy did not verify \u2014 nothing deleted";
     return out;
   }
 
@@ -13135,10 +13159,7 @@ function healthReport() {
     var ranAt = Number(props2.getProperty("archiveRanAt") || 0);
     var archErr = props2.getProperty("archiveError") || "";
     if (archErr) {
-      bad.push("The last archive run had trouble: " + archErr +
-               "\n     Nothing is lost by this \u2014 the mover never deletes a row " +
-               "it has not first copied and read back. But it is not clearing " +
-               "the tabs until it is put right.");
+      bad.push("The last archive run had trouble: " + archErr + ".");
     } else if (ranAt) {
       var daysAgo = Math.round((Date.now() - ranAt) / 86400000);
       good.push("Records were last archived " +
