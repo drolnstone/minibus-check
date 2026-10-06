@@ -1,7 +1,7 @@
 /* DRAWS THE CLIPS, frame by frame, from stage.html.
 
-     node video/render.mjs preview [1,2,3]   one still per scene, fully drawn, to build/preview/
-     node video/render.mjs video   [1,2,3]   every frame through ffmpeg, to build/out/
+     node video/render.mjs preview [1,2,3,driver]   one still per scene, fully drawn, to build/preview/
+     node video/render.mjs video   [1,2,3,driver]   every frame through ffmpeg, to build/out/
 
    Portrait 1080 x 1920 (the 540 x 960 stage at twice the pixels), 25 frames a
    second, H.264 in an MP4 that WhatsApp plays without converting. FFMPEG
@@ -17,8 +17,9 @@ const BUILD = join(HERE, "build");
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE || "playwright-core");
 const FPS = 25;
 const mode = process.argv[2] || "preview";
-const which = (process.argv[3] || "1,2,3").split(",").filter(Boolean);
-const NAMES = { 1: "Sunday-Bus-1-Put-it-on-your-phone", 2: "Sunday-Bus-2-Book-your-seat", 3: "Sunday-Bus-3-Sunday-morning" };
+const which = (process.argv[3] || "1,2,3,driver").split(",").filter(Boolean);
+const NAMES = { 1: "Sunday-Bus-1-Put-it-on-your-phone", 2: "Sunday-Bus-2-Book-your-seat", 3: "Sunday-Bus-3-Sunday-morning",
+                driver: "Driver-Sunday-morning-to-the-end-of-the-run" };
 
 /* The marks shots.mjs recorded, as a script the stage can load from disk. */
 writeFileSync(join(BUILD, "marks.js"), "window.MARKS = " + readFileSync(join(BUILD, "shots", "marks.json"), "utf8") + ";\n");
@@ -28,7 +29,7 @@ const page = await browser.newPage({ viewport: { width: 540, height: 960 }, devi
 const errs = [];
 page.on("pageerror", (e) => errs.push(String(e.message)));
 page.on("console", (m) => { if (m.type() === "error") errs.push(m.text()); });
-await page.goto("file://" + join(HERE, "stage.html"));
+await page.goto("file://" + join(HERE, "stage.html") + "?clips=" + which.join(","));
 await page.waitForFunction(() => window.READY || window.FAILED, null, { timeout: 30000 });
 const failed = await page.evaluate(() => window.FAILED || null);
 const over = await page.evaluate(() => window.OVER || []);
