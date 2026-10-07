@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.110.0";
+var SCRIPT_VERSION = "v1.111.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -10842,7 +10842,7 @@ function renewalAlerts(ss) {
   renewalsDue(ss, today, 60).forEach(function (x) {
     var stage = renewalStage(x.days);
     if (!stage) return;
-    var title = x.days < 0 ? (x.stop ? "BUS STOPPED: " : "") + x.reg + ": " + x.label + " expired " + ukDay(x.date)
+    var title = x.days < 0 ? (x.stop ? "BUS STOPPED: " : "") + x.reg + ": " + x.label + (x.item === "service" ? " overdue, was due " : " expired ") + ukDay(x.date)
               : x.days === 0 ? x.reg + ": " + x.label + " due today"
               : x.reg + ": " + x.label + " due in " + x.days + " days";
     var body = x.days >= 0 ? "Due " + ukDay(x.date) + ". Record it in the coordinator app when done."
@@ -10916,13 +10916,28 @@ function missingCheckAlert() {
   /* Every bus the app has ever recorded a check for. Reading it from history
      rather than a list here means adding a bus needs no code change: its
      first check puts it on the list from then on. */
-  var expected = knownRegs(ss).filter(function (reg) { return !done[reg]; });
+  var row = null;
+  readRotaRows(ss).forEach(function (r) { if (r.date === key) row = r; });
+
+  /* Only a bus down for a route that ran today went out (from v1.111.0). A
+     route called off, or a bus nobody had today, did not, and "went out
+     unchecked" about it was untrue. When neither route names a bus, every
+     known bus is still asked about, as before. */
+  var out = {}, named = false, running = 0;
+  ["North", "South"].forEach(function (rt) {
+    if (row && routeCalledOff(row.status, rt)) return;
+    running++;
+    var reg = busFor(ss, key, rt).reg;
+    if (reg) { out[reg.toUpperCase()] = true; named = true; }
+  });
+  if (!running) return;                            // no bus ran today
+  var expected = knownRegs(ss).filter(function (reg) {
+    return !done[reg] && (!named || out[reg.toUpperCase()]);
+  });
   if (!expected.length) return;                    // all checked, say nothing
 
   /* Who is down to drive, so you know whose phone to pick up rather than
      working it out from the rota yourself. */
-  var row = null;
-  readRotaRows(ss).forEach(function (r) { if (r.date === key) row = r; });
   var north = row ? String(row.actual || row.primary || "").trim() : "";
   var south = row ? String(row.actual2 || row.primary2 || "").trim() : "";
 
@@ -11398,7 +11413,7 @@ function weeklyDigest() {
       lines.push("&nbsp;");
       lines.push("<b>Renewals</b>");
       ren.forEach(function (x) {
-        var t = esc(x.reg) + ": " + esc(x.label) + " " + (x.days < 0 ? "expired " : "due ") + ukDay(x.date) +
+        var t = esc(x.reg) + ": " + esc(x.label) + " " + (x.days < 0 ? (x.item === "service" ? "overdue, was due " : "expired ") : "due ") + ukDay(x.date) +
                 (x.stop ? " (bus stopped)" : "");
         lines.push("&bull; " + (x.days < 0 ? "<b>" + t + "</b>" : t));
       });

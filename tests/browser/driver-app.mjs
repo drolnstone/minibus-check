@@ -1181,9 +1181,15 @@ if (want("T34")) {
   await me.click("Vehicle check", "#s-hub"); await me.wait(800);
   const chips = await me.pg.evaluate(() => Object.fromEntries([...document.querySelectorAll("#vehList .veh")].map(b =>
     [b.querySelector(".veh-plate").textContent, (b.querySelector(".chip.over, .chip.soon") || {}).textContent || ""])));
-  check("T34", "the badge on a bus card names the overdue or due-soon item",
-        chips["NH56 FWP"] === "Service overdue" && chips["YS70 PWE"] === "MOT and Service due soon" && !me.errs.length,
-        JSON.stringify({ chips, errs: me.errs }));
+  const box = await me.pg.evaluate(() => {
+    const d = document.createElement("div");
+    d.innerHTML = dueHTML(VEHICLES.find(v => v.reg === "NH56 FWP"));
+    return d.textContent;
+  });
+  check("T34", "the badge on a bus card names the overdue or due-soon item, and a service is overdue, not expired",
+        chips["NH56 FWP"] === "Service overdue" && chips["YS70 PWE"] === "MOT and Service due soon" &&
+        /^Overdue/.test(box) && /Overdue by 7 days/.test(box) && !/Expired|Renewal/.test(box) && !me.errs.length,
+        JSON.stringify({ chips, box, errs: me.errs }));
   await me.ctx.close();
 }
 

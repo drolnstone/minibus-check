@@ -2380,7 +2380,8 @@ function dueItems(v){
     out.push({
       key:k, label:DUE_LABELS[k], date:iso, days:n,
       state: n < 0 ? "over" : "soon",
-      words: n < 0 ? "Expired " + Math.abs(n) + (Math.abs(n)===1?" day":" days") + " ago"
+      /* A service is overdue, never expired: only papers expire. */
+      words: n < 0 ? (k === "service" ? "Overdue by " : "Expired ") + Math.abs(n) + (Math.abs(n)===1?" day":" days") + (k === "service" ? "" : " ago")
            : n === 0 ? "Due today"
            : "Due in " + n + (n===1?" day":" days")
     });
@@ -2392,7 +2393,7 @@ function dueHTML(v){
   if(!list.length) return "";
   var over = list.some(function(x){ return x.state==="over"; });
   return '<div class="due '+(over?"over":"soon")+'">'+
-    '<h4>'+(over?"Renewal overdue":"Renewal coming up")+'</h4><ul>'+
+    '<h4>'+(over?"Overdue":"Coming up")+'</h4><ul>'+
     list.map(function(x){
       return '<li><b>'+esc(x.label)+'</b><span class="w">'+esc(x.words)+' \u00B7 '+esc(prettyDate(x.date))+'</span></li>';
     }).join("")+

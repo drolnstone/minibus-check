@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.50.0";
+const SCRIPT_VERSION = "w2.51.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5888,10 +5888,10 @@ function sentTitle(tag, driver, where) {
   }
   const route = (where && where.route) || "";
   const pre = (t) => (route ? route + ": " : "") + t;
-  if (k === "off") return pre("No bus today");
+  if (k === "off") return pre(p[1] === londonKey(new Date()) ? "No bus today" : "No bus on Sunday");
   if (k === "late") return pre("No word yet that the bus has left church");
   if (k === "left") return pre("The bus has left church");
-  if (k === "next") return pre("The bus is on its way");
+  if (k === "next") return pre("Be at your stop");
   if (k === "past") return pre("The bus has gone past");
   if (k === "morn") return pre("Your bus today");
   if (k === "book") return "Book your seat for Sunday";
