@@ -3463,7 +3463,7 @@ function renderVehicles(){
     var chip = "";
     if(dl.length){
       /* Named, so the driver can say which: "Service overdue", not just
-         "Renewal overdue". Overdue items only when any are; the rest wait. */
+         the old generic word. Overdue items only when any are; the rest wait. */
       var ov = dl.some(function(x){ return x.state==="over"; });
       var names = dl.filter(function(x){ return x.state===(ov?"over":"soon"); })
                     .map(function(x){ return x.label; });
@@ -8404,7 +8404,7 @@ function tripCoordStopsHtml(){
     if(pap){
       h+='<p class="trip-note"><b class="trip-stopme">'+esc(v.reg)+': '+esc(pap.label)+' expired '+
          esc(prettyDate(pap.date))+'.</b> '+(pap.item==="mot" ? "Authorise an MOT run in the coordinator app."
-                                                          : "Record the renewal in the coordinator app.")+'</p>';
+                                                          : "Record the new insurance in the coordinator app.")+'</p>';
     }
   });
   return h;

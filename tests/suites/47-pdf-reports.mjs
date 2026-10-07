@@ -88,7 +88,7 @@ export default async function (root) {
       const stopped = sec(r, "Buses stopped").rows.map((x) => x.join(" | "));
       a.ok(stopped.some((x) => x === "YS70 PWE | Insurance expired 30/09/2026"), stopped.join(" / "));
       a.ok(stopped.some((x) => /^NH56 FWP \| Critical defect: Tyres/.test(x)), stopped.join(" / "));
-      const ren = sec(r, "Renewals overdue or due in the next 60 days").rows.map((x) => x.join(" | "));
+      const ren = sec(r, "MOT, service, insurance and permit overdue or due in the next 60 days").rows.map((x) => x.join(" | "));
       a.ok(ren.indexOf("YS70 PWE | MOT | 31/10/2026 | Due in 30 days") !== -1, ren.join(" / "));
       a.not(ren.some((x) => /NH56 FWP/.test(x)), "an MOT five months off is listed");
       a.eq(sec(r, "Open defects and advisories").rows.length, 1);

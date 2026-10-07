@@ -12,6 +12,8 @@
      "The bus is on its way", and a route called off on a Friday "No bus
      today" when the passengers were told "on Sunday". */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Suite } from "../lib/t.mjs";
 import { loadCodeGs, call } from "../lib/codegs.mjs";
 import { loadWorker, installGlobals } from "../lib/worker.mjs";
@@ -36,6 +38,8 @@ export default async function (root) {
       a.ok(subj.indexOf("Minibus: NH56 FWP: Service overdue, was due 30/09/2026") > -1, subj.join(" / "));
       a.ok(subj.indexOf("Minibus: BUS STOPPED: NH56 FWP: Insurance expired 05/10/2026") > -1, subj.join(" / "));
       a.not(subj.some((x) => /Service expired/.test(x)), subj.join(" / "));
+      const ins = L.gas.mail.find((m) => /Insurance expired/.test(m.subject));
+      a.has(String(ins && ins.body), "Record the new insurance");
     });
   });
 
@@ -91,6 +95,18 @@ export default async function (root) {
     await atTime("2026-10-04T08:00:00+01:00", () => {
       a.eq(W.sentTitle("off|2026-10-04|North", false, { route: "North" }), "North: No bus today");
     });
+  });
+
+  /* Asim, 7 October: "MOT is MOT, service is service, parking permit is
+     parking permit, insurance is insurance." No word lumps them together. */
+  s.test("no screen, push or email says renewal for an item it can name", async (a) => {
+    for (const f of ["index.html", "coord/index.html", "sunday/index.html", "Code.gs", "server/worker.js"]) {
+      const src = readFileSync(join(root, f), "utf8");
+      for (const bad of ["Renewal overdue", "Renewal due soon", "Renewal coming up", "Record the renewal",
+                         "Record renewals", "<h3>Renewals</h3>", "<b>Renewals</b>", "\"Renewals overdue"]) {
+        a.not(src.indexOf(bad) > -1, f + " still says " + bad);
+      }
+    }
   });
 
   return s;

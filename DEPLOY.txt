@@ -10,6 +10,9 @@ Words that match what is behind them (Asim, 7 Oct: "Renewal or service?"):
   "Service overdue, was due ..."; MOT, insurance and permit still expire.
 - Sunday 10:45 "went out unchecked": only the buses down for a route that
   ran today. A route called off, or another bus, is not named.
+- No screen, push or email says "renewal" for something it can name:
+  "Record the new insurance", "Record the MOT", headings "Due dates" and
+  "MOT, service, insurance and permit".
 - Coordinator Alerts list: a passenger's "Be at your stop" push is listed
   as Be at your stop, not The bus is on its way; a route called off before
   the day is listed as No bus on Sunday, as the passengers were told.

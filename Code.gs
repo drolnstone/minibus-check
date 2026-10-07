@@ -1008,7 +1008,7 @@ function readBuses(ss) {
 function busColumnsFirstFill(sh, bc) {
   try {
     sh.getRange(1, bc.mot).setNote(
-      "When each renewal is due. The driver app warns 30 days ahead and says\n" +
+      "When each one is due: MOT, service, insurance, permit. The driver app warns 30 days ahead and says\n" +
       "when one has passed. Leave blank for anything this bus does not have.");
     sh.getRange(1, bc.oddRoute).setNote(
       "North or South: the route this bus takes in odd-numbered months\n" +
@@ -1495,7 +1495,7 @@ function busDatesAudit(ss, where, who) {
           safetyAlert({ id: "typed|" + reg + "|" + k + "|" + b, kind: "renewal", reg: reg,
                         title: reg + ": " + RENEWALS[k].label + " due date typed on the sheet",
                         body: "From " + show(a) + " to " + show(b) + (who ? ", by " + who : "") +
-                              ". Record renewals in the coordinator app.", tab: BUSES_SHEET });
+                              ". Record the " + (k === "mot" ? "MOT" : RENEWALS[k].label.toLowerCase()) + " in the coordinator app.", tab: BUSES_SHEET });
         }
       });
     });
@@ -10846,7 +10846,7 @@ function renewalAlerts(ss) {
               : x.days === 0 ? x.reg + ": " + x.label + " due today"
               : x.reg + ": " + x.label + " due in " + x.days + " days";
     var body = x.days >= 0 ? "Due " + ukDay(x.date) + ". Record it in the coordinator app when done."
-             : x.item === "insurance" ? "Record the renewal in the coordinator app."
+             : x.item === "insurance" ? "Record the new insurance in the coordinator app."
              : x.item === "mot" ? "Record the new MOT in the coordinator app. For a booked test, authorise an MOT run there."
              : "Record it in the coordinator app when done.";
     safetyAlert({ id: "renew|" + x.reg + "|" + x.item + "|" + x.date + "|" + stage, kind: x.stop ? "stopped" : "renewal",
@@ -11411,7 +11411,7 @@ function weeklyDigest() {
     var ren = renewalsDue(ss, dateToKey(new Date()), 60);
     if (ren.length) {
       lines.push("&nbsp;");
-      lines.push("<b>Renewals</b>");
+      lines.push("<b>MOT, service, insurance and permit</b>");
       ren.forEach(function (x) {
         var t = esc(x.reg) + ": " + esc(x.label) + " " + (x.days < 0 ? (x.item === "service" ? "overdue, was due " : "expired ") : "due ") + ukDay(x.date) +
                 (x.stop ? " (bus stopped)" : "");
@@ -14805,7 +14805,7 @@ function pdfOutstanding(ss, today) {
     stopped.push([d.reg, "Critical defect: " + d.item + " (" + pdfDay(d.date) + ")"]);
   });
   sections.push(pdfSection("Buses stopped", ["Bus", "Why"], stopped));
-  sections.push(pdfSection("Renewals overdue or due in the next 60 days", ["Bus", "What", "Due", ""],
+  sections.push(pdfSection("MOT, service, insurance and permit overdue or due in the next 60 days", ["Bus", "What", "Due", ""],
     ren.map(function (r) { return [r.reg, r.what, pdfDay(r.due), pdfDueWords(r.days)]; })));
   defs.sort(function (a, b) { return (b.crit ? 1 : 0) - (a.crit ? 1 : 0) || (a.date < b.date ? -1 : 1); });
   sections.push(pdfSection("Open defects and advisories", ["Reported", "Bus", "Item", "Kind", "Critical", "Status", "Found"],

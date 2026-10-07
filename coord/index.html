@@ -1291,7 +1291,7 @@ function needs(){
   Object.keys(pap).forEach(function(reg){
     var p = pap[reg], r = p.motRun, rec = 'data-do="vlog" data-reg="'+esc(reg)+'"';
     var head = reg + ": " + p.label + " expired " + ukDay(p.date) + ".";
-    if(p.item !== "mot") out.push({ tone:"stop", text: head + " Record the renewal.", btn:"Record", data: rec });
+    if(p.item !== "mot") out.push({ tone:"stop", text: head + " Record the new insurance.", btn:"Record", data: rec });
     else if(r && r.ended) out.push({ tone:"stop", text: head + " MOT run done. Record the new MOT.", btn:"Record", data: rec });
     else if(r) out.push({ tone:"warn", text: reg + ": MOT run" + (r.garage ? " to " + r.garage : "") + " at " + r.time +
                           (r.started ? ", under way." : ", authorised by " + r.by + "."), btn:"Record", data: rec });
@@ -2477,7 +2477,7 @@ function renewalsHtml(){
          '<span class="bus-head"><span class="plate">' + esc(b.reg) + '</span><span class="go">›</span></span>' +
          dueRows(b, items) + '</button>';
   });
-  return '<h3>Renewals</h3>' + (h || '<div class="card"><p class="tiny" style="margin:0">Nothing due in the next 60 days.</p></div>');
+  return '<h3>Due dates</h3>' + (h || '<div class="card"><p class="tiny" style="margin:0">Nothing due in the next 60 days.</p></div>');
 }
 
 function motRun(reg){
