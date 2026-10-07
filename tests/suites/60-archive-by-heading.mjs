@@ -1,5 +1,11 @@
 /* THE ARCHIVE MATCHES COLUMNS BY HEADING.
-   sheet v1.110.0.
+   sheet v1.110.0; from v1.112.0 text goes across as text.
+
+   7 October: v1.110.0 wrote "07514433370" bare, Sheets read it back as
+   7514433370, the copy did not verify and stayed on the archive anyway.
+   Now text is written with an apostrophe, a copy that does not verify comes
+   off again, and the leftover from that night is cleared once the row has
+   moved properly.
 
    On 6 October 2026 the 3am tidy-up moved nothing off Bus Bookings: the live
    tab has Scheduled after Seats and Live ID before Passenger ID, and the
@@ -33,12 +39,33 @@ function bookingsSpec(L) {
 
 let ROOT;
 function load(liveRows, archRows, liveHead) {
-  return loadCodeGs(ROOT, {
+  const L = loadCodeGs(ROOT, {
     tabs: {
       "Bus Bookings": [liveHead || LIVE].concat(liveRows),
       "Bus Bookings (archive)": [ARCH].concat(archRows || [])
     }
   });
+  likeSheets(L, "Bus Bookings (archive)");
+  return L;
+}
+
+/* Sheets, not the fake: text written without an apostrophe is read as a
+   number or a time when it looks like one, and an apostrophe is dropped. */
+function likeSheets(L, name) {
+  const sh = L.gas.globals.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+  const set = sh._set.bind(sh);
+  sh._set = (r, c, v) => {
+    if (typeof v === "string") {
+      if (v.startsWith("'")) v = v.slice(1);
+      else if (/^\d+$/.test(v)) v = Number(v);
+      else if (/^\d{1,2}:\d{2}$/.test(v)) {
+        const [h, m] = v.split(":").map(Number);
+        v = new Date(1899, 11, 30, h, m);
+      }
+    }
+    set(r, c, v);
+  };
+  return sh;
 }
 
 function byHead(sh) {
@@ -108,6 +135,62 @@ export default function (root) {
       const out = call(L, "archiveTab", bookingsSpec(L), false);
       a.eq(out.moved, 0);
       a.has(out.note, "nothing moved");
+    });
+  });
+
+  s.test("a phone number and a time go across as text, as they are on the live tab", async (a) => {
+    await atTime(TUE, () => {
+      const L = load([liveRow("2026-08-23T00:00:00+01:00", "07514433370", "41", "fp-old")]);
+      const out = call(L, "archiveTab", bookingsSpec(L), false);
+      a.eq(out.note, "", "refused: " + out.note);
+      a.eq(out.moved, 1);
+      const ss = L.gas.globals.SpreadsheetApp.getActiveSpreadsheet();
+      const arch = byHead(ss.getSheetByName("Bus Bookings (archive)"));
+      a.eq(arch[0]["Phone"], "07514433370");
+      a.eq(arch[0]["Scheduled"], "10:12");
+      a.eq(arch[0]["Live ID"], "41");
+      a.eq(ss.getSheetByName("Bus Bookings").getLastRow(), 1, "the live row has gone");
+    });
+  });
+
+  s.test("a copy that does not verify comes off the archive again", async (a) => {
+    await atTime(TUE, () => {
+      const L = load([liveRow("2026-08-23T00:00:00+01:00", "07514433370", "41", "fp-old")]);
+      const arch = L.gas.globals.SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Bus Bookings (archive)");
+      const set = arch._set.bind(arch);
+      arch._set = (r, c, v) => set(r, c, typeof v === "string" && v.indexOf("07514") >= 0 ? "mangled" : v);
+      const out = call(L, "archiveTab", bookingsSpec(L), false);
+      a.eq(out.moved, 0);
+      a.has(out.note, "did not verify");
+      a.eq(arch.getLastRow(), 1, "nothing left on the archive");
+      const ss = L.gas.globals.SpreadsheetApp.getActiveSpreadsheet();
+      a.eq(ss.getSheetByName("Bus Bookings").getLastRow(), 2, "the live row stays");
+    });
+  });
+
+  s.test("a failed night's leftover copy is cleared when the row moves properly", async (a) => {
+    await atTime(TUE, () => {
+      const r = liveRow("2026-08-23T00:00:00+01:00", "07514433370", "41", "fp-old");
+      /* What v1.110.0 left on 7 October: the same booking, in the archive's
+         order, with Sheets' reading of the text. */
+      const leftover = [r[0], r[1], r[2], r[3], r[4], r[5], new Date(1899, 11, 30, 10, 11),
+                        r[7], r[8], 7514433370, 41, r[11]];
+      const keep = ["x", new Date("2026-08-16T00:00:00+01:00"), "South", "S04", "Hannan",
+                    3, "", "d8", "Booked", "07000000001", "7", "fp-aug"];
+      const head = ARCH.slice(0, 6).concat(["Scheduled"], ARCH.slice(6, 9), ["Live ID", "Passenger ID"]);
+      const L = loadCodeGs(ROOT, { tabs: {
+        "Bus Bookings": [LIVE, r],
+        "Bus Bookings (archive)": [head, keep, leftover]
+      } });
+      likeSheets(L, "Bus Bookings (archive)");
+      const out = call(L, "archiveTab", bookingsSpec(L), false);
+      a.eq(out.note, "", "refused: " + out.note);
+      a.eq(out.moved, 1);
+      const ss = L.gas.globals.SpreadsheetApp.getActiveSpreadsheet();
+      const arch = byHead(ss.getSheetByName("Bus Bookings (archive)"));
+      a.eq(arch.length, 2, "one copy of each booking");
+      a.eq(arch[0]["Passenger ID"], "fp-aug");
+      a.eq(arch[1]["Phone"], "07514433370");
     });
   });
 

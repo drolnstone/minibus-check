@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.111.0";
+var SCRIPT_VERSION = "v1.112.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -3321,6 +3321,24 @@ function archiveSig(row) {
   }).join("");
 }
 
+/* The same, but blind to what Sheets does to text written without an
+   apostrophe: "07514433370" read back as 7514433370, "10:12" as a time on
+   30 December 1899. Used only to recognise a failed run's leftover copy. */
+function archiveLooseSig(row) {
+  return row.map(function (v) {
+    if (v && typeof v.getTime === "function") {
+      /* A time of day only: Sheets reads these back a minute or so out in
+         London, so any time matches any time. The rest of the row decides. */
+      return v.getFullYear() < 1900 ? "t" : "d" + v.getTime();
+    }
+    if (typeof v === "number") return "n" + v;
+    var t = String(v == null ? "" : v).replace(/^'/, "").trim();
+    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(t)) return "t";
+    if (t !== "" && /^[+-]?\d+(\.\d+)?$/.test(t)) return "n" + Number(t);
+    return "s" + t;
+  }).join("\u0001");
+}
+
 /* One tab. Returns what it did rather than throwing, so one tab in trouble
    does not stop the other four. */
 function archiveTab(spec, dryRun) {
@@ -3428,8 +3446,22 @@ function archiveTab(spec, dryRun) {
     dest.insertColumnsAfter(dest.getMaxColumns(), destWide - dest.getMaxColumns());
   }
 
-  var at = dest.getLastRow() + 1;
-  dest.getRange(at, 1, copies.length, destWide).setValues(copies);
+  /* Every piece of text goes in as text. A live cell can hold "07514433370"
+     or "10:12" as text because its column is formatted that way or because
+     it was written with an apostrophe; the same characters written bare into
+     the archive are read by Sheets as a number or a time, the leading zero
+     goes, and the copy no longer matches. The apostrophe is the file's usual
+     way to say "text" (see quotedTime) and getValues hands the value back
+     without it. */
+  var written = copies.map(function (r) {
+    return r.map(function (v) {
+      return (typeof v === "string" && v !== "") ? "'" + v : v;
+    });
+  });
+
+  var before = dest.getLastRow();
+  var at = before + 1;
+  dest.getRange(at, 1, written.length, destWide).setValues(written);
 
   /* Committed before it is checked, and checked before anything is deleted. */
   SpreadsheetApp.flush();
@@ -3440,12 +3472,25 @@ function archiveTab(spec, dryRun) {
     same = archiveSig(copies[v]) === archiveSig(back[v]);
   }
   if (!same) {
-    /* Duplicated history is recoverable by hand in a minute. Deleted and not
-       copied is not recoverable at all. So: nothing is deleted, the run says
-       so, and healthCheck repeats it until somebody looks. */
+    /* Nothing is deleted from the live tab, and this run's own copy comes
+       off the archive again, so a night that fails adds nothing there. */
+    try { dest.deleteRows(at, copies.length); } catch (err) {}
     out.moved = 0;
     out.note = "the copy did not verify \u2014 nothing deleted";
     return out;
+  }
+
+  /* Copies a failed run left on the archive before v1.112.0, which did not
+     take them off again: a row still on the live tab is not history yet, so
+     an archive row that is the same booking, apart from what Sheets did to
+     its text, is one of those. Only once the good copy has read back. */
+  var stale = {};
+  copies.forEach(function (r) { stale[archiveLooseSig(r)] = true; });
+  if (before >= 2) {
+    var old = dest.getRange(2, 1, before - 1, destWide).getValues();
+    for (var o = old.length - 1; o >= 0; o--) {
+      if (stale[archiveLooseSig(old[o])]) dest.deleteRow(o + 2);
+    }
   }
 
   /* Bottom-up, contiguous runs batched, so earlier row numbers stay valid as
