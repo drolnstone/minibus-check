@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.50.0";
+const SCRIPT_VERSION = "w2.51.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5888,10 +5888,10 @@ function sentTitle(tag, driver, where) {
   }
   const route = (where && where.route) || "";
   const pre = (t) => (route ? route + ": " : "") + t;
-  if (k === "off") return pre("No bus today");
+  if (k === "off") return pre(p[1] === londonKey(new Date()) ? "No bus today" : "No bus on Sunday");
   if (k === "late") return pre("No word yet that the bus has left church");
   if (k === "left") return pre("The bus has left church");
-  if (k === "next") return pre("The bus is on its way");
+  if (k === "next") return pre("Be at your stop");
   if (k === "past") return pre("The bus has gone past");
   if (k === "morn") return pre("Your bus today");
   if (k === "book") return "Book your seat for Sunday";
@@ -7640,7 +7640,7 @@ async function actMotrun(env, me, act) {
   const bus = (await getBuses(env)).find((b) => String(b.reg).toUpperCase() === reg);
   if (!bus) return { ok: false, error: "That bus is not on the Buses tab." };
   const s = papersStop(bus.dates, today);
-  if (s && s.item === "insurance") return { ok: false, error: "The insurance has expired. Record the renewal first." };
+  if (s && s.item === "insurance") return { ok: false, error: "The insurance has expired. Record the new insurance first." };
   if (!s) return { ok: false, error: "The MOT on this bus has not expired." };
   const view = await coordVehiclesView(env);
   const bk = motBookingOn(view.log[reg], today);

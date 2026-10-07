@@ -1683,7 +1683,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.104.0";
+var APP_VERSION = "v1.104.1";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2380,7 +2380,8 @@ function dueItems(v){
     out.push({
       key:k, label:DUE_LABELS[k], date:iso, days:n,
       state: n < 0 ? "over" : "soon",
-      words: n < 0 ? "Expired " + Math.abs(n) + (Math.abs(n)===1?" day":" days") + " ago"
+      /* A service is overdue, never expired: only papers expire. */
+      words: n < 0 ? (k === "service" ? "Overdue by " : "Expired ") + Math.abs(n) + (Math.abs(n)===1?" day":" days") + (k === "service" ? "" : " ago")
            : n === 0 ? "Due today"
            : "Due in " + n + (n===1?" day":" days")
     });
@@ -2392,7 +2393,7 @@ function dueHTML(v){
   if(!list.length) return "";
   var over = list.some(function(x){ return x.state==="over"; });
   return '<div class="due '+(over?"over":"soon")+'">'+
-    '<h4>'+(over?"Renewal overdue":"Renewal coming up")+'</h4><ul>'+
+    '<h4>'+(over?"Overdue":"Coming up")+'</h4><ul>'+
     list.map(function(x){
       return '<li><b>'+esc(x.label)+'</b><span class="w">'+esc(x.words)+' \u00B7 '+esc(prettyDate(x.date))+'</span></li>';
     }).join("")+
@@ -3461,9 +3462,16 @@ function renderVehicles(){
     var dl = dueItems(v);
     var chip = "";
     if(dl.length){
+      /* Named, so the driver can say which: "Service overdue", not just
+         the old generic word. Overdue items only when any are; the rest wait. */
       var ov = dl.some(function(x){ return x.state==="over"; });
+      var names = dl.filter(function(x){ return x.state===(ov?"over":"soon"); })
+                    .map(function(x){ return x.label; });
+      var said = names.length > 1
+        ? names.slice(0,-1).join(", ") + " and " + names[names.length-1]
+        : names[0];
       chip = '<span class="chip '+(ov?"over":"soon")+'">'+
-             (ov?"Renewal overdue":"Renewal due soon")+'</span>';
+             esc(said + (ov?" overdue":" due soon"))+'</span>';
     }
     /* Said on the bus it belongs to, in the fewest words that are true: the
        route, and which Sunday. Not "yours" — he may be covering, and the rota
@@ -8396,7 +8404,7 @@ function tripCoordStopsHtml(){
     if(pap){
       h+='<p class="trip-note"><b class="trip-stopme">'+esc(v.reg)+': '+esc(pap.label)+' expired '+
          esc(prettyDate(pap.date))+'.</b> '+(pap.item==="mot" ? "Authorise an MOT run in the coordinator app."
-                                                          : "Record the renewal in the coordinator app.")+'</p>';
+                                                          : "Record the new insurance in the coordinator app.")+'</p>';
     }
   });
   return h;

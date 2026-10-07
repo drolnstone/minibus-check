@@ -1,33 +1,38 @@
 MINIBUS
 =======
-  pages v1.104.0 · server w2.50.0 · sheet v1.110.0
+  pages v1.104.1 · server w2.51.0 · sheet v1.111.0
 
-Bus Bookings archive (Asim's health report, 6 Oct):
-- The 3am tidy-up now files each value under its own heading on the
-  archive tab, so a live tab whose columns are in a different order
-  from its archive moves as usual. Bus Bookings has stood still because
-  of this; its old rows go across at the next 3am run.
-- The health report's archive line is the fault only.
-
-Code.gs only.
+Words that match what is behind them (Asim, 7 Oct: "Renewal or service?"):
+- Driver app: the badge on a bus card names the item, "Service overdue",
+  "MOT and Service due soon". The Before you start box heads Overdue or
+  Coming up, and a service reads "Overdue by N days", not "Expired".
+- Pushes, emails and the weekly summary: a service past its date is
+  "Service overdue, was due ..."; MOT, insurance and permit still expire.
+- Sunday 10:45 "went out unchecked": only the buses down for a route that
+  ran today. A route called off, or another bus, is not named.
+- No screen, push or email says "renewal" for something it can name:
+  "Record the new insurance", "Record the MOT", headings "Due dates" and
+  "MOT, service, insurance and permit".
+- Coordinator Alerts list: a passenger's "Be at your stop" push is listed
+  as Be at your stop, not The bus is on its way; a route called off before
+  the day is listed as No bus on Sunday, as the passengers were told.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.104.0        v1.104.0  (no change)
-  Worker  w2.49.0         w2.50.0  (#67's paste, if not yet done)
-  Code.gs v1.109.0        v1.110.0  (paste)
+  Pages   v1.104.0        v1.104.1  (merge)
+  Worker  w2.50.0         w2.51.0   (paste)
+  Code.gs v1.110.0        v1.111.0  (paste)
 
 
 IN THIS ORDER
 -------------
 
-1. If #67's Worker is not pasted yet: Cloudflare, the minibus-api
-   Worker, Edit code. Select everything, paste server/worker.js over it,
-   Deploy. (This pull request does not change it.)
-   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/bookings-archive-55kvfd/server/worker.js
+1. Cloudflare, the minibus-api Worker, Edit code. Select everything,
+   paste server/worker.js over it, Deploy.
+   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/renewal-overdue-badge-wt3a7f/server/worker.js
 2. Open the sheet, Extensions, Apps Script. Select everything in Code.gs,
    paste this pull request's Code.gs over it, Save.
-   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/bookings-archive-55kvfd/Code.gs
+   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/renewal-overdue-badge-wt3a7f/Code.gs
 3. Deploy, Manage deployments, the pencil, Version: New version, Deploy.
 4. Merge this pull request.
 
@@ -35,8 +40,8 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. Is everything working? says  Script is v1.110.0 .
-B. The morning after the paste: the archive line is a ✓ again, and
-   Rows on each tab shows fewer Bus Bookings.
+A. Is everything working? says  Script is v1.111.0 .
+B. The driver app's footer says v1.104.1, and NH56 FWP's card says
+   SERVICE OVERDUE until the service is recorded.
 
-Tests: suite 60.
+Tests: suite 61, driver T34.

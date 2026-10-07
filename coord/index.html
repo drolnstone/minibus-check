@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.104.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.104.1 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -707,7 +707,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.104.0";
+var PAGE_VERSION = "v1.104.1";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1291,7 +1291,7 @@ function needs(){
   Object.keys(pap).forEach(function(reg){
     var p = pap[reg], r = p.motRun, rec = 'data-do="vlog" data-reg="'+esc(reg)+'"';
     var head = reg + ": " + p.label + " expired " + ukDay(p.date) + ".";
-    if(p.item !== "mot") out.push({ tone:"stop", text: head + " Record the renewal.", btn:"Record", data: rec });
+    if(p.item !== "mot") out.push({ tone:"stop", text: head + " Record the new insurance.", btn:"Record", data: rec });
     else if(r && r.ended) out.push({ tone:"stop", text: head + " MOT run done. Record the new MOT.", btn:"Record", data: rec });
     else if(r) out.push({ tone:"warn", text: reg + ": MOT run" + (r.garage ? " to " + r.garage : "") + " at " + r.time +
                           (r.started ? ", under way." : ", authorised by " + r.by + "."), btn:"Record", data: rec });
@@ -2477,7 +2477,7 @@ function renewalsHtml(){
          '<span class="bus-head"><span class="plate">' + esc(b.reg) + '</span><span class="go">›</span></span>' +
          dueRows(b, items) + '</button>';
   });
-  return '<h3>Renewals</h3>' + (h || '<div class="card"><p class="tiny" style="margin:0">Nothing due in the next 60 days.</p></div>');
+  return '<h3>Due dates</h3>' + (h || '<div class="card"><p class="tiny" style="margin:0">Nothing due in the next 60 days.</p></div>');
 }
 
 function motRun(reg){

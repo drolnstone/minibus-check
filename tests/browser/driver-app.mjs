@@ -1170,6 +1170,29 @@ if (want("T33")) {
   await me.ctx.close();
 }
 
+/* T34 — v1.104.1 (Asim). The badge on a bus card names what is overdue
+   ("Service overdue"), not just "Renewal overdue"; with nothing overdue it
+   names what is due soon. */
+if (want("T34")) {
+  const me = await phone({ clock: "2026-10-07T09:40:00+01:00", world: { dates: {
+    "NH56 FWP": { mot: "2027-04-28", service: "2026-09-30", insurance: "2027-07-08", permit: "2027-01-31" },
+    "YS70 PWE": { mot: "2026-10-20", service: "2026-10-25", insurance: "2027-06-26", permit: "2027-01-31" } } } });
+  await me.load(); await me.close(["howDone"]); await me.signIn();
+  await me.click("Vehicle check", "#s-hub"); await me.wait(800);
+  const chips = await me.pg.evaluate(() => Object.fromEntries([...document.querySelectorAll("#vehList .veh")].map(b =>
+    [b.querySelector(".veh-plate").textContent, (b.querySelector(".chip.over, .chip.soon") || {}).textContent || ""])));
+  const box = await me.pg.evaluate(() => {
+    const d = document.createElement("div");
+    d.innerHTML = dueHTML(VEHICLES.find(v => v.reg === "NH56 FWP"));
+    return d.textContent;
+  });
+  check("T34", "the badge on a bus card names the overdue or due-soon item, and a service is overdue, not expired",
+        chips["NH56 FWP"] === "Service overdue" && chips["YS70 PWE"] === "MOT and Service due soon" &&
+        /^Overdue/.test(box) && /Overdue by 7 days/.test(box) && !/Expired|Renewal/.test(box) && !me.errs.length,
+        JSON.stringify({ chips, box, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");
