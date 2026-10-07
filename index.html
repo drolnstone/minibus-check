@@ -1683,7 +1683,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.104.0";
+var APP_VERSION = "v1.104.1";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -3461,9 +3461,16 @@ function renderVehicles(){
     var dl = dueItems(v);
     var chip = "";
     if(dl.length){
+      /* Named, so the driver can say which: "Service overdue", not just
+         "Renewal overdue". Overdue items only when any are; the rest wait. */
       var ov = dl.some(function(x){ return x.state==="over"; });
+      var names = dl.filter(function(x){ return x.state===(ov?"over":"soon"); })
+                    .map(function(x){ return x.label; });
+      var said = names.length > 1
+        ? names.slice(0,-1).join(", ") + " and " + names[names.length-1]
+        : names[0];
       chip = '<span class="chip '+(ov?"over":"soon")+'">'+
-             (ov?"Renewal overdue":"Renewal due soon")+'</span>';
+             esc(said + (ov?" overdue":" due soon"))+'</span>';
     }
     /* Said on the bus it belongs to, in the fewest words that are true: the
        route, and which Sunday. Not "yours" — he may be covering, and the rota
