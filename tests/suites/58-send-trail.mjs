@@ -59,9 +59,8 @@ export default async function (root) {
     a.eq(t.length, 1, JSON.stringify(t));
     a.eq(t[0].title, "Sent: Booking reminders");
     a.eq(t[0].body, "Book your seat: 2 passenger phones.");
-    /* Asked a few minutes later, not on this machine's own day: the trail
-       keeps an entry for a few days only, and this Wednesday has gone by. */
-    a.eq((await J(await atTime("2026-10-07T18:36:00+01:00", () => post(env, { action: "pushwhat", endpoint: COORD_EP })))).title,
+    a.eq((await J(await atTime("2026-10-07T18:36:00+01:00",
+                               () => post(env, { action: "pushwhat", endpoint: COORD_EP })))).title,
          "Sent: Booking reminders", "the coordinator's phone shows it");
   });
 
