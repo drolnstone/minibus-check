@@ -1,41 +1,50 @@
 MINIBUS
 =======
-  pages v1.104.1 · server w2.51.0 · sheet v1.112.0
+  pages v1.104.2 · server w2.52.0 · sheet v1.112.0
 
-Bus Bookings archive (Asim's health report, 7 Oct: "the copy did not
-verify"):
-- The 3am tidy-up writes every piece of text to the archive as text, so a
-  phone number keeps its leading 0 and a pick-up time stays as typed.
-  The copy then reads back the same and the old bookings move.
-- A copy that does not read back the same comes off the archive again.
-- The copy the 7 October run left on the archive is cleared the first
-  night the same bookings move properly.
+The coordinator's Alerts list keeps a week, not two days (Asim, 10 Oct):
 
-Code.gs only.
+  - Alerts, and every push and email under what went out, stay on the
+    list for seven days.
+  - An empty list says "No alerts in the last week."
+  - What is already on the list stays. Anything older than two days was
+    gone before this, so the list fills up to a week over the coming days.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.104.1        v1.104.1  (no change)
-  Worker  w2.51.0         w2.51.0   (no change)
-  Code.gs v1.111.0        v1.112.0  (paste)
+  Pages   v1.104.1        v1.104.2
+  Worker  w2.51.0         w2.52.0
+  Code.gs v1.112.0        v1.112.0  (no paste)
 
 
 IN THIS ORDER
 -------------
 
-1. Open the sheet, Extensions, Apps Script. Select everything in Code.gs,
-   paste this pull request's Code.gs over it, Save.
-   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/bookings-archive-55kvfd/Code.gs
-2. Deploy, Manage deployments, the pencil, Version: New version, Deploy.
-3. Merge this pull request.
+1. WORKER. Paste the whole file into the Cloudflare editor and deploy:
+   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/last-chance-reminder-j2u2hj/server/worker.js
+   No new variables.
+
+2. Merge the pull request.
 
 
 AFTER IT
 --------
 
-A. Is everything working? says  Script is v1.112.0 .
-B. The morning after the paste: the archive line is a ✓, Rows on each
-   tab shows fewer Bus Bookings, and the Bus Bookings (archive) tab has
-   each old booking once, with its phone number starting 0.
+A. The foot of all three apps reads  app v1.104.2 · server w2.52.0 · sheet
+   v1.112.0 .
 
-Tests: suite 60.
+B. In a few days, Alerts in the coordinator app still shows items from
+   more than two days back.
+
+
+WHAT CHANGED
+------------
+
+1. server/worker.js: COORD_LOG_AGE_MS 48 hours to 7 days; the list holds
+   up to 150 alerts and 400 sent lines, so a busy Sunday does not push
+   older days off the end.
+
+2. coord/index.html: the empty-list words. All pages v1.104.2.
+
+3. tests/suites/50-alerts-list.mjs: six days old stays, over a week goes,
+   at fixed times.

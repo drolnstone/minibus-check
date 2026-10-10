@@ -1,7 +1,7 @@
 /* COORDINATOR ALERTS, LISTED, COUNTED AND EMAILED. From v1.96.6 · w2.40.0 ·
    v1.104.0, after the Ushers app's PR #18.
 
-   The live server keeps the last two days of coordinator alerts and when
+   The live server keeps the last week of coordinator alerts and when
    each coordinator last opened Alerts, so the coordinator's app can show an
    unread count and a list. It answers each new alert with the coordinators
    it could not wake, and the sheet emails them. */
@@ -107,12 +107,14 @@ export default async function (root) {
     a.eq(told.unread, 1);
   });
 
-  s.test("only the last two days are kept", async (a) => {
+  s.test("only the last week is kept", async (a) => {
     const { env } = await fresh();
-    await atTime("2026-10-01T10:00:00+01:00", () => post(env, { action: "coordAlert", alert: alert({ id: "old" }) }));
-    await post(env, { action: "coordAlert", alert: alert({ id: "new" }) });
-    const k = await J(await coord(env, "Pst Kenneth", "load"));
-    a.eq(k.alerts.list.length, 1);
+    const NOW = "2026-10-10T12:00:00+01:00";
+    await atTime("2026-10-03T10:00:00+01:00", () => post(env, { action: "coordAlert", alert: alert({ id: "old" }) }));
+    await atTime("2026-10-04T13:00:00+01:00", () => post(env, { action: "coordAlert", alert: alert({ id: "sixdays" }) }));
+    await atTime(NOW, () => post(env, { action: "coordAlert", alert: alert({ id: "new" }) }));
+    const k = await atTime(NOW, async () => J(await coord(env, "Pst Kenneth", "load")));
+    a.eq(k.alerts.list.length, 2, "six days old stays, over a week goes");
   });
 
   /* ---- the sheet -------------------------------------------------------- */

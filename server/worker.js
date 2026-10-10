@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.51.0";
+const SCRIPT_VERSION = "w2.52.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5790,7 +5790,7 @@ async function handleCoordAlert(env, body) {
 
    Copied from the Ushers app's bell (its PR #18). The box above is per
    phone and is emptied as each phone reads it, so it cannot say what a
-   coordinator has not yet looked at. This keeps the last two days of
+   coordinator has not yet looked at. This keeps the last week of
    coordinator alerts in one list, and for each coordinator the moment they
    last opened Alerts in the coordinator's app. Whatever came after that,
    and was not about them, is their unread count: on the bell, on the
@@ -5799,8 +5799,10 @@ async function handleCoordAlert(env, body) {
    Logged as they arrive, held or not, so a coordinator looking at the app
    in the quiet hours sees what is waiting even though no phone was woken. */
 const COORD_LOG_KEY = "calert_log";
-const COORD_LOG_MAX = 30;
-const COORD_LOG_AGE_MS = 48 * 3600 * 1000;
+/* A week, from w2.52.0 (Asim, 10 Oct 2026: two days lost Wednesday's
+   booking reminders before Saturday's went missing). */
+const COORD_LOG_MAX = 150;
+const COORD_LOG_AGE_MS = 7 * 24 * 3600 * 1000;
 const coordReadKey = (name) => "calert_read:" + String(name || "").trim().toLowerCase();
 
 async function coordLogAdd(env, msg) {
@@ -5841,7 +5843,7 @@ async function coordAlertsFor(env, name) {
    Taken after the push service has accepted the push, so a phone that
    could not be reached is not listed as told. */
 const SENT_LOG_KEY = "sent_log";
-const SENT_LOG_MAX = 80;
+const SENT_LOG_MAX = 400;
 const SENT_JOIN_MS = 60 * 60000;
 
 async function sentNote(env, n) {
