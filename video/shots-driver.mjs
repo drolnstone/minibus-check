@@ -214,7 +214,7 @@ scene("d-run", async () => {
   await me.click("Start trip · NH56 FWP", "#s-stops"); await me.wait(1500); await me.close();
   etas.North.N01 = T("10:15");
   await again(me);
-  await shot(me, "d-running", { marks: { next: "#stopsBody .stop-row.trip-next", end: "#tripEnd" } });
+  await shot(me, "d-running", { marks: { next: "#stopsBody .stop-row.trip-next", end: "#tripEnd", map: "#stopsBody .stop-go" } });
   /* A minute away: the pop-up. */
   await me.jump(9); await again(me);
   await stopFor(me, 2);
