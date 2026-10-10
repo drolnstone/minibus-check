@@ -1771,7 +1771,7 @@ app asks to turn alerts on (from v1.96.7 each time it is opened, until they
 are on, as the driver app and the passenger page ask), its
 bell carries a count of alerts not yet seen (also on the first screen's
 Alerts line and, where the phone allows, the home-screen icon), the filled
-bell opens **Alerts** (the last two days, with Send a test alert), and an
+bell opens **Alerts** (the last week, with Send a test alert), and an
 alert that lands while the app is open shows in a strip at the foot. A
 coordinator with alerts on no phone is emailed each alert's short words at
 their Drivers-tab Email, unless that is `COORDINATOR_EMAIL`, which has the
