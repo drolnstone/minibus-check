@@ -16,10 +16,10 @@ four MP4s.
 
 And for drivers:
 
-4. **Driver: Sunday morning to the end of the run** (about 3:00): the 7:30
+4. **Driver: Sunday morning to the end of the run** (about 3:15): the 7:30
    reminder, name and PIN, the vehicle check with Fine, Advisory and Defect,
    the photo a Defect needs, Sign and send, Time to set off, Start trip, the
-   next stop in the middle, the pick-up pop-up (Call passenger, Picked up,
+   next stop in the middle, the postcode that opens the map, the pick-up pop-up (Call passenger, Picked up,
    Nobody here, waiting while the bus moves), changing an answer, Undo and
    its question, and End trip.
 
@@ -118,6 +118,7 @@ At app v1.104.0, server w2.50.0. If one of these changes, change the video.
 | A Defect needs a photo before Next stage; an Advisory may have one; camera or the phone's photos | `index.html`, `.addpic` and the stage count ("Add a photo of ..."), from v1.104.0 |
 | A Defect on a Stops the bus item: the bus does not run, ring the coordinator | `index.html`, the `t-crit` items and the red bar |
 | At the Depart time: "Time to set off" | `driverNudgeFor` (tag `go`) and `pushWhat` |
+| The postcode with the arrow on the next booked stop opens the phone's map app at the stop's pin; Android asks which app | `index.html` `mapHref` and the `.stop-go` link |
 | The next booked stop comes to the middle by itself | `index.html`, v1.101.1 (browser check T29) |
 | About a minute away, the pick-up pop-up: Call passenger, Picked up, Nobody here; grey under "Not while the bus is moving." | `index.html` `#pickModal`, v1.101.0 and v1.102.0 (T27, T30) |
 | A marked stop changes to the other answer in one tap; Undo asks first | `index.html` `#undoModal`, v1.103.0 (T31, T32) |

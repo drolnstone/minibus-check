@@ -167,6 +167,29 @@
       a.hold(2.8);
     });
 
+    /* The postcode on the next booked stop is a link: mapHref in index.html
+       hands the phone the stop's pin (Lat and Lng), or its address. */
+    scene((a) => {
+      head();
+      cap(["Need directions? Tap the", "postcode with the arrow on", "your next stop."]);
+      const s = phone("d-running");
+      a.ringOn(s, "map", { pad: 4 });
+      a.zoom(s, "map", 200, 740, 300, { pad: 8, color: a.RED });
+      a.hold(2.6);
+    });
+
+    scene((a) => {
+      head();
+      cap(["Your map app opens at the", "stop's exact spot. On Android,", "pick the map app you use."]);
+      a.draw(D.phone(120, 300, 300, 560), 0.8);
+      const rd = (d) => a.draw(a.rc.path(d, a.O({ strokeWidth: 6, stroke: "#c9ced4", roughness: 0.6 })), 0.25, { pen: false });
+      rd("M140 420 L400 470"); rd("M140 640 L400 600"); rd("M210 330 L250 840"); rd("M340 330 L320 840");
+      a.draw(a.rc.path("M270 560 q-34 -40 -34 -64 a34 34 0 0 1 68 0 q0 24 -34 64 z", a.O({ fill: a.RED, fillStyle: "solid", stroke: a.RED })), 0.7);
+      a.draw(a.rc.circle(270, 496, 18, a.O({ fill: "#ffffff", fillStyle: "solid", stroke: "#ffffff" })), 0.2, { pen: false });
+      a.label("Scarisbrick Drive", 270, 600, { size: 22, color: a.INK });
+      a.hold(2.4);
+    });
+
     scene((a) => {
       head();
       cap(["About a minute away, the stop", "comes up. **Call passenger**", "rings their phone."]);
