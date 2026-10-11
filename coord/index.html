@@ -83,6 +83,7 @@ body{background:var(--paper);color:var(--ink);
   font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
 button{font:inherit;color:inherit;cursor:pointer;border:none;background:none;padding:0}
 input,textarea,select{font:inherit;color:inherit}
+::placeholder{color:var(--muted);opacity:.6}
 [hidden]{display:none!important}
 
 /* ---- the bar across the top ---- */
@@ -2744,7 +2745,7 @@ function recordFor(reg, from){
             return '<label class="check"><input type="checkbox" data-defg="' + i + '"><span>' + esc(g.item) +
                    ' <small>' + esc(n > 1 ? n + " reports since " + shortDay(g.oldest) : (g.oldest ? shortDay(g.oldest) : "")) + '</small></span></label>';
           }).join("") + '</div>' : '') +
-          '<div class="field"><label for="vlNotes">Notes</label><textarea id="vlNotes" maxlength="500"></textarea></div>',
+          '<div class="field"><label for="vlNotes">Notes</label><textarea id="vlNotes" maxlength="500" placeholder="e.g. Front brake pads replaced"></textarea></div>',
     go: "Record it",
     onGo: function(){ recordSend(b); } });
   /* What it was: each button on or off by itself. Done or Booked: one. */

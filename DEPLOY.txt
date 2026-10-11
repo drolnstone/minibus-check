@@ -19,6 +19,8 @@ No End trip once a run is live (Asim, 11 Oct):
   - Facts only (Asim, 11 Oct): advice and instructions are cut from
     every alert, email and app screen. Confirmations and safeguards stay.
     The list: notes/advice-taken-out-2026-10-11.md in the project files.
+  - Every box you type in shows a faded grey sample (e.g. 07700 900123)
+    that goes as soon as you type. Suite 62 checks every page.
 
 
 YOU ARE ON              GOING TO
