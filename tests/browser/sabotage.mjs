@@ -48,13 +48,10 @@ const S = [
   { id: "S7a moving after repaint", tests: "T7", swaps: [
     ["  tripMovingPainted=null;\n  tripPaintMoving();\n  pinGateAutoFocus();", "  tripPaintMoving();\n  pinGateAutoFocus();"] ] },
   { id: "S7b undo while moving", tests: "T7", swaps: [
-    ["  if(tripMoving()){ toast(\"Not while the bus is moving. Tap it when you pull up.\"); return; }\n  /* Taking a tap back", "  /* Taking a tap back"] ] },
-  { id: "S8a due by the clock", tests: "T8", swaps: [
-    ["if((changed || dueFlip) && Date.now()-tripTapAt > 3000) tripPaint();", "if((changed) && Date.now()-tripTapAt > 3000) tripPaint();"] ] },
-  { id: "S8b End trip turns on a tap", tests: "T8", swaps: [
-    ["  if(eb) eb.classList.toggle(\"is-due\", !!tripDueNow());\n", ""] ] },
-  { id: "S8c late wins over marked", tests: "T8c", swaps: [
-    ["  return (trip.started && !trip.ended) ? tripEndState(trip.route) : null;", "  return (trip.started && !trip.ended) ? !!tripEndState(trip.route) : null;"] ] },
+    ["  if(tripMoving()){ toast(\"Not while the bus is moving.\", true); return; }\n  /* Taking a tap back", "  /* Taking a tap back"] ] },
+  { id: "S8 End trip on a live run", tests: "T8", swaps: [
+    ["    if(trip.started && !trip.ended && tripMayTap(trip.route)){\n      $(\"footbar\").classList.add(\"is-gone\");",
+     "    if(false){\n      $(\"footbar\").classList.add(\"is-gone\");"] ] },
   { id: "S9 PIN before a check", tests: "T9", swaps: [
     ["the one path round the gate. */\n  if(pinGateNeeded()){", "the one path round the gate. */\n  if(false){"] ] },
   /* v1.79.0: a rehearsal is a round. */

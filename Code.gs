@@ -1495,7 +1495,7 @@ function busDatesAudit(ss, where, who) {
         var a = was[k] || "", b = now[reg][k] || "";
         if (a === b) return;
         rows.push({ who: who, where: where, reg: reg, what: RENEWALS[k].column, from: show(a), to: show(b),
-                    why: b.charAt(0) === "?" ? "The sheet cannot read this as a date. Type it like 17/06/2027."
+                    why: b.charAt(0) === "?" ? "The sheet cannot read this as a date."
                                              : "Changed on the Buses tab, not through the app" });
         if (b.charAt(0) === "?") {
           safetyAlert(unreadableAlert(reg, k, b));
@@ -1503,7 +1503,7 @@ function busDatesAudit(ss, where, who) {
           safetyAlert({ id: "typed|" + reg + "|" + k + "|" + b, kind: "renewal", reg: reg,
                         title: reg + ": " + RENEWALS[k].label + " due date typed on the sheet",
                         body: "From " + show(a) + " to " + show(b) + (who ? ", by " + who : "") +
-                              ". Record the " + (k === "mot" ? "MOT" : RENEWALS[k].label.toLowerCase()) + " in the coordinator app.", tab: BUSES_SHEET });
+                              ".", tab: BUSES_SHEET });
         }
       });
     });
@@ -1802,7 +1802,7 @@ function coordVfix(ss, a, b, by) {
   rows.forEach(function (x) { if (x.id === b.corrects) orig = x; });
   if (!orig) return { done: true, ok: false, push: true, result: "That entry is not on the Vehicle Log tab." };
   if (rows.some(function (x) { return x.corrects === orig.id; })) {
-    return { done: true, ok: false, push: true, result: "That entry has already been corrected. Correct the correction instead." };
+    return { done: true, ok: false, push: true, result: "That entry has already been corrected." };
   }
   var where = "Coordinator's app";
   var fixed = {
@@ -2058,7 +2058,7 @@ function vehicleHealth(ss, lv, good, bad, todo) {
     }
     if (unreadable.length) {
       todo.push("Bus records: " + unreadable.join(", ") + " cannot be read as a date, so no driver is " +
-                "warned about it. Type it like 17/06/2027.");
+                "warned about it.");
     }
     if (!differ.length && !missing.length && !noPapers.length) {
       good.push("Bus records: the phones have every bus's due dates" +
@@ -9673,7 +9673,7 @@ function busPayload(key, ref, pid) {
     key = busCurrentSunday();
     rolled = (key !== todaySunday);
   }
-  if (!busDateAllowed(key)) return { ok: false, error: "That link is out of date. Ask for the current one." };
+  if (!busDateAllowed(key)) return { ok: false, error: "That link is out of date." };
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var counts = bookingCounts(ss, key);
@@ -9778,7 +9778,7 @@ function handleBooking(b) {
 
 function handleBookingLocked(b) {
   var key = String(b.date || "") || busCurrentSunday();
-  if (!busDateAllowed(key)) return reply({ ok: false, error: "That link is out of date. Ask for the current one." });
+  if (!busDateAllowed(key)) return reply({ ok: false, error: "That link is out of date." });
 
   var ref = String(b.ref || "").replace(/[^A-Za-z0-9]/g, "").substring(0, 32);
 
@@ -10891,7 +10891,7 @@ function safetyFlush() {
 function unreadableAlert(reg, item, raw) {
   return { id: "unreadable|" + reg + "|" + item + "|" + raw, kind: "renewal", reg: reg,
            title: reg + ": " + RENEWALS[item].label + " date unreadable",
-           body: "The Buses tab says \"" + String(raw).slice(1) + "\". Type it like 17/06/2027.", tab: BUSES_SHEET };
+           body: "The Buses tab says \"" + String(raw).slice(1) + "\".", tab: BUSES_SHEET };
 }
 
 /* Which alert a renewal is at, n days before it is due: "60", "30", "7",
@@ -10931,10 +10931,7 @@ function renewalAlerts(ss) {
     var title = x.days < 0 ? (x.stop ? "BUS STOPPED: " : "") + x.reg + ": " + x.label + (x.item === "service" ? " overdue, was due " : " expired ") + ukDay(x.date)
               : x.days === 0 ? x.reg + ": " + x.label + " due today"
               : x.reg + ": " + x.label + " due in " + x.days + " days";
-    var body = x.days >= 0 ? "Due " + ukDay(x.date) + ". Record it in the coordinator app when done."
-             : x.item === "insurance" ? "Record the new insurance in the coordinator app."
-             : x.item === "mot" ? "Record the new MOT in the coordinator app. For a booked test, authorise an MOT run there."
-             : "Record it in the coordinator app when done.";
+    var body = x.days >= 0 ? "Due " + ukDay(x.date) + "." : "";
     safetyAlert({ id: "renew|" + x.reg + "|" + x.item + "|" + x.date + "|" + stage, kind: x.stop ? "stopped" : "renewal",
                   urgent: x.stop, reg: x.reg, title: title, body: body,
                   colour: x.days <= 7 ? "#A8231B" : "#8A6116", tab: BUSES_SHEET });
@@ -10984,7 +10981,7 @@ function missedTapAlert(ss, sunday, route, trip) {
   safetyAlert({ id: "missed|" + trip, kind: "defect",
                 title: route + ", " + ukDay(sunday) + ": " + missed.length + (missed.length === 1 ? " booked stop" : " booked stops") + " not marked",
                 body: missed.map(function (id) { return ids[id].stop + " (" + booked[id] + " booked)"; }).join(", ") +
-                      ". Correct it in the coordinator app's Run record.", tab: TRIP_SHEET });
+                      ".", tab: TRIP_SHEET });
 }
 
 function missingCheckAlert() {
@@ -11047,19 +11044,16 @@ function missingCheckAlert() {
     lines.push("Checked this morning: " + Object.keys(done).join(", ") + ".");
     lines.push("&nbsp;");
   }
-  lines.push("<b>Please have " + (many ? "them" : "it") + " inspected on return.</b>");
 
   var plain = [(many ? "These buses" : "This bus") +
                " went out with no pre-drive check on " + when + ".", ""]
     .concat(expected.map(function (r) { return "  " + r; }));
   if (north) plain.push("", "North Liverpool: " + north);
   if (south) plain.push("South Liverpool: " + south);
-  plain.push("", "Please have " + (many ? "them" : "it") + " inspected on return.");
 
   tellCoordinatorPhones({ id: "unchecked|" + key + "|" + expected.join(","), kind: "unchecked",
     title: expected.join(", ") + " went out unchecked",
-    body: "No pre-drive check this morning. Please have " + (many ? "them" : "it") +
-          " inspected on return." });
+    body: "No pre-drive check this morning." });
   if (!COORDINATOR_EMAIL) return;
   sendMail({
     to: COORDINATOR_EMAIL,
@@ -11255,10 +11249,8 @@ function overbookingAlert(force) {
     if (other && other.reg && other.seats &&
         String(other.reg).toUpperCase() !== String(t.reg).toUpperCase() &&
         other.seats >= t.booked && t.seats >= other.booked) {
-      said = "Swap the buses: " + other.reg + " on " + t.route +
-             " (" + other.seats + " seats, " + t.booked + " booked) and " +
-             t.reg + " on " + other.route +
-             " (" + t.seats + " seats, " + other.booked + " booked).";
+      said = other.route + "'s bus: " + other.reg + ", " + other.seats + " seats, " +
+             other.booked + " booked.";
     }
 
     /* 2. A bus that is on neither route that day. Rare on this fleet, but it
@@ -11279,8 +11271,7 @@ function overbookingAlert(force) {
           reads as "no action needed" and the action is a second trip or a
           phone call, neither of which this app can make. */
     if (!said) {
-      said = "No bus fits them all. Arrange a second trip or another vehicle, " +
-             "or ring the " + t.over + " who booked last.";
+      said = "No bus fits them all.";
     }
 
     lines.push("&nbsp;&nbsp;&nbsp;" + esc(said));
@@ -11326,7 +11317,7 @@ function overbookingAlert(force) {
     kind: "overbooked",
     title: (rehearsing ? "REHEARSAL: " : "") +
            tell.map(function (t) { return t.route + " overbooked, " + t.booked + " of " + t.seats; }).join("; "),
-    body: "For " + when + ". Move a bus or a booking in the coordinator's app." });
+    body: "For " + when + "." });
   if (!COORDINATOR_EMAIL) {
     if (!rehearsing) overbookRemember(props, sent, stamps);
     return { ran: true, sent: 0, over: tell, rehearsal: rehearsing, phones: true };
@@ -11875,12 +11866,7 @@ function sendDutyEmail(to, who, sunday, daysAhead, covering, route, bus) {
   if (bus) lines.push("Bus: <b>" + esc(bus) + "</b>");
   if (covering) lines.push("Covering for " + esc(covering) + ".");
   lines.push("&nbsp;");
-  if (bus) {
-    lines.push("Check the app on the day for the bus.");
-    lines.push("&nbsp;");
-  }
   lines.push(bigLink(calendarLink(sunday, covering, route, bus), "Add to my calendar"));
-  lines.push("If you cannot make it, ask in the app or ring the coordinator.");
 
   /* Built by pushing rather than by a list of ternaries.
 
@@ -11893,8 +11879,6 @@ function sendDutyEmail(to, who, sunday, daysAhead, covering, route, bus) {
               "", when];
   if (bus) rows.push("Bus: " + bus);
   if (covering) rows.push("Covering for " + covering + ".");
-  if (bus) rows.push("", "Check the app on the day for the bus.");
-  rows.push("", "If you cannot make it, ask in the app or ring the coordinator.");
   var plain = rows.join("\n");
 
   sendMail({
@@ -11930,8 +11914,7 @@ function dutyIcs(sunday, who, covering, route, bus) {
   var desc = "You are down to drive the church minibus" +
              (route ? " on " + route : "") + "." +
              (bus ? " Bus: " + bus + "." : "") +
-             (covering ? " Covering for " + covering + "." : "") +
-             (bus ? " Check the app on the day for the bus." : "");
+             (covering ? " Covering for " + covering + "." : "");
 
   /* THE REAL DEPARTURE TIME, WHEN THE TAB HAS ONE.
 
@@ -12306,22 +12289,17 @@ function notifyDutyChange(ss, key, before, after, route) {
       "You are now down to drive the minibus on <b>" + esc(when) + "</b>" + on + ".",
       "&nbsp;",
       busNow ? ("Bus: <b>" + esc(busNow) + "</b>") : "",
-      /* The caveat goes wherever the registration goes: the man picking up a
-         cover has had the least warning and the most chance of it moving. */
-      busNow ? "Check the app on the day for the bus." : "",
       before ? ("Covering for " + esc(before) + ".") : "",
       "&nbsp;",
-      bigLink(calendarLink(sunday, before, route, busNow), "Add to my calendar"),
-      "If you cannot make it, ask in the app or ring the coordinator."
+      bigLink(calendarLink(sunday, before, route, busNow), "Add to my calendar")
     ].filter(function (l) { return l !== ""; });
 
     sendMail({
       to: emails[after],
       subject: "Minibus duty" + (route ? ": " + route : "") + " on " + when,
       body: "You are now down to drive the minibus on " + when + onPlain + ".\n\n" +
-            (busNow ? "Bus: " + busNow + ". Check the app on the day for the bus.\n\n" : "") +
-            (before ? "Covering for " + before + ".\n\n" : "") +
-            "If you cannot make it, ask in the app or ring the coordinator.",
+            (busNow ? "Bus: " + busNow + ".\n\n" : "") +
+            (before ? "Covering for " + before + "." : ""),
       htmlBody: htmlShell("You are now driving", "#1B3A57", onLines, ""),
       attachments: [{
         fileName: "minibus-duty.ics",
@@ -12413,12 +12391,6 @@ function notifyRequestDecided(ss, key, who, sh, row, qc, decision) {
                  (route ? " on <b>" + esc(route) + "</b>" : "") + " that morning.");
       plain.push("You are still down to drive" + (route ? " on " + route : "") + " that morning.");
       if (bus) { lines.push("Bus: <b>" + esc(bus) + "</b>"); plain.push("Bus: " + bus + "."); }
-      lines.push("&nbsp;");
-      lines.push("If you still cannot make it, ring the coordinator.");
-      plain.push("", "If you still cannot make it, ring the coordinator.");
-    } else {
-      lines.push("Open the app to see who is down for that morning.");
-      plain.push("Open the app to see who is down for that morning.");
     }
   } else {
     lines.push("Nobody is covering it yet.");
@@ -13806,8 +13778,7 @@ function calendarLink(sunday, covering, route, bus) {
   var details = "You are down to drive the church minibus" +
                 (route ? " on " + route : "") + "." +
                 (bus ? " Bus: " + bus + "." : "") +
-                (covering ? " Covering for " + covering + "." : "") +
-                (bus ? " Check the app on the day for the bus." : "");
+                (covering ? " Covering for " + covering + "." : "");
   return "https://calendar.google.com/calendar/render?action=TEMPLATE" +
          "&text=" + encodeURIComponent((route ? "Minibus duty: " + route : "Minibus driving duty") +
                                        (bus ? " (" + bus + ")" : "")) +
@@ -14005,8 +13976,7 @@ function emailUnalerted(alert, names) {
       sendMail({
         to: to,
         subject: String(alert.title).substring(0, 140),
-        body: alert.title + (alert.body ? "\n" + alert.body : "") + "\n\n" +
-              "Open the coordinator app. Tap the bell to get alerts on your phone."
+        body: alert.title + (alert.body ? "\n" + alert.body : "")
       });
       sent++;
     } catch (err) {}
@@ -14028,7 +13998,7 @@ function checkPhoneAlert(c, outcome, defectText) {
   var a = stopped
     ? { kind: "stopped", urgent: true, title: "BUS STOPPED: " + c.reg,
         body: "Critical defect" + by + (names(c.defects || []) ? ": " + names(c.defects || []) : "") +
-              ". Authorise it or arrange another bus." }
+              "." }
     : authorised
     ? { kind: "authorised", title: "Authorised to run: " + c.reg,
         body: "By " + (c.authorisedBy || "a coordinator") + ". The defect stays open." }

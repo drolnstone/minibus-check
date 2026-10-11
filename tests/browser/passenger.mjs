@@ -87,7 +87,7 @@ if (want("P1")) {
   const title = await me.text("#alertAskTitle");
   await me.shot("P1-offer-no-booking");
   check("P1", "a phone with no booking is offered alerts and told to book",
-        up && line === "No seat booked. Book below." && /alerts/i.test(title),
+        up && line === "No seat booked." && /alerts/i.test(title),
         "offer up " + up + ", title '" + title + "', line '" + line + "'");
   await me.ctx.close();
 }

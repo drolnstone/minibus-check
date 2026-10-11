@@ -1,6 +1,6 @@
 MINIBUS
 =======
-  pages v1.105.0 · server w2.54.0 · sheet v1.115.0
+  pages v1.106.0 · server w2.54.0 · sheet v1.115.0
 
 Emergency calls, who heard (Asim, 11 Oct):
 
@@ -17,12 +17,11 @@ Worker and Code.gs. The pages do not change.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.105.0        v1.105.0  (no change)
-  Worker  w2.52.0         w2.54.0   (paste)
-  Code.gs v1.113.0        v1.115.0  (paste)
+  Pages   v1.106.0        v1.106.0  (no change)
+  Worker  w2.53.0         w2.54.0   (paste; carries #77's Worker too)
+  Code.gs v1.114.0        v1.115.0  (paste; carries #77's Code.gs too)
 
-w2.53.0 and v1.114.0 belong to #77. If #77 is merged first, this one is
-brought up to date with it before you paste.
+If #77's Worker and Code.gs were never pasted, these carry them.
 
 
 IN THIS ORDER
@@ -43,7 +42,7 @@ Code.gs first, so the sheet knows the email before the Worker asks for it.
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.105.0 · server w2.54.0 ·
+A. The foot of all three apps reads  app v1.106.0 · server w2.54.0 ·
    sheet v1.115.0 .
 B. Coordinator app, Have a look, Who has alerts on: the Coordinators line.
 C. The next emergency calls change: its Sent line on the Alerts list of
@@ -61,4 +60,4 @@ WHAT CHANGED
    queue as a "mail" change; reportAlerts adds the Coordinators section.
 2. Code.gs: applyCoordAction's "mail" kind, coordMail, sends each one the
    alert's title and words.
-3. tests/suites/62-contact-reach.mjs.
+3. tests/suites/63-contact-reach.mjs.

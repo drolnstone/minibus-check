@@ -1663,9 +1663,9 @@ if (want("C49")) {
   await pg.waitForTimeout(1500);
   const home = await pg.evaluate(() => document.getElementById("s-home").classList.contains("is-on"));
   check("C49", "with no connection the app opens, says so, and carries on by itself when the signal is back",
-        scope === url && opened && off.sign && off.banner === "" && off.note === "No signal just now.Sign in once signal returns." &&
+        scope === url && opened && off.sign && off.banner === "" && off.note === "No signal just now." &&
         off.noteBelowTitle && off.names > 1 &&
-        /No signal just now\. Sign in once signal returns\./.test(tried.say) && tried.bad && tried.sign &&
+        /^No signal\.$/.test(tried.say) && tried.bad && tried.sign &&
         back === "" && home && !errs.length,
         JSON.stringify({ scope, opened, off, tried, back, home, errors: errs }));
   }
