@@ -1965,6 +1965,35 @@ if (want("C55")) {
   await p.ctx.close();
 }
 
+/* C56 — a message from a coordinator (v1.109.0): ready-made words fill the
+   box and pick passengers not booked; nothing picked is refused in red. */
+if (want("C56")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  await p.tap('[data-do="message"]');
+  const up = await p.sheetUp();
+  await p.pg.fill("#msgText", "Hello.");
+  await p.pg.click("#sheetGo");
+  await p.wait(300);
+  const refused = await p.text("#sheetSay");
+  const opt = await p.pg.$eval("#msgPick option:nth-child(2)", (o) => o.value);
+  await p.pg.selectOption("#msgPick", opt);
+  await p.wait(150);
+  const words = await p.pg.$eval("#msgText", (el) => el.value);
+  const on = await p.pg.$$eval("#msgTo button.on", (els) => els.map((e) => e.getAttribute("data-v")));
+  await p.shot("C56a-message");
+  await p.pg.click("#sheetGo");
+  await p.wait(1500);
+  const row = db._one("SELECT words FROM coord_actions WHERE kind='message' ORDER BY seq DESC LIMIT 1");
+  const sheetUp = await p.sheetUp();
+  await p.shot("C56b-sent");
+  check("C56", "Send a message: ready-made words pick passengers not booked; nobody picked is refused",
+        up && /Pick who it goes to/.test(refused) && /^Book your seat for /.test(words) && on.join(",") === "unbooked" &&
+        row && /^Message to passengers not booked for .*: Book your seat for /.test(row.words) && !sheetUp && !p.errs.length,
+        JSON.stringify({ up, refused, words, on, row, sheetUp, errs: p.errs }).slice(0, 900));
+  await p.ctx.close();
+}
+
 await done();
 cleanup(ROOT);
 const bad = results.filter((r) => !r.ok);

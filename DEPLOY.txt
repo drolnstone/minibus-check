@@ -1,35 +1,38 @@
 MINIBUS
 =======
-  pages v1.108.0 · server w2.55.0 · sheet v1.116.0
+  pages v1.109.0 · server w2.56.0 · sheet v1.116.0
 
-The Worker goes live from GitHub (Asim, 11 Oct):
+A message centre in the coordinator app (Asim, 11 Oct):
 
-  - Cloudflare's Git deploy is connected to minibus-api. Merging a pull
-    request builds main and puts server/worker.js live. Pasting the Worker
-    has stopped.
-  - This pull request changes no code. Merging it runs the first build,
-    which puts w2.55.0 live.
+  - Send a message, on the coordinator app's menu.
+  - Words: ready-made (Book your seat for Sun ...) or your own, 200
+    characters at most.
+  - To, any of: Coordinators · Drivers · Drivers on Sunday's rota ·
+    Passengers · Passengers booked for Sunday · Passengers not booked.
+  - Sent at once to every phone with alerts on, titled "Message from
+    (name)". Each person once. Never the sender.
+  - A coordinator with alerts off on every phone is emailed it.
+  - On the Alerts list. After Send: "Sent to N phones."
 
-Nothing to paste. No version change.
+Pages and Worker. Code.gs unchanged.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.108.0        v1.109.0
+  Worker  w2.55.0         w2.56.0
+  Code.gs v1.116.0        v1.116.0
 
 
 IN THIS ORDER
 -------------
 
-1. Merge the pull request.
+1. Merge the pull request. Pages and Worker go live together.
 
 
 AFTER IT
 --------
 
-A. minibus-api, Deployments: a new version from GitHub, Ready.
-B. The foot of all three apps reads  server w2.55.0 .
-C. Settings still shows the clock Every minute, both secrets and DB.
-
-
-FROM NOW ON
------------
-
-1. Paste Code.gs, then Deploy, Manage deployments, New version (only when
-   Code.gs changed).
-2. Merge the pull request. Pages and Worker go live together.
+A. The foot of all three apps reads  app v1.109.0 · server w2.56.0 · sheet
+   v1.116.0 .
+B. Coordinator app, Send a message, Coordinators only, a test line: the
+   other coordinators' phones get it.

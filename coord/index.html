@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.108.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.109.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -708,7 +708,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.108.0";
+var PAGE_VERSION = "v1.109.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1391,6 +1391,8 @@ function paintHome(){
        (D && D.pdf ? item("pdf", "PDF reports", "") : "") +
        item("look", "Have a look", "") +
        item("activity", "What has been done", waiting ? waiting + " on the way" : "", waiting ? "warn" : "") +
+       /* A live server from before w2.56.0 cannot send one. */
+       (D && D.message ? '<li><button type="button" data-do="message"><span class="t">Send a message</span><span class="go">›</span></button></li>' : '') +
        /* A live server from before w2.40.0 keeps no list. */
        (ALERTS.known ? item("alerts", "Alerts", ALERTS.unread ? ALERTS.unread + " new" : "", ALERTS.unread ? "stop" : "") : "") +
        '</ul>';
@@ -1462,6 +1464,62 @@ function pickContact(){
       if(!busy) sheetSay("");
     };
   });
+}
+
+/* ---- a message from a coordinator, from v1.109.0 ---------------------------
+
+   Asim, 11 Oct 2026: a message centre. Ready-made words or the coordinator's
+   own, to the groups ticked. The live server sends it at once and says how
+   many phones took it. */
+function sendMessage(){
+  var key = (D && D.message && D.message.sunday) || D.open || D.today;
+  var day = shortDay(key);
+  var ready = [
+    { v: "book", t: "Book your seat for " + day, text: "Book your seat for " + day + ".", to: ["unbooked"] }
+  ];
+  var groups = [["coord", "Coordinators"], ["drivers", "Drivers"], ["rota", "Drivers on " + day],
+                ["passengers", "Passengers"], ["booked", "Booked for " + day], ["unbooked", "Not booked for " + day]];
+  var on = {};
+  openSheet({ eyebrow: "Message", title: "Send a message",
+    body: '<div class="field"><label for="msgPick">Words</label><select id="msgPick">' +
+          '<option value="">Your own words</option>' +
+          ready.map(function(r){ return '<option value="'+esc(r.v)+'">'+esc(r.t)+'</option>'; }).join("") + '</select></div>' +
+          '<div class="field"><label for="msgText">Message</label><textarea id="msgText" maxlength="200" placeholder="e.g. North leaves at 10:20 today"></textarea></div>' +
+          '<p class="tiny" style="margin:14px 0 4px">To</p><div class="chips" id="msgTo">' +
+          groups.map(function(g){ return '<button type="button" data-v="'+g[0]+'">'+esc(g[1])+'</button>'; }).join("") + '</div>',
+    go: "Send",
+    onGo: function(){
+      var text = String($("msgText").value || "").replace(/\s+/g, " ").trim();
+      var to = groups.map(function(g){ return g[0]; }).filter(function(g){ return on[g]; });
+      if(!text){ sheetSay("Type the message.", true); return; }
+      if(!to.length){ sheetSay("Pick who it goes to.", true); return; }
+      act({ kind: "message", text: text, to: to }, function(out){
+        var n = (out && out.message && Number(out.message.phones)) || 0;
+        toast("Sent to " + n + (n === 1 ? " phone." : " phones."));
+      });
+    } });
+  var paint = function(){
+    Array.prototype.forEach.call(document.querySelectorAll("#msgTo button"), function(b){
+      b.classList.toggle("on", !!on[b.getAttribute("data-v")]);
+    });
+  };
+  Array.prototype.forEach.call(document.querySelectorAll("#msgTo button"), function(b){
+    b.onclick = function(){
+      var v = b.getAttribute("data-v");
+      on[v] = !on[v];
+      paint();
+      if(!busy) sheetSay("");
+    };
+  });
+  $("msgPick").onchange = function(){
+    var r = ready.filter(function(x){ return x.v === $("msgPick").value; })[0];
+    if(r){
+      $("msgText").value = r.text;
+      on = {}; r.to.forEach(function(g){ on[g] = true; });
+      paint();
+    }
+    if(!busy) sheetSay("");
+  };
 }
 
 /* ---- the rota -------------------------------------------------------------- */
@@ -3644,6 +3702,7 @@ document.addEventListener("click", function(e){
   if(d === "check"){ e.preventDefault(); toDriver("check"); return; }
   if(d === "mypin"){ myPin(); return; }
   if(d === "contact"){ pickContact(); return; }
+  if(d === "message"){ sendMessage(); return; }
   if(d === "authorise") authorise(t.getAttribute("data-reg"));
   else if(d === "motrun") motRun(t.getAttribute("data-reg"));
   else if(d === "endrun") endRun(t.getAttribute("data-route"));
