@@ -74,6 +74,20 @@ export default async function (root) {
     });
   });
 
+  s.test("a coordinator with alerts off on every phone is emailed it", async (a) => {
+    await atTime(SAT, async () => {
+      const { db, env } = await fresh();
+      await db.prepare("DELETE FROM push_subs WHERE driver=?").bind("Bro Asim").run();
+      await act(env, { kind: "driver", name: "Bro Adesina", set: { phone: "07717 194644" } }, "Bro Calvin");
+      const mail = db._one("SELECT * FROM coord_actions WHERE kind='mail' ORDER BY seq DESC LIMIT 1");
+      a.ok(mail, "no email for Bro Asim");
+      const b = JSON.parse(mail.body);
+      a.eq(b.names.join(","), "Bro Asim");
+      a.eq(b.title, "Change by Bro Calvin");
+      a.eq(b.body, "Bro Adesina: phone changed.");
+    });
+  });
+
   s.test("a PIN reset is told to that driver", async (a) => {
     await atTime(SAT, async () => {
       const { env } = await fresh();
