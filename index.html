@@ -582,7 +582,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   border-top:1px dashed var(--dashed)}
 .due li:first-child{border-top:none}
 .due li b{font-weight:600}
-.due li .w{font-family:"IBM Plex Mono",monospace;font-size:13px;white-space:nowrap}
+.due li .w{font-family:"IBM Plex Mono",monospace;font-size:13px;white-space:nowrap;text-align:right}
+.due li .w .bk{display:block;font-weight:600}
 @keyframes pulseWarn{0%,100%{box-shadow:0 0 0 0 rgba(178,107,0,0)}50%{box-shadow:0 0 0 5px rgba(178,107,0,.18)}}
 @keyframes pulseStop{0%,100%{box-shadow:0 0 0 0 rgba(168,35,27,0)}50%{box-shadow:0 0 0 6px rgba(168,35,27,.24)}}
 /* The route's bus for today. Steel rather than a warning colour: it is not a
@@ -1681,7 +1682,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.110.0";
+var APP_VERSION = "v1.112.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2366,16 +2367,27 @@ function busDates(v){
   }
   return (v && v.dates) || {};
 }
+/* A renewal booked in, as { item: day }, from server w2.58.0 (Asim, 11 Oct
+   2026): said beside the due date, which stays as it is until it is done. */
+function busBooked(v){
+  var reg = String((v && v.reg) || "").toUpperCase();
+  for(var i = 0; i < BUSES.length; i++){
+    var b = BUSES[i];
+    if(b && String(b.reg || "").toUpperCase() === reg) return b.booked || {};
+  }
+  return {};
+}
 function dueItems(v){
   var out = [];
   var dates = busDates(v);
+  var booked = busBooked(v);
   DUE_ORDER.forEach(function(k){
     var iso = dates[k];
     if(!iso) return;
     var n = daysUntil(iso);
     if(n === null || n > WARN_DAYS) return;
     out.push({
-      key:k, label:DUE_LABELS[k], date:iso, days:n,
+      key:k, label:DUE_LABELS[k], date:iso, days:n, booked: booked[k] || "",
       state: n < 0 ? "over" : "soon",
       /* A service is overdue, never expired: only papers expire. */
       words: n < 0 ? (k === "service" ? "Overdue by " : "Expired ") + Math.abs(n) + (Math.abs(n)===1?" day":" days") + (k === "service" ? "" : " ago")
@@ -2392,7 +2404,8 @@ function dueHTML(v){
   return '<div class="due '+(over?"over":"soon")+'">'+
     '<h4>'+(over?"Overdue":"Coming up")+'</h4><ul>'+
     list.map(function(x){
-      return '<li><b>'+esc(x.label)+'</b><span class="w">'+esc(x.words)+' \u00B7 '+esc(prettyDate(x.date))+'</span></li>';
+      return '<li><b>'+esc(x.label)+'</b><span class="w">'+esc(x.words)+' \u00B7 '+esc(prettyDate(x.date))+
+             (x.booked ? '<span class="bk">Booked for '+esc(prettyDate(x.booked))+'</span>' : '')+'</span></li>';
     }).join("")+
     '</ul></div>';
 }
@@ -4446,7 +4459,7 @@ function submit(){
     defects: defectList(),
     advisories: advisoryList(),
     na: naList(),
-    renewals: dueItems(st.veh).map(function(x){ return x.label+": "+x.words+" ("+prettyDate(x.date)+")"; }).join(" | ")
+    renewals: dueItems(st.veh).map(function(x){ return x.label+": "+x.words+" ("+prettyDate(x.date)+")"+(x.booked ? ", booked for "+prettyDate(x.booked) : ""); }).join(" | ")
   };
   lastRec = rec;
   var pics = photosOf(rec);

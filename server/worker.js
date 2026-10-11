@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.57.0";
+const SCRIPT_VERSION = "w2.58.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -2588,6 +2588,8 @@ async function boardPayload(env, route) {
     out.seats = seats;
     out.buses = buses.map((b) => ({ reg: b.reg, seats: b.seats, dates: b.dates || {} }));
   } catch (e) { out.seatsError = String(e); }
+  try { if (out.buses) withBookings(out.buses, await busBookings(env)); }
+  catch (e) { /* the due dates alone, as before */ }
 
   try { out.trip = await tripDriverPayload(env, r); }
   catch (e) { out.tripError = String(e); }
@@ -3856,6 +3858,8 @@ async function cachedLast(env) {
     out.seats = seats;
     out.buses = buses.map((b) => ({ reg: b.reg, seats: b.seats, dates: b.dates || {} }));
   } catch (e) { out.seatsError = String(e); }
+  try { if (out.buses) withBookings(out.buses, await busBookings(env)); }
+  catch (e) { /* the due dates alone, as before */ }
 
   out.ok = true;
   out.cache = "worker";
@@ -7492,6 +7496,29 @@ function vlogNum(v, max, whole) {
   const n = Number(t);
   if (!isFinite(n) || n < 0 || n > max) return undefined;
   return whole ? Math.round(n) : Math.round(n * 100) / 100;
+}
+/* A RENEWAL BOOKED AHEAD, from w2.58.0 (Asim, 11 Oct 2026: a service
+   booked in still read only "Overdue" on the driver's Before you start).
+   Each bus's renewals with a standing Booked entry in the Vehicle Log for
+   today or later, as { item: day }, the soonest booking for each. A day gone
+   by drops off: the entry then waits to be recorded as done. */
+async function busBookings(env) {
+  const today = londonKey(new Date());
+  const { log } = await coordVehiclesView(env);
+  const out = {};
+  for (const reg of Object.keys(log)) {
+    for (const x of log[reg] || []) {
+      const item = VLOG_ITEM[x.what];
+      if (!item || x.correctedBy || x.status !== "Booked" || !x.bookedFor || x.bookedFor < today) continue;
+      const k = String(reg).trim().toUpperCase();
+      const b = out[k] = out[k] || {};
+      if (!b[item] || x.bookedFor < b[item]) b[item] = x.bookedFor;
+    }
+  }
+  return out;
+}
+function withBookings(list, booked) {
+  return list.map((b) => Object.assign(b, { booked: booked[String(b.reg || "").trim().toUpperCase()] || {} }));
 }
 function vlogDay(v) { const k = String(v || ""); return rnParts(k) && rnKey(+k.slice(0, 4), +k.slice(5, 7), +k.slice(8, 10)) === k ? k : ""; }
 
