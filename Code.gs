@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.115.0";
+var SCRIPT_VERSION = "v1.116.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -4213,6 +4213,10 @@ function coordDriver(ss, a, b, by) {
   if (b.add && row) return { done: true, ok: false, push: true, result: name + " is already on the Drivers tab." };
   if (!b.add && !row) return { done: true, ok: false, push: true, result: name + " is not on the Drivers tab." };
   var set = b.set || {};
+  /* Checked again here, as the app does: a stray digit changes the default
+     PIN, and the driver is refused at sign-in (Bro Adesina, 11 Oct 2026). */
+  if (set.phone && !normalisePhone(set.phone))
+    return { done: true, ok: false, push: true, result: "Not an 11-digit UK phone number." };
   var hist = [];
   if (!row) {
     row = sh.getLastRow() + 1;

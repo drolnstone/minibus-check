@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.107.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.108.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -708,7 +708,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.107.0";
+var PAGE_VERSION = "v1.108.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -831,6 +831,15 @@ function dayOf(ms){
   }catch(e){ return ""; }
 }
 function when(ms){ return ms ? shortDay(dayOf(ms)) + " " + hhmm(ms) : ""; }
+/* The same rule as Code.gs normalisePhone: "" for anything else. */
+function ukPhone(v){
+  var d=String(v==null?"":v).replace(/[^0-9+]/g,"");
+  if(d.indexOf("+44")===0) d="0"+d.slice(3);
+  else if(d.indexOf("0044")===0) d="0"+d.slice(4);
+  else if(d.indexOf("44")===0 && d.length===12) d="0"+d.slice(2);
+  d=d.replace(/[^0-9]/g,"");
+  return (d.length===11 && d.charAt(0)==="0") ? d : "";
+}
 function phoneWords(p){ p=String(p||""); return p.length===11 ? p.slice(0,5)+" "+p.slice(5) : p; }
 function seatWords(n){ return n + (Number(n)===1 ? " seat" : " seats"); }
 /* A STOP IS ITS NUMBER, from v1.90.0: shown first wherever a stop is named,
@@ -2109,7 +2118,9 @@ function editDriver(name){
       if($("drEmail")){
         var em = String($("drEmail").value || "").trim(), ph = String($("drPhone").value || "").trim();
         if(em && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ sheetSay("That is not an email address.", true); return; }
-        if(ph && !/^\+?[0-9 ()-]{7,20}$/.test(ph)){ sheetSay("That is not a phone number.", true); return; }
+        /* A UK number of eleven digits, as the passenger app takes: a stray
+           digit here changes the driver's default PIN (Bro Adesina, 11 Oct). */
+        if(ph && !ukPhone(ph)){ sheetSay("Not an 11-digit UK phone number.", true); return; }
         if(add || em !== v.email) set.email = em;
         if(add || ph !== v.phone) set.phone = ph;
       }

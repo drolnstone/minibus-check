@@ -1,58 +1,68 @@
 MINIBUS
 =======
-  pages v1.107.0 · server w2.54.0 · sheet v1.115.0
+  pages v1.108.0 · server w2.55.0 · sheet v1.116.0
 
-Calling the coordinator (Asim, 11 Oct):
+A driver's phone number is checked (Asim, 11 Oct):
 
-  - Passenger app, bookings closed, no seat on this phone: a Call button
-    for whoever takes the coordinator's calls today (the emergency calls
-    chooser's choice, as on every other Call button), where it said "tell
-    the group". The same where a stop was taken off the timetable after
-    bookings closed.
-  - Driver app, vehicle check: a Defect on a Stops the bus item turns the
-    item and the dash red, and nothing more. No pop-up, no Do not run
-    banner and no Call while the check is being done or on the review
-    screen. After Submit, the Sent screen shows The bus does not run with
-    the Call, and the dash shows Do not run, as before.
+  - Bro Adesina could not sign in with 4643: at 09:52 his Phone on the
+    Drivers tab was changed from 447717194643 to 4477171946434, one digit
+    too many, so his default PIN became 6434.
+  - The coordinator app's Drivers page, the live server and the sheet now take
+    only an 11-digit UK number (07..., +44 or 44 in front is fine).
+    Anything else: "Not an 11-digit UK phone number." and nothing changes.
 
-Pages only. The Worker and Code.gs do not change in this one. If #78's
-Worker and Code.gs pastes are not done yet, do them first (Worker
-w2.54.0, then Code.gs v1.115.0 and a new version; they carry #77's too).
+A change that alters the runs is told (Asim, 11 Oct):
+
+  - A change made in the coordinator app to a driver, a PIN, the rota, a
+    bus, a stop, a rota request, a defect, the Vehicle Log or an MOT run
+    goes to every other coordinator's phone and Alerts list as "Change by
+    (name)", with the words What has been done shows.
+  - The driver it touches is told in the driver app too: a driver's own
+    details or PIN, everybody down to drive that Sunday for a rota change,
+    and the drivers down for the coming Sunday for a bus or a stop.
+  - A coordinator whose alerts are off on every phone is emailed it.
+  - Sent at once, at any hour. Bookings, stop times put right on the
+    record and jobs to arrange are not sent.
+
+Pages, Worker and Code.gs.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.106.0        v1.107.0
-  Worker  w2.54.0         w2.54.0   (no change)
-  Code.gs v1.115.0        v1.115.0  (no paste)
+  Pages   v1.107.0        v1.108.0
+  Worker  w2.54.0         w2.55.0
+  Code.gs v1.115.0        v1.116.0
 
 
 IN THIS ORDER
 -------------
 
-1. Merge the pull request.
+1. Paste and deploy the Worker.
+2. Paste Code.gs, then Deploy, Manage deployments, New version.
+3. Merge the pull request.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.107.0 · server w2.54.0 · sheet
-   v1.115.0 .
-B. Passenger app after 09:30 on a phone with no seat: Bookings have
-   closed, with Call and today's coordinator under it.
+A. The foot of all three apps reads  app v1.108.0 · server w2.55.0 · sheet
+   v1.116.0 .
+B. Drivers, any driver, Phone with one digit added: refused in red.
+
 
 
 WHAT CHANGED
 ------------
 
-1. sunday/index.html: "tell the group" (twice) is now callButton(), the
-   coordinator the server stamps on every answer.
+1. coord/index.html: the Drivers page's Phone box takes only an 11-digit
+   UK number (ukPhone, the rule of Code.gs normalisePhone).
 
-2. index.html: no toast on a critical Defect or a critical Advisory; the
-   dash's Do not run banner is hidden on the prep, stage and review screens
-   (class in-check); the review screen's red card has no Call.
+2. server/worker.js actDriver and Code.gs coordDriver: the same check
+   again, so neither stores a number that is not one.
 
-3. Version v1.107.0 in all three pages and their sw.js.
+3. Version v1.108.0 in all three pages and their sw.js; server w2.55.0;
+   sheet v1.116.0.
 
-4. tests/browser/passenger.mjs P10 and tests/browser/driver-app.mjs T35.
+4. tests/suites/42-drivers.mjs: a 13-digit number is refused.
 
-5. Not yet: the manual still quotes the old pop-up (it waits anyway).
+5. server/worker.js changeTell, called from coordAct: the alerts above.
+   tests/suites/64-change-told.mjs.

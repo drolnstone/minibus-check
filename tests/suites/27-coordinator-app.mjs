@@ -526,7 +526,8 @@ export default async function (root) {
                                op: "act", act: { id: "old-rota-1", kind: "rota", sunday: KEY, set: { northCover: "Bro Martin" } } }) }), env, {}));
       a.ok(out.ok, JSON.stringify(out));
       const d = await J(await W2.handleDrain(env, { limit: 300 }));
-      a.eq(d.coord.length, 1);
+      /* From w2.55.0 a coordinator with no phone is also emailed the change. */
+      a.eq(d.coord.filter((x) => x.kind === "rota").length, 1);
     });
   });
 
