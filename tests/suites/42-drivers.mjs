@@ -147,6 +147,15 @@ export default async function (root) {
       /* A phone number is a default PIN; none, none. */
       a.eq(shelf.find((d) => d.name === "Bro Trevor").hasPin, true);
       a.eq(shelf.find((d) => d.name === "Sis Ama").hasPin, false);
+      /* v1.116.0: a number that is not an 11-digit UK one is refused and the
+         cell kept, since it is the default PIN (Bro Adesina, 11 Oct). */
+      const r4 = call(L, "applyCoordAction", ss, A("d4", { name: "Bro Trevor", set: { phone: "4477009043214" } }), {});
+      a.not(r4.ok, "a 13-digit phone was taken");
+      a.eq(r4.result, "Not an 11-digit UK phone number.");
+      const r5 = call(L, "applyCoordAction", ss, A("d5", { name: "Bro Trevor", set: { phone: "07700 900003" } }), {});
+      a.ok(r5.done && r5.ok, JSON.stringify(r5));
+      const g2 = ss.getSheetByName("Drivers").getDataRange().getValues();
+      a.eq(g2.slice(1).find((r) => r[g2[0].indexOf("Name")] === "Bro Trevor")[g2[0].indexOf("Phone")], "07700 900003");
     });
   });
 

@@ -1,53 +1,50 @@
 MINIBUS
 =======
-  pages v1.105.0 · server w2.52.0 · sheet v1.113.0
+  pages v1.108.0 · server w2.52.0 · sheet v1.116.0
 
-Record something takes several things at once (Asim, 11 Oct):
+A driver's phone number is checked (Asim, 11 Oct):
 
-  - On a bus page, Record something: tap as many of MOT, Service,
-    Insurance, Parking permit, Repair, Tyres and Other as were done (or
-    booked) on the visit. A second tap takes one off.
-  - Record it puts one entry on the Vehicle Log for each, with the same
-    Done or Booked ahead, day, mileage, garage and notes.
-  - Each one chosen has its own cost box (MOT cost, Service cost ...), and
-    each dated item its own date box (MOT: expiry date on the certificate
-    ...). The blue box shows each one's next due date.
-  - A defect ticked as put right goes on the Repair entry if Repair is
-    chosen, otherwise on the first one.
+  - Bro Adesina could not sign in with 4643: at 09:52 his Phone on the
+    Drivers tab was changed from 447717194643 to 4477171946434, one digit
+    too many, so his default PIN became 6434.
+  - The coordinator app's Drivers page, and the sheet behind it, now take
+    only an 11-digit UK number (07..., +44 or 44 in front is fine).
+    Anything else: "Not an 11-digit UK phone number." and nothing changes.
 
-Pages only. The Worker and Code.gs do not change.
+Pages and Code.gs. The Worker does not change.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.104.2        v1.105.0
+  Pages   v1.105.0        v1.108.0
   Worker  w2.52.0         w2.52.0   (no change)
-  Code.gs v1.113.0        v1.113.0  (no paste)
+  Code.gs v1.113.0        v1.116.0
 
 
 IN THIS ORDER
 -------------
 
-1. Merge the pull request.
+1. Paste Code.gs, then Deploy, Manage deployments, New version.
+2. Merge the pull request.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.105.0 · server w2.52.0 · sheet
-   v1.113.0 .
-B. Record an MOT and a service together on a bus: the log shows two
-   entries, each with its own cost, and both dates move.
+A. The foot of all three apps reads  app v1.108.0 · server w2.52.0 · sheet
+   v1.116.0 .
+B. Drivers, any driver, Phone with one digit added: refused in red.
+
 
 
 WHAT CHANGED
 ------------
 
-1. coord/index.html: the Record form's item buttons each go on and off;
-   one cost box per item chosen and one date box per dated item; Record it
-   sends one change per item, in turn, each with its own id, so a second
-   tap after a lost answer does none of them twice.
+1. coord/index.html: the Drivers page's Phone box takes only an 11-digit
+   UK number (ukPhone, the rule of Code.gs normalisePhone).
 
-2. Version v1.105.0 in all three pages and their sw.js.
+2. Code.gs coordDriver: the same check again, so the sheet never stores a
+   number that is not one.
 
-3. tests/browser/coordinator.mjs C55: an MOT and a service recorded
-   together.
+3. Version v1.108.0 in all three pages and their sw.js; sheet v1.116.0.
+
+4. tests/suites/42-drivers.mjs: a 13-digit number is refused.
