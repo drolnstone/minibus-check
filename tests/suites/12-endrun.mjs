@@ -179,13 +179,14 @@ export default async function (root) {
     a.eq(r.error, "no pin");
   });
 
-  s.test("a coordinator ending HIS OWN run is sent back to the ordinary button", async (a) => {
+  s.test("a coordinator can end HIS OWN run here, the driver app having no End trip (w2.53.0)", async (a) => {
     const { env, key } = await fresh();
     await W.handleTrip(env, started({ driver: "Bro Arthur", sunday: key, events: [{ event: "start", at: Date.now() }] }));
+    const bad = await body(await W.handleEndRun(env, { endrun: { route: "North", who: "Bro Arthur", pin: "0000" } }));
+    a.not(bad.ok, "his own run closed without his PIN");
     const r = await body(await W.handleEndRun(env, { endrun: { route: "North", who: "Bro Arthur", pin: "1234" } }));
-    a.not(r.ok);
-    a.eq(r.error, "your own run",
-         "he must not learn that ending his own run costs four digits, or he will not notice the day it does");
+    a.ok(r.ok, JSON.stringify(r));
+    a.ok((await W.tripState(env, key, "North")).ended > 0, "the run is still open");
   });
 
   s.test("there is nothing to close when no run is out", async (a) => {

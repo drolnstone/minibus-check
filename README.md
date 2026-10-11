@@ -1542,10 +1542,26 @@ Three things make it safe:
   park cannot reset a timer that was nearly up.
 - **It needs the app open** on the dashboard, which is what `keepAwake` is for.
   A phone face down in a pocket gives no positions, and the run falls back to
-  the End trip reminder.
+  the server closing it (below).
 
 Auto-ends land on the record as `Logged (auto)`. A week of them is how you find
 out whether the fence is in the right place.
+
+### No End trip (from v1.106.0 · w2.53.0)
+
+From Start trip on, the driver app's bottom bar is gone: no End trip, no Done
+(Back at the top still leaves the screen). On 11 October 2026 North was ended
+four minutes after Start, still in the churchyard. A run now ends in one of
+three ways:
+
+- the app, back inside the church fence, as above (`Logged (auto)`);
+- the server, on its every-minute clock, once the route's last stop is half an
+  hour behind and nothing has been heard from the run for half an hour, the
+  same rule that already rolled the booking page on (`closeFinishedRuns`,
+  `Logged (server)`);
+- a coordinator, with End it in the coordinator app, their own run included.
+
+The End the trip push to the driver is gone with the button.
 
 ### Alerts
 
@@ -1695,7 +1711,6 @@ Drivers get five, and **only ever one at a time**:
 | **Your route is not running today** | the Rota's Status says so. Above the stopped bus, because a morning can be called off for reasons that have nothing to do with a defect, and a driver who turns up to a cancelled run has wasted it for nothing |
 | **Your bus was stopped by the check** | a walkaround stopped the bus the rota puts on his route, and he has not set off. It tells him to ring the coordinator, which is what every other stopped-bus message in the app says. The app does not choose a replacement vehicle |
 | **The bus has not gone out** | ten minutes past **the departure time on the Bus Stops tab**, with nothing started. Twice, then it stops. Not the 09:30 booking cutoff: a route with no Depart row gets no nudge at all rather than a guess |
-| **End the trip** | a run past its arrival time that has gone quiet. Twice, a quarter of an hour apart |
 | **You are driving today** | Sunday between 07:30 and 08:30, when nothing else is wrong |
 
 *From v1.73.0 there is a sixth, sitting directly under the stopped bus because
@@ -1801,7 +1816,6 @@ full email already.
 | Time to set off | the departure time, from w2.27.0 | push | on the minute, not ten minutes late | yes |
 | The bus has not gone out | 10–90 min past departure, no start tap | push | forgotten, or something is wrong | yes |
 | You are driving today | Sunday morning, before departure | push | the morning, said on the morning | yes |
-| End the trip | 15 min after the last timetabled arrival, 10 min idle | push | an open run never closes itself | yes |
 
 **The passengers** — push only.
 

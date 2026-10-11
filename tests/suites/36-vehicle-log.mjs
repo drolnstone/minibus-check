@@ -342,7 +342,7 @@ export default async function (root) {
       a.has(now && now.how, "more than a month early");
       const again = await act(env, { kind: "vfix", corrects: orig, done: "2026-09-12" });
       a.not(again.ok, "corrected twice");
-      a.has(String(again.error), "Correct the correction instead");
+      a.has(String(again.error), "already been corrected");
     });
   });
 

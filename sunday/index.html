@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.105.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.106.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -421,6 +421,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 /* Big, spaced and centred, because it is eleven digits being read back by
    somebody who has typed them on a kerb. font-size:16px or over, or iOS
    zooms the whole page the moment the caret lands in it. */
+::placeholder{color:var(--muted);opacity:.6}
 .ask-input{width:100%;min-height:var(--tap);border-radius:var(--r);
   border:1.5px solid var(--hair);background:var(--card);color:var(--ink);
   font:inherit;font-size:22px;font-weight:600;letter-spacing:.1em;text-align:center;
@@ -751,7 +752,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.105.0";
+var PAGE_VERSION = "v1.106.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -1269,7 +1270,7 @@ function load(again){
         return;
       }
       $("body").innerHTML='<div class="note note-warn"><b>The stops could not be loaded.</b><br>'+
-        esc(plainError(err))+'<br>Pull down to refresh, or:'+
+        esc(plainError(err))+
         '<br>'+callButton()+'</div>';
       retryStart();
     });
@@ -1317,7 +1318,7 @@ var SHORTHAND = {
   "not sent":    "It did not go through.",
   "not saved":   "It was not saved.",
   "no answer":   "The record did not answer.",
-  "bad token":   "This copy of the app is not recognised. Ring the bus coordinator."
+  "bad token":   "This copy of the app is not recognised."
 };
 
 /* Whatever was thrown, in words somebody at a bus stop can do something with.
@@ -1331,7 +1332,7 @@ var SHORTHAND = {
 function plainError(err){
   if(offlineNow(err)) return "Your phone is not on the network just now.";
   var m = String((err && err.message) || err || "").trim();
-  if(!m) return "Something did not work. Try again in a moment.";
+  if(!m) return "Something did not work.";
   if(SHORTHAND[m.toLowerCase()]) return SHORTHAND[m.toLowerCase()];
   if(/took too long|abort|timed out|timeout/i.test(m))
     return "The record took too long to answer.";
@@ -1901,7 +1902,7 @@ function alertAskWords(seatAt){
   }
   if(CLOSED) return "";
   /* The date is in the eyebrow above, so it is not said twice. */
-  return "No seat booked. Book below.";
+  return "No seat booked.";
 }
 
 function liveAgeWords(){
@@ -1966,7 +1967,7 @@ function paintLive(){
           '<p class="live-eyebrow">Not running</p>'+
           '<h2>No bus to '+esc(live.stop||"your stop")+' today</h2>'+
           '<p class="live-sub">The '+esc(live.route||"")+' bus is not running '+
-            'this Sunday. Sorry for the short notice.</p>'+
+            'this Sunday.</p>'+
           callButton()+
         '</div>';
       paintStopTimes();
@@ -2321,7 +2322,7 @@ function paint(){
      journey. */
   if(STOPGONE){
     html+='<div class="note note-warn"><b>Your stop has been taken off the '+
-          'timetable.</b> '+(CLOSED ? 'Tell the group.' : 'Please pick another one below.')+
+          'timetable.</b>'+
           '</div>';
   }
 
@@ -2337,9 +2338,7 @@ function paint(){
        page could do nothing for them; it is not true now, and a screen that
        sends people to WhatsApp for something there is a button for is the
        same fault as the one that told them to tap a locked stop. */
-    html+='<div class="note note-warn"><b>Bookings have closed.</b>'+
-          (booked ? '' : ' If you need a seat today, tell the group.')+
-          '</div>';
+    html+='<div class="note note-warn"><b>Bookings have closed.</b></div>';
 
     /* Waiting, but this phone holds no booking. Almost always because the
        booking was made somewhere else — a laptop, a phone that has since
@@ -2888,7 +2887,7 @@ function askSend(){
     var out=readJson(t);
     askDone();
     if(!out || out.ok!==true){
-      askSay((out && out.error) || "That did not go through. Try again.", true);
+      askSay((out && out.error) || "That did not go through.", true);
       return;
     }
     idSave(out.pid, out.phone || phone);
@@ -2902,7 +2901,7 @@ function askSend(){
        no booking and changes no seat. So unlike Confirm there is nothing to
        go and check, and saying try again is the honest whole of it. */
     askDone();
-    askSay(plainError(err) + " Try again.", true);
+    askSay(plainError(err), true);
   });
 }
 
@@ -3112,9 +3111,7 @@ function verifySend(payload, done){
          Left to paintBar it would spin at nothing for the rest of the
          morning. */
       if(cancelAsk || CLOSED) paint(); else paintBar();
-      toast(cancelAsk
-        ? "That did not save. Check your signal and tap Yes again."
-        : "That did not save. Check your signal and tap Confirm again.", true);
+      toast("That did not save.", true);
     });
 }
 

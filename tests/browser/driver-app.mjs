@@ -53,6 +53,9 @@ if (want("T1")) {
   await me.ctx.close();
 }
 
+/* No bar at the bottom: from v1.106.0 that is what a live run of his own looks like. */
+const footGone = (me) => me.pg.$eval("#footbar", b => getComputedStyle(b).display === "none").catch(() => false);
+
 /* T2 — a run the app ended by itself can be reopened, and the reopen reaches the record */
 if (want("T2")) {
   const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck(), staleEndMs: 9000 } });
@@ -68,7 +71,7 @@ if (want("T2")) {
     const toast = await me.toast();
     /* two polls while the board still carries the old end */
     await me.wait(11000);
-    reopened = /Run reopened/.test(toast) && (await me.foot()).includes("End trip, arrived at church") &&
+    reopened = /Run reopened/.test(toast) && (await footGone(me)) &&
                !/Trip finished/.test(await me.text("#stopsBody"));
     undoPosted = me.posted.some(p => p.action === "trip" && (p.trip.events || []).some(e => e.event === "undo" && e.undoes === "end"));
   }
@@ -95,7 +98,7 @@ if (want("T2b")) {
     await me.click("It has not finished, reopen it", "#s-stops"); await me.wait(200);
     const toast = await me.toast();
     await me.wait(800);
-    reopened = /Run reopened/.test(toast) && (await me.foot()).includes("End trip, arrived at church");
+    reopened = /Run reopened/.test(toast) && (await footGone(me));
   }
   check("T2b", "the reopen offer is still there when the app is opened fresh after the automatic end",
         ended && offered && reopened, "ended " + ended + ", offered after reload " + offered + ", reopened " + reopened);
@@ -129,7 +132,7 @@ if (want("T2c")) {
     await me.click("It has not finished, reopen it", "#s-stops"); await me.wait(200);
     const toast = await me.toast();
     await me.wait(800);
-    reopened = /Run reopened/.test(toast) && (await me.foot()).includes("End trip, arrived at church");
+    reopened = /Run reopened/.test(toast) && (await footGone(me));
   }
   check("T2c", "a driver covering at short notice gets the reopen offer too, when the app is opened fresh",
         started && ended && own && offered && reopened,
@@ -189,7 +192,8 @@ if (want("T4")) {
       const r = await me.pg.evaluate(() => {
         const bar = document.querySelector(".trip-actions");
         const line = bar.querySelector(".trip-waiting");
-        const ft = document.getElementById("footbar").getBoundingClientRect().top;
+        const fb = document.getElementById("footbar");
+        const ft = getComputedStyle(fb).display === "none" ? window.innerHeight : fb.getBoundingClientRect().top;
         const l = line.getBoundingClientRect();
         const hit = document.elementFromPoint(l.left + l.width / 2, l.top + l.height / 2);
         return { bar: bar.querySelectorAll("button").length, hit: !!hit && line.contains(hit),
@@ -204,7 +208,8 @@ if (want("T4")) {
       const pu = document.querySelector('[data-triptap="N01"][data-tripkind="pickup"]');
       if (!nb || !pu) return { found: false };
       nb.scrollIntoView({ block: "center" });
-      const ft = document.getElementById("footbar").getBoundingClientRect().top;
+      const fb = document.getElementById("footbar");
+      const ft = getComputedStyle(fb).display === "none" ? window.innerHeight : fb.getBoundingClientRect().top;
       const c = nb.getBoundingClientRect();
       const hit = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
       return { found: true, hit: hit === nb, bottom: Math.max(c.bottom, pu.getBoundingClientRect().bottom), ft };
@@ -280,48 +285,26 @@ if (want("T7")) {
   await me.ctx.close();
 }
 
-/* T8 — the end of the run is said when it arrives, by the clock or by the last tap */
+/* T8 — no End trip once the run is live (v1.106.0). On 11 October North was
+   ended four minutes after Start, still in the churchyard. */
 if (want("T8")) {
   const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck() } });
   await startRun(me);
+  const gone1 = await footGone(me);
   await me.jump(11); await tap(me, "pickup", "N01"); await me.wait(3500);
-  me.world.noEcho = true;                            /* the drive back: nothing on the board moves */
-  await me.wait(5500);
-  await me.jump(46); await me.wait(6500);            /* 11:01, nothing tapped */
-  const line = (await me.text("#stopsBody")).split("\n").find(l => /Still running/.test(l)) || "";
-  const red1 = await me.pg.$eval("#tripEnd", b => b.classList.contains("is-due")).catch(() => false);
-  check("T8", "«Still running — due at church 11:00» appears by itself once the time has passed, End trip turns",
-        /due at church 11:00/.test(line) && red1, "line '" + line + "', End trip is-due " + red1);
-  await me.ctx.close();
-
-  const me2 = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck() } });
-  await startRun(me2);
-  await me2.jump(44);                                  /* 10:48 */
-  for (const id of ["N01", "N02", "N04", "N06", "N07"]) { await tap(me2, "pickup", id); await me2.wait(400); }
-  await me2.wait(800);
-  const red2 = await me2.pg.$eval("#tripEnd", b => b.classList.contains("is-due")).catch(() => false);
-  const said = /Every stop marked/.test(await me2.text("#stopsBody"));
-  check("T8b", "marking the last booked stop turns End trip at once, with «Every stop marked»", red2 && said, "is-due " + red2 + ", line " + said);
-  await me2.ctx.close();
-}
-
-/* T8c — every stop marked, then the time at church goes by: the line moves
-   on to "Still running" by itself, as a fresh screen would draw it. */
-if (want("T8c")) {
-  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck() } });
-  await startRun(me);
-  await me.jump(44);                                  /* 10:48 */
-  for (const id of ["N01", "N02", "N04", "N06", "N07"]) { await tap(me, "pickup", id); await me.wait(400); }
-  await me.wait(4000);
-  const before = /Every stop marked/.test(await me.text("#stopsBody"));
-  me.world.noEcho = true;                             /* nothing on the board moves */
-  await me.wait(5500);
-  await me.jump(13); await me.wait(7000);             /* 11:01 */
-  const txt = await me.text("#stopsBody");
-  const late = /Still running — due at church 11:00/.test(txt) && !/Every stop marked/.test(txt);
-  const red = await me.pg.$eval("#tripEnd", b => b.classList.contains("is-due")).catch(() => false);
-  check("T8c", "with every stop marked, the line still moves on to «Still running — due at church 11:00» by itself",
-        before && late && red, "marked first " + before + ", late line by itself " + late + ", End trip is-due " + red);
+  await me.jump(46); await me.wait(6500);            /* 11:01, past the time at church */
+  const gone2 = await footGone(me);
+  const all = (await buttons(me)).join(" | ") + " | " + (await me.foot());
+  const none = !/End trip/i.test(all) && !/End trip/i.test(await me.text("#stopsBody"));
+  /* Back at church: the app ends it, and the bar comes back. */
+  await me.emit(AWAY); await me.wait(500);
+  await me.jump(1); await me.emit(CHURCH); await me.wait(500);
+  await me.jump(4); await me.emit(CHURCH); await me.wait(1500);
+  const ended = /Trip finished/.test(await me.text("#stopsBody"));
+  const back = !(await footGone(me)) && (await me.foot()).includes("Done");
+  check("T8", "from Start trip there is no bar and no End trip, past the time at church too; it comes back once the run ends",
+        gone1 && gone2 && none && ended && back,
+        "gone at start " + gone1 + ", gone at 11:01 " + gone2 + ", no End trip anywhere " + none + ", ended " + ended + ", bar back " + back);
   await me.ctx.close();
 }
 
@@ -573,7 +556,7 @@ if (want("T16c")) {
   const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck() } });
   await startRun(me);
   await me.jump(5);
-  await me.pg.evaluate(() => { try { tripEnd(); } catch (e) {} });
+  await me.pg.evaluate(() => { try { tripAutoEnd(); } catch (e) {} });
   await me.wait(3000);
   const ended = /Trip finished/.test(await me.text("#stopsBody"));
   me.world.rehearsal = reh(T("10:20"));
@@ -1030,7 +1013,10 @@ if (want("T29")) {
   const seen = () => me.pg.evaluate(() => {
     const r = document.querySelector("#stopsBody .stop-row.trip-next");
     if (!r) return { id: "", inView: false };
-    const b = r.getBoundingClientRect(), ft = document.getElementById("footbar").getBoundingClientRect().top;
+    const fb = document.getElementById("footbar");
+    /* No bar on a live run from v1.106.0: the screen's own bottom then. */
+    const b = r.getBoundingClientRect(),
+          ft = getComputedStyle(fb).display === "none" ? window.innerHeight : fb.getBoundingClientRect().top;
     return { name: r.textContent.slice(0, 40), inView: b.top >= 0 && b.bottom <= ft + 0.5 };
   });
   const atOpen = await seen();

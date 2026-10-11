@@ -143,7 +143,7 @@ export default async function (root) {
     a.eq(L.gas.mail.length, 1, JSON.stringify(L.gas.mail.map((m) => m.to)));
     a.eq(L.gas.mail[0].to, "kenneth@b.c");
     a.eq(L.gas.mail[0].subject, "BUS STOPPED: " + REG);
-    a.has(L.gas.mail[0].body, "Tap the bell");
+    a.hasnt(L.gas.mail[0].body, "Tap the bell", "an instruction in the email");
   });
 
   s.test("a COORDINATOR_EMAIL listing several addresses skips each of them", (a) => {

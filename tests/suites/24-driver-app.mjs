@@ -116,7 +116,7 @@ export default function (root) {
 
   s.test("the stop buttons stick above the bar at the bottom, not under it", (a) => {
     const rule = (html.match(/\.trip-actions\{[^}]*\}/) || [""])[0];
-    a.has(rule, "bottom:var(--footH", ".trip-actions sticks at the very bottom, behind the bar that holds End trip");
+    a.has(rule, "bottom:var(--footH", ".trip-actions sticks at the very bottom, behind the bar");
     a.has(body(code, "footHeightSync"), "--footH", "nothing measures the bar for --footH");
   });
 
@@ -128,16 +128,19 @@ export default function (root) {
     a.has(body(code, "tripUndo"), "tripMoving()", "Undo goes through on a moving bus");
   });
 
-  s.test("the end of the run is drawn when the clock gets there, not at the next change", (a) => {
-    a.has(body(code, "rotaCountsStart"), "tripDueNow()", "the poll repaints only when the board changes");
-    a.has(body(code, "tripPaint"), "is-due", "End trip turns only when the bar is rebuilt, never on a tap");
-  });
-
-  s.test("past the time at church the line says so, even with every stop marked", (a) => {
-    const b = body(code, "tripEndState") || "";
-    a.ok(b.indexOf('"late"') > 0 && b.indexOf('"late"') < b.indexOf('"marked"'), "late does not win over marked");
-    a.has(body(code, "tripDueNow"), "tripEndState(", "the poll watches only whether either line applies, not which one");
-    a.has(body(code, "tripHeaderHtml"), "tripEndState(", "the line is worked out apart from what the poll watches");
+  s.test("NO END TRIP ONCE A RUN IS LIVE (v1.106.0)", (a) => {
+    /* 11 October: North ended four minutes after Start, in the churchyard. */
+    const f = body(code, "paintFoot");
+    const stops = f.slice(f.indexOf('if(st.screen==="stops")'));
+    const from = stops.indexOf("if(trip.started && !trip.ended && tripMayTap(trip.route)){");
+    const live = stops.slice(from, stops.indexOf("return;", from));
+    a.ok(from > 0, "the live-run branch of the bar is not where it was");
+    a.has(live, 'classList.add("is-gone")', "the bar is still there while his run is live");
+    a.hasnt(live, "btn(", "a button is still drawn in the bar while his run is live");
+    a.has(f, 'classList.remove("is-gone")', "the bar never comes back after the run");
+    a.hasnt(code, "function tripEnd(", "the driver app can still end a run by hand");
+    a.hasnt(html, "End trip, arrived at church", "the End trip button is still in the page");
+    a.hasnt(html, "End trip when you are back", "he is still told to tap End trip");
   });
 
   s.test("every way into a check goes through the PIN gate", (a) => {
