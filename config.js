@@ -305,7 +305,8 @@ window.CONFIG = {
     windows: [
       { day: 0, from: 15, to: 16 },
       { day: 3, from: 18, to: 19 },
-      { day: 6, from: 18, to: 19, booked: true }
+      { day: 6, from: 18, to: 19, booked: true },
+      { day: 0, from: 8, to: 9 }
     ]
   },
 

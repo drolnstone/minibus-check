@@ -1,50 +1,42 @@
 MINIBUS
 =======
-  pages v1.104.2 · server w2.52.0 · sheet v1.112.0
+  pages v1.104.2 · server w2.52.0 · sheet v1.113.0
 
-The coordinator's Alerts list keeps a week, not two days (Asim, 10 Oct):
+A Sunday-morning last chance to book (Asim, 11 Oct, after Saturday's
+reminder went nowhere):
 
-  - Alerts, and every push and email under what went out, stay on the
-    list for seven days.
-  - An empty list says "No alerts in the last week."
-  - What is already on the list stays. Anything older than two days was
-    gone before this, so the list fills up to a week over the coming days.
+  - Sunday 08:00 to 09:00, every phone with alerts on and no seat for that
+    morning gets "Last chance to book for Sunday. Bookings close at 09:30
+    today."
+  - People who have booked hear nothing extra; their 07:30 "Your bus today"
+    is unchanged.
+  - Coordinators get one "Sent: Booking reminders" with the count.
+
+Code.gs only. The pages and the Worker do not change.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.104.1        v1.104.2
-  Worker  w2.51.0         w2.52.0
-  Code.gs v1.112.0        v1.112.0  (no paste)
+  Pages   v1.104.2        v1.104.2  (no change)
+  Worker  w2.52.0         w2.52.0   (no change)
+  Code.gs v1.112.0        v1.113.0  (paste)
 
 
 IN THIS ORDER
 -------------
 
-1. WORKER. Paste the whole file into the Cloudflare editor and deploy:
-   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/last-chance-reminder-j2u2hj/server/worker.js
-   No new variables.
+1. Open the sheet, Extensions, Apps Script. Select everything in Code.gs,
+   paste this pull request's Code.gs over it, Save.
+   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/last-chance-reminder-j2u2hj/Code.gs
+2. Deploy, Manage deployments, the pencil, Version: New version, Deploy.
+3. Merge this pull request.
 
-2. Merge the pull request.
+To catch this morning (11 Oct), do 1 and 2 before 08:55. The sheet passes
+the new time to the live server on its next five-minute sync, and the
+reminder goes on the first minute after that, up to 09:00.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.104.2 · server w2.52.0 · sheet
-   v1.112.0 .
-
-B. In a few days, Alerts in the coordinator app still shows items from
-   more than two days back.
-
-
-WHAT CHANGED
-------------
-
-1. server/worker.js: COORD_LOG_AGE_MS 48 hours to 7 days; the list holds
-   up to 150 alerts and 400 sent lines, so a busy Sunday does not push
-   older days off the end.
-
-2. coord/index.html: the empty-list words. All pages v1.104.2.
-
-3. tests/suites/50-alerts-list.mjs: six days old stays, over a week goes,
-   at fixed times.
+A. Is everything working? says  Script is v1.113.0 .
+B. Between 08:00 and 09:00 your phone gets "Sent: Booking reminders".
