@@ -1,0 +1,20 @@
+# The Cloudflare Worker minibus-api, as Cloudflare's Git deploy builds it
+# (npx wrangler deploy, path /). Secrets (PIN_SALT, SHEET_TOKEN and the
+# rest) stay in the dashboard; a deploy leaves them alone.
+
+name = "minibus-api"
+main = "server/worker.js"
+compatibility_date = "COMPATIBILITY_DATE"
+workers_dev = true
+keep_vars = true
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "minibus"
+database_id = "DATABASE_ID"
+
+[observability]
+enabled = true
