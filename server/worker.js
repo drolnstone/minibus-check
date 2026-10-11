@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.52.0";
+const SCRIPT_VERSION = "w2.54.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5744,7 +5744,8 @@ function coordAlertOf(a) {
    keeps one tag per phone for the driver's own alerts, and a coordinator who
    is also driving that Sunday would have his driver alert sent twice once
    this had written over it. Duplicates are refused before this, by id. */
-async function deliverCoordAlert(env, msg) {
+/* heard, when given, collects the name on each phone the push service took. */
+async function deliverCoordAlert(env, msg, heard) {
   const subs = await coordinatorSubs(env, msg.not);
   if (!subs.length) return 0;
   const keys = await vapidKeys(env);
@@ -5755,7 +5756,11 @@ async function deliverCoordAlert(env, msg) {
     box.push(msg);
     while (box.length > COORD_BOX_MAX) box.shift();
     await cachePut(env, coordBoxKey(sub.endpoint), box).run();
-    if (await pushOne(env, sub, keys)) sent++;
+    if (await pushOne(env, sub, keys)) {
+      sent++;
+      const n = String(sub.driver || "").trim();
+      if (heard && n && heard.indexOf(n) === -1) heard.push(n);
+    }
   }
   return sent;
 }
@@ -8777,16 +8782,51 @@ function contactView(now) {
    person picked most of all: being put on the calls without knowing is the
    one way this can go wrong. Urgent, so it is never held for the quiet
    hours: a choice made at seven on a Sunday morning is for that morning.
-   Fenced: the choice is made whether or not a phone could be woken. */
+   Fenced: the choice is made whether or not a phone could be woken.
+
+   From w2.54.0 (Asim, 11 Oct 2026, when the Sent line named only the two
+   drivers): one Sent line names every coordinator and driver whose phone
+   took it, and a coordinator no phone took it for is emailed it by the
+   sheet, through the queue the drain already carries. */
 async function contactTell(env, me, id, title, body, drivers) {
   try {
     const msg = coordAlertOf({ id: "contact-" + id, kind: "contact", urgent: true,
                                title: title, body: body, not: [me.name] });
     if (!msg) return;
     await coordLogAdd(env, msg);
-    await deliverCoordAlert(env, msg);
-    if (drivers) await contactTellDrivers(env, me, msg, drivers);
+    const heard = [];
+    await deliverCoordAlert(env, msg, heard);
+    const missed = await contactMissed(env, me, heard);
+    if (missed.length) await contactMail(env, me, msg, missed);
+    if (drivers) await contactTellDrivers(env, me, msg, drivers, heard);
+    if (heard.length) {
+      try { await sentNote(env, { g: "contact|" + msg.id, title: msg.title, who: heard }); } catch (e) {}
+    }
   } catch (e) { /* the choice stands; the alert is a courtesy on top */ }
+}
+
+/* Every active coordinator but the maker whose phone did not take it. */
+async function contactMissed(env, me, heard) {
+  const rules = await authRules(env);
+  if (!rules.roles.length) return [];
+  const marks = rules.roles.map(() => "?").join(",");
+  const { results } = await env.DB.prepare(
+    "SELECT name FROM drivers WHERE active = 1 AND lower(trim(role)) IN (" + marks + ") ORDER BY ord, name"
+  ).bind(...rules.roles).all();
+  const low = (n) => String(n || "").trim().toLowerCase();
+  const got = heard.map(low).concat([low(me.name)]);
+  return (results || []).map((r) => String(r.name || "").trim())
+    .filter((n) => n && got.indexOf(low(n)) === -1);
+}
+
+/* For the sheet to email (Code.gs coordMail). On What I have done as the
+   email it is. */
+async function contactMail(env, me, msg, names) {
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO coord_actions (id, kind, sunday, body, by_name, made, words) VALUES (?,?,?,?,?,?,?)")
+    .bind(msg.id + "-mail", "mail", "",
+          JSON.stringify({ names: names, title: msg.title, body: msg.body || "" }),
+          me.name, Date.now(), "Email to " + names.join(", ") + ": " + msg.title + ".").run();
 }
 
 /* THE DRIVERS TOO, from w2.42.0 (Asim): who to ring is worth knowing before
@@ -8816,14 +8856,13 @@ async function contactDriverNames(env, scope) {
   });
 }
 
-async function contactTellDrivers(env, me, msg, d) {
+async function contactTellDrivers(env, me, msg, d, heard) {
   const names = (await contactDriverNames(env, d.scope))
     .filter((n) => n.trim().toLowerCase() !== String(me.name || "").trim().toLowerCase());
   if (!names.length) return 0;
   const one = Object.assign({}, msg, { id: msg.id + "-d", body: d.body, url: "./" });
   const keys = await vapidKeys(env);
   let sent = 0;
-  const heard = [];
   for (const n of names) {
     for (const sub of await subsWhere(env, DRIVER_SUB_MATCH, [n])) {
       const box = ((await cacheGet(env, coordBoxKey(sub.endpoint))) || [])
@@ -8833,9 +8872,6 @@ async function contactTellDrivers(env, me, msg, d) {
       await cachePut(env, coordBoxKey(sub.endpoint), box).run();
       if (await pushOne(env, sub, keys)) { sent++; if (heard.indexOf(n) === -1) heard.push(n); }
     }
-  }
-  if (heard.length) {
-    try { await sentNote(env, { g: "contact|" + one.id, title: one.title, who: heard }); } catch (e) {}
   }
   return sent;
 }
@@ -9213,6 +9249,23 @@ async function reportAlerts(env) {
   const sections = [{ head: "Drivers", lines: [
     "Alerts on for " + roll.driversOn + " of " + roll.onRegister + " drivers on the register."
   ].concat(roll.driversOff.length ? ["No alerts yet: " + roll.driversOff.join(", ") + "."] : []) }];
+  /* From w2.54.0 (Asim, 11 Oct 2026). On means a phone in either app,
+     which is where a coordinator alert goes. */
+  let coordsOff = null, coordsAll = 0;
+  try {
+    coordsOff = await coordUnalerted(env, []);
+    const rules = await authRules(env);
+    if (rules.roles.length) {
+      const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM drivers WHERE active = 1 AND lower(trim(role)) IN (" +
+        rules.roles.map(() => "?").join(",") + ")").bind(...rules.roles).first();
+      coordsAll = Number(c && c.n) || 0;
+    }
+  } catch (e) { coordsOff = null; }
+  if (coordsOff && coordsAll) {
+    sections.push({ head: "Coordinators", lines: [
+      "Alerts on for " + (coordsAll - coordsOff.length) + " of " + coordsAll + " coordinators."
+    ].concat(coordsOff.length ? ["No alerts yet: " + coordsOff.join(", ") + "."] : []) });
+  }
   sections.push({ head: "Passengers", lines: [
     roll.passengers + " passenger phone" + (roll.passengers === 1 ? " has" : "s have") + " alerts on." ] });
   return { ok: true, name: "alerts", title: "Who has alerts on",

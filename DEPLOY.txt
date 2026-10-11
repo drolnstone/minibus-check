@@ -1,53 +1,64 @@
 MINIBUS
 =======
-  pages v1.105.0 · server w2.52.0 · sheet v1.113.0
+  pages v1.105.0 · server w2.54.0 · sheet v1.115.0
 
-Record something takes several things at once (Asim, 11 Oct):
+Emergency calls, who heard (Asim, 11 Oct):
 
-  - On a bus page, Record something: tap as many of MOT, Service,
-    Insurance, Parking permit, Repair, Tyres and Other as were done (or
-    booked) on the visit. A second tap takes one off.
-  - Record it puts one entry on the Vehicle Log for each, with the same
-    Done or Booked ahead, day, mileage, garage and notes.
-  - Each one chosen has its own cost box (MOT cost, Service cost ...), and
-    each dated item its own date box (MOT: expiry date on the certificate
-    ...). The blue box shows each one's next due date.
-  - A defect ticked as put right goes on the Repair entry if Repair is
-    chosen, otherwise on the first one.
+  - The Sent line for "Emergency calls: ..." names every coordinator and
+    driver whose phone took it, not only the drivers.
+  - A coordinator whose phone did not take it (alerts off on every phone)
+    is emailed its title and words, at their address on the Drivers tab.
+    The person who made the change is not.
+  - Have a look, Who has alerts on: a Coordinators line, "Alerts on for
+    N of M coordinators.", and "No alerts yet: ..." naming anyone with
+    alerts off in both apps.
 
-Pages only. The Worker and Code.gs do not change.
+Worker and Code.gs. The pages do not change.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.104.2        v1.105.0
-  Worker  w2.52.0         w2.52.0   (no change)
-  Code.gs v1.113.0        v1.113.0  (no paste)
+  Pages   v1.105.0        v1.105.0  (no change)
+  Worker  w2.52.0         w2.54.0   (paste)
+  Code.gs v1.113.0        v1.115.0  (paste)
+
+w2.53.0 and v1.114.0 belong to #77. If #77 is merged first, this one is
+brought up to date with it before you paste.
 
 
 IN THIS ORDER
 -------------
 
-1. Merge the pull request.
+1. Open the sheet, Extensions, Apps Script. Select everything in Code.gs,
+   paste this pull request's Code.gs over it, Save.
+   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/last-chance-reminder-j2u2hj/Code.gs
+2. Deploy, Manage deployments, the pencil, Version: New version, Deploy.
+3. Cloudflare, the minibus-api Worker, Edit code. Select everything,
+   paste this pull request's server/worker.js over it, Deploy.
+   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/last-chance-reminder-j2u2hj/server/worker.js
+4. Merge this pull request.
+
+Code.gs first, so the sheet knows the email before the Worker asks for it.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.105.0 · server w2.52.0 · sheet
-   v1.113.0 .
-B. Record an MOT and a service together on a bus: the log shows two
-   entries, each with its own cost, and both dates move.
+A. The foot of all three apps reads  app v1.105.0 · server w2.54.0 ·
+   sheet v1.115.0 .
+B. Coordinator app, Have a look, Who has alerts on: the Coordinators line.
+C. The next emergency calls change: its Sent line on the Alerts list of
+   whoever made it names the coordinators too. Anyone named under "No
+   alerts yet" gets the email; it shows on What I have done as
+   "Email to ...".
 
 
 WHAT CHANGED
 ------------
 
-1. coord/index.html: the Record form's item buttons each go on and off;
-   one cost box per item chosen and one date box per dated item; Record it
-   sends one change per item, in turn, each with its own id, so a second
-   tap after a lost answer does none of them twice.
-
-2. Version v1.105.0 in all three pages and their sw.js.
-
-3. tests/browser/coordinator.mjs C55: an MOT and a service recorded
-   together.
+1. server/worker.js: contactTell collects the name on each phone the push
+   service took (deliverCoordAlert and contactTellDrivers) and writes one
+   Sent line; the coordinators it did not reach go on the coordinator
+   queue as a "mail" change; reportAlerts adds the Coordinators section.
+2. Code.gs: applyCoordAction's "mail" kind, coordMail, sends each one the
+   alert's title and words.
+3. tests/suites/62-contact-reach.mjs.
