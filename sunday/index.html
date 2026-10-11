@@ -2322,7 +2322,7 @@ function paint(){
      journey. */
   if(STOPGONE){
     html+='<div class="note note-warn"><b>Your stop has been taken off the '+
-          'timetable.</b>'+
+          'timetable.</b>'+(CLOSED ? ' '+callButton() : '')+
           '</div>';
   }
 
@@ -2338,7 +2338,13 @@ function paint(){
        page could do nothing for them; it is not true now, and a screen that
        sends people to WhatsApp for something there is a button for is the
        same fault as the one that told them to tap a locked stop. */
-    html+='<div class="note note-warn"><b>Bookings have closed.</b></div>';
+    /* No seat on this phone: the call, to whoever takes the coordinator's
+       calls today (the emergency calls chooser decides it, through the same
+       answer every other Call button reads). From v1.107.0 (Asim, 11 Oct);
+       it said "tell the group", which named nobody. */
+    html+='<div class="note note-warn"><b>Bookings have closed.</b>'+
+          (booked ? '' : callButton())+
+          '</div>';
 
     /* Waiting, but this phone holds no booking. Almost always because the
        booking was made somewhere else — a laptop, a phone that has since
