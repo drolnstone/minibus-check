@@ -14,7 +14,7 @@ const GONE = [
   "Nothing is needed from you", "You were emailed because", "Buses can change during the week",
   "none of these people exist", "think about who takes it", "between themselves",
   "nothing to report yet", "That has changed", "Sent by the minibus app",
-  "Nothing is lost by this"
+  "Nothing is lost by this", "Correct it in the coordinator app"
 ];
 
 export default function (root) {

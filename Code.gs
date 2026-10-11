@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.113.0";
+var SCRIPT_VERSION = "v1.114.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -10951,7 +10951,7 @@ function missedTapAlert(ss, sunday, route, trip) {
   safetyAlert({ id: "missed|" + trip, kind: "defect",
                 title: route + ", " + ukDay(sunday) + ": " + missed.length + (missed.length === 1 ? " booked stop" : " booked stops") + " not marked",
                 body: missed.map(function (id) { return ids[id].stop + " (" + booked[id] + " booked)"; }).join(", ") +
-                      ". Correct it in the coordinator app's Run record.", tab: TRIP_SHEET });
+                      ".", tab: TRIP_SHEET });
 }
 
 function missingCheckAlert() {

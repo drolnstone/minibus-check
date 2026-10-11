@@ -1,6 +1,6 @@
 MINIBUS
 =======
-  pages v1.106.0 · server w2.53.0 · sheet v1.113.0
+  pages v1.106.0 · server w2.53.0 · sheet v1.114.0
 
 No End trip once a run is live (Asim, 11 Oct):
 
@@ -16,26 +16,30 @@ No End trip once a run is live (Asim, 11 Oct):
     The coordinator app's End it now also takes a coordinator's own run
     (it used to say "That is your own run. End it in the driver app.").
   - The "End the trip" push to the driver is gone.
+  - The "booked stops not marked" alert no longer ends with "Correct it
+    in the coordinator app's Run record."
 
 
 YOU ARE ON              GOING TO
   Pages   v1.105.0        v1.106.0
   Worker  w2.52.0         w2.53.0
-  Code.gs v1.113.0        v1.113.0  (no paste)
+  Code.gs v1.113.0        v1.114.0
 
 
 IN THIS ORDER
 -------------
 
 1. Cloudflare: paste server/worker.js into minibus-api and Deploy.
-2. Merge the pull request.
+2. Apps Script: paste Code.gs, then Deploy, Manage deployments, New
+   version.
+3. Merge the pull request.
 
 
 AFTER IT
 --------
 
 A. The foot of all three apps reads  app v1.106.0 · server w2.53.0 · sheet
-   v1.113.0 .
+   v1.114.0 .
 B. Driver app, Start trip on a rehearsal: the bar at the bottom goes and
    no End trip shows anywhere on the screen.
 C. A run nobody ends shows on Trip Events with an end row whose Status is
@@ -57,7 +61,10 @@ WHAT CHANGED
 
    coord/index.html: the "That is your own run" refusal words go.
 
-3. Version v1.106.0 in all three pages and their sw.js; w2.53.0.
+2b. Code.gs missedTapAlert: the "Correct it in the coordinator app's
+   Run record." sentence is cut; suite 57 bans it.
 
-4. Tests: suites 12, 21, 22 and 24, browser T2, T2b, T2c, T8, T16c and
+3. Version v1.106.0 in all three pages and their sw.js; w2.53.0; sheet v1.114.0.
+
+4. Tests: suites 12, 21, 22, 24 and 57, browser T2, T2b, T2c, T8, T16c and
    sabotage S8.
