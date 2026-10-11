@@ -7757,6 +7757,85 @@ async function reapplyDrivers(env) {
   return stmts.length;
 }
 
+/* ---- A CHANGE THAT ALTERS THE RUNS IS TOLD, from w2.55.0 -----------------
+
+   Asim, 11 Oct 2026: Bro Adesina's phone number was changed by mistake that
+   morning, which changed his default PIN, and nobody heard a thing until he
+   could not sign in. Now each of these, made in the coordinator's app, goes
+   to every other coordinator's phone and onto their Alerts list, and to the
+   drivers it touches in the driver app:
+
+     driver, pin      the driver named
+     rota             everybody down to drive that Sunday, before and after
+     bus              the drivers down for the Sunday bookings are open for
+     stop             the driver down for that route that Sunday
+     decide, defect, vlog, vfix, motrun   coordinators only
+
+   The words are the ones What has been done shows. Coordinators are told in
+   the coordinator app and not again in the driver app. Sent at once, quiet
+   hours or not, and fenced: the change stands whether or not a phone could
+   be woken. A booking, a stop time put right on the record and a job to
+   arrange do not change a run, so they are not sent. The emergency calls
+   choice has its own (contactTell). */
+const CHANGE_TOLD = ["driver", "pin", "rota", "bus", "stop", "decide", "defect", "vlog", "vfix", "motrun"];
+
+async function changeDriverNames(env, kind, r) {
+  let names = [];
+  if (kind === "driver" || kind === "pin") names = [r.body && r.body.name];
+  else if (kind === "rota") names = r.tell || [];
+  else if (kind === "bus" || kind === "stop") {
+    let key = runSunday();
+    try { key = (await busCurrentSunday(env, pickupsAndArrivals(await getStops(env)))) || key; } catch (e) {}
+    const row = await getRotaRow(env, key);
+    const routes = kind === "stop" ? [r.tellRoute] : ["North", "South"];
+    names = row ? routes.map((rt) => rotaDriverFor(row, rt)) : [];
+  }
+  const rules = await authRules(env);
+  const q = await env.DB.prepare("SELECT name, role FROM drivers").all();
+  const lead = {};
+  for (const d of (q.results || [])) {
+    if (rules.roles.indexOf(String(d.role || "").trim().toLowerCase()) !== -1) lead[String(d.name).trim().toLowerCase()] = 1;
+  }
+  const seen = {};
+  return names.map((n) => String(n || "").trim()).filter((n) => {
+    const k = n.toLowerCase();
+    if (!k || seen[k] || lead[k]) return false;
+    seen[k] = 1;
+    return true;
+  });
+}
+
+async function changeTell(env, me, kind, id, r) {
+  if (CHANGE_TOLD.indexOf(kind) === -1 || !r || !r.words) return;
+  try {
+    const msg = coordAlertOf({ id: "change-" + id, kind: "change", title: "Change by " + me.name,
+                               body: r.words, not: [me.name] });
+    if (!msg) return;
+    await coordLogAdd(env, msg);
+    const heard = [];
+    const keys = await vapidKeys(env);
+    const into = async (sub, m) => {
+      const box = ((await cacheGet(env, coordBoxKey(sub.endpoint))) || [])
+        .filter((x) => x && Date.now() - (Number(x.at) || 0) < COORD_ALERT_MAX_AGE_MS);
+      box.push(m);
+      while (box.length > COORD_BOX_MAX) box.shift();
+      await cachePut(env, coordBoxKey(sub.endpoint), box).run();
+      if (await pushOne(env, sub, keys)) {
+        const n = String(sub.driver || "").trim();
+        if (n && heard.indexOf(n) === -1) heard.push(n);
+      }
+    };
+    for (const sub of await coordinatorSubs(env, msg.not)) await into(sub, msg);
+    const one = Object.assign({}, msg, { id: msg.id + "-d", url: "./" });
+    const me0 = String(me.name || "").trim().toLowerCase();
+    for (const n of await changeDriverNames(env, kind, r)) {
+      if (n.toLowerCase() === me0) continue;
+      for (const sub of await subsWhere(env, DRIVER_SUB_MATCH, [n])) await into(sub, one);
+    }
+    if (heard.length) await sentNote(env, { g: "change|" + msg.id, title: msg.title + ": " + r.words, who: heard });
+  } catch (e) { /* the change stands; the alert is a courtesy on top */ }
+}
+
 async function actDriver(env, me, act) {
   const add = !!act.add;
   const name = String(act.name || "").replace(/\s+/g, " ").trim();
@@ -8188,7 +8267,7 @@ async function actStop(env, me, act) {
     if (pinCleared) words.push("pin cleared");
   }
   if (add && next.type !== "Pickup") words.push(next.type);
-  return { ok: true, sunday: "", stmts: stopSql(env, body, pins), body: body,
+  return { ok: true, sunday: "", stmts: stopSql(env, body, pins), body: body, tellRoute: next.route,
            words: (add ? id + " added: " : id + ": ") + words.join(", ") + "." };
 }
 
@@ -9463,7 +9542,12 @@ async function actRota(env, me, act) {
 
   const body = { sunday: key, set: set, note: note };
   if (noteEdit) body.noteEdit = noteEdit;
-  return { ok: true, sunday: key, body: body,
+  /* Everybody down to drive that Sunday, before the change and after it. */
+  const tell = [];
+  for (const x of [cur, next]) {
+    for (const f of ROTA_DRIVER_FIELDS) if (x && x[f]) tell.push(String(x[f]));
+  }
+  return { ok: true, sunday: key, body: body, tell: tell,
            words: rotaWords(key, cur, set, note, noteEdit),
            after: () => reapplyRawRota(env, [key]) };
 }
@@ -9800,6 +9884,7 @@ async function coordAct(env, me, act) {
       }
     } catch (e) {}
   }
+  await changeTell(env, me, kind, id, r);
   const row = await env.DB.prepare("SELECT * FROM coord_actions WHERE id=?").bind(id).first();
   return Object.assign({ ok: true, action: activityRow(row) }, r.reply || {});
 }

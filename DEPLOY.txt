@@ -11,6 +11,18 @@ A driver's phone number is checked (Asim, 11 Oct):
     only an 11-digit UK number (07..., +44 or 44 in front is fine).
     Anything else: "Not an 11-digit UK phone number." and nothing changes.
 
+A change that alters the runs is told (Asim, 11 Oct):
+
+  - A change made in the coordinator app to a driver, a PIN, the rota, a
+    bus, a stop, a rota request, a defect, the Vehicle Log or an MOT run
+    goes to every other coordinator's phone and Alerts list as "Change by
+    (name)", with the words What has been done shows.
+  - The driver it touches is told in the driver app too: a driver's own
+    details or PIN, everybody down to drive that Sunday for a rota change,
+    and the drivers down for the coming Sunday for a bus or a stop.
+  - Sent at once, at any hour. Bookings, stop times put right on the
+    record and jobs to arrange are not sent.
+
 Pages, Worker and Code.gs.
 
 
@@ -50,3 +62,6 @@ WHAT CHANGED
    sheet v1.116.0.
 
 4. tests/suites/42-drivers.mjs: a 13-digit number is refused.
+
+5. server/worker.js changeTell, called from coordAct: the alerts above.
+   tests/suites/63-change-told.mjs.
