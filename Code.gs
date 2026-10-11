@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.114.0";
+var SCRIPT_VERSION = "v1.115.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1880,6 +1880,38 @@ function coordPin(ss, a, b, by) {
       : { who: name, where: "Driver app", what: "PIN changed", from: "", to: "Own PIN", why: "" };
   historyAdd(ss, [line]);
   return { done: true, ok: true, push: true, result: "On the History tab." };
+}
+
+/* AN ALERT NO PHONE TOOK, BY EMAIL. From v1.115.0 (Asim, 11 Oct 2026).
+
+   The live server cannot send email. It names the coordinators whose
+   phones did not take an alert of its own (who takes emergency calls), and
+   each is emailed its short words at their address on the Drivers tab. */
+function coordMail(ss, a, b, by) {
+  var title = String(b.title || "").trim();
+  if (!title) return { done: true, ok: false, result: "Nothing to email." };
+  var want = {};
+  (b.names || []).forEach(function (n) {
+    n = String(n || "").trim();
+    if (n) want[n.toLowerCase()] = n;
+  });
+  var sent = [], none = [];
+  readDrivers(ss).forEach(function (d) {
+    var k = String(d.name || "").trim().toLowerCase();
+    if (!want[k]) return;
+    delete want[k];
+    var to = String(d.email || "").trim();
+    if (!d.active || !to) { none.push(d.name); return; }
+    try {
+      sendMail({ to: to, subject: title.substring(0, 140),
+                 body: title + (b.body ? "\n" + b.body : "") });
+      sent.push(d.name);
+    } catch (err) { none.push(d.name); }
+  });
+  Object.keys(want).forEach(function (k) { none.push(want[k]); });
+  var words = (sent.length ? "Emailed " + sent.join(", ") + "." : "") +
+              (none.length ? (sent.length ? " " : "") + "Not emailed: " + none.join(", ") + "." : "");
+  return { done: true, ok: sent.length > 0, result: words || "Nobody to email." };
 }
 
 /* ---- jobs to arrange ----------------------------------------------------
@@ -4598,6 +4630,7 @@ function applyCoordAction(ss, a, ctx) {
   if (kind === "stop") return coordStop(ss, a, b, by);
   if (kind === "motrun") return coordMotrun(ss, a, b, by);
   if (kind === "pin") return coordPin(ss, a, b, by);
+  if (kind === "mail") return coordMail(ss, a, b, by);
   if (kind === "booking") {
     return coordOnTab(ss, BOOKINGS_SHEET, b.bookingId, a, ctx || {},
                       "On the Bus Bookings tab.", "That booking is not on the Bus Bookings tab.");
