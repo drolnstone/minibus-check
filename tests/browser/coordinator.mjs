@@ -1994,6 +1994,38 @@ if (want("C56")) {
   await p.ctx.close();
 }
 
+/* C57 — every driver's phone number on Drivers, one tap to ring (v1.111.0,
+   Asim, 11 Oct 2026). */
+if (want("C57")) {
+  const held = await W.cacheGet(env, "coord_shelf");
+  const rows = (await env.DB.prepare("SELECT name, role, route, ord, active, pin_hash FROM drivers").all()).results;
+  await W.cachePut(env, "coord_shelf", Object.assign({}, held || {}, { builtAt: Date.now(), readAt: Date.now(),
+    drivers: rows.map((x, i) => ({ name: x.name, role: x.role, route: x.route, order: x.ord, active: Number(x.active) !== 0,
+      email: "", phone: i === 0 ? "" : i === 1 ? "+44 7700 900 123" : "077009001" + String(i).padStart(2, "0"), hasPin: !!x.pin_hash })) })).run();
+  const p = await page(env);
+  await p.signIn(PIN);
+  try {
+    await p.pg.evaluate(() => { location.hash = "drivers"; });
+    await p.wait(600);
+    const cards = await p.pg.$$eval("#driversBody .drv", (els) => els.map((el) => {
+      const a = el.querySelector("a.drv-tel");
+      return { name: el.querySelector(".def-head b").textContent,
+               href: a ? a.getAttribute("href") : "", shown: a ? a.textContent : "" };
+    }));
+    const reg = await p.pg.evaluate(() => (D.register.drivers || []).map((x) => ({ name: x.name, phone: x.phone || "" })));
+    const phones = reg.filter((x) => x.phone);
+    const ok = phones.length > 0 && phones.every((x) => {
+      const c = cards.find((k) => k.name === x.name), d = x.phone.replace(/\D/g, "").replace(/^44/, "0");
+      return c && c.href === "tel:" + d && c.shown.replace(/\D/g, "") === d && /^\d{5} \d{6}$/.test(c.shown);
+    }) && cards.filter((c) => c.href).length === phones.length;
+    await p.shot("C57-driver-phones");
+    check("C57", "Drivers shows each driver's phone number as a tap-to-call link",
+          ok && !p.errs.length, JSON.stringify({ cards, phones, errs: p.errs }).slice(0, 900));
+  } catch (e) { stopped("C57", e); }
+  await p.ctx.close();
+  await W.cachePut(env, "coord_shelf", held).run();
+}
+
 await done();
 cleanup(ROOT);
 const bad = results.filter((r) => !r.ok);
