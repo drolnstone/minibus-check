@@ -80,6 +80,7 @@ h1{margin:0 0 18px;font-size:24px;line-height:1.2;font-weight:700}
 .rows li:first-child{border-top:0}
 .rows b{flex:0 0 116px;font-weight:600;color:var(--muted)}
 label{display:block;font-size:13px;color:var(--muted);margin:0 0 6px}
+::placeholder{color:var(--muted);opacity:.6}
 input[type=password]{
   /* Centred, like every other PIN box in this project. Four dots hard against
      the left edge of a full width field read as the start of something longer;
@@ -175,8 +176,7 @@ function show(head, html, foot){
    underneath explaining how long links last. */
 function dead(head, words){
   show(head, '<div class="card warn">' +
-             (words ? '<p>' + esc(words) + '</p>' : '') +
-             '<p class="tiny">Open the spreadsheet to deal with it there.</p></div>');
+             (words ? '<p>' + esc(words) + '</p>' : '') + '</div>');
 }
 
 /* ---- what this link is about --------------------------------------------
@@ -209,7 +209,7 @@ function start(){
     if (out.kind === "rota") return paintRota(out);
     dead("That link is not one this page knows about", "Nothing has been changed.");
   }).catch(function(){
-    dead("Could not reach the live server", "Try again in a moment.");
+    dead("Could not reach the live server", "");
   });
 }
 
@@ -430,18 +430,18 @@ function send(choice){
       return;
     }
     if (out && out.error === "no pin") {
-      say("No coordinator has a PIN yet. Put their phone numbers on the Drivers tab.", true); return;
+      say("No coordinator has a PIN yet.", true); return;
     }
     if (out && out.error === "not authorised") {
       say("Only a coordinator can make this decision.", true); return;
     }
-    if (out && out.error === "expired") { say("This link has expired. Use the spreadsheet.", true); return; }
+    if (out && out.error === "expired") { say("This link has expired.", true); return; }
     if (out && out.error === "used") { say("Somebody has already decided this one.", true); return; }
     if (out && out.error === "no check") {
       say("That bus is not stopped any more. Nothing has been changed.", true); return;
     }
     if (out && out.error === "same hand") {
-      say("The person who did the walkaround cannot authorise it. Another coordinator has to.", true);
+      say("The person who did the walkaround cannot authorise it.", true);
       return;
     }
     say("The live server would not do that. Nothing has been changed.", true);
@@ -461,7 +461,7 @@ function done(out, choice){
         esc(out.by || "you") + '</b>.</p>' +
         '<p class="tiny">The defect stays open.</p>' +
       '</div>',
-      "You can close this page.");
+      "");
     return;
   }
   var ok = (choice === "Approved");
@@ -480,7 +480,7 @@ function done(out, choice){
       (out && out.applied === true ? '' :
         '<p class="tiny">On the rota within five minutes.</p>') +
     '</div>',
-    "You can close this page.");
+    "");
 }
 
 start();

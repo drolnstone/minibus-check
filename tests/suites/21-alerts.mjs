@@ -224,7 +224,7 @@ export default async function (root) {
       a.has(got[0].subject, "went out unchecked");
       a.ok(bothSay(got[0], "YS70 PWE"), "it does not say which bus");
       a.ok(bothSay(got[0], "NH56 FWP"), "or the other one");
-      a.ok(bothSay(got[0], "inspected on return"), "the thing it is actually asking for");
+      a.ok(!bothSay(got[0], "inspected on return"), "advice in the alert");
     });
   });
 
@@ -481,9 +481,9 @@ export default async function (root) {
 
   /* ---- 10. THE RUN NOBODY CLOSED --------------------------------------- */
 
-  s.test("A RUN LEFT OPEN LONG AFTER THE LAST STOP ASKS HIM TO END IT", async (a) => {
-    /* It never closes itself. An open run holds the route against the next
-       driver and leaves the morning unfinished in the record. */
+  s.test("A RUN LEFT OPEN LONG AFTER THE LAST STOP IS CLOSED, AND HE IS NOT ASKED", async (a) => {
+    /* From w2.53.0 the driver app has no End trip, so asking him to end it
+       would be asking for something he cannot do. The server closes it. */
     await atTime(SUN_1230, async () => {
       const { db, env, key } = await live();
       await driverPhone(db, "Bro Adrian", "North");
@@ -491,9 +491,34 @@ export default async function (root) {
         reg: "YS70 PWE", sunday: key,
         events: [{ event: "start", at: Date.parse("2026-09-27T09:52:00+01:00") }] });
       await W.wakeDrivers(env);
-      const got = woken(db);
-      a.eq(got.length, 1, "the run sat open and nobody was asked to close it");
-      a.has(got[0].last, "end", "got: " + got[0].last);
+      a.eq(woken(db).length, 0, "he was asked to end a run the app gives him no way to end");
+      a.eq(await W.closeFinishedRuns(env), 1, "the run was left open");
+      const t = await W.tripState(env, key, "North", "real");
+      a.ok(t.ended > 0, "the record still shows the run open");
+      const row = await db.prepare("SELECT status, driver FROM trip_events WHERE trip='t1' AND event='end'").first();
+      a.eq(row && row.status, "Logged (server)", "the end row does not say the server closed it");
+      a.eq(row && row.driver, "Bro Adrian", "the end row is not in the driver's name");
+      a.eq(await W.closeFinishedRuns(env), 0, "a closed run was closed again");
+    });
+  });
+
+  s.test("a run still being heard from is not closed under him", async (a) => {
+    await atTime(SUN_1230, async () => {
+      const { db, env, key } = await live();
+      await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
+        reg: "YS70 PWE", sunday: key,
+        events: [{ event: "start", at: Date.parse("2026-09-27T09:52:00+01:00") }] });
+      /* A late bus, still marking stops twenty minutes ago. */
+      const stop = (await W.getStops(env)).find((x) => x.route === "North" && !x.arrival && !x.depart);
+      if (stop) {
+        await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian",
+          reg: "YS70 PWE", sunday: key,
+          events: [{ event: "pickup", stopId: stop.id, at: Date.now() - 20 * 60000 }] });
+      }
+      a.ok(stop, "the fixture has no North stop to mark");
+      a.eq(await W.closeFinishedRuns(env), 0, "a run that was heard from twenty minutes ago was closed");
+      const t = await W.tripState(env, key, "North", "real");
+      a.eq(t.ended, 0, "the run was ended");
     });
   });
 

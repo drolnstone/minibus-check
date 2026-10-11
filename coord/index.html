@@ -83,6 +83,7 @@ body{background:var(--paper);color:var(--ink);
   font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
 button{font:inherit;color:inherit;cursor:pointer;border:none;background:none;padding:0}
 input,textarea,select{font:inherit;color:inherit}
+::placeholder{color:var(--muted);opacity:.6}
 [hidden]{display:none!important}
 
 /* ---- the bar across the top ---- */
@@ -872,19 +873,19 @@ function api(op, extra, ms){
     /* Not signed in yet, there are no changes to speak of: the sign-in
        screen's own words, as it opened with. */
     if(!D) outage(noSignal(err) ? "off" : "slow");
-    else banner(navigator.onLine === false ? "No signal. Changes need a connection." : "The live server is not answering.");
+    else banner(navigator.onLine === false ? "No signal." : "The live server is not answering.");
     throw err;
   });
 }
 
 function authWords(out){
   if(!out || out.ok) return "";
-  if(out.locked) return "Too many wrong tries. Wait " + (out.minutes || 5) + " minutes.";
+  if(out.locked) return "Too many wrong tries. Locked for " + (out.minutes || 5) + " minutes.";
   if(out.error === "bad pin") return "That PIN is not right." +
     (out.left > 0 ? " " + out.left + (out.left === 1 ? " try" : " tries") + " left." : "");
   if(out.error === "not authorised") return "Only a coordinator can open this.";
   if(out.error === "unknown driver") return "That name is not on the Drivers tab.";
-  if(out.error === "no pin") return "You have no PIN. Put your phone number on the Drivers tab.";
+  if(out.error === "no pin") return "You have no PIN.";
   if(out.error === "no driver") return "Choose your name.";
   return "";
 }
@@ -1292,7 +1293,7 @@ function needs(){
     var p = pap[reg], r = p.motRun, rec = 'data-do="vlog" data-reg="'+esc(reg)+'"';
     var head = reg + ": " + p.label + " expired " + ukDay(p.date) + ".";
     if(p.item !== "mot") out.push({ tone:"stop", text: head + " Record the new insurance.", btn:"Record", data: rec });
-    else if(r && r.ended) out.push({ tone:"stop", text: head + " MOT run done. Record the new MOT.", btn:"Record", data: rec });
+    else if(r && r.ended) out.push({ tone:"stop", text: head + " MOT run done.", btn:"Record", data: rec });
     else if(r) out.push({ tone:"warn", text: reg + ": MOT run" + (r.garage ? " to " + r.garage : "") + " at " + r.time +
                           (r.started ? ", under way." : ", authorised by " + r.by + "."), btn:"Record", data: rec });
     else if(motBookingOn(reg, calToday())) out.push({ tone:"stop", text: head + " MOT booked today.", btn:"MOT run", data:'data-do="motrun" data-reg="'+esc(reg)+'"' });
@@ -1305,7 +1306,7 @@ function needs(){
     var d = b.dates || {};
     var none = ["mot", "insurance"].filter(function(k){ return !rnParts(d[k]); })
                                  .map(function(k){ return RENEWALS[k].label; });
-    if(none.length) out.push({ tone:"stop", text: b.reg + ": no " + none.join(" or ") + " date. Type it on the Buses tab.",
+    if(none.length) out.push({ tone:"stop", text: b.reg + ": no " + none.join(" or ") + " date.",
                                go:"bus/" + encodeURIComponent(b.reg) });
   });
   var runs = (D && D.runs) || {};
@@ -2107,8 +2108,8 @@ function editDriver(name){
       if(add || n !== (Number(v.order) || 0)) set.order = n;
       if($("drEmail")){
         var em = String($("drEmail").value || "").trim(), ph = String($("drPhone").value || "").trim();
-        if(em && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ sheetSay("Check the email address.", true); return; }
-        if(ph && !/^\+?[0-9 ()-]{7,20}$/.test(ph)){ sheetSay("Check the phone number.", true); return; }
+        if(em && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ sheetSay("That is not an email address.", true); return; }
+        if(ph && !/^\+?[0-9 ()-]{7,20}$/.test(ph)){ sheetSay("That is not a phone number.", true); return; }
         if(add || em !== v.email) set.email = em;
         if(add || ph !== v.phone) set.phone = ph;
       }
@@ -2166,10 +2167,10 @@ function myPin(){
       busy = false; sheetBusy(false);
       if(!out || out.ok !== true){
         sheetSay(out && out.error === "no pin" ? "You have no PIN yet: put your phone number on the Drivers tab."
-                                               : "The live server did not take that. Try again.", true);
+                                               : "The live server did not take that.", true);
         return;
       }
-      if(out.locked){ sheetSay("Too many wrong tries. Wait " + (out.minutes || 5) + " minutes.", true); return; }
+      if(out.locked){ sheetSay("Too many wrong tries. Locked for " + (out.minutes || 5) + " minutes.", true); return; }
       if(out.valid !== true){
         sheetSay("That PIN is not right." + (out.left > 0
           ? " " + out.left + (out.left === 1 ? " more try" : " more tries") + " before it pauses." : ""), true);
@@ -2184,8 +2185,8 @@ function myPin(){
       /* Every call after this one carries the new PIN. */
       pin = nw;
       closeSheet();
-      toast("PIN changed. Use it here and in the driver app.");
-    }, function(){ busy = false; sheetBusy(false); sheetSay("No connection. Try again.", true); });
+      toast("PIN changed.");
+    }, function(){ busy = false; sheetBusy(false); sheetSay("No connection.", true); });
   };
   ids.forEach(function(id){
     $(id).addEventListener("input", function(){
@@ -2263,7 +2264,7 @@ function editStop(id){
       var typed = flat($("stPost").value);
       var pc = pcKey(typed);
       var pcNew = add || typed !== flat(v.postcode);
-      if(pcNew && pc && !/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(pc)){ sheetSay("Check the postcode.", true); return; }
+      if(pcNew && pc && !/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(pc)){ sheetSay("That is not a postcode.", true); return; }
       if(pc) pc = pc.slice(0, -3) + " " + pc.slice(-3);
       var wh = flat($("stWhere").value);
       var set = {};
@@ -2744,7 +2745,7 @@ function recordFor(reg, from){
             return '<label class="check"><input type="checkbox" data-defg="' + i + '"><span>' + esc(g.item) +
                    ' <small>' + esc(n > 1 ? n + " reports since " + shortDay(g.oldest) : (g.oldest ? shortDay(g.oldest) : "")) + '</small></span></label>';
           }).join("") + '</div>' : '') +
-          '<div class="field"><label for="vlNotes">Notes</label><textarea id="vlNotes" maxlength="500"></textarea></div>',
+          '<div class="field"><label for="vlNotes">Notes</label><textarea id="vlNotes" maxlength="500" placeholder="e.g. Front brake pads replaced"></textarea></div>',
     go: "Record it",
     onGo: function(){ recordSend(b); } });
   /* What it was: each button on or off by itself. Done or Booked: one. */
@@ -3097,11 +3098,11 @@ function copyLink(){
   var done = function(){ toast("Link copied."); };
   try {
     if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(url).then(done, function(){ toast("Could not copy. Press and hold the link above.", true); });
+      navigator.clipboard.writeText(url).then(done, function(){ toast("Could not copy.", true); });
       return;
     }
   } catch(e){}
-  toast("Could not copy. Press and hold the link above.", true);
+  toast("Could not copy.", true);
 }
 /* Asks first: this sends email to drivers. Whatever is due today goes; a
    reminder already sent is never sent twice, so asking again is safe. */
@@ -3237,7 +3238,7 @@ function pdfSay(t, bad){ PDF.say = t ? { t: t, bad: !!bad } : null; if($("pdfSay
 function pdfScript(src){
   return new Promise(function(ok, no){
     var s = document.createElement("script");
-    s.src = src; s.onload = ok; s.onerror = function(){ no(new Error("The PDF maker did not load. Try again.")); };
+    s.src = src; s.onload = ok; s.onerror = function(){ no(new Error("The PDF maker did not load.")); };
     document.head.appendChild(s);
   });
 }
@@ -3357,8 +3358,7 @@ function endRun(route){
         busy = false; sheetBusy(false);
         if(out && out.ok){ closeSheet(); toast("The " + route + " run is closed."); refresh(); return; }
         var t = authWords(out); if(t){ lock(t); return; }
-        sheetSay(out && out.error === "your own run" ? "That is your own run. End it in the driver app."
-               : out && out.error === "no run" ? "There is no open run on " + route + "."
+        sheetSay(out && out.error === "no run" ? "There is no open run on " + route + "."
                : plain(out && out.error) || "The live server did not take that.", true);
       }, function(err){ busy = false; sheetBusy(false); sheetSay(plain(err) || "No answer.", true); });
     } });
@@ -3520,15 +3520,15 @@ function peek(){
    the phone notices, and a quiet ask every twenty seconds for the times it
    does not, which is most of them. Never while the page is out of sight, and
    never once the live server has answered. */
-var OFFLINE_SIGN = "No signal just now. Sign in once signal returns.";
+var OFFLINE_SIGN = "No signal.";
 /* On the sign-in screen, in the passenger page's own words and the same card,
    in the page under "Who is it?" rather than along the top. "" takes it away.
    It goes by itself once the live server answers (peek, above). */
 function outage(kind){
   var n = $("signNote");
   if(!n) return;
-  n.innerHTML = kind === "off" ? "<b>No signal just now.</b><br>Sign in once signal returns."
-              : kind === "slow" ? "<b>The live server is not answering.</b><br>Sign in once it does."
+  n.innerHTML = kind === "off" ? "<b>No signal just now.</b>"
+              : kind === "slow" ? "<b>The live server is not answering.</b>"
               : "";
   n.hidden = !kind;
 }
@@ -3549,7 +3549,7 @@ function offlineWatch(){
 }
 window.addEventListener("online", offlineWatch);
 window.addEventListener("offline", function(){
-  if(pin) banner("No signal. Changes need a connection.");
+  if(pin) banner("No signal.");
   else outage("off");
 });
 setInterval(function(){
@@ -3581,7 +3581,7 @@ function diagnosis(){
     li("This visit", pin ? (HOW === "carried" ? "Opened from the driver app, with the PIN keyed there." : "PIN keyed here.")
       : HOW === "idle" ? "Locked after " + SET.idleMinutes + " minutes untouched." : "Not open yet.");
     li("Lock and refresh", "Locks after " + SET.idleMinutes + " minutes untouched. An open screen asks again every " +
-       SET.refreshSeconds + " seconds. coordApp in config.js.");
+       SET.refreshSeconds + " seconds.");
     if(D){
       var w = Number(D.waiting) || 0, c = D.clockAgoSec;
       li("On the way to the sheet", w + (w === 1 ? " change." : " changes.") +
@@ -3848,7 +3848,7 @@ function bellOn(test){
     toast(was ? "A test alert is on its way to this phone." : "Coordinator alerts are on for this phone.");
   }, function(err){
     BELL.busy = false; bellPaint();
-    toast(String(err && err.message) === "not granted" ? "Not turned on." : "Could not turn alerts on. Try again.", true);
+    toast(String(err && err.message) === "not granted" ? "Not turned on." : "Could not turn alerts on.", true);
   });
 }
 $("barBell").addEventListener("click", bellTap);
@@ -3874,8 +3874,7 @@ function alertAskMaybe(){
   openSheet({
     eyebrow: "Coordinator",
     title: ios ? "Add this app to your Home Screen" : "Turn on alerts on this phone?",
-    line: ios ? "An iPhone only gives alerts to an app on its Home Screen. Then tap the bell at the top."
-              : "You will be told at once when a bus is stopped or a driver asks for something.",
+    line: "",
     keep: "Not now", go: ios ? "Show me how" : "Turn on",
     onGo: function(){ closeSheet(); if(ios) howOpen(false); else bellOn(false); }
   });

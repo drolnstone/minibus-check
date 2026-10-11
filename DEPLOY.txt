@@ -1,6 +1,6 @@
 MINIBUS
 =======
-  pages v1.107.0 · server w2.52.0 · sheet v1.113.0
+  pages v1.107.0 · server w2.53.0 · sheet v1.114.0
 
 Calling the coordinator (Asim, 11 Oct):
 
@@ -15,13 +15,15 @@ Calling the coordinator (Asim, 11 Oct):
     screen. After Submit, the Sent screen shows The bus does not run with
     the Call, and the dash shows Do not run, as before.
 
-Pages only. The Worker and Code.gs do not change. Pages v1.106.0 is PR #77's.
+Pages only. The Worker and Code.gs do not change in this one. If #77's
+Worker and Code.gs pastes are not done yet, do them first (its steps 1
+and 2: Worker w2.53.0, Code.gs v1.114.0).
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.105.0        v1.107.0
-  Worker  w2.52.0         w2.52.0   (no change)
-  Code.gs v1.113.0        v1.113.0  (no paste)
+  Pages   v1.106.0        v1.107.0
+  Worker  w2.53.0         w2.53.0   (no change)
+  Code.gs v1.114.0        v1.114.0  (no paste)
 
 
 IN THIS ORDER
@@ -33,8 +35,8 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.107.0 · server w2.52.0 · sheet
-   v1.113.0 .
+A. The foot of all three apps reads  app v1.107.0 · server w2.53.0 · sheet
+   v1.114.0 .
 B. Passenger app after 09:30 on a phone with no seat: Bookings have
    closed, with Call and today's coordinator under it.
 

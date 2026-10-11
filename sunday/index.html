@@ -421,6 +421,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 /* Big, spaced and centred, because it is eleven digits being read back by
    somebody who has typed them on a kerb. font-size:16px or over, or iOS
    zooms the whole page the moment the caret lands in it. */
+::placeholder{color:var(--muted);opacity:.6}
 .ask-input{width:100%;min-height:var(--tap);border-radius:var(--r);
   border:1.5px solid var(--hair);background:var(--card);color:var(--ink);
   font:inherit;font-size:22px;font-weight:600;letter-spacing:.1em;text-align:center;
@@ -1269,7 +1270,7 @@ function load(again){
         return;
       }
       $("body").innerHTML='<div class="note note-warn"><b>The stops could not be loaded.</b><br>'+
-        esc(plainError(err))+'<br>Pull down to refresh, or:'+
+        esc(plainError(err))+
         '<br>'+callButton()+'</div>';
       retryStart();
     });
@@ -1317,7 +1318,7 @@ var SHORTHAND = {
   "not sent":    "It did not go through.",
   "not saved":   "It was not saved.",
   "no answer":   "The record did not answer.",
-  "bad token":   "This copy of the app is not recognised. Ring the bus coordinator."
+  "bad token":   "This copy of the app is not recognised."
 };
 
 /* Whatever was thrown, in words somebody at a bus stop can do something with.
@@ -1331,7 +1332,7 @@ var SHORTHAND = {
 function plainError(err){
   if(offlineNow(err)) return "Your phone is not on the network just now.";
   var m = String((err && err.message) || err || "").trim();
-  if(!m) return "Something did not work. Try again in a moment.";
+  if(!m) return "Something did not work.";
   if(SHORTHAND[m.toLowerCase()]) return SHORTHAND[m.toLowerCase()];
   if(/took too long|abort|timed out|timeout/i.test(m))
     return "The record took too long to answer.";
@@ -1901,7 +1902,7 @@ function alertAskWords(seatAt){
   }
   if(CLOSED) return "";
   /* The date is in the eyebrow above, so it is not said twice. */
-  return "No seat booked. Book below.";
+  return "No seat booked.";
 }
 
 function liveAgeWords(){
@@ -1966,7 +1967,7 @@ function paintLive(){
           '<p class="live-eyebrow">Not running</p>'+
           '<h2>No bus to '+esc(live.stop||"your stop")+' today</h2>'+
           '<p class="live-sub">The '+esc(live.route||"")+' bus is not running '+
-            'this Sunday. Sorry for the short notice.</p>'+
+            'this Sunday.</p>'+
           callButton()+
         '</div>';
       paintStopTimes();
@@ -2321,7 +2322,7 @@ function paint(){
      journey. */
   if(STOPGONE){
     html+='<div class="note note-warn"><b>Your stop has been taken off the '+
-          'timetable.</b> '+(CLOSED ? callButton() : 'Please pick another one below.')+
+          'timetable.</b>'+(CLOSED ? ' '+callButton() : '')+
           '</div>';
   }
 
@@ -2892,7 +2893,7 @@ function askSend(){
     var out=readJson(t);
     askDone();
     if(!out || out.ok!==true){
-      askSay((out && out.error) || "That did not go through. Try again.", true);
+      askSay((out && out.error) || "That did not go through.", true);
       return;
     }
     idSave(out.pid, out.phone || phone);
@@ -2906,7 +2907,7 @@ function askSend(){
        no booking and changes no seat. So unlike Confirm there is nothing to
        go and check, and saying try again is the honest whole of it. */
     askDone();
-    askSay(plainError(err) + " Try again.", true);
+    askSay(plainError(err), true);
   });
 }
 
@@ -3116,9 +3117,7 @@ function verifySend(payload, done){
          Left to paintBar it would spin at nothing for the rest of the
          morning. */
       if(cancelAsk || CLOSED) paint(); else paintBar();
-      toast(cancelAsk
-        ? "That did not save. Check your signal and tap Yes again."
-        : "That did not save. Check your signal and tap Confirm again.", true);
+      toast("That did not save.", true);
     });
 }
 

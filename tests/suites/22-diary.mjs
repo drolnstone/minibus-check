@@ -321,7 +321,7 @@ export default async function (root) {
       a.has(d[h].body, "09:52", h + ": " + d[h].body);
     }
     a.has(d["10:05 13 min late"].title, "not gone out");
-    a.has(d["11:20 past due"].title, "End the trip");
+    a.hasnt(d["11:20 past due"].all, "End the trip", "asked to end a run the app gives him no way to end");
     a.hasnt(d["11:05 ended"].all, "End the trip", "chased to close a closed run");
     a.hasnt(d["19:00"].all, "driving today", "still on duty at seven in the evening");
   });
@@ -358,8 +358,8 @@ export default async function (root) {
        to close it. Gating on the rota alone would have silenced exactly the man
        holding the keys. */
     const d = await drvDay({ who: "Bro Trevor", drove: "Bro Trevor" });
-    a.has(d["11:20 past due"].title, "End the trip",
-          "the man driving was told nothing: " + d["11:20 past due"].title);
+    a.has(d["11:20 past due"].title, "Your run is running",
+          "the man driving was not answered about his run: " + d["11:20 past due"].title);
     a.hasnt(d["08:00 duty window"].title, "driving today",
             "before he set off the rota did not name him, and it should not pretend");
   });

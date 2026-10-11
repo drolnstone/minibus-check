@@ -60,7 +60,7 @@ export default async function (root) {
       const out = await W.pushWhat(env, DRV);
       a.eq(out.title, "Time to set off");
       a.has(out.body, "09:52");
-      a.has(out.body, "Tap Start");
+      a.hasnt(out.body, "Tap Start", "an instruction in the push");
     });
   });
 
