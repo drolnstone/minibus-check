@@ -27,9 +27,9 @@ Pages, Worker and Code.gs.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.105.0        v1.108.0
-  Worker  w2.52.0         w2.55.0
-  Code.gs v1.113.0        v1.116.0
+  Pages   v1.106.0        v1.108.0
+  Worker  w2.53.0         w2.55.0
+  Code.gs v1.114.0        v1.116.0
 
 
 IN THIS ORDER

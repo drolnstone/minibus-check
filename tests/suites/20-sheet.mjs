@@ -722,7 +722,7 @@ export default function (root) {
       const his = to(byHand(deciding({ on: "Bro Trevor" }), "Rejected"), "ade@b.c");
       a.eq(his.length, 1);
       a.hasnt(his[0].body, "still down to drive", "got: " + his[0].body);
-      a.has(his[0].body, "Open the app");
+      a.hasnt(his[0].body, "Open the app", "an instruction in the email");
     });
   });
 

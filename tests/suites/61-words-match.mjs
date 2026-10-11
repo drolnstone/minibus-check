@@ -39,7 +39,7 @@ export default async function (root) {
       a.ok(subj.indexOf("Minibus: BUS STOPPED: NH56 FWP: Insurance expired 05/10/2026") > -1, subj.join(" / "));
       a.not(subj.some((x) => /Service expired/.test(x)), subj.join(" / "));
       const ins = L.gas.mail.find((m) => /Insurance expired/.test(m.subject));
-      a.has(String(ins && ins.body), "Record the new insurance");
+      a.hasnt(String(ins && ins.body), "Record the new insurance", "an instruction in the alert");
     });
   });
 

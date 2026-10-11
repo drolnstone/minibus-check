@@ -483,7 +483,7 @@ export default async function (root) {
     a.eq(net.calls.length, 0, "the setting is the whole of it");
   });
 
-  s.test("the reminder says his stop, his time and his seats, and how to change it", async (a) => {
+  s.test("the reminder says his stop, his time and his seats, and nothing more", async (a) => {
     const out = await words(WHEN.saturdayEvening, async (db) => {
       const now = W.runSunday();
       const target = W.bookingsClosed(now) ? W.keyAddWeeks(now, 1) : now;
@@ -493,7 +493,7 @@ export default async function (root) {
     a.has(out.body, "Stanley Pk");
     a.has(out.body, "10:52");
     a.has(out.body, "2 seats");
-    a.has(out.body, "Tap to change or cancel", "got: " + out.body);
+    a.hasnt(out.body, "Tap", "an instruction in the reminder: " + out.body);
   });
 
   /* ---- the words themselves ---------------------------------------------
@@ -553,7 +553,7 @@ export default async function (root) {
   s.test("somebody with no seat is asked to book one", async (a) => {
     const out = await words(WHEN.wednesdayEvening, async () => {});
     a.eq(out.title, "Book your seat for Sunday");
-    a.has(out.body, "Tap");
+    a.hasnt(out.body, "Tap", "an instruction in the reminder");
   });
 
   s.test("and told when it closes", async (a) => {
