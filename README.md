@@ -412,17 +412,18 @@ Order matters, because the pages depend on the two servers being ready.
    it. It builds every table and is safe to run twice. An existing database
    needs nothing: the one table and one column v1.70.0 added are created by
    the Worker itself the first time a check reaches it.
-1. **worker.js** → Cloudflare dashboard → Deploy. Once only, from w2.16.0:
-   add a **Cron Trigger** to the Worker that runs every minute
-   (`* * * * *`). It is the Worker's clock. Without it everything still
-   works, on the five minute sync, as before.
+1. **worker.js** goes live by itself when the pull request is merged
+   (from 11 Oct 2026): Cloudflare's Git deploy on minibus-api builds main
+   with `npx wrangler deploy`, using `wrangler.toml` (the every-minute
+   clock, the D1 binding `DB`, logs on). Secrets stay in the dashboard.
+   Deployments shows each build; the app footer shows the live version.
 2. **Code.gs** → Apps Script editor → Save → Deploy
 3. Minibus menu → **Send everything to the live server now**
 4. Minibus menu → **Is the live server working?** — it should report the rota
    and mileage copies as a few minutes old
-5. **The pages** → GitHub, with the `coord/` folder from v1.77.0
+5. **The pages and the Worker** → merge the pull request on GitHub
 
-Steps 1–4 need a computer. Step 5 can be done from a phone.
+Steps 2–4 need a computer. Step 5 can be done from a phone.
 
 Out of order, nothing breaks: the app asks a Worker with nothing on its shelf,
 gets a clean refusal, and falls back to Apps Script. It simply will not be any

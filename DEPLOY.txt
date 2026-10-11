@@ -4,11 +4,11 @@ MINIBUS
 
 The Worker goes live from GitHub (Asim, 11 Oct):
 
-  - wrangler.toml holds the Worker's settings: name minibus-api, the
-    every-minute clock, the database minibus as DB, logs on.
-  - Once Cloudflare's Git deploy is connected, merging a pull request puts
-    server/worker.js live. Pasting the Worker stops.
-  - Secrets stay in the dashboard and are not touched.
+  - Cloudflare's Git deploy is connected to minibus-api. Merging a pull
+    request builds main and puts server/worker.js live. Pasting the Worker
+    has stopped.
+  - This pull request changes no code. Merging it runs the first build,
+    which puts w2.55.0 live.
 
 Nothing to paste. No version change.
 
@@ -17,19 +17,19 @@ IN THIS ORDER
 -------------
 
 1. Merge the pull request.
-2. Cloudflare, minibus-api, Settings, Build, Connect:
-     repository minibus-check, branch main
-     Deploy command  npx wrangler deploy
-     Path  /
-     Preview builds  off
-     API token  Create new token
-3. Connect.
 
 
 AFTER IT
 --------
 
-A. Deployments shows a new version from GitHub, built without error.
-B. Settings still shows the clock Every minute, both secrets and DB.
-C. The foot of all three apps still reads  server w2.55.0 .
-D. Observability shows the every-minute runs.
+A. minibus-api, Deployments: a new version from GitHub, Ready.
+B. The foot of all three apps reads  server w2.55.0 .
+C. Settings still shows the clock Every minute, both secrets and DB.
+
+
+FROM NOW ON
+-----------
+
+1. Paste Code.gs, then Deploy, Manage deployments, New version (only when
+   Code.gs changed).
+2. Merge the pull request. Pages and Worker go live together.
