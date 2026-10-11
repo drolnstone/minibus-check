@@ -4,7 +4,7 @@
 
 name = "minibus-api"
 main = "server/worker.js"
-compatibility_date = "COMPATIBILITY_DATE"
+compatibility_date = "2026-10-01"
 workers_dev = true
 keep_vars = true
 
@@ -14,7 +14,7 @@ crons = ["* * * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "minibus"
-database_id = "DATABASE_ID"
+database_id = "983098fd-7ac8-443e-b8b3-2822e22a5b7e"
 
 [observability]
 enabled = true
