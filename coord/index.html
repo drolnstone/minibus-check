@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.104.2 · THE COORDINATOR'S APP.
+<!-- BUILD v1.105.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -707,7 +707,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.104.2";
+var PAGE_VERSION = "v1.105.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -2665,7 +2665,7 @@ function editBus(reg){
   show();
 }
 
-/* ---- recording one -------------------------------------------------------- */
+/* ---- recording one, or several --------------------------------------------- */
 
 var VL = null;          /* what the open Record form has chosen */
 
@@ -2681,29 +2681,63 @@ function numIn(v){
   return isFinite(n) && n >= 0 ? n : NaN;
 }
 
+/* From v1.105.0 more than one thing may be chosen (Asim, 11 Oct: an MOT and
+   a service on the same visit). Each is its own entry on the log, with the
+   same Done or Booked, day, mileage, garage and notes; each has its own cost
+   and, for the four dated items, its own date given. Chosen in the order the
+   buttons are in. */
+function vlChosen(){ return VLOG_WHAT.filter(function(w){ return VL.what.indexOf(w) !== -1; }); }
+function vlCostId(w){ return "vlCost" + (VL.what.length > 1 ? "_" + VLOG_WHAT.indexOf(w) : ""); }
+function vlGivenId(item){ return "vlGiven_" + item; }
+
+/* The boxes that come and go with what is chosen. What was typed in them
+   stays when another is tapped. */
+function vlKeep(){
+  Array.prototype.forEach.call(document.querySelectorAll("#vlCosts input, #vlGivens input"), function(x){
+    VL.typed[x.getAttribute("data-k")] = x.value;
+  });
+}
+function vlBoxes(b){
+  var ws = vlChosen(), many = ws.length > 1;
+  var cw = ws.length ? ws : [""];
+  $("vlCosts").innerHTML = cw.map(function(w){
+    var id = w ? vlCostId(w) : "vlCost", k = "cost:" + w;
+    return '<div class="field"><label for="' + id + '">' + esc(many ? w + " cost (£)" : "Cost (£)") + '</label>' +
+           '<input id="' + id + '" data-k="' + esc(k) + '" inputmode="decimal" autocomplete="off" placeholder="e.g. 245.00" value="' + esc(VL.typed[k] || "") + '"></div>';
+  }).join("");
+  $("vlGivens").innerHTML = ws.filter(function(w){ return VLOG_ITEM[w]; }).map(function(w){
+    var item = VLOG_ITEM[w], id = vlGivenId(item), k = "given:" + item, l = givenLabel(item);
+    return '<div class="field"><label for="' + id + '">' + esc(many ? w + ": " + l.charAt(0).toLowerCase() + l.slice(1) : l) + '</label>' +
+           '<input type="date" id="' + id + '" data-k="' + esc(k) + '" value="' + esc(VL.typed[k] || "") + '"></div>';
+  }).join("");
+  Array.prototype.forEach.call(document.querySelectorAll("#vlGivens input"), function(el){
+    el.onchange = function(){ recordShow(b); }; el.oninput = el.onchange;
+  });
+}
+
 /* The Record form. from, a Booked entry the form starts from: what it was,
    and its day if that has come. */
 function recordFor(reg, from){
   var b = busByReg(reg); if(!b) return;
   var today = calToday();
-  VL = { reg: b.reg, what: from ? from.what : "", status: "Done" };
+  VL = { reg: b.reg, what: from && from.what ? [from.what] : [], status: "Done", typed: {} };
   var m = milesOf(b.reg);
   /* One tick per fault, from v1.90.0, closing every report of it. */
   var defs = defectGroups(defectsOf(b.reg));
   var startDay = from && from.bookedFor && from.bookedFor <= today ? from.bookedFor : today;
   openSheet({ eyebrow: b.reg, title: "Record something",
     body: '<div class="chips" id="vlWhat">' + VLOG_WHAT.map(function(w){
-            return '<button type="button" data-w="' + esc(w) + '" class="' + (w === VL.what ? 'on' : '') + '">' + esc(w) + '</button>';
+            return '<button type="button" data-w="' + esc(w) + '" class="' + (VL.what.indexOf(w) !== -1 ? 'on' : '') + '">' + esc(w) + '</button>';
           }).join("") + '</div>' +
           '<div class="chips" id="vlStatus"><button type="button" data-s="Done" class="on">Done</button>' +
           (from ? '' : '<button type="button" data-s="Booked">Booked ahead</button>') + '</div>' +
           '<div class="field" id="vlDoneF"><label for="vlDay">Day it was done</label><input type="date" id="vlDay" value="' + esc(startDay) + '" max="' + esc(today) + '"></div>' +
           '<div class="field" id="vlBookF" hidden><label for="vlFor">Booked for</label><input type="date" id="vlFor" min="' + esc(today) + '"></div>' +
-          '<div class="field" id="vlGivenF" hidden><label for="vlGiven" id="vlGivenL"></label><input type="date" id="vlGiven"></div>' +
-          '<p class="preview" id="vlNext" hidden></p>' +
+          '<div id="vlGivens"></div>' +
+          '<p class="preview" id="vlNext" style="white-space:pre-line" hidden></p>' +
           '<div class="two"><div class="field"><label for="vlMiles">Mileage</label><input id="vlMiles" inputmode="numeric" autocomplete="off"' +
             ' placeholder="' + esc(m && m.miles ? "Last read " + Number(m.miles).toLocaleString("en-GB") : "e.g. 57363") + '"></div>' +
-          '<div class="field"><label for="vlCost">Cost (£)</label><input id="vlCost" inputmode="decimal" autocomplete="off" placeholder="e.g. 245.00"></div></div>' +
+          '<div id="vlCosts" style="display:contents"></div></div>' +
           '<div class="field"><label for="vlGarage">Garage</label><input id="vlGarage" maxlength="80" autocomplete="off" placeholder="e.g. High Street Garage" value="' + esc(from && from.garage || "") + '"></div>' +
           (defs.length ? '<div id="vlDefs"><p class="tiny" style="margin:0 0 2px">Defects put right</p>' + defs.map(function(g, i){
             var n = g.reports.length;
@@ -2713,57 +2747,68 @@ function recordFor(reg, from){
           '<div class="field"><label for="vlNotes">Notes</label><textarea id="vlNotes" maxlength="500"></textarea></div>',
     go: "Record it",
     onGo: function(){ recordSend(b); } });
-  var pick = function(sel, attr, set){
-    Array.prototype.forEach.call(document.querySelectorAll(sel + " button"), function(x){
-      x.onclick = function(){
-        set(x.getAttribute(attr));
-        Array.prototype.forEach.call(document.querySelectorAll(sel + " button"), function(y){ y.classList.toggle("on", y === x); });
-        if(!busy) sheetSay("");
-        recordShow(b);
-      };
-    });
-  };
-  pick("#vlWhat", "data-w", function(w){ VL.what = w; });
-  pick("#vlStatus", "data-s", function(s){ VL.status = s; });
-  ["vlDay", "vlFor", "vlGiven"].forEach(function(id){
+  /* What it was: each button on or off by itself. Done or Booked: one. */
+  Array.prototype.forEach.call(document.querySelectorAll("#vlWhat button"), function(x){
+    x.onclick = function(){
+      if(busy) return;
+      var w = x.getAttribute("data-w"), i = VL.what.indexOf(w);
+      vlKeep();
+      if(i === -1) VL.what.push(w); else VL.what.splice(i, 1);
+      x.classList.toggle("on", i === -1);
+      sheetSay("");
+      vlBoxes(b);
+      recordShow(b);
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("#vlStatus button"), function(x){
+    x.onclick = function(){
+      VL.status = x.getAttribute("data-s");
+      Array.prototype.forEach.call(document.querySelectorAll("#vlStatus button"), function(y){ y.classList.toggle("on", y === x); });
+      if(!busy) sheetSay("");
+      recordShow(b);
+    };
+  });
+  ["vlDay", "vlFor"].forEach(function(id){
     var el = $(id); if(el){ el.onchange = function(){ recordShow(b); }; el.oninput = el.onchange; }
   });
+  vlBoxes(b);
   recordShow(b);
 }
 
-/* What the form says as it is filled: the date the bus will have. */
+/* What the form says as it is filled: the date the bus will have, for each
+   dated item chosen. */
 function recordShow(b){
   if(!VL) return;
-  var item = VLOG_ITEM[VL.what] || "", done = VL.status === "Done";
-  var day = $("vlDay").value, given = item && done ? $("vlGiven").value : "";
-  var was = (b.dates || {})[item] || "";
+  var ws = vlChosen(), done = VL.status === "Done";
+  var day = $("vlDay").value;
   $("vlDoneF").hidden = !done;
   $("vlBookF").hidden = done;
-  $("vlGivenF").hidden = !(item && done);
-  if(item) $("vlGivenL").textContent = givenLabel(item);
+  $("vlGivens").hidden = !done;
   var defs = $("vlDefs"); if(defs) defs.hidden = !done;
-  $("vlNotes").placeholder = done ? (VLOG_SAMPLE[VL.what] || "e.g. Fire extinguisher replaced") : "e.g. Booked for 9am, drop the bus off at 8:45";
+  $("vlNotes").placeholder = done ? (VLOG_SAMPLE[ws[0]] || "e.g. Fire extinguisher replaced") : "e.g. Booked for 9am, drop the bus off at 8:45";
   var p = $("vlNext");
-  if(!done){
-    p.hidden = true;
-    return;
-  }
-  if(!item || !rnParts(day)){ p.hidden = true; return; }
-  var nd = rnNextDue(item, day, was, given);
-  var late = was ? rnDays(was, day) : null;
+  var items = ws.filter(function(w){ return VLOG_ITEM[w]; });
+  if(!done || !items.length || !rnParts(day)){ p.hidden = true; return; }
   p.hidden = false;
-  p.textContent = (was ? "It was due " + ukDay(was) + (late !== null ? ": " + lateWords(late) + ". " : ". ") : "") +
-                  "Next due " + ukDay(nd.next) + ".";
+  p.textContent = items.map(function(w){
+    var item = VLOG_ITEM[w], g = $(vlGivenId(item));
+    var was = (b.dates || {})[item] || "";
+    var nd = rnNextDue(item, day, was, g ? g.value : "");
+    var late = was ? rnDays(was, day) : null;
+    return (ws.length > 1 ? w + ": " : "") +
+           (was ? "It was due " + ukDay(was) + (late !== null ? ": " + lateWords(late) + ". " : ". ") : "") +
+           "Next due " + ukDay(nd.next) + ".";
+  }).join("\n");
 }
 
 function recordSend(b){
-  if(!VL.what){ sheetSay("Choose what it was.", true); return; }
-  var today = calToday(), done = VL.status === "Done", item = VLOG_ITEM[VL.what] || "";
-  var a = { kind: "vlog", reg: b.reg, what: VL.what, status: VL.status };
+  var ws = vlChosen();
+  if(!ws.length){ sheetSay("Choose what it was.", true); return; }
+  var today = calToday(), done = VL.status === "Done";
+  var a = { kind: "vlog", reg: b.reg, status: VL.status };
   if(done){
     a.done = $("vlDay").value || today;
     if(a.done > today){ sheetSay("That day has not come yet.", true); return; }
-    if(item) a.given = $("vlGiven").value || "";
     var groups = defectGroups(defectsOf(b.reg));
     a.defects = [].concat.apply([], Array.prototype.map.call(document.querySelectorAll("#vlDefs input[data-defg]:checked"), function(x){
       var g = groups[Number(x.getAttribute("data-defg"))]; return g ? g.keys : []; }));
@@ -2772,13 +2817,61 @@ function recordSend(b){
     if(!a.bookedFor){ sheetSay("Say the day it is booked for.", true); return; }
     if(a.bookedFor < today){ sheetSay("That day has gone.", true); return; }
   }
-  var miles = numIn($("vlMiles").value), cost = numIn($("vlCost").value);
+  var miles = numIn($("vlMiles").value);
   if(miles !== miles){ sheetSay("The mileage is not a number of miles.", true); return; }
-  if(cost !== cost){ sheetSay("The cost is not an amount in pounds.", true); return; }
-  a.miles = miles; a.cost = cost;
+  a.miles = miles;
   a.garage = $("vlGarage").value || "";
   a.notes = $("vlNotes").value || "";
-  act(a);
+  var list = [];
+  for(var i = 0; i < ws.length; i++){
+    var w = ws[i], item = VLOG_ITEM[w] || "";
+    var cost = numIn($(ws.length > 1 ? vlCostId(w) : "vlCost").value);
+    if(cost !== cost){ sheetSay((ws.length > 1 ? w + ": the cost" : "The cost") + " is not an amount in pounds.", true); return; }
+    var one = {}; for(var k in a) one[k] = a[k];
+    one.what = w; one.cost = cost;
+    if(done && item) one.given = ($(vlGivenId(item)) || {}).value || "";
+    /* A defect put right goes on one entry: the repair, if there is one. */
+    var home = ws.indexOf("Repair") !== -1 ? "Repair" : ws[0];
+    if(done && w !== home) one.defects = [];
+    list.push(one);
+  }
+  if(list.length === 1){ act(list[0]); return; }
+  actMany(list);
+}
+
+/* Several changes from one sheet, one after another, each with its own id
+   made from the sheet's and what it is, so a second tap after a lost answer
+   sends the same ones again and the live server does each once. */
+function actMany(list){
+  if(busy) return;
+  busy = true; sheetBusy(true); sheetSay("Sending…");
+  var base = SHEET.id || newId(), words = [], i = 0;
+  var stop = function(m){
+    busy = false; sheetBusy(false);
+    if(i) refresh();
+    sheetSay(m, true);
+  };
+  var next = function(){
+    if(i >= list.length){
+      busy = false; sheetBusy(false);
+      closeSheet();
+      toast(words.join(" ") || "Done.");
+      refresh();
+      setTimeout(refresh, 8000);
+      return;
+    }
+    var body = {}; for(var k in list[i]) body[k] = list[i][k];
+    body.id = base + "-" + VLOG_WHAT.indexOf(list[i].what);
+    api("act", { act: body }).then(function(out){
+      if(!out || !out.ok){ stop(list[i].what + ": " + (plain(out && out.error) || "The live server did not take that.")); return; }
+      words.push((out.action && out.action.words) || "");
+      i++;
+      next();
+    }, function(err){
+      stop(list[i].what + ": " + (plain(err) || "The live server did not answer."));
+    });
+  };
+  next();
 }
 
 /* ---- putting one right -------------------------------------------------------

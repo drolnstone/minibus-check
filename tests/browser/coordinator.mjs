@@ -1918,6 +1918,53 @@ if (want("C54")) {
   await p.ctx.close();
 }
 
+/* C55 — v1.105.0 (Asim, 11 Oct). Several things recorded at once: an MOT
+   and a service on one visit are two entries, each with its own cost and its
+   own next due date, the rest shared; the defect ticked goes on one. */
+if (want("C55")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  await p.pg.evaluate(() => { location.hash = "bus/NH56%20FWP"; });
+  await p.wait(400);
+  const before = db._rows("SELECT body FROM coord_actions WHERE kind='vlog'").length;
+  await p.pg.click('#busBody [data-do="vlog"]');
+  await p.wait(250);
+  await p.tapText("MOT", "#vlWhat");
+  await p.tapText("Service", "#vlWhat");
+  await p.tapText("Tyres", "#vlWhat");
+  await p.tapText("Tyres", "#vlWhat");
+  const on = await p.pg.evaluate(() => [...document.querySelectorAll("#vlWhat button.on")].map((b) => b.textContent));
+  const labels = await p.pg.evaluate(() => [...document.querySelectorAll("#vlCosts label, #vlGivens label")].map((l) => l.textContent));
+  const preview = await p.text("#vlNext");
+  await p.pg.fill("#vlMiles", "53,800");
+  await p.pg.fill("#vlCost_0", "54.85");
+  await p.pg.fill("#vlCost_1", "x");
+  await p.pg.click("#sheetGo");
+  await p.wait(300);
+  const refused = await p.text("#sheetSay");
+  await p.pg.fill("#vlCost_1", "189.00");
+  await p.pg.fill("#vlGarage", "Walton Garage");
+  const box = await p.pg.$("#vlDefs input");
+  if (box) await box.click();
+  await p.shot("C55a-record-two");
+  await p.pg.click("#sheetGo");
+  await p.wait(1500);
+  const rows = db._rows("SELECT body FROM coord_actions WHERE kind='vlog'").slice(before).map((r) => JSON.parse(r.body));
+  const by = (w) => rows.find((r) => r.what === w) || {};
+  const mot = by("MOT"), svc = by("Service");
+  const sheetUp = await p.sheetUp();
+  await p.shot("C55b-bus-after");
+  check("C55", "an MOT and a service recorded together: two entries, each its own cost and next due, mileage and garage on both",
+        on.join(",") === "MOT,Service" && labels.indexOf("MOT cost (£)") !== -1 && labels.indexOf("Service cost (£)") !== -1 &&
+        labels.indexOf("MOT: expiry date on the certificate") !== -1 && /MOT: .*Next due/.test(preview) && /Service: .*Next due/.test(preview) &&
+        /Service: the cost is not an amount in pounds/.test(refused) &&
+        rows.length === 2 && mot.cost === 54.85 && svc.cost === 189 && mot.miles === 53800 && svc.miles === 53800 &&
+        mot.garage === "Walton Garage" && svc.garage === "Walton Garage" && mot.next && svc.next &&
+        (svc.defects || []).length === 0 && !sheetUp && !p.errs.length,
+        JSON.stringify({ on, labels, preview, refused, rows, sheetUp, errs: p.errs }).slice(0, 900));
+  await p.ctx.close();
+}
+
 await done();
 cleanup(ROOT);
 const bad = results.filter((r) => !r.ok);

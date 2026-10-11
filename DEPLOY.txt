@@ -1,42 +1,53 @@
 MINIBUS
 =======
-  pages v1.104.2 · server w2.52.0 · sheet v1.113.0
+  pages v1.105.0 · server w2.52.0 · sheet v1.113.0
 
-A Sunday-morning last chance to book (Asim, 11 Oct, after Saturday's
-reminder went nowhere):
+Record something takes several things at once (Asim, 11 Oct):
 
-  - Sunday 08:00 to 09:00, every phone with alerts on and no seat for that
-    morning gets "Last chance to book for Sunday. Bookings close at 09:30
-    today."
-  - People who have booked hear nothing extra; their 07:30 "Your bus today"
-    is unchanged.
-  - Coordinators get one "Sent: Booking reminders" with the count.
+  - On a bus page, Record something: tap as many of MOT, Service,
+    Insurance, Parking permit, Repair, Tyres and Other as were done (or
+    booked) on the visit. A second tap takes one off.
+  - Record it puts one entry on the Vehicle Log for each, with the same
+    Done or Booked ahead, day, mileage, garage and notes.
+  - Each one chosen has its own cost box (MOT cost, Service cost ...), and
+    each dated item its own date box (MOT: expiry date on the certificate
+    ...). The blue box shows each one's next due date.
+  - A defect ticked as put right goes on the Repair entry if Repair is
+    chosen, otherwise on the first one.
 
-Code.gs only. The pages and the Worker do not change.
+Pages only. The Worker and Code.gs do not change.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.104.2        v1.104.2  (no change)
+  Pages   v1.104.2        v1.105.0
   Worker  w2.52.0         w2.52.0   (no change)
-  Code.gs v1.112.0        v1.113.0  (paste)
+  Code.gs v1.113.0        v1.113.0  (no paste)
 
 
 IN THIS ORDER
 -------------
 
-1. Open the sheet, Extensions, Apps Script. Select everything in Code.gs,
-   paste this pull request's Code.gs over it, Save.
-   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/last-chance-reminder-j2u2hj/Code.gs
-2. Deploy, Manage deployments, the pencil, Version: New version, Deploy.
-3. Merge this pull request.
-
-To catch this morning (11 Oct), do 1 and 2 before 08:55. The sheet passes
-the new time to the live server on its next five-minute sync, and the
-reminder goes on the first minute after that, up to 09:00.
+1. Merge the pull request.
 
 
 AFTER IT
 --------
 
-A. Is everything working? says  Script is v1.113.0 .
-B. Between 08:00 and 09:00 your phone gets "Sent: Booking reminders".
+A. The foot of all three apps reads  app v1.105.0 · server w2.52.0 · sheet
+   v1.113.0 .
+B. Record an MOT and a service together on a bus: the log shows two
+   entries, each with its own cost, and both dates move.
+
+
+WHAT CHANGED
+------------
+
+1. coord/index.html: the Record form's item buttons each go on and off;
+   one cost box per item chosen and one date box per dated item; Record it
+   sends one change per item, in turn, each with its own id, so a second
+   tap after a lost answer does none of them twice.
+
+2. Version v1.105.0 in all three pages and their sw.js.
+
+3. tests/browser/coordinator.mjs C55: an MOT and a service recorded
+   together.
