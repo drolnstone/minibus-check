@@ -16,7 +16,7 @@ Pages and Worker only. Code.gs is unchanged.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.110.0        v1.112.0   (v1.111.0 is the Drivers page phones PR)
+  Pages   v1.111.0        v1.112.0
   Worker  w2.57.0         w2.58.0
   Code.gs v1.117.0        v1.117.0
 
