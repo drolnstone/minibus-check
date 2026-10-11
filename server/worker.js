@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.55.0";
+const SCRIPT_VERSION = "w2.56.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -8973,6 +8973,125 @@ async function contactTellDrivers(env, me, msg, d, heard) {
   return sent;
 }
 
+/* ---- A MESSAGE FROM A COORDINATOR, from w2.56.0 ------------------------
+
+   Asim, 11 Oct 2026: a message centre in the coordinator app, in place of a
+   button that only sent the booking reminder. The coordinator's own words,
+   to the groups ticked: coordinators, every active driver or the drivers on
+   the coming Sunday's rota, and passengers with alerts on (all of them, or
+   only those booked or not booked for the Sunday bookings are open for).
+
+   Through each phone's box (coordAlertNext), as the other coordinator
+   alerts go, so the words are the coordinator's and never worked out from
+   the run. Sent at once, quiet hours or not: a coordinator chose to send
+   it now. Each person once, whatever groups they are in. A coordinator no
+   phone took it for is emailed it, as with a change. */
+const MESSAGE_TO = ["coord", "drivers", "rota", "passengers", "booked", "unbooked"];
+const MESSAGE_MAX = 200;
+
+/* The Sunday bookings are open for, as the booking reminder works it out. */
+function messageSunday() {
+  const now = runSunday();
+  return bookingsClosed(now) ? keyAddWeeks(now, 1) : now;
+}
+
+async function actMessage(env, me, act, id) {
+  const text = String((act && act.text) || "").replace(/\s+/g, " ").trim();
+  if (!text) return { ok: false, error: "Type the message." };
+  if (text.length > MESSAGE_MAX) return { ok: false, error: "The message is over " + MESSAGE_MAX + " characters." };
+  const want = Array.isArray(act && act.to) ? act.to.map(String) : [];
+  const to = MESSAGE_TO.filter((g) => want.indexOf(g) !== -1);
+  if (!to.length) return { ok: false, error: "Pick who it goes to." };
+  const key = messageSunday();
+  const names = { coord: "coordinators", drivers: "drivers", rota: "drivers on " + shortDay(key),
+                  passengers: "passengers", booked: "passengers booked for " + shortDay(key),
+                  unbooked: "passengers not booked for " + shortDay(key) };
+  const toWords = to.filter((g) => !(g === "rota" && to.indexOf("drivers") !== -1) &&
+                                   !((g === "booked" || g === "unbooked") && to.indexOf("passengers") !== -1))
+    .map((g) => names[g]).join(", ");
+  const reply = { message: { phones: 0, people: [] } };
+  return { ok: true, local: "Sent.", sunday: key, body: { to: to, text: text },
+           words: "Message to " + toWords + ": " + text,
+           reply: reply,
+           after: async () => { Object.assign(reply.message, await messageSend(env, me, id, to, text, key)); } };
+}
+
+async function messageSend(env, me, id, to, text, key) {
+  const msg = coordAlertOf({ id: "msg-" + id, kind: "message", title: "Message from " + me.name,
+                             body: text, not: [me.name] });
+  if (!msg) return { phones: 0, people: [] };
+  const keys = await vapidKeys(env);
+  const low = (n) => String(n || "").trim().toLowerCase();
+  const told = {}, people = [];
+  let phones = 0, riders = 0;
+  const into = async (sub, m) => {
+    const box = ((await cacheGet(env, coordBoxKey(sub.endpoint))) || [])
+      .filter((x) => x && Date.now() - (Number(x.at) || 0) < COORD_ALERT_MAX_AGE_MS);
+    box.push(m);
+    while (box.length > COORD_BOX_MAX) box.shift();
+    await cachePut(env, coordBoxKey(sub.endpoint), box).run();
+    if (!(await pushOne(env, sub, keys))) return;
+    phones++;
+    if (sub.role !== "driver") { riders++; return; }
+    const n = String(sub.driver || "").trim();
+    if (n && people.indexOf(n) === -1) people.push(n);
+  };
+
+  if (to.indexOf("coord") !== -1) {
+    await coordLogAdd(env, msg);
+    for (const sub of await coordinatorSubs(env, msg.not)) {
+      told[low(sub.driver)] = 1;
+      await into(sub, msg);
+    }
+    const missed = await contactMissed(env, me, people);
+    if (missed.length) await contactMail(env, me, msg, missed);
+  }
+
+  let drivers = [];
+  if (to.indexOf("drivers") !== -1) {
+    const q = await env.DB.prepare("SELECT name FROM drivers WHERE active = 1 ORDER BY ord, name").all();
+    drivers = (q.results || []).map((d) => d.name);
+  } else if (to.indexOf("rota") !== -1) {
+    const row = await getRotaRow(env, key);
+    drivers = row ? ["North", "South"].map((rt) => rotaDriverFor(row, rt)) : [];
+  }
+  const asDriver = Object.assign({}, msg, { id: msg.id + "-d", url: "./" });
+  for (const n of drivers) {
+    const k = low(n);
+    if (!k || told[k] || k === low(me.name)) continue;
+    told[k] = 1;
+    for (const sub of await subsWhere(env, DRIVER_WAKE_MATCH, [n])) await into(sub, asDriver);
+  }
+
+  const all = to.indexOf("passengers") !== -1;
+  const onlyBooked = !all && to.indexOf("booked") !== -1 && to.indexOf("unbooked") === -1;
+  const onlyNot = !all && to.indexOf("unbooked") !== -1 && to.indexOf("booked") === -1;
+  if (all || to.indexOf("booked") !== -1 || to.indexOf("unbooked") !== -1) {
+    const booked = {};
+    if (onlyBooked || onlyNot) {
+      for (const b of await liveBookings(env, key)) {
+        if (!(Number(b.seats) > 0)) continue;
+        if (b.device) booked["d:" + b.device] = 1;
+        if (b.pid) booked["p:" + b.pid] = 1;
+      }
+    }
+    const asRider = Object.assign({}, msg, { id: msg.id + "-p", url: "./" });
+    for (const sub of await subsWhere(env, "role <> 'driver'", [])) {
+      const has = !!((sub.ref && booked["d:" + sub.ref]) || (sub.pid && booked["p:" + sub.pid]));
+      if (onlyBooked && !has) continue;
+      if (onlyNot && has) continue;
+      await into(sub, asRider);
+    }
+  }
+
+  if (phones) {
+    try {
+      await sentNote(env, { g: "message|" + msg.id, title: msg.title + ": " + text, who: people, phones: riders });
+    } catch (e) {}
+  }
+  return { phones: phones, people: people, passengers: riders };
+}
+
 async function actContact(env, me, act) {
   const usual = (coordinator && coordinator.name) || "the usual coordinator";
   const was = contactOverrideLive();
@@ -9086,6 +9205,8 @@ async function coordLoad(env, me) {
   /* From w2.41.0: who takes emergency calls, and who may be picked. */
   try { out.contact = Object.assign(contactView(), { can: await contactCandidates(env) }); }
   catch (e) { out.contact = null; }
+  /* The message centre, from w2.56.0: the Sunday its booked groups mean. */
+  out.message = { sunday: messageSunday(), max: MESSAGE_MAX };
   /* From w2.30.0: each bus's Vehicle Log and jobs to arrange, and the last
      mileage a walkaround read, for the Record form. */
   try { out.vehicles = await coordVehiclesView(env); } catch (e) { out.vehicles = { log: {}, jobs: {} }; }
@@ -9924,6 +10045,7 @@ async function coordAct(env, me, act) {
   else if (kind === "motrun") r = await actMotrun(env, me, act);
   else if (kind === "pin") r = await actPinReset(env, me, act);
   else if (kind === "contact") r = await actContact(env, me, act);
+  else if (kind === "message") r = await actMessage(env, me, act, id);
   else if (kind === "rehearsal") r = await rehearsalPlan(env, String(act.op || ""), String(act.shape || ""));
   else return { ok: false, error: "unknown kind" };
   if (!r || !r.ok) return r || { ok: false, error: "refused" };
