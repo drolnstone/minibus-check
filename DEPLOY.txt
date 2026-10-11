@@ -1,29 +1,36 @@
 MINIBUS
 =======
-  pages v1.111.0 · server w2.57.0 · sheet v1.117.0
+  pages v1.112.0 · server w2.58.0 · sheet v1.117.0
 
-Coordinator app, Drivers: each driver's phone number shows on their card,
-under the name. One tap rings it. A wrong number shows at a glance.
+A renewal booked in (Asim, 11 Oct): when the Vehicle Log has a standing
+Booked entry for an MOT, service, insurance or parking permit, for today
+or later, the date is said beside the due date.
 
-Pages only. Worker and Code.gs unchanged.
+- Driver app, Before you start: under the line, "Booked for 20/10/2026".
+  The due date and Overdue stay as they are until it is recorded as done.
+- Coordinator app, Due dates and Buses: "booked for 20/10/2026" on the
+  small line.
+- A booking day gone by drops off.
+
+Pages and Worker only. Code.gs is unchanged.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.110.0        v1.111.0
-  Worker  w2.57.0         w2.57.0
+  Pages   v1.111.0        v1.112.0
+  Worker  w2.57.0         w2.58.0
   Code.gs v1.117.0        v1.117.0
 
 
 IN THIS ORDER
 -------------
 
-1. Merge the pull request.
+1. Merge the pull request. Pages and Worker go live together.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.111.0 · server w2.57.0 · sheet
+A. The foot of all three apps reads  app v1.112.0 · server w2.58.0 · sheet
    v1.117.0 .
-B. Coordinator app, Drivers: a phone number on each card that has one;
-   tapping it rings that number.
+B. A bus with a booked service: Before you start shows "Booked for" under
+   its due line.
