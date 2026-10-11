@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.52.0";
+const SCRIPT_VERSION = "w2.55.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -7789,7 +7789,9 @@ async function actDriver(env, me, act) {
   }
   if (inp.phone !== undefined) {
     const p = String(inp.phone || "").trim();
-    if (p && !DRIVER_PHONE.test(p)) return { ok: false, error: "Check the phone number." };
+    /* From w2.55.0 an 11-digit UK number only, as the sheet takes: a stray
+       digit changes the driver's default PIN (Bro Adesina, 11 Oct 2026). */
+    if (p && (!DRIVER_PHONE.test(p) || !normalisePhone(p))) return { ok: false, error: "Not an 11-digit UK phone number." };
     set.phone = p;
   }
   if (add) {

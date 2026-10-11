@@ -74,6 +74,10 @@ export default async function (root) {
       a.ok(t.waiting);
       const body = JSON.parse(db._one("SELECT body FROM coord_actions ORDER BY seq DESC LIMIT 1").body);
       a.not("pin" in (body.set || {}), "a PIN went to the live server");
+      /* w2.55.0: one digit too many is refused, since it is the default PIN. */
+      const bad = await act(env, { kind: "driver", name: "Bro Trevor", set: { phone: "4477009000024" } });
+      a.not(bad.ok, "a 13-digit phone was taken");
+      a.eq(bad.error, "Not an 11-digit UK phone number.");
     });
   });
 
