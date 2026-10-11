@@ -255,28 +255,27 @@ export default function (root) {
          "kerbs.mjs has no kerb for: " + (missing.join(", ") || "none"));
   });
 
-  /* ---- whose PIN an email link will ask for ------------------------------
+  /* ---- the name an email link is made out to ------------------------------
 
-     Not a new setting, deliberately. The Drivers tab already has an Email
-     column and COORDINATOR_EMAIL is already where these messages go, so the
-     name is the one the two agree on — and changing who gets the emails
-     changes whose PIN the link wants, with nothing to keep in step by hand. */
+     From v1.117.0 the person people ring (coordinatorContact): the first
+     active holder of the first coordinator title. COORDINATOR_EMAIL does not
+     decide it. Only a label: any coordinator's PIN opens the link. */
 
-  s.test("the link asks for the PIN of whoever the emails go to", (a) => {
+  s.test("the link is made out to the person people ring", (a) => {
     a.eq(call(L, "coordinatorName"), "Bro Arthur",
-         "matched on the Email column against COORDINATOR_EMAIL");
+         "the Coordinator before the Minister in Charge");
   });
 
-  s.test("with no Email filled in, it falls back to the first active coordinator", (a) => {
+  s.test("COORDINATOR_EMAIL does not move it", (a) => {
     const L2 = loadCodeGs(root, { tabs: tabs(), props: { COORDINATOR_EMAIL: "nobody@nowhere" } });
-    a.eq(call(L2, "coordinatorName"), "Pst Kenneth",
-         "a tab nobody has filled in should still produce a working link");
+    a.eq(call(L2, "coordinatorName"), "Bro Arthur",
+         "an address that matches nobody leaves the title order to decide");
   });
 
   s.test("a retired coordinator is never the one asked", (a) => {
     const L2 = loadCodeGs(root, { tabs: tabs(), props: { COORDINATOR_EMAIL: "old@b.c" } });
     a.ne(call(L2, "coordinatorName"), "Bro Retired",
-         "Active NO means he is on the tab for his history and nothing else");
+         "Active NO means they are on the tab for their history and nothing else");
   });
 
   s.test("an ordinary driver is never the one asked", (a) => {

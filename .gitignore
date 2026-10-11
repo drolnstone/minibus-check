@@ -3,3 +3,5 @@ manual/build/
 __pycache__/
 # The passenger videos build: photographs, fetched fonts and ffmpeg, stills, MP4s.
 video/build/
+# The test runner's working copy of the Worker, made on every run.
+tests/.build/

@@ -70,10 +70,11 @@ name or a phone number. The Drivers tab is the one place for them:
 - **The coordinator** is an active row whose **Role** is one of the titles
   in the `COORDINATOR_ROLES` Script Property (by default `Coordinator` and
   `Minister in Charge`), and the number people are told to ring is in that row's **Phone**
-  column. The one whose **Email** matches `COORDINATOR_EMAIL` wins, so the
-  person the alerts go to is the person people ring. Otherwise the first
-  person holding the first role in the list, then the second: here the
-  Coordinator before the Minister in Charge. A church with other titles
+  column. The first person holding the first role in the list, then the
+  second: here the Coordinator before the Minister in Charge. Until v1.117.0
+  the one whose **Email** matched `COORDINATOR_EMAIL` came first; with three
+  addresses there it matched nobody, so the title order already decided. To
+  move the calls for good, reorder `COORDINATOR_ROLES` or the rows. A church with other titles
   changes that one setting, spelled as in the Role column, and sends
   everything to the live server. From v1.81.0 the pages take the titles from
   the live server too; `fullInspectionRoles` in `config.js` is only what they
@@ -1591,6 +1592,7 @@ moment:
 - be at your stop in about 8 min
 - be at your stop now
 - the bus has gone past and nothing was recorded at your stop
+- nobody there at your stop (from w2.57.0, when the driver marks it)
 - you are booked for Sunday, or: book your seat for Sunday, bookings close
   Sunday 09:30 — and on the Saturday, *last chance to book*
 
@@ -1833,6 +1835,8 @@ full email already.
 | The bus is a few minutes away | the estimate moved by more than `resendMinutes` | only when the number actually changed | yes |
 | Picked up | you tap him picked | closes it | not measured |
 | The bus has gone past | it passes his stop | he has been missed and needs to know | yes |
+| Nobody there at (stop) | their own stop is marked Nobody here, from w2.57.0 | the bus has been and gone | yes |
+| Corrected after an Undo | a tap is taken back that changed their stop (gone past, Picked up or Nobody there) after a push reached them, from w2.57.0; not once the run has ended | what is true now, from the record | yes |
 | Alerts are working | he taps Turn on | proves it | n/a |
 
 Nothing is sent **21:00–08:00**. Every message carries a tag, so one event

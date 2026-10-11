@@ -41,6 +41,8 @@ const PEOPLE = [
   { Name: "Sis Adele", Role: "Coordinator", Active: "YES", Phone: "07700 900123", Email: "adele@b.c" },
   { Name: "Bro Driver", Role: "Driver", Active: "YES", "Primary order": 1, Route: "North", Phone: "07222 222222" }
 ];
+/* Sis Adele is who people ring once Bro First is off the tab. */
+const ADELE_FIRST = PEOPLE.filter((r) => r.Name !== "Bro First");
 
 export default async function (root) {
   const s = new Suite("who people ring comes from the Drivers tab");
@@ -59,10 +61,14 @@ export default async function (root) {
     a.eq(c.phone, "07111111111");
   });
 
-  s.test("with two, the one COORDINATOR_EMAIL names is the one people ring", (a) => {
-    const c = contact(sheet(PEOPLE, "ADELE@b.c"));
-    a.eq(c.name, "Sis Adele");
-    a.eq(c.phone, "07700900123");
+  /* From v1.117.0 (Asim, 11 Oct 2026) COORDINATOR_EMAIL does not decide.
+     With three addresses in it (4 Oct) it had matched nobody, and the title
+     order was deciding unseen. The Emergency calls chooser moves the calls. */
+  s.test("COORDINATOR_EMAIL does not decide who people ring", (a) => {
+    a.eq(contact(sheet(PEOPLE, "ADELE@b.c")).name, "Bro First");
+    a.eq(contact(sheet(PEOPLE, "first@b.c, adele@b.c")).name, "Bro First");
+    a.eq(contact(sheet(PEOPLE, "adele@b.c, first@b.c")).name, "Bro First",
+         "the order of the addresses moves nothing");
   });
 
   s.test("nobody with the role is a blank answer, not somebody else", (a) => {
@@ -83,8 +89,8 @@ export default async function (root) {
     a.eq(c.phone, "07333333333");
   });
 
-  s.test("COORDINATOR_EMAIL wins across every role in the list", (a) => {
-    a.eq(contact(sheet([MIC].concat(PEOPLE), "pst@b.c")).name, "Pst Top");
+  s.test("the title order wins whatever COORDINATOR_EMAIL holds", (a) => {
+    a.eq(contact(sheet([MIC].concat(PEOPLE), "pst@b.c")).name, "Bro First");
   });
 
   s.test("a church's own titles work once AUTHORISER_ROLES says them", (a) => {
@@ -144,11 +150,11 @@ export default async function (root) {
     rows[1].Phone = 447111111111;
     rows[2].Phone = "+44 7700 900123";
     a.eq(contact(sheet(rows)).phone, "07111111111");
-    a.eq(contact(sheet(rows, "adele@b.c")).phone, "07700900123");
+    a.eq(contact(sheet(rows.filter((r) => r.Name !== "Bro First"))).phone, "07700900123");
   });
 
   s.test("the push to the live server carries it", (a) => {
-    const L = sheet(PEOPLE, "adele@b.c");
+    const L = sheet(ADELE_FIRST);
     call(L, "pushToWorker");
     const sync = L.gas.fetched.map((f) => { try { return JSON.parse(f.opts.payload); } catch (e) { return null; } })
       .filter((b) => b && b.action === "sync")[0];
@@ -157,7 +163,7 @@ export default async function (root) {
   });
 
   s.test("the rota the sheet answers the driver app with carries it too", (a) => {
-    const L = sheet(PEOPLE, "adele@b.c");
+    const L = sheet(ADELE_FIRST);
     const out = call(L, "rotaPayload", "2026-10-04", 1);
     a.eq(JSON.stringify(out.coordinator), JSON.stringify(ADELE));
   });

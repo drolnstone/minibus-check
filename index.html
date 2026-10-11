@@ -1681,7 +1681,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.109.0";
+var APP_VERSION = "v1.110.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -5411,7 +5411,7 @@ function tripLoadState(){
    land on the sheet under a route it never happened on. Rehearsing on one
    phone is exactly how that gets discovered, and it looks like South tracking
    misbehaving when nothing about South is wrong. */
-function tripQueue(ev){
+function tripQueue(ev, hold){
   if(ev.route  === undefined) ev.route  = trip.route || "";
   if(ev.trip   === undefined) ev.trip   = trip.id    || "";
   if(ev.reg    === undefined) ev.reg    = trip.reg   || "";
@@ -5423,7 +5423,8 @@ function tripQueue(ev){
   /* Its own name in the queue, so a send takes off exactly what it sent. */
   if(ev.qid === undefined) ev.qid = Date.now().toString(36)+Math.random().toString(36).slice(2,8);
   var q=tripLoadQ(); q.push(ev); tripSaveQ(q);
-  tripFlush();
+  /* hold (v1.110.0): queued only, for the tap that follows it to carry. */
+  if(!hold) tripFlush();
 }
 
 /* What a queued tap is called. A tap queued before v1.79.1 has no qid and is
@@ -6394,8 +6395,9 @@ function tripTap(stop,kind){
   var at=tripNow();
   /* The other answer on a marked stop (v1.103.0, Asim: he went back for
      somebody). The first answer is taken back on the record, as an Undo
-     would, so a stop never carries two live answers. */
-  if(had) tripQueue({ event:"undo", undoes:had.event, stopId:stop.id, at:at });
+     would, so a stop never carries two live answers. Both go in one send
+     (v1.110.0), so passengers are told the new answer once. */
+  if(had) tripQueue({ event:"undo", undoes:had.event, stopId:stop.id, at:at }, true);
   trip.served[stop.id]={ at:at, event:kind };
   trip.lastAt=at; trip.lastStop=stop.stop;
   tripSaveState();

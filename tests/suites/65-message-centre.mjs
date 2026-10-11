@@ -99,6 +99,17 @@ export default async function (root) {
     });
   });
 
+  s.test("on the Alerts list, both the people and the passenger phones (w2.57.0)", async (a) => {
+    await atTime(SAT, async () => {
+      const { env } = await fresh();
+      await act(env, { kind: "message", text: "Service starts at 11.", to: ["drivers", "passengers"] }, "Bro Calvin");
+      const line = (await W.sentList(env)).find((m) => /Service starts at 11/.test(m.title));
+      a.ok(line, "not on the Alerts list");
+      a.has(line.body, "To Bro ");
+      a.has(line.body, " and 2 passenger phones.", "the passengers were left off the Sent line");
+    });
+  });
+
   s.test("refused: no words, too many words, nobody picked", async (a) => {
     await atTime(SAT, async () => {
       const { env } = await fresh();
