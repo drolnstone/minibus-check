@@ -1193,6 +1193,49 @@ if (want("T34")) {
   await me.ctx.close();
 }
 
+/* T35 — v1.107.0 (Asim, 11 Oct). A Stops the bus item marked Defect turns
+   red, and so does the dash, but nothing pops up and no Call shows until the
+   check is submitted. After Submit the Sent screen carries the Call. */
+if (want("T35")) {
+  const me = await phone({ clock: "2026-09-27T09:40:00+01:00", world: { coordinator: { name: "Bro Calvin", phone: "07399671575" } } });
+  await me.load(); await me.close(["howDone"]); await me.signIn();
+  await me.click("Vehicle check", "#s-hub"); await me.pickBus("NH56 FWP"); await me.onward(); await me.close(["busAskStay"]);
+  await me.setInput("miles", "48262"); await me.fuel(6); await me.onward();
+  let mid = null;
+  for (let i = 0; i < 8 && (await me.where()) === "s-stage"; i++) {
+    const has = await me.pg.evaluate(() => [...document.querySelectorAll("#itemList .item")].some(x => /^Tyres/.test((x.querySelector(".item-name, h3, b, strong") || x).textContent.trim())));
+    if (has) {
+      await me.answerStage({ "Tyres": { a: "Defect", note: "Cut in the sidewall" } });
+      mid = await me.pg.evaluate(() => {
+        const d = document.getElementById("dash"), al = d.querySelector(".dash-alert");
+        const c = [...document.querySelectorAll("#itemList .item")].find(x => /Tyres/.test(x.textContent));
+        return { red: d.classList.contains("is-stop"), banner: getComputedStyle(al).display, itemRed: c.classList.contains("is-def") };
+      });
+      mid.toast = await me.toast();
+      const input = await me.pg.evaluateHandle(() => [...document.querySelectorAll("#itemList .item")].find(x => /Tyres/.test(x.textContent)).querySelector("input[type=file]"));
+      await input.asElement().setInputFiles(new URL("../../icon-512.png", import.meta.url).pathname);
+      await me.wait(1500);
+    } else {
+      await me.answerStage({});
+    }
+    await me.onward();
+  }
+  await me.pg.evaluate(() => { const b = [...document.querySelectorAll("#jobChips button")].find(x => (x.textContent || "").trim() === "Nothing needed"); if (b) b.click(); });
+  await me.setInput("sign", "Sample");
+  const review = { at: await me.where(), call: await me.pg.evaluate(() => !!document.querySelector("#verdict .callbtn")),
+                   card: await me.text("#verdict h2"),
+                   banner: await me.pg.evaluate(() => getComputedStyle(document.querySelector("#dash .dash-alert")).display) };
+  await me.onward(); await me.wait(2500);
+  const sent = { at: await me.where(), call: await me.pg.evaluate(() => { const a = document.querySelector("#sentVerdict .callbtn"); return a ? a.getAttribute("href") : ""; }),
+                 banner: await me.pg.evaluate(() => getComputedStyle(document.querySelector("#dash .dash-alert")).display) };
+  check("T35", "a critical Defect turns red with no pop-up and no Call until the check is submitted",
+        mid && mid.red && mid.itemRed && mid.banner === "none" && !mid.toast &&
+        review.at === "s-review" && review.card === "The bus does not run" && !review.call && review.banner === "none" &&
+        sent.at === "s-sent" && sent.call === "tel:07399671575" && sent.banner !== "none" && !me.errs.length,
+        JSON.stringify({ mid, review, sent, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

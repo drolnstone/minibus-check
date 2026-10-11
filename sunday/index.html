@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.105.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.107.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -751,7 +751,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.105.0";
+var PAGE_VERSION = "v1.107.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -2321,7 +2321,7 @@ function paint(){
      journey. */
   if(STOPGONE){
     html+='<div class="note note-warn"><b>Your stop has been taken off the '+
-          'timetable.</b> '+(CLOSED ? 'Tell the group.' : 'Please pick another one below.')+
+          'timetable.</b> '+(CLOSED ? callButton() : 'Please pick another one below.')+
           '</div>';
   }
 
@@ -2337,8 +2337,12 @@ function paint(){
        page could do nothing for them; it is not true now, and a screen that
        sends people to WhatsApp for something there is a button for is the
        same fault as the one that told them to tap a locked stop. */
+    /* No seat on this phone: the call, to whoever takes the coordinator's
+       calls today (the emergency calls chooser decides it, through the same
+       answer every other Call button reads). From v1.107.0 (Asim, 11 Oct);
+       it said "tell the group", which named nobody. */
     html+='<div class="note note-warn"><b>Bookings have closed.</b>'+
-          (booked ? '' : ' If you need a seat today, tell the group.')+
+          (booked ? '' : callButton())+
           '</div>';
 
     /* Waiting, but this phone holds no booking. Almost always because the

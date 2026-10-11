@@ -307,6 +307,7 @@ body.dash-away .wrap{padding-top:calc(16px + var(--safe-t))}
 .dash-alert small{display:block;font-family:"IBM Plex Sans",sans-serif;font-weight:400;font-size:13px;
   letter-spacing:0;text-transform:none;margin-top:3px;color:var(--dash-stop-ink)}
 .dash.is-stop .dash-alert{display:block}
+.dash.is-stop.in-check .dash-alert{display:none}
 
 /* ---------- shell ---------- */
 .wrap{max-width:640px;margin:0 auto;
@@ -1683,7 +1684,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.105.0";
+var APP_VERSION = "v1.107.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2955,7 +2956,11 @@ function churchName(){
 
 function paintDash(){
   var t=tally(), lv=level(), d=$("dash");
-  d.className = "dash" + (lv==="stop"?" is-stop":lv==="warn"?" is-warn":"");
+  /* in-check hides the Do not run banner and its Call while the check is
+     still being done (v1.107.0, Asim): red, but no call until Submit. */
+  var inCheck = st.screen==="prep" || st.screen==="stage" || st.screen==="review";
+  d.className = "dash" + (lv==="stop"?" is-stop":lv==="warn"?" is-warn":"") +
+    (inCheck ? " in-check" : "");
   $("bar").style.width = TOTAL ? Math.round(t.done/TOTAL*100)+"%" : "0%";
 
   var L=[$("lampA"),$("lampB"),$("lampC")];
@@ -3941,16 +3946,17 @@ function renderStage(){
     bOk.addEventListener("click",function(){ pick("ok"); advance(); });
     if(bNa) bNa.addEventListener("click",function(){ pick("na"); advance(); });
     bDef.addEventListener("click",function(){
+      /* No pop-up here, from v1.107.0 (Asim, 11 Oct). A critical item turns
+         red and the dash with it; the call comes after Submit, on the Sent
+         screen. A pop-up in the middle of a check stopped the driver
+         finishing it. */
       pick("def");
-      if(it.crit) toast("Critical defect. The bus does not run. Tap Call at the top.", true);
       setTimeout(function(){ ta.focus(); },120);
     });
     /* Advisory does not advance, for the same reason Defect does not: it
        opens a box he is about to type in. */
     if(bAdv) bAdv.addEventListener("click",function(){
       pick("adv");
-      if(it.crit && advStops())
-        toast("Advisory on a critical item. A coordinator has to authorise the run.", true);
       setTimeout(function(){ ta.focus(); },120);
     });
     ta.addEventListener("input",function(){
@@ -4201,7 +4207,9 @@ function advsHTML(advs){
     return '<li><b>'+esc(d.name)+(d.crit?" (critical)":"")+'</b>'+(d.note?'<br>'+esc(d.note):'')+'</li>';
   }).join("")+'</ul>';
 }
-function verdictHTML(lv,defs,advs,auth){
+/* noCall: the review screen, before Submit. The card is still red; the Call
+   button waits for the Sent screen (v1.107.0, Asim). */
+function verdictHTML(lv,defs,advs,auth,noCall){
   var who=COORDINATOR.name||"the coordinator";
   advs = advs || [];
   /* Still the red card. A bus going out with a critical fault on it has not
@@ -4213,7 +4221,7 @@ function verdictHTML(lv,defs,advs,auth){
       'The defect stays open.</p>'+defsHTML(defs)+advsHTML(advs)+'</div>';
   }
   if(lv==="stop"){
-    var ph = coordPhone();
+    var ph = noCall ? "" : coordPhone();
     var call = ph ? '<a class="callbtn" href="tel:'+esc(ph)+'">Call '+esc(who)+' \u00B7 '+esc(prettyPhone())+'</a>' : "";
     return '<div class="verdict v-stop"><h2>The bus does not run</h2><p>A safety critical item has failed. Do not carry passengers. Ring the coordinator and arrange lifts.</p>'+defsHTML(defs)+advsHTML(advs)+call+'</div>';
   }
@@ -4256,7 +4264,7 @@ function renderReview(){
   /* Pre-tick Needs fuel on a low tank, but only while the driver has not
      answered yet. Once they have, their answer stands. */
   if(st.fuel!==null && st.fuel<=2 && !st.jobs.length) st.jobs.push("fuel");
-  $("verdict").innerHTML = verdictHTML(level(), defectList(), advisoryList());
+  $("verdict").innerHTML = verdictHTML(level(), defectList(), advisoryList(), null, true);
   $("sumBox").innerHTML = sumHTML();
   paintJobs();
   /* Left blank on purpose. A name already typed in for them is not a

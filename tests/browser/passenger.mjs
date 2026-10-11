@@ -61,6 +61,7 @@ async function passenger(o) {
         cutoff: "Sunday 09:30", stops: STOPS, arrivals: ARRIVALS, off: [], counts: { S03: 3, N02: 2 },
         driver: o.driver || null, phone: o.booked ? "07700900123" : "", stopGone: "",
         mine: o.booked ? { stopId: "S03", seats: 2 } : null, seats: {} });
+      if (o.coordinator) body.coordinator = o.coordinator;
     } else if (p.get("trip")) {
       body = Object.assign(body, o.trip || { live: false, why: "open", date: KEY });
     }
@@ -267,6 +268,33 @@ if (want("P9")) {
         after.theme === "green" && after.on === "green" && after.steel.toUpperCase() === "#00923F" &&
         after.bar.toUpperCase() === "#00923F" && !me.errs.length,
         JSON.stringify({ before, after, errors: me.errs }));
+}
+
+/* P10 — v1.107.0 (Asim, 11 Oct). Bookings closed and no seat on this phone:
+   a Call button for whoever takes the coordinator's calls today, where it
+   said "tell the group". A booked phone gets no button there. */
+if (want("P10")) {
+  const today = { name: "Bro Calvin", phone: "07399671575" };
+  const me = await passenger({ closed: true, coordinator: today });
+  await me.pg.evaluate(() => { const b = document.getElementById("alertAskNot"); if (b) b.click(); });
+  await me.pg.waitForTimeout(300);
+  const note = await me.pg.evaluate(() => {
+    const n = Array.prototype.find.call(document.querySelectorAll(".note-warn"), (x) => /Bookings have closed/.test(x.textContent));
+    const a = n && n.querySelector("a.callbtn");
+    return { text: n ? n.textContent.trim() : "", href: a ? a.getAttribute("href") : "" };
+  });
+  await me.shot("P10-closed-call");
+  await me.ctx.close();
+  const seat = await passenger({ closed: true, booked: true, pid: true, coordinator: today });
+  const seatNote = await seat.pg.evaluate(() => {
+    const n = Array.prototype.find.call(document.querySelectorAll(".note-warn"), (x) => /Bookings have closed/.test(x.textContent));
+    return n ? { text: n.textContent.trim(), call: !!n.querySelector("a.callbtn") } : null;
+  });
+  await seat.ctx.close();
+  check("P10", "bookings closed with no seat shows Call for today's coordinator, not 'tell the group'",
+        note.href === "tel:07399671575" && /Call Bro Calvin/.test(note.text) && !/group/i.test(note.text) &&
+        seatNote && !seatNote.call,
+        JSON.stringify({ note, seatNote }));
 }
 
 const bad = results.filter((r) => !r.ok);

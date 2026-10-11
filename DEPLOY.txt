@@ -1,25 +1,25 @@
 MINIBUS
 =======
-  pages v1.105.0 · server w2.52.0 · sheet v1.113.0
+  pages v1.107.0 · server w2.52.0 · sheet v1.113.0
 
-Record something takes several things at once (Asim, 11 Oct):
+Calling the coordinator (Asim, 11 Oct):
 
-  - On a bus page, Record something: tap as many of MOT, Service,
-    Insurance, Parking permit, Repair, Tyres and Other as were done (or
-    booked) on the visit. A second tap takes one off.
-  - Record it puts one entry on the Vehicle Log for each, with the same
-    Done or Booked ahead, day, mileage, garage and notes.
-  - Each one chosen has its own cost box (MOT cost, Service cost ...), and
-    each dated item its own date box (MOT: expiry date on the certificate
-    ...). The blue box shows each one's next due date.
-  - A defect ticked as put right goes on the Repair entry if Repair is
-    chosen, otherwise on the first one.
+  - Passenger app, bookings closed, no seat on this phone: a Call button
+    for whoever takes the coordinator's calls today (the emergency calls
+    chooser's choice, as on every other Call button), where it said "tell
+    the group". The same where a stop was taken off the timetable after
+    bookings closed.
+  - Driver app, vehicle check: a Defect on a Stops the bus item turns the
+    item and the dash red, and nothing more. No pop-up, no Do not run
+    banner and no Call while the check is being done or on the review
+    screen. After Submit, the Sent screen shows The bus does not run with
+    the Call, and the dash shows Do not run, as before.
 
-Pages only. The Worker and Code.gs do not change.
+Pages only. The Worker and Code.gs do not change. Pages v1.106.0 is PR #77's.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.104.2        v1.105.0
+  Pages   v1.105.0        v1.107.0
   Worker  w2.52.0         w2.52.0   (no change)
   Code.gs v1.113.0        v1.113.0  (no paste)
 
@@ -33,21 +33,24 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.105.0 · server w2.52.0 · sheet
+A. The foot of all three apps reads  app v1.107.0 · server w2.52.0 · sheet
    v1.113.0 .
-B. Record an MOT and a service together on a bus: the log shows two
-   entries, each with its own cost, and both dates move.
+B. Passenger app after 09:30 on a phone with no seat: Bookings have
+   closed, with Call and today's coordinator under it.
 
 
 WHAT CHANGED
 ------------
 
-1. coord/index.html: the Record form's item buttons each go on and off;
-   one cost box per item chosen and one date box per dated item; Record it
-   sends one change per item, in turn, each with its own id, so a second
-   tap after a lost answer does none of them twice.
+1. sunday/index.html: "tell the group" (twice) is now callButton(), the
+   coordinator the server stamps on every answer.
 
-2. Version v1.105.0 in all three pages and their sw.js.
+2. index.html: no toast on a critical Defect or a critical Advisory; the
+   dash's Do not run banner is hidden on the prep, stage and review screens
+   (class in-check); the review screen's red card has no Call.
 
-3. tests/browser/coordinator.mjs C55: an MOT and a service recorded
-   together.
+3. Version v1.107.0 in all three pages and their sw.js.
+
+4. tests/browser/passenger.mjs P10 and tests/browser/driver-app.mjs T35.
+
+5. Not yet: the manual still quotes the old pop-up (it waits anyway).
