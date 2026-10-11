@@ -1,63 +1,58 @@
 MINIBUS
 =======
-  pages v1.106.0 · server w2.54.0 · sheet v1.115.0
+  pages v1.107.0 · server w2.54.0 · sheet v1.115.0
 
-Emergency calls, who heard (Asim, 11 Oct):
+Calling the coordinator (Asim, 11 Oct):
 
-  - The Sent line for "Emergency calls: ..." names every coordinator and
-    driver whose phone took it, not only the drivers.
-  - A coordinator whose phone did not take it (alerts off on every phone)
-    is emailed its title and words, at their address on the Drivers tab.
-    The person who made the change is not.
-  - Have a look, Who has alerts on: a Coordinators line, "Alerts on for
-    N of M coordinators.", and "No alerts yet: ..." naming anyone with
-    alerts off in both apps.
+  - Passenger app, bookings closed, no seat on this phone: a Call button
+    for whoever takes the coordinator's calls today (the emergency calls
+    chooser's choice, as on every other Call button), where it said "tell
+    the group". The same where a stop was taken off the timetable after
+    bookings closed.
+  - Driver app, vehicle check: a Defect on a Stops the bus item turns the
+    item and the dash red, and nothing more. No pop-up, no Do not run
+    banner and no Call while the check is being done or on the review
+    screen. After Submit, the Sent screen shows The bus does not run with
+    the Call, and the dash shows Do not run, as before.
 
-Worker and Code.gs. The pages do not change.
+Pages only. The Worker and Code.gs do not change in this one. If #78's
+Worker and Code.gs pastes are not done yet, do them first (Worker
+w2.54.0, then Code.gs v1.115.0 and a new version; they carry #77's too).
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.106.0        v1.106.0  (no change)
-  Worker  w2.53.0         w2.54.0   (paste; carries #77's Worker too)
-  Code.gs v1.114.0        v1.115.0  (paste; carries #77's Code.gs too)
-
-If #77's Worker and Code.gs were never pasted, these carry them.
+  Pages   v1.106.0        v1.107.0
+  Worker  w2.54.0         w2.54.0   (no change)
+  Code.gs v1.115.0        v1.115.0  (no paste)
 
 
 IN THIS ORDER
 -------------
 
-1. Open the sheet, Extensions, Apps Script. Select everything in Code.gs,
-   paste this pull request's Code.gs over it, Save.
-   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/last-chance-reminder-j2u2hj/Code.gs
-2. Deploy, Manage deployments, the pencil, Version: New version, Deploy.
-3. Cloudflare, the minibus-api Worker, Edit code. Select everything,
-   paste this pull request's server/worker.js over it, Deploy.
-   https://raw.githubusercontent.com/drolnstone/minibus-check/claude/last-chance-reminder-j2u2hj/server/worker.js
-4. Merge this pull request.
-
-Code.gs first, so the sheet knows the email before the Worker asks for it.
+1. Merge the pull request.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.106.0 · server w2.54.0 ·
-   sheet v1.115.0 .
-B. Coordinator app, Have a look, Who has alerts on: the Coordinators line.
-C. The next emergency calls change: its Sent line on the Alerts list of
-   whoever made it names the coordinators too. Anyone named under "No
-   alerts yet" gets the email; it shows on What I have done as
-   "Email to ...".
+A. The foot of all three apps reads  app v1.107.0 · server w2.54.0 · sheet
+   v1.115.0 .
+B. Passenger app after 09:30 on a phone with no seat: Bookings have
+   closed, with Call and today's coordinator under it.
 
 
 WHAT CHANGED
 ------------
 
-1. server/worker.js: contactTell collects the name on each phone the push
-   service took (deliverCoordAlert and contactTellDrivers) and writes one
-   Sent line; the coordinators it did not reach go on the coordinator
-   queue as a "mail" change; reportAlerts adds the Coordinators section.
-2. Code.gs: applyCoordAction's "mail" kind, coordMail, sends each one the
-   alert's title and words.
-3. tests/suites/63-contact-reach.mjs.
+1. sunday/index.html: "tell the group" (twice) is now callButton(), the
+   coordinator the server stamps on every answer.
+
+2. index.html: no toast on a critical Defect or a critical Advisory; the
+   dash's Do not run banner is hidden on the prep, stage and review screens
+   (class in-check); the review screen's red card has no Call.
+
+3. Version v1.107.0 in all three pages and their sw.js.
+
+4. tests/browser/passenger.mjs P10 and tests/browser/driver-app.mjs T35.
+
+5. Not yet: the manual still quotes the old pop-up (it waits anyway).
