@@ -1136,7 +1136,6 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
         <div class="hint">No driver register has been set up yet.</div>
       </div>
     </div>
-    <p class="tiny" style="margin-top:14px">Name missing? Ring the coordinator before taking a bus out.</p>
     <!-- The three destinations used to sit here, under the name and the PIN,
          so this screen was a sign-in AND a launcher and a driver met seven
          things on the way to doing one. They have moved to a screen of their
@@ -1649,7 +1648,7 @@ var SHORTHAND = {
   "not sent":    "It did not go through.",
   "not saved":   "It was not saved.",
   "no answer":   "The record did not answer.",
-  "bad token":   "This copy of the app is not recognised. Ring the bus coordinator."
+  "bad token":   "This copy of the app is not recognised."
 };
 
 /* Whatever was thrown, in words he can act on. Messages this app or the
@@ -1658,7 +1657,7 @@ var SHORTHAND = {
 function plainError(err){
   if(offlineNow(err)) return "Your phone is not on the network just now.";
   var m = String((err && err.message) || err || "").trim();
-  if(!m) return "Something did not work. Try again in a moment.";
+  if(!m) return "Something did not work.";
   if(SHORTHAND[m.toLowerCase()]) return SHORTHAND[m.toLowerCase()];
   if(/took too long|abort|timed out|timeout/i.test(m))
     return "The record took too long to answer.";
@@ -2291,8 +2290,7 @@ function mileProblem(){
   }
   if(n - p > BIG_JUMP){
     return { kind:"jump",
-      msg:"That is " + (n-p).toLocaleString("en-GB") + " miles since " + prev.date +
-          ". Check you have not added a digit.",
+      msg:"That is " + (n-p).toLocaleString("en-GB") + " miles since " + prev.date + ".",
       confirm:"I have read it twice and the dashboard really does say this" };
   }
   return null;
@@ -2450,9 +2448,9 @@ function motRunSend(reg, step){
     }
     toast(out && out.error==="used" ? reg+" has had its MOT run today."
         : out && out.error==="started" ? out.driver+" has started this MOT run."
-        : out && out.error==="no mot run" ? "No MOT run is authorised for "+reg+" today. Ring "+coordName()+"."
-        : "The live server did not take that. Try again.", true);
-  }).catch(function(){ motRunDone(); toast("No answer. Try again.", true); });
+        : out && out.error==="no mot run" ? "No MOT run is authorised for "+reg+" today."
+        : "The live server did not take that.", true);
+  }).catch(function(){ motRunDone(); toast("No answer.", true); });
 }
 function motRunDone(){
   motRunBusy=false;
@@ -2905,7 +2903,7 @@ function paintLinks(){
         al.style.display = "none";
       } else {
         al.innerHTML = pushCanAsk()
-          ? 'Remind me to end the trip. <button type="button" id="hubAlertGo">Turn on</button>'
+          ? 'Reminders on this phone. <button type="button" id="hubAlertGo">Turn on</button>'
           : 'Add this app to your Home Screen to get reminders.';
         var ago=$("hubAlertGo");
         if(ago) ago.addEventListener("click",pushTurnOn);
@@ -3001,7 +2999,7 @@ function paintDash(){
   var who = coordName();
   var ph  = coordPhone();
   $("alertText").textContent = critNames().join(", ") +
-    ". Ring the coordinator before anyone boards.";
+    ".";
   var link = $("dashCall");
   if(ph){
     link.href = "tel:" + ph;
@@ -3575,10 +3573,10 @@ function geoText(){
   switch(geo.status){
     case "off":         return "";
     case "asking":      return "Finding you\u2026";
-    case "refused":     return "Location turned off for this app. Carry on.";
-    case "timeout":     return "Could not get a location in time. Carry on.";
-    case "unavailable": return "No location available here. Carry on.";
-    case "unsupported": return "This phone cannot give a location. Carry on as normal.";
+    case "refused":     return "Location turned off for this app.";
+    case "timeout":     return "Could not get a location in time.";
+    case "unavailable": return "No location available here.";
+    case "unsupported": return "This phone cannot give a location.";
     case "ok":
       var d = geo.dist===null ? ""
         : geoAway() ? " You are about "+geoPretty(geo.dist)+" from where the buses are kept."
@@ -3744,10 +3742,10 @@ function paintFuel(){
   /* No numbers here. The bar has already said it, and the eighths still go
      on the record. Only say something when there is something to say. */
   if(st.fuel<=2){
-    hint.textContent="Low. Fill up before you set off.";
+    hint.textContent="Low.";
     hint.style.color="var(--stop)";
   } else if(st.fuel===3){
-    hint.textContent="Getting low. Worth filling.";
+    hint.textContent="Getting low.";
     hint.style.color="var(--warn)";
   } else {
     hint.textContent="";
@@ -3946,7 +3944,7 @@ function renderStage(){
     if(bNa) bNa.addEventListener("click",function(){ pick("na"); advance(); });
     bDef.addEventListener("click",function(){
       pick("def");
-      if(it.crit) toast("Critical defect. The bus does not run. Tap Call at the top.", true);
+      if(it.crit) toast("Critical defect. The bus does not run.", true);
       setTimeout(function(){ ta.focus(); },120);
     });
     /* Advisory does not advance, for the same reason Defect does not: it
@@ -4401,14 +4399,14 @@ function paintSend(state, extra){
       '<span><b>Sending</b><p>Writing this check to the record.</p></span></div>';
   } else if(state==="ok"){
     box.innerHTML='<div class="sendbox s-ok"><span class="ico">&#10003;</span>'+
-      '<span><b>On the record</b><p>Saved to the coordinator\u2019s sheet. Nothing else to do.</p></span></div>';
+      '<span><b>On the record</b><p>Saved to the coordinator\u2019s sheet.</p></span></div>';
   } else if(state==="practice"){
     box.innerHTML='<div class="sendbox s-hold"><span class="ico">!</span>'+
-      '<span><b>Practice mode</b><p>No record address is set up yet, so this check was not sent anywhere.</p></span></div>';
+      '<span><b>Practice mode</b><p>This check was not sent anywhere.</p></span></div>';
   } else {
     box.innerHTML='<div class="sendbox s-hold"><span class="ico">!</span>'+
       '<span><b>Held on this phone</b><p>'+esc(extra||"Could not reach the record.")+
-      ' It will send itself as soon as you have signal. Do not close and forget it.</p></span></div>';
+      ' It will send itself as soon as you have signal.</p></span></div>';
   }
   $("retry").style.display = (state==="ok"||state==="sending") ? "none" : "";
 }
@@ -4467,7 +4465,7 @@ function submit(){
     paintSend("ok");
     if(picsSaved) picsSaved.then(sendPhotos);
     fetchLastMiles();
-    if(rec.level==="stop") toast("Sent. Now ring the coordinator.");
+    if(rec.level==="stop") toast("Sent.");
   }).catch(function(err){
     sendingNow = false;
     queueUp(rec);
@@ -5196,7 +5194,7 @@ function authSend(){
   var pin=String($("authPin").value||"").trim();
   if(pin.length<4){ tell("authSay", "Key your PIN.", true); return; }
   if(!LIVE_ENDPOINT || !navigator.onLine){
-    tell("authSay", "No connection. Authorise it on the Checks tab of the spreadsheet instead.", true);
+    tell("authSay", "No connection.", true);
     return;
   }
   $("authGo").disabled=true;
@@ -5239,18 +5237,18 @@ function authSend(){
          recognise, such as a live server that has not been updated yet, sends
          him to the spreadsheet rather than telling him his PIN is wrong. */
       var e = out && out.error;
-      tell("authSay", (out && out.locked) ? "Too many wrong tries. Wait "+(out.minutes||10)+" minutes."
+      tell("authSay", (out && out.locked) ? "Too many wrong tries. Locked for "+(out.minutes||10)+" minutes."
         : e === "bad pin" ? "That PIN is not right." +
             (out.left > 0 ? " " + out.left + (out.left===1 ? " more try." : " more tries.") : "")
         : e === "not authorised" ? "That name cannot authorise a bus."
         : e === "same hand" ? "The person who did the check cannot authorise it."
-        : e === "no check" ? "No stopped check on record for that bus yet. Try again in a minute."
+        : e === "no check" ? "No stopped check on record for that bus yet."
         : e === "no pin" ? "No PIN for that name: no phone number on the Drivers tab."
-        : "Could not authorise it here. Use the Checks tab instead.", true);
+        : "Could not authorise it here.", true);
     })
     .catch(function(){
       $("authGo").disabled=false;
-      tell("authSay", "Could not reach the record. Authorise it on the Checks tab instead.", true);
+      tell("authSay", "Could not reach the record.", true);
     });
 }
 
@@ -5646,7 +5644,7 @@ function tripAutoEndTell(){
     if(!navigator.serviceWorker) return;
     navigator.serviceWorker.ready.then(function(reg){
       reg.showNotification("Run ended, back at church", {
-        body: "Open the app to undo if that is wrong.",
+        body: "",
         tag: "autoend", renotify: true,
         icon: "./icon-192.png", badge: "./icon-192.png",
         data: { url: "./" }
@@ -6129,7 +6127,7 @@ function tripFetch(route,cb){ rotaCountsFetch(route,cb); }
 
    So it is his start button. One tap, the one he was going to make anyway. */
 function tripStart(route, reg, anyway){
-  if(!tripClosed){ toast("Bookings close "+(tripCutoff||"09:30")+". You can start the run then.", true); return; }
+  if(!tripClosed){ toast("Bookings close "+(tripCutoff||"09:30")+".", true); return; }
   if(tripMoving()){ toast("Not while the bus is moving.", true); return; }
   /* The buttons are off rather than disabled now, so they can say why. That
      puts the only real guard here: a run is recorded in a driver's name, and
@@ -6180,13 +6178,13 @@ function tripStart(route, reg, anyway){
   if(chk.state==="stopped"){
     /* No esc: toast sets textContent, which escapes nothing and needs
        nothing escaped. Passing esc() here would print the entities. */
-    toast(reg+" was stopped by today\u2019s check. Ring "+coordName()+".", true);
+    toast(reg+" was stopped by today\u2019s check.", true);
     return;
   }
   /* Expired insurance or MOT: no run with passengers. */
   var pap=papersOf(reg);
   if(pap){
-    toast(reg+": "+pap.label+" expired "+prettyDate(pap.date)+". Ring "+coordName()+".", true);
+    toast(reg+": "+pap.label+" expired "+prettyDate(pap.date)+".", true);
     return;
   }
 
@@ -6332,7 +6330,7 @@ function tripTap(stop,kind){
   /* Never onto a test run whose round is over by the clock. */
   if(tripRoundTick()) return;
   if(!trip.started || trip.ended) return;
-  if(tripMoving()){ toast("Not while the bus is moving. Tap it when you pull up.", true); return; }
+  if(tripMoving()){ toast("Not while the bus is moving.", true); return; }
   /* The same gate Start trip has, and for the same reason. A tap is a record
      filed under a driver's name — it is the record the Monday question rests
      on — and this asked for nothing.
@@ -6403,7 +6401,7 @@ function tripUndoAsk(stop){
   if(tripRoundTick()) return;
   var was=trip.served[stop.id];
   if(!was) return;
-  if(tripMoving()){ toast("Not while the bus is moving. Tap it when you pull up.", true); return; }
+  if(tripMoving()){ toast("Not while the bus is moving.", true); return; }
   if(pinGateNeeded()){ pinGateFocus(); return; }
   undoAskId=stop.id;
   $("undoBody").innerHTML=
@@ -6444,7 +6442,7 @@ function tripUndo(stop){
   /* The same rule as the tap it takes back. Undo was the one stop control
      with no moving check, so it went through whenever a repaint had left its
      button live on a moving bus. */
-  if(tripMoving()){ toast("Not while the bus is moving. Tap it when you pull up.", true); return; }
+  if(tripMoving()){ toast("Not while the bus is moving.", true); return; }
   /* Taking a tap back is as much a change to the record as making one. */
   if(pinGateNeeded()){ pinGateFocus(); return; }
   delete trip.served[stop.id];
@@ -7228,7 +7226,7 @@ function rotaPaint(keepPosition){
       var lockHtml=row.locked
         ? '<div class="rota-locked"><b>Protected Sunday.</b> '+
           (row.lockNote?esc(row.lockNote)+'. ':'')+
-          'This one cannot be swapped. If you cannot make it, ask for a cover.</div>'
+          'This one cannot be swapped.</div>'
         : '';
 
       var legs=unfilled
@@ -7266,7 +7264,7 @@ function rotaPaint(keepPosition){
        and a name can be a fortnight stale. */
     $("rotaViewing").innerHTML = my
       ? 'Viewing as <b>'+esc(my)+'</b>'
-      : 'No driver chosen. Go back and pick your name to see your own duties.';
+      : 'No driver chosen.';
 
     list.querySelectorAll("[data-rota-request]").forEach(function(b){
       b.addEventListener("click",function(){rotaOpenRequest(this.getAttribute("data-rota-request"));});
@@ -7533,7 +7531,7 @@ function rotaPaintStops(){
        they are withheld. Say why, rather than showing a bare timetable and
        leaving him to wonder where the numbers went. */
     html+='<p class="lede" style="margin:0 0 8px">Times only. The booking '+
-          'numbers are from an earlier Sunday and will refresh on their own.</p>';
+          'numbers are from an earlier Sunday.</p>';
   }
 
   /* Who this phone thinks you are, said on the screen the taps are made from.
@@ -8058,7 +8056,7 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
     if(mayTap && tripUncheckedAsked){
       if(pinGateNeeded()) pinWhy="Setting off with no check is recorded in your name.";
       h+='<p class="trip-note"><b>No check signed for '+esc(tripUncheckedAsked)+
-         ' today.</b> Do the check first.</p>'+
+         ' today.</b></p>'+
          '<div class="trip-two">'+
            '<button class="btn btn-main" id="tripDoCheck">Do the check</button>'+
            '<button class="btn btn-ghost'+(pinGateNeeded()?' is-off':'')+'" id="tripStartAnyway" '+
@@ -8092,7 +8090,7 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
            Bookings closing is the fact. When to pull out is the timetable's
            business and this says nothing about it. */
         : '<p class="trip-note"><b>Bookings close '+esc(tripCutoff||"09:30")+'.</b> '+
-          'You can start the run then.</p>';
+          '</p>';
     } else {
       /* Name the driver and the moment. Somebody looking for a button that is
          not theirs should be told whose it is, not left wondering whether the
@@ -8176,8 +8174,7 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
      can put it right. Said where he is already looking, only when it is
      genuinely impossible, and with the one thing to do about it. */
   if(off!==null && off < -MAX_EARLY){
-    bits.push('<b class="trip-stopme">'+scheduleWords(off)+'. Check the last '+
-              'stop you marked</b>');
+    bits.push('<b class="trip-stopme">'+scheduleWords(off)+'</b>');
   } else if(off!==null && off!==0){
     bits.push(scheduleWords(off));
   }
@@ -8413,7 +8410,7 @@ function tripBusButtonsHtml(){
      It is not the app's choice. See the comment at the top of tripStart. */
   stopped.forEach(function(reg){
     h+='<p class="trip-note"><b class="trip-stopme">'+esc(reg)+
-       ' was stopped by today\u2019s check.</b> Ring '+esc(coordName())+'.</p>';
+       ' was stopped by today\u2019s check.</b></p>';
     /* The second way out, offered where the refusal is, to the one person who
        can take it. A driver never sees this button. */
     var v=checkVerdict(reg);
@@ -8876,7 +8873,7 @@ function rotaOpenRequest(key){
       sel.innerHTML='<option value="">'+esc(who)+' is already driving this Sunday</option>';
       $("rotaSwapAgreedText").textContent="We have already agreed this swap.";
       swapNote(esc(who)+" is already driving on this Sunday, so he cannot take "+
-               "yours as well. Pick somebody else, or ask for a cover instead.");
+               "yours as well.");
       return;
     }
     /* Never their entry on the very Sunday being asked about. Swapping into
@@ -8889,8 +8886,7 @@ function rotaOpenRequest(key){
       /* Backups sit outside both patterns, so they have no Sundays of their
          own and nothing to trade. That is not a fault, it is what a backup
          is, but a driver staring at an empty list cannot know that. */
-      swapNote(esc(who)+" has no Sundays of his own coming up. Ask for a "+
-               "cover instead.");
+      swapNote(esc(who)+" has no Sundays of his own coming up.");
       return;
     }
     swapNote("");
@@ -8945,7 +8941,7 @@ function rotaSubmitRequest(){
   }
   if(reason.length<3){ toast("Give the coordinator a short reason.", true); return; }
   if(!LIVE){ toast("Not submitted. The shared rota is not connected yet.", true); return; }
-  if(!navigator.onLine){ toast("Not submitted. No connection. Try again when you have signal.", true); return; }
+  if(!navigator.onLine){ toast("Not submitted. No connection.", true); return; }
 
   var body={token:CFG.token||"",action:"rotaRequest",request:{
     id:rotaReqId || ("rq"+Date.now()+"-"+Math.random().toString(36).slice(2,7)),
@@ -8983,8 +8979,8 @@ function rotaSubmitRequest(){
       if(out.__live){ rotaNoteRequest(rotaEditDate, body.request.driver, type); rotaRender(true); }
       else rotaRender(true,null,true);
       toast(type==="Request a swap"
-        ? "Swap sent. The coordinator decides; neither Sunday has changed yet."
-        : "Request sent. The coordinator decides; the rota has not changed yet.");
+        ? "Swap sent. Neither Sunday has changed yet."
+        : "Request sent. The rota has not changed yet.");
     })
     .catch(function(e){
       /* The same fault the booking page had. Apps Script writes the row and
@@ -8997,7 +8993,7 @@ function rotaSubmitRequest(){
          So look before saying anything. The request either reached the sheet
          or it did not. */
       if(!navigator.onLine){
-        toast("Not submitted. You lost signal. Try again when you are back in range.", true);
+        toast("Not submitted. You lost signal.", true);
         btn.disabled=false; btn.textContent="Send request";
         return;
       }
@@ -9011,11 +9007,11 @@ function rotaSubmitRequest(){
         if(rotaRequestFor(askedFor, me)){
           rotaClose(); rotaRender(true,null,true);
           toast(type==="Request a swap"
-            ? "Swap sent. The coordinator decides; neither Sunday has changed yet."
-            : "Request sent. The coordinator decides; the rota has not changed yet.");
+            ? "Swap sent. Neither Sunday has changed yet."
+            : "Request sent. The rota has not changed yet.");
           return;
         }
-        toast("Not submitted. "+plainError(e)+" Tap Send request again.", true);
+        toast("Not submitted. "+plainError(e), true);
         btn.disabled=false; btn.textContent="Send request";
       }, true);
     });
@@ -9339,7 +9335,7 @@ $("share").addEventListener("click",function(){
   var text=recText(lastRec);
   if(navigator.share){ navigator.share({ title:"Minibus check "+lastRec.reg, text:text }).catch(function(){}); }
   else if(navigator.clipboard){ navigator.clipboard.writeText(text).then(function(){ toast("Copied."); },
-    function(){ toast("Could not copy. Screenshot this page.", true); }); }
+    function(){ toast("Could not copy.", true); }); }
   else toast("Screenshot this page to share it.");
 });
 
@@ -9551,7 +9547,7 @@ function pinPaintHint(){
   if(!h) return;
   var need=pinNeeded();
   h.style.display = (pinMsg || need) ? "" : "none";
-  tell(h, pinMsg || (need ? "Forgotten your PIN? Ask the coordinator." : ""), pinMsg && pinMsgBad);
+  tell(h, pinMsg || (need ? "" : ""), pinMsg && pinMsgBad);
 }
 
 /* ---- confirming your name at the point of writing -----------------------
@@ -9808,7 +9804,7 @@ function pinAskLive(tried, stillTyping, answered, thenSheet){
 function pinApply(out, tried, answered){
   if(out.locked){
     st.pinOk=false; st.pinState="";
-    pinSay("Too many wrong tries. Wait "+(out.minutes||10)+" minutes, or ring the coordinator.", true);
+    pinSay("Too many wrong tries. Locked for "+(out.minutes||10)+" minutes.", true);
     paintFoot(); return;
   }
   st.pinOk = (out.valid === true);
@@ -9859,7 +9855,7 @@ function pinScreenSet(mode){
 function pinSaySet(t,bad){ tell("pinSaySet", t, bad); }
 
 function pinPost(action, body, then, wrong){
-  if(!(LIVE_ENDPOINT && navigator.onLine)){ pinSaySet("No signal. Try again when you have one.", true); return; }
+  if(!(LIVE_ENDPOINT && navigator.onLine)){ pinSaySet("No signal.", true); return; }
   if(pinBusy) return;
   pinBusy = true;
   pinSaySet("Sending\u2026");
@@ -9874,11 +9870,11 @@ function pinPost(action, body, then, wrong){
       pinBusy = false;
       var out = JSON.parse(t);
       if(!out || out.ok !== true){
-        pinSaySet(out && out.error === "no pin" ? "You have no PIN yet. Ring the coordinator."
-                                                 : "The live server did not take that. Try again.", true);
+        pinSaySet(out && out.error === "no pin" ? "You have no PIN yet."
+                                                 : "The live server did not take that.", true);
         return;
       }
-      if(out.locked){ pinSaySet("Too many wrong tries. Wait "+(out.minutes||5)+" minutes, or ring the coordinator.", true); return; }
+      if(out.locked){ pinSaySet("Too many wrong tries. Locked for "+(out.minutes||5)+" minutes.", true); return; }
       if(out.valid !== true){
         pinSaySet("That PIN is not right." + (out.left > 0
           ? " " + out.left + (out.left === 1 ? " more try" : " more tries") + " before it pauses." : ""), true);
@@ -9887,7 +9883,7 @@ function pinPost(action, body, then, wrong){
       }
       then(out);
     })
-    .catch(function(){ pinBusy = false; pinSaySet("No connection. Try again.", true); });
+    .catch(function(){ pinBusy = false; pinSaySet("No connection.", true); });
 }
 
 $("toPinChange").addEventListener("click",function(){ pinScreenSet("change"); show("pin"); });
@@ -9962,7 +9958,7 @@ function pinOffline(tried){
 function pinLetThrough(){
   st.pinOk = true;
   st.pinState = "offline";
-  pinSay("No signal to check the PIN. Carry on.");
+  pinSay("No signal to check the PIN.");
   paintFoot();
 }
 function showPinField(){

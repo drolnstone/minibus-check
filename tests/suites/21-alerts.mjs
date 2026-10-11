@@ -224,7 +224,7 @@ export default async function (root) {
       a.has(got[0].subject, "went out unchecked");
       a.ok(bothSay(got[0], "YS70 PWE"), "it does not say which bus");
       a.ok(bothSay(got[0], "NH56 FWP"), "or the other one");
-      a.ok(bothSay(got[0], "inspected on return"), "the thing it is actually asking for");
+      a.ok(!bothSay(got[0], "inspected on return"), "advice in the alert");
     });
   });
 

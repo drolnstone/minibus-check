@@ -2147,7 +2147,7 @@ async function busPayload(env, keyIn, ref, pid) {
     rolled = key !== today;
   }
   if (!busDateAllowed(key)) {
-    return { ok: false, error: "That link is out of date. Ask for the current one." };
+    return { ok: false, error: "That link is out of date." };
   }
 
   const rows = await liveBookings(env, key);
@@ -2653,7 +2653,7 @@ async function handleBooking(env, b) {
   const stops = pickupsAndArrivals(all);
   const key = String(b.date || "") || (await busCurrentSunday(env, stops));
   if (!busDateAllowed(key)) {
-    return json({ ok: false, error: "That link is out of date. Ask for the current one." });
+    return json({ ok: false, error: "That link is out of date." });
   }
 
   const ref = String(b.ref || "").replace(/[^A-Za-z0-9]/g, "").substring(0, 32);
@@ -5638,12 +5638,11 @@ function seatWords(seat) {
       return { ok: true, tag: "book", url: "./",
                title: "Last chance to book for Sunday",
                body: "Bookings close at " + cutoffClock() + " " +
-                     (today ? "today" : "tomorrow") + ". Tap to pick your stop." };
+                     (today ? "today" : "tomorrow") + "." };
     }
     return { ok: true, tag: "book", url: "./",
              title: "Book your seat for Sunday",
-             body: "There is room on the bus. Bookings close " + cutoffWords() +
-                   ". Tap to pick your stop." };
+             body: "There is room on the bus. Bookings close " + cutoffWords() + "." };
   }
 
   /* HIS SEAT'S OWN SUNDAY, COMPARED WITH TODAY. On the day it is a time to be
@@ -5665,8 +5664,7 @@ function seatWords(seat) {
   return { ok: true, tag: "book", url: "./",
            title: "You are booked for Sunday",
            body: seat.stop + (seat.time ? ", " + seat.time : "") + "." +
-                 (n ? " " + n + (n === 1 ? " seat." : " seats.") : "") +
-                 " Tap to change or cancel." };
+                 (n ? " " + n + (n === 1 ? " seat." : " seats.") : "") };
 }
 
 /* WHAT A MAN WITH A SEAT IS TOLD WHILE A REHEARSAL RUNS.
@@ -6220,7 +6218,7 @@ async function pushWhat(env, endpoint) {
                         is the coordinator's call, not this server's. Generic
                         rather than named, because the coordinator's name lives
                         in config.js on the phone and nothing here has it. */
-                     body: "Do not take it out. Ring the coordinator." };
+                     body: "Do not take it out." };
           }
           /* AND THE ANSWER, when it comes. He was told not to drive; this is
              the only way he hears that he may. Worked out from the record
@@ -6241,7 +6239,7 @@ async function pushWhat(env, endpoint) {
         return { ok: true, tag: "start", url: "./",
                  title: "Time to set off",
                  body: "Your " + route + " run is due to leave church" + (when ? " at " + when : " now") +
-                       ". Tap Start as you pull away." };
+                       "." };
       }
       if (due && now - due.getTime() >= 10 * 60000) {
         return { ok: true, tag: "start", url: "./",
@@ -6359,7 +6357,7 @@ async function pushWhat(env, endpoint) {
     return { ok: true, tag: "bus", url: "./",
              title: "Nobody there at " + stop,
              body: "The driver marked nobody waiting" + (p.servedAt ? " at " + p.servedAt : "") +
-                   ". Still there? Open the page." };
+                   "." };
   }
   if (p.mine === "served") {
     return { ok: true, tag: "bus", url: "./",
@@ -7193,7 +7191,7 @@ async function handleTestPush(env, body) {
        from Google on a bad minute must not, or a phone that is perfectly well
        subscribed gets told it is not. */
     return json({ ok: false, status, gone: true,
-                  error: "the push service says this phone is gone. Turn alerts off and on again." });
+                  error: "the push service says this phone is gone." });
   }
 
   if (status >= 200 && status < 300) {
@@ -7495,7 +7493,7 @@ async function actVlog(env, me, act, id) {
        than faults; the name is said once. */
     for (const k of [...new Set(act.defects)].slice(0, 50)) {
       const d = open.find((x) => x.key === k && String(x.reg || "").toUpperCase() === reg);
-      if (!d) return { ok: false, error: "One of those defects is not open on this bus any more. Refresh and try again." };
+      if (!d) return { ok: false, error: "One of those defects is not open on this bus any more." };
       defects.push(d.key);
       if (defectNames.indexOf(d.item) === -1) defectNames.push(d.item);
     }
@@ -7528,8 +7526,8 @@ async function actVfix(env, me, act, id) {
   const view = await coordVehiclesView(env);
   let orig = null, origReg = "";
   for (const r of Object.keys(view.log)) for (const x of view.log[r]) if (x.id && x.id === act.corrects) { orig = x; origReg = r; }
-  if (!orig) return { ok: false, error: "That entry is not on the Vehicle Log. Refresh and try again." };
-  if (orig.correctedBy) return { ok: false, error: "That entry has already been corrected. Correct the correction instead." };
+  if (!orig) return { ok: false, error: "That entry is not on the Vehicle Log." };
+  if (orig.correctedBy) return { ok: false, error: "That entry has already been corrected." };
   if (orig.status === "Withdrawn") return { ok: false, error: "That entry was withdrawn." };
   const withdraw = !!act.withdraw;
   const why = vlogText(act.why, 300);
@@ -7582,7 +7580,7 @@ async function actJob(env, me, act) {
   const j = view.jobs[reg];
   const job = String(act.job || "");
   if (!j || j.checkId !== String(act.checkId || "") || (j.jobs || []).indexOf(job) === -1) {
-    return { ok: false, error: "That job is not waiting any more. Refresh and try again." };
+    return { ok: false, error: "That job is not waiting any more." };
   }
   return { ok: true, sunday: "", body: { reg: reg, job: job, checkId: j.checkId, note: vlogText(act.note, 200) },
            words: reg + ": " + job + ", done." };
@@ -7656,11 +7654,11 @@ async function actMotrun(env, me, act) {
   const bus = (await getBuses(env)).find((b) => String(b.reg).toUpperCase() === reg);
   if (!bus) return { ok: false, error: "That bus is not on the Buses tab." };
   const s = papersStop(bus.dates, today);
-  if (s && s.item === "insurance") return { ok: false, error: "The insurance has expired. Record the new insurance first." };
+  if (s && s.item === "insurance") return { ok: false, error: "The insurance has expired." };
   if (!s) return { ok: false, error: "The MOT on this bus has not expired." };
   const view = await coordVehiclesView(env);
   const bk = motBookingOn(view.log[reg], today);
-  if (!bk) return { ok: false, error: "No MOT is booked for this bus today. Record the booking first." };
+  if (!bk) return { ok: false, error: "No MOT is booked for this bus today." };
   const time = String(act.time || "").trim();
   if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(time)) return { ok: false, error: "Give the test time as hours and minutes." };
   const k = motRunKey(today, reg);
@@ -7778,7 +7776,7 @@ async function actDriver(env, me, act) {
   const view = await coordDriversView(env);
   const d = view.drivers.find((x) => x.name.toLowerCase() === name.toLowerCase());
   if (add && d) return { ok: false, error: name + " is already a driver." };
-  if (!add && !d) return { ok: false, error: name + " is not on the live server's list. Refresh and try again." };
+  if (!add && !d) return { ok: false, error: name + " is not on the live server's list." };
   const inp = act.set || {};
   const set = {};
   if (inp.role !== undefined) {
@@ -7798,12 +7796,12 @@ async function actDriver(env, me, act) {
   }
   if (inp.email !== undefined) {
     const e = String(inp.email || "").trim();
-    if (e && (e.length > 100 || !DRIVER_EMAIL.test(e))) return { ok: false, error: "Check the email address." };
+    if (e && (e.length > 100 || !DRIVER_EMAIL.test(e))) return { ok: false, error: "That is not an email address." };
     set.email = e;
   }
   if (inp.phone !== undefined) {
     const p = String(inp.phone || "").trim();
-    if (p && !DRIVER_PHONE.test(p)) return { ok: false, error: "Check the phone number." };
+    if (p && !DRIVER_PHONE.test(p)) return { ok: false, error: "That is not a phone number." };
     set.phone = p;
   }
   if (add) {
@@ -7868,7 +7866,7 @@ async function actBus(env, me, act) {
   const buses = await getBuses(env);
   const x = buses.find((b) => busKey(b.reg) === busKey(reg));
   if (add && x) return { ok: false, error: x.reg + " is already a bus." };
-  if (!add && !x) return { ok: false, error: reg + " is not on the live server's list. Refresh and try again." };
+  if (!add && !x) return { ok: false, error: reg + " is not on the live server's list." };
   const inp = act.set || {};
   const set = {};
   if (inp.seats !== undefined) {
@@ -7883,7 +7881,7 @@ async function actBus(env, me, act) {
     set.oddRoute = r;
   }
   if (inp.notes !== undefined) {
-    if (x && x.noNotes) return { ok: false, error: "Change these notes on the Buses tab." };
+    if (x && x.noNotes) return { ok: false, error: "These notes are kept on the Buses tab." };
     const t = String(inp.notes || "").replace(/\r\n?/g, "\n").trim();
     if (t.length > 500) return { ok: false, error: "Notes are 500 characters at most." };
     set.notes = t;
@@ -7978,8 +7976,8 @@ function stopOrderProblem(list, s) {
   const others = (type) => on.filter((x) => x !== s && x.type === type);
   if (s.type === "Depart" && (others("Depart").length || i !== 0)) return "Depart is the first stop on a route, and there is one.";
   if (s.type === "Arrival" && (others("Arrival").length || i !== on.length - 1)) return "Arrival is the last stop on a route, and there is one.";
-  if (s.type === "Pickup" && on.slice(0, i).some((x) => x.type === "Arrival")) return "Move its row above the Arrival on the Bus Stops tab first.";
-  if (s.type === "Pickup" && on.slice(i + 1).some((x) => x.type === "Depart")) return "Move its row below the Depart on the Bus Stops tab first.";
+  if (s.type === "Pickup" && on.slice(0, i).some((x) => x.type === "Arrival")) return "Its row is below the Arrival on the Bus Stops tab.";
+  if (s.type === "Pickup" && on.slice(i + 1).some((x) => x.type === "Depart")) return "Its row is above the Depart on the Bus Stops tab.";
   const prev = on[i - 1], next = on[i + 1];
   if ((prev && s.time < prev.time) || (next && next.time && s.time > next.time)) {
     return "Pick a time " + (prev ? "from " + prev.time : "up to ") + (prev && next ? " to " : "") +
@@ -8093,7 +8091,7 @@ async function reapplyStops(env) {
 
 async function actStop(env, me, act) {
   const view = await coordStopsView(env);
-  if (!view) return { ok: false, error: "The Bus Stops tab has not reached the live server yet. Try again in a few minutes." };
+  if (!view) return { ok: false, error: "The Bus Stops tab has not reached the live server yet." };
   const list = view.stops;
   const add = !!act.add;
   const inp = act.set || {};
@@ -8105,7 +8103,7 @@ async function actStop(env, me, act) {
     /* stopId: act.id is the action's own. */
     id = String(act.stopId || "").toUpperCase().trim();
     x = list.find((s) => s.id.toUpperCase() === id) || null;
-    if (!x) return { ok: false, error: (id || "That stop") + " is not on the live server's list. Refresh and try again." };
+    if (!x) return { ok: false, error: (id || "That stop") + " is not on the live server's list." };
     id = x.id;
   }
   const set = {};
@@ -8121,7 +8119,7 @@ async function actStop(env, me, act) {
   }
   if (inp.postcode !== undefined) {
     const p = String(inp.postcode || "").toUpperCase().replace(/\s+/g, "");
-    if (p && !STOP_POSTCODE.test(p)) return { ok: false, error: "Check the postcode." };
+    if (p && !STOP_POSTCODE.test(p)) return { ok: false, error: "That is not a postcode." };
     set.postcode = p ? p.slice(0, -3) + " " + p.slice(-3) : "";
   }
   if (inp.where !== undefined) {
@@ -8171,7 +8169,7 @@ async function actStop(env, me, act) {
       "SELECT COALESCE(SUM(seats),0) AS n FROM bookings WHERE stop_id=? AND sunday>=? AND lower(status)='booked'")
       .bind(x.id, from).first();
     const n = Number(q && q.n) || 0;
-    if (n) return { ok: false, error: seatWord(n) + " booked at " + x.id + ". Cancel " + (n === 1 ? "it" : "them") + " on Bookings first." };
+    if (n) return { ok: false, error: seatWord(n) + " booked at " + x.id + "." };
   }
 
   /* Spacing and capitals tidied are not a new kerb. */
@@ -9315,7 +9313,7 @@ async function reportFromSheet(env, name, title) {
     if (mine && mine.good.length) sections.push({ head: "Live server: fine", tone: "good", lines: mine.good });
     return { ok: true, name: name, title: title, tone: "bad", sheetDown: true,
              lead: "The spreadsheet did not answer in " + Math.round(SHEET_REPORT_MS / 1000) +
-                   " seconds. Try again, or use the Minibus menu on the sheet.",
+                   " seconds.",
              sections: sections };
   }
   const out = { ok: true, name: name, title: rep.title || title, lead: rep.lead || "",
@@ -9343,7 +9341,7 @@ async function coordPdf(env, me, body) {
   if (PDF_NAMES.indexOf(name) === -1) return { ok: false, error: "no such report" };
   const got = await sheetAsk(env, { action: "pdf", step: "data", name: name,
                                     from: String(body.from || ""), to: String(body.to || "") }, PDF_SHEET_MS);
-  if (!got) return { ok: false, error: "The spreadsheet did not answer. Try again." };
+  if (!got) return { ok: false, error: "The spreadsheet did not answer." };
   if (got.ok !== true) return { ok: false, error: String(got.error || "The spreadsheet could not make that report.") };
   return { ok: true, report: got.report };
 }
@@ -9456,7 +9454,7 @@ async function actRota(env, me, act) {
   if (noteEdit) {
     const flat = String(cur.notes || "").split("\n").map(noteLine);
     if (flat.indexOf(noteEdit.was) === -1) {
-      return { ok: false, error: "That note is not on the live server's copy. Refresh and try again." };
+      return { ok: false, error: "That note is not on the live server's copy." };
     }
     if (noteEdit.now && flat.indexOf(noteEdit.now) !== -1) return { ok: false, error: "That note is there already." };
   }
@@ -9470,7 +9468,7 @@ async function actRota(env, me, act) {
   const nBus = busResolve(key, "North", next.northBus, buses), sBus = busResolve(key, "South", next.southBus, buses);
   if (("northBus" in set || "southBus" in set) && nBus && sBus && nBus === sBus) {
     return { ok: false, clash: nBus,
-             error: nBus + " is already on " + ("northBus" in set ? "South" : "North") + " that Sunday. Swap the two buses instead." };
+             error: nBus + " is already on " + ("northBus" in set ? "South" : "North") + " that Sunday." };
   }
 
   const body = { sunday: key, set: set, note: note };
@@ -9486,7 +9484,7 @@ async function actDecide(env, me, act) {
   if (choice !== "Approved" && choice !== "Rejected") return { ok: false, error: "choice" };
   const reqs = await coordRequestsView(env, { noCandidates: true });
   const rq = reqs.find((r) => r.id === id);
-  if (!rq) return { ok: false, error: "That request is not on the live server's copy. Refresh and try again." };
+  if (!rq) return { ok: false, error: "That request is not on the live server's copy." };
   if (rq.status !== "Pending") {
     return { ok: false, error: "That request has already been " +
                                (rq.status === "Approved" ? "approved" : "turned down") + "." };
@@ -9638,8 +9636,8 @@ async function actDefect(env, me, act) {
   const ds = keys.map((k) => list.find((x) => x.key === k) || null);
   if (!keys.length || ds.some((d) => !d)) {
     return { ok: false, error: keys.length > 1
-      ? "One of those reports is not open on the live server's copy. Refresh and try again."
-      : "That defect is not open on the live server's copy. Refresh and try again." };
+      ? "One of those reports is not open on the live server's copy."
+      : "That defect is not open on the live server's copy." };
   }
   const d = ds[0];
   if (ds.some((x) => x.reg !== d.reg)) return { ok: false, error: "Those reports are not all on one bus." };
@@ -9680,7 +9678,7 @@ async function actFix(env, me, act) {
   const todayKey = londonKey(new Date());
   if (!key || key > todayKey) return { ok: false, error: "Only a run that has happened can be corrected." };
   if (key < keyAddWeeks(runSunday(), -FIX_WINDOW_WEEKS)) {
-    return { ok: false, error: "That run is too old to correct here. Use the Trip Events tab." };
+    return { ok: false, error: "That run is too old to correct here." };
   }
   const hhmm = String(act.time || "").trim();
   if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(hhmm)) return { ok: false, error: "Give the time as hours and minutes." };
@@ -9731,7 +9729,7 @@ async function actFix(env, me, act) {
   const live = await env.DB.prepare(
     "SELECT id FROM trip_events WHERE trip=? AND stop_id=? AND event IN " + TAP_SQL + " AND status<>'Undone' LIMIT 1")
     .bind(trip, stop.id).first();
-  if (live) return { ok: false, error: stop.stop + " already has a time. Correct that one." };
+  if (live) return { ok: false, error: stop.stop + " already has a time." };
   const anchor = (await bookedTimes(env, key, any.route))[stop.id] || stop.time;
   const sched = londonMoment(key, anchor);
   const off = sched ? Math.round((at - sched.getTime()) / 60000) : null;

@@ -16,8 +16,9 @@ No End trip once a run is live (Asim, 11 Oct):
     The coordinator app's End it now also takes a coordinator's own run
     (it used to say "That is your own run. End it in the driver app.").
   - The "End the trip" push to the driver is gone.
-  - The "booked stops not marked" alert no longer ends with "Correct it
-    in the coordinator app's Run record."
+  - Facts only (Asim, 11 Oct): advice and instructions are cut from
+    every alert, email and app screen. Confirmations and safeguards stay.
+    The list: notes/advice-taken-out-2026-10-11.md in the project files.
 
 
 YOU ARE ON              GOING TO
@@ -61,8 +62,9 @@ WHAT CHANGED
 
    coord/index.html: the "That is your own run" refusal words go.
 
-2b. Code.gs missedTapAlert: the "Correct it in the coordinator app's
-   Run record." sentence is cut; suite 57 bans it.
+2b. Advice cut from pushes, emails and refusals (worker.js, Code.gs) and
+   from the screens of index.html, sunday/index.html, coord/index.html and
+   do/index.html. Suite 57 bans the cut phrases.
 
 3. Version v1.106.0 in all three pages and their sw.js; w2.53.0; sheet v1.114.0.
 

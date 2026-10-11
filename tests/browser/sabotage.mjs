@@ -48,7 +48,7 @@ const S = [
   { id: "S7a moving after repaint", tests: "T7", swaps: [
     ["  tripMovingPainted=null;\n  tripPaintMoving();\n  pinGateAutoFocus();", "  tripPaintMoving();\n  pinGateAutoFocus();"] ] },
   { id: "S7b undo while moving", tests: "T7", swaps: [
-    ["  if(tripMoving()){ toast(\"Not while the bus is moving. Tap it when you pull up.\"); return; }\n  /* Taking a tap back", "  /* Taking a tap back"] ] },
+    ["  if(tripMoving()){ toast(\"Not while the bus is moving.\", true); return; }\n  /* Taking a tap back", "  /* Taking a tap back"] ] },
   { id: "S8 End trip on a live run", tests: "T8", swaps: [
     ["    if(trip.started && !trip.ended && tripMayTap(trip.route)){\n      $(\"footbar\").classList.add(\"is-gone\");",
      "    if(false){\n      $(\"footbar\").classList.add(\"is-gone\");"] ] },
