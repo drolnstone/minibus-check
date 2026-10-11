@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.116.0";
+var SCRIPT_VERSION = "v1.117.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -13810,36 +13810,22 @@ function htmlShell(title, colour, lines, buttonLabel, tabName) {
    Fenced completely. The message is the thing that matters; the link is a
    convenience on top of it, and a convenience must never be able to stop a
    coordinator finding out that a bus is off the road. */
-/* WHOSE PIN THE PAGE WILL ASK FOR.
+/* THE COORDINATOR NAMED ON AN ACTION LINK.
 
-   Not a new setting. The Drivers tab already has an Email column and
-   COORDINATOR_EMAIL is already where these messages go, so the name is the
-   one the two agree on — which also means that changing who gets the emails
-   changes whose PIN the link wants, with nothing to keep in step by hand.
+   The first active driver in an authorising role, by title order: the same
+   person the Call buttons ring (coordinatorContact). It used to be whoever
+   COORDINATOR_EMAIL matched in the Email column; that list holds all three
+   coordinators, so it never matched one and the title order always decided.
 
-   Falls back to the first active driver in an authorising role, because a
-   spreadsheet where nobody has filled in the Email column should still
-   produce a working link rather than a dead one. Returns "" when there is no
-   such person at all, and an empty name makes actionLink hand back no link,
-   which puts the email back to "open the coordinator app". */
+   Returns "" when there is no such person at all, and an empty name makes
+   actionLink hand back no link, which puts the email back to "open the
+   coordinator app". */
 function coordinatorName() {
-  var want = String(COORDINATOR_EMAIL || "").trim().toLowerCase();
-  var roles = (AUTHORISER_ROLES || []).map(function (r) {
-    return String(r || "").trim().toLowerCase();
-  });
-  var list = [];
-  try { list = readDrivers(SpreadsheetApp.getActiveSpreadsheet()) || []; }
+  /* From v1.117.0 the same person coordinatorContact names, by the one rule
+     below. Only a label: the live server takes any coordinator's PIN on an
+     action link. */
+  try { return coordinatorContact(readDrivers(SpreadsheetApp.getActiveSpreadsheet()) || []).name; }
   catch (err) { return ""; }
-
-  var fallback = "";
-  for (var i = 0; i < list.length; i++) {
-    var d = list[i];
-    if (!d.active) continue;
-    if (roles.indexOf(String(d.role || "").trim().toLowerCase()) === -1) continue;
-    if (!fallback) fallback = d.name;
-    if (want && String(d.email || "").trim().toLowerCase() === want) return d.name;
-  }
-  return fallback;
 }
 
 /* WHO PEOPLE RING, off the Drivers tab.
@@ -13854,10 +13840,9 @@ function coordinatorName() {
    fullInspectionRoles, and this follows. Until v1.85.3 this looked for the
    word Coordinator alone, and a church without one showed nobody.
 
-   Whoever COORDINATOR_EMAIL names wins, so the person the alerts go to is the
-   person people are told to ring. Otherwise the first active person holding
-   the FIRST role in the list, then the second, and so on: here that is the
-   Coordinator before the Minister in Charge. Nobody in any of them gives a
+   The first active person holding the FIRST role in the list, then the
+   second, and so on: here that is the Coordinator before the Minister in
+   Charge. Nobody in any of them gives a
    blank name and a blank number, and every page then says "the bus
    coordinator" instead.
 
@@ -13865,15 +13850,21 @@ function coordinatorName() {
    gives, which is how the pages learn it. Also carried on the rota, for the
    driver app when it is talking to this file directly. */
 function coordinatorContact(drivers) {
-  var want = String(COORDINATOR_EMAIL || "").trim().toLowerCase();
+  /* BY TITLE ORDER ALONE, from v1.117.0 (Asim, 11 Oct 2026).
+
+     This first looked for the coordinator whose Email was COORDINATOR_EMAIL.
+     Once that held three addresses (4 Oct) it matched nobody, and the title
+     order below decided every time, unseen. Matching each address in turn
+     would not have helped: the coordinators' inbox is kept apart from the
+     Drivers tab Email on purpose, so it would have picked whoever happened to
+     share one. The first active holder of the first title in
+     COORDINATOR_ROLES takes the calls; the coordinator app's Emergency calls
+     chooses someone else for a day or until changed back. */
   var roles = (AUTHORISER_ROLES || []).map(function (r) { return String(r || "").trim().toLowerCase(); });
   var list = (drivers || []).filter(function (d) {
     return d && d.active && roles.indexOf(String(d.role || "").trim().toLowerCase()) !== -1;
   });
   var first = null;
-  for (var i = 0; i < list.length && want && !first; i++) {
-    if (String(list[i].email || "").trim().toLowerCase() === want) first = list[i];
-  }
   for (var r = 0; r < roles.length && !first; r++) {
     for (var j = 0; j < list.length; j++) {
       if (String(list[j].role || "").trim().toLowerCase() === roles[r]) { first = list[j]; break; }

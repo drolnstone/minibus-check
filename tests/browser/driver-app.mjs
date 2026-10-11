@@ -1103,10 +1103,13 @@ if (want("T32")) {
   const after = sent();
   const asked = await me.pg.evaluate(() => document.getElementById("undoModal").classList.contains("is-on"));
   const back = await me.pg.$('.trip-row-btns [data-triptap="N01"][data-tripkind="empty"]');
-  check("T32", "Nobody here changes to Picked up in one tap, the first answer taken back on the record",
+  /* One send carries both (v1.110.0), so passengers are told once. */
+  const both = me.posted.filter(p => p.action === "trip").map(p => (p.trip.events || []).map(e => e.event).join(","))
+    .filter(x => /undo/.test(x));
+  check("T32", "Nobody here changes to Picked up in one tap, the first answer taken back on the record, in one send",
         first === "empty" && after.slice(-2).join(",") === "undo:empty,pickup" && /picked up 10:1/i.test(row) &&
-        !asked && !!back && !me.errs.length,
-        JSON.stringify({ first, after, asked, back: !!back, errs: me.errs }));
+        !asked && !!back && both.length === 1 && both[0] === "undo,pickup" && !me.errs.length,
+        JSON.stringify({ first, after, asked, back: !!back, both, errs: me.errs }));
   await me.ctx.close();
 }
 

@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.56.0";
+const SCRIPT_VERSION = "w2.57.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -597,9 +597,10 @@ async function handleLinkDo(env, body) {
   /* ANY COORDINATOR'S PIN, WHICH IS THE RULE THE APP HAS ALWAYS USED.
 
      This asked for ONE named person's — subject.to, which the spreadsheet
-     fills in with coordinatorName(). That name is whoever COORDINATOR_EMAIL
-     matches in the Email column, FALLING BACK to the first active driver in
-     an authorising role when nothing matches.
+     fills in with coordinatorName(). That name was then whoever
+     COORDINATOR_EMAIL matched in the Email column, FALLING BACK to the first
+     active driver in an authorising role when nothing matched (from sheet
+     v1.117.0 it is that title order alone).
 
      On 24 September a coordinator opened his own link, keyed his own PIN, and
      was told it was not right. It was not right — for the man the fallback had
@@ -3186,6 +3187,29 @@ async function handleTrip(env, payload) {
     written++;
   }
 
+  /* WHAT AN UNDO MAY HAVE TOLD PEOPLE, read before the record changes
+     (w2.57.0). Each stop's verdict as a phone would read it, and when the
+     tap being taken back went on the record: a phone woken since then may
+     have been told something the Undo makes untrue. See wakeAfterUndo. */
+  let undoBefore = null, undoSince = 0, undoAt = 0;
+  const undos = rehearsing ? [] : events.filter((e) =>
+    String(e.event || "").trim().toLowerCase() === "undo" && isStopTap(e.undoes) && Number(e.at));
+  if (undos.length) {
+    try {
+      for (const u of undos) {
+        const r = await env.DB.prepare(
+          "SELECT logged FROM trip_events WHERE trip=? AND event=? AND stop_id=? AND status<>'Undone'")
+          .bind(trip, String(u.undoes).trim().toLowerCase(), String(u.stopId || "").trim()).first();
+        const t = r ? Number(r.logged) || 0 : 0;
+        if (t && (!undoSince || t < undoSince)) undoSince = t;
+      }
+      if (undoSince) {
+        undoBefore = stopVerdicts(await tripState(env, key, route, "real"), stops, route);
+        undoAt = Number(undos[0].at) || 0;
+      }
+    } catch (e) { undoBefore = null; }
+  }
+
   if (stmts.length) await env.DB.batch(stmts);
 
   /* WHO ENDED IT, on the end row itself.
@@ -3216,19 +3240,27 @@ async function handleTrip(env, payload) {
      kind that loses a Sunday. */
   try {
     if (!rehearsing) {
-      const marked = {};
+      const fixes = undoBefore ? await undoFixes(env, key, route, stops, undoBefore, undoSince) : [];
+      const marked = {}, liveTap = {};
       const done = await env.DB.prepare(
-        "SELECT stop_id FROM trip_events WHERE trip=? AND status<>'Undone'").bind(trip).all();
-      for (const r of (done.results || [])) marked[r.stop_id] = 1;
+        "SELECT stop_id, event FROM trip_events WHERE trip=? AND status<>'Undone'").bind(trip).all();
+      for (const r of (done.results || [])) {
+        marked[r.stop_id] = 1;
+        if (isStopTap(r.event)) liveTap[r.stop_id + "|" + String(r.event).trim().toLowerCase()] = 1;
+      }
 
       for (const ev of events) {
         const kind = String(ev.event || "").trim().toLowerCase();
+        const stopId = String(ev.stopId || "").trim();
         if (kind === "start") {
           await wakeDeparture(env, key, route, stops, null);
-        } else if (isStopTap(kind)) {
-          await wakeAfterTap(env, key, route, all, stops, String(ev.stopId || "").trim(), marked);
+        } else if (isStopTap(kind) && liveTap[stopId + "|" + kind]) {
+          /* Only a tap still on the record (w2.57.0): one taken back in the
+             same send, by a phone that was out of signal, tells nobody. */
+          await wakeAfterTap(env, key, route, all, stops, stopId, marked, kind);
         }
       }
+      if (fixes.length) await wakeAfterUndo(env, key, route, fixes, undoAt);
     }
   } catch (e) { /* the record is written; this was only the courtesy */ }
 
@@ -5077,7 +5109,7 @@ async function minutesToStop(env, key, route, all, state, stopId) {
    subject to any of this: somebody standing at a kerb the bus has driven by
    is not receiving an update, he is receiving the only message that will ever
    reach him. */
-async function wakeAfterTap(env, key, route, all, stops, stopId, marked) {
+async function wakeAfterTap(env, key, route, all, stops, stopId, marked, kind) {
   const line = stops.filter((s) => s.route === route && !s.arrival);
   const at = line.findIndex((s) => s.id === stopId);
   if (at < 0) return 0;
@@ -5087,6 +5119,15 @@ async function wakeAfterTap(env, key, route, all, stops, stopId, marked) {
   try { state = await tripState(env, key, route); } catch (e) {}
 
   let n = 0;
+
+  /* NOBODY HERE, TO THE PEOPLE BOOKED HERE, from w2.57.0 (Asim, 11 Oct
+     2026). A Picked up tells them nothing they do not know; Nobody here may
+     be the first they hear that the bus has been and gone. The words are
+     pushWhat's "Nobody there at ...", from the record. */
+  if (TAP_EMPTY.indexOf(String(kind || "").trim().toLowerCase()) !== -1 && !(state && state.ended)) {
+    n += await wake(env, await subsAtStop(env, key, stopId), "empty|" + key + "|" + stopId,
+                    { route, stop: line[at].stop });
+  }
 
   for (let i = at + 1; i < line.length; i++) {
     const subs = await subsAtStop(env, key, line[i].id);
@@ -5135,6 +5176,69 @@ async function wakeAfterTap(env, key, route, all, stops, stopId, marked) {
                          title: route + ": The bus has gone past " + line[i].stop,
                          body: "To " + trailPhones(r, "passenger") + "." });
     }
+  }
+  return n;
+}
+
+/* AN UNDO PUTS RIGHT WHAT IT TOLD, from w2.57.0 (Asim, 11 Oct 2026).
+
+   A tap taken back can leave people told something that is no longer true:
+   "The bus has gone past" or "Picked up" from a tap at the wrong kerb, or
+   "Nobody there" at their own stop. Whatever told them (the tap's own push,
+   or a later one that read the record while the wrong tap was on it), the
+   words came from the record, so the test is the record: each stop's
+   verdict before the Undo against after it. A stop whose verdict changed
+   has its booked phones woken again, but only phones a push has reached
+   since the undone tap went on the record; anybody not woken since was told
+   nothing wrong. The words are pushWhat's, so they say what is true now:
+   the estimate, Picked up, or gone past from another tap.
+
+   Read from the record, so a send that arrives twice changes nothing the
+   second time and sends nothing. Not once the run has ended: a phone then
+   reads about next Sunday, not this bus. */
+function stopVerdicts(state, stops, route) {
+  const line = stops.filter((s) => s.route === route);
+  const served = (state && state.served) || {};
+  const out = {};
+  for (let i = 0; i < line.length; i++) {
+    const hit = served[line[i].id];
+    if (hit) {
+      out[line[i].id] = TAP_EMPTY.indexOf(String(hit.event || "").toLowerCase()) !== -1 ? "empty" : "picked";
+      continue;
+    }
+    out[line[i].id] = line.slice(i + 1).some((x) => served[x.id]) ? "passed" : "open";
+  }
+  return out;
+}
+
+/* Who is owed a correction, read straight after the record changes and
+   before the same send's own taps wake anybody. */
+async function undoFixes(env, key, route, stops, before, since) {
+  let state = null;
+  try { state = await tripState(env, key, route, "real"); } catch (e) { return []; }
+  if (!state || state.ended) return [];
+  const after = stopVerdicts(state, stops, route);
+  const out = [];
+  for (const s of stops.filter((x) => x.route === route && !x.arrival)) {
+    if (before[s.id] === after[s.id]) continue;
+    const subs = (await subsAtStop(env, key, s.id)).filter((x) => (Number(x.seen) || 0) >= since);
+    if (subs.length) out.push({ stop: s, was: subs.map((x) => ({ id: x.id, last: String(x.last || "") })) });
+  }
+  return out;
+}
+
+/* Sent after the send's own taps have had their say. A phone one of them
+   has just woken has already been told what is true now (pushWhat reads the
+   record), so it is left alone rather than buzzed twice: the switch from
+   Picked up to Nobody here tells its stop "Nobody there" once. */
+async function wakeAfterUndo(env, key, route, fixes, when) {
+  let n = 0;
+  for (const f of fixes) {
+    const was = {};
+    for (const x of f.was) was[x.id] = x.last;
+    const subs = (await subsAtStop(env, key, f.stop.id))
+      .filter((x) => was[x.id] !== undefined && String(x.last || "") === was[x.id]);
+    n += await wake(env, subs, "fix|" + key + "|" + f.stop.id + "|" + when, { route, stop: f.stop.stop });
   }
   return n;
 }
@@ -5923,6 +6027,8 @@ function sentTitle(tag, driver, where) {
   if (k === "left") return pre("The bus has left church");
   if (k === "next") return pre("Be at your stop");
   if (k === "past") return pre("The bus has gone past");
+  if (k === "empty") return pre("Nobody there");
+  if (k === "fix") return pre("Corrected after an Undo");
   if (k === "morn") return pre("Your bus today");
   if (k === "book") return "Book your seat for Sunday";
   if (k === "booked") return "You are booked for Sunday";
@@ -5970,9 +6076,12 @@ async function sentList(env) {
       const n = Number(m.phones) || 0;
       const stops = (m.stops || []).join(", ");
       const who = (m.who || []).join(", ");
+      const phones = n + " passenger phone" + (n === 1 ? "" : "s");
+      /* Both, for a coordinator's message to drivers and passengers (w2.57.0). */
       const to = m.mail ? "Email to " + (who || "the coordinator") + "."
+        : who && n ? "To " + who + " and " + phones + "."
         : who ? "To " + who + "."
-        : "To " + n + " passenger phone" + (n === 1 ? "" : "s") + (stops ? ": " + stops : "") + ".";
+        : "To " + phones + (stops ? ": " + stops : "") + ".";
       return { id: m.id, kind: "sent", mail: !!m.mail, title: m.title, body: to, at: m.at,
                urgent: false, unread: false };
     });

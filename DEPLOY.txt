@@ -1,38 +1,51 @@
 MINIBUS
 =======
-  pages v1.109.0 · server w2.56.0 · sheet v1.116.0
+  pages v1.110.0 · server w2.57.0 · sheet v1.117.0
 
-A message centre in the coordinator app (Asim, 11 Oct):
+From the list (Asim, 11 Oct): 5, 6, 7 and 8.
 
-  - Send a message, on the coordinator app's menu.
-  - Words: ready-made (Book your seat for Sun ...) or your own, 200
-    characters at most.
-  - To, any of: Coordinators · Drivers · Drivers on Sunday's rota ·
-    Passengers · Passengers booked for Sunday · Passengers not booked.
-  - Sent at once to every phone with alerts on, titled "Message from
-    (name)". Each person once. Never the sender.
-  - A coordinator with alerts off on every phone is emailed it.
-  - On the Alerts list. After Send: "Sent to N phones."
+5. Alerts list: a push is tagged Notification (was Sent), beside Email.
 
-Pages and Worker. Code.gs unchanged.
+6. Who people ring: the first active holder of the first title in
+   COORDINATOR_ROLES (Coordinator, then Minister in Charge, ...).
+   COORDINATOR_EMAIL no longer counts: with three addresses it matched
+   nobody, so this is what already happened. Still Bro Asim. Emergency
+   calls in the coordinator app moves it, as before.
+
+7. Passengers, on a run:
+   - A stop marked Nobody here tells the people booked at it:
+     "Nobody there at (stop)". Picked up still tells that stop nothing.
+   - An Undo: when taking a tap back changes a stop (gone past, Picked
+     up, Nobody there), the phones booked there that had a push since
+     that tap are told what is true now. Not once the run has ended. On
+     the Alerts list as "Corrected after an Undo".
+   - Changing a stop's answer (Nobody here to Picked up, or back) goes up
+     as one send, so passengers are told once.
+   - A coordinator message to drivers and passengers lists both on its
+     Sent line.
+
+8. The stray test file is gone from the repo and the folder is ignored.
+
+Pages, Worker and Code.gs.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.108.0        v1.109.0
-  Worker  w2.55.0         w2.56.0
-  Code.gs v1.116.0        v1.116.0
+  Pages   v1.109.0        v1.110.0
+  Worker  w2.56.0         w2.57.0
+  Code.gs v1.116.0        v1.117.0
 
 
 IN THIS ORDER
 -------------
 
-1. Merge the pull request. Pages and Worker go live together.
+1. Paste Code.gs, then Deploy, Manage deployments, New version.
+2. Merge the pull request. Pages and Worker go live together.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.109.0 · server w2.56.0 · sheet
-   v1.116.0 .
-B. Coordinator app, Send a message, Coordinators only, a test line: the
-   other coordinators' phones get it.
+A. The foot of all three apps reads  app v1.110.0 · server w2.57.0 · sheet
+   v1.117.0 .
+B. Coordinator app, emergency calls line: still Bro Asim.
+C. Alerts list: pushes tagged Notification.

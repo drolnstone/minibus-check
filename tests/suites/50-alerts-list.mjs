@@ -158,5 +158,14 @@ export default async function (root) {
     a.eq(L.gas.mail.length, 0);
   });
 
+  /* v1.110.0 (Asim, 11 Oct 2026): what went out is tagged Notification for
+     a push, beside Email for an email. It read Sent. */
+  s.test("on the Alerts list a push is tagged Notification and an email Email", async (a) => {
+    const { readFileSync } = await import("node:fs");
+    const html = readFileSync(join(root, "coord", "index.html"), "utf8");
+    a.has(html, '(m.mail ? "Email" : "Notification")');
+    a.hasnt(html, '(m.mail ? "Email" : "Sent")');
+  });
+
   return s;
 }
