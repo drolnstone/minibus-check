@@ -807,14 +807,15 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
    been, amber when it has gone past or gone quiet, red for be at your stop. */
 .dw-row{cursor:pointer}
 .dw-on{box-shadow:inset 0 0 0 2px var(--accent-ink)}
-.dw-hint{font-size:13px;color:var(--muted);margin:0 0 6px}
-.dw{border:1px solid var(--hair);border-radius:var(--r);padding:9px 12px;margin:0 0 8px;background:var(--card)}
+.dw-hint{font-size:14px;line-height:1.5;color:var(--ink);margin:0 0 8px}
+.dw-hint b{font-weight:600}
+.dw{border:1px solid var(--hair);border-radius:var(--r);padding:13px 14px;margin:0 0 8px;background:var(--card)}
 .dw-eyebrow{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;
   letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
-.dw-big{font-family:"Barlow Condensed",sans-serif;font-size:24px;font-weight:700;line-height:1.15;margin:1px 0 2px}
+.dw-big{font-family:"Barlow Condensed",sans-serif;font-size:30px;font-weight:700;line-height:1.15;margin:1px 0 2px}
 .dw-sub{font-size:13px;line-height:1.45;color:var(--muted);margin:0}
 .dw-sub b{color:var(--ink)}
-.dw-off{background:none;border:0;padding:0;margin-top:4px;font:inherit;font-size:13px;
+.dw-off{background:none;border:0;padding:0;margin-top:8px;font:inherit;font-size:13px;
   color:var(--muted);text-decoration:underline;cursor:pointer}
 .dw-go{background:var(--pass-bg);border-color:var(--pass)}
 .dw-go .dw-big{color:var(--pass)}
@@ -822,6 +823,11 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .dw-warn .dw-big{color:var(--warn)}
 .dw-now{background:var(--stop-bg);border-color:var(--stop)}
 .dw-now .dw-big{color:var(--stop)}
+.dw .callbtn{background:var(--card)}
+.dw-go .callbtn{color:var(--pass);border-color:var(--pass)}
+.dw-warn .callbtn{color:var(--warn);border-color:var(--warn)}
+/* The same card on the hub, from v1.113.0, as the passenger page opens on it. */
+#hubWatch .dw{margin:0 0 14px}
 /* The confirm-it-is-you panel, in the trip strip and in the request form. */
 .pingate{margin-top:11px;padding-top:11px;border-top:1px solid var(--hair)}
 .pingate .pinbox{width:120px;margin-top:6px}
@@ -1316,6 +1322,8 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
     <div class="hint hub-pin" id="hubPin" style="display:none"></div>
     <!-- Offered, never sprung: see pushOfferHtml. -->
     <div class="hint hub-alert" id="hubAlert" style="display:none"></div>
+    <!-- The stop he is watching, from v1.113.0: see dwHubStart. -->
+    <div id="hubWatch"></div>
 
     <!-- DRIVING ROTA AND VEHICLE CHECK CHANGED PLACES. A SWAP, NOT A SHUFFLE.
 
@@ -1681,7 +1689,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.110.0";
+var APP_VERSION = "v1.113.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -3067,6 +3075,7 @@ function show(n){
   window.scrollTo(0,0);
   syncToTop();
   paintDash(); paintFoot(); paintLinks();
+  if(n==="hub") dwHubStart(); else dwHubStop();
   /* After paintDash, because that is what can change the strip's height —
      a registration plate appearing, or the Do not run alert opening. */
   dashHeightSync();
@@ -5976,56 +5985,97 @@ function dwWire(){
   var off = $("dwOff");
   if(off) off.onclick = function(){ dwSave(""); dwLive = null; tripPaint(); };
 }
-function dwHtml(){
+/* From v1.113.0 the words are the passenger page's, line for line (Asim:
+   "the same way it is done in the passenger app"): Watching, the same heads
+   and lines, the coordinator's Call button where the passenger page has one,
+   and "Watching the wrong stop?". hub: drawn on the hub, whichever route the
+   stops screen last showed. */
+function dwHtml(hub){
   var s = dwStopNow();
-  if(!s || s.route !== rotaStopsRoute || tripMayTap(s.route)) return "";
+  if(!s || (!hub && s.route !== rotaStopsRoute) || tripMayTap(s.route)) return "";
   var L = (dwLive && dwLive.forStop === s.id) ? dwLive : null;
-  var head = "", sub = "", cls = "";
+  var head = "", sub = "", cls = "", call = false;
   var stop = esc(s.stop), sched = esc(s.time);
+  var eyebrow = "Watching "+stop;
   if(!L){
-    head = sched; sub = "Checking…";
+    head = sched; sub = "Checking\u2026";
   } else if(L.live === false){
-    if(L.why === "cancelled"){ cls = "dw-warn"; head = "Not running"; sub = "No bus to "+stop+" today."; }
+    if(L.why === "cancelled"){
+      eyebrow = "Not running"; head = "No bus to "+stop+" today";
+      sub = "The "+esc(s.route)+" bus is not running this Sunday."; call = true;
+    }
     else { head = "Not set off yet"; sub = "Timetabled "+sched+"."; }
   } else if(L.mine === "served"){
     var empty = L.servedEvent === "empty";
     cls = empty ? "dw-warn" : "dw-go";
     head = (empty ? "Nobody there at " : "Picked up at ")+esc(L.servedAt);
-    sub = empty ? "Nobody was waiting at "+stop+"." : "The bus has been to "+stop+".";
+    sub = empty ? "Nobody was waiting at "+stop+". Still there?"
+                : "The bus has been to "+stop+". Not on it?";
+    call = true;
   } else if(L.mine === "passed"){
     cls = "dw-warn"; head = "The bus has gone past";
     sub = "It was at "+esc(L.passedStop)+" at "+esc(L.passedAtWords)+
-          ". No pickup recorded at "+stop+".";
+          ", and no pickup was recorded at "+stop+". Still waiting?";
+    call = true;
   } else if(!L.started){
     head = "Not set off yet"; sub = "Timetabled "+sched+".";
   } else if(L.mine === "eta"){
     var close = L.imminent || L.minutes <= 0;
     cls = close ? "dw-now" : "";
     head = close ? "Be at your stop" : (L.minutes+" min");
-    sub = "About <b>"+esc(L.etaWords)+"</b> \u00B7 "+scheduleWords(L.offset)+
+    sub = (close && L.minutes >= 0 ? "The bus is a minute or two away. " : "")+
+          "About <b>"+esc(L.etaWords)+"</b> at "+stop+" \u00B7 "+scheduleWords(L.offset)+
           (L.lastStop
             ? ". Left "+esc(L.lastStop)+(L.lastAtWords ? " "+esc(L.lastAtWords) : "")+"."
             : ". Left church"+(L.startedAtWords ? " "+esc(L.startedAtWords) : "")+".");
   } else if(L.mine === "ended" || L.ended){
-    head = "The bus has finished its run"; sub = stop+" was never marked.";
+    head = "The bus has finished its run"; sub = "Your stop was never marked."; call = true;
   } else if(L.mine === "silent"){
     cls = "dw-warn"; head = "No update since it left";
     sub = "Left church"+(L.startedAtWords ? " at "+esc(L.startedAtWords) : "")+
-          ". Timetabled "+sched+".";
+          ", and no stop has been marked since. Yours is timetabled "+sched+". Still waiting?";
+    call = true;
   } else if(!L.lastStop){
     head = "On its way";
     sub = "Left church"+(L.startedAtWords ? " at "+esc(L.startedAtWords) : "")+
-          ". Timetabled "+sched+".";
+          ". Yours is timetabled "+sched+".";
   } else {
     cls = "dw-warn"; head = "No update yet";
-    sub = "Last seen at "+esc(L.lastStop)+", "+esc(L.lastAtWords)+". Timetabled "+sched+".";
+    sub = "Last seen at "+esc(L.lastStop)+", "+esc(L.lastAtWords)+". Yours is timetabled "+sched+".";
   }
+  var ph = call ? coordPhone() : "";
   return '<div class="dw '+cls+'">'+
-           '<p class="dw-eyebrow">Following '+stop+'</p>'+
+           '<p class="dw-eyebrow">'+eyebrow+'</p>'+
            '<p class="dw-big">'+head+'</p>'+
            '<p class="dw-sub">'+sub+'</p>'+
-           '<button type="button" class="dw-off" id="dwOff">Stop following</button>'+
+           (ph ? '<a class="callbtn" href="tel:'+esc(ph)+'">Call '+esc(coordName())+' \u00B7 '+esc(prettyPhone())+'</a>' : '')+
+           (hub ? '<button type="button" class="dw-off" id="dwOffHub">Watching the wrong stop?</button>'
+                : '<button type="button" class="dw-off" id="dwOff">Watching the wrong stop?</button>')+
          '</div>';
+}
+
+/* ---- the same card on the hub (v1.113.0) --------------------------------
+   The passenger page opens on the stop it is watching. So does this app now:
+   on the hub, above the buttons, polled every five seconds while the hub is
+   on screen. Choosing the stop stays on Stops and bookings. */
+var dwHubTimer = null;
+function dwHubPaint(){
+  var box = $("hubWatch");
+  if(!box) return;
+  box.innerHTML = (st.screen === "hub") ? dwHtml(true) : "";
+  var off = $("dwOffHub");
+  if(off) off.onclick = function(){ dwSave(""); dwLive = null; dwHubPaint(); };
+}
+function dwHubStop(){ if(dwHubTimer){ clearInterval(dwHubTimer); dwHubTimer = null; } }
+function dwHubStart(){
+  dwHubStop();
+  dwHubPaint();
+  if(st.screen !== "hub" || document.hidden || !dwStopNow()) return;
+  dwFetch(function(){ dwHubPaint(); });
+  dwHubTimer = setInterval(function(){
+    if(st.screen !== "hub" || document.hidden || !dwStopNow()){ dwHubStop(); dwHubPaint(); return; }
+    dwFetch(function(){ dwHubPaint(); });
+  }, 5000);
 }
 
 /* ---- opening a stop in a map ------------------------------------------
@@ -6995,7 +7045,9 @@ function rotaCountsStart(){
 }
 
 document.addEventListener("visibilitychange",function(){
-  if(document.hidden){ rotaCountsStop(); return; }
+  if(document.hidden){ rotaCountsStop(); dwHubStop(); return; }
+  /* The watched stop's card on the hub, from v1.113.0. */
+  if(st.screen==="hub") dwHubStart();
 
   /* The browser took the wake lock back the moment this page went out of
      sight and will not hand it over again on its own. Ask every time. It
@@ -7678,7 +7730,7 @@ function rotaPaintStops(){
     html+=tripHeaderHtml(route,mayTap,onThis,queued,view);
   }
   if(dwOk && !(dwOn && dwOn.route===route)){
-    html+='<p class="dw-hint">Tap a stop to follow the bus.</p>';
+    html+='<p class="dw-hint"><b>Waiting for the bus?</b> Tap your stop to follow it.</p>';
   }
 
   /* How far along the route he actually is: the LAST stop he marked, not the

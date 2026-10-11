@@ -1,51 +1,41 @@
 MINIBUS
 =======
-  pages v1.110.0 · server w2.57.0 · sheet v1.117.0
+  pages v1.113.0 · server w2.57.0 · sheet v1.117.0
 
-From the list (Asim, 11 Oct): 5, 6, 7 and 8.
+Driver app: watching a stop, as the passenger app does it (Asim, 11 Oct).
 
-5. Alerts list: a push is tagged Notification (was Sent), beside Email.
+A driver who is not driving that route taps a stop on Stops and bookings,
+as before. From this release the card says what the passenger app says,
+word for word:
+  - "Watching (stop)", the same heads and lines.
+  - Call (coordinator) where the passenger app has it: picked up, nobody
+    there, gone past, no update since it left, finished its run, not
+    running.
+  - "Watching the wrong stop?" in place of "Stop following".
+  - The note over the stops reads "Waiting for the bus? Tap your stop to
+    follow it."
+  - The same card on the first screen (the hub), above the buttons, kept
+    up to date while it is on screen.
 
-6. Who people ring: the first active holder of the first title in
-   COORDINATOR_ROLES (Coordinator, then Minister in Charge, ...).
-   COORDINATOR_EMAIL no longer counts: with three addresses it matched
-   nobody, so this is what already happened. Still Bro Asim. Emergency
-   calls in the coordinator app moves it, as before.
-
-7. Passengers, on a run:
-   - A stop marked Nobody here tells the people booked at it:
-     "Nobody there at (stop)". Picked up still tells that stop nothing.
-   - An Undo: when taking a tap back changes a stop (gone past, Picked
-     up, Nobody there), the phones booked there that had a push since
-     that tap are told what is true now. Not once the run has ended. On
-     the Alerts list as "Corrected after an Undo".
-   - Changing a stop's answer (Nobody here to Picked up, or back) goes up
-     as one send, so passengers are told once.
-   - A coordinator message to drivers and passengers lists both on its
-     Sent line.
-
-8. The stray test file is gone from the repo and the folder is ignored.
-
-Pages, Worker and Code.gs.
+Pages only. v1.111.0 and v1.112.0 belong to the Phone numbers and
+Service overdue pull requests.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.109.0        v1.110.0
-  Worker  w2.56.0         w2.57.0
-  Code.gs v1.116.0        v1.117.0
+  Pages   v1.110.0        v1.113.0
+  Worker  w2.57.0         w2.57.0   (no change)
+  Code.gs v1.117.0        v1.117.0  (no change)
 
 
 IN THIS ORDER
 -------------
 
-1. Paste Code.gs, then Deploy, Manage deployments, New version.
-2. Merge the pull request. Pages and Worker go live together.
+1. Merge the pull request. Nothing to paste.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.110.0 · server w2.57.0 · sheet
-   v1.117.0 .
-B. Coordinator app, emergency calls line: still Bro Asim.
-C. Alerts list: pushes tagged Notification.
+A. The foot of the driver app reads  app v1.113.0 .
+B. Driver app, not driving: Stops and bookings, tap a stop on the other
+   route. The card reads "Watching ...". Back: the same card on the hub.
