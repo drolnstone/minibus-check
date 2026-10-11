@@ -1,53 +1,63 @@
 MINIBUS
 =======
-  pages v1.105.0 · server w2.52.0 · sheet v1.113.0
+  pages v1.106.0 · server w2.53.0 · sheet v1.113.0
 
-Record something takes several things at once (Asim, 11 Oct):
+No End trip once a run is live (Asim, 11 Oct):
 
-  - On a bus page, Record something: tap as many of MOT, Service,
-    Insurance, Parking permit, Repair, Tyres and Other as were done (or
-    booked) on the visit. A second tap takes one off.
-  - Record it puts one entry on the Vehicle Log for each, with the same
-    Done or Booked ahead, day, mileage, garage and notes.
-  - Each one chosen has its own cost box (MOT cost, Service cost ...), and
-    each dated item its own date box (MOT: expiry date on the certificate
-    ...). The blue box shows each one's next due date.
-  - A defect ticked as put right goes on the Repair entry if Repair is
-    chosen, otherwise on the first one.
-
-Pages only. The Worker and Code.gs do not change.
+  - Driver app: from Start trip the bar at the bottom is gone, End trip
+    and all. Back at the top still leaves the screen. The bar (Done) comes
+    back once the run has ended.
+  - The lines "Every stop marked. End trip when you are back.", "Still
+    running ... End trip when you are back." and "Your North run is still
+    open. End trip when you are back." are gone.
+  - A run now ends by itself: the app, back inside the church fence for
+    three minutes (as before); or the server, once the route's last stop
+    is half an hour behind and nothing has been heard for half an hour.
+    The coordinator app's End it now also takes a coordinator's own run
+    (it used to say "That is your own run. End it in the driver app.").
+  - The "End the trip" push to the driver is gone.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.104.2        v1.105.0
-  Worker  w2.52.0         w2.52.0   (no change)
+  Pages   v1.105.0        v1.106.0
+  Worker  w2.52.0         w2.53.0
   Code.gs v1.113.0        v1.113.0  (no paste)
 
 
 IN THIS ORDER
 -------------
 
-1. Merge the pull request.
+1. Cloudflare: paste server/worker.js into minibus-api and Deploy.
+2. Merge the pull request.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.105.0 · server w2.52.0 · sheet
+A. The foot of all three apps reads  app v1.106.0 · server w2.53.0 · sheet
    v1.113.0 .
-B. Record an MOT and a service together on a bus: the log shows two
-   entries, each with its own cost, and both dates move.
+B. Driver app, Start trip on a rehearsal: the bar at the bottom goes and
+   no End trip shows anywhere on the screen.
+C. A run nobody ends shows on Trip Events with an end row whose Status is
+   Logged (server).
 
 
 WHAT CHANGED
 ------------
 
-1. coord/index.html: the Record form's item buttons each go on and off;
-   one cost box per item chosen and one date box per dated item; Record it
-   sends one change per item, in turn, each with its own id, so a second
-   tap after a lost answer does none of them twice.
+1. index.html: paintFoot draws no bar while the signed-in driver's own run
+   is live; tripEnd, the End trip button, its red "due" state and the two
+   "End trip when you are back" lines are removed.
 
-2. Version v1.105.0 in all three pages and their sw.js.
+2. server/worker.js: closeFinishedRuns, on the every-minute clock, ends a
+   real run that routeOver says is over (last stop + 30 min, quiet 30 min),
+   filed through handleTrip with Status Logged (server). The driver's
+   "End the trip" push is removed. handleEndRun no longer refuses a
+   coordinator's own run.
 
-3. tests/browser/coordinator.mjs C55: an MOT and a service recorded
-   together.
+   coord/index.html: the "That is your own run" refusal words go.
+
+3. Version v1.106.0 in all three pages and their sw.js; w2.53.0.
+
+4. Tests: suites 12, 21, 22 and 24, browser T2, T2b, T2c, T8, T16c and
+   sabotage S8.

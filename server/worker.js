@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.52.0";
+const SCRIPT_VERSION = "w2.53.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -2056,6 +2056,40 @@ async function routeOver(env, key, route, stops, mode) {
   return now - heard >= RUN_DONE_QUIET_MIN * 60000;
 }
 
+/* A RUN NOBODY CLOSED, CLOSED. From w2.53.0 (Asim, 11 Oct 2026).
+
+   The driver app has no End trip any more: on 11 October North was ended
+   four minutes after Start, still in the churchyard, by the one button left
+   on the screen. The app ends a run itself back inside the church fence
+   (tripAutoEnd in index.html), but only while it is open with location on.
+   Anything else is closed here, on the clock, by the rule that already said
+   the route was over (routeOver): the last stop half an hour behind and
+   nothing heard for half an hour. The coordinator app's End it is still
+   there for one that should go sooner.
+
+   Filed through handleTrip, in the driver's name, so the end row is shaped
+   like every other; its Status says the server closed it. */
+async function closeFinishedRuns(env) {
+  const key = runSunday();
+  const stops = pickupsAndArrivals(await getStops(env));
+  let n = 0;
+  for (const route of routeNames(stops)) {
+    let t = null;
+    try { t = await tripState(env, key, route, "real"); } catch (e) { continue; }
+    if (!t || !t.started || t.ended || !t.trip) continue;
+    if (!(await routeOver(env, key, route, stops, "real"))) continue;
+    const res = await handleTrip(env, {
+      trip: t.trip, route: route, driver: t.driver, reg: t.reg, sunday: key,
+      rehearsal: 0,
+      events: [{ event: "end", stopId: "", at: Date.now(), auto: "server" }]
+    });
+    let out = null;
+    try { out = JSON.parse(await res.text()); } catch (e) {}
+    if (out && out.ok) n++;
+  }
+  return n;
+}
+
 /* Has this Sunday's service finished, so next week may be booked?
 
    Before the cutoff, no. After the backstop, yes whatever anybody tapped.
@@ -3099,7 +3133,7 @@ async function handleTrip(env, payload) {
          saying on the record: an arrival time nobody typed is a different
          fact from one somebody did, and a week of them is how you find out
          whether the fence is in the right place. */
-      status = "Logged (auto)";
+      status = ev.auto === "server" ? "Logged (server)" : "Logged (auto)";
     } else {
       status = "Logged";
     }
@@ -4504,6 +4538,7 @@ async function clockAlive(env) {
 async function sweeps(env) {
   try { await wakeCancelled(env); } catch (e) {}
   try { await wakeDrivers(env); } catch (e) {}
+  try { await closeFinishedRuns(env); } catch (e) {}
   try { await wakeNotLeft(env); } catch (e) {}
   try { await wakeMorning(env); } catch (e) {}
   try { await wakeBookingReminders(env); } catch (e) {}
@@ -5411,17 +5446,8 @@ async function driverNudgeFor(env, key, route, all, stops, rotaRow, buses) {
     }
   }
 
-  /* ---- the run nobody closed -------------------------------------------- */
-  if (t.started && !t.ended) {
-    const arr = stops.filter((s) => s.route === route && s.arrival);
-    const last = arr.length ? londonMoment(key, arr[arr.length - 1].time) : null;
-    if (last &&
-        now >= last.getTime() + 15 * 60000 &&
-        now - (Number(t.lastAt) || Number(t.started) || 0) >= 10 * 60000) {
-      return { who, tag: "end" + (now - last.getTime() > 40 * 60000 ? "b" : "a") +
-                         "|" + key + "|" + route };
-    }
-  }
+  /* The run nobody closed is no longer his to close: from w2.53.0 the
+     driver app has no End trip, and closeFinishedRuns closes it. */
 
   /* ---- you are driving today -------------------------------------------- */
   /* A window rather than a moment: this Worker has no clock of its own and
@@ -5884,7 +5910,6 @@ function sentTitle(tag, driver, where) {
     if (k === "clear") return rt + " is authorised to run";
     if (k === "go") return rt + ": Time to set off";
     if (k === "starta" || k === "startb") return rt + ": The bus has not gone out";
-    if (k === "enda" || k === "endb") return rt + ": End the trip";
     if (k === "duty") return rt + ": You are driving today";
     return "Driver alert";
   }
@@ -6264,13 +6289,6 @@ async function pushWhat(env, endpoint) {
     }
 
     if (t && t.started && !t.ended) {
-      const arr = all.filter((x) => x.arrival && x.route === route);
-      const last = arr.length ? londonMoment(key, arr[arr.length - 1].time) : null;
-      if (last && now >= last.getTime() + 15 * 60000) {
-        return { ok: true, tag: "end", url: "./",
-                 title: "End the trip",
-                 body: "Your " + route + " run is still open." };
-      }
       return { ok: true, tag: "end", url: "./",
                title: "Your run is running", body: "Nothing outstanding." };
     }
@@ -6967,13 +6985,9 @@ async function handleEndRun(env, body) {
   if (!open || !open.started) return json({ ok: false, error: "no run" });
   if (open.ended) return json({ ok: true, already: true, ended: open.ended });
 
-  /* His own run goes through the ordinary path, where it costs no PIN. This
-     is not pedantry: a coordinator who is also driving should not learn that
-     ending his own run asks for four digits, because then the day he has to
-     close somebody else's he will not notice that it did. */
-  if (sameName(open.driver, who)) {
-    return json({ ok: false, error: "your own run", hint: "End trip" });
-  }
+  /* His own run too, from w2.53.0. It used to be sent back to End trip in
+     the driver app, which no longer has one, so this is now the only hand
+     that can close it. Same PIN as anybody else's. */
 
   const own = await ownPinOf(env, row.name);
   if (!pinWantedOf(row, own)) return json({ ok: false, error: "no pin" });

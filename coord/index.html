@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.105.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.106.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -707,7 +707,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.105.0";
+var PAGE_VERSION = "v1.106.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -3357,8 +3357,7 @@ function endRun(route){
         busy = false; sheetBusy(false);
         if(out && out.ok){ closeSheet(); toast("The " + route + " run is closed."); refresh(); return; }
         var t = authWords(out); if(t){ lock(t); return; }
-        sheetSay(out && out.error === "your own run" ? "That is your own run. End it in the driver app."
-               : out && out.error === "no run" ? "There is no open run on " + route + "."
+        sheetSay(out && out.error === "no run" ? "There is no open run on " + route + "."
                : plain(out && out.error) || "The live server did not take that.", true);
       }, function(err){ busy = false; sheetBusy(false); sheetSay(plain(err) || "No answer.", true); });
     } });

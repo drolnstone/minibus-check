@@ -486,9 +486,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
    afford, because the prompts that matter are the ones about a bus that
    should not be carrying anybody. A dead zone needs nobody to read it and
    works just as well in week fifty. */
-.btn-end{background:var(--card);border-color:var(--steel);color:var(--accent-ink);
-  width:auto;flex:0 0 auto;margin-left:auto;font-size:15px;padding:0 15px;
-  letter-spacing:.04em;max-width:64%}
 /* Only ever seen when something is genuinely waiting, so it is allowed to
    carry the amber. */
 .btn-warn{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn)}
@@ -843,10 +840,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .trip-note+.trip-note{margin-top:6px}
 .trip-wait{color:var(--warn);font-weight:600}
 .trip-stopme{color:var(--stop)}
-/* The End trip button once it is the only thing left. Same colour as the
-   notice above it, so the sentence and the button read as one instruction
-   rather than two things competing. */
-.btn-end.is-due{border-color:var(--stop);color:var(--stop);font-weight:700}
 /* A stop gone past without being marked. Amber where it sits in the list,
    rather than a card above repeating what the row already says. */
 .trip-missed-row{background:var(--warn-bg);box-shadow:inset 3px 0 0 var(--warn)}
@@ -864,6 +857,10 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .trip-actions{position:sticky;bottom:var(--footH,0px);background:var(--paper);border-top:1px solid var(--hair);
   padding:12px 0 10px;margin-top:14px;
   display:flex;flex-direction:column;gap:8px}
+/* No bar at all while a run is live, so the sticky block clears the home
+   indicator itself. */
+.footbar.is-gone{display:none}
+body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
 .trip-waiting{margin:0;font-size:14px;color:var(--muted);text-align:center}
 .trip-waiting b{color:var(--ink);font-size:16px}
 /* One target, full width, impossible to mis-hit from a cab. Green fill, so
@@ -1683,7 +1680,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.105.0";
+var APP_VERSION = "v1.106.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2579,9 +2576,8 @@ function paintSentNext(){
    Every other nudge in this app lives inside the app. A push is the only
    thing that reaches a man who has stopped looking at it.
 
-   The live server decides when: a run started, past its arrival time, and
-   nothing heard for ten minutes. It asks twice, a quarter of an hour apart,
-   and then leaves him alone. */
+   From v1.106.0 there is no End trip to remind him of: the server closes a
+   run nobody closed (closeFinishedRuns), so that push is gone. */
 var PUSH_ABLE = ("Notification" in window) && ("serviceWorker" in navigator) &&
                 ("PushManager" in window);
 var pushOn = false, pushBusy = false;
@@ -3135,6 +3131,8 @@ function paintFoot(){
 
   var f=$("footIn"), c=$("count");
   f.innerHTML=""; c.textContent="";
+  $("footbar").classList.remove("is-gone");
+  document.body.classList.remove("no-foot");
   /* Moving the eye on, when a step has just been finished.
 
      The focus goes to the way on. It does not press it: this is a fork on the
@@ -3418,12 +3416,18 @@ function btn(label,cls,fn,dis,why){
        trip sitting on his screen. Every other control here was already gated
        on tripMayTap; this one was not, which is why the stop taps correctly
        refused him and the heaviest button on the screen did not. */
+    /* Nothing at all from Start trip on (v1.106.0, Asim, 11 Oct 2026).
+
+       On 11 October North was started at 09:58 and ended four minutes later,
+       before the bus had left the churchyard, by the one button left in this
+       bar. A run is now ended by the app back inside the church fence
+       (tripAutoEnd), or by the server once the route is over and quiet
+       (closeFinishedRuns in server/worker.js), or by a coordinator with End it
+       in the coordinator app. Never by a thumb in the cab. So the bar goes,
+       and the screen keeps Back at the top. */
     if(trip.started && !trip.ended && tripMayTap(trip.route)){
-      /* The same fact on the button he is about to press, so the notice and
-         the target are not two separate things to notice. */
-      var endBtn = btn("End trip, arrived at church","btn-end",tripEnd);
-      endBtn.id="tripEnd";
-      if(tripEndDue(trip.route)) endBtn.classList.add("is-due");
+      $("footbar").classList.add("is-gone");
+      document.body.classList.add("no-foot");
       return;
     }
     btn("Done","btn-main",stopsClose);
@@ -5613,10 +5617,8 @@ function autoEndNext(s, verdict, now, needMs){
 
    So it acts, and then it tells him, and the telling carries the way back.
 
-   Deliberately NOT tripEnd(). That function guards itself against a moving
-   bus and against a missing PIN, and both are right for a thumb and wrong for
-   this: he PIN'd in to start the run and is not standing here to do it
-   again. What it does keep is the one guard that matters, which is that this
+   No moving-bus or PIN guard: he PIN'd in to start the run and is not
+   standing here to do it again. What it does keep is the one guard that matters, which is that this
    phone owns the run it is ending. */
 function tripAutoEnd(){
   if(!trip.started || trip.ended) return;
@@ -6456,86 +6458,6 @@ function tripUndo(stop){
   tripPaint();
 }
 
-/* Stops on this route with people booked that he has not marked yet. Zero
-   means the kerbs are done and only church is left. */
-function tripLeftToTap(route){
-  var left = 0;
-  (rotaStops||[]).forEach(function(s){
-    if(s.route !== route || s.arrival) return;
-    if(!(Number(rotaStopCounts[s.id]) > 0)) return;
-    if(trip.served && trip.served[s.id]) return;
-    left++;
-  });
-  return left;
-}
-
-/* Whether the run has come to its end: every booked stop marked, or the
-   clock past the time the timetable has the bus back at church. One answer
-   for the End trip button and the line above it. They were worked out apart
-   and drawn at different moments, so the line could say "Every stop marked"
-   over a button that had not turned. */
-function tripEndDue(route){
-  return !!tripEndState(route);
-}
-/* Which of the two lines applies: "late" once the clock is past the time the
-   timetable has the bus back at church, "marked" when every booked stop is
-   marked before then, "" for neither. Late wins: it is the one that says the
-   run is still open when it should not be.
-
-   The line, the button's colour and the poll's test for a repaint all ask
-   this, so the screen always says what a fresh one would. The poll used to
-   watch only whether EITHER was true, so a run with every stop marked went
-   past its time at church still saying "Every stop marked", until something
-   unrelated redrew the screen. */
-function tripEndState(route){
-  var due = tripDueAt(route);
-  if(due && tripNow() >= due) return "late";
-  return tripLeftToTap(route) ? "" : "marked";
-}
-/* The same, for this phone's live run, or null when there is none. */
-function tripDueNow(){
-  return (trip.started && !trip.ended) ? tripEndState(trip.route) : null;
-}
-/* What the screen was last drawn saying about it. */
-var tripDueDrawn = null;
-
-/* When this route is timetabled into church, today, in milliseconds. 0 when
-   the tab does not say — and nothing is claimed on a guess. */
-function tripDueAt(route){
-  var arr = (rotaStops||[]).filter(function(s){ return s.route===route && s.arrival; });
-  if(!arr.length) arr = (rotaStops||[]).filter(function(s){ return s.arrival; });
-  if(!arr.length) return 0;
-  var p = String(arr[0].time||"").split(":");
-  if(p.length < 2) return 0;
-  var d = new Date();
-  d.setHours(Number(p[0])||0, Number(p[1])||0, 0, 0);
-  var ms = d.getTime();
-  return isNaN(ms) ? 0 : ms;
-}
-
-function tripEnd(){
-  if(tripRoundTick()) return;
-  if(!trip.started || trip.ended) return;
-  /* The same test the button is drawn behind, repeated here because the
-     button is not the only way in: a stale bar, a queued tap, anything that
-     reaches this function still has to answer for whose run it is ending. */
-  if(!tripMayTap(trip.route)){
-    toast("That is "+(tripWhoDrives(trip.route)||"another driver")+"’s run. Only he can end it.", true);
-    return;
-  }
-  if(tripMoving()){ toast("Not while the bus is moving.", true); return; }
-  /* The heaviest tap of the morning: it closes the run for everybody, takes
-     the live times off every passenger's phone, and is what tells the booking
-     page the day is over. Least of all should it be the one that asks least. */
-  if(pinGateNeeded()){ pinGateFocus(); return; }
-  trip.ended=tripNow();
-  tripSaveState();
-  tripQueue({ event:"end", stopId:"", at:trip.ended });
-  tripWatchStop();
-  wakeDrop();
-  tripPaint();
-}
-
 /* ---- booking counts on their own ----------------------------------------
    The Stops and bookings screen used to take whatever counts happened to be
    in the phone's cache and never ask again, because the only fetch on that
@@ -7040,12 +6962,7 @@ function rotaCountsStart(){
          waits for the next turn of this timer. */
       /* tripPaint, not rotaPaintStops: the strip and the bar are one state
          and must be redrawn from one call, or they drift apart. */
-      /* The clock changes this screen as well as the board. "Still running,
-         due at church" is true from a time of day, and on the drive back
-         nothing on the board moves, so it waited for some unrelated change
-         to be drawn at all. */
-      var dueFlip = tripDueNow()!==tripDueDrawn;
-      if((changed || dueFlip) && Date.now()-tripTapAt > 3000) tripPaint();
+      if(changed && Date.now()-tripTapAt > 3000) tripPaint();
       else if($("countsAge")){
         var ageEl=$("countsAge");
         ageEl.textContent=rotaCountsWords();
@@ -8309,31 +8226,6 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
      screen to key the thing they were waiting for. */
   if(mayTap && pinGateNeeded()) pinWhy="Every stop you tap is recorded in your name.";
 
-  /* Nothing left but End trip.
-
-     A driver taps his last kerb and the app has, until now, said nothing at
-     all about the one thing still outstanding. On 6 September North marked
-     three stops, drove home, and never tapped End: the passenger page held a
-     finished morning for every stop on both routes, and next week could not
-     be booked, because the app was waiting for a message from somebody who
-     had put the keys back.
-
-     Said when either is true — every booked stop marked, or the clock is past
-     his arrival at church — because he can reach church with a stop unmarked
-     and he can finish early. Two wordings, because "one thing left" and "you
-     are overdue" are different facts and reading the wrong one is worse than
-     reading neither. */
-  if(mayTap){
-    var endState = tripEndState(route);
-    if(endState){
-      h+='<p class="trip-note"><b class="trip-stopme">'+
-         (endState==="late"
-           ? 'Still running — due at church '+tripClock(tripDueAt(route))+'.'
-           : 'Every stop marked.')+
-         ' End trip when you are back.</b></p>';
-    }
-  }
-
   /* Always rendered, empty when there is nothing waiting, so the line exists
      to be written into later. It is the only thing on this screen a finished
      send changes, and having it always present is what lets the send stop
@@ -8836,8 +8728,6 @@ function tripActionHtml(nextStop, showCounts){
   } else {
     h+='<p class="trip-waiting">Every booked stop is done.</p>';
   }
-  /* End trip lives in the fixed bar now, not here. Two identical buttons on
-     one screen is a question a driver has to stop and answer. */
   return h+'</div>';
 }
 
@@ -8858,7 +8748,7 @@ function tripPaintMoving(){
   var pm=$("pickMoving");
   if(pm) pm.classList.toggle("is-on", moving);
   Array.prototype.forEach.call(
-    document.querySelectorAll("[data-triptap],[data-tripundo],#tripEnd,[data-tripstart],#tripStartAnyway,[data-pick],[data-pickcall],[data-undoyes]"),
+    document.querySelectorAll("[data-triptap],[data-tripundo],[data-tripstart],#tripStartAnyway,[data-pick],[data-pickcall],[data-undoyes]"),
     function(b){ b.disabled=moving; b.classList.toggle("is-dead",moving); });
 }
 
@@ -8885,12 +8775,6 @@ function tripPaint(){
      narrowed to avoid in the first place. */
   var sig=(trip.started?1:0)+"|"+(trip.ended?1:0)+"|"+trip.id+"|"+trip.route;
   if(sig!==tripFootSig){ tripFootSig=sig; paintFoot(); }
-  /* The button's colour follows the line, on every paint. A class on the same
-     element changes nothing under a thumb, which is the only reason the bar
-     itself is not rebuilt here. */
-  var eb=$("tripEnd");
-  if(eb) eb.classList.toggle("is-due", !!tripDueNow());
-  tripDueDrawn = tripDueNow();
   footHeightSync();
 }
 
@@ -9277,17 +9161,9 @@ function paintRotaHint(){
   var north=(row.actual||row.primary||"").trim();
   var south=(row.actual2||row.primary2||rotaSeedSecondary(d)||"").trim();
 
-  /* His own run, still open, said on the FIRST screen he lands on.
-
-     The strip on the stops screen only helps a driver who is looking at the
-     stops screen. A driver who closed the app at his last kerb and opens it
-     again in the church car park was told nothing at all, which is exactly
-     the morning that produced this. */
-  if(trip.started && !trip.ended && tripMayTap(trip.route)){
-    el.textContent = "Your "+trip.route+" run is still open. End trip when you are back.";
-    el.style.display="";
-    return;
-  }
+  /* His own run, still going: nothing to say, and since v1.106.0 nothing
+     for him to do about it either. */
+  if(trip.started && !trip.ended && tripMayTap(trip.route)) return;
 
   if(!north && !south) return;
   if(sameName(north,me) || sameName(south,me)) return;
