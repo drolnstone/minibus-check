@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.112.0";
+var SCRIPT_VERSION = "v1.113.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -680,7 +680,10 @@ var LINK_RULES = {
                          round to it.
      Saturday evening    the last one that can do anything. Bookings close at
                          half past nine on Sunday morning, so this is the
-                         final hour anybody can act, and the wording says so.
+                         final evening anybody can act, and the wording says so.
+     Sunday morning      from v1.113.0, 08:00 to 09:00, the very last chance
+                         before bookings close at 09:30. People with no seat
+                         only.
 
    IT WAS TWO, SUNDAY AND THURSDAY, and it was really one. oncePerWeek was
    true, which tags every window in a week the same, so a man nudged on the
@@ -713,7 +716,12 @@ var BOOKING_RULES = {
   windows: [
     { day: 0, from: 15, to: 16 },
     { day: 3, from: 18, to: 19 },
-    { day: 6, from: 18, to: 19, booked: true }
+    { day: 6, from: 18, to: 19, booked: true },
+    /* Sunday morning, from v1.113.0 (Asim, 11 Oct 2026, after Saturday's
+       went nowhere): a second last chance before bookings close at 09:30,
+       to people with no seat only. Not before 08:00, the end of the quiet
+       hours. */
+    { day: 0, from: 8, to: 9 }
   ]
 };
 
