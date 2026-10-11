@@ -2,67 +2,34 @@ MINIBUS
 =======
   pages v1.108.0 · server w2.55.0 · sheet v1.116.0
 
-A driver's phone number is checked (Asim, 11 Oct):
+The Worker goes live from GitHub (Asim, 11 Oct):
 
-  - Bro Adesina could not sign in with 4643: at 09:52 his Phone on the
-    Drivers tab was changed from 447717194643 to 4477171946434, one digit
-    too many, so his default PIN became 6434.
-  - The coordinator app's Drivers page, the live server and the sheet now take
-    only an 11-digit UK number (07..., +44 or 44 in front is fine).
-    Anything else: "Not an 11-digit UK phone number." and nothing changes.
+  - wrangler.toml holds the Worker's settings: name minibus-api, the
+    every-minute clock, the database minibus as DB, logs on.
+  - Once Cloudflare's Git deploy is connected, merging a pull request puts
+    server/worker.js live. Pasting the Worker stops.
+  - Secrets stay in the dashboard and are not touched.
 
-A change that alters the runs is told (Asim, 11 Oct):
-
-  - A change made in the coordinator app to a driver, a PIN, the rota, a
-    bus, a stop, a rota request, a defect, the Vehicle Log or an MOT run
-    goes to every other coordinator's phone and Alerts list as "Change by
-    (name)", with the words What has been done shows.
-  - The driver it touches is told in the driver app too: a driver's own
-    details or PIN, everybody down to drive that Sunday for a rota change,
-    and the drivers down for the coming Sunday for a bus or a stop.
-  - A coordinator whose alerts are off on every phone is emailed it.
-  - Sent at once, at any hour. Bookings, stop times put right on the
-    record and jobs to arrange are not sent.
-
-Pages, Worker and Code.gs.
-
-
-YOU ARE ON              GOING TO
-  Pages   v1.107.0        v1.108.0
-  Worker  w2.54.0         w2.55.0
-  Code.gs v1.115.0        v1.116.0
+Nothing to paste. No version change.
 
 
 IN THIS ORDER
 -------------
 
-1. Paste and deploy the Worker.
-2. Paste Code.gs, then Deploy, Manage deployments, New version.
-3. Merge the pull request.
+1. Merge the pull request.
+2. Cloudflare, minibus-api, Settings, Build, Connect:
+     repository minibus-check, branch main
+     Deploy command  npx wrangler deploy
+     Path  /
+     Preview builds  off
+     API token  Create new token
+3. Connect.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.108.0 · server w2.55.0 · sheet
-   v1.116.0 .
-B. Drivers, any driver, Phone with one digit added: refused in red.
-
-
-
-WHAT CHANGED
-------------
-
-1. coord/index.html: the Drivers page's Phone box takes only an 11-digit
-   UK number (ukPhone, the rule of Code.gs normalisePhone).
-
-2. server/worker.js actDriver and Code.gs coordDriver: the same check
-   again, so neither stores a number that is not one.
-
-3. Version v1.108.0 in all three pages and their sw.js; server w2.55.0;
-   sheet v1.116.0.
-
-4. tests/suites/42-drivers.mjs: a 13-digit number is refused.
-
-5. server/worker.js changeTell, called from coordAct: the alerts above.
-   tests/suites/64-change-told.mjs.
+A. Deployments shows a new version from GitHub, built without error.
+B. Settings still shows the clock Every minute, both secrets and DB.
+C. The foot of all three apps still reads  server w2.55.0 .
+D. Observability shows the every-minute runs.
