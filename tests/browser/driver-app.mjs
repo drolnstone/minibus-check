@@ -897,14 +897,14 @@ if (want("T26")) {
   const run = { trip: "t1", route: "North", reg: "NH56 FWP", driver: "Bro Adrian", started: T("10:05"), ended: 0,
     served: { N01: { event: "pickup", at: T("10:12") }, N02: { event: "pickup", at: T("10:18") } },
     lastStop: "Grace Road bus stop, Walton Vale", lastAt: T("10:18"), offset: 3 };
-  const world = { trips: { North: run, South: null },
+  const world = { trips: { North: run, South: null }, coordinator: { name: "Bro Calvin", phone: "07399671575" },
     watch: (id) => ans[id] || { ok: true, live: true, watching: true, stopId: id, started: false } };
   const me = await phone({ clock: "2026-09-27T10:22:00+01:00", world });
   await me.load(); await me.close(["howDone"]);
   await me.signIn("Bro Cedric"); await me.toStops(); await me.close(); await me.wait(800);
   const panel = () => me.pg.evaluate(() => { const e = document.querySelector("#dwPanel .dw"); return e ? e.textContent : ""; });
   const tapRow = (id) => me.pg.evaluate(i => { const r = document.querySelector('[data-dwstop="' + i + '"]'); if (r) { r.click(); return true; } return false; }, id);
-  const hint = /Tap a stop to follow the bus/.test(await me.text("#stopsBody"));
+  const hint = /Tap a stop to watch the bus/.test(await me.text("#stopsBody"));
   const tapped = await tapRow("N06"); await me.wait(800);
   const first = await panel();
   await me.shot("T26-following");
@@ -914,6 +914,13 @@ if (want("T26")) {
   ans.N06 = Object.assign({}, ans.N06, { mine: "served", servedEvent: "pickup", servedAt: "10:35" });
   await me.load(); await me.close(["howDone"]); await me.toStops(); await me.close(); await me.wait(1200);
   const kept = await panel();
+  /* v1.113.0: the passenger page's heads and facts, no Call button, and the
+     same card on the hub. */
+  const call = await me.pg.evaluate(() => { const a = document.querySelector("#dwPanel .dw .callbtn"); return a ? a.textContent : ""; });
+  await me.clickId("stopsBack"); await me.wait(1500);
+  const hub = await me.pg.evaluate(() => (document.getElementById("hubWatch") || {}).textContent || "");
+  await me.shot("T26-hub");
+  await me.toStops(); await me.close(); await me.wait(800);
   await me.pg.click("#dwOff"); await me.wait(300);
   const gone = !(await panel()) && /Tap a stop/.test(await me.text("#stopsBody"));
   /* South: follow a South stop, and the screen opens on South next time. */
@@ -929,10 +936,11 @@ if (want("T26")) {
   await dr.signIn("Bro Sample"); await dr.toStops(); await dr.close(); await dr.wait(800);
   const own = await dr.pg.evaluate(() => document.querySelectorAll('[data-dwstop]').length);
   check("T26", "a driver not driving taps a stop and follows the bus to it, on North or South",
-        hint && tapped && /Following Bedford Road/.test(first) && /12 min/.test(first) && /About 10:34/.test(first) &&
-        /Be at your stop/.test(near) && /Picked up at 10:35/.test(kept) && gone &&
-        /^South/.test(south) && /Following/.test(southPanel) && own === 0 && !me.errs.length && !dr.errs.length,
-        JSON.stringify({ hint, tapped, first, near, kept, gone, south, southPanel, own, errs: me.errs.concat(dr.errs) }));
+        hint && tapped && /Watching Bedford Road/.test(first) && /About 10:34 at Bedford Road/.test(first) && /Stop watching/.test(first) && /12 min/.test(first) && /About 10:34/.test(first) &&
+        /Be at your stop/.test(near) && /Picked up at 10:35/.test(kept) && /The bus has been to Bedford Road by Stuart Hotel\.$/.test(kept.replace(/Stop watching$/, "")) && call === "" &&
+        /Watching Bedford Road/.test(hub) && /Picked up at 10:35/.test(hub) && gone &&
+        /^South/.test(south) && /Watching/.test(southPanel) && own === 0 && !me.errs.length && !dr.errs.length,
+        JSON.stringify({ hint, tapped, first, near, kept, call, hub, gone, south, southPanel, own, errs: me.errs.concat(dr.errs) }));
   await dr.ctx.close();
 }
 

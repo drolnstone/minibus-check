@@ -1,36 +1,36 @@
 MINIBUS
 =======
-  pages v1.112.0 · server w2.58.0 · sheet v1.117.0
+  pages v1.113.0 · server w2.58.0 · sheet v1.117.0
 
-A renewal booked in (Asim, 11 Oct): when the Vehicle Log has a standing
-Booked entry for an MOT, service, insurance or parking permit, for today
-or later, the date is said beside the due date.
+Driver app: watching a stop, as the passenger app does it (Asim, 11 Oct).
 
-- Driver app, Before you start: under the line, "Booked for 20/10/2026".
-  The due date and Overdue stay as they are until it is recorded as done.
-- Coordinator app, Due dates and Buses: "booked for 20/10/2026" on the
-  small line.
-- A booking day gone by drops off.
+A driver who is not driving that route taps a stop on Stops and bookings,
+as before. From this release the card shows what the passenger app shows,
+without the questions or the Call button:
+  - "Watching (stop)": the live state and ETA, facts only.
+  - "Stop watching" in place of "Stop following".
+  - The note over the stops reads "Tap a stop to watch the bus."
+  - The same card on the first screen (the hub), above the buttons, kept
+    up to date while it is on screen.
 
-Pages and Worker only. Code.gs is unchanged.
+Pages only.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.111.0        v1.112.0
-  Worker  w2.57.0         w2.58.0
-  Code.gs v1.117.0        v1.117.0
+  Pages   v1.112.0        v1.113.0
+  Worker  w2.58.0         w2.58.0   (no change)
+  Code.gs v1.117.0        v1.117.0  (no change)
 
 
 IN THIS ORDER
 -------------
 
-1. Merge the pull request. Pages and Worker go live together.
+1. Merge the pull request. Nothing to paste.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.112.0 · server w2.58.0 · sheet
-   v1.117.0 .
-B. A bus with a booked service: Before you start shows "Booked for" under
-   its due line.
+A. The foot of the driver app reads  app v1.113.0 .
+B. Driver app, not driving: Stops and bookings, tap a stop on the other
+   route. The card reads "Watching ...". Back: the same card on the hub.
