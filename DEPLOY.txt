@@ -1,35 +1,28 @@
 MINIBUS
 =======
-  pages v1.114.0 · server w2.59.0 · sheet v1.117.0
+  pages v1.115.0 · server w2.59.0 · sheet v1.117.0
 
-One phone per run (Asim, 12 Oct).
+Item 4 (Asim, 12 Oct): the coordinator app's bell moves to the far right
+of the top bar, after Lock. The driver and passenger apps already have
+their bell at the far right.
 
-A live run belongs to the phone that started it. While that phone is
-talking to the server, another phone signed in as the same driver:
-  - is refused at sign-in: "Your run is open on another phone."
-  - cannot mark stops, Undo or end the run; its taps are refused.
-Once the run's phone has said nothing for 5 minutes, the next phone of his
-to sign in or open Stops and bookings takes the run over, from the last
-stop marked. The old phone, when it comes back, lets the run go:
-"Run moved to another phone." Real runs only, not rehearsals.
-
-Pages and Worker. Code.gs unchanged.
+Pages only. Worker and Code.gs unchanged.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.113.0        v1.114.0
-  Worker  w2.58.0         w2.59.0
+  Pages   v1.114.0        v1.115.0
+  Worker  w2.59.0         w2.59.0  (no change)
   Code.gs v1.117.0        v1.117.0  (no change)
 
 
 IN THIS ORDER
 -------------
 
-1. Merge the pull request. Cloudflare deploys the Worker from main;
-   nothing to paste.
+1. Merge the pull request. Nothing to paste.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.114.0 · server w2.59.0 .
+A. The foot of all three apps reads  app v1.115.0 · server w2.59.0 .
+B. Coordinator app, signed in: Lock, then the bell at the far right.

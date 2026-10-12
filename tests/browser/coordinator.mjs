@@ -869,6 +869,11 @@ if (want("C25")) {
   await p.wait(400);
   if (await p.sheetUp()) { await p.pg.click("#sheetNot"); await p.wait(300); }
   const shown = !(await p.pg.$eval("#barBell", (el) => el.hidden));
+  /* Far right of the bar from v1.115.0, as in the driver and passenger apps. */
+  const farRight = await p.pg.evaluate(() => {
+    const shownIn = [...document.querySelectorAll(".bar-in > *")].filter((el) => !el.hidden);
+    return shownIn[shownIn.length - 1].id;
+  });
   await p.pg.click("#barBell");
   await p.wait(1500);
   const first = await p.text("#toast");
@@ -885,10 +890,10 @@ if (want("C25")) {
   const second = await p.text("#toast");
   const test = db._one("SELECT v FROM settings WHERE k=?", "test:https://push.example/coord-phone");
   await p.ctx.close();
-  check("C25", "the bell is there once signed in, turns coordinator alerts on for this phone under the signed-in name, then opens Alerts, where the test is",
-        hiddenSignedOut && shown && /alerts are on/i.test(first) && row && row.role === "driver" && row.driver === "Bro Arthur" &&
+  check("C25", "the bell is there once signed in, at the far right, turns coordinator alerts on for this phone under the signed-in name, then opens Alerts, where the test is",
+        hiddenSignedOut && shown && farRight === "barBell" && /alerts are on/i.test(first) && row && row.role === "driver" && row.driver === "Bro Arthur" &&
         /^\.\.\/sw\.js \.\.\/$/.test(registered) && on && onAlerts && /test alert/i.test(second) && !!test && !p.errs.length,
-        "hidden before sign-in " + hiddenSignedOut + ", shown " + shown + ", first '" + first + "', row " + JSON.stringify(row) +
+        "hidden before sign-in " + hiddenSignedOut + ", shown " + shown + ", far right " + farRight + ", first '" + first + "', row " + JSON.stringify(row) +
         ", registered '" + registered + "', on " + on + ", alerts " + onAlerts + ", second '" + second + "', test " + !!test + ", errors " + JSON.stringify(p.errs));
 }
 
