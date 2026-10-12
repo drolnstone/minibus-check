@@ -824,9 +824,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .dw-warn .dw-big{color:var(--warn)}
 .dw-now{background:var(--stop-bg);border-color:var(--stop)}
 .dw-now .dw-big{color:var(--stop)}
-.dw .callbtn{background:var(--card)}
-.dw-go .callbtn{color:var(--pass);border-color:var(--pass)}
-.dw-warn .callbtn{color:var(--warn);border-color:var(--warn)}
 /* The same card on the hub, from v1.113.0, as the passenger page opens on it. */
 #hubWatch .dw{margin:0 0 14px}
 /* The confirm-it-is-you panel, in the trip strip and in the request form. */
@@ -5998,16 +5995,15 @@ function dwWire(){
   var off = $("dwOff");
   if(off) off.onclick = function(){ dwSave(""); dwLive = null; tripPaint(); };
 }
-/* From v1.113.0 the words are the passenger page's, line for line (Asim:
-   "the same way it is done in the passenger app"): Watching, the same heads
-   and lines, the coordinator's Call button where the passenger page has one,
-   and "Watching the wrong stop?". hub: drawn on the hub, whichever route the
-   stops screen last showed. */
+/* From v1.113.0 the passenger page's heads and facts, and no more (Asim,
+   12 Oct: "he just needs to see the live updates and eta"): no questions,
+   no Call button. hub: drawn on the hub, whichever route the stops screen
+   last showed. */
 function dwHtml(hub){
   var s = dwStopNow();
   if(!s || (!hub && s.route !== rotaStopsRoute) || tripMayTap(s.route)) return "";
   var L = (dwLive && dwLive.forStop === s.id) ? dwLive : null;
-  var head = "", sub = "", cls = "", call = false;
+  var head = "", sub = "", cls = "";
   var stop = esc(s.stop), sched = esc(s.time);
   var eyebrow = "Watching "+stop;
   if(!L){
@@ -6015,55 +6011,49 @@ function dwHtml(hub){
   } else if(L.live === false){
     if(L.why === "cancelled"){
       eyebrow = "Not running"; head = "No bus to "+stop+" today";
-      sub = "The "+esc(s.route)+" bus is not running this Sunday."; call = true;
+      sub = "The "+esc(s.route)+" bus is not running this Sunday.";
     }
     else { head = "Not set off yet"; sub = "Timetabled "+sched+"."; }
   } else if(L.mine === "served"){
     var empty = L.servedEvent === "empty";
     cls = empty ? "dw-warn" : "dw-go";
     head = (empty ? "Nobody there at " : "Picked up at ")+esc(L.servedAt);
-    sub = empty ? "Nobody was waiting at "+stop+". Still there?"
-                : "The bus has been to "+stop+". Not on it?";
-    call = true;
+    sub = empty ? "Nobody was waiting at "+stop+"."
+                : "The bus has been to "+stop+".";
   } else if(L.mine === "passed"){
     cls = "dw-warn"; head = "The bus has gone past";
     sub = "It was at "+esc(L.passedStop)+" at "+esc(L.passedAtWords)+
-          ", and no pickup was recorded at "+stop+". Still waiting?";
-    call = true;
+          ", and no pickup was recorded at "+stop+".";
   } else if(!L.started){
     head = "Not set off yet"; sub = "Timetabled "+sched+".";
   } else if(L.mine === "eta"){
     var close = L.imminent || L.minutes <= 0;
     cls = close ? "dw-now" : "";
     head = close ? "Be at your stop" : (L.minutes+" min");
-    sub = (close && L.minutes >= 0 ? "The bus is a minute or two away. " : "")+
-          "About <b>"+esc(L.etaWords)+"</b> at "+stop+" \u00B7 "+scheduleWords(L.offset)+
+    sub = "About <b>"+esc(L.etaWords)+"</b> at "+stop+" \u00B7 "+scheduleWords(L.offset)+
           (L.lastStop
             ? ". Left "+esc(L.lastStop)+(L.lastAtWords ? " "+esc(L.lastAtWords) : "")+"."
             : ". Left church"+(L.startedAtWords ? " "+esc(L.startedAtWords) : "")+".");
   } else if(L.mine === "ended" || L.ended){
-    head = "The bus has finished its run"; sub = "Your stop was never marked."; call = true;
+    head = "The bus has finished its run"; sub = stop+" was never marked.";
   } else if(L.mine === "silent"){
     cls = "dw-warn"; head = "No update since it left";
     sub = "Left church"+(L.startedAtWords ? " at "+esc(L.startedAtWords) : "")+
-          ", and no stop has been marked since. Yours is timetabled "+sched+". Still waiting?";
-    call = true;
+          ", and no stop has been marked since. Timetabled "+sched+".";
   } else if(!L.lastStop){
     head = "On its way";
     sub = "Left church"+(L.startedAtWords ? " at "+esc(L.startedAtWords) : "")+
-          ". Yours is timetabled "+sched+".";
+          ". Timetabled "+sched+".";
   } else {
     cls = "dw-warn"; head = "No update yet";
-    sub = "Last seen at "+esc(L.lastStop)+", "+esc(L.lastAtWords)+". Yours is timetabled "+sched+".";
+    sub = "Last seen at "+esc(L.lastStop)+", "+esc(L.lastAtWords)+". Timetabled "+sched+".";
   }
-  var ph = call ? coordPhone() : "";
   return '<div class="dw '+cls+'">'+
            '<p class="dw-eyebrow">'+eyebrow+'</p>'+
            '<p class="dw-big">'+head+'</p>'+
            '<p class="dw-sub">'+sub+'</p>'+
-           (ph ? '<a class="callbtn" href="tel:'+esc(ph)+'">Call '+esc(coordName())+' \u00B7 '+esc(prettyPhone())+'</a>' : '')+
-           (hub ? '<button type="button" class="dw-off" id="dwOffHub">Watching the wrong stop?</button>'
-                : '<button type="button" class="dw-off" id="dwOff">Watching the wrong stop?</button>')+
+           (hub ? '<button type="button" class="dw-off" id="dwOffHub">Stop watching</button>'
+                : '<button type="button" class="dw-off" id="dwOff">Stop watching</button>')+
          '</div>';
 }
 
@@ -7743,7 +7733,7 @@ function rotaPaintStops(){
     html+=tripHeaderHtml(route,mayTap,onThis,queued,view);
   }
   if(dwOk && !(dwOn && dwOn.route===route)){
-    html+='<p class="dw-hint"><b>Waiting for the bus?</b> Tap your stop to follow it.</p>';
+    html+='<p class="dw-hint">Tap a stop to watch the bus.</p>';
   }
 
   /* How far along the route he actually is: the LAST stop he marked, not the

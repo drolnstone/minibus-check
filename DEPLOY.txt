@@ -5,15 +5,11 @@ MINIBUS
 Driver app: watching a stop, as the passenger app does it (Asim, 11 Oct).
 
 A driver who is not driving that route taps a stop on Stops and bookings,
-as before. From this release the card says what the passenger app says,
-word for word:
-  - "Watching (stop)", the same heads and lines.
-  - Call (coordinator) where the passenger app has it: picked up, nobody
-    there, gone past, no update since it left, finished its run, not
-    running.
-  - "Watching the wrong stop?" in place of "Stop following".
-  - The note over the stops reads "Waiting for the bus? Tap your stop to
-    follow it."
+as before. From this release the card shows what the passenger app shows,
+without the questions or the Call button:
+  - "Watching (stop)": the live state and ETA, facts only.
+  - "Stop watching" in place of "Stop following".
+  - The note over the stops reads "Tap a stop to watch the bus."
   - The same card on the first screen (the hub), above the buttons, kept
     up to date while it is on screen.
 
