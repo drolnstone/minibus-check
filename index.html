@@ -1687,7 +1687,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.113.0";
+var APP_VERSION = "v1.114.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -5368,6 +5368,22 @@ function tripNoteSkew(serverMs){
    Taps carry the time they were MADE. A blackspot delays the sending, never
    the timestamp, or every projection downstream drifts by however long the
    phone was out of touch. */
+/* ONE PHONE PER RUN, from v1.114.0 (Asim). This phone's own handle, made
+   once and kept. The live server lets only the phone holding a run act for
+   it; another of the driver's phones is refused until that one goes quiet,
+   then takes the run over from where it stopped. */
+var PHONE_KEY="driver.phone.v1";
+function myPhone(){
+  var h=store.get(PHONE_KEY);
+  if(!h){ h="p"+Math.random().toString(36).slice(2,10)+Date.now().toString(36); store.set(PHONE_KEY,h); }
+  return h;
+}
+/* The run is on another phone now: its taps waiting here are dropped, and
+   the run with them. */
+function tripLetGo(runId){
+  tripSaveQ(tripLoadQ().filter(function(e){ return (e.trip||"")!==runId; }));
+  if(trip.id===runId){ tripClearRun(); toast("Run moved to another phone."); }
+}
 function tripLoadQ(){ try{ return JSON.parse(store.get(TQKEY)||"[]"); }catch(e){ return []; } }
 function tripSaveQ(a){ store.set(TQKEY, JSON.stringify(a)); }
 
@@ -5486,11 +5502,18 @@ function tripFlush(){
       /* Left out for a tap queued by a copy of this app from before v1.79.0,
          which the live server then judges the old way. */
       rehearsal: head.rehearsal,
+      phone: myPhone(),
       events: batch
     }})
   }).then(function(r){ return r.text(); }).then(function(t){
     var out=JSON.parse(t);
     tripBusy=false;
+    if(out && out.error==="other phone"){
+      tripLetGo(runId);
+      tripPaint();
+      tripPaintWait();
+      return;
+    }
     if(!out || out.ok!==true) throw new Error(out&&out.error?out.error:"not sent");
     /* Accepted, including any it ignored as repeats. Taken off the queue AS IT
        IS NOW, not as it was when the send went out: on a slow signal a send
@@ -6583,7 +6606,9 @@ function rotaCountsFetch(route,cb){
      would let an answer worked out before this phone's own check reached the
      server look as if it had seen it. */
   var boardAskedAt = Date.now();
-  callFetch(LIVE_ENDPOINT+"?board=1&route="+encodeURIComponent(route),
+  var who=(st.driver||"").trim();
+  callFetch(LIVE_ENDPOINT+"?board=1&route="+encodeURIComponent(route)+
+            (who ? "&phone="+encodeURIComponent(myPhone())+"&driver="+encodeURIComponent(who) : ""),
             {method:"GET",redirect:"follow"}, POLL_TIMEOUT)
     .then(function(r){return r.text();})
     .then(function(t){
@@ -6822,6 +6847,13 @@ function tripMerge(route, tp){
      seen the run yet and answers with an empty one; that is a server still
      catching up, not a morning that has not begun. */
   var sameRun = !!trip.id && (!srvId || srvId===trip.id);
+
+  /* ONE PHONE PER RUN (v1.114.0). His run is held by another phone that is
+     still talking: never taken, and let go if this phone held it. */
+  if(srvId && tp.phone && tp.phone.here===false){
+    tripLetGo(srvId);
+    return;
+  }
 
   if(!sameRun || !today){
     /* IS THIS RUN OURS TO TAKE?
@@ -9801,13 +9833,20 @@ function pinConfirmQuietly(tried){
     method:"POST", redirect:"follow",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
     body: JSON.stringify({ token: CFG.token||"", action:"pin",
-                           pin:{ driver: st.driver, pin: st.pin } })
+                           pin:{ driver: st.driver, pin: st.pin, phone: myPhone() } })
   }, PIN_TIMEOUT)
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out = JSON.parse(t);
       if(!out || out.ok !== true) return;              /* no answer, no change */
       if(st.driver + ":" + st.pin !== tried) return;   /* moved on since */
+      if(out.elsewhere){
+        st.pinOk = false; st.pinState = "";
+        pinLast = ""; pinLastOk = false;
+        pinSay(PIN_ELSEWHERE, true);
+        paintFoot();
+        return;
+      }
       if(out.valid === true){
         pinKeepNote(out);
         /* Agreed. Refresh this phone's copy so it stays current. */
@@ -9850,7 +9889,7 @@ function pinAskLive(tried, stillTyping, answered, thenSheet){
     method:"POST", redirect:"follow",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
     body: JSON.stringify({ token: CFG.token||"", action:"pin",
-                           pin:{ driver: st.driver, pin: st.pin } })
+                           pin:{ driver: st.driver, pin: st.pin, phone: myPhone() } })
   }, PIN_TIMEOUT)
     .then(function(r){ return r.text(); })
     .then(function(t){
@@ -9867,7 +9906,15 @@ function pinAskLive(tried, stillTyping, answered, thenSheet){
 
 /* One place that turns an answer into a gate, because there are two servers
    giving the same answer now and two copies of this would drift. */
+/* ONE PHONE PER RUN (v1.114.0). Not cached as a wrong PIN: the same PIN
+   is let in once the run's phone has gone quiet. */
+var PIN_ELSEWHERE = "Your run is open on another phone.";
 function pinApply(out, tried, answered){
+  if(out.elsewhere){
+    st.pinOk=false; st.pinState="";
+    pinSay(PIN_ELSEWHERE, true);
+    paintFoot(); return;
+  }
   if(out.locked){
     st.pinOk=false; st.pinState="";
     pinSay("Too many wrong tries. Locked for "+(out.minutes||10)+" minutes.", true);

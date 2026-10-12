@@ -378,3 +378,13 @@ CREATE TABLE IF NOT EXISTS photos (
   data     TEXT NOT NULL,
   UNIQUE (check_id, item, n)
 );
+
+-- ONE PHONE PER RUN, from w2.59.0. The phone that holds a live run: the one
+-- that started it, or the one that took it over after that phone went quiet
+-- for five minutes. Rows older than a week go when a run starts.
+-- Created by the Worker on first use, so a live database needs no console step.
+CREATE TABLE IF NOT EXISTS run_phones (
+  trip  TEXT PRIMARY KEY,
+  phone TEXT NOT NULL,
+  seen  INTEGER NOT NULL             -- ms, when that phone was last heard from
+);
