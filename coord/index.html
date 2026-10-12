@@ -172,6 +172,7 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .card{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);padding:12px 13px}
 .card+.card{margin-top:10px}
 .drv.off,.stp.off{opacity:.7}
+.drv-tel{display:inline-block;margin-top:2px;padding:6px 0;color:var(--info-deep);font-weight:600;font-size:17px;text-decoration:none;white-space:nowrap}
 .stp .stp-name{margin:4px 0 0;overflow-wrap:anywhere}
 #stopsBody>.btn-wide{margin-bottom:10px}
 #driversBody .btn-wide,#busesBody>.btn-wide{margin-bottom:10px}
@@ -2114,6 +2115,14 @@ function regDriver(name){
   for(var i = 0; i < l.length; i++) if(l[i].name === name) return l[i];
   return null;
 }
+/* The phone number on each card, one tap to ring (Asim, 11 Oct 2026): a
+   wrong number shows at a glance, as Bro Adesina's did not. */
+function telLine(p){
+  var raw = String(p || "").trim();
+  if(!raw) return "";
+  var d = ukPhone(raw) || raw.replace(/[^0-9+]/g, "");
+  return '<a class="drv-tel" href="tel:' + esc(d) + '">' + esc(ukPhone(raw) ? phoneWords(d) : raw) + '</a>';
+}
 function paintDrivers(){
   var R = D.register || { drivers: [] };
   var h = '<button class="btn btn-main btn-wide" type="button" data-do="adddriver">Add a driver</button>';
@@ -2129,6 +2138,7 @@ function paintDrivers(){
       h += '<div class="card drv' + (x.active ? '' : ' off') + '"><div class="def-head"><b>' + esc(x.name) + '</b>' +
            (x.active ? '' : '<span class="tag">Not active</span>') +
            miss.map(function(m){ return '<span class="tag warn">' + esc(m) + '</span>'; }).join("") + '</div>' +
+           telLine(x.phone) +
            '<div class="def-foot"><p class="tiny">' + esc([x.role || "Driver", x.order ? "No. " + x.order : ""].filter(Boolean).join(", ")) + '</p>' +
            (x.waiting ? '<span class="tag info">To the sheet</span>' : '') +
            '<button class="mini" type="button" data-do="editdriver" data-name="' + esc(x.name) + '">Edit</button></div></div>';
@@ -2523,6 +2533,17 @@ function latestDone(reg, item){
 }
 function entryById(reg, id){ var l = logOf(reg); for(var i=0;i<l.length;i++) if(l[i].id === id) return l[i]; return null; }
 
+/* A renewal booked for today or later: the soonest standing Booked entry's
+   day, the same rule as the live server's busBookings (v1.112.0). */
+function bookedAhead(reg, item){
+  var today = calToday(), best = "";
+  logOf(reg).forEach(function(x){
+    if(x.correctedBy || x.status !== "Booked" || VLOG_ITEM[x.what] !== item || !x.bookedFor || x.bookedFor < today) return;
+    if(!best || x.bookedFor < best) best = x.bookedFor;
+  });
+  return best;
+}
+
 /* From v1.94.0. The same rule as the live server's papersStop. */
 function motBookingOn(reg, day){
   var l = logOf(reg);
@@ -2569,10 +2590,11 @@ function dueRows(b, only){
   return (only || RENEW_KEYS).map(function(item){
     var key = (b.dates || {})[item] || "";
     var w = dueWords(key);
-    var last = latestDone(b.reg, item);
+    var last = latestDone(b.reg, item), bk = bookedAhead(b.reg, item);
     return '<span class="due"><b>' + esc(RENEWALS[item].label) + '</b>' +
            '<span class="when ' + w.tone + '">' + esc(key ? ukDay(key) : "Not set") + '</span>' +
            '<small><span class="' + w.tone + '">' + esc(key ? w.words : "No date on the Buses tab") + '</span>' +
+           (bk ? ' · booked for ' + esc(ukDay(bk)) : '') +
            (last ? ' · last done ' + esc(ukDay(last.done)) + (last.status === "Estimated" ? " (estimated)" : "") : '') +
            '</small></span>';
   }).join("");
