@@ -1,36 +1,35 @@
 MINIBUS
 =======
-  pages v1.113.0 · server w2.58.0 · sheet v1.117.0
+  pages v1.114.0 · server w2.59.0 · sheet v1.117.0
 
-Driver app: watching a stop, as the passenger app does it (Asim, 11 Oct).
+One phone per run (Asim, 12 Oct).
 
-A driver who is not driving that route taps a stop on Stops and bookings,
-as before. From this release the card shows what the passenger app shows,
-without the questions or the Call button:
-  - "Watching (stop)": the live state and ETA, facts only.
-  - "Stop watching" in place of "Stop following".
-  - The note over the stops reads "Tap a stop to watch the bus."
-  - The same card on the first screen (the hub), above the buttons, kept
-    up to date while it is on screen.
+A live run belongs to the phone that started it. While that phone is
+talking to the server, another phone signed in as the same driver:
+  - is refused at sign-in: "Your run is open on another phone."
+  - cannot mark stops, Undo or end the run; its taps are refused.
+Once the run's phone has said nothing for 5 minutes, the next phone of his
+to sign in or open Stops and bookings takes the run over, from the last
+stop marked. The old phone, when it comes back, lets the run go:
+"Run moved to another phone." Real runs only, not rehearsals.
 
-Pages only.
+Pages and Worker. Code.gs unchanged.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.112.0        v1.113.0
-  Worker  w2.58.0         w2.58.0   (no change)
+  Pages   v1.113.0        v1.114.0
+  Worker  w2.58.0         w2.59.0
   Code.gs v1.117.0        v1.117.0  (no change)
 
 
 IN THIS ORDER
 -------------
 
-1. Merge the pull request. Nothing to paste.
+1. Merge the pull request. Cloudflare deploys the Worker from main;
+   nothing to paste.
 
 
 AFTER IT
 --------
 
-A. The foot of the driver app reads  app v1.113.0 .
-B. Driver app, not driving: Stops and bookings, tap a stop on the other
-   route. The card reads "Watching ...". Back: the same card on the hub.
+A. The foot of all three apps reads  app v1.114.0 · server w2.59.0 .

@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.58.0";
+const SCRIPT_VERSION = "w2.59.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -2475,6 +2475,84 @@ async function tripDriverPayload(env, route, mode) {
   };
 }
 
+/* ONE PHONE PER RUN, from w2.59.0 (Asim, 12 Oct 2026).
+
+   A driver signed in on two phones could drive one run from both: either
+   could mark stops, Undo or end it. Now the run belongs to the phone that
+   started it. Another phone signed in under his name is refused at sign-in
+   and its taps are refused here, until the run's phone has said nothing for
+   RUN_PHONE_QUIET_MS. Then the next phone of his to ask takes the run over
+   and carries on from where it stopped.
+
+   The phone is a random handle the driver app makes once and keeps. A phone
+   on an app from before v1.114.0 sends none and is judged the old way.
+   Real runs only: a rehearsal is driven from one phone anyway.
+
+   run_phones: trip  the run's id
+               phone the handle of the phone that holds it
+               seen  ms, when that phone was last heard from */
+const RUN_PHONE_QUIET_MS = 5 * 60000;
+/* A heard-from stamp is written at most this often from the board poll. */
+const RUN_PHONE_SEEN_EVERY = 15000;
+
+const phoneOf = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+
+let runPhonesReady = false;
+async function ensureRunPhones(env) {
+  if (runPhonesReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS run_phones (" +
+    "  trip  TEXT PRIMARY KEY," +
+    "  phone TEXT NOT NULL," +
+    "  seen  INTEGER NOT NULL)").run();
+  runPhonesReady = true;
+}
+
+/* Whether this phone may act for the run, and the run's record brought up to
+   date: taken when nobody holds it, kept fresh when this phone does, taken
+   over when the holder has gone quiet. Answers true or false. */
+async function runPhoneTake(env, trip, phone, now) {
+  await ensureRunPhones(env);
+  const row = await env.DB.prepare(
+    "SELECT phone, seen FROM run_phones WHERE trip=?").bind(trip).first();
+  if (!row) {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO run_phones (trip, phone, seen) VALUES (?,?,?)").bind(trip, phone, now).run();
+    const won = await env.DB.prepare("SELECT phone FROM run_phones WHERE trip=?").bind(trip).first();
+    return !won || won.phone === phone;
+  }
+  if (row.phone === phone) {
+    if (now - Number(row.seen) >= RUN_PHONE_SEEN_EVERY) {
+      await env.DB.prepare("UPDATE run_phones SET seen=? WHERE trip=? AND phone=?")
+        .bind(now, trip, phone).run();
+    }
+    return true;
+  }
+  if (now - Number(row.seen) < RUN_PHONE_QUIET_MS) return false;
+  /* Taken over. Only if nobody else took it in the meantime. */
+  const res = await env.DB.prepare(
+    "UPDATE run_phones SET phone=?, seen=? WHERE trip=? AND phone=? AND seen=?")
+    .bind(phone, now, trip, row.phone, row.seen).run();
+  return !!(res && res.meta && res.meta.changes);
+}
+
+/* Whether a live real run in this driver's name is held by another phone
+   that is still talking. For the sign-in. */
+async function runOnOtherPhone(env, name, phone) {
+  if (!phone) return false;
+  const key = runSunday();
+  const stops = pickupsAndArrivals(await getStops(env));
+  for (const rt of routeNames(stops)) {
+    const s = await tripState(env, key, rt, "real");
+    if (!s.started || s.ended || !s.trip || !sameName(s.driver, name)) continue;
+    await ensureRunPhones(env);
+    const row = await env.DB.prepare(
+      "SELECT phone, seen FROM run_phones WHERE trip=?").bind(s.trip).first();
+    if (row && row.phone !== phone && Date.now() - Number(row.seen) < RUN_PHONE_QUIET_MS) return true;
+  }
+  return false;
+}
+
 /* Which bus every OTHER route currently has out. Runs in progress only: a
    route that has finished tells you nothing about which bus is standing free. */
 async function runningRegs(env, exceptRoute, stops) {
@@ -2556,7 +2634,7 @@ async function checksToday(env) {
    thing the phone can safely tell from a fact. An empty object would be
    indistinguishable from "nobody booked anywhere" and would wipe good
    numbers off a driver's screen. */
-async function boardPayload(env, route) {
+async function boardPayload(env, route, phone, driver) {
   const r = String(route || "").trim() || "North";
   const out = { ok: true };
   const key = runSunday();
@@ -2593,6 +2671,18 @@ async function boardPayload(env, route) {
 
   try { out.trip = await tripDriverPayload(env, r); }
   catch (e) { out.tripError = String(e); }
+
+  /* ONE PHONE PER RUN (w2.59.0). A phone signed in as the run's driver says
+     who it is with every poll: the run's phone is heard from, and another of
+     his phones takes the run over once that one has gone quiet. here says
+     whether the asking phone holds it. Real runs only. */
+  try {
+    const t = out.trip, ph = phoneOf(phone);
+    if (ph && t && t.trip && t.started && !t.ended && !t.rehearsal &&
+        String(driver || "").trim() && sameName(t.driver, driver)) {
+      t.phone = { here: await runPhoneTake(env, t.trip, ph, Date.now()) };
+    }
+  } catch (e) { /* the board as before */ }
 
   /* THE ESTIMATE, PER STOP, FOR THE DRIVER'S OWN LIST.
 
@@ -2975,6 +3065,21 @@ async function handleTrip(env, payload) {
           body: ps.label + " expired " + rnUk(ps.date) + ". " + (who || "A driver") + " started the " + route + " run." } });
       }
     } catch (e) {}
+  }
+
+  /* ONE PHONE PER RUN (w2.59.0). Taps from a phone other than the one that
+     holds the run are refused while that phone is still talking. */
+  const phone = phoneOf(payload.phone);
+  if (phone && !rehearsing) {
+    if (!(await runPhoneTake(env, trip, phone, Date.now()))) {
+      return json({ ok: false, error: "other phone", run: { driver: who, route: route } });
+    }
+    if (startsHere) {
+      try {
+        await env.DB.prepare("DELETE FROM run_phones WHERE seen < ?")
+          .bind(Date.now() - 7 * 86400000).run();
+      } catch (e) {}
+    }
   }
 
   /* WHOSE RUN IS THIS TO END?
@@ -6712,6 +6817,13 @@ async function handlePin(env, body) {
   const gate = await pinTry(env, row, own, pin);
   if (gate.locked) return json({ ok: true, valid: false, locked: true, minutes: PIN_LOCK_MINUTES });
   if (!gate.ok) return json({ ok: true, valid: false, left: gate.left });
+  /* ONE PHONE PER RUN (w2.59.0): his run is out on another phone that is
+     still talking. Asked only after a right PIN. */
+  try {
+    if (await runOnOtherPhone(env, row.name, phoneOf(body && body.phone))) {
+      return json({ ok: true, valid: false, elsewhere: true });
+    }
+  } catch (e) {}
   /* askPinChange: on the default PIN and never asked, so the app asks once
      whether to keep it. Only ever on a right PIN. */
   return json({ ok: true, valid: true, askPinChange: onDefaultUnasked(row, own) });
@@ -10288,7 +10400,7 @@ export default {
         if (p.get("rota")) return json(await cachedRota(env, p.get("from"), p.get("weeks")));
         if (p.get("last")) return json(await cachedLast(env));
         if (p.get("bus")) return json(await busPayload(env, "", p.get("ref"), p.get("pid")));
-        if (p.get("board")) return json(await boardPayload(env, p.get("route")));
+        if (p.get("board")) return json(await boardPayload(env, p.get("route"), p.get("phone"), p.get("driver")));
         if (p.get("trip")) {
           return p.get("route")
             ? json(await tripDriverPayload(env, p.get("route")))
