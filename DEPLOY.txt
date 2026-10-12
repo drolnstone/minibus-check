@@ -1,6 +1,6 @@
 MINIBUS
 =======
-  pages v1.113.0 · server w2.57.0 · sheet v1.117.0
+  pages v1.113.0 · server w2.58.0 · sheet v1.117.0
 
 Driver app: watching a stop, as the passenger app does it (Asim, 11 Oct).
 
@@ -17,13 +17,12 @@ word for word:
   - The same card on the first screen (the hub), above the buttons, kept
     up to date while it is on screen.
 
-Pages only. v1.111.0 and v1.112.0 belong to the Phone numbers and
-Service overdue pull requests.
+Pages only.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.110.0        v1.113.0
-  Worker  w2.57.0         w2.57.0   (no change)
+  Pages   v1.112.0        v1.113.0
+  Worker  w2.58.0         w2.58.0   (no change)
   Code.gs v1.117.0        v1.117.0  (no change)
 
 
