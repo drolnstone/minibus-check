@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.115.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.116.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -752,7 +752,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.115.0";
+var PAGE_VERSION = "v1.116.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -1707,6 +1707,30 @@ function pushKeyBytes(k){
   return out;
 }
 
+/* SIGNING THIS PHONE UP WITH ITS PUSH SERVICE, AND SAYING WHY WHEN IT FAILS.
+
+   From v1.116.0 (Asim, 13 Oct: an Android phone said only "Could not turn
+   alerts on.", twice, with no way to tell which step had failed). A phone
+   still holding a sign-up made with another key refuses a new one with
+   InvalidStateError until the old one is dropped, so that one case is dropped
+   and tried once more. Every other refusal comes from the phone's own push
+   service and is named on screen, so a screenshot says where it stopped. */
+function pushSubscribe(reg, key){
+  var opts = { userVisibleOnly: true, applicationServerKey: pushKeyBytes(key) };
+  function mark(e){ try{ e.pushStep = true; }catch(x){} throw e; }
+  return reg.pushManager.subscribe(opts).catch(function(e){
+    if(!e || e.name !== "InvalidStateError") mark(e);
+    return reg.pushManager.getSubscription().then(function(old){
+      return old ? old.unsubscribe() : true;
+    }).then(function(){ return reg.pushManager.subscribe(opts); }).catch(mark);
+  });
+}
+function pushWhy(err){
+  if(err && err.pushStep) return "Push service refused (" + String(err.name || "error") + ").";
+  if(err && err.message === "not taken") return "The bus server refused it.";
+  return "The bus server did not answer.";
+}
+
 function pushTurnOn(){
   if(pushBusy || !pushCanAsk()) return;
   pushBusy = true;
@@ -1721,10 +1745,7 @@ function pushTurnOn(){
       return fetch(ENDPOINT + "?vapid=1").then(function(r){ return r.json(); })
         .then(function(v){
           if(!v || !v.ok || !v.key) throw new Error("no key");
-          return reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: pushKeyBytes(v.key)
-          });
+          return pushSubscribe(reg, v.key);
         })
         .then(function(sub){
           var j = sub.toJSON();
@@ -1735,15 +1756,17 @@ function pushTurnOn(){
                                    ref: REF, pid: PID })
           });
         })
-        .then(function(){
+        .then(function(r){ return r.json(); })
+        .then(function(out){
+          if(!out || !out.ok) throw new Error("not taken");
           pushOn = true; pushBusy = false;
           toast("Alerts on.");
           paintAlerts();
         });
     });
-  }).catch(function(){
+  }).catch(function(err){
     pushBusy = false;
-    toast("Could not turn alerts on.", true);
+    toast("Could not turn alerts on. " + pushWhy(err), true);
     paintAlerts();
   });
 }

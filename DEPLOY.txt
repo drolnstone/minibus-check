@@ -1,16 +1,17 @@
 MINIBUS
 =======
-  pages v1.115.0 · server w2.59.0 · sheet v1.117.0
+  pages v1.116.0 · server w2.59.0 · sheet v1.117.0
 
-Item 4 (Asim, 12 Oct): the coordinator app's bell moves to the far right
-of the top bar, after Lock. The driver and passenger apps already have
-their bell at the far right.
+Asim, 13 Oct: an Android phone said "Could not turn alerts on." with no
+reason. All three apps now name the step that failed after that line, and a
+phone holding an old sign-up made with another key drops it and tries once
+more.
 
 Pages only. Worker and Code.gs unchanged.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.114.0        v1.115.0
+  Pages   v1.115.0        v1.116.0
   Worker  w2.59.0         w2.59.0  (no change)
   Code.gs v1.117.0        v1.117.0  (no change)
 
@@ -24,5 +25,6 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.115.0 · server w2.59.0 .
-B. Coordinator app, signed in: Lock, then the bell at the far right.
+A. The foot of all three apps reads  app v1.116.0 · server w2.59.0 .
+B. On the Android phone, passenger app, Turn on bus alerts. Either
+   "Alerts on." or the red line now ends with the reason.
