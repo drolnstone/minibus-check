@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.115.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.116.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -711,7 +711,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.115.0";
+var PAGE_VERSION = "v1.116.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -3897,6 +3897,30 @@ function bellLook(){
 }
 /* Hollow, it turns alerts on. Filled, from v1.96.6, it opens Alerts, which
    is where the test now is: the Ushers app's bell, which was this one's. */
+/* SIGNING THIS PHONE UP WITH ITS PUSH SERVICE, AND SAYING WHY WHEN IT FAILS.
+
+   From v1.116.0 (Asim, 13 Oct: an Android phone said only "Could not turn
+   alerts on.", twice, with no way to tell which step had failed). A phone
+   still holding a sign-up made with another key refuses a new one with
+   InvalidStateError until the old one is dropped, so that one case is dropped
+   and tried once more. Every other refusal comes from the phone's own push
+   service and is named on screen, so a screenshot says where it stopped. */
+function pushSubscribe(reg, key){
+  var opts = { userVisibleOnly: true, applicationServerKey: pushKeyBytes(key) };
+  function mark(e){ try{ e.pushStep = true; }catch(x){} throw e; }
+  return reg.pushManager.subscribe(opts).catch(function(e){
+    if(!e || e.name !== "InvalidStateError") mark(e);
+    return reg.pushManager.getSubscription().then(function(old){
+      return old ? old.unsubscribe() : true;
+    }).then(function(){ return reg.pushManager.subscribe(opts); }).catch(mark);
+  });
+}
+function pushWhy(err){
+  if(err && err.pushStep) return "Push service refused (" + String(err.name || "error") + ").";
+  if(err && err.message === "not taken") return "The bus server refused it.";
+  return "The bus server did not answer.";
+}
+
 function bellTap(){
   if(BELL.on && !iosBrowser()){ go("alerts"); return; }
   bellOn(false);
@@ -3923,7 +3947,7 @@ function bellOn(test){
       if(sub) return sub;
       return fetch(LIVE + "?vapid=1").then(function(r){ return r.json(); }).then(function(v){
         if(!v || !v.ok || !v.key) throw new Error("no key");
-        return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKeyBytes(v.key) });
+        return pushSubscribe(reg, v.key);
       });
     });
   }).then(function(sub){
@@ -3942,7 +3966,7 @@ function bellOn(test){
     toast(was ? "A test alert is on its way to this phone." : "Coordinator alerts are on for this phone.");
   }, function(err){
     BELL.busy = false; bellPaint();
-    toast(String(err && err.message) === "not granted" ? "Not turned on." : "Could not turn alerts on.", true);
+    toast(String(err && err.message) === "not granted" ? "Not turned on." : "Could not turn alerts on. " + pushWhy(err), true);
   });
 }
 $("barBell").addEventListener("click", bellTap);

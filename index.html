@@ -1687,7 +1687,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.115.0";
+var APP_VERSION = "v1.116.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2635,6 +2635,30 @@ function pushKeyBytes(k){
   return out;
 }
 
+/* SIGNING THIS PHONE UP WITH ITS PUSH SERVICE, AND SAYING WHY WHEN IT FAILS.
+
+   From v1.116.0 (Asim, 13 Oct: an Android phone said only "Could not turn
+   alerts on.", twice, with no way to tell which step had failed). A phone
+   still holding a sign-up made with another key refuses a new one with
+   InvalidStateError until the old one is dropped, so that one case is dropped
+   and tried once more. Every other refusal comes from the phone's own push
+   service and is named on screen, so a screenshot says where it stopped. */
+function pushSubscribe(reg, key){
+  var opts = { userVisibleOnly: true, applicationServerKey: pushKeyBytes(key) };
+  function mark(e){ try{ e.pushStep = true; }catch(x){} throw e; }
+  return reg.pushManager.subscribe(opts).catch(function(e){
+    if(!e || e.name !== "InvalidStateError") mark(e);
+    return reg.pushManager.getSubscription().then(function(old){
+      return old ? old.unsubscribe() : true;
+    }).then(function(){ return reg.pushManager.subscribe(opts); }).catch(mark);
+  });
+}
+function pushWhy(err){
+  if(err && err.pushStep) return "Push service refused (" + String(err.name || "error") + ").";
+  if(err && err.message === "not taken") return "The bus server refused it.";
+  return "The bus server did not answer.";
+}
+
 function pushTurnOn(){
   if(pushBusy || !pushCanAsk()) return;
   var me = String(st.driver||"").trim();
@@ -2646,8 +2670,7 @@ function pushTurnOn(){
       return fetch(LIVE_ENDPOINT + "?vapid=1").then(function(r){ return r.json(); })
         .then(function(v){
           if(!v || !v.ok || !v.key) throw new Error("no key");
-          return reg.pushManager.subscribe({
-            userVisibleOnly: true, applicationServerKey: pushKeyBytes(v.key) });
+          return pushSubscribe(reg, v.key);
         })
         .then(function(sub){
           var j = sub.toJSON();
@@ -2659,9 +2682,11 @@ function pushTurnOn(){
                                    route: myRouteToday() || "North" })
           });
         })
-        .then(function(){ pushOn=true; pushBusy=false; toast("Reminders on."); paintLinks(); });
+        .then(function(r){ return r.json(); })
+        .then(function(out){
+          if(!out || !out.ok) throw new Error("not taken"); pushOn=true; pushBusy=false; toast("Reminders on."); paintLinks(); });
     });
-  }).catch(function(){ pushBusy=false; toast("Could not turn reminders on.", true); paintLinks(); });
+  }).catch(function(err){ pushBusy=false; toast("Could not turn reminders on. " + pushWhy(err), true); paintLinks(); });
 }
 
 /* PROVE IT, ON THIS PHONE, NOW.
