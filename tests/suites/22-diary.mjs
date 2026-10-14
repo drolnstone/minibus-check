@@ -316,10 +316,13 @@ export default async function (root) {
     for (const h of ["Fri 14:00", "Sat 20:00"]) {
       a.hasnt(d[h].title, "driving today", h + " woke him two days early: " + d[h].title);
     }
-    for (const h of ["07:00", "08:00 duty window", "09:45"]) {
+    for (const h of ["07:00", "08:00 duty window"]) {
       a.has(d[h].title, "driving today", h + ": " + d[h].title);
-      a.has(d[h].body, "09:52", h + ": " + d[h].body);
+      a.eq(d[h].body, "North. Vehicle check 09:32. Depart 09:52.", h);
     }
+    /* From w2.60.0 the check comes first once its time has passed. */
+    a.eq(d["09:45"].title, "Vehicle check not started");
+    a.eq(d["09:45"].body, "North. Depart 09:52.");
     a.has(d["10:05 13 min late"].title, "not gone out");
     a.hasnt(d["11:20 past due"].all, "End the trip", "asked to end a run the app gives him no way to end");
     a.hasnt(d["11:05 ended"].all, "End the trip", "chased to close a closed run");

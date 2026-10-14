@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.117.0";
+var SCRIPT_VERSION = "v1.118.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -11663,6 +11663,39 @@ var REMIND_DAYS = [7, 2];
 
 var BUS_ADDRESS = "3-5 Chester Road, Liverpool L6 4DY";
 
+/* THE VEHICLE CHECK'S TIME, from v1.118.0 (Asim, 14 Oct 2026): the
+   departure on the Bus Stops tab less 20 minutes, 30 for a coordinator, whose
+   app opens on the full inspection. The live server works it out the same
+   way (CHECK_LEAD_MIN in worker.js). */
+var CHECK_LEAD_MIN = 20;
+var CHECK_LEAD_FULL_MIN = 30;
+
+/* Depart and check, "HH:MM" each, or null when the route has no Depart row. */
+function dutyTimes(ss, route, who) {
+  /* "North Liverpool" in the emails, "North" on the Bus Stops tab: the
+     first word is the part both mean. */
+  var d = null;
+  try {
+    d = departStopFor(ss, route) ||
+        departStopFor(ss, String(route || "").trim().split(" ")[0]);
+  } catch (err) { d = null; }
+  if (!d || !d.time) return null;
+  var lead = CHECK_LEAD_MIN;
+  try {
+    var me = String(who || "").trim().toLowerCase();
+    var roles = AUTHORISER_ROLES.map(function (r) { return String(r).trim().toLowerCase(); });
+    readDrivers(ss).forEach(function (x) {
+      if (x.active && x.name.trim().toLowerCase() === me &&
+          roles.indexOf(String(x.role || "").trim().toLowerCase()) !== -1) lead = CHECK_LEAD_FULL_MIN;
+    });
+  } catch (err) {}
+  var hm = String(d.time).split(":");
+  var t = ((Number(hm[0]) * 60 + Number(hm[1]) - lead) % 1440 + 1440) % 1440;
+  if (isNaN(t)) return null;
+  var p = function (n) { return (n < 10 ? "0" : "") + n; };
+  return { depart: String(d.time), check: p(Math.floor(t / 60)) + ":" + p(t % 60) };
+}
+
 /* THE CADENCE IN WORDS, BUILT FROM REMIND_DAYS ITSELF.
 
    This was a sentence typed out by hand in the Is everything working? report,
@@ -11867,10 +11900,16 @@ function sendDutyEmail(to, who, sunday, daysAhead, covering, route, bus) {
     "&nbsp;",
     "<b>" + esc(when) + "</b>"
   ];
+  var times = null;
+  try { times = dutyTimes(SpreadsheetApp.getActiveSpreadsheet(), route, who); } catch (err) {}
+  if (times) {
+    lines.push("Vehicle check: <b>" + esc(times.check) + "</b>");
+    lines.push("Depart church: <b>" + esc(times.depart) + "</b>");
+  }
   if (bus) lines.push("Bus: <b>" + esc(bus) + "</b>");
   if (covering) lines.push("Covering for " + esc(covering) + ".");
   lines.push("&nbsp;");
-  lines.push(bigLink(calendarLink(sunday, covering, route, bus), "Add to my calendar"));
+  lines.push(bigLink(calendarLink(sunday, covering, route, bus, who), "Add to my calendar"));
 
   /* Built by pushing rather than by a list of ternaries.
 
@@ -11881,6 +11920,7 @@ function sendDutyEmail(to, who, sunday, daysAhead, covering, route, bus) {
      nothing else. */
   var rows = ["You are down to drive the minibus" + onPlain + " " + lead + ".",
               "", when];
+  if (times) rows.push("Vehicle check: " + times.check, "Depart church: " + times.depart);
   if (bus) rows.push("Bus: " + bus);
   if (covering) rows.push("Covering for " + covering + ".");
   var plain = rows.join("\n");
@@ -11943,7 +11983,13 @@ function dutyIcs(sunday, who, covering, route, bus) {
   try { depart = departStopFor(SpreadsheetApp.getActiveSpreadsheet(), route); }
   catch (err) { depart = null; }
 
-  var from = depart && depart.time ? stopMomentOn(dateToKey(sunday), depart.time) : null;
+  /* From v1.118.0 the entry starts at the vehicle check, and says both. */
+  var times = null;
+  try { times = dutyTimes(SpreadsheetApp.getActiveSpreadsheet(), route, who); } catch (err) {}
+  if (times) desc += " Vehicle check: " + times.check + ". Depart church: " + times.depart + ".";
+
+  var from = times ? stopMomentOn(dateToKey(sunday), times.check)
+           : depart && depart.time ? stopMomentOn(dateToKey(sunday), depart.time) : null;
   var till = null;
   if (from) {
     /* Until the route gets back, when the tab says so, and two hours
@@ -11953,7 +11999,8 @@ function dutyIcs(sunday, who, covering, route, bus) {
     try {
       var all = readBusStops(SpreadsheetApp.getActiveSpreadsheet());
       for (var i = 0; i < all.length; i++) {
-        if (all[i].arrival && all[i].route === route && all[i].time) { arr = all[i]; break; }
+        if (all[i].arrival && all[i].time && (all[i].route === route ||
+            all[i].route === String(route || "").trim().split(" ")[0])) { arr = all[i]; break; }
       }
     } catch (err2) { arr = null; }
     till = arr ? stopMomentOn(dateToKey(sunday), arr.time) : null;
@@ -11996,6 +12043,7 @@ function dutyIcs(sunday, who, covering, route, bus) {
     /* A timed duty is time he is not free; an all-day one never was. */
     from ? "TRANSP:OPAQUE" : "TRANSP:TRANSPARENT",
     "SUMMARY:" + icsEscape((route ? "Minibus duty: " + route : "Minibus driving duty") +
+                           (times ? " \u00B7 check " + times.check + " \u00B7 depart " + times.depart : "") +
                            (bus ? " (" + bus + ")" : "")),
     "DESCRIPTION:" + icsEscape(desc),
     "LOCATION:" + icsEscape(BUS_ADDRESS),
@@ -12289,19 +12337,24 @@ function notifyDutyChange(ss, key, before, after, route) {
   }
 
   if (after && emails[after]) {
+    var nowTimes = null;
+    try { nowTimes = dutyTimes(ss, route, after); } catch (err) {}
     var onLines = [
       "You are now down to drive the minibus on <b>" + esc(when) + "</b>" + on + ".",
       "&nbsp;",
+      nowTimes ? ("Vehicle check: <b>" + esc(nowTimes.check) + "</b>") : "",
+      nowTimes ? ("Depart church: <b>" + esc(nowTimes.depart) + "</b>") : "",
       busNow ? ("Bus: <b>" + esc(busNow) + "</b>") : "",
       before ? ("Covering for " + esc(before) + ".") : "",
       "&nbsp;",
-      bigLink(calendarLink(sunday, before, route, busNow), "Add to my calendar")
+      bigLink(calendarLink(sunday, before, route, busNow, after), "Add to my calendar")
     ].filter(function (l) { return l !== ""; });
 
     sendMail({
       to: emails[after],
       subject: "Minibus duty" + (route ? ": " + route : "") + " on " + when,
       body: "You are now down to drive the minibus on " + when + onPlain + ".\n\n" +
+            (nowTimes ? "Vehicle check: " + nowTimes.check + "\nDepart church: " + nowTimes.depart + "\n\n" : "") +
             (busNow ? "Bus: " + busNow + ".\n\n" : "") +
             (before ? "Covering for " + before + "." : ""),
       htmlBody: htmlShell("You are now driving", "#1B3A57", onLines, ""),
@@ -13771,7 +13824,7 @@ function openButton(label, tabName) {
  * than with a .ics attachment, and this needs no file handling at all: it
  * opens a prefilled event in the browser.
  */
-function calendarLink(sunday, covering, route, bus) {
+function calendarLink(sunday, covering, route, bus, who) {
   var tz = Session.getScriptTimeZone();
   var day = Utilities.formatDate(sunday, tz, "yyyyMMdd");
   var after = new Date(sunday); after.setDate(after.getDate() + 1);
@@ -13783,10 +13836,22 @@ function calendarLink(sunday, covering, route, bus) {
                 (route ? " on " + route : "") + "." +
                 (bus ? " Bus: " + bus + "." : "") +
                 (covering ? " Covering for " + covering + "." : "");
+  /* From v1.118.0 timed from the vehicle check to the departure, as the
+     attached file is, when the Bus Stops tab has a Depart row. */
+  var times = null;
+  try { times = dutyTimes(SpreadsheetApp.getActiveSpreadsheet(), route, who); } catch (err) {}
+  var dates = day + "/" + dayAfter;
+  if (times) {
+    details += " Vehicle check: " + times.check + ". Depart church: " + times.depart + ".";
+    var a = stopMomentOn(dateToKey(sunday), times.check), b = stopMomentOn(dateToKey(sunday), times.depart);
+    if (a && b) dates = Utilities.formatDate(a, "UTC", "yyyyMMdd'T'HHmmss'Z'") + "/" +
+                        Utilities.formatDate(b, "UTC", "yyyyMMdd'T'HHmmss'Z'");
+  }
   return "https://calendar.google.com/calendar/render?action=TEMPLATE" +
          "&text=" + encodeURIComponent((route ? "Minibus duty: " + route : "Minibus driving duty") +
+                                       (times ? " \u00B7 check " + times.check + " \u00B7 depart " + times.depart : "") +
                                        (bus ? " (" + bus + ")" : "")) +
-         "&dates=" + day + "/" + dayAfter +
+         "&dates=" + dates +
          "&details=" + encodeURIComponent(details) +
          "&location=" + encodeURIComponent(BUS_ADDRESS);
 }

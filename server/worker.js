@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.59.0";
+const SCRIPT_VERSION = "w2.60.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5563,6 +5563,136 @@ function rotaDriverFor(rotaRow, route) {
                                    : (rotaRow.north_cover || rotaRow.north)) || "").trim();
 }
 
+/* THE VEHICLE CHECK'S OWN TIME, from w2.60.0 (Asim, 14 Oct 2026).
+
+   The departure time less the check: 20 minutes for the pre-drive check, 30
+   for a coordinator, whose app opens on the full inspection. Worked out from
+   the Bus Stops tab's Depart row, so a timetable change moves both times. */
+const CHECK_LEAD_MIN = 20;
+const CHECK_LEAD_FULL_MIN = 30;
+
+function hhmmLess(hhmm, mins) {
+  const [h, m] = String(hhmm || "").split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return "";
+  const t = ((h * 60 + m - mins) % 1440 + 1440) % 1440;
+  return p2(Math.floor(t / 60)) + ":" + p2(t % 60);
+}
+
+async function checkLeadFor(env, who) {
+  try {
+    const rules = await authRules(env);
+    const row = await env.DB.prepare(
+      "SELECT role FROM drivers WHERE active = 1 AND lower(trim(name)) = lower(trim(?))")
+      .bind(String(who || "")).first();
+    if (row && rules.roles.indexOf(String(row.role || "").trim().toLowerCase()) !== -1) {
+      return CHECK_LEAD_FULL_MIN;
+    }
+  } catch (e) {}
+  return CHECK_LEAD_MIN;
+}
+
+/* Depart and check, "HH:MM" each, or null when the route has no Depart row. */
+async function checkTimesFor(env, all, route, who) {
+  const d = departStopFor(all, route);
+  if (!d || !d.time) return null;
+  const lead = await checkLeadFor(env, who);
+  return { depart: d.time, check: hhmmLess(d.time, lead), lead };
+}
+
+/* A CHECK STARTED, told by the phone when its first stage opens. Kept for
+   the day, by the driver's name and by the bus, so neither check push goes
+   to somebody halfway through one. */
+function checkGoKey(day, what) {
+  return "chkgo|" + day + "|" + String(what || "").trim().toLowerCase();
+}
+
+async function markCheckStarted(env, who, reg) {
+  const day = londonKey(new Date());
+  const v = { at: Date.now() };
+  try {
+    await env.DB.prepare("DELETE FROM settings WHERE k LIKE 'chkgo|%' AND k NOT LIKE ?")
+      .bind("chkgo|" + day + "|%").run();
+  } catch (e) {}
+  if (String(who || "").trim()) await cachePut(env, checkGoKey(day, who), v).run();
+  if (String(reg || "").trim()) await cachePut(env, checkGoKey(day, reg), v).run();
+}
+
+async function handleCheckGo(env, body) {
+  const c = (body && body.checkgo) || {};
+  const who = String(c.driver || "").trim().slice(0, 80);
+  const reg = String(c.reg || "").trim().slice(0, 20);
+  if (!who && !reg) return json({ ok: false, error: "nothing named" });
+  await markCheckStarted(env, who, reg);
+  return json({ ok: true });
+}
+
+/* "done" a check is in today for him or his bus, "going" one has started,
+   "" neither. */
+async function checkProgress(env, who, reg) {
+  const me = String(who || "").trim().toLowerCase();
+  const bus = String(reg || "").trim().toUpperCase();
+  try {
+    const checks = await checksToday(env);
+    for (const r of Object.keys(checks)) {
+      if (bus && r.toUpperCase() === bus) return "done";
+      if (me && String(checks[r].driver || "").trim().toLowerCase() === me) return "done";
+    }
+  } catch (e) {}
+  const day = londonKey(new Date());
+  try {
+    if (me && await cacheGet(env, checkGoKey(day, me))) return "going";
+    if (bus && await cacheGet(env, checkGoKey(day, bus))) return "going";
+  } catch (e) {}
+  return "";
+}
+
+/* Where the morning's check stands for the run's driver, or "" when nothing
+   needs saying: "due" from the check time, "late" ten minutes after it, both
+   until the departure time, and only while no check is in or started. */
+async function checkNudgeFor(env, key, route, all, who, reg) {
+  if (key !== londonKey(new Date())) return "";
+  const ck = await checkTimesFor(env, all, route, who);
+  if (!ck) return "";
+  const at = londonMoment(key, ck.check), due = londonMoment(key, ck.depart);
+  const now = Date.now();
+  if (!at || !due || now < at.getTime() || now >= due.getTime()) return "";
+  if (await checkProgress(env, who, reg)) return "";
+  return now - at.getTime() >= 10 * 60000 ? "late" : "due";
+}
+
+/* THE DUTY CARD on the driver app's hub, from w2.60.0: the coming Sunday's
+   route, check and departure for the signed-in driver, and on the day where
+   the check stands. */
+async function handleDuty(env, body) {
+  const who = String((body && body.driver) || "").trim();
+  if (!who) return json({ ok: false, error: "no driver" });
+  const key = runSunday();
+  const all = await getStops(env);
+  const stops = pickupsAndArrivals(all);
+  let rotaRow = null;
+  try { rotaRow = await getRotaRow(env, key); } catch (e) {}
+  const me = who.toLowerCase();
+  const route = routeNames(stops).find((rt) => rotaDriverFor(rotaRow, rt).toLowerCase() === me) || "";
+  if (!route) return json({ ok: true, sunday: key, route: "" });
+  if (routeCancelled(rotaRow, route)) return json({ ok: true, sunday: key, route, off: true });
+  const ck = await checkTimesFor(env, all, route, who);
+  const out = { ok: true, sunday: key, route,
+                depart: ck ? ck.depart : "", check: ck ? ck.check : "", state: "" };
+  const p = londonParts(new Date());
+  if (key === londonKey(new Date()) && p.hh * 60 + p.mi >= 7 * 60 + 31) {
+    let reg = "";
+    try { reg = (await busFor(env, key, route, await getBuses(env), rotaRow)).reg || ""; } catch (e) {}
+    const prog = await checkProgress(env, who, reg);
+    if (prog) out.state = prog;
+    else if (ck) {
+      const at = londonMoment(key, ck.check);
+      if (at && Date.now() >= at.getTime() + 10 * 60000) out.state = "late";
+      else if (at && Date.now() >= at.getTime()) out.state = "due";
+    }
+  }
+  return json(out);
+}
+
 /* WHAT ONE DRIVER MOST NEEDS TOLD, AND NOTHING ELSE.
 
    This began as three separate sweeps and that was wrong, in a way the tests
@@ -5657,6 +5787,17 @@ async function driverNudgeFor(env, key, route, all, stops, rotaRow, buses) {
         return { who, tag: "go|" + key + "|" + route };
       }
     }
+  }
+
+  /* ---- the vehicle check, from w2.60.0 ---------------------------------- */
+  /* Due at the check time and not started ten minutes after it, until the
+     departure time takes over. Never while a check is in or under way. */
+  if (!t.started) {
+    let reg = "";
+    try { reg = (await busFor(env, key, route, buses, rotaRow)).reg || ""; } catch (e) {}
+    const ck = await checkNudgeFor(env, key, route, all, who, reg);
+    if (ck === "late") return { who, tag: "chkl|" + key + "|" + route };
+    if (ck === "due") return { who, tag: "chk|" + key + "|" + route };
   }
 
   /* The run nobody closed is no longer his to close: from w2.53.0 the
@@ -6127,6 +6268,8 @@ function sentTitle(tag, driver, where) {
     if (k === "go") return rt + ": Time to set off";
     if (k === "starta" || k === "startb") return rt + ": The bus has not gone out";
     if (k === "duty") return rt + ": You are driving today";
+    if (k === "chk") return rt + ": Time for the vehicle check";
+    if (k === "chkl") return rt + ": Vehicle check not started";
     return "Driver alert";
   }
   const route = (where && where.route) || "";
@@ -6322,7 +6465,7 @@ async function coordAlertNext(env, endpoint) {
   return out;
 }
 
-async function pushWhat(env, endpoint) {
+async function pushWhat(env, endpoint, opts) {
   /* A TEST ASKED FOR FROM THE APP, answered before anything about the bus.
 
      The push carries no payload, so without this a test would wake the phone
@@ -6376,6 +6519,14 @@ async function pushWhat(env, endpoint) {
     try { all = await getStops(env); } catch (e) {}
     const todays = await driverRouteToday(env, sub, key, pickupsAndArrivals(all));
     const route = todays.route;
+
+    /* A CHECK OPEN ON THIS PHONE, from v1.117.0: the service worker says so
+       when the page has one under way, which covers a start the phone could
+       not send for want of signal. Recorded before the words below are
+       chosen, so neither check push is what it reads. */
+    if (opts && opts.checking && sub.driver) {
+      try { await markCheckStarted(env, sub.driver, ""); } catch (e) {}
+    }
 
     /* NOT HIS MORNING, NOTHING TO SAY.
 
@@ -6491,6 +6642,21 @@ async function pushWhat(env, endpoint) {
 
          Asked of the record, so a rota edited between the push and the tap is
          the rota that answers. */
+      /* THE VEHICLE CHECK, from w2.60.0: due, then not started, while no
+         check is in or under way. Asked of the record, like the rest. */
+      let ck = null;
+      try { ck = await checkTimesFor(env, all, route, sub.driver); } catch (e) {}
+      if (ck && todays.mine) {
+        let reg = "";
+        try { reg = (await busFor(env, key, route, await getBuses(env), await getRotaRow(env, key))).reg || ""; } catch (e) {}
+        const nudge = await checkNudgeFor(env, key, route, all, sub.driver, reg);
+        if (nudge) {
+          return { ok: true, tag: "check", url: "./",
+                   title: nudge === "late" ? "Vehicle check not started" : "Time for the vehicle check",
+                   body: route + ". Depart " + ck.depart + "." };
+        }
+      }
+
       const lp = londonParts(new Date());
       if (lp.dow === 0 && (!due || now < due.getTime())) {
         /* One sentence carrying the ORDER of the morning, not two facts
@@ -6502,8 +6668,8 @@ async function pushWhat(env, endpoint) {
            the route, and the short form is still a sentence. */
         return { ok: true, tag: "duty", url: "./",
                  title: "You are driving today",
-                 body: route + ". Depart " + (when ? when + " " : "") +
-                       "after vehicle check." };
+                 body: route + "." + (ck && ck.check ? " Vehicle check " + ck.check + "." : "") +
+                       (when ? " Depart " + when + "." : "") };
       }
 
       return { ok: true, tag: "end", url: "./", title: "Dominion Assembly Transport", body: "Nothing outstanding." };
@@ -10441,7 +10607,7 @@ export default {
         if (action === "subscribe")   return await handleSubscribe(env, body);
         if (action === "pushapp")     return await handlePushApp(env, body);
         if (action === "unsubscribe") return await handleUnsubscribe(env, body);
-        if (action === "pushwhat")    return json(await pushWhat(env, body.endpoint));
+        if (action === "pushwhat")    return json(await pushWhat(env, body.endpoint, body));
         /* Same reasoning, plus: it only ever pushes to an endpoint that is
            already subscribed, and the caller had to know that endpoint to ask.
            There is nothing here a token would protect. */
@@ -10473,6 +10639,9 @@ export default {
         if (action === "rotaRequest") return knock(await handleRotaRequest(env, body.request), "request");
         /* The walkaround. Token checked like every other write. */
         if (action === "check") return knock(await handleCheck(env, body.check), "check");
+        /* From w2.60.0: a check's first stage opened, and the hub's duty card. */
+        if (action === "checkgo") return await handleCheckGo(env, body);
+        if (action === "duty") return await handleDuty(env, body);
         /* A photo on a reported item, from w2.50.0. Nothing for the sheet
            to collect, so no knock. */
         if (action === "photo") return await handlePhoto(env, body.photo);

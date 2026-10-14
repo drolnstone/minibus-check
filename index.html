@@ -825,7 +825,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .dw-now{background:var(--stop-bg);border-color:var(--stop)}
 .dw-now .dw-big{color:var(--stop)}
 /* The same card on the hub, from v1.113.0, as the passenger page opens on it. */
-#hubWatch .dw{margin:0 0 14px}
+#hubWatch .dw,#hubDuty .dw{margin:0 0 14px}
 /* The confirm-it-is-you panel, in the trip strip and in the request form. */
 .pingate{margin-top:11px;padding-top:11px;border-top:1px solid var(--hair)}
 .pingate .pinbox{width:120px;margin-top:6px}
@@ -1177,8 +1177,8 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
     <div class="card" id="modeCard" style="display:none">
       <div class="lbl" style="margin-bottom:8px">Inspection type</div>
       <div class="choose">
-        <button type="button" class="ok on" id="modePre">Pre-drive</button>
-        <button type="button" class="def" id="modeFull">Full</button>
+        <button type="button" class="ok on" id="modeFull">Full</button>
+        <button type="button" class="ok" id="modePre">Pre-drive</button>
       </div>
       <div class="hint" id="modeHint"></div>
     </div>
@@ -1320,6 +1320,8 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
     <div class="hint hub-pin" id="hubPin" style="display:none"></div>
     <!-- Offered, never sprung: see pushOfferHtml. -->
     <div class="hint hub-alert" id="hubAlert" style="display:none"></div>
+    <!-- His Sunday: check and departure times, from v1.117.0: see dutyStart. -->
+    <div id="hubDuty"></div>
     <!-- The stop he is watching, from v1.113.0: see dwHubStart. -->
     <div id="hubWatch"></div>
 
@@ -1687,7 +1689,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.116.0";
+var APP_VERSION = "v1.117.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -3111,6 +3113,9 @@ function show(n){
   syncToTop();
   paintDash(); paintFoot(); paintLinks();
   if(n==="hub") dwHubStart(); else dwHubStop();
+  if(n==="hub") dutyStart(); else dutyStop();
+  /* A check open on this phone ends with it, however it ends. */
+  if(n==="hub"||n==="sent"||n==="driver"||n==="vehicle"||n==="pending") checkOpenFlag(false);
   /* After paintDash, because that is what can change the strip's height —
      a registration plate appearing, or the Do not run alert opening. */
   dashHeightSync();
@@ -3140,7 +3145,7 @@ window.addEventListener("popstate", function(){
 
 /** Clears the finished check and returns to the first screen. */
 function goHome(){
-  st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign=""; st.mode="pre";
+  st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign=""; st.mode="pre"; st.modeSet=false;
   st.fuel=null; st.jobs=[];
   /* The PIN goes with the check it belonged to. It used to survive all the
      way back to the home screen still filled in, so the next person to pick
@@ -3342,7 +3347,7 @@ function btn(label,cls,fn,dis,why){
     var prob = mileProblem();
     var okm = entered && (!prob || st.mileOk) && st.fuel!==null;
     btn("Back","btn-ghost",function(){ show("vehicle"); });
-    btn("Start the check","btn-main",function(){ st.stage=0; renderStage(); show("stage"); }, !okm,
+    btn("Start the check","btn-main",function(){ checkStarted(); st.stage=0; renderStage(); show("stage"); }, !okm,
         function(){
           if(!entered || (prob && !st.mileOk)) { flash("mileCard"); $("miles").focus(); }
           else flash("fuelCard");
@@ -3871,17 +3876,19 @@ function renderPrep(){
 function paintMode(){
   var card=$("modeCard");
   if(!canDoFull()){ st.mode="pre"; card.style.display="none"; buildFor(st.veh); return; }
+  /* A coordinator opens on the full inspection, from v1.117.0 (Asim, 14 Oct
+     2026); Pre-drive stays beside it. */
+  if(!st.modeSet) st.mode="full";
   card.style.display="";
   var full = st.mode==="full";
   $("modePre").classList.toggle("on", !full);
   $("modeFull").classList.toggle("on", full);
   buildFor(st.veh);
-  $("modeHint").textContent = full
-    ? TOTAL+" items. The full inspection, including the slower structural checks."
-    : TOTAL+" items. What a driver checks before carrying anyone.";
+  $("modeHint").textContent = TOTAL+" items";
 }
 
 function setMode(m){
+  st.modeSet=true;
   if(st.mode===m) return;
   st.mode=m;
   st.res={};          /* a different list means the old answers no longer line up */
@@ -6129,6 +6136,109 @@ function dwHubStart(){
   }, 5000);
 }
 
+/* ---- the duty card and the check's own time (v1.117.0) -----------------
+   Asim, 14 Oct 2026: the driver on the rota sees, from the Monday, when
+   the vehicle check is and when the bus departs; on the day, where the check
+   stands. Worked out by the live server (action duty), kept on the phone. */
+var DUTY_KEY = "duty.card.v1";
+var dutyTimer = null, dutyBusy = false;
+function dutyHeld(){
+  try{ var d = JSON.parse(store.get(DUTY_KEY) || "null");
+       return (d && sameName(d.driver, st.driver)) ? d : null; }catch(e){ return null; }
+}
+function dutyHtml(){
+  var d = dutyHeld();
+  if(!d || !d.route || d.sunday !== rotaKey(rotaBaseSunday(0))) return "";
+  var today = d.sunday === rotaKey(new Date());
+  var eyebrow = (today ? "Today" : esc(dayShort(d.sunday))) + " · " + esc(d.route);
+  if(d.off){
+    return '<div class="dw dw-warn"><p class="dw-eyebrow">'+eyebrow+'</p>'+
+           '<p class="dw-big">'+esc(d.route)+' not running</p></div>';
+  }
+  var big = d.check ? "Check "+esc(d.check)+" · Depart "+esc(d.depart) : esc(d.route);
+  var cls = "", sub = "";
+  var state = today ? d.state : "";
+  if(state === "done"){ cls = "dw-go"; sub = "Vehicle check done ✓"; }
+  else if(state === "going"){ sub = "Vehicle check in progress"; }
+  else if(state === "late"){ cls = "dw-now"; sub = "<b>Vehicle check not started</b>"; }
+  else if(state === "due"){ cls = "dw-now"; sub = "<b>Vehicle check due</b>"; }
+  return '<div class="dw '+cls+'"><p class="dw-eyebrow">'+eyebrow+'</p>'+
+         '<p class="dw-big">'+big+'</p>'+(sub ? '<p class="dw-sub">'+sub+'</p>' : '')+'</div>';
+}
+function dayShort(key){
+  var d = rotaDateFromKey(key);
+  return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d.getDay()]+" "+
+         d.getDate()+" "+["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
+}
+function dutyPaint(){
+  var box = $("hubDuty");
+  if(box) box.innerHTML = (st.screen === "hub") ? dutyHtml() : "";
+}
+function dutyFetch(){
+  if(!LIVE || !st.driver || !navigator.onLine || dutyBusy){ dutyPaint(); return; }
+  dutyBusy = true;
+  var me = st.driver;
+  callFetch(LIVE_ENDPOINT, { method:"POST", redirect:"follow",
+    headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: CFG.token||"", action:"duty", driver: me }) }, POLL_TIMEOUT)
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      dutyBusy = false;
+      var out = JSON.parse(t);
+      if(out && out.ok === true && sameName(me, st.driver)){
+        out.driver = me;
+        store.set(DUTY_KEY, JSON.stringify(out));
+      }
+      dutyPaint();
+    })
+    .catch(function(){ dutyBusy = false; dutyPaint(); });
+}
+function dutyStop(){ if(dutyTimer){ clearInterval(dutyTimer); dutyTimer = null; } }
+function dutyStart(){
+  dutyStop();
+  dutyPaint();
+  if(st.screen !== "hub" || document.hidden) return;
+  dutyFetch();
+  /* A minute while the hub is open, on a Sunday only: the rest of the week
+     the card does not change. */
+  if(new Date().getDay() === 0){
+    dutyTimer = setInterval(function(){
+      if(st.screen !== "hub" || document.hidden){ dutyStop(); return; }
+      dutyFetch();
+    }, 60000);
+  }
+}
+
+/* THE CHECK HAS STARTED, told to the live server as the first stage opens so
+   neither check push reaches somebody halfway through one. Sent again when
+   the signal comes back. The service worker is told too (a flag in its
+   cache), and says so when the phone is woken. */
+var checkGoSent = false;
+function checkGoSend(){
+  if(checkGoSent || !LIVE || !st.driver || !navigator.onLine) return;
+  checkGoSent = true;
+  callFetch(LIVE_ENDPOINT, { method:"POST", redirect:"follow",
+    headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: CFG.token||"", action:"checkgo",
+                           checkgo:{ driver: st.driver, reg: (st.veh && st.veh.reg) || "" } }) })
+    .then(function(r){ if(!r.ok) throw new Error("http "+r.status); })
+    .catch(function(){ checkGoSent = false; });
+}
+function checkOpenFlag(on){
+  if(!on) checkGoSent = false;
+  try{
+    if(!window.caches) return;
+    caches.open("minibus-flags").then(function(c){
+      return on ? c.put("./__checking", new Response(String(Date.now())))
+                : c.delete("./__checking");
+    }).catch(function(){});
+  }catch(e){}
+}
+function checkStarted(){ checkOpenFlag(true); checkGoSend(); }
+window.addEventListener("online", function(){
+  if(st.screen === "stage" || st.screen === "review") checkGoSend();
+});
+
 /* ---- opening a stop in a map ------------------------------------------
    Whatever map app the phone has, rather than the one we happen to prefer.
 
@@ -7105,9 +7215,9 @@ function rotaCountsStart(){
 }
 
 document.addEventListener("visibilitychange",function(){
-  if(document.hidden){ rotaCountsStop(); dwHubStop(); return; }
-  /* The watched stop's card on the hub, from v1.113.0. */
-  if(st.screen==="hub") dwHubStart();
+  if(document.hidden){ rotaCountsStop(); dwHubStop(); dutyStop(); return; }
+  /* The watched stop's card on the hub, from v1.113.0, and his duty card. */
+  if(st.screen==="hub"){ dwHubStart(); dutyStart(); }
 
   /* The browser took the wake lock back the moment this page went out of
      sight and will not hand it over again on its own. Ask every time. It
@@ -9164,7 +9274,7 @@ function rotaClose(){
 
 /* ---------------- reset ---------------- */
 function reset(){
-  st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign=""; st.mode="pre";
+  st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign=""; st.mode="pre"; st.modeSet=false;
   st.fuel=null; st.jobs=[];
   st.pin=""; st.pinOk=false; st.pinState="";
   if($("pin")) $("pin").value="";
