@@ -38,3 +38,43 @@ AFTER IT
 A. The foot of all three apps reads  app v1.119.0 · server w2.62.0 · sheet
    v1.119.0 .
 B. The next "Sent:" notice comes from the Coordinator app only.
+
+
+CODE.GS ON MERGE (from #93)
+===========================
+
+Asim, 14 Oct: "Merging pages became automatic. Merging worker became
+automatic. How can I make Apps Script automatic as well?"
+
+Code.gs on merge. When a change to Code.gs reaches main, GitHub pushes it
+into the sheet's Apps Script and makes a new version of the web app (the one
+ending ...1XxMSA, so its address never changes). No more pasting.
+
+Until the setup below is done, nothing changes: you paste as before.
+
+
+ONCE, ON A COMPUTER
+-------------------
+
+1. Turn on the Apps Script API:
+     https://script.google.com/home/usersettings  ->  Google Apps Script API: On
+
+2. Sign clasp in to your Google account (the one that owns "Minibus checks").
+   In a terminal (needs Node):
+     npx @google/clasp@2.4.2 login
+   Allow. It writes a file called .clasprc.json in your home folder.
+
+3. GitHub, minibus-check, Settings, Secrets and variables, Actions,
+   New repository secret, twice:
+     CLASPRC_JSON   everything in .clasprc.json
+     SCRIPT_ID      Apps Script editor, Project Settings (cog), Script ID
+
+4. Try it: GitHub, Actions, Apps Script, Run workflow.
+   Manage deployments then shows a new version "sheet v1.119.0, ...".
+
+
+FROM THEN ON
+------------
+
+Merge the pull request. Pages, Worker and Code.gs all go live from it.
+The foot of the apps shows the sheet version as before.

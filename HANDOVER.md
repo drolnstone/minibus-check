@@ -63,7 +63,7 @@ There is no quarterly email: the app makes a PDF for any period.
 
 - Merging a PR to main publishes the three apps through GitHub Pages.
 - Worker changes: Asim pastes `server/worker.js` into the Cloudflare editor and deploys.
-- Code.gs changes: Asim pastes `Code.gs` into Apps Script, saves, then **Deploy, Manage deployments, New version**, because the Worker calls the deployed web app.
+- Code.gs changes: the Apps Script workflow (`.github/workflows/apps-script.yml`) pushes `Code.gs` and makes a new version of the web app (same deployment, same URL) when a change reaches main, once the secrets CLASPRC_JSON and SCRIPT_ID are set. Without them, Asim pastes `Code.gs` into Apps Script, saves, then **Deploy, Manage deployments, New version**.
 - The foot of all three apps shows app · server · sheet versions. Asim checks it after each release, and runs the sheet's health check (✓ and ✗ lines).
 - Code.gs needed a one-time `pdfFolder` run so it can save reports to Drive (done for #30).
 
