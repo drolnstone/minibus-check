@@ -418,7 +418,11 @@ Order matters, because the pages depend on the two servers being ready.
    with `npx wrangler deploy`, using `wrangler.toml` (the every-minute
    clock, the D1 binding `DB`, logs on). Secrets stay in the dashboard.
    Deployments shows each build; the app footer shows the live version.
-2. **Code.gs** → Apps Script editor → Save → Deploy
+2. **Code.gs** goes live by itself when the pull request is merged, once
+   the repository secrets CLASPRC_JSON and SCRIPT_ID are set: the Apps Script
+   workflow pulls the live project, swaps in `Code.gs`, pushes it with clasp
+   and makes a new version of the existing web app, so its URL stays.
+   Without the secrets: Apps Script editor → Save → Deploy
 3. Minibus menu → **Send everything to the live server now**
 4. Minibus menu → **Is the live server working?** — it should report the rota
    and mileage copies as a few minutes old

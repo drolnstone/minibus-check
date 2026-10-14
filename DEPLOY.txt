@@ -1,45 +1,39 @@
 MINIBUS
 =======
-  pages v1.118.0 · server w2.61.0 · sheet v1.119.0
+  No version change: pages v1.118.0 · server w2.61.0 · sheet v1.119.0
 
-Asim, 14 Oct: "Do all" (the Subtle loose ends thread).
+Asim, 14 Oct: "Merging pages became automatic. Merging worker became
+automatic. How can I make Apps Script automatic as well?"
 
-1. Bookings follow the timetable. For the Sundays still open for booking,
-   once the Bus Stops tab has stood still for 10 minutes:
-     - a booking at a stop number that has gone moves to the one stop with
-       the same name, route and all;
-     - a booking whose stop time changed takes the new time, and the
-       passenger's phones get one alert:  New time at Dewsbury Road ·
-       Sun 18 Oct: 10:49.  Not sent 21:00 to 08:00; it goes after 08:00.
-   Nothing changes once Sunday's bookings close at 09:30.
+Code.gs on merge. When a change to Code.gs reaches main, GitHub pushes it
+into the sheet's Apps Script and makes a new version of the web app (the one
+ending ...1XxMSA, so its address never changes). No more pasting.
 
-2. Coordinator app, Bookings: a card "Not on the timetable" lists any seat
-   at a stop with no namesake on the tab, with its number and Cancel.
-
-3. Sunday from 07:40 to 09:30: if "Your bus today" has not gone out, or the
-   live server has stopped answering, the sheet emails every address in
-   COORDINATOR_EMAIL, once:  07:30 message not sent.
-
-Pages, Worker and Code.gs.
+Until the setup below is done, nothing changes: you paste as before.
 
 
-YOU ARE ON              GOING TO
-  Pages   v1.117.0        v1.118.0
-  Worker  w2.60.0         w2.61.0
-  Code.gs v1.118.0        v1.119.0   (v1.118.0 is in this one too)
+ONCE, ON A COMPUTER
+-------------------
+
+1. Turn on the Apps Script API:
+     https://script.google.com/home/usersettings  ->  Google Apps Script API: On
+
+2. Sign clasp in to your Google account (the one that owns "Minibus checks").
+   In a terminal (needs Node):
+     npx @google/clasp@2.4.2 login
+   Allow. It writes a file called .clasprc.json in your home folder.
+
+3. GitHub, minibus-check, Settings, Secrets and variables, Actions,
+   New repository secret, twice:
+     CLASPRC_JSON   everything in .clasprc.json
+     SCRIPT_ID      Apps Script editor, Project Settings (cog), Script ID
+
+4. Try it: GitHub, Actions, Apps Script, Run workflow.
+   Manage deployments then shows a new version "sheet v1.119.0, ...".
 
 
-IN THIS ORDER
--------------
+FROM THEN ON
+------------
 
-1. Paste Code.gs, then Deploy, Manage deployments, New version.
-2. Merge the pull request. Pages and Worker go live together.
-
-
-AFTER IT
---------
-
-A. The foot of all three apps reads  app v1.118.0 · server w2.61.0 · sheet
-   v1.119.0 .
-B. Coordinator app, Bookings, Sun 18 Oct: no "Not on the timetable" card,
-   unless a seat is stranded.
+Merge the pull request. Pages, Worker and Code.gs all go live from it.
+The foot of the apps shows the sheet version as before.
