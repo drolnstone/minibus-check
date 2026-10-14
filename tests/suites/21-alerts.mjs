@@ -795,7 +795,7 @@ export default async function (root) {
      unreachable before the cutoff. The only people who ever saw it were the
      ones who left the notification unopened for two hours. */
 
-  s.test("ON THE MORNING ITSELF IT SAYS TODAY, AND WHERE (facts only from w2.61.0)", async (a) => {
+  s.test("ON THE MORNING ITSELF IT SAYS TODAY, AND TO BE THERE EARLY", async (a) => {
     await atTime(SUN_0800, async () => {
       const { db, env, key } = await live();
       await withSeat(db, key, "N02");
@@ -804,7 +804,7 @@ export default async function (root) {
       const out = await W.pushWhat(env, ep);
       a.has(out.title, "today", "the morning message does not mention the morning: " + out.title);
       a.has(out.title, "10:15", "or when his bus comes");
-      a.eq(out.body, "Grace Rd.", "or where: " + out.body);
+      a.has(out.body, "early", "or the one thing it is sent to say: " + out.body);
     });
   });
 

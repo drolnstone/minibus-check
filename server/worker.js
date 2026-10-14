@@ -6131,7 +6131,7 @@ function seatWords(seat) {
   if (itsToday && seat.time) {
     return { ok: true, tag: "bus", url: "./",
              title: "Your bus today at " + seat.time,
-             body: seat.stop + "." };
+             body: seat.stop + ". Be at your stop a few minutes early." };
   }
   /* What he booked, all of it, and what he can do about it. The Sunday is
      one whose bookings are still open (seatFor asks the cutoff), so changing
@@ -6930,7 +6930,7 @@ async function pushWhat(env, endpoint, opts) {
   if (p.scheduled) {
     return { ok: true, tag: "bus", url: "./",
              title: "Your bus today at " + p.scheduled,
-             body: stop + "." };
+             body: stop + ". Be at your stop a few minutes early." };
   }
 
   return { ok: true, tag: "bus", url: "./", title: "Sunday Bus",

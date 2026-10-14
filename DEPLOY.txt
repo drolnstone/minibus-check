@@ -20,9 +20,6 @@ Asim, 14 Oct: "Do all" (the Subtle loose ends thread).
    live server has stopped answering, the sheet emails every address in
    COORDINATOR_EMAIL, once:  07:30 message not sent.
 
-4. The 07:30 message no longer says "Be at your stop a few minutes early."
-   It reads: Your bus today at 10:49 · Dewsbury Road.
-
 Pages, Worker and Code.gs.
 
 

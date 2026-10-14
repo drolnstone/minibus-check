@@ -105,13 +105,13 @@ export default async function (root) {
 
   /* ---- the regular, who travelled this morning -------------------------- */
 
-  s.test("HE IS TOLD WHEN AND WHERE, ON THE MORNING ITSELF", async (a) => {
+  s.test("HE IS TOLD TO BE AT HIS STOP EARLY, ON THE MORNING ITSELF", async (a) => {
     const d = await day(TODAY);
     for (const h of ["07:00 before anything", "07:45 morning message",
                      "09:20 ten to the cutoff", "09:40 bookings closed"]) {
       a.has(d[h].title, "today", h + ": " + d[h].title);
       a.has(d[h].title, "10:15", h + ": " + d[h].title);
-      a.hasnt(d[h].body, "early", h + ": " + d[h].body);
+      a.has(d[h].body, "early", h + ": " + d[h].body);
     }
   });
 
