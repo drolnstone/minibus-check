@@ -1,6 +1,47 @@
 MINIBUS
 =======
-  No version change: pages v1.118.0 · server w2.61.0 · sheet v1.119.0
+  pages v1.119.0 · server w2.62.0 · sheet v1.119.0
+
+Asim, 14 Oct: "Why did the driver app also send this notice to me?"
+("Sent: Booking reminders" came from the Driver app and the Coordinator
+app.)
+
+1. A coordinator alert reaches each coordinator once, in the coordinator
+   app when they have it. The driver app's Coordinator button had opened
+   the coordinator page inside the driver app, and that marked the driver
+   app as holding coordinator alerts too.
+2. A driver's own alerts reach the driver app only, not a second app on the
+   same phone as well.
+3. Each Home Screen app now knows which one it is and puts its own mark
+   right the next time it opens.
+
+Pages and Worker only. Code.gs is unchanged.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.118.0        v1.119.0
+  Worker  w2.61.0         w2.62.0
+  Code.gs v1.119.0        v1.119.0   (unchanged)
+
+
+IN THIS ORDER
+-------------
+
+1. Merge the pull request. Pages and Worker go live together.
+2. On the phone, open the Driver app once, then the Coordinator app once,
+   each from its own Home Screen icon.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.119.0 · server w2.62.0 · sheet
+   v1.119.0 .
+B. The next "Sent:" notice comes from the Coordinator app only.
+
+
+CODE.GS ON MERGE (from #93)
+===========================
 
 Asim, 14 Oct: "Merging pages became automatic. Merging worker became
 automatic. How can I make Apps Script automatic as well?"
