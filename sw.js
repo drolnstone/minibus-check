@@ -1,7 +1,7 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
 const CACHE_PREFIX = "minibus-check-";
-const CACHE = CACHE_PREFIX + "v1.116.0";
+const CACHE = CACHE_PREFIX + "v1.117.0";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -271,10 +271,18 @@ self.addEventListener("push", (e) => {
     try {
       const sub = await self.registration.pushManager.getSubscription();
       if (sub) {
+        /* A vehicle check open in the app, from v1.117.0: the page leaves a
+           flag here while one is under way, so the server never answers
+           "Vehicle check not started" to a phone in the middle of one. */
+        let checking = false;
+        try {
+          const f = await (await caches.open("minibus-flags")).match("./__checking");
+          if (f) checking = Date.now() - Number(await f.text()) < 2 * 3600000;
+        } catch (err) {}
         const res = await fetch(LIVE_API, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ action: "pushwhat", endpoint: sub.endpoint })
+          body: JSON.stringify({ action: "pushwhat", endpoint: sub.endpoint, checking })
         });
         const out = await res.json();
         if (out && out.ok && out.title) say = out;

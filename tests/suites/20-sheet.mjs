@@ -507,12 +507,37 @@ export default function (root) {
        formed. */
     const line = (/DTSTART:[^\r\n]*/.exec(ics()) || [""])[0];
     a.has(line, "Z", "a Z on the end means no client has to guess the zone: " + line);
-    a.has(line, "20260927T0852", "09:52 British Summer Time is 08:52 UTC, got " + line);
+    /* From v1.118.0 it starts at the vehicle check, 20 minutes earlier. */
+    a.has(line, "20260927T0832", "09:32 British Summer Time is 08:32 UTC, got " + line);
   });
 
-  s.test("after the clocks go back, 09:52 is 09:52 UTC", (a) => {
+  s.test("after the clocks go back, 09:32 is 09:32 UTC", (a) => {
     const line = (/DTSTART:[^\r\n]*/.exec(ics(null, new Date(2026, 10, 1))) || [""])[0];
-    a.has(line, "20261101T0952", "09:52 on 1 November is 09:52 UTC, got " + line);
+    a.has(line, "20261101T0932", "09:32 on 1 November is 09:32 UTC, got " + line);
+  });
+
+  /* From v1.118.0 (Asim, 14 Oct 2026): the duty email gives the vehicle
+     check and the departure. 20 minutes for a driver, 30 for a coordinator. */
+  function dutyMail(who, route) {
+    const L2 = loadCodeGs(root, { tabs: tabs(), props: { COORDINATOR_EMAIL: "a@b.c" } });
+    call(L2, "sendDutyEmail", "d@b.c", who, new Date(2026, 8, 27), 2, "", route || "North", "YS70 PWE");
+    return L2.gas.mail[L2.gas.mail.length - 1];
+  }
+  s.test("the duty email says when the check is and when the bus departs", (a) => {
+    const m = dutyMail("Bro Adrian");
+    const body = m.body || "";
+    a.has(body, "Vehicle check: 09:32", body);
+    a.has(body, "Depart church: 09:52", body);
+    a.has(m.htmlBody || "", "Vehicle check: <b>09:32</b>");
+  });
+  s.test("the reminder's own route name, North Liverpool, finds the North timetable", (a) => {
+    const m = dutyMail("Bro Adrian", "North Liverpool");
+    a.has(m.body || "", "Vehicle check: 09:32");
+    const ics = String(((m.attachments || [])[0] || {}).content || "");
+    a.has(ics, "DTSTART:20260927T0832", "the calendar entry starts at the check: " + ics.slice(0, 400));
+  });
+  s.test("a coordinator's check is 30 minutes before", (a) => {
+    a.has(dutyMail("Bro Arthur").body || "", "Vehicle check: 09:22");
   });
 
   s.test("a timed duty is time he is not free", (a) => {
