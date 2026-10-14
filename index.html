@@ -1689,7 +1689,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.118.0";
+var APP_VERSION = "v1.119.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2675,12 +2675,13 @@ function pushTurnOn(){
           return pushSubscribe(reg, v.key);
         })
         .then(function(sub){
-          var j = sub.toJSON();
-          pushAppMark(j.endpoint);
+          var j = sub.toJSON(), home = homeApp();
+          if(home !== "coord") pushAppMark(j.endpoint);
           return callFetch(LIVE_ENDPOINT, {
             method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
             body: JSON.stringify({ action:"subscribe", endpoint:j.endpoint, keys:j.keys,
-                                   role:"driver", driver: me, app:"driver",
+                                   role:"driver", driver: me,
+                                   app: home === "coord" ? "" : "driver", sure: home === "driver",
                                    route: myRouteToday() || "North" })
           });
         })
@@ -2753,14 +2754,32 @@ var PUSHAPP_KEY = "fleet.pushapp.v1";
 function pushAppMark(endpoint){
   try{ if(endpoint) localStorage.setItem(PUSHAPP_KEY, endpoint); }catch(e){}
 }
+/* WHICH HOME SCREEN APP THIS IS, from v1.119.0 (Asim, 14 Oct: a booking
+   reminder's "Sent" came from both apps). The Coordinator button opens the
+   coordinator page inside this app, on this app's endpoint, and the
+   coordinator app installed apart has its own. Kept by whichever page
+   opens first from the Home Screen (no page before it), so a page reached
+   by a button inside the other app knows it is a guest there. Shared with
+   the coordinator page. Blank in a browser tab. */
+var HOME_KEY = "fleet.home.v1";
+function homeApp(){
+  var h = "";
+  try{
+    h = localStorage.getItem(HOME_KEY) || "";
+    if(!h && standalone() && !document.referrer){ h = "driver"; localStorage.setItem(HOME_KEY, h); }
+  }catch(e){}
+  return h;
+}
 function pushAppSay(endpoint){
   if(!endpoint) return;
+  var home = homeApp();
+  if(home === "coord") return;
   pushAppMark(endpoint);
   if(!LIVE_ENDPOINT || !navigator.onLine) return;
   try{
     callFetch(LIVE_ENDPOINT, {
       method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
-      body: JSON.stringify({ action:"pushapp", endpoint:endpoint, app:"driver" })
+      body: JSON.stringify({ action:"pushapp", endpoint:endpoint, app:"driver", sure: home === "driver" })
     }).catch(function(){});
   }catch(e){}
 }

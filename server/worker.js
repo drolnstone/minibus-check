@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.61.0";
+const SCRIPT_VERSION = "w2.62.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5106,8 +5106,38 @@ const DRIVER_SUB_MATCH = "role = 'driver' AND lower(trim(driver)) = lower(trim(?
 
    A driver's own reminders skip 'coord'. A coordinator alert goes to the
    coordinator app's endpoints when that person has one, and to the rest
-   only when they have none. */
+   only when they have none.
+
+   ONE APP EACH, from w2.62.0 (Asim, 14 Oct: "Sent: Booking reminders" came
+   from the driver app and the coordinator app). The driver app's
+   Coordinator button opens the coordinator page inside the driver app, on
+   the driver app's endpoint, and that page marked it 'both'; with the
+   coordinator app installed apart, both endpoints read 'both' and both were
+   woken. So each person's phones are taken best first, one kind only:
+   coordinator alerts coord, then both, then the rest; a driver's alerts
+   driver (or not known), then both, then coord. And an app that knows it is
+   its own install (sure) says so outright, mending a mark left wrong. */
 const DRIVER_WAKE_MATCH = DRIVER_SUB_MATCH + " AND app <> 'coord'";
+const APP_RANK_COORD = { coord: 0, both: 1 };
+const APP_RANK_DRIVER = { driver: 0, "": 0, both: 1, coord: 2 };
+function oneAppEach(subs, rank) {
+  const best = {};
+  const key = (sub) => String(sub.driver || "").trim().toLowerCase();
+  const r = (sub) => (String(sub.app || "") in rank) ? rank[String(sub.app || "")] : 9;
+  for (const sub of subs) {
+    const k = key(sub);
+    if (!(k in best) || r(sub) < best[k]) best[k] = r(sub);
+  }
+  return subs.filter((sub) => r(sub) === best[key(sub)]);
+}
+/* A driver's own phones for an alert meant for the driver app, one kind.
+   The coordinator app's own only with coordToo, where they were woken
+   before (a change, an emergency number), and only when nothing else is. */
+async function driverWakeSubs(env, name, coordToo) {
+  if (!(await ensurePushApp(env))) return subsWhere(env, DRIVER_SUB_MATCH, [name]);
+  const subs = await subsWhere(env, coordToo ? DRIVER_SUB_MATCH : DRIVER_WAKE_MATCH, [name]);
+  return oneAppEach(subs, APP_RANK_DRIVER);
+}
 const PUSH_APPS = ["driver", "coord", "both"];
 let pushAppReady = false;
 async function ensurePushApp(env) {
@@ -5128,11 +5158,11 @@ function pushAppMerge(was, said) {
   if (!was || was === said || said === "both") return said;
   return "both";
 }
-async function notePushApp(env, endpoint, said) {
+async function notePushApp(env, endpoint, said, sure) {
   if (!(await ensurePushApp(env))) return;
   const row = await env.DB.prepare("SELECT app FROM push_subs WHERE endpoint=?").bind(endpoint).first();
   if (!row) return;
-  const next = pushAppMerge(row.app, said);
+  const next = sure && PUSH_APPS.indexOf(said) !== -1 ? said : pushAppMerge(row.app, said);
   if (next !== String(row.app || "")) {
     await env.DB.prepare("UPDATE push_subs SET app=? WHERE endpoint=?").bind(next, endpoint).run();
   }
@@ -5140,7 +5170,7 @@ async function notePushApp(env, endpoint, said) {
 async function handlePushApp(env, body) {
   const endpoint = String((body && body.endpoint) || "").trim();
   if (!endpoint) return json({ ok: false, error: "no endpoint" });
-  try { await notePushApp(env, endpoint, String((body && body.app) || "")); } catch (e) {}
+  try { await notePushApp(env, endpoint, String((body && body.app) || ""), body.sure === true); } catch (e) {}
   return json({ ok: true });
 }
 
@@ -5958,9 +5988,7 @@ async function wakeDrivers(env) {
        way the Drivers tab spells it: a cover typed in by hand on a Saturday
        night is the usual way the two drift apart. A bare = here meant that
        driver was never woken, and nothing anywhere said so. */
-    const subs = (await ensurePushApp(env))
-      ? await subsWhere(env, DRIVER_WAKE_MATCH, [nudge.who])
-      : await subsWhere(env, DRIVER_SUB_MATCH, [nudge.who]);
+    const subs = await driverWakeSubs(env, nudge.who);
 
     /* Mend the stored route on the way past. pushWhat no longer trusts it, so
        nothing depends on this being right; it just stops the column drifting
@@ -6215,13 +6243,9 @@ async function coordinatorSubs(env, not) {
     seen[sub.id] = 1;
     return skip.indexOf(String(sub.driver || "").trim().toLowerCase()) === -1;
   });
-  /* From w2.43.0: once, to the coordinator app, when this person has it. */
-  const inApp = {};
-  for (const sub of subs) {
-    if (sub.app === "coord" || sub.app === "both") inApp[String(sub.driver || "").trim().toLowerCase()] = 1;
-  }
-  return subs.filter((sub) => !inApp[String(sub.driver || "").trim().toLowerCase()] ||
-                              sub.app === "coord" || sub.app === "both");
+  /* From w2.43.0: once, to the coordinator app, when this person has it;
+     from w2.62.0 only its own install's phones when it has one. */
+  return oneAppEach(subs, APP_RANK_COORD);
 }
 
 function coordAlertOf(a) {
@@ -7053,7 +7077,7 @@ async function handleSubscribe(env, body) {
          String((body && body.driver) || ""), String((body && body.route) || ""),
          Date.now()).run();
   if (role === "driver" && body && body.app) {
-    try { await notePushApp(env, endpoint, String(body.app)); } catch (e) {}
+    try { await notePushApp(env, endpoint, String(body.app), body.sure === true); } catch (e) {}
   }
   return json({ ok: true });
 }
@@ -8387,7 +8411,7 @@ async function changeTell(env, me, kind, id, r) {
     const me0 = String(me.name || "").trim().toLowerCase();
     for (const n of await changeDriverNames(env, kind, r)) {
       if (n.toLowerCase() === me0) continue;
-      for (const sub of await subsWhere(env, DRIVER_SUB_MATCH, [n])) await into(sub, one);
+      for (const sub of await driverWakeSubs(env, n, true)) await into(sub, one);
     }
     if (heard.length) await sentNote(env, { g: "change|" + msg.id, title: msg.title + ": " + r.words, who: heard });
   } catch (e) { /* the change stands; the alert is a courtesy on top */ }
@@ -9497,7 +9521,7 @@ async function contactTellDrivers(env, me, msg, d, heard) {
   const keys = await vapidKeys(env);
   let sent = 0;
   for (const n of names) {
-    for (const sub of await subsWhere(env, DRIVER_SUB_MATCH, [n])) {
+    for (const sub of await driverWakeSubs(env, n, true)) {
       const box = ((await cacheGet(env, coordBoxKey(sub.endpoint))) || [])
         .filter((m) => m && Date.now() - (Number(m.at) || 0) < COORD_ALERT_MAX_AGE_MS);
       box.push(one);
@@ -9596,7 +9620,7 @@ async function messageSend(env, me, id, to, text, key) {
     const k = low(n);
     if (!k || told[k] || k === low(me.name)) continue;
     told[k] = 1;
-    for (const sub of await subsWhere(env, DRIVER_WAKE_MATCH, [n])) await into(sub, asDriver);
+    for (const sub of await driverWakeSubs(env, n)) await into(sub, asDriver);
   }
 
   const all = to.indexOf("passengers") !== -1;

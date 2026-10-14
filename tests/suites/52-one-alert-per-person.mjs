@@ -87,8 +87,43 @@ export default async function (root) {
       await sub(env, EP("shared"), "Bro Adrian", "coord");
       G.reset();
       await W.wakeDrivers(env);
-      a.eq(JSON.stringify(pushedTo()), JSON.stringify([EP("drv"), EP("shared")].sort()));
+      a.eq(JSON.stringify(pushedTo()), JSON.stringify([EP("drv")]),
+           "the driver app's own, not a phone it shares as well");
     });
+  });
+
+  /* From w2.62.0 (Asim, 14 Oct: "Sent: Booking reminders" from both apps).
+     The driver app's Coordinator button had marked the driver app's own
+     endpoint 'both', and the coordinator app installed apart read 'both'
+     too. */
+  s.test("two endpoints that both read both: a coordinator alert goes to one kind only", async (a) => {
+    const { db, env } = await fresh();
+    await sub(env, EP("drv"), "Bro Arthur", "driver");
+    await sub(env, EP("drv"), "Bro Arthur", "coord");
+    await sub(env, EP("crd"), "Bro Arthur", "coord");
+    a.eq(appOf(db, EP("drv")), "both");
+    G.reset();
+    await J(await post(env, { action: "coordAlert", alert }));
+    a.eq(JSON.stringify(pushedTo()), JSON.stringify([EP("crd")]), "the coordinator app's own install");
+  });
+
+  s.test("an app sure of its own install mends a mark left wrong", async (a) => {
+    const { db, env } = await fresh();
+    await sub(env, EP("drv"), "Bro Arthur", "driver");
+    await sub(env, EP("drv"), "Bro Arthur", "coord");
+    await sub(env, EP("crd"), "Bro Arthur", "driver");
+    await sub(env, EP("crd"), "Bro Arthur", "coord");
+    a.eq(appOf(db, EP("drv")), "both");
+    a.eq(appOf(db, EP("crd")), "both");
+    await J(await post(env, { action: "pushapp", endpoint: EP("drv"), app: "driver", sure: true }));
+    await J(await post(env, { action: "pushapp", endpoint: EP("crd"), app: "coord", sure: true }));
+    a.eq(appOf(db, EP("drv")), "driver");
+    a.eq(appOf(db, EP("crd")), "coord");
+    await J(await post(env, { action: "pushapp", endpoint: EP("drv"), app: "nonsense", sure: true }));
+    a.eq(appOf(db, EP("drv")), "driver");
+    G.reset();
+    await J(await post(env, { action: "coordAlert", alert }));
+    a.eq(JSON.stringify(pushedTo()), JSON.stringify([EP("crd")]));
   });
 
   return s;

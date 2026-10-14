@@ -1,45 +1,40 @@
 MINIBUS
 =======
-  pages v1.118.0 · server w2.61.0 · sheet v1.119.0
+  pages v1.119.0 · server w2.62.0 · sheet v1.119.0
 
-Asim, 14 Oct: "Do all" (the Subtle loose ends thread).
+Asim, 14 Oct: "Why did the driver app also send this notice to me?"
+("Sent: Booking reminders" came from the Driver app and the Coordinator
+app.)
 
-1. Bookings follow the timetable. For the Sundays still open for booking,
-   once the Bus Stops tab has stood still for 10 minutes:
-     - a booking at a stop number that has gone moves to the one stop with
-       the same name, route and all;
-     - a booking whose stop time changed takes the new time, and the
-       passenger's phones get one alert:  New time at Dewsbury Road ·
-       Sun 18 Oct: 10:49.  Not sent 21:00 to 08:00; it goes after 08:00.
-   Nothing changes once Sunday's bookings close at 09:30.
+1. A coordinator alert reaches each coordinator once, in the coordinator
+   app when they have it. The driver app's Coordinator button had opened
+   the coordinator page inside the driver app, and that marked the driver
+   app as holding coordinator alerts too.
+2. A driver's own alerts reach the driver app only, not a second app on the
+   same phone as well.
+3. Each Home Screen app now knows which one it is and puts its own mark
+   right the next time it opens.
 
-2. Coordinator app, Bookings: a card "Not on the timetable" lists any seat
-   at a stop with no namesake on the tab, with its number and Cancel.
-
-3. Sunday from 07:40 to 09:30: if "Your bus today" has not gone out, or the
-   live server has stopped answering, the sheet emails every address in
-   COORDINATOR_EMAIL, once:  07:30 message not sent.
-
-Pages, Worker and Code.gs.
+Pages and Worker only. Code.gs is unchanged.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.117.0        v1.118.0
-  Worker  w2.60.0         w2.61.0
-  Code.gs v1.118.0        v1.119.0   (v1.118.0 is in this one too)
+  Pages   v1.118.0        v1.119.0
+  Worker  w2.61.0         w2.62.0
+  Code.gs v1.119.0        v1.119.0   (unchanged)
 
 
 IN THIS ORDER
 -------------
 
-1. Paste Code.gs, then Deploy, Manage deployments, New version.
-2. Merge the pull request. Pages and Worker go live together.
+1. Merge the pull request. Pages and Worker go live together.
+2. On the phone, open the Driver app once, then the Coordinator app once,
+   each from its own Home Screen icon.
 
 
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.118.0 · server w2.61.0 · sheet
+A. The foot of all three apps reads  app v1.119.0 · server w2.62.0 · sheet
    v1.119.0 .
-B. Coordinator app, Bookings, Sun 18 Oct: no "Not on the timetable" card,
-   unless a seat is stranded.
+B. The next "Sent:" notice comes from the Coordinator app only.

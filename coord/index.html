@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.118.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.119.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -711,7 +711,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.118.0";
+var PAGE_VERSION = "v1.119.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -3888,7 +3888,22 @@ function bellPaint(name){
 /* From v1.97.1: "both" when the driver app on this phone holds the same
    endpoint, so one phone with both apps is alerted once. With no mark yet,
    a driver app signed in here shares this endpoint. */
+/* From v1.119.0, which Home Screen app this is (the driver app keeps the
+   same key): in its own, "coord" outright; opened by the driver app's
+   Coordinator button, nothing, since the endpoint is the driver app's. */
+var HOME_KEY = "fleet.home.v1";
+function homeApp(){
+  var h = "";
+  try{
+    h = localStorage.getItem(HOME_KEY) || "";
+    if(!h && standalone() && !document.referrer){ h = "coord"; localStorage.setItem(HOME_KEY, h); }
+  }catch(e){}
+  return h;
+}
 function pushAppOf(endpoint){
+  var home = homeApp();
+  if(home === "coord") return "coord";
+  if(home === "driver") return "";
   var mark = "", signed = "";
   try{ mark = localStorage.getItem("fleet.pushapp.v1") || "";
        signed = localStorage.getItem("fleet.signin.v1") || ""; }catch(e){}
@@ -3903,7 +3918,8 @@ function bellLook(){
     return r && r.pushManager ? r.pushManager.getSubscription() : null;
   }).then(function(sub){
     BELL.on = !!sub && Notification.permission === "granted";
-    if(BELL.on) post({ action: "pushapp", endpoint: sub.endpoint, app: pushAppOf(sub.endpoint) }).then(null, function(){});
+    if(BELL.on && pushAppOf(sub.endpoint))
+      post({ action: "pushapp", endpoint: sub.endpoint, app: pushAppOf(sub.endpoint), sure: homeApp() === "coord" }).then(null, function(){});
     bellPaint();
     alertAskMaybe();
   }, function(){});
@@ -3968,7 +3984,7 @@ function bellOn(test){
     endpoint = j.endpoint;
     /* Every time, so the phone is under the name signed in now. */
     return post({ action: "subscribe", endpoint: j.endpoint, keys: j.keys, role: "driver", driver: who, route: "",
-                  app: pushAppOf(j.endpoint) });
+                  app: pushAppOf(j.endpoint), sure: homeApp() === "coord" });
   }).then(function(out){
     if(!out || !out.ok) throw new Error("not taken");
     if(was) return post({ action: "testpush", endpoint: endpoint });

@@ -1,0 +1,45 @@
+MINIBUS
+=======
+  pages v1.118.0 · server w2.61.0 · sheet v1.119.0
+
+Asim, 14 Oct: "Do all" (the Subtle loose ends thread).
+
+1. Bookings follow the timetable. For the Sundays still open for booking,
+   once the Bus Stops tab has stood still for 10 minutes:
+     - a booking at a stop number that has gone moves to the one stop with
+       the same name, route and all;
+     - a booking whose stop time changed takes the new time, and the
+       passenger's phones get one alert:  New time at Dewsbury Road ·
+       Sun 18 Oct: 10:49.  Not sent 21:00 to 08:00; it goes after 08:00.
+   Nothing changes once Sunday's bookings close at 09:30.
+
+2. Coordinator app, Bookings: a card "Not on the timetable" lists any seat
+   at a stop with no namesake on the tab, with its number and Cancel.
+
+3. Sunday from 07:40 to 09:30: if "Your bus today" has not gone out, or the
+   live server has stopped answering, the sheet emails every address in
+   COORDINATOR_EMAIL, once:  07:30 message not sent.
+
+Pages, Worker and Code.gs.
+
+
+YOU ARE ON              GOING TO
+  Pages   v1.117.0        v1.118.0
+  Worker  w2.60.0         w2.61.0
+  Code.gs v1.118.0        v1.119.0   (v1.118.0 is in this one too)
+
+
+IN THIS ORDER
+-------------
+
+1. Paste Code.gs, then Deploy, Manage deployments, New version.
+2. Merge the pull request. Pages and Worker go live together.
+
+
+AFTER IT
+--------
+
+A. The foot of all three apps reads  app v1.118.0 · server w2.61.0 · sheet
+   v1.119.0 .
+B. Coordinator app, Bookings, Sun 18 Oct: no "Not on the timetable" card,
+   unless a seat is stranded.
