@@ -423,6 +423,8 @@ Order matters, because the pages depend on the two servers being ready.
    workflow pulls the live project, swaps in `Code.gs`, pushes it with clasp
    and makes a new version of the existing web app, so its URL stays.
    Without the secrets: Apps Script editor → Save → Deploy
+   From v1.120.0 the sheet's five-minute clock then runs Set up / refresh
+   rota by itself, once for each new version (`setUpIfNew` in `Code.gs`).
 3. Minibus menu → **Send everything to the live server now**
 4. Minibus menu → **Is the live server working?** — it should report the rota
    and mileage copies as a few minutes old
