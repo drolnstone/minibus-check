@@ -609,13 +609,13 @@ export default async function (root) {
     a.has(out.body, "Stanley Pk");
   });
 
-  s.test("before the bus sets off he is told when it comes and to be early", async (a) => {
+  s.test("before the bus sets off he is told when it comes, facts only (w2.61.0)", async (a) => {
     const out = await words(WHEN.sundayLate, async (db, env, key) => {
       await seedBookings(db, key, [{ route: "North", stopId: "N08" }]);
     });
     a.has(out.title, "10:52", "his own timetabled time: " + out.title);
-    a.has(out.body, "early");
-    a.has(out.body, "Stanley Pk");
+    a.hasnt(out.body, "early", "an instruction is back in the morning message");
+    a.eq(out.body, "Stanley Pk.");
   });
 
   /* ---- quiet hours, on their own ---------------------------------------- */

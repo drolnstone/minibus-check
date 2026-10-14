@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.118.0";
+var SCRIPT_VERSION = "v1.119.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -4948,6 +4948,11 @@ function drainFromWorker() {
             .setProperty("liveError", String((got && got.error) || "drain failed")); } catch (e) {}
     return { bookings: 0, trips: 0 };
   }
+  /* For morningWatch, from v1.119.0. */
+  if (got.morning) {
+    try { PropertiesService.getScriptProperties()
+            .setProperty("workerMorning", JSON.stringify({ seen: Date.now(), m: got.morning })); } catch (e) {}
+  }
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var doneB = [], doneT = [];
@@ -5473,6 +5478,46 @@ function liveSync() {
   try { outcomeRetry(); } catch (err) {}
   try { overbookAfter(back); } catch (err) {}
   try { safetyFlush(); } catch (err) {}
+  try { morningWatch(); } catch (err) {}
+}
+
+/* THE 07:30 MESSAGE, WATCHED FROM HERE, from v1.119.0 (Asim, 14 Oct 2026).
+
+   "Your bus today" is sent by the live server's clock. On 10 Oct a booking
+   reminder died there with nothing said to anybody. This sheet runs on
+   Google, not Cloudflare, so it can see the morning's message go missing
+   when the server cannot: from 07:40 on a Sunday, if the last drain did not
+   show this Sunday's message as sent (or the server has stopped answering),
+   the coordinators are emailed, once. Not when the message is switched off
+   or a rehearsal is running. Email only: a push would go through the server
+   that has failed. */
+var MORNING_WATCH_FROM = "07:40", MORNING_WATCH_TO = "09:30";
+
+function morningWatch() {
+  var now = new Date(), tz = "Europe/London";
+  var day = Utilities.formatDate(now, tz, "EEE d MMM");
+  if (day.indexOf("Sun") !== 0) return;
+  var hm = Utilities.formatDate(now, tz, "HH:mm");
+  if (hm < MORNING_WATCH_FROM || hm > MORNING_WATCH_TO) return;
+  var key = Utilities.formatDate(now, tz, "yyyy-MM-dd");
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty("morningAlarm") === key) return;
+
+  var w = null;
+  try { w = JSON.parse(props.getProperty("workerMorning") || "null"); } catch (e) {}
+  if (!w) return;   /* a server too old to say; nothing to judge by */
+  var fresh = Date.now() - Number(w.seen || 0) < 15 * 60000;
+  var m = w.m || {};
+  if (fresh && (m.key === key || m.off || m.rehearsal)) return;
+
+  var to = safetyTo();
+  if (!to) return;
+  var body = fresh
+    ? "\u201cYour bus today\u201d had not gone to passengers by " + hm + ", " + day + "."
+    : "\u201cYour bus today\u201d not confirmed: the live server last answered at " +
+      Utilities.formatDate(new Date(Number(w.seen || 0)), tz, "HH:mm") + ", " + day + ".";
+  sendMail({ to: to, subject: "07:30 message not sent", body: body });
+  props.setProperty("morningAlarm", key);
 }
 
 /* Whether to look at the seat counts after a drain, and doing it. */
