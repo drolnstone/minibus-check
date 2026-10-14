@@ -211,6 +211,9 @@ export async function phone(opts = {}) {
     else if (post.action === "photo") body = world.photoFails ? { ok: false } : { ok: true };
     else if (post.check || post.action === "check") body = world.checkFails ? { ok: false } : { ok: true, id: "chk-" + posted.length };
     else if (post.action === "subscribe" || post.action === "testpush") body = { ok: true };
+    /* The hub's duty card and a check's start, from v1.117.0. */
+    else if (post.action === "duty") body = world.duty ? world.duty(post) : { ok: true, route: "" };
+    else if (post.action === "checkgo") body = { ok: true };
     else if (p.get("vapid")) body = { ok: true, key: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" };
     else if (p.get("last")) {
       body = {

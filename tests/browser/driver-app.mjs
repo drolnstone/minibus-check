@@ -1233,6 +1233,39 @@ if (want("T35")) {
   await me.ctx.close();
 }
 
+/* T36 — v1.117.0 (Asim, 14 Oct). The hub shows the coming Sunday's check
+   and departure; Start the check tells the live server; a coordinator's
+   check opens on Full, a driver's has no choice. */
+if (want("T36")) {
+  const duty = (state) => (post) => ({ ok: true, sunday: "2026-09-27", route: "North",
+    check: "09:32", depart: "09:52", state });
+  const me = await phone({ clock: "2026-09-27T09:40:00+01:00", world: { duty: duty("late") } });
+  await me.load(); await me.close(["howDone"]); await me.signIn(); await me.wait(1200);
+  const card = await me.text("#hubDuty");
+  await me.click("Vehicle check", "#s-hub"); await me.pickBus("NH56 FWP"); await me.onward(); await me.close(["busAskStay"]);
+  const driverMode = await me.pg.evaluate(() => getComputedStyle(document.getElementById("modeCard")).display);
+  await me.setInput("miles", "48262"); await me.fuel(6); await me.onward(); await me.wait(800);
+  const go = me.posted.find(p => p.action === "checkgo");
+  await me.ctx.close();
+
+  const co = await phone({ role: "Coordinator", clock: "2026-09-27T09:40:00+01:00",
+                           world: { duty: duty("going"), leadRoles: ["Coordinator"] } });
+  await co.load(); await co.close(["howDone"]); await co.signIn(); await co.wait(1200);
+  const coCard = await co.text("#hubDuty");
+  await co.click("Vehicle check", "#s-hub"); await co.pickBus("NH56 FWP"); await co.onward(); await co.close(["busAskStay"]);
+  const mode = await co.pg.evaluate(() => ({
+    first: document.querySelector("#modeCard .choose button").id,
+    full: document.getElementById("modeFull").classList.contains("on"),
+    hint: document.getElementById("modeHint").textContent }));
+  check("T36", "the hub card gives check and departure; Start the check is told; a coordinator opens on Full",
+        /Today · North/i.test(card) && /Check 09:32 · Depart 09:52/.test(card) && /Vehicle check not started/.test(card) &&
+        driverMode === "none" && go && go.checkgo && go.checkgo.reg === "NH56 FWP" &&
+        /Vehicle check in progress/.test(coCard) &&
+        mode.first === "modeFull" && mode.full && /^\d+ items$/.test(mode.hint) && !me.errs.length && !co.errs.length,
+        JSON.stringify({ card, driverMode, go, coCard, mode, errs: me.errs.concat(co.errs) }));
+  await co.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");
