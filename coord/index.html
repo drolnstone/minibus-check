@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.117.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.118.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -711,7 +711,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.117.0";
+var PAGE_VERSION = "v1.118.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1839,6 +1839,18 @@ function paintBookings(key){
                    (every ? 'Booked stops only' : (empty === 1 ? '1 stop' : empty + ' stops') + ' with nobody booked') + '</button>';
     h += '</div>';
   });
+  /* Booked at a stop no longer on the timetable (from v1.118.0). */
+  if(b.gone && b.gone.length){
+    h += '<div class="card"><div class="bk-head"><b>Not on the timetable</b></div>';
+    b.gone.forEach(function(k){
+      h += '<div class="bk"><span class="who"><span class="n">'+esc(seatWords(k.seats))+'</span>' +
+           (k.phone ? '<a href="tel:'+esc(k.phone)+'">'+esc(phoneWords(k.phone))+'</a>' : '<span>no number</span>') +
+           (k.coord ? '<span class="tag info">'+esc(bookedBy(k.note))+'</span>' : '') +
+           '<small class="moved">'+esc((k.stopId ? k.stopId + " " : "") + k.stop)+'</small></span>' +
+           (b.mayAct ? '<button class="mini warn" type="button" data-do="cancel" data-id="'+k.id+'">Cancel</button>' : '') + '</div>';
+    });
+    h += '</div>';
+  }
   if(b.cancelled && b.cancelled.length){
     h += '<details class="more"><summary>Cancelled ('+b.cancelled.length+')</summary><ul class="list">' + b.cancelled.map(function(k){
       return '<li>'+esc(seatWords(k.seats))+' at '+esc((k.stopId ? k.stopId + " " : "") + k.stop)+(k.phone ? ', '+esc(phoneWords(k.phone)) : '')+
@@ -1850,6 +1862,7 @@ function paintBookings(key){
 
 function bookingById(id){
   var b = BOOK.data; if(!b) return null;
+  for(var g=0;g<(b.gone||[]).length;g++) if(b.gone[g].id === id) return b.gone[g];
   for(var i=0;i<b.routes.length;i++) for(var j=0;j<b.routes[i].stops.length;j++){
     var s = b.routes[i].stops[j];
     for(var k=0;k<s.bookings.length;k++) if(s.bookings[k].id === id) return s.bookings[k];

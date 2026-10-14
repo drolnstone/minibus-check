@@ -1,42 +1,32 @@
 MINIBUS
 =======
-  pages v1.117.0 · server w2.60.0 · sheet v1.118.0
+  pages v1.118.0 · server w2.61.0 · sheet v1.119.0
 
-Asim, 14 Oct: every driver reminder says when the vehicle check is and
-when the bus departs. Check time is the Bus Stops tab's departure less 20
-minutes, 30 for a coordinator (North 10:02: check 09:42, a coordinator
-09:32).
+Asim, 14 Oct: "Do all" (the Subtle loose ends thread).
 
-1. Duty emails (a week ahead, the Friday, a cover):
-     Vehicle check: 09:42
-     Depart church: 10:02
-   The calendar entry starts at the check and its title gives both times.
+1. Bookings follow the timetable. For the Sundays still open for booking,
+   once the Bus Stops tab has stood still for 10 minutes:
+     - a booking at a stop number that has gone moves to the one stop with
+       the same name, route and all;
+     - a booking whose stop time changed takes the new time, and the
+       passenger's phones get one alert:  New time at Dewsbury Road ·
+       Sun 18 Oct: 10:49.  Not sent 21:00 to 08:00; it goes after 08:00.
+   Nothing changes once Sunday's bookings close at 09:30.
 
-2. Sunday morning push: "You are driving today · North. Vehicle check
-   09:42. Depart 10:02."
+2. Coordinator app, Bookings: a card "Not on the timetable" lists any seat
+   at a stop with no namesake on the tab, with its number and Cancel.
 
-3. On the day, to the rostered driver only:
-     09:42  Time for the vehicle check · North. Depart 10:02.
-     09:52  Vehicle check not started · North. Depart 10:02.
-   Neither goes once a check for that driver or bus is in, or has
-   started: the driver app tells the server when Start the check is
-   tapped, and a phone with a check open says so when it is woken.
-   10:02 "Time to set off" as before.
-
-4. Driver app, hub: a card for whoever is on the rota for the coming
-   Sunday: "Sunday 18 Oct · North / Check 09:42 · Depart 10:02". On the
-   day from 07:31: Vehicle check due, not started, in progress, done ✓.
-
-5. Vehicle check, coordinators: Full is first and already chosen;
-   Pre-drive beside it. Other drivers unchanged.
+3. Sunday from 07:40 to 09:30: if "Your bus today" has not gone out, or the
+   live server has stopped answering, the sheet emails every address in
+   COORDINATOR_EMAIL, once:  07:30 message not sent.
 
 Pages, Worker and Code.gs.
 
 
 YOU ARE ON              GOING TO
-  Pages   v1.116.0        v1.117.0
-  Worker  w2.59.0         w2.60.0
-  Code.gs v1.117.0        v1.118.0
+  Pages   v1.117.0        v1.118.0
+  Worker  w2.60.0         w2.61.0
+  Code.gs v1.118.0        v1.119.0   (v1.118.0 is in this one too)
 
 
 IN THIS ORDER
@@ -49,7 +39,7 @@ IN THIS ORDER
 AFTER IT
 --------
 
-A. The foot of all three apps reads  app v1.117.0 · server w2.60.0 · sheet
-   v1.118.0 .
-B. Driver app hub: the card with your next Sunday's check and departure.
-C. Sheet menu, the sample duty email: the two times under the date.
+A. The foot of all three apps reads  app v1.118.0 · server w2.61.0 · sheet
+   v1.119.0 .
+B. Coordinator app, Bookings, Sun 18 Oct: no "Not on the timetable" card,
+   unless a seat is stranded.

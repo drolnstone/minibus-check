@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.60.0";
+const SCRIPT_VERSION = "w2.61.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -4543,12 +4543,23 @@ async function handleDrain(env, body) {
                 requests: requests, coord: coord,
                 checks: checks, auths: auths, decisions: decisions, cacheAgeMin: age,
                 clockAgoSec: clockAgoSec, poke: poke, pinSalt: !!pinSaltOf(env),
+                /* The Sunday whose 07:30 message last went, and whether that
+                   message is switched off, for the sheet's watch on it. */
+                morning: await morningSeen(env),
                 /* Where it knocks, so the sheet can say whether that is its own
                    address. A web app URL is not a secret: it is in config.js. */
                 knockTo: await sheetUrlKept(env),
                 /* Whether the sheet's own password is set here, so the sheet
                    can say which side is missing it. */
                 sheetTokenSet: !!sheetTokenOf(env) });
+}
+
+async function morningSeen(env) {
+  try {
+    const m = await cacheGet(env, "morning_done");
+    return { key: String((m && m.key) || ""), off: !(await passengerRules(env)).morningMessage,
+             rehearsal: !!(await rehearsalOn(env)) };
+  } catch (e) { return null; }
 }
 
 async function sheetUrlKept(env) {
@@ -4673,10 +4684,118 @@ async function clockAlive(env) {
   } catch (e) { return false; }
 }
 
+/* BOOKINGS KEPT IN STEP WITH THE TIMETABLE, from w2.61.0 (Asim, 14 Oct 2026).
+
+   A booking keeps the stop number and the time it was made with. When the
+   Bus Stops tab changed on 12 Oct, a booking at a renumbered stop pointed at
+   a stop that no longer existed (the driver never saw it, and no morning
+   message went), and one whose time moved measured "late" from the old time,
+   so every ETA after it was out by the difference.
+
+   For the Sundays still open for booking, every sweep:
+     - a booking whose stop number has gone moves to the one stop with the
+       same name, route and all;
+     - a booking whose stop time has changed takes the new time, and the
+       passenger's phones are told the new time once.
+   A booking with no stop of the same name is left alone; the coordinator
+   app lists it (coordBookings, gone).
+
+   Only on a timetable that has stood still for TIMETABLE_SETTLE_MS, so a
+   reorder done row by row on a phone is not acted on halfway. The new time
+   is not sent in quiet hours; it waits for the morning, still unsent. */
+const TIMETABLE_SETTLE_MS = 10 * 60000;
+const HHMM = /^\d{1,2}:\d{2}$/;
+
+async function fitBookingsToStops(env) {
+  const stops = pickupsAndArrivals(await getStops(env)).filter((s) => !s.arrival);
+  if (!stops.length) return 0;
+
+  const sig = stops.map((s) => [s.id, s.route, s.time, s.stop].join("|")).join("~");
+  const seen = await cacheGet(env, "stops_seen");
+  if (!seen || seen.sig !== sig) {
+    await cachePut(env, "stops_seen", { sig: sig, since: Date.now() }).run();
+    return 0;
+  }
+  if (Date.now() - (Number(seen.since) || 0) < TIMETABLE_SETTLE_MS) return 0;
+  if (!(await ensureBookSched(env))) return 0;
+  if (await rehearsalOn(env)) return 0;
+
+  const quiet = quietNow(await passengerRules(env));
+  const thisSunday = sundayKeyOf(new Date());
+  let n = 0;
+  for (const key of [thisSunday, keyAddWeeks(thisSunday, 1)]) {
+    if (bookingsClosed(key)) continue;
+    const q = await env.DB.prepare(
+      "SELECT id, route, stop_id, stop, seats, device, pid, sched, status FROM bookings " +
+      "WHERE sunday=? AND lower(status) NOT IN ('cancelled','rehearsal')").bind(key).all();
+    for (const b of (q.results || [])) {
+      let stop = stops.find((s) => s.id === b.stop_id) || null;
+      let moved = false;
+      if (!stop) {
+        const same = stops.filter((s) => sameStopName(s.stop, b.stop));
+        if (same.length !== 1) continue;
+        stop = same[0];
+        moved = true;
+      }
+      const retime = !!(b.sched && HHMM.test(String(stop.time || "")) && b.sched !== stop.time);
+      if (!moved && !retime) continue;
+      if (retime && quiet) continue;
+
+      /* Guarded on what was read, so two sweeps at once change it once and
+         tell the passenger once. */
+      const r = await env.DB.prepare(
+        "UPDATE bookings SET route=?, stop_id=?, stop=?, sched=?, synced=0 " +
+        "WHERE id=? AND stop_id=? AND sched=?")
+        .bind(stop.route, stop.id, stop.stop, retime ? stop.time : String(b.sched || ""),
+              Number(b.id), b.stop_id, String(b.sched || "")).run();
+      if (!(r && r.meta && r.meta.changes)) continue;
+      n++;
+      if (retime && Number(b.seats) > 0) {
+        try { await tellNewTime(env, b, stop, key); } catch (e) {}
+      }
+    }
+  }
+  return n;
+}
+
+/* One message, into each of the passenger's phones, as the coordinator's
+   Send a message reaches them. */
+async function tellNewTime(env, b, stop, key) {
+  const msg = coordAlertOf({ id: "time-" + b.id + "-" + stop.time, kind: "message",
+                             title: "New time at " + stop.stop,
+                             body: shortDay(key) + ": " + stop.time + "." });
+  if (!msg) return 0;
+  const subs = [], had = {};
+  if (b.device) for (const s of await subsWhere(env, "role='passenger' AND ref=?", [b.device])) {
+    if (!had[s.id]) { had[s.id] = 1; subs.push(s); }
+  }
+  if (b.pid) for (const s of await subsWhere(env, "role='passenger' AND pid=?", [b.pid])) {
+    if (!had[s.id]) { had[s.id] = 1; subs.push(s); }
+  }
+  if (!subs.length) return 0;
+  const keys = await vapidKeys(env);
+  const m = Object.assign({}, msg, { url: "./" });
+  let phones = 0;
+  for (const sub of subs) {
+    const box = ((await cacheGet(env, coordBoxKey(sub.endpoint))) || [])
+      .filter((x) => x && Date.now() - (Number(x.at) || 0) < COORD_ALERT_MAX_AGE_MS);
+    box.push(m);
+    while (box.length > COORD_BOX_MAX) box.shift();
+    await cachePut(env, coordBoxKey(sub.endpoint), box).run();
+    if (await pushOne(env, sub, keys)) phones++;
+  }
+  if (phones) {
+    try { await sentNote(env, { g: "time|" + key, title: "New stop times, " + shortDay(key), who: [], phones: phones }); }
+    catch (e) {}
+  }
+  return phones;
+}
+
 /* Every timed message, in the order that matters: a route called off first,
    so nobody is told his bus comes at ten past ten before he is told it is not
    coming. Each one fenced, so one fault costs only itself. */
 async function sweeps(env) {
+  try { await fitBookingsToStops(env); } catch (e) {}
   try { await wakeCancelled(env); } catch (e) {}
   try { await wakeDrivers(env); } catch (e) {}
   try { await closeFinishedRuns(env); } catch (e) {}
@@ -5519,6 +5638,9 @@ async function wakeMorning(env) {
   if (words.length) {
     await trail(env, { once: "p|morn|" + key, title: "Your bus today", body: words.join(" ") });
   }
+  /* Done for this Sunday, for the sheet's watch on it (morningWatch in
+     Code.gs, from w2.61.0): the sheet emails if this is missing by 07:40. */
+  try { await cachePut(env, "morning_done", { key: key, at: Date.now(), phones: n }).run(); } catch (e) {}
   return n;
 }
 
@@ -9715,6 +9837,14 @@ async function coordBookings(env, me, sundayIn) {
     out.routes.push({ route: rt, off: routeCancelled(rotaRow, rt), bus: seats,
                       ended: !!(run && run.ended), started: !!(run && run.started), stops: list });
   }
+  /* Seats at a stop no longer on the timetable, from w2.61.0: on no route
+     above, so listed on their own (fitBookingsToStops moves the ones it can). */
+  const onTable = {};
+  for (const s of stops) if (!s.arrival) onTable[s.id] = 1;
+  out.gone = rows.filter((b) => {
+    const st = String(b.status || "").toLowerCase();
+    return st !== "cancelled" && st !== "rehearsal" && !onTable[b.stop_id];
+  }).map(one);
   out.cancelled = rows.filter((b) => String(b.status || "").toLowerCase() === "cancelled")
     .sort((a, b) => (Number(b.received) || 0) - (Number(a.received) || 0)).slice(0, 30).map(one);
   return out;
