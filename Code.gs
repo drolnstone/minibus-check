@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.119.0";
+var SCRIPT_VERSION = "v1.120.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -5455,6 +5455,8 @@ function webAppTail(u) {
 }
 
 function liveSync() {
+  /* A new version's Set up first, so what it adds is there for the rest. */
+  try { setUpIfNew(); } catch (err) {}
   try {
     var props = PropertiesService.getScriptProperties();
     var now = String(props.getProperty("rotaVersion") || "1");
@@ -7010,10 +7012,60 @@ function checkDriversTab() {
 
 /* ------------------------------------------------------------------------ */
 
+/* SET UP BY ITSELF, from v1.120.0 (Asim, 14 Oct 2026: "if its auto, let it
+   be auto indeed and not semiauto").
+
+   A merge puts new Code.gs live without anybody opening the sheet, so nobody
+   is there to run Set up / refresh rota. The five-minute clock runs it
+   instead, once for each new SCRIPT_VERSION, and before anything else in that
+   tick, so a new column or scheduled job is in place before the push to the
+   live server. It is the same work as the menu item without the dialog.
+
+   Guarded by a stamp rather than the script lock, because the steps inside
+   take that lock themselves. A run that dies part way is tried again on the
+   next tick, three times at most, so a step that always fails cannot run Set
+   up every five minutes for ever; the health check names it. */
+var SETUP_TRIES = 3;
+
+function setUpIfNew() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty("setUpFor") === SCRIPT_VERSION) return false;
+  var started = Number(props.getProperty("setUpRunning") || 0);
+  if (started && Date.now() - started < 6 * 60000) return false;
+  var tries = String(props.getProperty("setUpTries") || "").split(" ");
+  var n = tries[0] === SCRIPT_VERSION ? Number(tries[1]) || 0 : 0;
+  if (n >= SETUP_TRIES) return false;
+  props.setProperty("setUpTries", SCRIPT_VERSION + " " + (n + 1));
+  props.setProperty("setUpRunning", String(Date.now()));
+  try {
+    setUpQuiet(SpreadsheetApp.getActiveSpreadsheet());
+    props.setProperty("setUpFor", SCRIPT_VERSION);
+    props.setProperty("setUpAt", new Date().toISOString());
+    return true;
+  } finally {
+    props.deleteProperty("setUpRunning");
+  }
+}
+
 function setUpEverything() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var dropSkips = setUpQuiet(ss);
+  try {
+    var props = PropertiesService.getScriptProperties();
+    props.setProperty("setUpFor", SCRIPT_VERSION);
+    props.setProperty("setUpAt", new Date().toISOString());
+  } catch (err) {}
+  var n = ss.getSheetByName(ROTA_SHEET).getLastRow() - 1;
+  var tz = timeZoneWarning();
+  var dh = driversHeaderWarning(ss);
+  setUpReport(ss, dropSkips, n, tz, dh);
+}
+
+/* Everything Set up does, with nothing on screen, so the clock can run it.
+   Returns the steps that were skipped. */
+function setUpQuiet(ss) {
   structReset();
   PRETTY_SKIPS = [];
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
   /* Each tab on its own. One of them refusing a dropdown — which is all a
      Table ever does — used to end the whole run where it stood, so the rota
      fill, the scheduled emails and the sheet protection underneath never
@@ -7099,9 +7151,10 @@ function setUpEverything() {
   try { installMissingCheckAlert(); } catch (err) { /* same */ }
   try { installLiveSync(); } catch (err) { /* same. The menu can send by hand. */ }
   try { installLivePush(); } catch (err) { /* same. The five minute sync still pushes. */ }
-  var n = ss.getSheetByName(ROTA_SHEET).getLastRow() - 1;
-  var tz = timeZoneWarning();
-  var dh = driversHeaderWarning(ss);
+  return dropSkips;
+}
+
+function setUpReport(ss, dropSkips, n, tz, dh) {
 
   /* Said in a dialog rather than a toast. A toast is gone in six seconds and
      this one needs reading, because the fix is on the sheet and not in here. */
@@ -12917,6 +12970,18 @@ function healthReport() {
      this is not the version just pasted, nothing else in this report is
      about the code that was meant to be running. */
   good.push("Script is " + SCRIPT_VERSION + ".");
+  try {
+    var suProps = PropertiesService.getScriptProperties();
+    var suTries = String(suProps.getProperty("setUpTries") || "").split(" ");
+    if (suProps.getProperty("setUpFor") === SCRIPT_VERSION) {
+      good.push("Set up has run for " + SCRIPT_VERSION + ".");
+    } else if (suTries[0] === SCRIPT_VERSION && Number(suTries[1]) >= SETUP_TRIES) {
+      bad.push("Set up did not finish by itself for " + SCRIPT_VERSION +
+               ". Run Minibus \u203a Set up / refresh rota.");
+    } else {
+      todo.push("Set up for " + SCRIPT_VERSION + " runs by itself within five minutes.");
+    }
+  } catch (err) {}
 
   /* The other two, so this report and the line under the app's first screen
      say the same thing and a deploy can be checked from either end.
