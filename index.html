@@ -1689,7 +1689,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.119.0";
+var APP_VERSION = "v1.120.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2761,14 +2761,35 @@ function pushAppMark(endpoint){
    opens first from the Home Screen (no page before it), so a page reached
    by a button inside the other app knows it is a guest there. Shared with
    the coordinator page. Blank in a browser tab. */
-var HOME_KEY = "fleet.home.v1";
+/* From v1.120.0 (Asim, 15 Oct: still from both apps) the first button
+   ever tapped across settles it, whatever was kept before: in the driver
+   app the first is Coordinator, in the coordinator app it is Driver app or
+   Vehicle check. A page iOS reopened where it was left can claim wrongly;
+   that first tap cannot. FIRSTVIA_KEY is "coord" or "driver", where it went. */
+var HOME_KEY = "fleet.home.v1", FIRSTVIA_KEY = "fleet.firstvia.v1";
+var HOME_FRESH = !document.referrer;
 function homeApp(){
   var h = "";
   try{
-    h = localStorage.getItem(HOME_KEY) || "";
-    if(!h && standalone() && !document.referrer){ h = "driver"; localStorage.setItem(HOME_KEY, h); }
+    var via = localStorage.getItem(FIRSTVIA_KEY) || "";
+    h = via === "coord" ? "driver" : via === "driver" ? "coord" : (localStorage.getItem(HOME_KEY) || "");
+    if(!h && standalone() && HOME_FRESH) h = "driver";
+    if(h && h !== localStorage.getItem(HOME_KEY)) localStorage.setItem(HOME_KEY, h);
   }catch(e){}
   return h;
+}
+function firstVia(to){
+  try{ if(standalone() && !localStorage.getItem(FIRSTVIA_KEY)) localStorage.setItem(FIRSTVIA_KEY, to); }catch(e){}
+}
+/* Said again each time the app comes back into view (the visibilitychange
+   handler), so a phone only ever switched to, never reopened, still puts
+   its mark right. */
+function pushAppAgain(){
+  if(!PUSH_ABLE) return;
+  try{
+    navigator.serviceWorker.ready.then(function(reg){ return reg.pushManager.getSubscription(); })
+      .then(function(sub){ if(sub) pushAppSay(sub.endpoint); }, function(){});
+  }catch(e){}
 }
 function pushAppSay(endpoint){
   if(!endpoint) return;
@@ -7235,6 +7256,7 @@ function rotaCountsStart(){
 
 document.addEventListener("visibilitychange",function(){
   if(document.hidden){ rotaCountsStop(); dwHubStop(); dutyStop(); return; }
+  safely(pushAppAgain);
   /* The watched stop's card on the hub, from v1.113.0, and his duty card. */
   if(st.screen==="hub"){ dwHubStart(); dutyStart(); }
 
@@ -9454,6 +9476,7 @@ $("toRota").addEventListener("click",rotaOpen);
    checked here, or not keyed at all, and only the name goes, so the page
    asks. Opened any other way, it always asks. */
 $("toCoord").addEventListener("click",function(){
+  firstVia("coord");
   try{ localStorage.setItem("coord.name.v1", st.driver.trim()); }catch(e){}
   try{
     if(st.pinOk && st.pinState === "ok" && /^\d{4,8}$/.test(String(st.pin||"")))

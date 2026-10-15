@@ -126,5 +126,38 @@ export default async function (root) {
     a.eq(JSON.stringify(pushedTo()), JSON.stringify([EP("crd")]));
   });
 
+  /* From w2.63.0 (Asim, 15 Oct: "NH56 FWP: Service overdue" from both apps
+     after #94). One sure report puts the person's other phones right. */
+  s.test("the coordinator app's own report alone ends the double", async (a) => {
+    const { db, env } = await fresh();
+    for (const ep of ["drv", "crd"]) {
+      await sub(env, EP(ep), "Bro Arthur", "driver");
+      await sub(env, EP(ep), "Bro Arthur", "coord");
+    }
+    await sub(env, EP("kenneth"), "Pst Kenneth", "coord");
+    const out = await J(await post(env, { action: "pushapp", endpoint: EP("crd"), app: "coord", sure: true }));
+    a.eq(out.app, "coord", "the answer says the mark");
+    a.eq(appOf(db, EP("crd")), "coord");
+    a.eq(appOf(db, EP("drv")), "driver", "the driver app's phone is the driver app's again");
+    a.eq(appOf(db, EP("kenneth")), "coord", "nobody else's phone is touched");
+    G.reset();
+    await J(await post(env, { action: "coordAlert", alert }));
+    a.eq(JSON.stringify(pushedTo()), JSON.stringify([EP("crd"), EP("kenneth")].sort()));
+  });
+
+  s.test("the driver app's own report alone ends it too", async (a) => {
+    const { db, env } = await fresh();
+    for (const ep of ["drv", "crd"]) {
+      await sub(env, EP(ep), "Bro Arthur", "driver");
+      await sub(env, EP(ep), "Bro Arthur", "coord");
+    }
+    await J(await post(env, { action: "pushapp", endpoint: EP("drv"), app: "driver", sure: true }));
+    a.eq(appOf(db, EP("drv")), "driver");
+    a.eq(appOf(db, EP("crd")), "coord");
+    G.reset();
+    await J(await post(env, { action: "coordAlert", alert }));
+    a.eq(JSON.stringify(pushedTo()), JSON.stringify([EP("crd")]));
+  });
+
   return s;
 }

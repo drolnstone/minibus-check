@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.119.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.120.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -711,7 +711,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.119.0";
+var PAGE_VERSION = "v1.120.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -3686,6 +3686,11 @@ function diagnosis(){
       : me.hasPin ? picked + " has a PIN." : picked + " has NO PIN: no phone number on the Drivers tab.");
     li("This visit", pin ? (HOW === "carried" ? "Opened from the driver app, with the PIN keyed there." : "PIN keyed here.")
       : HOW === "idle" ? "Locked after " + SET.idleMinutes + " minutes untouched." : "Not open yet.");
+    li("Alerts on this phone", MARK_SEEN === "coord" ? "Coordinator app only."
+      : MARK_SEEN === "both" ? "One sign-up for both apps."
+      : MARK_SEEN === "driver" ? "Driver app's sign-up; coordinator alerts go here only with no coordinator app."
+      : MARK_SEEN === "guest" ? "Opened inside the driver app."
+      : "Not known yet.");
     li("Lock and refresh", "Locks after " + SET.idleMinutes + " minutes untouched. An open screen asks again every " +
        SET.refreshSeconds + " seconds.");
     if(D){
@@ -3891,15 +3896,45 @@ function bellPaint(name){
 /* From v1.119.0, which Home Screen app this is (the driver app keeps the
    same key): in its own, "coord" outright; opened by the driver app's
    Coordinator button, nothing, since the endpoint is the driver app's. */
-var HOME_KEY = "fleet.home.v1";
+/* From v1.120.0 the first button ever tapped across settles it (the driver
+   app says why): Driver app or Vehicle check first means this is the
+   coordinator app's own. */
+var HOME_KEY = "fleet.home.v1", FIRSTVIA_KEY = "fleet.firstvia.v1";
+var HOME_FRESH = !document.referrer;
 function homeApp(){
   var h = "";
   try{
-    h = localStorage.getItem(HOME_KEY) || "";
-    if(!h && standalone() && !document.referrer){ h = "coord"; localStorage.setItem(HOME_KEY, h); }
+    var via = localStorage.getItem(FIRSTVIA_KEY) || "";
+    h = via === "coord" ? "driver" : via === "driver" ? "coord" : (localStorage.getItem(HOME_KEY) || "");
+    if(!h && standalone() && HOME_FRESH) h = "coord";
+    if(h && h !== localStorage.getItem(HOME_KEY)) localStorage.setItem(HOME_KEY, h);
   }catch(e){}
   return h;
 }
+document.addEventListener("click", function(e){
+  var a = e.target && e.target.closest ? e.target.closest('a[href="../"]') : null;
+  if(!a) return;
+  try{ if(standalone() && !localStorage.getItem(FIRSTVIA_KEY)) localStorage.setItem(FIRSTVIA_KEY, "driver"); }catch(x){}
+}, true);
+/* From v1.120.0: said as the app opens and each time it comes back into
+   view, signed in or not, so the mark is put right without a PIN. The
+   server's answer is kept for This page. */
+var MARK_SEEN = "";
+function markSay(){
+  if(!pushAble() || !navigator.serviceWorker.getRegistration || !LIVE) return;
+  navigator.serviceWorker.getRegistration("../").then(function(r){
+    return r && r.pushManager ? r.pushManager.getSubscription() : null;
+  }).then(function(sub){
+    if(!sub || Notification.permission !== "granted") return;
+    var app = pushAppOf(sub.endpoint);
+    if(!app) { MARK_SEEN = "guest"; return; }
+    return post({ action: "pushapp", endpoint: sub.endpoint, app: app, sure: homeApp() === "coord" }).then(function(out){
+      if(out && out.ok && out.app) MARK_SEEN = out.app;
+    });
+  }).then(null, function(){});
+}
+document.addEventListener("visibilitychange", function(){ if(!document.hidden) markSay(); });
+setTimeout(markSay, 0);
 function pushAppOf(endpoint){
   var home = homeApp();
   if(home === "coord") return "coord";
@@ -3918,8 +3953,7 @@ function bellLook(){
     return r && r.pushManager ? r.pushManager.getSubscription() : null;
   }).then(function(sub){
     BELL.on = !!sub && Notification.permission === "granted";
-    if(BELL.on && pushAppOf(sub.endpoint))
-      post({ action: "pushapp", endpoint: sub.endpoint, app: pushAppOf(sub.endpoint), sure: homeApp() === "coord" }).then(null, function(){});
+    if(BELL.on) markSay();
     bellPaint();
     alertAskMaybe();
   }, function(){});
