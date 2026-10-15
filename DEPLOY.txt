@@ -1,27 +1,33 @@
 MINIBUS
 =======
-  sheet v1.120.0 (pages v1.119.0 and server w2.62.0 unchanged)
+  pages v1.120.0 · server w2.63.0 · sheet v1.120.0 (unchanged)
 
-Asim, 14 Oct: "if its auto, let it be auto indeed and not semiauto".
+Asim, 15 Oct: "I thought this was fixed. Double notifications."
+("NH56 FWP: Service overdue" at 08:04 came from the Driver app and the
+Coordinator app.)
 
-Set up / refresh rota runs by itself. Within five minutes of a new Code.gs
-going live, the sheet's five-minute clock runs Set up once for that version,
-the same work as the menu item without the dialog. Nobody needs to open
-the sheet after a merge.
-
-If it fails three times, Minibus > Have a look > Is everything working?
-says so in red. Otherwise it reads "Set up has run for v1.120.0."
+1. One app putting its own mark right now puts right the same person's
+   other app too. Opening either app is enough.
+2. The coordinator app puts its mark right as it opens and each time it
+   comes back into view, without a PIN. The driver app also does it each
+   time it comes back into view, not only when it opens.
+3. The first button tapped across (Coordinator in the driver app, Driver
+   app or Vehicle check in the coordinator app) settles which app is
+   which for good.
+4. Coordinator app, This page: "Alerts on this phone" says which app the
+   coordinator alerts go to.
 
 
 IN THIS ORDER
 -------------
 
-1. Merge the pull request. Code.gs goes live by itself.
+1. Merge the pull request. Pages and Worker go live together.
+2. Open the Coordinator app from its icon, close it, and open it again.
 
 
 AFTER IT
 --------
 
-A. The foot of the apps reads  sheet v1.120.0 .
-B. After five minutes, Is everything working? reads
-   "Set up has run for v1.120.0."
+A. The foot of the apps reads  app v1.120.0 · server w2.63.0 · sheet
+   v1.120.0 .
+B. Coordinator app, This page, Alerts on this phone: Coordinator app only.

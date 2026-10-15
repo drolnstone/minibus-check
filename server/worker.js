@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.62.0";
+const SCRIPT_VERSION = "w2.63.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5161,17 +5161,34 @@ function pushAppMerge(was, said) {
 async function notePushApp(env, endpoint, said, sure) {
   if (!(await ensurePushApp(env))) return;
   const row = await env.DB.prepare("SELECT app FROM push_subs WHERE endpoint=?").bind(endpoint).first();
-  if (!row) return;
+  if (!row) return "";
   const next = sure && PUSH_APPS.indexOf(said) !== -1 ? said : pushAppMerge(row.app, said);
   if (next !== String(row.app || "")) {
     await env.DB.prepare("UPDATE push_subs SET app=? WHERE endpoint=?").bind(next, endpoint).run();
   }
+  /* From w2.63.0 (Asim, 15 Oct: "NH56 FWP: Service overdue" still came from
+     both apps). An app sure of its own install also puts right the same
+     person's other phones that still claim it: the coordinator app's own
+     makes any other 'coord' or 'both' the driver app's, and the driver
+     app's own makes any other 'both' the coordinator app's. One report from
+     either Home Screen app is enough; it no longer needs both. */
+  if (sure && (said === "coord" || said === "driver")) {
+    const who = await env.DB.prepare("SELECT driver FROM push_subs WHERE endpoint=?").bind(endpoint).first();
+    const name = String((who && who.driver) || "").trim();
+    if (!name) return next;
+    const other = said === "coord" ? "driver" : "coord";
+    const claims = said === "coord" ? "('coord','both')" : "('both')";
+    await env.DB.prepare("UPDATE push_subs SET app=? WHERE " + DRIVER_SUB_MATCH +
+      " AND endpoint <> ? AND app IN " + claims).bind(other, name, endpoint).run();
+  }
+  return next;
 }
 async function handlePushApp(env, body) {
   const endpoint = String((body && body.endpoint) || "").trim();
   if (!endpoint) return json({ ok: false, error: "no endpoint" });
-  try { await notePushApp(env, endpoint, String((body && body.app) || ""), body.sure === true); } catch (e) {}
-  return json({ ok: true });
+  let app = "";
+  try { app = await notePushApp(env, endpoint, String((body && body.app) || ""), body.sure === true); } catch (e) {}
+  return json({ ok: true, app: app || "" });
 }
 
 async function subsWhere(env, where, binds) {
