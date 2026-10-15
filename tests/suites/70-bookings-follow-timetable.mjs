@@ -80,7 +80,9 @@ export default async function (root) {
 
     a.eq(await sweep(env, WED("12:20")), 0, "a second sweep changed something again");
     a.eq((await box(env, "B")).length, 1, "a second sweep told the passenger twice");
-    const what = await W.pushWhat(env, EP("B"));
+    /* On the test's own clock: on the real one a Thursday evening read the
+       booking reminder first (fixed 15 Oct). */
+    const what = await atTime(WED("12:21"), () => W.pushWhat(env, EP("B")));
     a.eq(what.title, "New time at Dewsbury Rd");
   });
 
