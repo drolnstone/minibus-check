@@ -1,33 +1,28 @@
 MINIBUS
 =======
-  pages v1.120.0 · server w2.63.0 · sheet v1.120.0 (unchanged)
+  pages v1.121.0 · server w2.63.0 · sheet v1.120.0 (both unchanged)
 
-Asim, 15 Oct: "I thought this was fixed. Double notifications."
-("NH56 FWP: Service overdue" at 08:04 came from the Driver app and the
-Coordinator app.)
+Asim, 15 Oct: "The driver app still shows a notice of one notification."
 
-1. One app putting its own mark right now puts right the same person's
-   other app too. Opening either app is enough.
-2. The coordinator app puts its mark right as it opens and each time it
-   comes back into view, without a PIN. The driver app also does it each
-   time it comes back into view, not only when it opens.
-3. The first button tapped across (Coordinator in the driver app, Driver
-   app or Vehicle check in the coordinator app) settles which app is
-   which for good.
-4. Coordinator app, This page: "Alerts on this phone" says which app the
-   coordinator alerts go to.
+The number on an app's icon is the count of unread coordinator alerts. The
+08:04 service alert reached the Driver app before #96 and left a 1 there,
+and only the coordinator page ever cleared it. Now the Driver app clears
+it as it opens, once the server says coordinator alerts no longer come to
+it.
+
+Pages only.
 
 
 IN THIS ORDER
 -------------
 
-1. Merge the pull request. Pages and Worker go live together.
-2. Open the Coordinator app from its icon, close it, and open it again.
+1. Merge the pull request.
 
 
 AFTER IT
 --------
 
-A. The foot of the apps reads  app v1.120.0 · server w2.63.0 · sheet
+A. The foot of the apps reads  app v1.121.0 · server w2.63.0 · sheet
    v1.120.0 .
-B. Coordinator app, This page, Alerts on this phone: Coordinator app only.
+B. Open the Driver app from its icon (twice, the first loads the new
+   version). The 1 goes.
