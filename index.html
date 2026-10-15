@@ -1689,7 +1689,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.120.0";
+var APP_VERSION = "v1.121.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2801,6 +2801,12 @@ function pushAppSay(endpoint){
     callFetch(LIVE_ENDPOINT, {
       method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
       body: JSON.stringify({ action:"pushapp", endpoint:endpoint, app:"driver", sure: home === "driver" })
+    }).then(function(r){ return r.json(); }).then(function(out){
+      /* From v1.121.0 (Asim, 15 Oct: a 1 stayed on this app's icon). The
+         number on the icon is only ever the coordinator alerts' unread
+         count, put there by sw.js. Once the server says coordinator alerts
+         no longer come to this app, a number left from before goes. */
+      if(out && out.ok && out.app === "driver" && navigator.clearAppBadge) navigator.clearAppBadge().catch(function(){});
     }).catch(function(){});
   }catch(e){}
 }
