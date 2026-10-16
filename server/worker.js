@@ -3611,8 +3611,12 @@ async function handleSync(env, body) {
         if (look.failed) continue;
         const at = look.known ? look.at : (Number(c.at) || 0);
         const day = look.known ? londonKey(new Date(at)) : String(c.day || "");
-        /* Sent straight to the sheet with no key (w2.64.0): it cannot lift a stop. */
-        if (c.confirmed === false && c.state !== "stopped" && (await stopHolds(env, c.reg, day))) continue;
+        /* Not confirmed by its driver's key (w2.64.0): it cannot lift a
+           stop. The sheet says so from v1.121.0; this server's own record
+           says so for any check it took itself, whatever the sheet says. */
+        if (c.state === "stopped") await dropUnconfirmedOk(env, c.reg, day, c.id);
+        else if ((c.confirmed === false || (look.known && (await checkUnconfirmed(env, c.id)))) &&
+                 (await stopHolds(env, c.reg, day))) continue;
         await writeCheckToday(env, c.reg, day, c.state, at, c.driver || "", c.id);
       } catch (e) {}
     }
@@ -4089,6 +4093,32 @@ async function stopHolds(env, reg, day) {
   } catch (e) { return false; }
 }
 
+/* Whether this server filed a check as not confirmed, and so, with
+   allClear, an all-clear nobody confirmed. The sheet's copy of a check comes
+   back on every sync, and a sheet from before v1.121.0 does not say. */
+async function checkUnconfirmed(env, id, allClear) {
+  if (!id) return false;
+  try {
+    const r = await env.DB.prepare("SELECT body, level FROM checks_in WHERE check_id=?").bind(String(id)).first();
+    if (!r || JSON.parse(r.body).pinState !== "unconfirmed") return false;
+    return !allClear || String(r.level || "ok") !== "stop";
+  } catch (e) { return false; }
+}
+
+/* A stop beats an all-clear nobody confirmed, whichever was made first. A
+   stop held on a phone with no signal arrives late; an unconfirmed "ok" that
+   got here before it must not keep the bus on the road. Never the stop's own
+   row: a coordinator's correction of that stands. */
+async function dropUnconfirmedOk(env, reg, day, id) {
+  try {
+    const r = await env.DB.prepare("SELECT day, state, check_id FROM checks_today WHERE reg=?").bind(reg).first();
+    if (!r || r.day !== day || r.state !== "ok" || !r.check_id || r.check_id === String(id || "")) return;
+    if (!(await checkUnconfirmed(env, r.check_id, true))) return;
+    await env.DB.prepare("DELETE FROM checks_today WHERE reg=? AND check_id=? AND state='ok'")
+      .bind(reg, r.check_id).run();
+  } catch (e) {}
+}
+
 async function writeCheckToday(env, reg, day, state, at, driver, id) {
   try {
     await env.DB.prepare(CHECKS_TODAY_UPSERT)
@@ -4360,7 +4390,10 @@ async function handleCheck(env, check, sure) {
   if (reg && londonKey(new Date(at)) >= day) {
     const state = level === "stop" ? "stopped" : "ok";
     if (sure === false && state === "ok" && (await stopHolds(env, reg, day))) stopHeld = true;
-    else await writeCheckToday(env, reg, day, state, at, who, check.id);
+    else {
+      if (state === "stopped") await dropUnconfirmedOk(env, reg, day, check.id);
+      await writeCheckToday(env, reg, day, state, at, who, check.id);
+    }
   }
 
   return json({ ok: true, written: 1, unconfirmed: sure === false || undefined, stopHeld: stopHeld || undefined });
@@ -7232,10 +7265,13 @@ function pinTriesKey(name) {
 
    Behind it, one ceiling per name for everybody together: PIN_NAME_CEILING
    wrong PINs within an hour locks the name for the rest of that hour. That is
-   what stops somebody trying ten thousand PINs from ten thousand addresses,
-   and it takes many addresses at once to reach. */
+   what stops somebody trying ten thousand PINs from ten thousand addresses.
+   One caller also has PIN_CALLER_HOUR wrong PINs an hour at most, so one
+   stranger on his own can never reach the ceiling: it takes four addresses
+   at once. */
 const PIN_NAME_CEILING = 30;
 const PIN_NAME_WINDOW_MS = 3600 * 1000;
+const PIN_CALLER_HOUR = 9;
 
 function pinFloodKey(name) {
   return "pinflood:" + String(name || "").trim().toLowerCase();
@@ -7265,12 +7301,19 @@ async function callerOf(request, env) {
    the name's ceiling. { locked } or { ok } or { ok:false, left }. */
 async function pinGate(env, name, check) {
   const tkey = pinCallerKey(env, name);
+  const hkey = env && env.CALLER ? tkey + "|hour" : "";
   const fkey = pinFloodKey(name);
   const now = Date.now();
   const held = await cacheGet(env, tkey);
   let tries = 0;
   if (held && now - (Number(held.at) || 0) < PIN_LOCK_MINUTES * 60000) tries = Number(held.n) || 0;
   if (tries >= PIN_MAX_TRIES) return { locked: true, minutes: PIN_LOCK_MINUTES };
+  const hour = hkey ? await cacheGet(env, hkey) : null;
+  let hn = 0;
+  if (hour && now - (Number(hour.at) || 0) < PIN_NAME_WINDOW_MS) hn = Number(hour.n) || 0;
+  if (hn >= PIN_CALLER_HOUR) {
+    return { locked: true, minutes: Math.max(1, Math.ceil((PIN_NAME_WINDOW_MS - (now - Number(hour.at))) / 60000)) };
+  }
   const flood = await cacheGet(env, fkey);
   let fn = 0;
   if (flood && now - (Number(flood.at) || 0) < PIN_NAME_WINDOW_MS) fn = Number(flood.n) || 0;
@@ -7278,10 +7321,11 @@ async function pinGate(env, name, check) {
     return { locked: true, minutes: Math.max(1, Math.ceil((PIN_NAME_WINDOW_MS - (now - Number(flood.at))) / 60000)) };
   }
   if (await check()) {
-    if (held) { try { await env.DB.prepare("DELETE FROM settings WHERE k=?").bind(tkey).run(); } catch (e) {} }
+    if (held || hour) { try { await env.DB.prepare("DELETE FROM settings WHERE k=? OR k=?").bind(tkey, hkey || tkey).run(); } catch (e) {} }
     return { ok: true };
   }
   try { await cachePut(env, tkey, { n: tries + 1, at: now }).run(); } catch (e) {}
+  if (hkey) { try { await cachePut(env, hkey, { n: hn + 1, at: hn ? Number(hour.at) : now }).run(); } catch (e) {} }
   try { await cachePut(env, fkey, { n: fn + 1, at: fn ? Number(flood.at) : now }).run(); } catch (e) {}
   return { ok: false, left: Math.max(0, PIN_MAX_TRIES - tries - 1) };
 }
@@ -7299,7 +7343,8 @@ async function pinGate(env, name, check) {
    fingerprint of it is kept here. Ten phones a name at most; the oldest
    goes first.
 
-   A name nobody is asked a PIN for needs no key, as it needs no PIN. */
+   A name nobody is asked a PIN for needs no key, as it needs no PIN, but
+   its walkaround cannot lift a stop: there is nothing to prove it is his. */
 const DRIVER_KEYS_MAX = 10;
 let keysReady = false;
 async function ensureKeys(env) {
@@ -7340,18 +7385,44 @@ function keysDropStmt(env, name) {
   return env.DB.prepare("DELETE FROM driver_keys WHERE name=?").bind(pinKey(name));
 }
 
-/* Whether a write in this name is his: true when nobody is asked a PIN for
-   the name, or the key is his. A name the drivers table has never heard of
-   is not confirmed. */
-async function driverConfirmed(env, name, key) {
+/* How sure this server is that a write in this name is his:
+     "key"   his key came with it;
+     "open"  an active driver nobody is asked a PIN for, so there is no key
+             to have;
+     "old"   no key at all, from a phone still on the app from before keys
+             (it sends no key field), in the KEYLESS_DAYS after this server
+             first ran. That phone cannot be told what is wrong, and refusing
+             it would hold every stop tap of a run;
+     ""      none of these, and a name the drivers table has never heard of.
+   Runs, stop taps, rota requests and MOT runs need any of the first three.
+   A walkaround needs "key" to lift a stop. */
+const KEYLESS_DAYS = 14;
+async function keylessStill(env) {
+  try {
+    let since = await cacheGet(env, "keys_since");
+    if (!since || !Number(since.at)) {
+      await env.DB.prepare("INSERT OR IGNORE INTO settings (k, v) VALUES (?, ?)")
+        .bind("keys_since", JSON.stringify({ at: Date.now() })).run();
+      since = await cacheGet(env, "keys_since");
+    }
+    return !!since && Date.now() - Number(since.at) < KEYLESS_DAYS * 86400000;
+  } catch (e) { return false; }
+}
+async function driverSureOf(env, name, key, keyless) {
   const who = String(name || "").trim();
-  if (!who) return false;
+  if (!who) return "";
   const row = await env.DB.prepare(
-    "SELECT name, pin_hash FROM drivers WHERE lower(name)=lower(?)").bind(who).first();
-  if (!row) return false;
+    "SELECT name, pin_hash, active FROM drivers WHERE lower(name)=lower(?)").bind(who).first();
+  if (!row) return "";
+  if (key && (await keyNameOf(env, key)) === pinKey(row.name)) return "key";
+  if (Number(row.active) === 0) return "";
   const own = await ownPinOf(env, row.name);
-  if (!pinWantedOf(row, own)) return true;
-  return (await keyNameOf(env, key)) === pinKey(row.name);
+  if (!pinWantedOf(row, own)) return "open";
+  if (keyless && (await keylessStill(env))) return "old";
+  return "";
+}
+function keylessOf(body) {
+  return !(body && Object.prototype.hasOwnProperty.call(body, "key"));
 }
 
 async function handlePin(env, body) {
@@ -11013,15 +11084,17 @@ export default {
            them and sends them again once it has the key. */
         if (action === "trip") {
           const t = body.trip || {};
-          if (!(await driverConfirmed(env, t.driver, body.key))) return json({ ok: false, error: "pin" });
+          if (!(await driverSureOf(env, t.driver, body.key, keylessOf(body)))) return json({ ok: false, error: "pin" });
           return knock(await handleTrip(env, t), "trip");
         }
         /* A driver asking for a swap or cover. Same body as Apps Script's
            rotaRequest, so the app sends one thing to either server. */
         if (action === "rotaRequest") {
           const r = body.request || {};
-          if (!(await driverConfirmed(env, r.driver, body.key))) return json({ ok: false, error: "pin" });
-          delete r.unconfirmed;
+          const sure = await driverSureOf(env, r.driver, body.key, keylessOf(body));
+          if (!sure) return json({ ok: false, error: "pin" });
+          /* From an older phone with no key: the coordinator is told. */
+          if (sure === "old") r.reason = "Not confirmed by PIN. " + String(r.reason || "");
           return knock(await handleRotaRequest(env, r), "request");
         }
         /* The walkaround. Token checked like every other write. */
@@ -11029,7 +11102,7 @@ export default {
            the key it is filed as not confirmed, and it cannot lift a stop. */
         if (action === "check") {
           const c = body.check || {};
-          const sure = await driverConfirmed(env, c.driver, body.key);
+          const sure = (await driverSureOf(env, c.driver, body.key, false)) === "key";
           if (!sure) c.pinState = "unconfirmed";
           return knock(await handleCheck(env, c, sure), "check");
         }
@@ -11045,7 +11118,7 @@ export default {
         /* An MOT run starting or ending, from w2.36.0. */
         if (action === "motrun") {
           const m = (body && body.motrun) || {};
-          if (!(await driverConfirmed(env, m.who, body.key))) return json({ ok: false, error: "pin" });
+          if (!(await driverSureOf(env, m.who, body.key, keylessOf(body)))) return json({ ok: false, error: "pin" });
           return await handleMotrun(env, body);
         }
         /* The Outcome column, edited on the spreadsheet. Token checked. */
@@ -11072,7 +11145,8 @@ export default {
         /* Whether a write a phone sent straight to the sheet carried its
            driver's key, from w2.64.0. Only this server holds the keys. */
         if (action === "keyok") {
-          return json({ ok: true, confirmed: await driverConfirmed(env, body.driver, body.key) });
+          const sure = await driverSureOf(env, body.driver, body.key, body.keyless === true);
+          return json({ ok: true, confirmed: sure === "key", allowed: !!sure, sure: sure });
         }
         /* The coordinator's app. Token checked, and then his PIN on every
            call. A change knocks, like a booking, once he has his answer. */

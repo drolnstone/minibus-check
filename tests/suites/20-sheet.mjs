@@ -703,7 +703,7 @@ export default function (root) {
     }
   });
 
-  s.test("a cover assigned more than a week out is not emailed, and that is the rule", (a) => {
+  s.test("a cover assigned more than a week out is not emailed, and that is the rule", async (a) => {
     /* NOT A BUG, and worth a test so it stops looking like one. Duty
        reminders start seven days before a Sunday, so past that nobody has
        been told who is driving and there is nothing to correct — the ordinary
@@ -712,9 +712,13 @@ export default function (root) {
        The answer to the REQUEST is a different thing and has no horizon: the
        driver who asked is waiting for it however far off the Sunday is. This
        pair of tests is the line between the two. */
-    const L2 = deciding({ sunday: FAR, replacement: "Bro Trevor" });
-    const mail = byHand(L2, "Approved", "Bro Trevor");
-    a.eq(to(mail, "trevor@b.c").length, 0, "ten weeks out, nobody has been told anything yet");
+    /* On the Saturday before SUN, so FAR is still nine weeks off whenever
+       this runs: the build that puts the server live runs these too. */
+    await atTime("2026-10-03T12:00:00+01:00", () => {
+      const L2 = deciding({ sunday: FAR, replacement: "Bro Trevor" });
+      const mail = byHand(L2, "Approved", "Bro Trevor");
+      a.eq(to(mail, "trevor@b.c").length, 0, "ten weeks out, nobody has been told anything yet");
+    });
   });
 
   s.test("a rejection does not tell the other driver in a swap", async (a) => {
@@ -750,13 +754,15 @@ export default function (root) {
     });
   });
 
-  s.test("an answer is sent however far away the Sunday is", (a) => {
+  s.test("an answer is sent however far away the Sunday is", async (a) => {
     /* notifyDutyChange stays quiet past seven days because nobody has been
        told who is driving yet, so there is nothing to correct. This is the
        answer to a question he asked, and he is waiting for it whether the
        Sunday is next week or in ten. */
-    const his = to(byHand(deciding({ sunday: FAR }), "Rejected"), "ade@b.c");
-    a.eq(his.length, 1, "ten weeks out is still an answer he is owed");
+    await atTime("2026-10-03T12:00:00+01:00", () => {
+      const his = to(byHand(deciding({ sunday: FAR }), "Rejected"), "ade@b.c");
+      a.eq(his.length, 1, "ten weeks out is still an answer he is owed");
+    });
   });
 
   s.test("nothing is sent about a Sunday that has been and gone", (a) => {

@@ -19,6 +19,7 @@ import { Suite } from "../lib/t.mjs";
 import { makeDB } from "../lib/d1.mjs";
 import { loadWorker, env as makeEnv, installGlobals } from "../lib/worker.mjs";
 import { seedSunday } from "../lib/seed.mjs";
+import { atTime } from "../lib/clock.mjs";
 
 const REG = "YS70 PWE";
 
@@ -280,7 +281,9 @@ export default async function (root) {
   s.test("each name carries what a coordinator needs to judge it", async (a) => {
     /* A bare list of names is the thing I objected to, and the objection was
        right about the list. Already-driving and last-drove are what turn it
-       into a decision. */
+       into a decision. On a fixed day: in the week before 25 October the
+       Sunday before this one would be 18 October itself. */
+    await atTime("2026-10-14T12:00:00+01:00", async () => {
     const { env } = await fresh();
     await withRota(env, "2026-10-18", { south: "Pst Kenneth" });
     await withRota(env, W.keyAddWeeks(W.runSunday(), -1), { north: "Bro Arthur" });
@@ -292,6 +295,7 @@ export default async function (root) {
     a.eq(by["Pst Kenneth"].busy, "South", "he is already out that morning and it does not say so");
     a.eq(by["Bro Arthur"].busy, "", "he is free and it says otherwise");
     a.eq(by["Bro Arthur"].last, W.keyAddWeeks(W.runSunday(), -1), "when he last drove");
+    });
   });
 
   s.test("A SWAP IS OFFERED NOBODY, because it names its own partner", async (a) => {

@@ -2430,12 +2430,17 @@ function doPost(e) {
        confirmed, and cannot lift a stop. */
     if (String(body.action || "") === "rotaRequest") {
       var rqd = body.request || {};
-      if (!keyConfirmed(rqd.driver, body.key)) rqd.reason = "Not confirmed by PIN. " + String(rqd.reason || "");
+      var rqv = keyVerdict(rqd.driver, body);
+      if (!rqv.allowed) return reply({ ok: false, error: "pin" });
+      if (rqv.sure === "old" || rqv.sure === "unknown") rqd.reason = "Not confirmed by PIN. " + String(rqd.reason || "");
       return handleRotaRequest(rqd);
     }
 
+    /* A run sent here is one sent with no live server in config.js, which is
+       how the apps are put back on the sheet alone. Taken unless the live
+       server says the name on it is not his; taken when it cannot be asked. */
     if (String(body.action || "") === "trip") {
-      if (WORKER_URL) return reply({ ok: false, error: "runs go to the live server" });
+      if (!keyVerdict((body.trip || {}).driver, body).allowed) return reply({ ok: false, error: "pin" });
       return handleTrip(body.trip);
     }
 
@@ -2495,7 +2500,7 @@ function doPost(e) {
       return reply({ ok: true, ran: !!back });
     }
 
-    if (body.check && !keyConfirmed(body.check.driver, body.key)) body.check.pinState = "unconfirmed";
+    if (body.check && !keyVerdict(body.check.driver, body).confirmed) body.check.pinState = "unconfirmed";
     return handleCheck(body.check);
 
   } catch (err) {
@@ -2798,16 +2803,22 @@ function applyOutcomeDropdown(sh, row) {
  * Written down beats blocked, and this is where it is written down.
  */
 /* Whether a phone's own post here carried its driver's key. Only the live
-   server holds the keys, so it is asked; no live server configured, nothing
-   to ask and nothing changes; no answer, not confirmed. From v1.121.0. */
-function keyConfirmed(driver, key) {
-  if (!WORKER_URL) return true;
+   server holds the keys, so it is asked, and it says the same as it would
+   to the phone (w2.64.0, keyok): confirmed, his key came with it, which a
+   walkaround needs to lift a stop; allowed, a run, stop tap or request may
+   be taken. No live server configured, nothing to ask and nothing changes.
+   No answer: allowed, since a run must not be lost while the live server is
+   down, but not confirmed. From v1.121.0. */
+function keyVerdict(driver, body) {
+  if (!WORKER_URL) return { confirmed: true, allowed: true, sure: "key" };
+  var keyless = !(body && Object.prototype.hasOwnProperty.call(body, "key"));
   try {
-    var out = workerCall("keyok", { driver: String(driver || ""), key: String(key || "") });
+    var out = workerCall("keyok", { driver: String(driver || ""), key: String((body && body.key) || ""), keyless: keyless });
     /* A live server older than w2.64.0 cannot judge: as before, then. */
-    if (out && out.error === "unknown action") return true;
-    return !!(out && out.ok === true && out.confirmed === true);
-  } catch (err) { return false; }
+    if (out && out.error === "unknown action") return { confirmed: true, allowed: true, sure: "key" };
+    if (!out || out.ok !== true) return { confirmed: false, allowed: true, sure: "unknown" };
+    return { confirmed: out.confirmed === true, allowed: out.allowed !== false, sure: String(out.sure || "") };
+  } catch (err) { return { confirmed: false, allowed: true, sure: "unknown" }; }
 }
 
 /* From v1.121.0: sent without the driver's key. It cannot lift a stop. */
@@ -5830,13 +5841,15 @@ function liveTripEdits(e, sh) {
     var t = tripCellHHMM(shown[i][0]);
     if (t) edits.push({ id: id, time: t });
   });
-  if (!edits.length) return;
-  var out = workerCall("sheettrips", { edits: edits });
-  var refused = ((out && out.results) || []).filter(function (x) { return !x.applied && x.why !== "same"; });
-  if (!out || out.ok !== true || refused.length) {
-    try { PropertiesService.getScriptProperties()
-            .setProperty("liveError", "trip time edit: " + String((out && out.error) ||
-              (refused.length ? refused.map(function (x) { return x.why; }).join(", ") : "no answer"))); } catch (err) {}
+  /* Fifty at a time, which is what the live server takes in one go. */
+  for (var k = 0; k < edits.length; k += 50) {
+    var out = workerCall("sheettrips", { edits: edits.slice(k, k + 50) });
+    var refused = ((out && out.results) || []).filter(function (x) { return !x.applied && x.why !== "same"; });
+    if (!out || out.ok !== true || refused.length) {
+      try { PropertiesService.getScriptProperties()
+              .setProperty("liveError", "trip time edit: " + String((out && out.error) ||
+                (refused.length ? refused.map(function (x) { return x.why; }).join(", ") : "no answer"))); } catch (err) {}
+    }
   }
 }
 

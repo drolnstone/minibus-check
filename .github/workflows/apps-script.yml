@@ -14,8 +14,10 @@
 #
 # From 16 Oct 2026 (audit): only after the Tests workflow has passed on that
 # commit of main. A merge whose checks fail no longer reaches the sheet. It
-# runs after every passing push to main and does nothing when the live
-# Code.gs is already the same, so a pages-only merge makes no new version.
+# runs after every passing push to main, and only for the newest commit on
+# main, so a slow run for an older merge cannot put older code back. It does
+# nothing when the web app already runs this Code.gs version, so a pages-only
+# merge makes no new version, and a deploy that failed is tried again.
 name: Apps Script
 
 on:
@@ -48,8 +50,22 @@ jobs:
           # The commit the tests passed on, not whatever main is now.
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
+      - name: Still the newest commit on main?
+        id: newest
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          TIP=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "${{ github.event_name }}" = "workflow_run" ] && [ -n "$TIP" ] && [ "$TIP" != "$SHA" ]; then
+            echo "::notice::main has moved on to ${TIP::7}; its own run deploys it."
+            echo "go=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=yes" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Secrets present?
         id: ready
+        if: steps.newest.outputs.go == 'yes'
         run: |
           if [ -z "$CLASPRC_JSON" ] || [ -z "$SCRIPT_ID" ]; then
             echo "::notice::CLASPRC_JSON or SCRIPT_ID is not set, so Code.gs was not deployed. Paste it by hand."
@@ -65,6 +81,8 @@ jobs:
 
       - name: Push Code.gs and update the web app
         if: steps.ready.outputs.go == 'yes'
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           set -euo pipefail
           npm install -g @google/clasp@2.4.2
@@ -77,15 +95,21 @@ jobs:
           [ -f appsscript.json ] || { echo "::error::Pull brought no appsscript.json"; exit 1; }
           [ -f Code.gs ] || { echo "::error::The live project has no file called Code"; exit 1; }
 
-          if cmp -s ../Code.gs Code.gs; then
-            echo "::notice::Code.gs is already live; nothing to deploy"
+          # Judged by what the web app runs, not by the saved code: a push
+          # that went through with a deploy that failed is deployed now.
+          VERSION=$(grep -o 'SCRIPT_VERSION = "[^"]*"' ../Code.gs | cut -d'"' -f2)
+          LIVE=$(clasp deployments 2>&1 | grep "$DEPLOYMENT_ID" || true)
+          echo "Web app now: $LIVE"
+          if cmp -s ../Code.gs Code.gs && echo "$LIVE" | grep -q "sheet $VERSION,"; then
+            echo "::notice::Code.gs $VERSION is already live; nothing to deploy"
             exit 0
           fi
-          cp ../Code.gs Code.gs
-          clasp push --force
+          if ! cmp -s ../Code.gs Code.gs; then
+            cp ../Code.gs Code.gs
+            clasp push --force
+          fi
 
-          VERSION=$(grep -o 'SCRIPT_VERSION = "[^"]*"' Code.gs | cut -d'"' -f2)
-          OUT=$(clasp deploy -i "$DEPLOYMENT_ID" -d "sheet $VERSION, ${GITHUB_SHA::7}" 2>&1)
+          OUT=$(clasp deploy -i "$DEPLOYMENT_ID" -d "sheet $VERSION, ${SHA::7}" 2>&1)
           echo "$OUT"
           echo "$OUT" | grep -q "$DEPLOYMENT_ID" || { echo "::error::The web app was not updated"; exit 1; }
           echo "::notice::Code.gs $VERSION is live"

@@ -1553,10 +1553,17 @@ function driverKeyDrop(name){
   try{ store.set(KKEY, JSON.stringify(m)); }catch(e){}
 }
 /* The key for a name, fetched first with the PIN keyed on this phone when
-   there is none yet. done("") when it cannot be had now. */
+   there is none yet. done("") when it cannot be had now.
+
+   Only a PIN the gate has let in, and each one once: this is called on a
+   timer, and a wrong PIN sent again every few seconds would lock his own
+   phone. A wrong answer shuts the gate so the right one can be keyed. */
+var keyAsked="";
 function keyEnsure(name, done){
   var k=driverKey(name);
-  if(k || !LIVE_ENDPOINT || !navigator.onLine || !st.pin || !sameName(st.driver, name)){ done(k); return; }
+  var tried=st.driver+":"+st.pin;
+  if(k || !LIVE_ENDPOINT || !navigator.onLine || !sameName(st.driver, name) || !st.pinOk || !st.pinState ||
+     !/^\d{4,8}$/.test(String(st.pin||"")) || keyAsked===tried){ done(k); return; }
   callFetch(LIVE_ENDPOINT, {
     method:"POST", redirect:"follow",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
@@ -1566,10 +1573,35 @@ function keyEnsure(name, done){
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out=JSON.parse(t);
-      if(out && out.valid===true && out.key) driverKeySave(name, out.key);
+      if(out && out.ok===true){
+        keyAsked=tried;
+        if(st.driver+":"+st.pin===tried){
+          if(out.valid===true && out.key) driverKeySave(name, out.key);
+          else if(out.valid===false && !out.locked && !out.elsewhere){
+            try{ var m=pinSeen(); delete m[st.driver]; store.set(PKEY, JSON.stringify(m)); }catch(e){}
+            pinTakeBack("That PIN is not right.");
+          }
+        }
+      }
       done(driverKey(name));
     })
     .catch(function(){ done(""); });
+}
+/* The live server would not take something in this name: no key for it on
+   this phone, or his PIN has changed. The gate shuts so the right PIN can
+   be keyed; the key that comes with it sends what is waiting. */
+function pinTakeBack(msg){
+  driverKeyDrop(st.driver);
+  st.pinOk=false; st.pinState=""; pinLast=""; pinLastOk=false;
+  if(msg) pinSay(msg, true);
+  paintFoot();
+}
+/* A key has just come: anything held for want of one goes now. */
+function keyArrived(name, key){
+  if(!key) return;
+  driverKeySave(name, key);
+  tripPinTold=false;
+  setTimeout(tripFlush, 0);
 }
 /* Every call to Apps Script, with a limit on how long it may hang.
 
@@ -2510,7 +2542,7 @@ function motRunSend(reg, step){
     toast(out && out.error==="used" ? reg+" has had its MOT run today."
         : out && out.error==="started" ? out.driver+" has started this MOT run."
         : out && out.error==="no mot run" ? "No MOT run is authorised for "+reg+" today."
-        : out && out.error==="pin" ? (driverKeyDrop(st.driver), "Key your PIN again, then try.")
+        : out && out.error==="pin" ? (pinTakeBack(""), pinGateFocus(), "Key your PIN again, then try.")
         : "The live server did not take that.", true);
   }).catch(function(){ motRunDone(); toast("No answer.", true); });
   });
@@ -3814,7 +3846,9 @@ function groupOpenDefects(raw){
    fixed passes it; No, still there reports it again and the bus stops. */
 function openCritFor(reg, name){
   var key=String(name||"").trim().toLowerCase();
-  var list=groupOpenDefects(OPEN_DEFECTS[reg]);
+  /* Not one the coordinator is watching (Monitoring): he has let the bus
+     run with it, and "No, still there" would stop it every week. */
+  var list=groupOpenDefects((OPEN_DEFECTS[reg]||[]).filter(function(d){ return d.status!=="Monitoring"; }));
   for(var i=0;i<list.length;i++){
     var d=list[i];
     if(d.crit && d.kind!=="Advisory" && String(d.item||"").trim().toLowerCase()===key) return d;
@@ -5637,8 +5671,10 @@ function tripFlush(){
   });
   if(!batch.length) return;
 
-  tripBusy=true;
   var tripWho = head.driver || st.driver || "";
+  /* No key, and the gate is waiting for his PIN: nothing to send with yet. */
+  if(!driverKey(tripWho) && sameName(tripWho, st.driver) && pinGateNeeded()){ tripPaintWait(); return; }
+  tripBusy=true;
   keyEnsure(tripWho, function(key){
   callFetch(LIVE_ENDPOINT,{
     method:"POST", redirect:"follow",
@@ -5665,11 +5701,12 @@ function tripFlush(){
       return;
     }
     /* No key for this name yet (v1.123.0). Kept, all of it, and sent once
-       his PIN has been keyed with signal. */
+       his PIN has been keyed with signal: the gate shuts to ask for it. */
     if(out && out.error==="pin"){
-      driverKeyDrop(tripWho);
       tripPaintWait();
-      if(!tripPinTold){ tripPinTold=true; toast("Key your PIN to send your stops.", true); }
+      if(!sameName(tripWho, st.driver)){ driverKeyDrop(tripWho); return; }
+      pinTakeBack("");
+      if(!tripPinTold){ tripPinTold=true; pinGateFocus(); toast("Key your PIN to send your stops.", true); }
       return;
     }
     if(!out || out.ok!==true) throw new Error(out&&out.error?out.error:"not sent");
@@ -10127,9 +10164,11 @@ function pinConfirmQuietly(tried){
         paintFoot();
         return;
       }
+      /* Locked by wrong tries made elsewhere. Not a changed PIN: he stays in. */
+      if(out.locked) return;
       if(out.valid === true){
         pinKeepNote(out);
-        if(out.key) driverKeySave(st.driver, out.key);
+        keyArrived(st.driver, out.key);
         /* Agreed. Refresh this phone's copy so it stays current. */
         if(canHash()) sha256Hex(tried).then(function(h){ pinRemember(st.driver, h); },
                                             function(){});
@@ -10207,7 +10246,7 @@ function pinApply(out, tried, answered){
   answered(st.pinOk);
   if(st.pinOk){
     pinKeepNote(out);
-    if(out.key) driverKeySave(st.driver, out.key);
+    keyArrived(st.driver, out.key);
     pinSay("");
     /* Kept so this phone works without signal next time. Made here, never
        received and never sent. */
@@ -10281,7 +10320,7 @@ function pinPost(action, body, then, wrong){
       /* A change drops every phone's key for him; this one gets the new. */
       if(out.key){
         if(action === "pinchange") driverKeyDrop(st.driver);
-        driverKeySave(st.driver, out.key);
+        keyArrived(st.driver, out.key);
       }
       then(out);
     })

@@ -2,17 +2,18 @@
    sheet v1.121.0.
 
    - Wrong PINs are counted per phone, so a stranger cannot lock a driver
-     out; a ceiling per name stops guessing from many phones.
+     out; a ceiling per name stops guessing from many phones, and one phone
+     alone cannot reach it.
    - A right PIN gets the driver app a key. Runs, rota requests and MOT runs
-     need it; a walkaround without it is filed as not confirmed and cannot
-     lift a stop.
+     need it (a phone still on the old app is taken for a fortnight); a
+     walkaround without it is filed as not confirmed and cannot lift a stop.
    - A time typed on the Trip Events tab reaches the live server.
    - Passengers' numbers go six weeks after their Sunday, on both sides.
    - The knock cross shows only while something is waiting.
    - A monthly summary that did not go out is a cross on the health check.
    - An open critical defect asks "Has this been fixed?" on its check item.
 
-   Everything here fails on w2.63.0 / v1.120.0 / v1.122.0. */
+   Written for w2.64.0 / v1.121.0 / v1.123.0. */
 
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
@@ -94,10 +95,113 @@ export default async function (root) {
     await atTime(SUN, async () => {
       const { env } = await fresh();
       const rq = { id: "rq1", date: "2026-10-25", driver: "Bro Trevor", type: "Request cover", reason: "Away" };
-      a.eq((await J(await post(env, { action: "rotaRequest", request: rq }))).error, "pin");
+      a.eq((await J(await post(env, { action: "rotaRequest", request: rq, key: "" }))).error, "pin");
       const key = (await signIn(env, TREVOR)).key;
       a.ok((await J(await post(env, { action: "rotaRequest", request: rq, key }))).ok);
-      a.eq((await J(await post(env, { action: "motrun", motrun: { reg: REG, step: "start", who: "Bro Trevor" } }))).error, "pin");
+      a.eq((await J(await post(env, { action: "motrun", key: "", motrun: { reg: REG, step: "start", who: "Bro Trevor" } }))).error, "pin");
+    });
+  });
+
+  s.test("a phone still on the old app is taken for a fortnight, then refused", async (a) => {
+    const { db, env } = await fresh();
+    const old = (id) => post(env, { action: "trip", trip: { trip: id, route: "North", driver: "Bro Trevor",
+      sunday: KEY, events: [{ event: "start", at: Date.now() - 60000 }] } });
+    await atTime(SUN, async () => {
+      a.ok((await J(await old("t1"))).ok, "an old phone's run was refused on the first Sunday");
+      const rq = { id: "rq2", date: "2026-10-25", driver: "Bro Trevor", type: "Request cover", reason: "Away" };
+      a.ok((await J(await post(env, { action: "rotaRequest", request: rq }))).ok, "an old phone's request was refused");
+      a.has(JSON.parse(db._one("SELECT body FROM requests").body).reason, "Not confirmed by PIN.");
+      a.eq((await J(await post(env, { action: "keyok", driver: "Bro Trevor", key: "", keyless: true }))).allowed, true);
+    });
+    await atTime("2026-11-01T09:30:00+00:00", async () => {
+      a.eq((await J(await old("t2"))).error, "pin", "an old phone was still taken after two weeks");
+      a.eq((await J(await post(env, { action: "keyok", driver: "Bro Trevor", key: "", keyless: true }))).allowed, false);
+    });
+  });
+
+  s.test("a name with no PIN can run, but cannot lift a stop, and an inactive one cannot run", async (a) => {
+    await atTime(SUN, async () => {
+      const { db, env } = await fresh();
+      await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES ('Bro Gone','Driver','North',2,0,'')").run();
+      const run = (who, id) => post(env, { action: "trip", key: "", trip: { trip: id, route: "South", driver: who,
+        sunday: KEY, events: [{ event: "start", at: Date.now() }] } });
+      a.eq((await J(await run("Bro Gone", "t8"))).error, "pin", "an inactive name ran");
+      a.ok((await J(await run("Sis Ama", "t9"))).ok, "a name with no PIN could not run");
+      const key = (await signIn(env, TREVOR)).key;
+      await check(env, "c1", "stop", key);
+      const out = await J(await post(env, { action: "check", key: "", check: { id: "c2", reg: REG, level: "ok", driver: "Sis Ama" } }));
+      a.eq(out.stopHeld, true, "a name with no PIN lifted a stop");
+      a.eq(db._one("SELECT * FROM checks_today WHERE reg=?", REG).state, "stopped");
+    });
+  });
+
+  s.test("the sheet's copy of a held check, saying nothing, does not lift the stop", async (a) => {
+    await atTime(SUN, async () => {
+      const { db, env } = await fresh();
+      const key = (await signIn(env, TREVOR)).key;
+      await check(env, "c1", "stop", key);
+      await check(env, "c2", "ok", "");
+      /* As a sheet from before v1.121.0 sends it: no confirmed at all. */
+      await W.handleSync(env, { checks: [{ reg: REG, day: KEY, state: "ok", at: Date.now(), driver: "Bro Trevor", id: "c2" }] });
+      a.eq(db._one("SELECT * FROM checks_today WHERE reg=?", REG).state, "stopped", "the echo lifted the stop");
+    });
+  });
+
+  s.test("a stop sent late beats an all-clear nobody confirmed", async (a) => {
+    await atTime(SUN, async () => {
+      const { db, env } = await fresh();
+      const key = (await signIn(env, TREVOR)).key;
+      await check(env, "c9", "ok", "");
+      a.eq(db._one("SELECT * FROM checks_today WHERE reg=?", REG).state, "ok");
+      /* Made ten minutes before the fake all-clear, sent after it. */
+      await post(env, { action: "check", key, check: { id: "c1", reg: REG, level: "stop", driver: "Bro Trevor", age: 600000 } });
+      a.eq(db._one("SELECT * FROM checks_today WHERE reg=?", REG).state, "stopped", "the fake all-clear kept the bus out");
+      /* His own confirmed all-clear after that still lets it go. */
+      await check(env, "c3", "ok", key);
+      a.eq(db._one("SELECT * FROM checks_today WHERE reg=?", REG).state, "ok");
+    });
+  });
+
+  s.test("one stranger alone cannot reach the name's ceiling", async (a) => {
+    const { env } = await fresh();
+    const t0 = new Date(SUN).getTime();
+    for (let i = 0; i < 12; i++) {
+      await atTime(new Date(t0 + i * 6 * 60000).toISOString(), async () => {
+        for (let j = 0; j < 3; j++) await signIn(env, "0000", "203.0.113.9");
+      });
+    }
+    await atTime(new Date(t0 + 72 * 60000 - 60000).toISOString(), async () => {
+      const own = await signIn(env, TREVOR, "198.51.100.4");
+      a.eq(own.valid, true, "one address locked the name: " + JSON.stringify(own));
+    });
+  });
+
+  s.test("a coordinator's reset ends every phone's key", async (a) => {
+    await atTime(SUN, async () => {
+      const { env } = await fresh();
+      const key = (await signIn(env, TREVOR)).key;
+      const r = await W.actPinReset(env, {}, { name: "Bro Trevor" });
+      a.ok(r.ok, JSON.stringify(r));
+      await env.DB.batch(r.stmts);
+      a.eq((await J(await trip(env, key))).error, "pin", "a key outlived the reset");
+    });
+  });
+
+  s.test("the sheet asks the live server about a post sent straight to it", async (a) => {
+    await atTime(SUN, () => {
+      const L = sheet({ WORKER_URL: "https://example.invalid", SHEET_TOKEN: "s" });
+      L.gas.setFetchReply({ code: 200, body: JSON.stringify({ ok: true, confirmed: false, allowed: false, sure: "" }) });
+      const out = JSON.parse(call(L, "doPost", { postData: { contents: JSON.stringify({ token: "minibusapp", action: "trip", key: "",
+        trip: { trip: "t1", route: "North", driver: "Bro Trevor", events: [] } }) } }).getContent());
+      a.eq(out.error, "pin", "a run the live server refused was taken");
+      a.eq(JSON.parse(L.gas.fetched[0].opts.payload).keyless, false);
+      L.gas.setFetchReply({ code: 500, body: "down" });
+      const v = call(L, "keyVerdict", "Bro Trevor", { key: "" });
+      a.eq(v.allowed, true, "a run is lost while the live server is down");
+      a.eq(v.confirmed, false);
+      L.gas.setFetchReply({ code: 200, body: JSON.stringify({ ok: true, confirmed: false, allowed: true, sure: "old" }) });
+      a.eq(call(L, "keyVerdict", "Bro Trevor", {}).sure, "old");
+      a.eq(JSON.parse(L.gas.fetched[L.gas.fetched.length - 1].opts.payload).keyless, true);
     });
   });
 
@@ -211,6 +315,9 @@ export default async function (root) {
     a.ok(app.indexOf('"Yes, fixed"') !== -1 && app.indexOf('"No, still there"') !== -1);
     a.ok(/action:"trip", key: key/.test(app), "taps go without the key");
     a.ok(/action: "check", check: sent, key: key/.test(app), "walkarounds go without the key");
+    a.ok(/d\.status!=="Monitoring"/.test(app), "a defect the coordinator is watching is asked about");
+    a.ok(/keyAsked===tried/.test(app), "a refused PIN is sent again on every timer");
+    a.ok(/if\(out\.locked\) return;/.test(app), "a lock reads as a changed PIN");
   });
 
   return s;
