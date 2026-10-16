@@ -1,34 +1,51 @@
 MINIBUS
 =======
-  pages v1.123.0 · server w2.64.0 · sheet v1.121.0
+  pages v1.124.0 · server w2.65.0 · sheet v1.122.0
 
-YOU ARE ON   app v1.122.0 · server w2.63.0 · sheet v1.120.0
-GOING TO     app v1.123.0 · server w2.64.0 · sheet v1.121.0
+YOU ARE ON   app v1.123.0 · server w2.64.0 · sheet v1.121.0
+GOING TO     app v1.124.0 · server w2.65.0 · sheet v1.122.0
 
-Asim, 16 Oct: "Do the already known plus 1 to 7 except 2", from the A to Z
-audit of 15 Oct.
+Asim, 16 Oct: the mileage when the bus is put away after the afternoon run,
+so the next walkaround shows any use during the week. An exact match, a
+column of its own, and only on the phone of the driver who drove the bus
+that morning. He chose "Optional reading" on the card.
 
-1. Wrong PINs are counted per phone. A stranger's three wrong PINs lock his
-   own phone, not the driver's. Thirty wrong in an hour from anywhere still
-   lock the name, so nobody can guess a PIN from many phones, and one phone
-   on its own can never get to thirty.
-3. A right PIN gives the driver app a key. Runs, stop taps, rota requests and
-   MOT runs need it. A walkaround without it is still filed, as "Not
-   confirmed" in the PIN check column, and cannot lift a stop: a coordinator
-   lets that bus out instead. A driver with no phone number has no PIN, so
-   his walkarounds are "Not confirmed" too.
-   A phone still on the old app has its runs and requests taken for two
-   weeks after the update (a request then says "Not confirmed by PIN").
-   After that it needs the new app, which it gets when opened with signal.
-4. A check item with an open critical defect asks "Has this been fixed?":
-   Yes, fixed, or No, still there. Not for one set to Monitoring.
-5. Passengers' phone numbers are blanked six weeks after their Sunday, on
-   the live server and on Bus Bookings and its archive. The row stays.
-6. A monthly or yearly summary that did not go out is a cross on the health
-   check, with the reason.
-7. The server and the sheet go live only after the tests pass.
-Known: a time typed in Happened on Trip Events now reaches the live server.
-Known: the cross about the last knock shows only while something is waiting.
+1. Driver app, on a Sunday: once that morning's run has ended, the first
+   screen has a "Bus parked" box for that bus, on that driver's phone only.
+   With no run in the app that day, it shows from noon to the driver who did
+   the walkaround. It goes at midnight. Keying it needs the driver's PIN, the
+   same as a run. It can be changed until midnight.
+2. With no signal, the reading stays on the phone ("Saved on this phone.
+   Sent when there is signal.") and goes by itself once the app is open with
+   signal, up to a week later, as long as that bus has had no newer
+   walkaround. It is filed with the time it was keyed. A closed iPhone app
+   cannot send, so it goes the next time the app is opened with signal. If
+   it reaches the sheet after the next walkaround, that walkaround's Since
+   parked is worked out again from it.
+3. Notifications, to that morning's driver only, with the coordinators'
+   usual "Sent:" copy:
+   - "Trip ended" when the server ends the run. While the bus has no parked
+     reading it adds: "Record the bus parked mileage when you return from
+     the afternoon run."
+   - At 2pm, "Parked mileage", only if nothing has been keyed yet, naming
+     each bus still owed. Not after 3pm, and not in the half hour after
+     Trip ended.
+   - "Parked mileage received" once the reading is in.
+4. Checks tab: two new columns beside Mileage. "Parked mileage" is filled on
+   the Sunday walkaround's row when the reading comes in, with a note of who
+   keyed it and when. "Since parked" is filled on the next walkaround's row:
+   the miles since the bus was parked. 0 means it has not moved. Anything
+   else, even 1 mile, goes to the coordinators' phones as an alert.
+5. Nothing keyed on the Sunday: "Since parked" says "Not reported" (blank
+   after a weekday walkaround, when none could be keyed). Its note gives the
+   miles since the last walkaround and a usual Sunday's miles for that bus.
+   Only a real big gap, more than one and a half usual Sundays, goes to the
+   coordinators' phones.
+6. Coordinator app, Buses: each bus shows its last walkaround and its parked
+   reading, or "Parked mileage not reported since the last walkaround".
+
+The first Sunday after this goes live only collects parked readings. The
+walkaround the Sunday after is the first one compared with them.
 
 
 IN THIS ORDER
@@ -43,22 +60,20 @@ IN THIS ORDER
 AFTER IT (give it ten minutes)
 --------
 
-A. The foot of the apps reads  app v1.123.0 · server w2.64.0 · sheet
-   v1.121.0 . Open each app from its Home Screen icon twice.
-B. Is everything working? says Set up has run for v1.121.0.
-C. Driver app: key your PIN with signal. Nothing else changes for the
-   drivers: each phone gets its key the first time its driver keys his PIN
-   with signal. If a phone has stops waiting for want of a key, it asks for
-   the PIN and sends them once it is keyed.
-D. On a bus with an open critical defect, its item asks "Has this been
-   fixed?".
-E. Optional: on Trip Events, type a new time in Happened on one of last
-   Sunday's rows. Within a minute the cell's note says "Corrected on the
-   sheet".
+A. The foot of the apps reads  app v1.124.0 · server w2.65.0 · sheet
+   v1.122.0 . Open each app from its Home Screen icon twice.
+B. Is everything working? says Set up has run for v1.122.0.
+C. Checks tab: "Parked mileage" and "Since parked" sit beside Mileage. The
+   rows already there keep their values.
+D. On Sunday, after the morning run ends, that bus's driver gets the Trip
+   ended notification and sees the box. Other drivers do not. Once a
+   reading is keyed, the driver gets "Parked mileage received".
 
-IF THE SERVER STAYS ON w2.63.0
+
+IF THE SERVER STAYS ON w2.64.0
 -----------------------------
 
 Cloudflare, Workers, minibus-api, Deployments: the build log says which
 check failed. The live server stays as it was, and the new pages work with
-it, so Sunday is unaffected. Tell Claude what it says.
+it (the box does not show), so Sunday is unaffected. Tell Claude what it
+says.

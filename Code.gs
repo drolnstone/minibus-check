@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.121.0";
+var SCRIPT_VERSION = "v1.122.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -498,9 +498,13 @@ var STOPS_HEADERS = ["Route", "Stop ID", "Time", "Stop", "Postcode", "Active", "
 /* The four on the end are new in v1.62.0 and go on the END for the reason
    every other late column does: existing rows keep every value where it
    already was, and ensureCols adds the headings on the next write. */
+/* Parked mileage and Since parked, from v1.122.0, go beside Mileage on
+   purpose: they are read with it. ensureCols inserts a missing heading beside
+   its neighbour, and every reader and writer finds a column by its heading,
+   so the rows already on the tab move across with the new columns. */
 var CHECK_HEADERS = [
   "Received", "Check ID", "Date", "Time", "Vehicle", "Registration",
-  "Driver", "Role", "Mileage", "Mileage flag", "Outcome",
+  "Driver", "Role", "Mileage", "Mileage flag", "Parked mileage", "Since parked", "Outcome",
   "Items checked", "Defect count", "Defects", "Renewals due", "Signed",
   "Not applicable", "Check type", "Where checked", "Accuracy (yd)",
   "Distance from base (yd)", "Location note", "Fuel", "To arrange", "PIN check",
@@ -2691,6 +2695,10 @@ function handleCheckLocked(c) {
   kput(kc.role,        safeText(c.role));
   kput(kc.mileage,     c.miles || "");
   kput(kc.mileageFlag, safeText(c.milesFlag));
+  /* From v1.122.0: against the parked reading after this bus's walkaround
+     before. Worked out before this row is on the tab. */
+  var pc = parkedCompare(checks, kc, c);
+  kput(kc.sinceParked, pc.cell);
   kput(kc.outcome,     outcome);
   kput(kc.items,       (c.checked || "") + "/" + (c.total || ""));
   kput(kc.defectCount, (c.defects || []).length);
@@ -2713,6 +2721,9 @@ function handleCheckLocked(c) {
 
   checks.getRange(checks.getLastRow() + 1, 1, 1, kw).setValues([krow]);
   applyOutcomeDropdown(checks, checks.getLastRow());
+  if (pc.note && kc.sinceParked) {
+    try { checks.getRange(checks.getLastRow(), kc.sinceParked).setNote(pc.note); } catch (err) {}
+  }
 
   /* One row per defect AND one per advisory, so nothing a driver wrote down
      is only findable by reading a check row end to end. The Kind column is
@@ -2768,8 +2779,189 @@ function handleCheckLocked(c) {
     tellCoordinatorPhones(checkPhoneAlert(c, outcome, defectText));
     if (COORDINATOR_EMAIL || safetyTo()) notifyCheck(c, outcome, defectText);
   }
+  if (pc.alert) tellCoordinatorPhones(pc.alert);
 
   return reply({ ok: true });
+}
+
+/* ==========================================================================
+   PARKED MILEAGE, from v1.122.0
+   ==========================================================================
+   Asim, 16 Oct 2026: a bus may be lent out during the week without his being
+   told, and a difference in mileage is the only way he would know. "It's
+   not to trap or monitor anybody. It's just to note and having record when
+   things happen."
+
+   The walkaround reads the dashboard before the morning run. A parked
+   reading, keyed in the driver app when the bus is put away after the
+   afternoon return, goes in Parked mileage on that walkaround's row. The
+   next walkaround of that bus is then measured from it, to the mile:
+   Since parked is 0 when the bus has not moved, and any other number when
+   it has, with a note to the coordinators.
+
+   Optional (his choice, 16 Oct). With no parked reading, Since parked says
+   Not reported, his words: "No input validates the optional nature of
+   parked mileage and shouldn't show a big gap... Big gap is when really
+   there is a big gap." The gap is measured from the walkaround before, in
+   the cell's note, and the coordinators are told only when it is more than
+   half as much again as a usual Sunday for that bus. */
+var PARKED_NO_READING = "Not reported";
+/* More than this many usual Sundays since the last walkaround, with no
+   parked reading, is told. */
+var PARKED_USUAL_TIMES = 1.5;
+/* The usual Sunday is the middle of the last eight, and needs three. */
+var PARKED_USUAL_WEEKS = 8;
+var PARKED_USUAL_MIN = 3;
+
+/* When parked readings could first be keyed: the first drain from a live
+   server that carries them (w2.65.0), so a sheet live before its server is
+   not measuring readings nobody could key. A walkaround before then could
+   not have had one, and saying Not reported about it would be noise. 0
+   until then. */
+function parkedFrom(stamp) {
+  var props = PropertiesService.getScriptProperties();
+  var v = Number(props.getProperty("parkedFrom") || 0);
+  if (!v && stamp) { v = Date.now(); try { props.setProperty("parkedFrom", String(v)); } catch (err) {} }
+  return v;
+}
+
+/* This bus's walkarounds on the recent end of the tab, oldest first. */
+function parkedHistory(sh, c, reg) {
+  var want = String(reg || "").trim().toUpperCase();
+  var out = [];
+  if (!sh || !want || sh.getLastRow() < 2) return out;
+  var last = sh.getLastRow();
+  var first = Math.max(2, last - MILEAGE_SCAN_ROWS + 1);
+  sh.getRange(first, 1, last - first + 1, sh.getLastColumn()).getValues().forEach(function (r, i) {
+    if (String(at1(r, c.reg) || "").trim().toUpperCase() !== want) return;
+    var miles = Number(at1(r, c.mileage));
+    if (!miles) return;
+    var t = checkMoment(at1(r, c.received), at1(r, c.date), at1(r, c.time));
+    if (!t) return;
+    var pk = at1(r, c.parked);
+    var parked = (pk === "" || pk === null || isNaN(Number(pk)) || !Number(pk)) ? null : Number(pk);
+    out.push({ t: t, key: dateToKey(new Date(t)), miles: miles, parked: parked, row: first + i,
+               id: String(at1(r, c.id) || ""),
+               date: dayWords(at1(r, c.date)), time: timeWords(at1(r, c.time)) });
+  });
+  out.sort(function (a, b) { return a.t - b.t; });
+  return out;
+}
+
+/* How far this bus goes on a usual Sunday, morning and afternoon, or 0 when
+   there are not enough Sundays to say. Each Sunday counts once, from its
+   first walkaround: to its parked reading when it has one, which is the
+   Sunday alone, or else to the walkaround a week later. The middle of the
+   last few, so one week the bus went further does not move it. */
+function usualSunday(hist) {
+  var days = [];
+  hist.forEach(function (h) {
+    if (new Date(h.t).getDay() !== 0) return;
+    if (days.length && days[days.length - 1].key === h.key) {
+      if (h.parked !== null) days[days.length - 1].parked = h.parked;
+      return;
+    }
+    days.push({ key: h.key, miles: h.miles, parked: h.parked });
+  });
+  var samples = [];
+  days.forEach(function (d, i) {
+    var n = null;
+    if (d.parked !== null) n = d.parked - d.miles;
+    else if (days[i + 1] && days[i + 1].key === dateToKey(addWeeks(keyToDate(d.key), 1))) n = days[i + 1].miles - d.miles;
+    if (n !== null && n >= 0) samples.push(n);
+  });
+  samples = samples.slice(-PARKED_USUAL_WEEKS);
+  if (samples.length < PARKED_USUAL_MIN) return 0;
+  samples.sort(function (a, b) { return a - b; });
+  var m = Math.floor(samples.length / 2);
+  return Math.round(samples.length % 2 ? samples[m] : (samples[m - 1] + samples[m]) / 2);
+}
+
+function milesWords(n) {
+  return String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+/* What this walkaround's reading says against the walkaround before it on
+   the same bus: { cell, note, alert }. cell is the Since parked value: a
+   number of miles, Not reported, or blank when there is nothing to measure
+   from (the first walkaround, a second one the same day, or one before the
+   column existed). */
+function parkedCompare(sh, c, chk) {
+  var none = { cell: "", note: "", alert: null };
+  try {
+    var miles = Number(String(chk.miles || "").replace(/[,\s]/g, ""));
+    if (!miles || !c.parked) return none;
+    var now = Date.now() - (Number(chk.age) > 0 ? Math.min(Number(chk.age), 7 * 86400000) : 0);
+    var hist = parkedHistory(sh, c, chk.reg).filter(function (h) { return h.t < now; });
+    var prev = hist[hist.length - 1];
+    if (!prev || prev.key === dateToKey(new Date(now))) return none;
+    var reg = String(chk.reg || "").trim().toUpperCase();
+    var walk = "Walkaround " + milesWords(miles) + " on " + safeText(chk.date || "") +
+               (chk.time ? " at " + safeText(chk.time) : "") + ".";
+    if (prev.parked !== null) {
+      var d = miles - prev.parked;
+      return { cell: d, note: "", alert: d !== 0 ? parkedAlert("parked|" + chk.id, reg, d, prev, walk) : null };
+    }
+    /* A reading is only ever taken on a Sunday: after a weekday walkaround,
+       a full inspection or an MOT run, none was asked for. */
+    if (new Date(prev.t).getDay() !== 0) return none;
+    var from = parkedFrom();
+    if (!from || prev.t < from) return none;
+    var gap = miles - prev.miles;
+    var usual = usualSunday(hist);
+    var res = { cell: PARKED_NO_READING,
+                note: milesWords(gap) + " since the walkaround on " + prev.date + "." +
+                      (usual ? " A usual Sunday is " + milesWords(usual) + "." : ""),
+                alert: null };
+    if (usual && gap > usual * PARKED_USUAL_TIMES) {
+      res.alert = { id: "parked|" + chk.id, kind: "mileage", reg: reg,
+        title: reg + ": " + milesWords(gap) + " miles since " + prev.date,
+        body: "Parked mileage not reported after that walkaround. A usual Sunday is " + milesWords(usual) +
+              " miles. " + walk };
+    }
+    return res;
+  } catch (err) { return none; }
+}
+
+/* Told to the coordinators: the bus has moved since it was parked, by d. */
+function parkedAlert(id, reg, d, prev, walk) {
+  return { id: id, kind: "mileage", reg: reg,
+    title: reg + ": " + milesWords(Math.abs(d)) + (Math.abs(d) === 1 ? " mile " : " miles ") +
+           (d > 0 ? "since it was parked" : "lower than when it was parked"),
+    body: "Parked " + milesWords(prev.parked) + " after the walkaround on " + prev.date + ". " + walk };
+}
+
+/* A PARKED READING FILED AFTER THE BUS'S NEXT WALKAROUND. The phone keeps
+   one keyed with no signal until it has some, so it can reach the sheet a
+   week late, as the next walkaround is done. That walkaround's Since parked
+   was worked out without it, so it is worked out again from it, and told
+   as it would have been. */
+function parkedLate(sh, c, prow, miles) {
+  if (!sh || !c.sinceParked || !prow || !Number(miles)) return;
+  var hist = parkedHistory(sh, c, sh.getRange(prow, c.reg).getValue());
+  var at = -1;
+  for (var i = 0; i < hist.length; i++) if (hist[i].row === prow) { at = i; break; }
+  var prev = at >= 0 ? hist[at] : null, next = at >= 0 ? hist[at + 1] : null;
+  if (!prev || !next) return;
+  prev.parked = Number(miles);
+  var d = next.miles - prev.parked;
+  var cell = sh.getRange(next.row, c.sinceParked);
+  if (String(cell.getValue()) === String(d)) return;
+  cell.setValue(d);
+  try { cell.setNote(""); } catch (e) {}
+  if (d === 0) return;
+  var reg = String(sh.getRange(prow, c.reg).getValue() || "").trim().toUpperCase();
+  var walk = "Walkaround " + milesWords(next.miles) + " on " + next.date + (next.time ? " at " + next.time : "") + ".";
+  tellCoordinatorPhones(parkedAlert("parked|" + next.id + "|" + prev.parked, reg, d, prev, walk));
+}
+
+/* A parked reading's own words, for the note on its cell. */
+function parkedNote(pk) {
+  var when = new Date(Number(pk.at) || Date.now());
+  var tz = Session.getScriptTimeZone();
+  return "Keyed by " + safeText(pk.driver || "a driver") + " on " +
+         Utilities.formatDate(when, tz, "dd/MM/yyyy") + " at " + Utilities.formatDate(when, tz, "HH:mm") +
+         (pk.confirmed === false ? ". Not confirmed by PIN." : ".");
 }
 
 /* Four words a person may put in the Outcome column, offered as a list so the
@@ -2846,8 +3038,9 @@ function pinWords(c) {
    3: Advisory count, Advisories, Authorised by and Authorised on on Checks,
       and Kind on Defects. Without this bump the first hour after a deploy
       would skip the column check, colsHard would refuse the missing heading,
-      and every walkaround sent in that hour would bounce. */
-var STRUCT_VERSION = "3";
+      and every walkaround sent in that hour would bounce.
+   4: Parked mileage and Since parked on Checks (v1.122.0). */
+var STRUCT_VERSION = "4";
 
 function structKey(tag) { return "struct_" + STRUCT_VERSION + "_" + tag; }
 
@@ -3009,6 +3202,11 @@ function lastMileagePayload() {
                     date: dayWords(at1(r, c.date)),
                     time: timeWords(at1(r, c.time)),
                     driver: String(at1(r, c.driver) || ""), _t: when };
+      /* From v1.122.0: which walkaround, and the parked reading after it. */
+      var id = String(at1(r, c.id) || "").trim();
+      if (id) last[reg].checkId = id;
+      var pk = Number(at1(r, c.parked));
+      if (pk) last[reg].parked = { miles: pk, checkId: id };
     }
   });
 
@@ -5177,6 +5375,43 @@ function drainFromWorker() {
             .setProperty("liveError", "trips: " + String(err && err.message || err)); } catch (e) {}
   }
 
+  /* ---- parked readings, from v1.122.0 ----
+
+     On the row of the walkaround each one follows, found by its Check ID.
+     Filed before the walkarounds, so a walkaround in this same drain is
+     measured from a reading that arrived with it, a week late from a phone
+     that had no signal; then again after them, for a reading whose own
+     walkaround came in this drain too. One whose row is not on the tab yet
+     comes round on the next drain; one still without a row after a
+     fortnight never will, and is let go. */
+  var doneP = [];
+  function parkedPass(first) {
+    try {
+      if (first && Array.isArray(got.parked)) parkedFrom(true);
+      var parks = got.parked || [];
+      if (!parks.length) return;
+      var psh = ss.getSheetByName(CHECKS_SHEET);
+      if (psh) ensureChecksColumns(psh);
+      var pcc = psh ? colsSoft(psh, CHECKS_SHEET) : {};
+      parks.forEach(function (pk) {
+        if (!pk || pk.id === undefined || pk.id === null || doneP.indexOf(pk.id) !== -1) return;
+        var prow = (psh && pcc.parked && pk.checkId) ? checkRowById(psh, pcc, pk.checkId) : 0;
+        if (!prow) {
+          if (!first && Date.now() - (Number(pk.at) || 0) > 14 * 86400000) doneP.push(pk.id);
+          return;
+        }
+        psh.getRange(prow, pcc.parked).setValue(Number(pk.miles) || "");
+        try { psh.getRange(prow, pcc.parked).setNote(parkedNote(pk)); } catch (e) {}
+        pretty("Parked mileage, the walkaround after", function () { parkedLate(psh, pcc, prow, pk.miles); });
+        doneP.push(pk.id);
+      });
+    } catch (err) {
+      try { PropertiesService.getScriptProperties()
+              .setProperty("liveError", "parked: " + String(err && err.message || err)); } catch (e) {}
+    }
+  }
+  parkedPass(true);
+
   /* ---- walkarounds ----
 
      New in v1.62.0. The check is posted to the live server now, so this is
@@ -5251,6 +5486,11 @@ function drainFromWorker() {
     try { PropertiesService.getScriptProperties()
             .setProperty("liveError", "auths: " + String(err && err.message || err)); } catch (e) {}
   }
+
+  /* ---- parked readings, second pass ----
+
+     The ones whose walkaround reached the tab just now, above. */
+  parkedPass(false);
 
   /* ---- rota requests taken on the live server ----
 
@@ -5355,7 +5595,7 @@ function drainFromWorker() {
      rows come round again and match on their Live ID, so the worst case is
      writing the same row twice over itself — never losing one. */
   if (doneB.length || doneT.length || doneK.length || doneA.length || doneD.length || doneR.length ||
-      doneC.length) {
+      doneC.length || doneP.length) {
     SpreadsheetApp.flush();
     /* THE STAMP GOES BACK WITH THE IDS. The live server marks a row done only
        if it has not changed since this drain copied it, which is what keeps a
@@ -5367,7 +5607,7 @@ function drainFromWorker() {
     var stamped = typeof got.claim === "number";
     workerCall("drained", { claim: stamped ? got.claim : undefined,
                             bookings: doneB, trips: doneT, checks: doneK, requests: doneR,
-                            coord: doneC,
+                            coord: doneC, parked: doneP,
                             auths: stamped ? doneA : doneA.map(function (x) { return x.key; }),
                             decisions: doneD });
     try { PropertiesService.getScriptProperties()
@@ -14778,7 +15018,8 @@ FIELDS[BUSES_SHEET] = {
 FIELDS[CHECKS_SHEET] = {
   received: "Received", id: "Check ID", date: "Date", time: "Time",
   vehicle: "Vehicle", reg: "Registration", driver: "Driver", role: "Role",
-  mileage: "Mileage", mileageFlag: "Mileage flag", outcome: "Outcome",
+  mileage: "Mileage", mileageFlag: "Mileage flag",
+  parked: "Parked mileage", sinceParked: "Since parked", outcome: "Outcome",
   items: "Items checked", defectCount: "Defect count", defects: "Defects",
   renewals: "Renewals due", signed: "Signed", na: "Not applicable",
   type: "Check type", where: "Where checked", acc: "Accuracy (yd)",
