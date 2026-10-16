@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.64.0";
+const SCRIPT_VERSION = "w2.65.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -2091,6 +2091,65 @@ async function closeFinishedRuns(env) {
   return n;
 }
 
+/* What a driver's phone is told once the run he drove today has ended, or
+   null: none ended today, or one of his is still going. */
+async function runEndedToday(env, key, driver, stops) {
+  const now = new Date();
+  if (!driver || key !== londonKey(now)) return null;
+  let last = null, lastRoute = "";
+  for (const rt of routeNames(stops)) {
+    let t = null;
+    try { t = await tripState(env, key, rt, "real"); } catch (e) { continue; }
+    if (!t || !t.trip || !t.started || !sameName(t.driver, driver)) continue;
+    if (!t.ended) return null;
+    if (!last || Number(t.ended) > Number(last.ended)) { last = t; lastRoute = rt; }
+  }
+  if (!last) return null;
+  let owed = false;
+  try {
+    owed = (await parkedOpen(env)).some((o) => o.reg === String(last.reg || "").trim().toUpperCase() &&
+                                               !o.parked && sameName(o.driver, driver));
+  } catch (e) {}
+  return { ok: true, tag: "ended", url: "./", title: "Trip ended",
+           body: lastRoute + " ended at " + londonHHMM(new Date(Number(last.ended))) + "." +
+                 (owed ? " Record the bus parked mileage when you return from the afternoon run." : "") };
+}
+
+/* THE RUN HAS ENDED, told to its driver, from w2.65.0. Asim, 16 Oct 2026:
+   "when trip is ended, which is now automatic, the driver can get trip
+   ended notification, reminding him also in that same notification to
+   record bus parked mileage when he returns from the afternoon run."
+
+   However the run ended: back inside the church fence, closed here on the
+   clock, or by a coordinator. Once a run, and only within half an hour of
+   its end, so a Worker that was down at the time does not wake him in the
+   evening. The words are pushWhat's, from the record. */
+const RUN_ENDED_TELL_MS = 30 * 60000;
+async function wakeRunEnded(env) {
+  const now = new Date();
+  if (londonParts(now).dow !== 0) return 0;
+  const key = londonKey(now);
+  const stops = pickupsAndArrivals(await getStops(env));
+  let n = 0;
+  for (const route of routeNames(stops)) {
+    let t = null;
+    try { t = await tripState(env, key, route, "real"); } catch (e) { continue; }
+    if (!t || !t.trip || !t.started || !t.ended || !t.driver) continue;
+    if (now.getTime() - Number(t.ended) > RUN_ENDED_TELL_MS) continue;
+    /* Each end once, by its run and its time: a second run on the route, or
+       a run reopened after an early end, is told when it ends again. */
+    const end = String(t.trip) + ":" + Number(t.ended);
+    const once = await env.DB.prepare("INSERT OR IGNORE INTO settings (k, v) VALUES (?, ?)")
+      .bind("endtold:" + key + ":" + route + ":" + end, JSON.stringify({ trip: t.trip, at: now.getTime() })).run();
+    if (once && once.meta && typeof once.meta.changes === "number" && once.meta.changes === 0) continue;
+    const r = await wake(env, await driverWakeSubs(env, t.driver), "ended|" + key + "|" + route + "|" + Number(t.ended));
+    n += r;
+    await trail(env, { once: "d|ended|" + key + "|" + route + "|" + end, title: route + ": Trip ended",
+                       body: "To " + t.driver + ": " + trailPhones(r) + ".", not: [t.driver] });
+  }
+  return n;
+}
+
 /* Has this Sunday's service finished, so next week may be booked?
 
    Before the cutoff, no. After the backstop, yes whatever anybody tapped.
@@ -3940,13 +3999,21 @@ async function cachedRota(env, from, weeks) {
   return out;
 }
 
+/* The two parked mileage fields, from w2.65.0, or nothing if they fail. */
+async function parkedFields(env) {
+  try { return { parkOpen: await parkedOpen(env), parked: await parkedLatest(env) }; }
+  catch (e) { return { parkedError: String(e) }; }
+}
+
 async function cachedLast(env) {
   const c = await cacheGet(env, "cache_last");
-  if (!c || !c.payload) return { ok: false, cache: "none" };
+  /* With a refusal too: the driver app takes these before it asks the sheet
+     for the mileage, and only this server has them. */
+  if (!c || !c.payload) return Object.assign({ ok: false, cache: "none" }, await parkedFields(env));
 
   const age = Date.now() - (Number(c.builtAt) || 0);
   if (age > CACHE_MAX_AGE_MS) {
-    return { ok: false, cache: "stale", ageMin: Math.round(age / 60000) };
+    return Object.assign({ ok: false, cache: "stale", ageMin: Math.round(age / 60000) }, await parkedFields(env));
   }
 
   const out = Object.assign({}, c.payload);
@@ -3971,6 +4038,10 @@ async function cachedLast(env) {
   } catch (e) { out.seatsError = String(e); }
   try { if (out.buses) withBookings(out.buses, await busBookings(env)); }
   catch (e) { /* the due dates alone, as before */ }
+  /* Parked mileage, from w2.65.0: the buses one may be keyed for now, and
+     the newest keyed, live from here rather than the sheet's copy, which can
+     be an hour behind. */
+  Object.assign(out, await parkedFields(env));
 
   out.ok = true;
   out.cache = "worker";
@@ -4399,6 +4470,254 @@ async function handleCheck(env, check, sure) {
   return json({ ok: true, written: 1, unconfirmed: sure === false || undefined, stopHeld: stopHeld || undefined });
 }
 
+/* ==========================================================================
+   PARKED MILEAGE, from w2.65.0
+   ==========================================================================
+   Asim, 16 Oct 2026: "the higher authorities have the authority to allow
+   anybody use the bus for personal stuff during the week without
+   necessarily telling me. So the only way I can eventually know that the
+   bus was used is by spotting a difference in mileage."
+
+   Each bus does the morning run, which this app follows, and an afternoon
+   return it does not, back at church about half two or three. The walkaround
+   reads the dashboard before the morning run, so the gap from one Sunday's
+   walkaround to the next mixes the afternoon with the week. One more reading
+   when the bus is put away after both runs takes the afternoon out: the next
+   walkaround should then read the same, to the mile.
+
+   Optional (his choice on 16 Oct): a 4pm notification finds the driver at
+   home. Then, the same day: "it shouldn't be on everybody's page. It should
+   be only on the page of the person on duty, the person who drove the bus
+   that morning", gone once the Sunday is, and said in the notification that
+   his run has ended (wakeRunEnded). So the driver app offers it on its first
+   screen to that morning's driver of the bus, from the end of his run to
+   the end of the Sunday; with no run recorded for the bus, to whoever did
+   its walkaround, from noon. Each reading belongs to the walkaround it
+   follows, by Check ID, so the sheet puts it on that walkaround's row; keyed
+   again, it replaces the first. The comparison itself is made on the sheet,
+   which has the history. */
+let parkedReady = false;
+async function ensureParked(env) {
+  if (parkedReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS parked (" +
+    "  id        INTEGER PRIMARY KEY AUTOINCREMENT," +
+    "  check_id  TEXT NOT NULL UNIQUE," +
+    "  reg       TEXT NOT NULL," +
+    "  miles     INTEGER NOT NULL," +
+    "  driver    TEXT NOT NULL DEFAULT ''," +
+    "  made      INTEGER NOT NULL," +
+    "  got       INTEGER NOT NULL DEFAULT 0," +
+    "  confirmed INTEGER NOT NULL DEFAULT 0," +
+    "  synced    INTEGER NOT NULL DEFAULT 0)").run();
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS parked_sync ON parked(synced)").run();
+  parkedReady = true;
+}
+
+/* The most a bus could do between its walkaround and being put away. The
+   same figure the driver app calls a large jump on a walkaround. */
+const PARKED_MAX_MILES = 1500;
+const PARKED_FROM = "12:00";
+/* Keyed with no signal, a reading comes when the phone next has some, with
+   the time it was keyed. Taken as at that time for up to a week, while the
+   walkaround it follows is still the bus's newest. */
+const PARKED_LATE_MS = 7 * 86400000;
+
+/* Today's real runs, by bus: who drove it and when the run ended (0 while
+   it is still going). The latest run on a route is the one tripState gives. */
+async function runsByBus(env, day) {
+  const out = {};
+  let routes = [];
+  try { routes = routeNames(pickupsAndArrivals(await getStops(env))); } catch (e) { return out; }
+  for (const route of routes) {
+    let t = null;
+    try { t = await tripState(env, day, route, "real"); } catch (e) { continue; }
+    if (!t || !t.trip || !t.started || !t.reg) continue;
+    out[String(t.reg).trim().toUpperCase()] = { driver: String(t.driver || ""), ended: Number(t.ended) || 0, route };
+  }
+  return out;
+}
+
+/* The buses a parked reading may be keyed for now: each one whose newest
+   walkaround was made today, a Sunday, once its morning run has ended (from
+   noon when no run was recorded for it), to the end of the day. With the
+   walkaround's reading, the one person it is for, and any parked reading
+   already keyed after it. */
+async function parkedOpen(env, now) {
+  const at = Number(now) || Date.now();
+  const today = new Date(at);
+  if (londonParts(today).dow !== 0) return [];
+  const day = londonKey(today);
+  await ensureChecksIn(env);
+  await ensureParked(env);
+  const q = await env.DB.prepare(
+    "SELECT check_id, reg, driver, received, body FROM checks_in WHERE received > ? ORDER BY received, id")
+    .bind(at - 2 * 86400000).all();
+  const newest = {};
+  for (const r of (q.results || [])) {
+    const reg = String(r.reg || "").trim().toUpperCase();
+    if (reg) newest[reg] = r;
+  }
+  const regs = Object.keys(newest).filter((reg) => londonKey(new Date(Number(newest[reg].received))) === day).sort();
+  if (!regs.length) return [];
+  const runs = await runsByBus(env, day);
+  const noon = londonMoment(day, PARKED_FROM);
+  const out = [];
+  for (const reg of regs) {
+    const r = newest[reg], run = runs[reg];
+    if (run ? !run.ended : (!noon || at < noon.getTime())) continue;
+    let miles = 0;
+    try { miles = Math.round(Number(JSON.parse(r.body).miles)) || 0; } catch (e) {}
+    const p = await env.DB.prepare(
+      "SELECT miles, driver, made FROM parked WHERE check_id=?").bind(String(r.check_id)).first();
+    out.push({ reg, checkId: String(r.check_id), day, miles, ended: run ? run.ended : 0,
+               driver: run && run.driver ? run.driver : String(r.driver || ""),
+               parked: p ? { miles: Number(p.miles), driver: String(p.driver || ""), at: Number(p.made) } : null });
+  }
+  return out;
+}
+
+/* The newest parked reading for each bus, while the walkaround it follows is
+   still that bus's newest here. For the driver app's next walkaround, ahead
+   of the sheet's copy. */
+async function parkedLatest(env) {
+  await ensureChecksIn(env);
+  await ensureParked(env);
+  const q = await env.DB.prepare(
+    "SELECT p.check_id, p.reg, p.miles, p.driver, p.made, c.received FROM parked p " +
+    "JOIN checks_in c ON c.check_id = p.check_id " +
+    "WHERE NOT EXISTS (SELECT 1 FROM checks_in n WHERE upper(n.reg) = upper(p.reg) AND n.received > c.received)").all();
+  const out = {};
+  for (const r of (q.results || [])) {
+    const reg = String(r.reg || "").trim().toUpperCase();
+    const when = new Date(Number(r.made));
+    out[reg] = { miles: Number(r.miles), driver: String(r.driver || ""), checkId: String(r.check_id),
+                 at: Number(r.made), date: londonKey(when), time: londonHHMM(when) };
+  }
+  return out;
+}
+
+/* sure: what driverSureOf said, already known to be one of the yeses. */
+async function handleParked(env, p, sure) {
+  const reg = String((p && p.reg) || "").trim().toUpperCase();
+  const checkId = String((p && p.checkId) || "").trim();
+  const who = String((p && p.driver) || "").trim().slice(0, 80);
+  const raw = String((p && p.miles) === undefined || p.miles === null ? "" : p.miles).replace(/[,\s]/g, "");
+  if (!/^\d{1,7}$/.test(raw)) return { ok: false, error: "number" };
+  const miles = Number(raw);
+  const now = Date.now();
+  const told = Math.round(Number(p && p.made) || 0);
+  const made = told > 0 && told <= now && now - told <= PARKED_LATE_MS ? told : now;
+  const open = (await parkedOpen(env, made)).filter((o) => o.reg === reg && o.checkId === checkId)[0];
+  if (!open) return { ok: false, error: "closed" };
+  /* Only the morning's driver of the bus. */
+  if (!sameName(open.driver, who)) return { ok: false, error: "not yours", driver: open.driver };
+  if (open.miles && miles < open.miles) return { ok: false, error: "lower", walkaround: open.miles };
+  if (open.miles && miles - open.miles > PARKED_MAX_MILES) return { ok: false, error: "jump", walkaround: open.miles };
+  /* The same reading again, its answer lost on a weak signal, changes
+     nothing and is not told twice. One keyed earlier than the reading kept,
+     arriving later from a phone that had no signal, does not replace it:
+     either way the phone is given the reading kept, and drops its copy. */
+  const kept = async () => env.DB.prepare(
+    "SELECT miles, driver, made, got FROM parked WHERE check_id=?").bind(checkId).first();
+  const was = await kept();
+  const said = (r) => ({ reg, checkId, miles: Number(r.miles), driver: String(r.driver || ""),
+                         at: Number(r.made), got: Number(r.got) });
+  if (was && (Number(was.made) > made || (Number(was.miles) === miles && Number(was.made) === made))) {
+    return { ok: true, again: true, parked: said(was) };
+  }
+  await env.DB.prepare(
+    "INSERT INTO parked (check_id, reg, miles, driver, made, got, confirmed, synced) VALUES (?,?,?,?,?,?,?,0) " +
+    "ON CONFLICT(check_id) DO UPDATE SET miles=excluded.miles, driver=excluded.driver, " +
+    "made=excluded.made, got=excluded.got, confirmed=excluded.confirmed, synced=0 " +
+    "WHERE excluded.made >= parked.made")
+    .bind(checkId, reg, miles, who, made, now, sure === "key" ? 1 : 0).run();
+  const is = await kept();
+  if (is && (Number(is.made) !== made || Number(is.miles) !== miles)) return { ok: true, again: true, parked: said(is) };
+  return { ok: true, parked: { reg, checkId, miles, driver: who, at: made, got: now } };
+}
+
+/* RECEIVED, told to the driver who keyed it, from w2.65.0. Asim, 16 Oct:
+   "at best give him a notification that mileage has been submitted". Most
+   of all for one keyed with no signal, which goes when the phone next has
+   some. The coordinators have their copy, as of every push. */
+const PARKED_TOLD_MS = 10 * 60000;
+const milesSaid = (n) => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+async function tellParked(env, pk) {
+  try {
+    const r = await wake(env, await driverWakeSubs(env, pk.driver),
+                         "parkok|" + londonKey(new Date(pk.at)) + "|" + pk.reg + "|" + pk.got);
+    await trail(env, { once: "d|parkok|" + pk.checkId + "|" + pk.got, title: pk.reg + ": Parked mileage received",
+                       body: milesSaid(pk.miles) + ", keyed by " + pk.driver + " at " + londonHHMM(new Date(pk.at)) +
+                             ". To " + pk.driver + ": " + trailPhones(r) + ".",
+                       not: [pk.driver] });
+  } catch (e) {}
+}
+
+/* THE 2PM REMINDER, from w2.65.0. Asim, 16 Oct: "From my experience, 2
+   p.m. will be a good time", as the afternoon run sets off. Once for each
+   walkaround, only while its parked reading is still to be keyed, and only
+   up to three: later, a Worker that was down would find him at home. Not in
+   the half hour after his Trip ended, which said the same. */
+const PARKED_ASK_AT = "14:00";
+const PARKED_ASK_TILL = "15:00";
+async function wakeParkAsk(env) {
+  const now = new Date();
+  if (londonParts(now).dow !== 0) return 0;
+  const day = londonKey(now);
+  const from = londonMoment(day, PARKED_ASK_AT), till = londonMoment(day, PARKED_ASK_TILL);
+  if (!from || !till || now < from || now >= till) return 0;
+  /* One reminder for each driver, naming every bus still owed by him. */
+  const due = {};
+  for (const o of await parkedOpen(env, now.getTime())) {
+    if (o.parked || !o.driver) continue;
+    if (o.ended && now.getTime() - Number(o.ended) < RUN_ENDED_TELL_MS) continue;
+    const once = await env.DB.prepare("INSERT OR IGNORE INTO settings (k, v) VALUES (?, ?)")
+      .bind("parkask:" + o.checkId, JSON.stringify({ at: now.getTime(), driver: o.driver })).run();
+    if (once && once.meta && typeof once.meta.changes === "number" && once.meta.changes === 0) continue;
+    const who = String(o.driver).trim().toLowerCase();
+    (due[who] = due[who] || { driver: o.driver, regs: [] }).regs.push(o.reg);
+  }
+  let n = 0;
+  for (const who of Object.keys(due)) {
+    const d = due[who], buses = andList(d.regs);
+    const r = await wake(env, await driverWakeSubs(env, d.driver), "parkask|" + day + "|" + buses);
+    n += r;
+    await trail(env, { once: "d|parkask|" + day + "|" + buses, title: buses + ": Parked mileage",
+                       body: "To " + d.driver + ": " + trailPhones(r) + ".", not: [d.driver] });
+  }
+  return n;
+}
+const andList = (xs) => xs.length < 2 ? String(xs[0] || "") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1];
+
+/* What a driver's phone reads about his parked mileage, from the record,
+   when that is what it was woken for (kind, from its last wake): received
+   in the last ten minutes, or the 2pm reminder for every bus still owed.
+   Null otherwise. Asked only for those wakes, so these words never take
+   the place of a check, set-off or stopped-bus push. */
+async function parkedWordsFor(env, driver, kind) {
+  if (!driver) return null;
+  await ensureParked(env);
+  if (kind === "parkok") {
+    const q = await env.DB.prepare("SELECT reg, miles, driver, made, got FROM parked WHERE got > ? ORDER BY got DESC")
+      .bind(Date.now() - PARKED_TOLD_MS).all();
+    const got = (q.results || []).filter((r) => sameName(r.driver, driver))[0];
+    if (!got) return null;
+    return { ok: true, tag: "parkok", url: "./", title: "Parked mileage received",
+             body: String(got.reg) + ": " + milesSaid(got.miles) + ", keyed at " +
+                   londonHHMM(new Date(Number(got.made))) + "." };
+  }
+  if (kind !== "parkask") return null;
+  const owed = [];
+  for (const o of await parkedOpen(env)) {
+    if (o.parked || !sameName(o.driver, driver)) continue;
+    if (await cacheGet(env, "parkask:" + o.checkId)) owed.push(o.reg);
+  }
+  if (!owed.length) return null;
+  return { ok: true, tag: "parkask", url: "./", title: "Parked mileage",
+           body: "Record the bus parked mileage for " + andList(owed) + " when you return from the afternoon run." };
+}
+
 /* What Apps Script has not taken a copy of yet. It marks them done with
    ?action=drained once they are safely on the tab — never before, so a failed
    write means they come round again rather than vanishing. */
@@ -4450,6 +4769,20 @@ async function handleDrain(env, body) {
   } catch (e) {}
   const t = await env.DB.prepare(
     "SELECT * FROM trip_events WHERE synced=? ORDER BY id").bind(claim).all();
+
+  /* Parked readings, from w2.65.0, stamped the same way. Fenced like the
+     requests: no table until the first is keyed. */
+  const parked = [];
+  try {
+    await ensureParked(env);
+    await env.DB.prepare("UPDATE parked SET synced=? WHERE id IN " +
+      "(SELECT id FROM parked WHERE synced<1 ORDER BY id LIMIT 50)").bind(claim).run();
+    const q = await env.DB.prepare("SELECT * FROM parked WHERE synced=? ORDER BY id").bind(claim).all();
+    for (const r of (q.results || [])) {
+      parked.push({ id: r.id, checkId: r.check_id, reg: r.reg, miles: Number(r.miles),
+                    driver: r.driver || "", at: Number(r.made), confirmed: !!r.confirmed });
+    }
+  } catch (e) {}
 
   /* THE COORDINATOR'S ACTIONS, stamped the same way, in the order he made
      them: two changes to one Sunday are applied in that order. */
@@ -4593,7 +4926,7 @@ async function handleDrain(env, body) {
   } catch (e) {}
 
   return json({ ok: true, claim: claim, bookings: b.results || [], trips: t.results || [],
-                requests: requests, coord: coord,
+                requests: requests, coord: coord, parked: parked,
                 checks: checks, auths: auths, decisions: decisions, cacheAgeMin: age,
                 clockAgoSec: clockAgoSec, poke: poke, pinSalt: !!pinSaltOf(env),
                 /* The Sunday whose 07:30 message last went, and whether that
@@ -4637,6 +4970,8 @@ async function handleDrained(env, body) {
           .bind(...list));
   };
   if (Array.isArray(body.bookings) && body.bookings.length) done("bookings", body.bookings);
+  /* From w2.65.0. */
+  if (Array.isArray(body.parked) && body.parked.length) done("parked", body.parked);
   if (Array.isArray(body.requests) && body.requests.length) {
     const ids = body.requests.map((x) => String(x || "")).filter((x) => /^[A-Za-z0-9_.-]{1,64}$/.test(x));
     if (ids.length) {
@@ -4852,6 +5187,8 @@ async function sweeps(env) {
   try { await wakeCancelled(env); } catch (e) {}
   try { await wakeDrivers(env); } catch (e) {}
   try { await closeFinishedRuns(env); } catch (e) {}
+  try { await wakeRunEnded(env); } catch (e) {}
+  try { await wakeParkAsk(env); } catch (e) {}
   try { await wakeNotLeft(env); } catch (e) {}
   try { await wakeMorning(env); } catch (e) {}
   try { await wakeBookingReminders(env); } catch (e) {}
@@ -4923,7 +5260,8 @@ async function anythingWaiting(env) {
     "SELECT 1 AS n FROM checks_in WHERE synced = 0 LIMIT 1",
     "SELECT 1 AS n FROM requests WHERE synced < 1 LIMIT 1",
     "SELECT 1 AS n FROM links WHERE kind='rota' AND used=1 AND synced=0 LIMIT 1",
-    "SELECT 1 AS n FROM coord_actions WHERE synced < 1 LIMIT 1"
+    "SELECT 1 AS n FROM coord_actions WHERE synced < 1 LIMIT 1",
+    "SELECT 1 AS n FROM parked WHERE synced < 1 LIMIT 1"
   ]) {
     try { if (await env.DB.prepare(sql).first()) return true; } catch (e) { /* no such table yet */ }
   }
@@ -6557,6 +6895,9 @@ function sentTitle(tag, driver, where) {
     if (k === "duty") return rt + ": You are driving today";
     if (k === "chk") return rt + ": Time for the vehicle check";
     if (k === "chkl") return rt + ": Vehicle check not started";
+    if (k === "ended") return rt + ": Trip ended";
+    if (k === "parkask") return rt + ": Parked mileage";
+    if (k === "parkok") return rt + ": Parked mileage received";
     return "Driver alert";
   }
   const route = (where && where.route) || "";
@@ -6823,6 +7164,25 @@ async function pushWhat(env, endpoint, opts) {
        and the record may have changed since it was woken. A driver who is
        nobody's driver today is told nothing, which is what the sweep would
        have told him. */
+    /* HIS RUN HAS ENDED, from w2.65.0: the end, and the parked mileage
+       while it is still to be keyed (see wakeRunEnded). Asked before the
+       rota, because a run he drove as cover is not on his rota line, and
+       once it has ended driverRouteToday no longer finds it. Today only,
+       and not while he has another run going. */
+    /* Only when that is what this phone was last woken for: these words
+       must not stand in for a check, set-off or stopped-bus push. */
+    const woke = String(sub.last || "").split("|")[0];
+    try {
+      const pk = await parkedWordsFor(env, sub.driver, woke);
+      if (pk) return pk;
+    } catch (e) { /* the ordinary answer, below */ }
+    if (woke === "ended") {
+      try {
+        const ended = await runEndedToday(env, key, sub.driver, pickupsAndArrivals(all));
+        if (ended) return ended;
+      } catch (e) { /* the ordinary answer, below */ }
+    }
+
     if (!todays.mine) {
       return { ok: true, tag: "end", url: "./", title: "Dominion Assembly Transport",
                body: "Nothing outstanding." };
@@ -6966,6 +7326,7 @@ async function pushWhat(env, endpoint, opts) {
       return { ok: true, tag: "end", url: "./",
                title: "Your run is running", body: "Nothing outstanding." };
     }
+
 
     return { ok: true, tag: "end", url: "./", title: "Dominion Assembly Transport", body: "Nothing outstanding." };
   }
@@ -10061,6 +10422,8 @@ async function coordLoad(env, me) {
     out.lastMiles = {};
     for (const reg of Object.keys(last)) out.lastMiles[reg] = { miles: last[reg].miles, date: last[reg].date || "" };
   } catch (e) { out.lastMiles = {}; }
+  /* From w2.65.0: each bus's parked reading since its last walkaround. */
+  try { out.parked = await parkedLatest(env); } catch (e) { out.parked = null; }
 
   /* Today's walkarounds and runs, for the two things that cannot wait: a bus
      the check stopped, and a run left open. */
@@ -10395,7 +10758,8 @@ async function liveHealthLines(env) {
     ["stop tap", "SELECT COUNT(*) AS n FROM trip_events WHERE synced < 1"],
     ["walkaround", "SELECT COUNT(*) AS n FROM checks_in WHERE synced = 0"],
     ["rota request", "SELECT COUNT(*) AS n FROM requests WHERE synced < 1"],
-    ["coordinator change", "SELECT COUNT(*) AS n FROM coord_actions WHERE synced < 1"]
+    ["coordinator change", "SELECT COUNT(*) AS n FROM coord_actions WHERE synced < 1"],
+    ["parked reading", "SELECT COUNT(*) AS n FROM parked WHERE synced < 1"]
   ]) {
     try {
       const r = await env.DB.prepare(sql).first();
@@ -11105,6 +11469,20 @@ export default {
           const sure = (await driverSureOf(env, c.driver, body.key, false)) === "key";
           if (!sure) c.pinState = "unconfirmed";
           return knock(await handleCheck(env, c, sure), "check");
+        }
+        /* A parked reading, from w2.65.0. A run's rule: his name on it means
+           his PIN was keyed. */
+        if (action === "parked") {
+          const pk = body.parked || {};
+          /* No old phone sends this, so a post without the key is not let
+             through as one: his key, or a driver with no PIN. */
+          const sure = await driverSureOf(env, pk.driver, body.key, false);
+          if (!sure) return json({ ok: false, error: "pin" });
+          const out = await handleParked(env, pk, sure);
+          if (!out.ok || out.again) return json(out);
+          try { if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(tellParked(env, out.parked)); }
+          catch (e) {}
+          return knock(json(out), "parked");
         }
         /* From w2.60.0: a check's first stage opened, and the hub's duty card. */
         if (action === "checkgo") return await handleCheckGo(env, body);

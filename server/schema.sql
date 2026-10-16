@@ -130,6 +130,22 @@ CREATE TABLE IF NOT EXISTS checks_in (
 );
 CREATE INDEX IF NOT EXISTS checks_in_sync ON checks_in(synced);
 
+-- A parked reading, from w2.65.0: the dashboard when a bus is put away after
+-- the afternoon return, against the walkaround it follows. One per walkaround;
+-- keyed again, it replaces the first. Created by the Worker on demand too.
+CREATE TABLE IF NOT EXISTS parked (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  check_id  TEXT NOT NULL UNIQUE,    -- the walkaround it follows
+  reg       TEXT NOT NULL,
+  miles     INTEGER NOT NULL,
+  driver    TEXT NOT NULL DEFAULT '',
+  made      INTEGER NOT NULL,        -- ms, when it was keyed on the phone
+  got       INTEGER NOT NULL DEFAULT 0,   -- ms, when it reached here
+  confirmed INTEGER NOT NULL DEFAULT 0,   -- 1 when his key came with it
+  synced    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS parked_sync ON parked(synced);
+
 -- ---- owned here ----------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS bookings (

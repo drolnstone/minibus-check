@@ -825,7 +825,12 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .dw-now{background:var(--stop-bg);border-color:var(--stop)}
 .dw-now .dw-big{color:var(--stop)}
 /* The same card on the hub, from v1.113.0, as the passenger page opens on it. */
-#hubWatch .dw,#hubDuty .dw{margin:0 0 14px}
+#hubWatch .dw,#hubDuty .dw,#hubParked .dw{margin:0 0 14px}
+/* Parked mileage on the hub, from v1.124.0. */
+.park-row{display:flex;gap:8px;align-items:stretch;margin-top:8px}
+.park-row input{flex:1 1 auto;min-width:0}
+.park-row .btn{flex:0 0 auto;width:auto;padding-left:18px;padding-right:18px}
+.park-say{margin-top:6px}
 /* The confirm-it-is-you panel, in the trip strip and in the request form. */
 .pingate{margin-top:11px;padding-top:11px;border-top:1px solid var(--hair)}
 .pingate .pinbox{width:120px;margin-top:6px}
@@ -1324,6 +1329,8 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
     <div id="hubDuty"></div>
     <!-- The stop he is watching, from v1.113.0: see dwHubStart. -->
     <div id="hubWatch"></div>
+    <!-- Parked mileage, from v1.124.0: see parkPaint. -->
+    <div id="hubParked"></div>
 
     <!-- DRIVING ROTA AND VEHICLE CHECK CHANGED PLACES. A SWAP, NOT A SHUFFLE.
 
@@ -1576,7 +1583,7 @@ function keyEnsure(name, done){
       if(out && out.ok===true){
         keyAsked=tried;
         if(st.driver+":"+st.pin===tried){
-          if(out.valid===true && out.key) driverKeySave(name, out.key);
+          if(out.valid===true && out.key){ driverKeySave(name, out.key); parkKeyed(name); }
           else if(out.valid===false && !out.locked && !out.elsewhere){
             try{ var m=pinSeen(); delete m[st.driver]; store.set(PKEY, JSON.stringify(m)); }catch(e){}
             pinTakeBack("That PIN is not right.");
@@ -1602,6 +1609,7 @@ function keyArrived(name, key){
   driverKeySave(name, key);
   tripPinTold=false;
   setTimeout(tripFlush, 0);
+  parkKeyed(name);
 }
 /* Every call to Apps Script, with a limit on how long it may hang.
 
@@ -1759,7 +1767,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.123.0";
+var APP_VERSION = "v1.124.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2327,6 +2335,8 @@ function fetchLastMiles(cb){
     .then(function(r){ return r.text(); })
     .then(function(t){
       var out = JSON.parse(t);
+      /* Only the live server has these, refusal or not (v1.124.0). */
+      if(base === LIVE_ENDPOINT && LIVE_ENDPOINT !== CFG.endpoint) parkSeen(out);
       if((!out || out.ok !== true) && mayFall){ ask(CFG.endpoint,false); return; }
       scriptSeen(out);
       seatsSeen(out);
@@ -2354,6 +2364,62 @@ function lastFor(reg){
 }
 var BIG_JUMP = 1500;   // miles since last check that looks like a typo
 
+/* ---- parked mileage, from v1.124.0 -------------------------------------
+   Asim, 16 Oct 2026: a bus may be used during the week without his being
+   told, and a difference in mileage is how he would know. A reading when
+   the bus is put away after the afternoon return, keyed on the hub, and the
+   next walkaround is measured from it, to the mile. Optional, with no
+   reminder at 4pm. Then (same day): only for the person who drove the bus
+   that morning, gone with the Sunday, and said in the notification that his
+   run has ended. The live server says which buses one may be keyed for, and
+   by whom: from the end of the bus's morning run to the end of the Sunday.
+   The comparison and the note to the coordinators are the sheet's. */
+var PARK_KEY = "fleet.parked.v1";
+/* PARKQ: readings keyed here and not yet taken by the live server, by Check
+   ID. Asim, 16 Oct: kept with no signal and sent when there is some, with
+   the time each was keyed. */
+var PARKOPEN = [], PARKED = {}, PARKED_LIVE = false, PARKQ = {};
+(function(){
+  try{
+    var p = JSON.parse(store.get(PARK_KEY) || "null");
+    if(p){ PARKOPEN = p.open || []; PARKED = p.parked || {}; PARKED_LIVE = !!p.live;
+           PARKQ = (p.queue && typeof p.queue === "object") ? p.queue : {}; }
+  }catch(e){}
+})();
+function parkSave(){
+  try{ store.set(PARK_KEY, JSON.stringify({ open:PARKOPEN, parked:PARKED, live:PARKED_LIVE, queue:PARKQ })); }catch(e){}
+}
+/* The live server's answer to ?last=1. */
+function parkSeen(out){
+  if(!out || typeof out !== "object" || !Array.isArray(out.parkOpen)) return;
+  PARKOPEN = out.parkOpen;
+  PARKED = (out.parked && typeof out.parked === "object") ? out.parked : {};
+  PARKED_LIVE = true;
+  parkSave();
+  parkPaint();
+}
+/* The parked reading this bus's next walkaround is measured from, or null.
+   The live server's when it has said, since it knows of a walkaround the
+   sheet's copy may not have yet; the sheet's otherwise. Never one that
+   belongs to a walkaround older than the newest the sheet knows of. */
+function parkedBase(reg){
+  var R = String(reg||"").trim().toUpperCase();
+  var L = LASTMILES[reg] || LASTMILES[R] || null;
+  var P = PARKED_LIVE ? PARKED[R] : (L && L.parked);
+  if(!P || !Number(P.miles)) return null;
+  if(L && L.checkId && P.checkId && L.checkId !== P.checkId) return null;
+  return P;
+}
+function isoToUk(k){
+  var m = String(k||"").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? m[3]+"/"+m[2]+"/"+m[1] : String(k||"");
+}
+/* "after the walkaround on 11/10/2026", or when and by whom it was keyed. */
+function parkedWords(P, prev){
+  if(P.date) return "on " + isoToUk(P.date) + (P.time ? " at " + P.time : "") + (P.driver ? " by " + P.driver : "");
+  return prev && prev.date ? "after the walkaround on " + prev.date : "";
+}
+
 /* Returns null when the reading looks normal, or a description of the problem. */
 function mileProblem(){
   var prev = st.veh ? lastFor(st.veh.reg) : null;
@@ -2361,6 +2427,13 @@ function mileProblem(){
   if(!prev || now === "") return null;
   var n = Number(now), p = Number(prev.miles);
   if(isNaN(n)) return null;
+  var pk = parkedBase(st.veh.reg);
+  if(pk && n < Number(pk.miles)){
+    return { kind:"low",
+      msg:"That is LOWER than the parked reading of " + Number(pk.miles).toLocaleString("en-GB") +
+          " " + parkedWords(pk, prev) + ".",
+      confirm:"I have read it twice and the dashboard really does say this" };
+  }
 
   if(n < p){
     return { kind:"low",
@@ -2395,6 +2468,15 @@ function paintMilesHint(){
   $("mileConfirm").classList.remove("is-on");
   $("mileConfirm").setAttribute("aria-pressed","false");
 
+  var pk = prev && st.veh ? parkedBase(st.veh.reg) : null;
+  if(pk){
+    var since = now !== "" ? Number(now) - Number(pk.miles) : null;
+    hint.textContent = "Parked: " + Number(pk.miles).toLocaleString("en-GB") + " " + parkedWords(pk, prev) +
+      (since !== null && since >= 0 ? "  \u00B7  " + since.toLocaleString("en-GB") + " since" : "") +
+      (lastMilesAt ? "" : "  \u00B7  this phone\u2019s last copy, not just checked");
+    hint.classList.remove("is-bad");
+    return;
+  }
   if(prev){
     var added = now !== "" ? Number(now) - Number(prev.miles) : null;
     /* The time is new here. The date used to arrive as the whole JavaScript
@@ -3233,6 +3315,7 @@ function show(n){
   paintDash(); paintFoot(); paintLinks();
   if(n==="hub") dwHubStart(); else dwHubStop();
   if(n==="hub") dutyStart(); else dutyStop();
+  if(n==="hub") parkStart(); else parkStop();
   /* A check open on this phone ends with it, however it ends. */
   if(n==="hub"||n==="sent"||n==="driver"||n==="vehicle"||n==="pending") checkOpenFlag(false);
   /* After paintDash, because that is what can change the strip's height —
@@ -4668,6 +4751,9 @@ function submit(){
 
   LASTMILES[rec.reg] = { miles: rec.miles, date: rec.date, driver: rec.driver };
   store.set(MKEY, JSON.stringify(LASTMILES));
+  /* Its parked reading belonged to the walkaround before this one. */
+  delete PARKED[String(rec.reg||"").trim().toUpperCase()];
+  parkSave();
 
   paintSend("sending");
   sendRec(rec, true).then(function(){
@@ -5892,9 +5978,11 @@ function tripAutoEndTell(){
     if(!("Notification" in window) || Notification.permission!=="granted") return;
     if(!navigator.serviceWorker) return;
     navigator.serviceWorker.ready.then(function(reg){
+      /* Tagged as the live server's Trip ended push, from v1.124.0, so that
+         one, with the parked mileage line, takes its place: one notice. */
       reg.showNotification("Run ended, back at church", {
         body: "",
-        tag: "autoend", renotify: true,
+        tag: "ended", renotify: true,
         icon: "./icon-192.png", badge: "./icon-192.png",
         data: { url: "./" }
       });
@@ -6372,6 +6460,209 @@ function dutyStart(){
       dutyFetch();
     }, 60000);
   }
+}
+
+/* ---- parked mileage on the hub (v1.124.0) ------------------------------
+   One card for each bus the live server says may have a parked reading
+   now, on the phone of the driver it names and nobody else's: the box
+   until one is keyed, then the reading, with Change. Nothing on any other
+   day. */
+var parkTimer = null, parkBusy = false, parkEdit = {}, parkSaid = {}, parkAskedAt = 0;
+function parkHtml(){
+  var h = "", n = 0;
+  (PARKOPEN || []).forEach(function(o){
+    if(!o || !o.reg || !st.driver || !sameName(o.driver, st.driver)) return;
+    if(o.day && o.day !== rotaKey(new Date())) return;
+    /* Buttons carry the walkaround's Check ID, never a place in the list:
+       the list can change under him while he types. */
+    var i = n++, pid = esc(String(o.checkId || ""));
+    var done = o.parked && Number(o.parked.miles);
+    var eyebrow = "Bus parked · " + esc(o.reg);
+    var walk = o.miles ? "Walkaround " + Number(o.miles).toLocaleString("en-GB") +
+               (o.day === rotaKey(new Date()) ? " this morning." : " on " + esc(dayShort(o.day)) + ".") : "";
+    var say = parkSaid[o.checkId] || null;
+    var sayHtml = say ? '<p class="dw-sub park-say'+(say.bad ? ' is-bad' : '')+'">'+esc(say.t)+'</p>' : "";
+    var q = PARKQ[o.checkId];
+    if(q && !parkEdit[o.checkId]){
+      h += '<div class="dw"><p class="dw-eyebrow">'+eyebrow+'</p>'+
+           '<p class="dw-big">'+Number(q.miles).toLocaleString("en-GB")+'</p>'+
+           '<p class="dw-sub">Keyed at '+ukTime(new Date(Number(q.made) || 0))+'. '+walk+'</p>'+
+           (sayHtml || (q.wait ? '<p class="dw-sub park-say is-bad">'+PARK_PIN+'</p>'
+                               : '<p class="dw-sub park-say">'+PARK_HELD+'</p>'))+
+           '<button type="button" class="dw-off" data-park-change="'+pid+'">Change</button></div>';
+      return;
+    }
+    if(done && !parkEdit[o.checkId]){
+      var at = new Date(Number(o.parked.at) || 0);
+      h += '<div class="dw dw-go"><p class="dw-eyebrow">'+eyebrow+'</p>'+
+           '<p class="dw-big">'+Number(o.parked.miles).toLocaleString("en-GB")+' ✓</p>'+
+           '<p class="dw-sub">Keyed'+(o.parked.driver ? ' by '+esc(o.parked.driver) : '')+
+             (o.parked.at ? ' at '+ukTime(at) : '')+'. '+walk+'</p>'+sayHtml+
+           '<button type="button" class="dw-off" data-park-change="'+pid+'">Change</button></div>';
+      return;
+    }
+    h += '<div class="dw"><p class="dw-eyebrow">'+eyebrow+'</p>'+
+         '<label class="dw-sub" for="parkMiles'+i+'"><b>Mileage after the afternoon run</b>'+(walk ? ' · '+walk : '')+'</label>'+
+         '<div class="park-row"><input id="parkMiles'+i+'" type="number" inputmode="numeric" class="mono" '+
+           'placeholder="e.g. '+esc(String((Number(o.miles)||57363) + 12))+'" autocomplete="off">'+
+         '<button class="btn btn-main" type="button" data-park-save="'+pid+'">Save</button></div>'+sayHtml+'</div>';
+  });
+  return h;
+}
+function parkPaint(){
+  var box = $("hubParked");
+  if(!box) return;
+  /* Not while he is typing in it: a repaint would take the number away. */
+  var a = document.activeElement;
+  if(a && a.id && a.id.indexOf("parkMiles") === 0 && box.contains(a)) return;
+  box.innerHTML = (st.screen === "hub") ? parkHtml() : "";
+  Array.prototype.forEach.call(box.querySelectorAll("[data-park-save]"), function(b){
+    b.onclick = function(){
+      parkSend(b.getAttribute("data-park-save"), b.parentNode && b.parentNode.querySelector("input"));
+    };
+  });
+  Array.prototype.forEach.call(box.querySelectorAll("[data-park-change]"), function(b){
+    b.onclick = function(){
+      var o = parkOpenOf(b.getAttribute("data-park-change"));
+      if(o){ parkEdit[o.checkId] = true; delete parkSaid[o.checkId]; }
+      parkPaint();
+    };
+  });
+}
+function parkOpenOf(id){
+  return (PARKOPEN || []).filter(function(x){ return x && String(x.checkId) === String(id); })[0] || null;
+}
+function parkSend(id, inp){
+  var o = parkOpenOf(id);
+  /* A send in flight does not stop a correction: it is kept, and goes next. */
+  if(!o || !inp || !st.driver || !sameName(o.driver, st.driver)){ parkPaint(); return; }
+  var raw = String(inp.value || "").replace(/[,\s]/g, "");
+  /* Off the box, or the repaint that follows would wait for him to leave it. */
+  try{ inp.blur(); }catch(e){}
+  var say = function(t, bad){ parkSaid[o.checkId] = { t:t, bad:!!bad }; parkPaint(); };
+  if(!/^\d{1,7}$/.test(raw)){ say("The mileage is not a number of miles.", true); return; }
+  var miles = Number(raw);
+  if(o.miles && miles < Number(o.miles)){
+    say("That is lower than the walkaround's " + Number(o.miles).toLocaleString("en-GB") + ".", true); return;
+  }
+  if(!st.driver){ show("driver"); return; }
+  if(!driverKey(st.driver) && pinGateNeeded()){
+    toast("Enter your four digit PIN to confirm it is you.", true);
+    show("driver");
+    try{ $("pin").focus(); }catch(e){}
+    return;
+  }
+  if(!LIVE){ say("No live server. Not saved.", true); return; }
+  PARKQ[o.checkId] = { reg:o.reg, checkId:o.checkId, miles:miles, driver:(st.driver||"").trim(), made:Date.now() };
+  delete parkEdit[o.checkId];
+  delete parkSaid[o.checkId];
+  parkSave();
+  parkPaint();
+  parkFlush();
+}
+var PARK_HELD = "Saved on this phone. Sent when there is signal.";
+var PARK_PIN = "Saved on this phone. Key your PIN to send it.";
+function parkIdle(){ parkBusy = false; }
+/* Each reading keyed here goes to the live server, now or once there is
+   signal again: on the hub, when the signal comes back, and when a key
+   comes. Kept through no answer and a PIN to key again; dropped, with the
+   reason, once the live server has said no for good. */
+function parkFlush(){
+  if(parkBusy || !LIVE || !navigator.onLine) return;
+  /* One held for his PIN goes once a key is on the phone, or his PIN is
+     keyed and a key can be asked for. */
+  var ready = function(x){
+    return x && (!x.wait || !!driverKey(x.driver) || (sameName(st.driver, x.driver) && st.pinOk && st.pinState));
+  };
+  var q = null;
+  Object.keys(PARKQ).some(function(id){ var x = PARKQ[id]; if(ready(x)){ q = x; return true; } return false; });
+  if(!q) return;
+  var id = q.checkId;
+  var o = parkOpenOf(id);
+  var say = function(t, bad){
+    parkSaid[id] = { t:t, bad:!!bad };
+    if(bad && !o) toast("Parked mileage for "+q.reg+": "+t, true);
+    parkPaint();
+  };
+  /* Taken off the list only if it is still the one sent: keyed again
+     meanwhile, the newer one goes next. */
+  var done = function(){ if(PARKQ[id] === q) delete PARKQ[id]; parkSave(); };
+  /* Save stays pressable meanwhile: a correction is kept and goes next. */
+  parkBusy = true;
+  keyEnsure(q.driver, function(key){
+    callFetch(LIVE_ENDPOINT, { method:"POST", redirect:"follow",
+      headers:{ "Content-Type":"text/plain;charset=utf-8" },
+      body: JSON.stringify({ token: CFG.token||"", action:"parked", key: key,
+        parked:{ reg:q.reg, checkId:id, miles:q.miles, driver:q.driver, made:q.made } }) }, POLL_TIMEOUT)
+      .then(function(r){ return r.text(); })
+      .then(function(t){
+        parkIdle();
+        var out = JSON.parse(t);
+        if(out && out.ok && out.parked){
+          if(o) o.parked = { miles:out.parked.miles, driver:out.parked.driver, at:out.parked.at };
+          var R = String(q.reg).toUpperCase(), when = new Date(Number(out.parked.at) || Date.now());
+          PARKED[R] = { miles:out.parked.miles, driver:out.parked.driver, checkId:id, at:out.parked.at,
+                        date: rotaKey(when), time: ukTime(when) };
+          var newer = !!PARKQ[id] && PARKQ[id] !== q;
+          done();
+          /* Keyed again meanwhile, or the box open to change it: no word
+             about the one that went. */
+          if(newer || parkEdit[id]) parkPaint();
+          else say(Number(out.parked.miles) === Number(q.miles) ? "Saved." :
+                   "The reading kept is the one keyed at "+ukTime(when)+".", false);
+          setTimeout(parkFlush, 0);
+          return;
+        }
+        var e = out && out.error;
+        if(e === "pin"){
+          /* Held until his PIN is keyed again; the key that brings sends it. */
+          q.wait = true; parkSave();
+          driverKeyDrop(q.driver);
+          if(sameName(st.driver, q.driver)) pinTakeBack("");
+          say(PARK_PIN, true);
+          setTimeout(parkFlush, 0);
+          return;
+        }
+        if(e === "not yours"){ done(); say("This is "+(out.driver || "the morning driver")+"\u2019s to key.", true); return; }
+        var why = e === "closed" ? "No longer taken: a newer walkaround of "+q.reg+" came first, or the week has passed."
+          : e === "lower" ? "That is lower than the walkaround's "+Number(out.walkaround).toLocaleString("en-GB")+"."
+          : e === "jump" ? "That is "+(Number(q.miles)-Number(out.walkaround)).toLocaleString("en-GB")+" miles more than the walkaround's "+
+                           Number(out.walkaround).toLocaleString("en-GB")+"."
+          : e === "number" ? "The mileage is not a number of miles."
+          : "";
+        if(why){ done(); say(why + " Not saved.", true); setTimeout(parkFlush, 0); return; }
+        say("The live server did not take that. Kept on this phone.", true);
+      })
+      .catch(function(){ parkIdle(); say(PARK_HELD, false); });
+  });
+}
+/* A key has come for this driver: anything held for want of one goes. */
+function parkKeyed(name){
+  Object.keys(PARKQ).forEach(function(id){ var x = PARKQ[id]; if(x && sameName(x.driver, name)) delete x.wait; });
+  parkSave();
+  setTimeout(parkFlush, 0);
+}
+function parkStop(){ if(parkTimer){ clearInterval(parkTimer); parkTimer = null; } }
+/* Asked again on the hub on a Sunday from ten, once a minute while it is
+   open; any other day the phone's copy is emptied. */
+function parkWanted(){
+  var d = new Date();
+  return d.getDay() === 0 && d.getHours() >= 10;
+}
+function parkStart(){
+  parkStop();
+  if(new Date().getDay() !== 0 && (PARKOPEN || []).length){ PARKOPEN = []; parkSave(); }
+  parkFlush();
+  parkPaint();
+  if(st.screen !== "hub" || document.hidden || !parkWanted() || !LIVE) return;
+  var ask = function(){
+    if(st.screen !== "hub" || document.hidden){ parkStop(); return; }
+    if(Date.now() - parkAskedAt < 50000) return;
+    parkAskedAt = Date.now();
+    fetchLastMiles();
+  };
+  ask();
+  parkTimer = setInterval(ask, 60000);
 }
 
 /* THE CHECK HAS STARTED, told to the live server as the first stage opens so
@@ -7383,7 +7674,7 @@ document.addEventListener("visibilitychange",function(){
   if(document.hidden){ rotaCountsStop(); dwHubStop(); dutyStop(); return; }
   safely(pushAppAgain);
   /* The watched stop's card on the hub, from v1.113.0, and his duty card. */
-  if(st.screen==="hub"){ dwHubStart(); dutyStart(); }
+  if(st.screen==="hub"){ dwHubStart(); dutyStart(); parkStart(); }
 
   /* The browser took the wake lock back the moment this page went out of
      sight and will not hand it over again on its own. Ask every time. It
@@ -9754,7 +10045,7 @@ $("share").addEventListener("click",function(){
   else toast("Screenshot this page to share it.");
 });
 
-window.addEventListener("online",function(){ fetchLastMiles(); if(loadQ().length) flush(); else sendPhotos(); });
+window.addEventListener("online",function(){ fetchLastMiles(); parkFlush(); if(loadQ().length) flush(); else sendPhotos(); });
 
 /* driver register: entries may be "Name" or { name, role, hasPin }.
 
@@ -10745,6 +11036,9 @@ safely(function(){ sessionStorage.removeItem("coord.hand.v1"); });
 safely(function(){ show("driver"); });
 safely(dashHeightSync);
 safely(pushLook);
+/* A parked reading kept on this phone goes as soon as it is opened with
+   signal, before anybody signs in: it carries its own driver's key. */
+safely(parkFlush);
 
 /* The sign-in screen is up. Guarded to one attempt per load inside. */
 safely(howAuto);
