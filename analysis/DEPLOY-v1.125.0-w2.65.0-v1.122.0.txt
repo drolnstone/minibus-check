@@ -1,0 +1,31 @@
+MINIBUS
+=======
+  pages v1.125.0 · server w2.65.0 · sheet v1.122.0
+
+YOU ARE ON   app v1.124.0 · server w2.65.0 · sheet v1.122.0
+GOING TO     app v1.125.0 · server w2.65.0 · sheet v1.122.0
+
+Asim, 16 Oct: App info in the coordinator app reached up under the phone's
+clock and battery, with room left at the bottom.
+
+1. Coordinator app: every pop-up sheet (App info and the others) now stops
+   12px under the clock and signal, whatever height the phone reports for
+   the screen. A sheet taller than that scrolls inside. The space under
+   Close is smaller: the home bar and 10px, and App info drops the empty
+   line above Close.
+   Nothing else changes. The driver app and the passenger page only take the
+   new version number.
+
+GOING LIVE
+----------
+
+Merge the pull request. The pages go live at once. Server and sheet do not
+change.
+
+
+AFTER IT (give it ten minutes)
+--------
+
+A. The foot of the apps reads  app v1.125.0 · server w2.65.0 · sheet
+   v1.122.0 . Open each app from its Home Screen icon twice.
+B. Coordinator app, App info: the top of the sheet sits below the clock.
