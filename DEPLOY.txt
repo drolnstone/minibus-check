@@ -1,79 +1,28 @@
 MINIBUS
 =======
-  pages v1.124.0 · server w2.65.0 · sheet v1.122.0
+  pages v1.125.0 · server w2.65.0 · sheet v1.122.0
 
-YOU ARE ON   app v1.123.0 · server w2.64.0 · sheet v1.121.0
-GOING TO     app v1.124.0 · server w2.65.0 · sheet v1.122.0
+YOU ARE ON   app v1.124.0 · server w2.65.0 · sheet v1.122.0
+GOING TO     app v1.125.0 · server w2.65.0 · sheet v1.122.0
 
-Asim, 16 Oct: the mileage when the bus is put away after the afternoon run,
-so the next walkaround shows any use during the week. An exact match, a
-column of its own, and only on the phone of the driver who drove the bus
-that morning. He chose "Optional reading" on the card.
+Asim, 16 Oct: App info in the coordinator app reached up under the phone's
+clock and battery, with room left at the bottom.
 
-1. Driver app, on a Sunday: once that morning's run has ended, the first
-   screen has a "Bus parked" box for that bus, on that driver's phone only.
-   With no run in the app that day, it shows from noon to the driver who did
-   the walkaround. It goes at midnight. Keying it needs the driver's PIN, the
-   same as a run. It can be changed until midnight.
-2. With no signal, the reading stays on the phone ("Saved on this phone.
-   Sent when there is signal.") and goes by itself once the app is open with
-   signal, up to a week later, as long as that bus has had no newer
-   walkaround. It is filed with the time it was keyed. A closed iPhone app
-   cannot send, so it goes the next time the app is opened with signal. If
-   it reaches the sheet after the next walkaround, that walkaround's Since
-   parked is worked out again from it.
-3. Notifications, to that morning's driver only, with the coordinators'
-   usual "Sent:" copy:
-   - "Trip ended" when the server ends the run. While the bus has no parked
-     reading it adds: "Record the bus parked mileage when you return from
-     the afternoon run."
-   - At 2pm, "Parked mileage", only if nothing has been keyed yet, naming
-     each bus still owed. Not after 3pm, and not in the half hour after
-     Trip ended.
-   - "Parked mileage received" once the reading is in.
-4. Checks tab: two new columns beside Mileage. "Parked mileage" is filled on
-   the Sunday walkaround's row when the reading comes in, with a note of who
-   keyed it and when. "Since parked" is filled on the next walkaround's row:
-   the miles since the bus was parked. 0 means it has not moved. Anything
-   else, even 1 mile, goes to the coordinators' phones as an alert.
-5. Nothing keyed on the Sunday: "Since parked" says "Not reported" (blank
-   after a weekday walkaround, when none could be keyed). Its note gives the
-   miles since the last walkaround and a usual Sunday's miles for that bus.
-   Only a real big gap, more than one and a half usual Sundays, goes to the
-   coordinators' phones.
-6. Coordinator app, Buses: each bus shows its last walkaround and its parked
-   reading, or "Parked mileage not reported since the last walkaround".
+1. Coordinator app: every pop-up sheet (App info and the others) now stops
+   12px under the clock and signal. A sheet taller than that scrolls inside.
+   Nothing else changes. The driver app and the passenger page only take the
+   new version number.
 
-The first Sunday after this goes live only collects parked readings. The
-walkaround the Sunday after is the first one compared with them.
+GOING LIVE
+----------
 
-
-IN THIS ORDER
--------------
-
-1. Merge the pull request. Nothing to paste.
-
-   The pages go live at once. The tests run, and only if they pass do the
-   server (Cloudflare build) and the sheet (Apps Script workflow) go live.
+Merge the pull request. The pages go live at once. Server and sheet do not
+change.
 
 
 AFTER IT (give it ten minutes)
 --------
 
-A. The foot of the apps reads  app v1.124.0 · server w2.65.0 · sheet
+A. The foot of the apps reads  app v1.125.0 · server w2.65.0 · sheet
    v1.122.0 . Open each app from its Home Screen icon twice.
-B. Is everything working? says Set up has run for v1.122.0.
-C. Checks tab: "Parked mileage" and "Since parked" sit beside Mileage. The
-   rows already there keep their values.
-D. On Sunday, after the morning run ends, that bus's driver gets the Trip
-   ended notification and sees the box. Other drivers do not. Once a
-   reading is keyed, the driver gets "Parked mileage received".
-
-
-IF THE SERVER STAYS ON w2.64.0
------------------------------
-
-Cloudflare, Workers, minibus-api, Deployments: the build log says which
-check failed. The live server stays as it was, and the new pages work with
-it (the box does not show), so Sunday is unaffected. Tell Claude what it
-says.
+B. Coordinator app, App info: the top of the sheet sits below the clock.
