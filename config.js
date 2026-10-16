@@ -149,8 +149,11 @@ window.CONFIG = {
      answers yes or no. No phone is ever sent a fingerprint.
 
      A driver with no phone number and no PIN of his own is not asked for
-     one, so adding somebody never locks them out. Set false to turn the
-     whole thing off. */
+     one, so adding somebody never locks them out.
+
+     Keep it true. From v1.123.0 the live server takes a driver's runs, stop
+     taps, rota requests and MOT runs only once his PIN has been keyed on
+     the phone, so false would hold every one of them. */
   requirePin: true,
 
   /* Who is offered the full inspection as well as the pre-drive check, and

@@ -39,6 +39,9 @@ export default async function (root) {
     await db.prepare("DELETE FROM drivers").run();
     await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,?,1,?)")
       .bind("Bro Arthur", "Coordinator", "North", 1, await W.pinHashOf(env, "Bro Arthur", PIN)).run();
+    /* Names with no PIN need no key for an MOT run (w2.64.0). */
+    for (const n of ["Bro Ben", "Bro Carl"]) await db.prepare(
+      "INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,'Driver','North',2,1,'')").bind(n).run();
     await W.cachePut(env, "auth_rules", { roles: ["coordinator"], sameHandBothWays: true }).run();
     await W.cachePut(env, "bus_extra", {
       "YS70 PWE": { dates: dates || {}, oddRoute: "North", notes: "" },

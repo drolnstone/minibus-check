@@ -92,7 +92,8 @@ export default async function (root) {
     const app = readFileSync(join(root, "index.html"), "utf8");
     a.ok(/phone: myPhone\(\),\s*events: batch/.test(app), "taps");
     a.ok(app.indexOf('"&phone="+encodeURIComponent(myPhone())') !== -1, "board poll");
-    a.eq((app.match(/pin: st\.pin, phone: myPhone\(\)/g) || []).length, 2, "both PIN calls");
+    /* Three from v1.123.0: the sign-in key is fetched the same way. */
+    a.eq((app.match(/pin: st\.pin, phone: myPhone\(\)/g) || []).length, 3, "every PIN call");
     a.ok(app.indexOf('error==="other phone"') !== -1, "a refused tap lets the run go");
   });
 

@@ -30,6 +30,8 @@ export default async function (root) {
     const db = makeDB(join(root, "server", "schema.sql"));
     const env = makeEnv(db);
     await seedSunday(db, KEY);
+    /* A name with no PIN needs no key (w2.64.0). */
+    await db.prepare("INSERT OR REPLACE INTO drivers (name, role, route, ord, active, pin_hash) VALUES ('Bro Trevor','Driver','North',1,1,'')").run();
     return { db, env };
   }
   const setting = (db, k, v) =>

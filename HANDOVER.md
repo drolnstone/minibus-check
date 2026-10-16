@@ -62,8 +62,9 @@ There is no quarterly email: the app makes a PDF for any period.
 ## 4. Release process
 
 - Merging a PR to main publishes the three apps through GitHub Pages.
-- Worker changes: Asim pastes `server/worker.js` into the Cloudflare editor and deploys.
-- Code.gs changes: the Apps Script workflow (`.github/workflows/apps-script.yml`) pushes `Code.gs` and makes a new version of the web app (same deployment, same URL) when a change reaches main, once the secrets CLASPRC_JSON and SCRIPT_ID are set. From sheet v1.120.0 the five-minute clock runs Set up / refresh rota by itself once per new version. Without them, Asim pastes `Code.gs` into Apps Script, saves, then **Deploy, Manage deployments, New version**.
+- Worker changes go live on merge through Cloudflare's Git deploy (`wrangler.toml`). From server w2.64.0 the build runs the tests first and a failure stops the deploy.
+- Code.gs changes: the Apps Script workflow (`.github/workflows/apps-script.yml`) pushes `Code.gs` and makes a new version of the web app (same deployment, same URL) once the Tests workflow has passed on main (from 16 Oct 2026), and does nothing when the live Code.gs is already the same. It needs the secrets CLASPRC_JSON and SCRIPT_ID. From sheet v1.120.0 the five-minute clock runs Set up / refresh rota by itself once per new version.
+- So one merge is the whole release: no paste. Asim checks the foot versions and "Is everything working?".
 - The foot of all three apps shows app · server · sheet versions. Asim checks it after each release, and runs the sheet's health check (✓ and ✗ lines).
 - Code.gs needed a one-time `pdfFolder` run so it can save reports to Drive (done for #30).
 

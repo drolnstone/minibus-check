@@ -1533,6 +1533,76 @@ var store = {
   set:function(k,v){ mem[k]=v; try{ localStorage.setItem(k,v); }catch(e){} },
   del:function(k){ delete mem[k]; try{ localStorage.removeItem(k); }catch(e){} }
 };
+
+/* A SIGN-IN KEY, from v1.123.0 (audit, 16 Oct).
+
+   A right PIN gets this phone a key for that name from the live server. It
+   goes with each walkaround, run, stop tap, rota request and MOT run, so the
+   server knows the name on them was keyed here. Kept until his PIN is
+   changed or reset, so a Sunday with no signal still has last week's. */
+var KKEY = "fleet.keys.v1";
+function driverKeys(){ try{ return JSON.parse(store.get(KKEY)||"{}")||{}; }catch(e){ return {}; } }
+function driverKey(name){ return String(driverKeys()[String(name||"").trim().toLowerCase()]||""); }
+function driverKeySave(name, key){
+  if(!key || !String(name||"").trim()) return;
+  var m=driverKeys(); m[String(name).trim().toLowerCase()]=String(key);
+  try{ store.set(KKEY, JSON.stringify(m)); }catch(e){}
+}
+function driverKeyDrop(name){
+  var m=driverKeys(); delete m[String(name||"").trim().toLowerCase()];
+  try{ store.set(KKEY, JSON.stringify(m)); }catch(e){}
+}
+/* The key for a name, fetched first with the PIN keyed on this phone when
+   there is none yet. done("") when it cannot be had now.
+
+   Only a PIN the gate has let in, and each one once: this is called on a
+   timer, and a wrong PIN sent again every few seconds would lock his own
+   phone. A wrong answer shuts the gate so the right one can be keyed. */
+var keyAsked="";
+function keyEnsure(name, done){
+  var k=driverKey(name);
+  var tried=st.driver+":"+st.pin;
+  if(k || !LIVE_ENDPOINT || !navigator.onLine || !sameName(st.driver, name) || !st.pinOk || !st.pinState ||
+     !/^\d{4,8}$/.test(String(st.pin||"")) || keyAsked===tried){ done(k); return; }
+  callFetch(LIVE_ENDPOINT, {
+    method:"POST", redirect:"follow",
+    headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: CFG.token||"", action:"pin",
+                           pin:{ driver: st.driver, pin: st.pin, phone: myPhone(), key: "" } })
+  }, PIN_TIMEOUT)
+    .then(function(r){ return r.text(); })
+    .then(function(t){
+      var out=JSON.parse(t);
+      if(out && out.ok===true){
+        keyAsked=tried;
+        if(st.driver+":"+st.pin===tried){
+          if(out.valid===true && out.key) driverKeySave(name, out.key);
+          else if(out.valid===false && !out.locked && !out.elsewhere){
+            try{ var m=pinSeen(); delete m[st.driver]; store.set(PKEY, JSON.stringify(m)); }catch(e){}
+            pinTakeBack("That PIN is not right.");
+          }
+        }
+      }
+      done(driverKey(name));
+    })
+    .catch(function(){ done(""); });
+}
+/* The live server would not take something in this name: no key for it on
+   this phone, or his PIN has changed. The gate shuts so the right PIN can
+   be keyed; the key that comes with it sends what is waiting. */
+function pinTakeBack(msg){
+  driverKeyDrop(st.driver);
+  st.pinOk=false; st.pinState=""; pinLast=""; pinLastOk=false;
+  if(msg) pinSay(msg, true);
+  paintFoot();
+}
+/* A key has just come: anything held for want of one goes now. */
+function keyArrived(name, key){
+  if(!key) return;
+  driverKeySave(name, key);
+  tripPinTold=false;
+  setTimeout(tripFlush, 0);
+}
 /* Every call to Apps Script, with a limit on how long it may hang.
 
    fetch has no timeout of its own. A request that never answers was held until
@@ -1689,7 +1759,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.122.0";
+var APP_VERSION = "v1.123.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2454,10 +2524,11 @@ function motRunSend(reg, step){
   motRunBusy=true;
   Array.prototype.forEach.call(document.querySelectorAll("[data-motrun]"),function(b){ b.disabled=true; });
   toast(step==="start" ? "Starting the MOT run\u2026" : "Ending the MOT run\u2026");
+  keyEnsure(st.driver, function(key){
   callFetch(LIVE_ENDPOINT,{
     method:"POST", redirect:"follow",
     headers:{"Content-Type":"text/plain;charset=utf-8"},
-    body: JSON.stringify({ token: CFG.token||"", action:"motrun",
+    body: JSON.stringify({ token: CFG.token||"", action:"motrun", key: key,
       motrun:{ reg:reg, step:step, who:(st.driver||"").trim() } })
   }).then(function(r){ return r.text(); }).then(function(t){
     motRunDone();
@@ -2471,8 +2542,10 @@ function motRunSend(reg, step){
     toast(out && out.error==="used" ? reg+" has had its MOT run today."
         : out && out.error==="started" ? out.driver+" has started this MOT run."
         : out && out.error==="no mot run" ? "No MOT run is authorised for "+reg+" today."
+        : out && out.error==="pin" ? (pinTakeBack(""), pinGateFocus(), "Key your PIN again, then try.")
         : "The live server did not take that.", true);
   }).catch(function(){ motRunDone(); toast("No answer.", true); });
+  });
 }
 function motRunDone(){
   motRunBusy=false;
@@ -3765,6 +3838,24 @@ function groupOpenDefects(raw){
   return order.map(function(k){ return byItem[k]; });
 }
 
+/* HAS THIS BEEN FIXED?, from v1.123.0 (audit, 16 Oct).
+
+   Only today's check stops a bus. A critical defect left open from an
+   earlier week was shown in the box above the check and nothing more, so a
+   driver could pass that item with one tap of Fine. Now the item asks: Yes,
+   fixed passes it; No, still there reports it again and the bus stops. */
+function openCritFor(reg, name){
+  var key=String(name||"").trim().toLowerCase();
+  /* Not one the coordinator is watching (Monitoring): he has let the bus
+     run with it, and "No, still there" would stop it every week. */
+  var list=groupOpenDefects((OPEN_DEFECTS[reg]||[]).filter(function(d){ return d.status!=="Monitoring"; }));
+  for(var i=0;i<list.length;i++){
+    var d=list[i];
+    if(d.crit && d.kind!=="Advisory" && String(d.item||"").trim().toLowerCase()===key) return d;
+  }
+  return null;
+}
+
 function openDefectsHTML(reg){
   /* Critical first, whichever kind, so a critical advisory sits at the top
      of the list until somebody closes it. Within the same weight a defect
@@ -3959,6 +4050,7 @@ function renderStage(){
   var list=$("itemList"); list.innerHTML="";
   s.items.forEach(function(it){
     var r=st.res[it.id];
+    var oc=(st.veh && it.crit) ? openCritFor(st.veh.reg, it.name) : null;
     var el=document.createElement("article");
     el.className=itemClass(it,r);
     var tags="";
@@ -3972,15 +4064,16 @@ function renderStage(){
       (tags?'<div class="tags">'+tags+'</div>':'')+
       '<p class="what">'+esc(it.what)+'</p>'+
       (it.history?'<p class="history"><b>On this bus:</b> '+esc(it.history)+'</p>':'')+
+      (oc?'<p class="history"><b>Reported critical:</b> '+esc(oc.note||oc.item)+'<br><b>Has this been fixed?</b></p>':'')+
       '<div class="choose'+(OVR.advisory?" three":"")+'">'+
-        '<button type="button" class="ok'+(r&&r.v==="ok"?" on":"")+'">Fine</button>'+
+        '<button type="button" class="ok'+(r&&r.v==="ok"?" on":"")+'">'+(oc?"Yes, fixed":"Fine")+'</button>'+
         /* Between Fine and Defect on the screen because it is between them in
            meaning, and a driver reaching for the right hand button under time
            pressure should not find the softer answer there. */
         (OVR.advisory
           ? '<button type="button" class="adv'+(r&&r.v==="adv"?" on":"")+'">Advisory</button>'
           : '')+
-        '<button type="button" class="def'+(r&&r.v==="def"?" on":"")+'">Defect</button>'+
+        '<button type="button" class="def'+(r&&r.v==="def"?" on":"")+'">'+(oc?"No, still there":"Defect")+'</button>'+
         /* Pre-drive lists are already cut to what this particular bus has,
            so nothing on one can be "not on this bus". Offering it there just
            gives a driver a third button that will never be right. The full
@@ -4051,6 +4144,8 @@ function renderStage(){
          screen. A pop-up in the middle of a check stopped the driver
          finishing it. */
       pick("def");
+      /* Still there: the report it was given, to keep or add to. */
+      if(oc && !ta.value && oc.note){ ta.value=oc.note; st.res[it.id].note=oc.note; paintFoot(); }
       setTimeout(function(){ ta.focus(); },120);
     });
     /* Advisory does not advance, for the same reason Defect does not: it
@@ -4417,7 +4512,7 @@ function paintBanner(){
 
    If the Worker cannot be reached at all, this falls back to exactly what it
    did before: Apps Script, slowly, correctly. */
-function sendRecTo(url, rec, fresh){
+function sendRecTo(url, rec, fresh, key){
   /* How long ago the check was made, measured on this phone's own clock at
      the moment of sending. A duration is right even when the phone's date is
      wrong, and it is what lets a server place a check held overnight in the
@@ -4435,7 +4530,7 @@ function sendRecTo(url, rec, fresh){
     method:"POST",
     redirect:"follow",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
-    body: JSON.stringify({ token: CFG.token || "", action: "check", check: sent })
+    body: JSON.stringify({ token: CFG.token || "", action: "check", check: sent, key: key || "" })
   }).then(function(res){
     if(!res.ok) throw new Error("http "+res.status);
     return res.text();
@@ -4449,19 +4544,28 @@ function sendRecTo(url, rec, fresh){
 
 function sendRec(rec, alsoSheet){
   if(!LIVE) return Promise.reject(new Error("no endpoint"));
+  /* The driver's key, from v1.123.0: without it the check is still filed,
+     as not confirmed, and cannot lift a stop. */
+  return new Promise(function(res){ keyEnsure(rec.driver, res); }).then(function(key){
+    return sendRecKeyed(rec, alsoSheet, key);
+  });
+}
+function sendRecKeyed(rec, alsoSheet, key){
   /* alsoSheet is set only by the live submit, which is also the one send
      that is never late. */
   var fresh = !!alsoSheet;
   var viaWorker = !!(LIVE_ENDPOINT && LIVE_ENDPOINT !== CFG.endpoint);
-  if(!viaWorker) return sendRecTo(CFG.endpoint, rec, fresh);
-  return sendRecTo(LIVE_ENDPOINT, rec, fresh).then(function(out){
+  if(!viaWorker) return sendRecTo(CFG.endpoint, rec, fresh, key);
+  return sendRecTo(LIVE_ENDPOINT, rec, fresh, key).then(function(out){
     noteCheckReached(rec);
     if(alsoSheet){
-      try{ sendRecTo(CFG.endpoint, rec, fresh).catch(function(){}); }catch(e){}
+      try{ sendRecTo(CFG.endpoint, rec, fresh, key).catch(function(){}); }catch(e){}
     }
+    /* Not confirmed, after a stop today: the stop stands. */
+    if(out && out.stopHeld) toast(rec.reg+" stays stopped. Ring the coordinator.", true);
     return out;
   }, function(){
-    return sendRecTo(CFG.endpoint, rec, fresh);
+    return sendRecTo(CFG.endpoint, rec, fresh, key);
   });
 }
 
@@ -5567,11 +5671,15 @@ function tripFlush(){
   });
   if(!batch.length) return;
 
+  var tripWho = head.driver || st.driver || "";
+  /* No key, and the gate is waiting for his PIN: nothing to send with yet. */
+  if(!driverKey(tripWho) && sameName(tripWho, st.driver) && pinGateNeeded()){ tripPaintWait(); return; }
   tripBusy=true;
+  keyEnsure(tripWho, function(key){
   callFetch(LIVE_ENDPOINT,{
     method:"POST", redirect:"follow",
     headers:{"Content-Type":"text/plain;charset=utf-8"},
-    body: JSON.stringify({ token: CFG.token||"", action:"trip", trip:{
+    body: JSON.stringify({ token: CFG.token||"", action:"trip", key: key, trip:{
       trip: runId,
       sunday: head.sunday || rotaKey(rotaBaseSunday(0)),
       route: rt,
@@ -5590,6 +5698,15 @@ function tripFlush(){
       tripLetGo(runId);
       tripPaint();
       tripPaintWait();
+      return;
+    }
+    /* No key for this name yet (v1.123.0). Kept, all of it, and sent once
+       his PIN has been keyed with signal: the gate shuts to ask for it. */
+    if(out && out.error==="pin"){
+      tripPaintWait();
+      if(!sameName(tripWho, st.driver)){ driverKeyDrop(tripWho); return; }
+      pinTakeBack("");
+      if(!tripPinTold){ tripPinTold=true; pinGateFocus(); toast("Key your PIN to send your stops.", true); }
       return;
     }
     if(!out || out.ok!==true) throw new Error(out&&out.error?out.error:"not sent");
@@ -5620,7 +5737,9 @@ function tripFlush(){
        waiting, which is more use than a toast that scrolls away. */
     tripPaintWait();
   });
+  });
 }
+var tripPinTold=false;
 
 /* One fix, at Start trip, on the start row only. Not a fix per tap: that
    would be tracking the bus, which this app does not do and says it does not.
@@ -9231,6 +9350,8 @@ function rotaSubmitRequest(){
   }};
 
   btn.disabled=true; btn.textContent="Sending\u2026";
+  keyEnsure(st.driver, function(key){
+  body.key = key;
 
   /* THE LIVE SERVER FIRST, from v1.76.0. It answers in a fraction of a second
      and hands the request to the sheet itself. If it cannot be reached, or
@@ -9241,14 +9362,18 @@ function rotaSubmitRequest(){
       .then(function(r){return r.text();})
       .then(function(t){
         var out=JSON.parse(t);
-        if(!out.ok) throw new Error(out.error||"The record would not accept it.");
+        if(!out.ok){ var er=new Error(out.error||"The record would not accept it."); er.code=out.error; throw er; }
         return out;
       });
   };
   var viaLive = !!(LIVE_ENDPOINT && LIVE_ENDPOINT !== CFG.endpoint);
   (viaLive
     ? post(LIVE_ENDPOINT).then(function(out){ out.__live=true; return out; },
-                               function(){ return post(CFG.endpoint); })
+                               function(e){
+                                 /* Refused for want of his key: not sent anywhere else. */
+                                 if(e && e.code==="pin") throw e;
+                                 return post(CFG.endpoint);
+                               })
     : post(CFG.endpoint))
     .then(function(out){
       rotaClose();
@@ -9263,6 +9388,14 @@ function rotaSubmitRequest(){
         : "Request sent. The rota has not changed yet.");
     })
     .catch(function(e){
+      if(e && e.code==="pin"){
+        driverKeyDrop(st.driver);
+        st.pinOk=false; st.pinState=""; pinLast=""; pinLastOk=false;
+        toast("Not submitted. Key your PIN again first.", true);
+        btn.disabled=false; btn.textContent="Send request";
+        paintFoot();
+        return;
+      }
       /* The same fault the booking page had. Apps Script writes the row and
          then answers with a redirect to a second address; a phone that
          cannot follow that redirect rejects a request that is already on the
@@ -9295,6 +9428,7 @@ function rotaSubmitRequest(){
         btn.disabled=false; btn.textContent="Send request";
       }, true);
     });
+  });
 }
 /* A request the live server has taken, put on this phone's copy of the rota
    the way the sheet will show it once it has filed it. */
@@ -10016,7 +10150,7 @@ function pinConfirmQuietly(tried){
     method:"POST", redirect:"follow",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
     body: JSON.stringify({ token: CFG.token||"", action:"pin",
-                           pin:{ driver: st.driver, pin: st.pin, phone: myPhone() } })
+                           pin:{ driver: st.driver, pin: st.pin, phone: myPhone(), key: driverKey(st.driver) } })
   }, PIN_TIMEOUT)
     .then(function(r){ return r.text(); })
     .then(function(t){
@@ -10030,8 +10164,11 @@ function pinConfirmQuietly(tried){
         paintFoot();
         return;
       }
+      /* Locked by wrong tries made elsewhere. Not a changed PIN: he stays in. */
+      if(out.locked) return;
       if(out.valid === true){
         pinKeepNote(out);
+        keyArrived(st.driver, out.key);
         /* Agreed. Refresh this phone's copy so it stays current. */
         if(canHash()) sha256Hex(tried).then(function(h){ pinRemember(st.driver, h); },
                                             function(){});
@@ -10042,6 +10179,7 @@ function pinConfirmQuietly(tried){
       st.pinOk = false; st.pinState = "";
       pinLast = ""; pinLastOk = false;
       try{ var m=pinSeen(); delete m[st.driver]; store.set(PKEY, JSON.stringify(m)); }catch(e){}
+      driverKeyDrop(st.driver);
       pinSay("That PIN has been changed. Key the new one.", true);
       paintFoot();
     })
@@ -10072,7 +10210,7 @@ function pinAskLive(tried, stillTyping, answered, thenSheet){
     method:"POST", redirect:"follow",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
     body: JSON.stringify({ token: CFG.token||"", action:"pin",
-                           pin:{ driver: st.driver, pin: st.pin, phone: myPhone() } })
+                           pin:{ driver: st.driver, pin: st.pin, phone: myPhone(), key: driverKey(st.driver) } })
   }, PIN_TIMEOUT)
     .then(function(r){ return r.text(); })
     .then(function(t){
@@ -10108,6 +10246,7 @@ function pinApply(out, tried, answered){
   answered(st.pinOk);
   if(st.pinOk){
     pinKeepNote(out);
+    keyArrived(st.driver, out.key);
     pinSay("");
     /* Kept so this phone works without signal next time. Made here, never
        received and never sent. */
@@ -10156,6 +10295,7 @@ function pinPost(action, body, then, wrong){
   pinBusy = true;
   pinSaySet("Sending\u2026");
   body.driver = st.driver;
+  body.key = driverKey(st.driver);
   callFetch(LIVE_ENDPOINT, {
     method:"POST", redirect:"follow",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
@@ -10176,6 +10316,11 @@ function pinPost(action, body, then, wrong){
           ? " " + out.left + (out.left === 1 ? " more try" : " more tries") + " before it pauses." : ""), true);
         if(wrong) wrong();
         return;
+      }
+      /* A change drops every phone's key for him; this one gets the new. */
+      if(out.key){
+        if(action === "pinchange") driverKeyDrop(st.driver);
+        keyArrived(st.driver, out.key);
       }
       then(out);
     })

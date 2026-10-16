@@ -1,24 +1,64 @@
 MINIBUS
 =======
-  pages v1.122.0 · server w2.63.0 · sheet v1.120.0 (both unchanged)
+  pages v1.123.0 · server w2.64.0 · sheet v1.121.0
 
-Asim, 15 Oct: "This page" was a confusing name.
+YOU ARE ON   app v1.122.0 · server w2.63.0 · sheet v1.120.0
+GOING TO     app v1.123.0 · server w2.64.0 · sheet v1.121.0
 
-Coordinator app: the box behind the version numbers on the sign-in screen
-is now called App info.
+Asim, 16 Oct: "Do the already known plus 1 to 7 except 2", from the A to Z
+audit of 15 Oct.
 
-Pages only.
+1. Wrong PINs are counted per phone. A stranger's three wrong PINs lock his
+   own phone, not the driver's. Thirty wrong in an hour from anywhere still
+   lock the name, so nobody can guess a PIN from many phones, and one phone
+   on its own can never get to thirty.
+3. A right PIN gives the driver app a key. Runs, stop taps, rota requests and
+   MOT runs need it. A walkaround without it is still filed, as "Not
+   confirmed" in the PIN check column, and cannot lift a stop: a coordinator
+   lets that bus out instead. A driver with no phone number has no PIN, so
+   his walkarounds are "Not confirmed" too.
+   A phone still on the old app has its runs and requests taken for two
+   weeks after the update (a request then says "Not confirmed by PIN").
+   After that it needs the new app, which it gets when opened with signal.
+4. A check item with an open critical defect asks "Has this been fixed?":
+   Yes, fixed, or No, still there. Not for one set to Monitoring.
+5. Passengers' phone numbers are blanked six weeks after their Sunday, on
+   the live server and on Bus Bookings and its archive. The row stays.
+6. A monthly or yearly summary that did not go out is a cross on the health
+   check, with the reason.
+7. The server and the sheet go live only after the tests pass.
+Known: a time typed in Happened on Trip Events now reaches the live server.
+Known: the cross about the last knock shows only while something is waiting.
 
 
 IN THIS ORDER
 -------------
 
-1. Merge the pull request.
+1. Merge the pull request. Nothing to paste.
+
+   The pages go live at once. The tests run, and only if they pass do the
+   server (Cloudflare build) and the sheet (Apps Script workflow) go live.
 
 
-AFTER IT
+AFTER IT (give it ten minutes)
 --------
 
-A. The foot of the apps reads  app v1.122.0 · server w2.63.0 · sheet
-   v1.120.0 .
-B. Tapping the version numbers opens App info.
+A. The foot of the apps reads  app v1.123.0 · server w2.64.0 · sheet
+   v1.121.0 . Open each app from its Home Screen icon twice.
+B. Is everything working? says Set up has run for v1.121.0.
+C. Driver app: key your PIN with signal. Nothing else changes for the
+   drivers: each phone gets its key the first time its driver keys his PIN
+   with signal. If a phone has stops waiting for want of a key, it asks for
+   the PIN and sends them once it is keyed.
+D. On a bus with an open critical defect, its item asks "Has this been
+   fixed?".
+E. Optional: on Trip Events, type a new time in Happened on one of last
+   Sunday's rows. Within a minute the cell's note says "Corrected on the
+   sheet".
+
+IF THE SERVER STAYS ON w2.63.0
+-----------------------------
+
+Cloudflare, Workers, minibus-api, Deployments: the build log says which
+check failed. The live server stays as it was, and the new pages work with
+it, so Sunday is unaffected. Tell Claude what it says.

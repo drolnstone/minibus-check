@@ -173,6 +173,8 @@ export default async function (root) {
       const ctx = { waitUntil: (p) => waits.push(p) };
       const post = (body) => mod.default.fetch(new Request("https://worker.test/", {
         method: "POST", body: JSON.stringify(Object.assign({ token: "minibusapp" }, body)) }), env, ctx);
+      /* A name with no PIN needs no key (w2.64.0). */
+      await db.prepare("INSERT OR REPLACE INTO drivers (name, role, route, ord, active, pin_hash) VALUES ('Bro Adrian','Driver','North',1,1,'')").run();
       await post({ action: "trip", trip: { trip: "t1", route: "North", driver: "Bro Adrian", sunday: KEY,
         events: [{ event: "start", at: Date.now() - 60000 }] } });
       await post({ action: "check", check: { id: "chk1", reg: "YS70 PWE", level: "ok", driver: "Bro Adrian" } });
