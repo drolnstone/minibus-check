@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.120.0";
+var SCRIPT_VERSION = "v1.121.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -2422,11 +2422,20 @@ function doPost(e) {
       return handlePinCheck(body.pin);
     }
 
+    /* STRAIGHT TO THE SHEET, from v1.121.0 (audit, 16 Oct). Only the live
+       server can check a driver's key, so what a phone sends here itself is
+       not confirmed as his. A rota request says so to the coordinator. A run
+       is refused while there is a live server: the driver app sends runs
+       there and keeps them until it answers. A walkaround is filed as not
+       confirmed, and cannot lift a stop. */
     if (String(body.action || "") === "rotaRequest") {
-      return handleRotaRequest(body.request);
+      var rqd = body.request || {};
+      if (!keyConfirmed(rqd.driver, body.key)) rqd.reason = "Not confirmed by PIN. " + String(rqd.reason || "");
+      return handleRotaRequest(rqd);
     }
 
     if (String(body.action || "") === "trip") {
+      if (WORKER_URL) return reply({ ok: false, error: "runs go to the live server" });
       return handleTrip(body.trip);
     }
 
@@ -2486,6 +2495,7 @@ function doPost(e) {
       return reply({ ok: true, ran: !!back });
     }
 
+    if (body.check && !keyConfirmed(body.check.driver, body.key)) body.check.pinState = "unconfirmed";
     return handleCheck(body.check);
 
   } catch (err) {
@@ -2787,10 +2797,26 @@ function applyOutcomeDropdown(sh, row) {
  * and do the check another way, he drives with nothing recorded at all.
  * Written down beats blocked, and this is where it is written down.
  */
+/* Whether a phone's own post here carried its driver's key. Only the live
+   server holds the keys, so it is asked; no live server configured, nothing
+   to ask and nothing changes; no answer, not confirmed. From v1.121.0. */
+function keyConfirmed(driver, key) {
+  if (!WORKER_URL) return true;
+  try {
+    var out = workerCall("keyok", { driver: String(driver || ""), key: String(key || "") });
+    /* A live server older than w2.64.0 cannot judge: as before, then. */
+    if (out && out.error === "unknown action") return true;
+    return !!(out && out.ok === true && out.confirmed === true);
+  } catch (err) { return false; }
+}
+
+/* From v1.121.0: sent without the driver's key. It cannot lift a stop. */
+var PIN_NOT_CONFIRMED = "Not confirmed";
 function pinWords(c) {
   var s = String((c && c.pinState) || "");
   return s === "ok" ? "Verified"
        : s === "offline" ? "Not verified (no signal)"
+       : s === "unconfirmed" ? PIN_NOT_CONFIRMED
        : "";
 }
 
@@ -3232,6 +3258,13 @@ function nightlyMaintenance() {
     } catch (err2) {}
   }
 
+  /* Passengers' numbers, six weeks after their Sunday (v1.121.0). */
+  try { forgetOldPhones(); }
+  catch (err) {
+    try { PropertiesService.getScriptProperties()
+            .setProperty("archiveError", "numbers: " + String((err && err.message) || err)); } catch (err2) {}
+  }
+
   /* Any tab not locked, locked. Unlock the sheet lasts until tonight. */
   relockIfNeeded(ss);
 
@@ -3290,6 +3323,45 @@ function archiveBook() {
 }
 
 var ARCHIVE_SUFFIX = " (archive)";
+
+/* PASSENGERS' NUMBERS ARE KEPT SIX WEEKS, from v1.121.0 (audit, 16 Oct).
+
+   A booking's Phone and Passenger ID were kept for ever: six weeks on Bus
+   Bookings, then moved to its archive tab and never deleted. UK data
+   protection expects personal details to go once they are not needed, and
+   nothing reads a booking after its Sunday. So, every night, both cells are
+   blanked on any booking whose Sunday is more than six weeks gone, on the
+   live tab and the archive. The row stays: the seat count is the record.
+   The live server blanks its own copy the same way. */
+var PHONES_KEEP_WEEKS = 6;
+function forgetOldPhones() {
+  var cutoff = dateToKey(addWeeks(sundayOf(new Date()), -PHONES_KEEP_WEEKS));
+  var books = [SpreadsheetApp.getActiveSpreadsheet()];
+  try { var ab = archiveBook(); if (ab.getId() !== books[0].getId()) books.push(ab); } catch (err) {}
+  var blanked = 0;
+  books.forEach(function (book) {
+    [BOOKINGS_SHEET, BOOKINGS_SHEET + ARCHIVE_SUFFIX].forEach(function (name) {
+      var sh = book.getSheetByName(name);
+      if (!sh || sh.getLastRow() < 2) return;
+      var m = headerMap(sh);
+      var cs = m["Sunday"], cp = m["Phone"], ci = m["Passenger ID"];
+      if (!cs || (!cp && !ci)) return;
+      var n = sh.getLastRow() - 1;
+      var days = sh.getRange(2, cs, n, 1).getValues();
+      [cp, ci].forEach(function (col) {
+        if (!col) return;
+        var rng = sh.getRange(2, col, n, 1);
+        var vals = rng.getValues(), changed = false;
+        for (var i = 0; i < n; i++) {
+          var d = anyToKey(days[i][0]);
+          if (d && d < cutoff && String(vals[i][0]) !== "") { vals[i][0] = ""; changed = true; blanked++; }
+        }
+        if (changed) rng.setValues(vals);
+      });
+    });
+  });
+  return blanked;
+}
 
 /* Per tab, per run. The six minute execution limit is the reason: a backlog
    takes a few nights rather than one run that dies halfway and leaves rows
@@ -3937,7 +4009,9 @@ function pushCheckToWorker(c) {
       /* Which walkaround this is. The live server keeps the time it first
          saw a check by, so filing it here minutes after a coordinator has
          authorised the bus does not put the bus back in the yard. */
-      id: String(c.id || "")
+      id: String(c.id || ""),
+      /* From v1.121.0: one not confirmed by its driver's key cannot lift a stop. */
+      confirmed: String(c.pinState || "") !== "unconfirmed"
     }] });
   } catch (err) { /* a check must never fail because the live server is down */ }
 }
@@ -5680,6 +5754,7 @@ function onEditLive(e) {
     var name = sh.getName();
 
     if (name === BOOKINGS_SHEET) { liveBookingEdits(e, sh); return; }
+    if (name === TRIP_SHEET) { liveTripEdits(e, sh); return; }
     if (LIVE_PUSH_TABS.indexOf(name) === -1) return;
 
     /* The stops are cached for a minute between executions, and this push
@@ -5725,6 +5800,52 @@ function liveBookingEdits(e, sh) {
     try { PropertiesService.getScriptProperties()
             .setProperty("liveError", "booking edit: " + String((out && out.error) || "no answer")); } catch (err) {}
   }
+}
+
+/* A time typed in the Happened column of Trip Events, from v1.121.0.
+
+   Known until now: the live server owns these rows, so a time corrected
+   here was written back over by the next drain and reached nothing. The
+   coordinator app's Fix was the only way. Now the edit goes to the live
+   server, which corrects the row as Fix does and sends its copy back, so
+   the tab ends up saying what was typed. Rows with no Live ID were typed in
+   by hand and stay the sheet's own. Hours and minutes, or a time cell. */
+function liveTripEdits(e, sh) {
+  var c = colsSoft(sh, TRIP_SHEET);
+  if (!c.liveId || !c.happened) return;
+  var topRow = Math.max(e.range.getRow(), 2);
+  var lastRow = e.range.getRow() + e.range.getNumRows() - 1;
+  var topCol = e.range.getColumn();
+  var lastCol = topCol + e.range.getNumColumns() - 1;
+  if (lastRow < topRow || topCol > c.happened || lastCol < c.happened) return;
+
+  var vals = sh.getRange(topRow, 1, lastRow - topRow + 1, sh.getLastColumn()).getValues();
+  /* As the cell shows it. A time typed on its own is held as a day in 1899,
+     which London's clock of that year would put a minute out. */
+  var shown = sh.getRange(topRow, c.happened, lastRow - topRow + 1, 1).getDisplayValues();
+  var edits = [];
+  vals.forEach(function (r, i) {
+    var id = Number(at1(r, c.liveId));
+    if (!(id > 0)) return;
+    var t = tripCellHHMM(shown[i][0]);
+    if (t) edits.push({ id: id, time: t });
+  });
+  if (!edits.length) return;
+  var out = workerCall("sheettrips", { edits: edits });
+  var refused = ((out && out.results) || []).filter(function (x) { return !x.applied && x.why !== "same"; });
+  if (!out || out.ok !== true || refused.length) {
+    try { PropertiesService.getScriptProperties()
+            .setProperty("liveError", "trip time edit: " + String((out && out.error) ||
+              (refused.length ? refused.map(function (x) { return x.why; }).join(", ") : "no answer"))); } catch (err) {}
+  }
+}
+
+/* The time in a cell as it is shown: "09:05", "9:05", "04/10/2026 09:05:00".
+   Hours and minutes, or "" when there is no time in it. */
+function tripCellHHMM(v) {
+  var m = /(?:^|\s)(\d{1,2}):(\d{2})(?::\d{2})?\s*$/.exec(String(v == null ? "" : v));
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return "";
+  return ("0" + Number(m[1])).slice(-2) + ":" + m[2];
 }
 
 function installLivePush() {
@@ -5866,7 +5987,13 @@ function liveCheckLines() {
                    " If it does not, put the right Web app URL in the Script Property WEB_APP_URL.");
       }
     }
-    if (out.poke) {
+    /* The cross only while something is waiting, from v1.121.0. A knock
+       that went unanswered with nothing left to collect has cost nothing, and
+       a cross that stays until the next knock read as a fault. */
+    if (out.poke && !out.poke.ok && out.poke.waiting === false) {
+      lines.push("    It last asked this sheet to collect " + agoWords(Date.now() - out.poke.agoSec * 1000) +
+                 " and had no answer. Nothing is waiting.");
+    } else if (out.poke) {
       lines.push((out.poke.ok ? "\u2713  " : "\u2717  ") + "It last asked this sheet to collect " +
                  agoWords(Date.now() - out.poke.agoSec * 1000) +
                  (out.poke.ok ? "." : ", and the sheet did not answer. Check the web app is deployed."));
@@ -9456,9 +9583,12 @@ function checksToday() {
       var when = checkMoment(at1(r, c.received), at1(r, c.date), at1(r, c.time));
       if (!when || when < from || when >= to) return;
       if (out[reg] && out[reg].at >= when) return;
+      var state = String(at1(r, c.outcome) || "").trim().toUpperCase() === "STOPPED" ? "stopped" : "ok";
+      /* Not confirmed by the driver's key: it cannot lift a stop (v1.121.0). */
+      if (state === "ok" && out[reg] && out[reg].state === "stopped" &&
+          String(at1(r, c.pinCheck) || "").trim() === PIN_NOT_CONFIRMED) return;
       out[reg] = {
-        state: String(at1(r, c.outcome) || "").trim().toUpperCase() === "STOPPED"
-          ? "stopped" : "ok",
+        state: state,
         at: when,
         driver: String(at1(r, c.driver) || "").trim()
       };
@@ -11606,8 +11736,10 @@ function weeklyDigest() {
     htmlBody: htmlShell(title, colour, lines, "Open spreadsheet", CHECKS_SHEET)
   });
 
-  /* From v1.101.0: the month, and the year, after their last Sunday. */
-  try { periodDigests(sunday, new Date()); } catch (err) {}
+  /* From v1.101.0: the month, and the year, after their last Sunday. A
+     failure is kept for the health check from v1.121.0, never swallowed. */
+  try { periodDigests(sunday, new Date()); }
+  catch (err) { periodTrouble(String(err && err.message || err)); }
 
   return title;
 }
@@ -11640,18 +11772,66 @@ function periodDigests(sunday, now) {
   var sent = {};
   try { sent = JSON.parse(props.getProperty("periodSent") || "{}") || {}; } catch (err) { sent = {}; }
   var done = [];
+  var failed = "";
   want.forEach(function (p) {
     if (sent[p.key]) return;
-    periodDigest(p);
+    try { periodDigest(p); }
+    catch (err) { failed = failed || (p.name + ": " + String(err && err.message || err)); return; }
     sent[p.key] = new Date().toISOString();
     done.push(p.key);
   });
+  if (failed) periodTrouble(failed);
   if (done.length) {
     var keys = Object.keys(sent).sort();
     while (keys.length > 40) { delete sent[keys.shift()]; }
     props.setProperty("periodSent", JSON.stringify(sent));
   }
   return done;
+}
+
+/* WHY A MONTHLY OR YEARLY SUMMARY DID NOT GO, from v1.121.0 (audit).
+   It used to be swallowed, so a failure on 25 October would have told
+   nobody. Kept here for the health check, which also notices one that never
+   ran at all. */
+function periodTrouble(why) {
+  try {
+    PropertiesService.getScriptProperties().setProperty("periodError",
+      JSON.stringify({ at: new Date().toISOString(), why: String(why || "").slice(0, 300) }));
+  } catch (err) {}
+}
+
+/* The last month-end Sunday whose summary should have gone by now (from
+   Sunday 25 October 2026, after 8pm), and whether it did. A ✗ line, or "". */
+var PERIOD_FIRST = "2026-10-25";
+function periodHealthLine(now) {
+  now = now || new Date();
+  if (!COORDINATOR_EMAIL) return "";
+  var sun = lastSunday(now);
+  for (var i = 0; i < 6; i++) {
+    var next = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 7);
+    var due = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate(), 20);
+    if (next.getMonth() !== sun.getMonth() && now >= due) break;
+    sun = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() - 7);
+  }
+  var key = dateToKey(sun);
+  if (key < PERIOD_FIRST) return "";
+  var sent = {};
+  try { sent = JSON.parse(PropertiesService.getScriptProperties().getProperty("periodSent") || "{}") || {}; }
+  catch (err) { sent = {}; }
+  var months = ["January", "February", "March", "April", "May", "June", "July",
+                "August", "September", "October", "November", "December"];
+  var missing = [];
+  if (!sent["month:" + key]) missing.push("monthly summary for " + months[sun.getMonth()] + " " + sun.getFullYear());
+  var nextSun = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 7);
+  if (nextSun.getFullYear() !== sun.getFullYear() && !sent["year:" + key]) missing.push("yearly summary for " + sun.getFullYear());
+  if (!missing.length) return "";
+  var why = "";
+  try {
+    var pe = JSON.parse(PropertiesService.getScriptProperties().getProperty("periodError") || "null");
+    if (pe && pe.why && new Date(pe.at) >= new Date(sun.getFullYear(), sun.getMonth(), sun.getDate())) why = " " + pe.why;
+  } catch (err) {}
+  return "The " + missing.join(" and the ") + " did not go out." + why +
+         " Minibus \u203a Send an email now \u203a Weekly summary sends it again that week.";
 }
 
 /* One summary email, built from the Period summary's tables. */
@@ -12970,6 +13150,7 @@ function healthReport() {
      this is not the version just pasted, nothing else in this report is
      about the code that was meant to be running. */
   good.push("Script is " + SCRIPT_VERSION + ".");
+  try { var pl = periodHealthLine(new Date()); if (pl) bad.push(pl); } catch (err) {}
   try {
     var suProps = PropertiesService.getScriptProperties();
     var suTries = String(suProps.getProperty("setUpTries") || "").split(" ");

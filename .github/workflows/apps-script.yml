@@ -11,12 +11,18 @@
 #   CLASPRC_JSON  the whole ~/.clasprc.json that clasp 2.4.2 login writes
 #   SCRIPT_ID     Apps Script, Project Settings, Script ID
 # Until both are there it does nothing and stays green.
+#
+# From 16 Oct 2026 (audit): only after the Tests workflow has passed on that
+# commit of main. A merge whose checks fail no longer reaches the sheet. It
+# runs after every passing push to main and does nothing when the live
+# Code.gs is already the same, so a pages-only merge makes no new version.
 name: Apps Script
 
 on:
-  push:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
     branches: [main]
-    paths: [Code.gs]
   workflow_dispatch:
 
 concurrency:
@@ -25,6 +31,10 @@ concurrency:
 
 jobs:
   deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -34,6 +44,9 @@ jobs:
       DEPLOYMENT_ID: AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The commit the tests passed on, not whatever main is now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Secrets present?
         id: ready
@@ -64,6 +77,10 @@ jobs:
           [ -f appsscript.json ] || { echo "::error::Pull brought no appsscript.json"; exit 1; }
           [ -f Code.gs ] || { echo "::error::The live project has no file called Code"; exit 1; }
 
+          if cmp -s ../Code.gs Code.gs; then
+            echo "::notice::Code.gs is already live; nothing to deploy"
+            exit 0
+          fi
           cp ../Code.gs Code.gs
           clasp push --force
 

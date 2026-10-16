@@ -1,12 +1,20 @@
 # The Cloudflare Worker minibus-api, as Cloudflare's Git deploy builds it
 # (npx wrangler deploy, path /). Secrets (PIN_SALT, SHEET_TOKEN and the
 # rest) stay in the dashboard; a deploy leaves them alone.
+#
+# From 16 Oct 2026 (audit) the build runs the tests first: wrangler deploy
+# runs [build] before it uploads, and a failing check stops the deploy, so
+# the Worker that is live stays live. Node from .node-version (22, which the
+# tests need for node:sqlite).
 
 name = "minibus-api"
 main = "server/worker.js"
 compatibility_date = "2026-10-01"
 workers_dev = true
 keep_vars = true
+
+[build]
+command = "node tests/run-tests.mjs"
 
 [triggers]
 crons = ["* * * * *"]

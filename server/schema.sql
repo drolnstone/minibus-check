@@ -388,3 +388,12 @@ CREATE TABLE IF NOT EXISTS run_phones (
   phone TEXT NOT NULL,
   seen  INTEGER NOT NULL             -- ms, when that phone was last heard from
 );
+
+-- A sign-in key per phone, from w2.64.0: a right PIN gets the driver app a
+-- key, sent with walkarounds, runs, rota requests and MOT runs. Only a
+-- fingerprint of it is kept. The Worker also creates this itself.
+CREATE TABLE IF NOT EXISTS driver_keys (
+  hash TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  made INTEGER NOT NULL
+);
