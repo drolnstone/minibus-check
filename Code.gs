@@ -45,7 +45,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.122.0";
+var SCRIPT_VERSION = "v1.123.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -6006,6 +6006,7 @@ function onEditLive(e) {
 
     if (name === BOOKINGS_SHEET) { liveBookingEdits(e, sh); return; }
     if (name === TRIP_SHEET) { liveTripEdits(e, sh); return; }
+    if (name === CHECKS_SHEET) { liveParkedEdits(e, sh); return; }
     if (LIVE_PUSH_TABS.indexOf(name) === -1) return;
 
     /* The stops are cached for a minute between executions, and this push
@@ -6091,6 +6092,52 @@ function liveTripEdits(e, sh) {
                 (refused.length ? refused.map(function (x) { return x.why; }).join(", ") : "no answer"))); } catch (err) {}
     }
   }
+}
+
+/* A PARKED READING CORRECTED BY HAND, from v1.123.0 (wrap up audit, 16 Oct).
+
+   The driver can key it again only until midnight. After that, a mistyped
+   one is put right in Parked mileage on the walkaround's row (Unlock the
+   sheet first). The live server takes the corrected number, so the driver
+   app's next walkaround is measured from it too, and Since parked on the
+   bus's next walkaround is worked out again. A cell emptied takes the
+   reading away on the live server. */
+function liveParkedEdits(e, sh) {
+  var c = colsSoft(sh, CHECKS_SHEET);
+  if (!c.parked || !c.id || !c.reg) return;
+  var topRow = Math.max(e.range.getRow(), 2);
+  var lastRow = e.range.getRow() + e.range.getNumRows() - 1;
+  var topCol = e.range.getColumn();
+  var lastCol = topCol + e.range.getNumColumns() - 1;
+  if (lastRow < topRow || topCol > c.parked || lastCol < c.parked) return;
+  var vals = sh.getRange(topRow, 1, lastRow - topRow + 1, sh.getLastColumn()).getValues();
+  var edits = [], rows = [];
+  vals.forEach(function (r, i) {
+    var id = String(at1(r, c.id) || "").trim();
+    var reg = String(at1(r, c.reg) || "").trim().toUpperCase();
+    if (!id || !reg) return;
+    var raw = String(at1(r, c.parked) == null ? "" : at1(r, c.parked)).replace(/[,\s]/g, "");
+    if (raw !== "" && !/^\d{1,7}$/.test(raw)) return;
+    edits.push({ checkId: id, reg: reg, miles: raw === "" ? "" : Number(raw) });
+    rows.push(topRow + i);
+  });
+  if (!edits.length) return;
+  var out = WORKER_URL ? workerCall("sheetparked", { edits: edits }) : { ok: true };
+  if (!out || out.ok !== true) {
+    try { PropertiesService.getScriptProperties()
+            .setProperty("liveError", "parked mileage edit: " + String((out && out.error) || "no answer")); } catch (err) {}
+  }
+  var tz = Session.getScriptTimeZone();
+  edits.forEach(function (ed, i) {
+    var cell = sh.getRange(rows[i], c.parked);
+    /* Who keyed it stays in the note, with when it was corrected. */
+    try {
+      var keyed = /Keyed by [^\n]*/.exec(String(cell.getNote() || ""));
+      cell.setNote(ed.miles === "" ? "" : (keyed ? keyed[0] + "\n" : "") + "Corrected on the sheet on " +
+                   Utilities.formatDate(new Date(), tz, "dd/MM/yyyy") + " at " + Utilities.formatDate(new Date(), tz, "HH:mm") + ".");
+    } catch (err) {}
+    if (ed.miles !== "") pretty("Parked mileage, the walkaround after", function () { parkedLate(sh, c, rows[i], ed.miles); });
+  });
 }
 
 /* The time in a cell as it is shown: "09:05", "9:05", "04/10/2026 09:05:00".
@@ -6190,6 +6237,13 @@ function liveCheckLines() {
     if (out.script) lines.push("    Its version: " + out.script);
     lines.push("    Waiting to come back: " +
                ((out.bookings || []).length + (out.trips || []).length ? "some rows" : "nothing"));
+    /* From v1.123.0 (wrap up audit): a phone on an app from before keys,
+       refused once its fortnight was up. That app keeps trying and says
+       nothing, so this is the only place it shows. */
+    if (out.keyRefused && out.keyRefused.length) {
+      lines.push("\u2717  Refused from a phone on an app older than v1.123.0, with no PIN key: " +
+                 out.keyRefused.map(safeText).join("; ") + ".");
+    }
 
     /* How old the copies of the rota and the mileage are over there.
 
@@ -12083,8 +12137,8 @@ function periodHealthLine(now) {
     var pe = JSON.parse(PropertiesService.getScriptProperties().getProperty("periodError") || "null");
     if (pe && pe.why && new Date(pe.at) >= new Date(sun.getFullYear(), sun.getMonth(), sun.getDate())) why = " " + pe.why;
   } catch (err) {}
-  return "The " + missing.join(" and the ") + " did not go out." + why +
-         " Minibus \u203a Send an email now \u203a Weekly summary sends it again that week.";
+  /* Facts only (wrap up audit, v1.123.0): no instruction on the end. */
+  return "The " + missing.join(" and the ") + " did not go out." + why;
 }
 
 /* One summary email, built from the Period summary's tables. */

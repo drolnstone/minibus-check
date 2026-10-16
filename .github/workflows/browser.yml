@@ -1,0 +1,45 @@
+# The browser checks in tests/browser: the driver app, the coordinator app,
+# the passenger page and parked mileage, opened in Chrome on a phone-sized
+# screen, the way a driver or coordinator meets them. From 16 Oct 2026
+# (wrap up audit): they ran only by hand, so two coordinator checks had gone
+# out of date unnoticed. Now on every pull request and every push to main.
+#
+# Kept apart from the Tests workflow on purpose: the sheet's deploy waits on
+# Tests, and a browser that is slow to start on a runner must not hold up
+# the sheet. A red here shows on the pull request before it is merged.
+name: Browser checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      TZ: Europe/London
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22        # node:sqlite, which the stand-in Worker needs
+      - name: playwright-core, and the runner's own Chrome
+        run: |
+          npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/pw" playwright-core@1.55.0
+          echo "PLAYWRIGHT_CORE=$RUNNER_TEMP/pw/node_modules/playwright-core/index.mjs" >> "$GITHUB_ENV"
+          echo "CHROMIUM=$(command -v google-chrome || command -v chromium)" >> "$GITHUB_ENV"
+      - name: Driver app
+        if: always()
+        run: node tests/browser/driver-app.mjs
+      - name: Coordinator app
+        if: always()
+        run: node tests/browser/coordinator.mjs
+      - name: Passenger page
+        if: always()
+        run: node tests/browser/passenger.mjs
+      - name: Parked mileage
+        if: always()
+        run: node tests/browser/parked.mjs
