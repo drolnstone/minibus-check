@@ -504,7 +504,9 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
   padding-top:calc(var(--safe-t) + 12px)}
 .sheet-wrap.is-on{display:flex}
 .sheet{width:min(640px,100%);background:var(--paper);border-radius:14px 14px 0 0;
-  padding:16px calc(14px + var(--safe-r)) calc(18px + var(--safe-b)) calc(14px + var(--safe-l));max-height:min(92vh,100%);overflow:auto}
+  padding:16px calc(14px + var(--safe-r)) calc(10px + var(--safe-b)) calc(14px + var(--safe-l));max-height:min(92vh,100%);overflow:auto}
+/* A sheet with only Close has nothing to say: no empty line above it. */
+.sheet-wrap.only-close .say:empty{display:none}
 @media (min-width:641px){.sheet-wrap{align-items:center}.sheet{border-radius:14px}}
 .sheet p.line{margin:0 0 12px;font-size:15px;color:var(--ink-2)}
 .sheet-acts{display:flex;gap:8px;margin-top:14px}
@@ -3590,6 +3592,7 @@ function openSheet(o){
     };
   });
   var w = $("sheet");
+  w.classList.toggle("only-close", !!o.only);
   w.classList.add("is-on"); w.setAttribute("aria-hidden","false");
 }
 function closeSheet(){

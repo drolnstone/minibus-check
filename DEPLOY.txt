@@ -9,7 +9,10 @@ Asim, 16 Oct: App info in the coordinator app reached up under the phone's
 clock and battery, with room left at the bottom.
 
 1. Coordinator app: every pop-up sheet (App info and the others) now stops
-   12px under the clock and signal. A sheet taller than that scrolls inside.
+   12px under the clock and signal, whatever height the phone reports for
+   the screen. A sheet taller than that scrolls inside. The space under
+   Close is smaller: the home bar and 10px, and App info drops the empty
+   line above Close.
    Nothing else changes. The driver app and the passenger page only take the
    new version number.
 
