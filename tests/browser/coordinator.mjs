@@ -270,8 +270,16 @@ if (want("C1") || true) {
   const home = await me.on("home");
   const menu = await me.text("#homeBody .menu");
   await me.shot("C1-home");
-  const onScreen = await me.pg.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 2);
-  check("C1", "a wrong PIN says so; the right one opens the first screen, all of it on one screen",
+  /* Since the alerts, due dates and emergency calls joined it (October), the
+     first screen scrolls on a phone. What must hold: the Sunday is in view
+     without scrolling, and nothing runs off the side. */
+  const onScreen = await me.pg.evaluate(() => {
+    const card = document.querySelector("#homeBody .sun.now");
+    const r = card ? card.getBoundingClientRect() : null;
+    return !!r && r.top >= 0 && r.bottom <= window.innerHeight &&
+           document.documentElement.scrollWidth <= window.innerWidth + 1;
+  });
+  check("C1", "a wrong PIN says so; the right one opens the first screen, the Sunday in view and nothing off the side",
         /not right/.test(bad) && /2 tries left/.test(bad) && home && /1 waiting/.test(menu) && /4 open/.test(menu) && onScreen,
         "bad '" + bad + "', home " + home + ", menu '" + menu.replace(/\n/g, " | ") + "', fits " + onScreen);
 }
@@ -294,7 +302,9 @@ if (want("C2")) {
   await me.settle();
   const cover = await me.text("#sundayBody .route-card");
   const raw = db._one("SELECT north_cover, status FROM rota WHERE sunday=?", NEXT);
-  const acts = db._rows("SELECT kind, words FROM coord_actions");
+  /* The change, and since the Message centre (#83) the email telling
+     the coordinators about it. */
+  const acts = db._rows("SELECT kind, words FROM coord_actions WHERE kind='rota'");
   await me.shot("C2-sunday-covered");
   check("C2", "a cover put on next Sunday shows at once and is taken by the live server",
         label === coverName + " covers North" && cover.indexOf(coverName) !== -1 && raw.north_cover === coverName &&
@@ -1795,8 +1805,11 @@ if (want("C52")) {
 /* C48 — v1.96.2: Change your PIN in the coordinator app, the driver app's
    one PIN on the live server. The boxes hand on, the last one sends, a
    mismatch is bold red and empties the new boxes, and the app goes on
-   working with the new PIN. Last, because it changes the PIN. */
+   working with the new PIN. Once ran last, because it changes the PIN; the
+   checks added after it since sign in with the first PIN, so it is put
+   back afterwards (wrap up audit, 16 Oct). */
 if (want("C48")) {
+  const pinsWere = db._rows("SELECT * FROM driver_pins");
   const p = await page(env);
   try {
     await p.signIn(PIN);
@@ -1829,6 +1842,12 @@ if (want("C48")) {
           JSON.stringify({ f0, a1, a2, a3, wrong, toast, open, still, errors: p.errs }));
   } catch (e) { stopped("C48", e); }
   await p.ctx.close();
+  await env.DB.prepare("DELETE FROM driver_pins").run();
+  for (const r of pinsWere) {
+    const k = Object.keys(r);
+    await env.DB.prepare("INSERT INTO driver_pins (" + k.join(",") + ") VALUES (" + k.map(() => "?").join(",") + ")")
+      .bind(...k.map((x) => r[x])).run();
+  }
 }
 
 check("C0", "no script error on the page throughout", me && !me.errs.length, JSON.stringify(me && me.errs));

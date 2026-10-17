@@ -80,3 +80,7 @@ fails on v1.78.0 too, so the lost tap is a fault of the live release. S16d,
 S17, S18, S18b and S18c take each fix back out in turn. S18b and S18c are the
 two halves of T18b's fix: the clock's check of the round, and dropping what
 the board said in a round that is over.
+
+From 16 Oct 2026 GitHub runs all four (driver-app, coordinator, passenger,
+parked) on every pull request and push to main: .github/workflows/browser.yml,
+in Chrome. sabotage.mjs is still run by hand.

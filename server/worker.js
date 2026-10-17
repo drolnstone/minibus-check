@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.65.0";
+const SCRIPT_VERSION = "w2.66.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -201,7 +201,7 @@ const tokenOf = (env) => (env && env.TOKEN) || TOKEN_FALLBACK;
 const sheetTokenOf = (env) => String((env && env.SHEET_TOKEN) || "");
 const SHEET_ONLY_ACTIONS = ["ping", "mint", "outcome", "cleartrips", "rehearsal", "sync",
                             "coordAlert", "drain", "drained", "sheetbookings", "sentMail",
-                            "trail", "sheettrips", "keyok"];
+                            "trail", "sheettrips", "keyok", "sheetparked"];
 function sheetTokenOk(env, body) {
   const want = sheetTokenOf(env);
   return !want || String((body && body.sheetToken) || "") === want;
@@ -4637,6 +4637,38 @@ async function handleParked(env, p, sure) {
   return { ok: true, parked: { reg, checkId, miles, driver: who, at: made, got: now } };
 }
 
+/* A PARKED READING CORRECTED ON THE SHEET, from w2.66.0 (wrap up audit).
+   { edits: [{ checkId, reg, miles }] }: miles a number puts it right here
+   too, so the driver app measures the next walkaround from it; "" takes it
+   away. Marked as the sheet's own, so no drain writes it back over the cell,
+   and nobody is told it was received. Who keyed it and when stay as they
+   were; one put in for a walkaround that had none is the sheet's. */
+async function handleSheetParked(env, body) {
+  const edits = Array.isArray(body && body.edits) ? body.edits.slice(0, 50) : [];
+  await ensureParked(env);
+  const results = [];
+  for (const e of edits) {
+    const checkId = String((e && e.checkId) || "").trim();
+    const reg = String((e && e.reg) || "").trim().toUpperCase();
+    const m = e ? e.miles : undefined;
+    const raw = (m === undefined || m === null ? "" : String(m)).replace(/[,\s]/g, "");
+    if (!checkId) { results.push({ checkId, applied: false, why: "no id" }); continue; }
+    if (raw === "") {
+      await env.DB.prepare("DELETE FROM parked WHERE check_id=?").bind(checkId).run();
+      results.push({ checkId, applied: true });
+      continue;
+    }
+    if (!/^\d{1,7}$/.test(raw) || !reg) { results.push({ checkId, applied: false, why: "not a number" }); continue; }
+    const now = Date.now();
+    await env.DB.prepare(
+      "INSERT INTO parked (check_id, reg, miles, driver, made, got, confirmed, synced) VALUES (?,?,?,'',?,?,0,1) " +
+      "ON CONFLICT(check_id) DO UPDATE SET miles=excluded.miles, synced=1")
+      .bind(checkId, reg, Number(raw), now, now).run();
+    results.push({ checkId, applied: true });
+  }
+  return json({ ok: true, results });
+}
+
 /* RECEIVED, told to the driver who keyed it, from w2.65.0. Asim, 16 Oct:
    "at best give him a notification that mileage has been submitted". Most
    of all for one keyed with no signal, which goes when the phone next has
@@ -4929,6 +4961,8 @@ async function handleDrain(env, body) {
                 requests: requests, coord: coord, parked: parked,
                 checks: checks, auths: auths, decisions: decisions, cacheAgeMin: age,
                 clockAgoSec: clockAgoSec, poke: poke, pinSalt: !!pinSaltOf(env),
+                /* From w2.66.0, for the sheet's health check. */
+                keyRefused: await keyRefusedLines(env),
                 /* The Sunday whose 07:30 message last went, and whether that
                    message is switched off, for the sheet's watch on it. */
                 morning: await morningSeen(env),
@@ -5212,6 +5246,13 @@ async function forgetOldNumbers(env) {
   const r = await env.DB.prepare(
     "UPDATE bookings SET phone='', pid='' WHERE sunday < ? AND synced >= 1 AND (phone<>'' OR pid<>'')")
     .bind(cutoff).run();
+  /* And, from w2.66.0, the addresses known by a right PIN once their 30 days
+     are up, and refusals once their week is. */
+  try {
+    await env.DB.prepare("DELETE FROM settings WHERE (k LIKE 'pinknown:%' AND CAST(json_extract(v, '$.at') AS INTEGER) < ?) " +
+                         "OR (k LIKE 'keyrefused:%' AND CAST(json_extract(v, '$.at') AS INTEGER) < ?)")
+      .bind(Date.now() - PIN_KNOWN_DAYS * 86400000, Date.now() - KEY_REFUSED_DAYS * 86400000).run();
+  } catch (e) {}
   await cachePut(env, "forgot", { day: today, at: Date.now() }).run();
   return Number((r && r.meta && r.meta.changes) || 0);
 }
@@ -7633,6 +7674,18 @@ function pinTriesKey(name) {
 const PIN_NAME_CEILING = 30;
 const PIN_NAME_WINDOW_MS = 3600 * 1000;
 const PIN_CALLER_HOUR = 9;
+/* A PHONE THAT HAS KEYED THE RIGHT PIN IS NOT HELD BY THE CEILING, from
+   w2.66.0 (wrap up audit, 16 Oct). Thirty wrong PINs from four or more
+   addresses locked the name everywhere for up to an hour, the coordinator
+   app with it, which asks the PIN on every call. An address that had the
+   right PIN for this name in the last PIN_KNOWN_DAYS still gets its own
+   three tries, but goes on past the ceiling: somebody guessing does not
+   have the right PIN. Written at most once a day per address. */
+const PIN_KNOWN_DAYS = 30;
+function pinKnownKey(env, name) {
+  const caller = String((env && env.CALLER) || "");
+  return caller ? "pinknown:" + String(name || "").trim().toLowerCase() + "|" + caller : "";
+}
 
 function pinFloodKey(name) {
   return "pinflood:" + String(name || "").trim().toLowerCase();
@@ -7644,8 +7697,8 @@ function pinCallerKey(env, name) {
 /* Every count kept for a name, for a reset to clear. */
 function pinTriesClearStmt(env, name) {
   const k = pinTriesKey(name);
-  return env.DB.prepare("DELETE FROM settings WHERE k=? OR k LIKE ? OR k=?")
-    .bind(k, k + "|%", pinFloodKey(name));
+  return env.DB.prepare("DELETE FROM settings WHERE k=? OR k LIKE ? OR k=? OR k LIKE ?")
+    .bind(k, k + "|%", pinFloodKey(name), "pinknown:" + String(name || "").trim().toLowerCase() + "|%");
 }
 
 /* The request's caller, as a short salted fingerprint. */
@@ -7678,10 +7731,16 @@ async function pinGate(env, name, check) {
   const flood = await cacheGet(env, fkey);
   let fn = 0;
   if (flood && now - (Number(flood.at) || 0) < PIN_NAME_WINDOW_MS) fn = Number(flood.n) || 0;
-  if (fn >= PIN_NAME_CEILING) {
+  const kkey = pinKnownKey(env, name);
+  const known = kkey ? await cacheGet(env, kkey) : null;
+  const knownHere = !!(known && now - (Number(known.at) || 0) < PIN_KNOWN_DAYS * 86400000);
+  if (fn >= PIN_NAME_CEILING && !knownHere) {
     return { locked: true, minutes: Math.max(1, Math.ceil((PIN_NAME_WINDOW_MS - (now - Number(flood.at))) / 60000)) };
   }
   if (await check()) {
+    if (kkey && !(known && now - (Number(known.at) || 0) < 86400000)) {
+      try { await cachePut(env, kkey, { at: now }).run(); } catch (e) {}
+    }
     if (held || hour) { try { await env.DB.prepare("DELETE FROM settings WHERE k=? OR k=?").bind(tkey, hkey || tkey).run(); } catch (e) {} }
     return { ok: true };
   }
@@ -7736,6 +7795,8 @@ async function keyFor(env, name, had) {
   const key = Array.from(bytes).map((b) => ("0" + b.toString(16)).slice(-2)).join("");
   await env.DB.prepare("INSERT INTO driver_keys (hash, name, made) VALUES (?,?,?)")
     .bind(await keyHashOf(key), n, Date.now()).run();
+  /* A key now, so what was refused before it is no longer news (w2.66.0). */
+  try { await env.DB.prepare("DELETE FROM settings WHERE k=?").bind("keyrefused:" + n).run(); } catch (e) {}
   await env.DB.prepare(
     "DELETE FROM driver_keys WHERE name=? AND hash NOT IN " +
     "(SELECT hash FROM driver_keys WHERE name=? ORDER BY made DESC LIMIT ?)")
@@ -7784,6 +7845,41 @@ async function driverSureOf(env, name, key, keyless) {
 }
 function keylessOf(body) {
   return !(body && Object.prototype.hasOwnProperty.call(body, "key"));
+}
+
+/* REFUSED FROM A PHONE ON AN OLD APP, from w2.66.0 (wrap up audit, 16 Oct).
+   After KEYLESS_DAYS a phone still on an app from before v1.123.0 is
+   refused, and that app does not understand the refusal: it keeps the taps
+   and tries again, and nobody was told. Kept here per name, the newest, and
+   said on both health checks for a week. Only a name the drivers table
+   knows, so a stranger's post names nobody. */
+const KEY_REFUSED_DAYS = 7;
+async function keyRefused(env, name, what, keyless) {
+  if (!keyless) return;
+  try {
+    const row = await env.DB.prepare("SELECT name FROM drivers WHERE lower(name)=lower(?)")
+      .bind(String(name || "").trim()).first();
+    if (!row) return;
+    await cachePut(env, "keyrefused:" + pinKey(row.name), { name: row.name, what: what, at: Date.now() }).run();
+  } catch (e) {}
+}
+/* "Bro A's stop taps at 08:12 on 18/10", newest first, for a week. */
+async function keyRefusedLines(env) {
+  const out = [];
+  try {
+    const q = await env.DB.prepare("SELECT v FROM settings WHERE k LIKE 'keyrefused:%'").all();
+    const since = Date.now() - KEY_REFUSED_DAYS * 86400000;
+    const rows = (q.results || []).map((r) => { try { return JSON.parse(r.v); } catch (e) { return null; } })
+      .filter((r) => r && Number(r.at) > since).sort((a, b) => Number(b.at) - Number(a.at));
+    for (const r of rows) {
+      const when = new Date(Number(r.at));
+      out.push(r.name + ": " + r.what + ", " + londonHHMM(when) + " on " + shortDay(londonKey(when)));
+    }
+  } catch (e) {}
+  return out;
+}
+function keyRefusedWords(list) {
+  return "Refused from a phone on an app older than v1.123.0, with no PIN key: " + list.join("; ") + ".";
 }
 
 async function handlePin(env, body) {
@@ -8015,6 +8111,8 @@ async function handlePinChange(env, body) {
   /* A new PIN, so every phone's key for him goes, and this one gets a new. */
   let key = "";
   try { await ensureKeys(env); await keysDropStmt(env, row.name).run(); key = await keyFor(env, row.name, ""); } catch (e) {}
+  /* And every address known by the old one (w2.66.0). */
+  try { await pinTriesClearStmt(env, row.name).run(); } catch (e) {}
   return json({ ok: true, valid: true, changed: true, key: key || undefined });
 }
 
@@ -10768,6 +10866,8 @@ async function liveHealthLines(env) {
     } catch (e) {}
   }
   if (waits.length) bad.push("Not on the sheet yet: " + waits.join(", ") + ".");
+  const refused = await keyRefusedLines(env);
+  if (refused.length) bad.push(keyRefusedWords(refused));
   else good.push("Everything phones have done is on the sheet.");
   try {
     const c = await cacheGet(env, "cache_rota");
@@ -11448,7 +11548,10 @@ export default {
            them and sends them again once it has the key. */
         if (action === "trip") {
           const t = body.trip || {};
-          if (!(await driverSureOf(env, t.driver, body.key, keylessOf(body)))) return json({ ok: false, error: "pin" });
+          if (!(await driverSureOf(env, t.driver, body.key, keylessOf(body)))) {
+            await keyRefused(env, t.driver, "stop taps", keylessOf(body));
+            return json({ ok: false, error: "pin" });
+          }
           return knock(await handleTrip(env, t), "trip");
         }
         /* A driver asking for a swap or cover. Same body as Apps Script's
@@ -11456,7 +11559,10 @@ export default {
         if (action === "rotaRequest") {
           const r = body.request || {};
           const sure = await driverSureOf(env, r.driver, body.key, keylessOf(body));
-          if (!sure) return json({ ok: false, error: "pin" });
+          if (!sure) {
+            await keyRefused(env, r.driver, "rota request", keylessOf(body));
+            return json({ ok: false, error: "pin" });
+          }
           /* From an older phone with no key: the coordinator is told. */
           if (sure === "old") r.reason = "Not confirmed by PIN. " + String(r.reason || "");
           return knock(await handleRotaRequest(env, r), "request");
@@ -11496,7 +11602,10 @@ export default {
         /* An MOT run starting or ending, from w2.36.0. */
         if (action === "motrun") {
           const m = (body && body.motrun) || {};
-          if (!(await driverSureOf(env, m.who, body.key, keylessOf(body)))) return json({ ok: false, error: "pin" });
+          if (!(await driverSureOf(env, m.who, body.key, keylessOf(body)))) {
+            await keyRefused(env, m.who, "MOT run", keylessOf(body));
+            return json({ ok: false, error: "pin" });
+          }
           return await handleMotrun(env, body);
         }
         /* The Outcome column, edited on the spreadsheet. Token checked. */
@@ -11520,6 +11629,8 @@ export default {
         if (action === "sheetbookings") return await handleSheetBookings(env, body);
         /* A time typed on the Trip Events tab, from w2.64.0. */
         if (action === "sheettrips") return await handleSheetTrips(env, body);
+        /* A parked reading corrected on the Checks tab, from w2.66.0. */
+        if (action === "sheetparked") return await handleSheetParked(env, body);
         /* Whether a write a phone sent straight to the sheet carried its
            driver's key, from w2.64.0. Only this server holds the keys. */
         if (action === "keyok") {
