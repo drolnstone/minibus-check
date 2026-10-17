@@ -1,37 +1,26 @@
 MINIBUS
 =======
-  pages v1.127.0 · server w2.68.0 · sheet v1.124.0
+  pages v1.127.1 · server w2.68.0 · sheet v1.124.0
 
-YOU ARE ON   app v1.126.0 · server w2.67.0 · sheet v1.124.0
-GOING TO     app v1.127.0 · server w2.68.0 · sheet v1.124.0
+YOU ARE ON   app v1.127.0 · server w2.68.0 · sheet v1.124.0
+GOING TO     app v1.127.1 · server w2.68.0 · sheet v1.124.0
 
-Asim, 17 Oct: the time at church.
-
-1. Passenger app, after Picked up: under "Picked up at 10:42",
-   "Church about 10:58", updating as the bus goes. Once 10:58 has passed
-   with no arrival, "Due at church 10:58. Arrival not recorded." When the
-   driver app records the bus back inside the church grounds,
-   "At church at 10:57". Ended by the server or a coordinator's End it,
-   "The bus has finished its run", no time.
-2. Driver app, the phone driving the run: once the last booked stop is
-   answered, a pop-up "Church about 10:58", then "Due at church 10:58".
-   No buttons. It closes when the run ends. A tap on it puts it away, so
-   Undo on the stops stays in reach; it comes back if the stops change.
-3. The arrival time on the record is the moment the bus came back inside
-   the grounds, not 3 minutes later. Runs end exactly as before, and next
-   week's booking opens exactly as now.
+The driver app now keeps "the bus has left the grounds" with the run. It
+was held in memory only, so a phone whose app was reloaded while locked
+(the phone does this to save battery) came back inside the church fence
+not knowing the bus had been out: it never ended the run itself, and the
+server closed it half an hour later with no arrival time. Pages only.
 
 GOING LIVE
 ----------
 
-Merge the pull request. Pages and server go live by themselves. Code.gs is
-unchanged.
+Merge the pull request. The pages go live by themselves.
 
 
 AFTER IT (give it ten minutes)
 --------
 
-B. The foot of the apps reads  app v1.127.0 · server w2.68.0 · sheet
+B. The foot of the apps reads  app v1.127.1 · server w2.68.0 · sheet
    v1.124.0 .
 
 
