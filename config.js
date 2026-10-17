@@ -11,8 +11,13 @@
 
 window.CONFIG = {
 
-  /* The Apps Script Web App URL. Blank means practice mode: nothing is sent. */
-  endpoint: "https://script.google.com/macros/s/AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA/exec",
+  /* The sheet, by way of the live server. Blank means practice mode:
+     nothing is sent.
+
+     Until v1.126.0 this was the Apps Script web app's own address. It is not
+     written in any file now: the live server keeps it, as the sheet sends it,
+     and passes on what is sent here. */
+  endpoint: "https://minibus-api.asimbassey.workers.dev/sheet",
 
   /* ---- the live server -------------------------------------------------
      The calls that happen DURING a Sunday go here instead: the driver's stop
@@ -29,9 +34,9 @@ window.CONFIG = {
      to endpoint above only if this does not answer. The rota and last
      mileage are read from here and fall back to endpoint above.
 
-     TO GO BACK: blank this line. Every call returns to Apps Script and the
-     app behaves exactly as it did before, slowly but correctly. That is the
-     whole of the rollback. */
+     TO GO BACK: blank this line. Every call goes to the sheet, by way of
+     endpoint above, and the app behaves as it did before the live server,
+     slowly but correctly. */
   liveEndpoint: "https://minibus-api.asimbassey.workers.dev",
 
   /* Must match the token in Code.gs. */

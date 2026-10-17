@@ -989,7 +989,9 @@ is below, in the order it is easiest to do.
 - [ ] Fork or copy this repository and turn on GitHub Pages from `main`.
 - [ ] Make a new Google spreadsheet, open **Extensions, Apps Script**, and
       paste in `Code.gs`. **Deploy, New deployment, Web app**, run as you,
-      access Anyone. Copy the `/exec` address.
+      access Anyone. Copy the `/exec` address into the Script Property
+      `WEB_APP_URL`, and its ID into the repository secret `DEPLOYMENT_ID`.
+      Never into a file.
 - [ ] Make a Cloudflare Worker from `server/worker.js`, with a D1 database
       bound to it under the name `DB`. Paste `server/schema.sql` into the D1 console and run it.
       Add the every-minute Cron Trigger (see *Deploying*).
@@ -1002,8 +1004,8 @@ is below, in the order it is easiest to do.
       values as above; `TOKEN`; a `PHONE_SALT` of your own.
 
 **3. The code's addresses and church details.**
-- [ ] `config.js`: `endpoint` (the `/exec` address), `liveEndpoint` (the
-      Worker), `token`, `busBase` and `churchBase` (measured standing there,
+- [ ] `config.js`: `endpoint` (your Worker's address with `/sheet` on the
+      end), `liveEndpoint` (the Worker), `token`, `busBase` and `churchBase` (measured standing there,
       not off a map), `fullInspectionRoles`, `rotaAnchor` and
       `rotaSecondaryAnchor` (the first Sunday of each route's driver pattern),
       and `VEHICLES`: one entry per bus, with its registration exactly as on
@@ -1041,7 +1043,7 @@ switches, and two addresses. No people: see *The people live on the Drivers
 tab*, above.
 
 ```js
-endpoint:     "https://script.google.com/macros/s/.../exec"   // Apps Script
+endpoint:     "https://minibus-api.asimbassey.workers.dev/sheet" // Apps Script, through the Worker
 liveEndpoint: "https://minibus-api.asimbassey.workers.dev"    // the Worker
 ```
 

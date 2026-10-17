@@ -93,9 +93,9 @@ export default async function (root) {
     a.eq(off.sent[0].sheetToken, undefined);
   });
 
-  s.test("the sheet refuses the live server's three asks without it", (a) => {
+  s.test("the sheet refuses the live server's asks without it", (a) => {
     const { L } = sheet({ SHEET_TOKEN: SECRET });
-    for (const action of ["decision", "report", "drainnow"]) {
+    for (const action of ["decision", "report", "pdf", "drainnow"]) {
       a.eq(doPost(L, { token: "minibusapp", action }).error, "bad sheet token",
            action + " went through on the public token alone");
       a.not(doPost(L, { token: "minibusapp", sheetToken: SECRET, action }).error === "bad sheet token",
