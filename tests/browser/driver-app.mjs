@@ -1011,6 +1011,48 @@ if (want("T27")) {
   await me.ctx.close();
 }
 
+/* T37 — v1.127.0 (Asim, 17 Oct 2026). Once the last booked stop is
+   answered, a pop-up with no buttons gives the time at church, then "Due at
+   church" once it has passed. A tap puts it away, so Undo stays in reach.
+   It closes when the run ends back inside the fence, and the end carries the
+   moment the bus came back, not three minutes later. */
+if (want("T37")) {
+  const etas = { North: {}, South: {} };
+  const world = { checks: okCheck(), etas, counts: { North: { N01: 2 }, South: {} } };
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world });
+  await startRun(me);
+  const pop = () => me.pg.evaluate(() => {
+    const m = document.getElementById("churchModal");
+    const h = document.getElementById("churchTitle");
+    return { up: m.classList.contains("is-on"), text: h ? h.textContent.trim() : "",
+             buttons: m.querySelectorAll("button").length };
+  });
+  const again = async () => { await me.clickId("stopsBack"); await me.toStops(); await me.close(); await me.wait(1500); };
+  const before = await pop();
+  await me.jump(11); const tapped = await tap(me, "pickup", "N01"); await me.wait(3500);
+  etas.North.N09 = T("10:58");
+  await again();
+  const up = await pop();
+  await me.shot("T37-church");
+  await me.jump(45); await me.wait(11000);
+  const due = await pop();
+  await me.pg.evaluate(() => document.getElementById("churchModal").click()); await me.wait(400);
+  const away = await pop();
+  const undo = await me.pg.evaluate(() => !!document.querySelector('[data-tripundo="N01"]'));
+  await me.jump(1); await me.emit(AWAY); await me.wait(500);
+  await me.jump(1); await me.emit(CHURCH); await me.wait(500);
+  const back = await me.pg.evaluate(() => Date.now());
+  await me.jump(4); await me.emit(CHURCH); await me.wait(1500);
+  const end = me.posted.map(p => p.trip && (p.trip.events || []).find(e => e.event === "end")).find(Boolean) || {};
+  const gone = await pop();
+  check("T37", "after the last pickup the church pop-up gives the time, then Due at church; a tap puts it away; the end is the time back inside",
+        !before.up && up.up && up.text === "Church about 10:58" && up.buttons === 0 &&
+        due.up && due.text === "Due at church 10:58" && !away.up && undo &&
+        !gone.up && Math.abs(Number(end.at) - back) < 60000 && !me.errs.length,
+        JSON.stringify({ tapped, before, up, due, away: away.up, undo, gone: gone.up, endAt: end.at, back, errs: me.errs }));
+  await me.ctx.close();
+}
+
 /* T29 — v1.101.1 (Asim). The next booked stop comes into view by itself
    when the list opens and each time it moves on; the driver never scrolls to
    find it. A poll that changes nothing leaves the list where he put it. */

@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.126.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.127.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -494,6 +494,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .live-big{font-family:"Barlow Condensed",sans-serif;font-size:30px;font-weight:700;
   line-height:1.05;margin:0 0 3px;color:var(--accent-ink)}
 .live-sub{margin:0;font-size:13px;color:var(--muted);line-height:1.5}
+.live-church{margin:0 0 6px;font-size:17px;font-weight:600;color:var(--ink,inherit)}
 .live-sub .ring,.note .ring,.foot .ring{color:inherit;font-weight:600;text-decoration:underline}
 /* The full-bus line. Ink rather than inherit, so the part worth pressing
    stands out of a muted sentence without changing its size.
@@ -752,7 +753,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.126.0";
+var PAGE_VERSION = "v1.127.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -1415,7 +1416,7 @@ function liveFetch(){
       /* Once your own stop has been served there is nothing left to watch,
          so the polling sheds itself as the run goes on rather than peaking
          at the end when the most phones are open. */
-      if(out.live===false || out.mine==="served" || out.ended){
+      if(out.live===false || (out.mine==="served" && !liveRiding(out)) || out.ended){
         liveStop();
         /* Nothing left to watch in a rehearsal, but the page still has to
            hear when it ends: the slow gate poll carries on asking. */
@@ -1943,7 +1944,24 @@ function liveLate(){ return !!liveAt && (Date.now()-liveAt) > 45000; }
    place so the clock and the poller cannot disagree about when a morning is
    finished. */
 function liveDone(){
-  return !!live && (live.mine==="served" || live.mine==="ended" || !!live.ended);
+  return !!live && ((live.mine==="served" && !liveRiding(live)) || live.mine==="ended" || !!live.ended);
+}
+
+/* Picked up and the run still going, from v1.127.0 (Asim, 17 Oct 2026): the
+   church line keeps updating until the run ends. */
+function liveRiding(l){
+  return !!l && l.mine==="served" && l.servedEvent!=="empty" && !l.ended &&
+         !!l.church && (l.church.state==="eta" || l.church.state==="due");
+}
+
+/* The line under "Picked up at 10:42". */
+function churchWords(c){
+  if(!c) return "";
+  if(c.state==="eta") return "Church about <b>"+esc(c.words)+"</b>";
+  if(c.state==="due") return "Due at church "+esc(c.words)+". Arrival not recorded.";
+  if(c.state==="at") return "At church at "+esc(c.words);
+  if(c.state==="done") return "The bus has finished its run";
+  return "";
 }
 
 /* The clock has to keep counting even when no answer arrives, because a
@@ -2024,7 +2042,7 @@ function paintLive(){
       'Sunday.</p>'+pick+'</div>'
     : "";
 
-  var head="", sub="", cls="";
+  var head="", sub="", cls="", churchLine="";
 
   /* Who to turn to when somebody has been left at a kerb.
 
@@ -2065,6 +2083,7 @@ function paintLive(){
     var wasEmpty = live.servedEvent==="empty";
     cls = wasEmpty ? "live-warn" : "live-go";
     head = (wasEmpty ? "Nobody there at " : "Picked up at ")+esc(live.servedAt);
+    churchLine = wasEmpty ? "" : churchWords(live.church);
     sub = wasEmpty
       ? "Nobody was waiting at "+esc(live.stop)+". "+turnTo("Still there?")
       : "The bus has been to "+esc(live.stop)+". "+turnTo("Not on it?");
@@ -2176,6 +2195,7 @@ function paintLive(){
   box.innerHTML=banner+'<div class="live '+cls+'">'+
     '<p class="live-eyebrow">'+eyebrow+'</p>'+
     '<p class="live-big">'+head+'</p>'+
+    (churchLine ? '<p class="live-church" id="liveChurch">'+churchLine+'</p>' : '')+
     '<p class="live-sub">'+sub+'</p>'+
     callBtn+
     (live.watching
