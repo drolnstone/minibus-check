@@ -247,6 +247,30 @@ if (want("P8")) {
         (text.indexOf(S03.stop) > -1) + ", gone after the run " + gone);
 }
 
+/* P11 — v1.127.0 (Asim, 17 Oct 2026). Picked up, the line under it gives
+   the time at church: the estimate, then "Due at church" once it has
+   passed, then the arrival, or "finished" with no time. */
+if (want("P11")) {
+  const got = [];
+  for (const church of [{ state: "eta", words: "10:58" }, { state: "due", words: "10:58" },
+                        { state: "at", words: "10:57" }, { state: "done" }]) {
+    const me = await passenger({ booked: true, pid: true, closed: true, trip: leftChurch({
+      mine: "served", servedEvent: "pickup", servedAt: "10:42", ended: church.state === "at" || church.state === "done",
+      church }) });
+    await me.pg.evaluate(() => { const b = document.getElementById("alertAskNot"); if (b) b.click(); });
+    await me.pg.waitForTimeout(300);
+    got.push((await me.text("#live .live-big")) + " | " + (await me.text("#liveChurch")));
+    await me.shot("P11-church-" + church.state);
+    await me.ctx.close();
+  }
+  const want11 = ["Picked up at 10:42 | Church about 10:58",
+                  "Picked up at 10:42 | Due at church 10:58. Arrival not recorded.",
+                  "Picked up at 10:42 | At church at 10:57",
+                  "Picked up at 10:42 | The bus has finished its run"];
+  check("P11", "picked up: Church about, Due at church, At church at, or finished with no time",
+        got.join("\n") === want11.join("\n"), got.join(" / "));
+}
+
 /* P9 — v1.96.3. Auto, Light, Dark and the green of this page's own icon,
    and nothing else. A phone left on navy from before follows the phone. */
 if (want("P9")) {

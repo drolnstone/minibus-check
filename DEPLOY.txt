@@ -1,49 +1,38 @@
 MINIBUS
 =======
-  pages v1.126.0 · server w2.67.0 · sheet v1.124.0
+  pages v1.127.0 · server w2.68.0 · sheet v1.124.0
 
-YOU ARE ON   app v1.125.0 · server w2.66.0 · sheet v1.123.0
-GOING TO     app v1.126.0 · server w2.67.0 · sheet v1.124.0
+YOU ARE ON   app v1.126.0 · server w2.67.0 · sheet v1.124.0
+GOING TO     app v1.127.0 · server w2.68.0 · sheet v1.124.0
 
-Asim, 17 Oct: the Apps Script web app's address (the deployment ending
-…1XxMSA) was in config.js and in the Apps Script workflow, both public.
+Asim, 17 Oct: the time at church.
 
-1. config.js no longer has it. The driver app's fallback to the sheet now
-   goes to the live server's /sheet, which passes the call on to the
-   address the sheet sends on each sync (Script Property WEB_APP_URL).
-   It passes on only what a phone could always send, and never with the
-   sheet's own password. It works only with SHEET_TOKEN set on both sides.
-2. The Apps Script workflow reads the deployment from the repository secret
-   DEPLOYMENT_ID, which GitHub also blanks out of the run logs. Without it
-   the run goes red and Code.gs does not go live.
-3. The sheet asks for its own password (SHEET_TOKEN) on report and pdf as
-   well, the two the coordinator app asks through the live server.
-4. The live server's status answer gives the sheet its address only when
-   SHEET_TOKEN is set.
-
-The old address is still in the repository's history and in earlier
-Actions logs, so only a fresh deployment makes the address private.
-
-BEFORE MERGING
---------------
-
-A. GitHub, the repository, Settings, Secrets and variables, Actions, New
-   repository secret. Name DEPLOYMENT_ID. Value: Apps Script, Deploy,
-   Manage deployments, the web app ending …1XxMSA, Deployment ID.
+1. Passenger app, after Picked up: under "Picked up at 10:42",
+   "Church about 10:58", updating as the bus goes. Once 10:58 has passed
+   with no arrival, "Due at church 10:58. Arrival not recorded." When the
+   driver app records the bus back inside the church grounds,
+   "At church at 10:57". Ended by the server or a coordinator's End it,
+   "The bus has finished its run", no time.
+2. Driver app, the phone driving the run: once the last booked stop is
+   answered, a pop-up "Church about 10:58", then "Due at church 10:58".
+   No buttons. It closes when the run ends. A tap on it puts it away, so
+   Undo on the stops stays in reach; it comes back if the stops change.
+3. The arrival time on the record is the moment the bus came back inside
+   the grounds, not 3 minutes later. Runs end exactly as before, and next
+   week's booking opens exactly as now.
 
 GOING LIVE
 ----------
 
-Merge the pull request. Pages, server and sheet go live by themselves.
+Merge the pull request. Pages and server go live by themselves. Code.gs is
+unchanged.
 
 
 AFTER IT (give it ten minutes)
 --------
 
-B. The foot of the apps reads  app v1.126.0 · server w2.67.0 · sheet
+B. The foot of the apps reads  app v1.127.0 · server w2.68.0 · sheet
    v1.124.0 .
-C. "Is everything working?" says Set up has run for v1.124.0, and has no
-   ✗ for SHEET_TOKEN.
 
 
 A FRESH ADDRESS (not on a Sunday, after B and C)

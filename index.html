@@ -1033,6 +1033,8 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
 .pick-row{cursor:pointer}
 /* Undo's confirm (v1.103.0), centred like the pickup pop-up and above it. */
 .undo-modal{z-index:135}
+.church-modal .pick-sheet{text-align:center}
+.church-modal h2{margin:0}
 .rota-modal-actions .btn{flex:1}
 @media (min-width:641px){.rota-modal{align-items:center}.rota-sheet{border-radius:14px;max-height:80vh}}
 
@@ -1475,6 +1477,15 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
   <div class="rota-sheet pick-sheet" role="dialog" aria-modal="true" aria-labelledby="pickTitle" id="pickBody"></div>
 </div>
 
+<!-- The church pop-up, from v1.127.0 (Asim, 17 Oct 2026). Once every booked
+     stop is answered: "Church about 10:58", kept up to date, then "Due at
+     church 10:58". No buttons. It closes when the run ends. A tap on it puts
+     it away, so Undo on the stops behind it stays in reach. Filled by
+     churchSync. -->
+<div class="rota-modal pick-modal church-modal" id="churchModal" aria-hidden="true">
+  <div class="rota-sheet pick-sheet" role="dialog" aria-modal="true" aria-labelledby="churchTitle" id="churchBody"></div>
+</div>
+
 <!-- Undo, asked first, from v1.103.0 (Asim). One tap on Undo used to take a
      stop back on the spot, next to the row's own buttons. Filled by
      tripUndoAsk. -->
@@ -1767,7 +1778,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.126.0";
+var APP_VERSION = "v1.127.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -5959,7 +5970,10 @@ function tripAutoEnd(){
   if(!trip.started || trip.ended) return;
   if(!tripMayTap(trip.route)) return;
 
-  trip.ended=tripNow();
+  /* The moment the bus came back inside the fence, from v1.127.0 (Asim),
+     not the three minutes later that this is called. */
+  var back = tripHomeSince ? tripHomeSince + tripSkew : 0;
+  trip.ended = (back && back <= tripNow()) ? back : tripNow();
   tripAutoEndedAt=trip.ended;
   tripSaveState();
   tripQueue({ event:"end", stopId:"", at:trip.ended, auto:1 });
@@ -8119,6 +8133,7 @@ function stopsClose(){
   pinModalClose();
   pinGateWasUp=false; pinWhy="";
   pickNext=null; pickSync();
+  churchFor=null; churchSync();
   tripUndoClose();
   stopsAutoNext="";
   show(stopsFrom||"driver");
@@ -8396,6 +8411,15 @@ function rotaPaintStops(){
   /* The stop the pickup pop-up is about. A stop with no estimate cannot say
      when "Be at your stop" comes, so its own row keeps the two buttons. */
   pickNext=nextStop;
+  /* The church pop-up's stop: the Arrival row, once the last booked stop is
+     answered. Set again below once the missed-stop ask is known. */
+  churchFor=null;
+  var churchSig="";
+  if(onThis && mayTap && showCounts && !nextStop && arr.length){
+    list.forEach(function(s){
+      if(view.served[s.id] && (rotaStopCounts[s.id]||0)>0) churchSig+=s.id+":"+view.served[s.id].event+",";
+    });
+  }
   var pickRowBtns = !!(nextStop && !pickTimed(nextStop));
 
   /* THE STOP HE HAS GONE PAST WITHOUT MARKING.
@@ -8419,6 +8443,7 @@ function rotaPaintStops(){
       if(!tripSkipAsked[missed[mi].id]){ askStop=missed[mi]; break; }
     }
   }
+  if(churchSig && !askStop){ churchFor=arr[0]; churchKey=trip.id+"|"+churchSig; }
   if(askStop){
     var askN=rotaStopCounts[askStop.id]||0;
     html+='<div class="trip-ask">'+
@@ -8689,6 +8714,7 @@ function rotaPaintStops(){
      brought the buttons back to life and the banner back to blank, halfway
      down the road. */
   pickSync();
+  churchSync();
   tripMovingPainted=null;
   tripPaintMoving();
   pinGateAutoFocus();
@@ -9399,6 +9425,49 @@ function pickFetch(){
 }
 
 setInterval(function(){ if(rotaStopsOpen) pickSync(); }, 10000);
+
+/* ---- the church pop-up, from v1.127.0 (Asim, 17 Oct 2026) ---------------
+   On the phone driving the run, once the last booked stop is answered. The
+   time is the board's estimate for the Arrival row, the one the passenger
+   page shows under "Picked up at". Past it, "Due at church". No buttons; it
+   closes when the run ends (the church fence, the server, or End it). A tap
+   on it puts it away until the stops change, so Undo stays in reach. */
+var churchFor = null;       /* the Arrival row, while the pop-up is wanted */
+var churchKey = "";         /* the run and the answers it is up for */
+var churchAway = "";        /* the churchKey it was put away for */
+var churchDrawn = "";
+
+function churchClose(){
+  var box = $("churchModal");
+  churchDrawn = "";
+  if(!box || !box.classList.contains("is-on")) return;
+  box.classList.remove("is-on");
+  box.setAttribute("aria-hidden","true");
+  $("churchBody").innerHTML = "";
+}
+
+function churchSync(){
+  var s = (rotaStopsOpen && trip.started && !trip.ended) ? churchFor : null;
+  var at = s && rotaStopEtas ? Number(rotaStopEtas[s.id]) || 0 : 0;
+  if(!s || !at || churchAway === churchKey){ churchClose(); return; }
+  var due = tripNow() >= at + 60000;
+  var t = tripClock(at);
+  var h = due ? 'Due at church '+esc(t) : 'Church about <b>'+esc(t)+'</b>';
+  if(h === churchDrawn) return;
+  churchDrawn = h;
+  $("churchBody").innerHTML = '<p class="eyebrow">'+esc(trip.route||"")+'</p>'+
+                              '<h2 id="churchTitle">'+h+'</h2>';
+  var box = $("churchModal");
+  box.classList.add("is-on");
+  box.setAttribute("aria-hidden","false");
+}
+
+(function(){
+  var box = $("churchModal");
+  if(box) box.addEventListener("click", function(){ churchAway = churchKey; churchClose(); });
+})();
+
+setInterval(function(){ if(rotaStopsOpen) churchSync(); }, 10000);
 
 function tripActionHtml(nextStop, showCounts){
   var waiting=nextStop?(rotaStopCounts[nextStop.id]||0):0;

@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.67.0";
+const SCRIPT_VERSION = "w2.68.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1948,7 +1948,7 @@ async function tripState(env, key, route, mode) {
 
   const state = { trip: "", driver: "", reg: "", started: 0, ended: 0,
                   lastAt: 0, lastStop: "", lastStopId: "",
-                  offset: null, served: {} };
+                  offset: null, served: {}, endAuto: false };
 
   for (const r of live) {
     if (want && String(r.trip || "") !== want) continue;
@@ -1975,7 +1975,13 @@ async function tripState(env, key, route, mode) {
       }
       continue;
     }
-    if (ev === "end") { state.ended = at; continue; }
+    /* endAuto, from w2.68.0: the driver app closed it back inside the church
+       fence, so its time is when the bus came back (Asim, 17 Oct 2026). */
+    if (ev === "end") {
+      state.ended = at;
+      state.endAuto = String(r.status || "").toLowerCase().indexOf("(auto)") !== -1;
+      continue;
+    }
 
     if (r.stop_id) state.served[r.stop_id] = { at, event: ev };
 
@@ -2454,6 +2460,9 @@ async function tripPayload(env, ref, want, askedStop, pid) {
        not on. */
     const said = String(servedHere.event || "").toLowerCase();
     out.servedEvent = TAP_EMPTY.indexOf(said) !== -1 ? "empty" : said;
+    if (out.servedEvent !== "empty") {
+      try { out.church = await churchLine(env, key, all, myStop.route, state); } catch (e) {}
+    }
     return out;
   }
 
@@ -2509,6 +2518,31 @@ async function tripPayload(env, ref, want, askedStop, pid) {
   out.minutes = mins;
   out.imminent = mins <= TRIP_IMMINENT_MINUTES;
   return out;
+}
+
+/* THE CHURCH LINE, from w2.68.0 (Asim, 17 Oct 2026), for somebody already
+   picked up. One of:
+     { state: "eta",  words }  the estimate for the Arrival row, still ahead
+     { state: "due",  words }  that estimate has passed, nothing recorded
+     { state: "at",   words }  back inside the church fence at this time
+     { state: "done" }         ended some other way: no time
+   The estimate is the board's, rounded to the minute the same way, so the
+   driver's pop-up and this line give one time. null when there is none. */
+async function churchLine(env, key, all, route, state) {
+  if (state.ended) {
+    return state.endAuto ? { state: "at", words: londonHHMM(new Date(state.ended)) }
+                         : { state: "done" };
+  }
+  if (!state.started || state.offset === null || state.offset === undefined) return null;
+  const arr = all.find((s) => s.arrival && s.route === route && s.time) || null;
+  const sched = arr ? londonMoment(key, arr.time) : null;
+  if (!sched) return null;
+  const set = await etaSettings(env);
+  const ordered = stopsOnRoute(all, route);
+  const booked = await bookedStopIds(env, key, route);
+  const saved = etaSavedMinutes(key, ordered, state.lastStopId, arr.id, booked, set);
+  const eta = Math.round((sched.getTime() + Number(state.offset) * 60000 - saved * 60000) / 60000) * 60000;
+  return { state: Date.now() >= eta + 60000 ? "due" : "eta", words: londonHHMM(new Date(eta)) };
 }
 
 /* `mode` as for tripState. The driver's board leaves it out; the driver's
