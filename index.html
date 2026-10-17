@@ -1778,7 +1778,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.127.0";
+var APP_VERSION = "v1.127.1";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -5674,6 +5674,7 @@ function tripSaveState(){
                                     ended:trip.ended, served:trip.served,
                                     undone:trip.undone, reopened:trip.reopened||0,
                                     autoEnded:tripAutoEndedAt||0,
+                                    away:tripAwayEver?1:0,
                                     driver:trip.driver||"",
                                     rehearsal:Number(trip.rehearsal)||0 }));
 }
@@ -5714,6 +5715,7 @@ function tripLoadState(){
        app to undo", and a phone that had put the app away opened it fresh,
        with no button. */
     tripAutoEndedAt = trip.ended ? (Number(s.autoEnded)||0) : 0;
+    tripAwayEver = !trip.ended && !!s.away;
   }catch(e){}
 }
 
@@ -5919,8 +5921,13 @@ function tripAutoArrive(p){
     geoFenceVerdict(toYards(m), toYards(p.coords.accuracy||0), churchRadius()),
     Date.now(), mins*60000);
 
+  /* Kept with the run from v1.127.1: held in memory only, a phone that
+     reloaded the app while locked came back inside the fence not knowing
+     the bus had been out, and never ended the run itself. */
+  var wasAway = tripAwayEver;
   tripAwayEver  = next.away;
   tripHomeSince = next.since;
+  if(tripAwayEver !== wasAway) tripSaveState();
   if(next.end) tripAutoEnd();
 }
 

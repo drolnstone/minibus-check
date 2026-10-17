@@ -1053,6 +1053,27 @@ if (want("T37")) {
   await me.ctx.close();
 }
 
+/* T38 — v1.127.1. The app reloaded while the phone was locked, after a
+   pickup: back inside the fence it still ends the run itself, stamped with
+   the first reading inside. It used to forget the bus had been out. */
+if (want("T38")) {
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck(), counts: { North: { N01: 2 }, South: {} } } });
+  await startRun(me);
+  await me.jump(11); await me.emit(AWAY); await me.wait(500);
+  const tapped = await tap(me, "pickup", "N01"); await me.wait(3500);
+  await me.jump(40);
+  await me.load(); await me.close(["howDone"]);
+  await me.toStops(); await me.close();
+  await me.emit(CHURCH); await me.wait(500);
+  const back = await me.pg.evaluate(() => Date.now());
+  await me.jump(4); await me.emit(CHURCH); await me.wait(1500);
+  const dbg = await me.pg.evaluate(() => ({ ended: trip.ended, auto: tripAutoEndedAt }));
+  check("T38", "reloaded after a pickup, back inside the fence the run still ends itself, stamped on the first reading inside",
+        tapped && dbg.ended && Math.abs(dbg.ended - back) < 60000 && !me.errs.length,
+        JSON.stringify({ tapped, back, dbg, errs: me.errs }));
+  await me.ctx.close();
+}
+
 /* T29 — v1.101.1 (Asim). The next booked stop comes into view by itself
    when the list opens and each time it moves on; the driver never scrolls to
    find it. A poll that changes nothing leaves the list where he put it. */
