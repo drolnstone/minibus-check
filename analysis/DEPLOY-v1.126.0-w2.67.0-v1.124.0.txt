@@ -1,0 +1,58 @@
+MINIBUS
+=======
+  pages v1.126.0 · server w2.67.0 · sheet v1.124.0
+
+YOU ARE ON   app v1.125.0 · server w2.66.0 · sheet v1.123.0
+GOING TO     app v1.126.0 · server w2.67.0 · sheet v1.124.0
+
+Asim, 17 Oct: the Apps Script web app's address (the deployment ending
+…1XxMSA) was in config.js and in the Apps Script workflow, both public.
+
+1. config.js no longer has it. The driver app's fallback to the sheet now
+   goes to the live server's /sheet, which passes the call on to the
+   address the sheet sends on each sync (Script Property WEB_APP_URL).
+   It passes on only what a phone could always send, and never with the
+   sheet's own password. It works only with SHEET_TOKEN set on both sides.
+2. The Apps Script workflow reads the deployment from the repository secret
+   DEPLOYMENT_ID, which GitHub also blanks out of the run logs. Without it
+   the run goes red and Code.gs does not go live.
+3. The sheet asks for its own password (SHEET_TOKEN) on report and pdf as
+   well, the two the coordinator app asks through the live server.
+4. The live server's status answer gives the sheet its address only when
+   SHEET_TOKEN is set.
+
+The old address is still in the repository's history and in earlier
+Actions logs, so only a fresh deployment makes the address private.
+
+BEFORE MERGING
+--------------
+
+A. GitHub, the repository, Settings, Secrets and variables, Actions, New
+   repository secret. Name DEPLOYMENT_ID. Value: Apps Script, Deploy,
+   Manage deployments, the web app ending …1XxMSA, Deployment ID.
+
+GOING LIVE
+----------
+
+Merge the pull request. Pages, server and sheet go live by themselves.
+
+
+AFTER IT (give it ten minutes)
+--------
+
+B. The foot of the apps reads  app v1.126.0 · server w2.67.0 · sheet
+   v1.124.0 .
+C. "Is everything working?" says Set up has run for v1.124.0, and has no
+   ✗ for SHEET_TOKEN.
+
+
+A FRESH ADDRESS (not on a Sunday, after B and C)
+-----------------
+
+1. Apps Script, Deploy, New deployment, Web app, Execute as Me, Who has
+   access Anyone, Deploy. Copy the Web app URL and the Deployment ID.
+2. Project Settings, Script Properties: WEB_APP_URL is the new Web app URL.
+3. GitHub secret DEPLOYMENT_ID: Update, the new Deployment ID.
+4. Minibus menu, Send everything to the live server now. "Is everything
+   working?" names the web app ending in the new ID's last six.
+5. Deploy, Manage deployments: Archive the one ending …1XxMSA.

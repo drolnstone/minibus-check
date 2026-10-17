@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.66.0";
+const SCRIPT_VERSION = "w2.67.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -4967,8 +4967,9 @@ async function handleDrain(env, body) {
                    message is switched off, for the sheet's watch on it. */
                 morning: await morningSeen(env),
                 /* Where it knocks, so the sheet can say whether that is its own
-                   address. A web app URL is not a secret: it is in config.js. */
-                knockTo: await sheetUrlKept(env),
+                   address. Only to the sheet, behind its own password: from
+                   w2.67.0 no page carries the address. */
+                knockTo: sheetTokenOf(env) ? await sheetUrlKept(env) : undefined,
                 /* Whether the sheet's own password is set here, so the sheet
                    can say which side is missing it. */
                 sheetTokenSet: !!sheetTokenOf(env) });
@@ -10702,6 +10703,58 @@ async function coordRuns(env, me, sundayIn) {
    and are asked of it: the health check reads every tab, and who is carrying
    the load counts twenty six Sundays of the Rota tab. */
 
+/* THE SHEET, BY WAY OF HERE, from w2.67.0.
+
+   The web app's address used to be in config.js, so the driver app could
+   fall back to the sheet when this server had nothing for it. config.js is
+   public, so the address was too. Now config.js names /sheet on this server
+   instead, and this passes the call on to the address the sheet itself sent
+   on its last sync, which no page ever sees.
+
+   It passes on what a phone could always send and nothing more. The calls
+   only this server makes of the sheet are refused here, and the sheet's own
+   password is never added: a phone has not got it, so neither does a call
+   that came from one. The sheet's answer goes back exactly as it came.
+
+   Only with SHEET_TOKEN set. Without it anybody holding the public token
+   could send a sync naming an address of their own, and this would hand
+   them what phones send. */
+const RELAY_REFUSED = ["decision", "report", "pdf", "drainnow"];
+
+async function sheetRelay(request, env, url) {
+  const set = await cacheGet(env, "sheet_url");
+  const to = set && String(set.url || "");
+  if (!to || !sheetTokenOf(env)) return json({ ok: false, error: "no sheet" });
+  let go;
+  if (request.method === "GET") {
+    go = fetch(to + url.search, { method: "GET", redirect: "follow" });
+  } else if (request.method === "POST") {
+    let body;
+    try { body = JSON.parse(await request.text() || "{}"); } catch (e) { body = null; }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return json({ ok: false, error: "bad request" });
+    if (RELAY_REFUSED.indexOf(String(body.action || "")) !== -1) return json({ ok: false, error: "bad sheet token" });
+    delete body.sheetToken;
+    go = fetch(to, { method: "POST", redirect: "follow",
+                     headers: { "content-type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) });
+  } else {
+    return json({ ok: false, error: "bad request" });
+  }
+  let text = "";
+  try {
+    const r = await go;
+    if (!r || !r.ok) return json({ ok: false, error: "the sheet did not answer" });
+    text = await r.text();
+    JSON.parse(text);
+  } catch (e) {
+    return json({ ok: false, error: "the sheet did not answer" });
+  }
+  return new Response(text, { headers: {
+    "content-type": "application/json;charset=UTF-8",
+    "access-control-allow-origin": "*",
+    "cache-control": "no-store"
+  } });
+}
+
 async function sheetAsk(env, payload, capMs) {
   const set = await cacheGet(env, "sheet_url");
   const url = set && String(set.url || "");
@@ -11449,6 +11502,12 @@ export default {
         "access-control-allow-methods": "GET,POST,OPTIONS",
         "access-control-allow-headers": "content-type"
       } });
+    }
+
+    /* The driver app's way to the sheet, from w2.67.0. See sheetRelay. */
+    if (url.pathname.replace(/\/+$/, "") === "/sheet") {
+      try { return await sheetRelay(request, env, url); }
+      catch (e) { return json({ ok: false, error: "the sheet did not answer" }); }
     }
 
     /* Who is asking, for counting wrong PINs per phone (w2.64.0). A copy of

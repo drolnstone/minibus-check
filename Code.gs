@@ -18,7 +18,9 @@
  *   4. Deploy > New deployment > Web app
  *        Execute as: Me
  *        Who has access: Anyone
- *   5. Copy the /exec URL into config.js
+ *   5. Copy the /exec URL into the Script Property WEB_APP_URL. Never into
+ *      a file: the repository is public, and from v1.124.0 the pages reach
+ *      this sheet through the live server's /sheet, so none of them needs it.
  *
  * After ANY later edit to this file: Deploy > Manage deployments > edit >
  * Version: New version. Saving alone does not update the live app.
@@ -45,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.123.0";
+var SCRIPT_VERSION = "v1.124.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -2413,8 +2415,9 @@ function doPost(e) {
       return reply({ ok: false, error: "bad token" });
     }
     /* Only the live server asks these, so they want the sheet's own password
-       as well as the public one. */
-    var fromServer = ["decision", "report", "drainnow"];
+       as well as the public one. report and pdf from v1.124.0: they read
+       every tab, and pdf can save a file in Drive. */
+    var fromServer = ["decision", "report", "pdf", "drainnow"];
     if (fromServer.indexOf(String(body.action || "")) !== -1 && !sheetTokenOk(body)) {
       return reply({ ok: false, error: "bad sheet token" });
     }

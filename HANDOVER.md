@@ -18,7 +18,7 @@ Three phone web apps for the Sunday minibus of RCCG Dominion Assembly, Liverpool
 | Passenger page (book a seat, watch the bus) | `sunday/` | https://drolnstone.github.io/minibus-check/sunday/ |
 | Coordinator app (rota, notes, requests, defects, drivers, buses, bus stops, Vehicle Log, bookings, trip times, authorise stopped buses, PDF reports) | `coord/` | https://drolnstone.github.io/minibus-check/coord/ |
 | Fast server: Cloudflare Worker with D1 database `minibus` (bound as `DB`) | `server/worker.js`, `server/schema.sql` | https://minibus-api.asimbassey.workers.dev |
-| Sheet code: Google Apps Script bound to the Google Sheet (Europe/London), deployed as the web app the Worker calls (URL ends `…1XxMSA`, full URL in `config.js`) | `Code.gs` (repo root) | script.google.com |
+| Sheet code: Google Apps Script bound to the Google Sheet (Europe/London), deployed as the web app the Worker calls (URL ends `…1XxMSA`; the full URL is only in the Script Property `WEB_APP_URL` and the repository secret `DEPLOYMENT_ID`, never in a file) | `Code.gs` (repo root) | script.google.com |
 | Driver's Manual PDF builder | `manual/` | |
 | Doodle video scripts | `video/` | |
 | Deploy notes, one per release | `analysis/DEPLOY-*.txt`, latest also in `DEPLOY.txt` | |

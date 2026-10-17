@@ -4,13 +4,17 @@
 #
 # It first pulls the live project, so the manifest (appsscript.json) and any
 # other file there stay exactly as they are; only Code.gs is replaced. The web
-# app deployment is updated in place, so its URL (…1XxMSA, in config.js and in
-# the Worker's WEB_APP_URL) never changes.
+# app deployment is updated in place, so its URL (…1XxMSA, in the Script
+# Property WEB_APP_URL) never changes.
 #
-# Needs two repository secrets, set once (DEPLOY.txt, "Code.gs on merge"):
-#   CLASPRC_JSON  the whole ~/.clasprc.json that clasp 2.4.2 login writes
-#   SCRIPT_ID     Apps Script, Project Settings, Script ID
-# Until both are there it does nothing and stays green.
+# Needs three repository secrets, set once (DEPLOY.txt, "Code.gs on merge"):
+#   CLASPRC_JSON   the whole ~/.clasprc.json that clasp 2.4.2 login writes
+#   SCRIPT_ID      Apps Script, Project Settings, Script ID
+#   DEPLOYMENT_ID  Apps Script, Deploy, Manage deployments, the web app's
+#                  Deployment ID. A secret from v1.124.0: it is the web app's
+#                  address, and a secret is also blanked out of the logs.
+# Until the first two are there it does nothing and stays green. Without the
+# third it goes red, so a Code.gs that did not go live is seen.
 #
 # From 16 Oct 2026 (audit): only after the Tests workflow has passed on that
 # commit of main. A merge whose checks fail no longer reaches the sheet. It
@@ -42,8 +46,8 @@ jobs:
     env:
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
       SCRIPT_ID: ${{ secrets.SCRIPT_ID }}
-      # The web app the Worker calls; the same ID is in config.js.
-      DEPLOYMENT_ID: AKfycbxS-2KqOjCWCwTkoNWgOOsB-TfGYShkSkvQJC6ItfpGINj7DJ6CRYuTxpXQip1R1XxMSA
+      # The web app the Worker calls. Never written here: see the top.
+      DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,6 +74,9 @@ jobs:
           if [ -z "$CLASPRC_JSON" ] || [ -z "$SCRIPT_ID" ]; then
             echo "::notice::CLASPRC_JSON or SCRIPT_ID is not set, so Code.gs was not deployed. Paste it by hand."
             echo "go=no" >> "$GITHUB_OUTPUT"
+          elif [ -z "$DEPLOYMENT_ID" ]; then
+            echo "::error::DEPLOYMENT_ID is not set, so Code.gs was not deployed. Add it under Settings, Secrets and variables, Actions."
+            exit 1
           else
             echo "go=yes" >> "$GITHUB_OUTPUT"
           fi

@@ -1767,7 +1767,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.125.0";
+var APP_VERSION = "v1.126.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2064,7 +2064,9 @@ var LIVE = !!(CFG.endpoint && CFG.endpoint.indexOf("http") === 0);
 
    Falls back to CFG.endpoint the moment liveEndpoint is blank, and that is
    the whole rollback: one line in config.js and every call returns to Apps
-   Script, slow but correct. */
+   Script, slow but correct. From v1.126.0 CFG.endpoint is the live server's
+   /sheet, which passes the call to the sheet, so the web app's own address
+   is in no page. */
 var LIVE_ENDPOINT = (CFG.liveEndpoint && String(CFG.liveEndpoint).indexOf("http") === 0)
   ? CFG.liveEndpoint : CFG.endpoint;
 
