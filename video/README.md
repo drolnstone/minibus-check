@@ -16,14 +16,16 @@ four MP4s.
 
 And for drivers:
 
-4. **Driver: Sunday morning to the end of the run** (about 3:15): the 7:30
-   reminder, name and PIN, the vehicle check with Fine, Advisory and Defect,
-   the photo a Defect needs, Sign and send, Time to set off, Start trip, the
-   next stop in the middle, the postcode that opens the map, the pick-up pop-up (Call passenger, Picked up,
-   Nobody here, waiting while the bus moves), changing an answer, Undo and
-   its question, and End trip.
+4. **Driver: from your name to the parked mileage** (about 4:00): the 7:30
+   reminder, name and PIN, the duty card, the vehicle check with Fine,
+   Advisory and Defect, the photo a Defect needs, Sign and send, Time to set
+   off, Start trip, the next stop in the middle, the postcode that opens the
+   map, the pick-up pop-up (Call passenger, Picked up, Nobody here, waiting
+   while the bus moves), changing an answer, Undo and its question, the
+   church pop-up, the run ending by itself back at church, the Trip ended and
+   2pm reminders, and the parked mileage on the hub.
 
-Captions only, no voice. Portrait, 1080 x 1920, each under 5 MB, so they send
+Captions only, no voice. Portrait, 1080 x 1920, each under 6 MB, so they send
 on WhatsApp as they are.
 
 **Nothing from the spreadsheet is needed or kept here.** The stops come from
@@ -60,7 +62,7 @@ driver video (`video/build.sh preview-driver` for its stills only). If only capt
 | `build.sh` | Runs everything below, in order, after fetching rough.js, the fonts and ffmpeg once. |
 | `check_words.py` | Holds every blue phrase to the page it shows (`sunday/index.html`, or `index.html` for the driver video) and every notification to `server/worker.js`. Must end `unexplained after the hand-read list: 0`. |
 | `shots.mjs` | The passenger page at each stage, one scene each, on the real page with a stand-in for the live server. Records where every ringed button is (`build/shots/marks.json`). |
-| `shots-driver.mjs` | The same for the driver app (`index.html`), with the stand-in servers of `tests/browser/lib.mjs`: Bro Sample on North in NH56 FWP, from the check to the end of the run. |
+| `shots-driver.mjs` | The same for the driver app (`index.html`), with the stand-in servers of `tests/browser/lib.mjs`: Bro Sample on North in NH56 FWP, from signing in to the parked mileage. |
 | `clips.js` | The three passenger videos, scene by scene: every caption, every notification, every ring and close-up. **This is the file to edit.** |
 | `clips-driver.js` | The driver video, the same way. |
 | `engine.js` | The drawing: rough.js shapes drawn stroke by stroke, handwriting that writes itself, the pencil, phones, rings, close-ups and notification cards. |

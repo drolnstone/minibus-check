@@ -1,4 +1,5 @@
-/* THE DRIVER VIDEO, scene by scene: Sunday morning to the end of the run.
+/* THE DRIVER VIDEO, scene by scene: from choosing your name to the parked
+   mileage after the afternoon run.
 
    Built the same way as clips.js (see engine.js for the calls). **Words in
    stars** are what the driver app says, and check_words.py holds them to
@@ -12,7 +13,7 @@
   const A = DOODLE, D = A.D;
   const CX = 30, CY = 96;
   const PH = { x: 135, y: 322, w: 270 };
-  const TITLE = "Driver  ·  Sunday morning";
+  const TITLE = "Driver  ·  Sunday";
   const APP = { app: "Driver", icon: "../icon-driver-180.png" };
 
   const head = () => A.label(TITLE, 270, 40, { size: 21 });
@@ -31,8 +32,8 @@
       a.draw(D.church(360, 610, 1.05), 1.1);
       a.draw(D.bus(50, 680, 1.0), 1.2);
       a.write(["The Driver app"], 270, 190, { size: 64, anchor: "middle" });
-      a.write(["Sunday morning"], 270, 270, { size: 44, anchor: "middle", color: a.BLUE });
-      a.write(["to the end of the run"], 270, 330, { size: 36, anchor: "middle", color: a.SOFT });
+      a.write(["From your name"], 270, 270, { size: 44, anchor: "middle", color: a.BLUE });
+      a.write(["to the parked mileage"], 270, 330, { size: 36, anchor: "middle", color: a.SOFT });
       a.draw(D.underline(110, 430, 360), 0.5, { pen: false });
       a.hold(1.8);
     });
@@ -43,7 +44,7 @@
       when("Sunday, between 7:30 and 8:30");
       a.write(["With alerts on, your phone", "tells you your route and time."], CX, CY + 44, { size: 34 });
       lock("7:45", "Sunday 27 September");
-      a.note(90, 480, 360, "You are driving today", "North. Depart 10:05 after vehicle check.", APP);
+      a.note(90, 480, 360, "You are driving today", "North. Vehicle check 09:45. Depart 10:05.", APP);
       a.hold(3.6);
     });
 
@@ -65,6 +66,14 @@
     });
 
     /* ---- the check ------------------------------------------------------ */
+    scene((a) => {
+      head();
+      cap(["At the top: your route, the", "check time and when you", "depart."]);
+      const s = phone("d-hub");
+      a.zoom(s, "duty", 40, 640, 460, { pad: 4, color: a.RED });
+      a.hold(2.8);
+    });
+
     scene((a) => {
       head();
       cap(["Before you drive, tap", "**Vehicle check**."]);
@@ -147,7 +156,7 @@
       when("10:05  Time to leave church");
       a.write(["Your phone says when it", "is time to go."], CX, CY + 44, { size: 34 });
       lock("10:05", "Sunday 27 September");
-      a.note(90, 480, 360, "Time to set off", "Your North run is due to leave church at 10:05. Tap Start as you pull away.", APP);
+      a.note(90, 480, 360, "Time to set off", "Your North run is due to leave church at 10:05.", APP);
       a.hold(3.6);
     });
 
@@ -232,20 +241,57 @@
       a.hold(2.8);
     });
 
+    /* ---- back at church (v1.106.0, v1.127.0) ---------------------------- */
     scene((a) => {
       head();
-      cap(["Back at church, tap", "**End trip, arrived at church**."]);
-      const s = phone("d-arrived");
-      a.ringOn(s, "end", { pad: 2 });
-      a.hold(2.6);
+      cap(["Every booked stop done: the", "time at church comes up.", "Tap it to put it away."]);
+      const s = phone("d-church");
+      a.zoom(s, "title", 40, 650, 460, { pad: 6, color: a.BLUE });
+      a.hold(2.8);
     });
 
     scene((a) => {
       head();
-      cap(["**Trip finished.** Done for", "this Sunday."]);
-      const s = phone("d-finished");
-      a.zoom(s, "done", 40, 620, 460, { pad: 4, color: a.GREEN });
-      a.draw(D.tick(440, 560, 1.2), 0.5);
+      cap(["Back in the church grounds,", "the run ends by itself.", "No button to press."]);
+      const s = phone("d-ended");
+      a.zoom(s, "done", 40, 640, 460, { pad: 4, color: a.GREEN });
+      a.hold(2.8);
+    });
+
+    scene((a) => {
+      head();
+      when("10:58  The run has ended");
+      a.write(["Your phone says so, and", "asks for the parked mileage."], CX, CY + 44, { size: 34 });
+      lock("10:58", "Sunday 27 September");
+      a.note(90, 480, 360, "Trip ended", "North ended at 10:58. Record the bus parked mileage when you return from the afternoon run.", APP);
+      a.hold(3.8);
+    });
+
+    /* ---- the parked mileage (v1.124.0) ------------------------------------ */
+    scene((a) => {
+      head();
+      when("14:00  If it is not in yet");
+      a.write(["A reminder at two o'clock."], CX, CY + 44, { size: 34 });
+      lock("14:00", "Sunday 27 September");
+      a.note(90, 480, 360, "Parked mileage", "Record the bus parked mileage for NH56 FWP when you return from the afternoon run.", APP);
+      a.hold(3.6);
+    });
+
+    scene((a) => {
+      head();
+      cap(["Bus parked after the", "afternoon run? On the hub,", "type the mileage. Tap **Save**."]);
+      const s = phone("d-park");
+      a.ringOn(s, "box", { pad: 2 });
+      a.ringOn(s, "save", { pad: 2 });
+      a.hold(2.8);
+    });
+
+    scene((a) => {
+      head();
+      cap(["The tick means it is in.", "Done for this Sunday."]);
+      const s = phone("d-park-done");
+      a.zoom(s, "card", 40, 640, 460, { pad: 4, color: a.GREEN });
+      a.draw(D.tick(440, 600, 1.2), 0.5);
       a.hold(2.6);
     });
 
