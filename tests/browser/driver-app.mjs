@@ -1127,7 +1127,9 @@ if (want("T30")) {
   const up = () => me.pg.evaluate(() => document.getElementById("pickModal").classList.contains("is-on"));
   const AT = { lat: 53.4497, lng: -2.9365 };
   const far = await up();
-  for (let i = 0; i < 8; i++) { await me.emit(Object.assign({ acc: 8, speed: 11 }, AT)); await me.wait(500); }
+  /* Long enough to count as moving (4 s), so the bus has left church
+     (v1.128.0: the pop-up waits until it has). */
+  for (let i = 0; i < 12; i++) { await me.emit(Object.assign({ acc: 8, speed: 11 }, AT)); await me.wait(500); }
   const passing = await up();
   for (let i = 0; i < 8; i++) { await me.emit(Object.assign({ acc: 400, speed: 0 }, AT)); await me.wait(500); }
   const vague = await up();
@@ -1337,11 +1339,11 @@ if (want("T36")) {
   await co.ctx.close();
 }
 
-/* T38 — v1.128.0 (Asim, 18 Oct 2026: "Nobody goes back to pick you when
+/* T39 — v1.128.0 (Asim, 18 Oct 2026: "Nobody goes back to pick you when
    you've been left behind"). Only the stretch from the last marked stop to
    the next booked one can be tapped; Undo and the other answer are on the
    last marked stop only, and one step back only. */
-if (want("T38")) {
+if (want("T39")) {
   const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck() } });
   await startRun(me);
   await me.jump(11); await me.wait(300);
@@ -1360,7 +1362,7 @@ if (want("T38")) {
   const oneStep = !(await has('[data-tripundo="N01"]'));
   const refused = await me.pg.evaluate(() => { tripTap(rotaStops.find(x => x.id === "N05"), "pickup");
                                                return !trip.served.N05; });
-  check("T38", "only the stretch to the next booked stop can be tapped; Undo on the last marked stop, one step back",
+  check("T39", "only the stretch to the next booked stop can be tapped; Undo on the last marked stop, one step back",
         aheadShut && undo1 && behind && undo2 && someone && past && oneStep && refused && !me.errs.length,
         JSON.stringify({ aheadShut, undo1, behind, undo2, someone, past, oneStep, refused, errs: me.errs }));
   await me.ctx.close();
