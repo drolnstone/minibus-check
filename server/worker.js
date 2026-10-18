@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.68.0";
+const SCRIPT_VERSION = "w2.69.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5223,7 +5223,7 @@ async function tellNewTime(env, b, stop, key) {
                              body: shortDay(key) + ": " + stop.time + "." });
   if (!msg) return 0;
   const subs = [], had = {};
-  if (b.device) for (const s of await subsWhere(env, "role='passenger' AND ref=?", [b.device])) {
+  if (b.device && !b.pid) for (const s of await subsWhere(env, "role='passenger' AND ref=?", [b.device])) {
     if (!had[s.id]) { had[s.id] = 1; subs.push(s); }
   }
   if (b.pid) for (const s of await subsWhere(env, "role='passenger' AND pid=?", [b.pid])) {
@@ -5736,14 +5736,19 @@ async function subsWhere(env, where, binds) {
 }
 
 /* The passengers booked at one stop today. Matched on BOTH handles, because a
-   booking made on a laptop and watched on a phone is one person. */
+   booking made on a laptop and watched on a phone is one person.
+
+   The device handle counts only for a booking with no number on it, as in
+   bookingFor. From w2.69.0 (Asim, 18 Oct 2026): a phone that once booked for
+   somebody else's number keeps its handle on that row, and was woken all
+   morning for a seat its own page rightly said it did not have. */
 async function subsAtStop(env, key, stopId) {
   const rows = await liveBookings(env, key);
   const want = rows.filter((b) => b.stopId === stopId && b.seats > 0);
   if (!want.length) return [];
   const subs = [], seen = {};
   for (const b of want) {
-    if (b.device) {
+    if (b.device && !b.pid) {
       for (const s of await subsWhere(env, "role='passenger' AND ref=?", [b.device])) {
         if (!seen[s.id]) { seen[s.id] = 1; subs.push(s); }
       }
@@ -6137,7 +6142,7 @@ async function wakeBookingReminders(env) {
   for (const b of await liveBookings(env, target)) {
     if (!(Number(b.seats) > 0)) continue;
     const hold = off.length > 0 && off.indexOf(byStop[String(b.stopId)] || "") !== -1;
-    if (b.device) { booked["d:" + b.device] = 1; if (hold) held["d:" + b.device] = 1; }
+    if (b.device && !b.pid) { booked["d:" + b.device] = 1; if (hold) held["d:" + b.device] = 1; }
     if (b.pid) { booked["p:" + b.pid] = 1; if (hold) held["p:" + b.pid] = 1; }
   }
 
@@ -6646,7 +6651,7 @@ async function seatFor(env, sub) {
   let rows = [];
   try { rows = await liveBookings(env, target); } catch (e) { return null; }
   const mine = rows.find((b) => Number(b.seats) > 0 &&
-    ((sub.ref && b.device === sub.ref) || (sub.pid && b.pid === sub.pid)));
+    ((sub.ref && !b.pid && b.device === sub.ref) || (sub.pid && b.pid === sub.pid)));
   if (!mine) return null;
   let stop = null;
   try {
@@ -10410,7 +10415,7 @@ async function messageSend(env, me, id, to, text, key) {
     if (onlyBooked || onlyNot) {
       for (const b of await liveBookings(env, key)) {
         if (!(Number(b.seats) > 0)) continue;
-        if (b.device) booked["d:" + b.device] = 1;
+        if (b.device && !b.pid) booked["d:" + b.device] = 1;
         if (b.pid) booked["p:" + b.pid] = 1;
       }
     }

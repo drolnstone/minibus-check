@@ -1,15 +1,17 @@
 MINIBUS
 =======
-  pages v1.127.1 · server w2.68.0 · sheet v1.124.0
+  pages v1.127.1 · server w2.69.0 · sheet v1.124.0
 
-YOU ARE ON   app v1.127.0 · server w2.68.0 · sheet v1.124.0
-GOING TO     app v1.127.1 · server w2.68.0 · sheet v1.124.0
+YOU ARE ON   app v1.127.1 · server w2.68.0 · sheet v1.124.0
+GOING TO     app v1.127.1 · server w2.69.0 · sheet v1.124.0
 
-The driver app now keeps "the bus has left the grounds" with the run. It
-was held in memory only, so a phone whose app was reloaded while locked
-(the phone does this to save battery) came back inside the church fence
-not knowing the bus had been out: it never ended the run itself, and the
-server closed it half an hour later with no arrival time. Pages only.
+A phone is woken only for its own seat. A booking keeps the handle of the
+phone that last made or changed it, and the alerts also matched on that
+handle, so a phone that once booked for somebody else's number and went
+back to its own was still told when the bus was near that person's stop,
+while its own page rightly showed no booking. The handle now counts only
+for an old booking with no number on it, as the page already did. Server
+only.
 
 GOING LIVE
 ----------
@@ -20,7 +22,7 @@ Merge the pull request. The pages go live by themselves.
 AFTER IT (give it ten minutes)
 --------
 
-B. The foot of the apps reads  app v1.127.1 · server w2.68.0 · sheet
+B. The foot of the apps reads  app v1.127.1 · server w2.69.0 · sheet
    v1.124.0 .
 
 
