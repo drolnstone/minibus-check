@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.68.0";
+const SCRIPT_VERSION = "w2.69.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -213,7 +213,6 @@ const TZ = "Europe/London";
 /* All the same numbers as Code.gs, and they must stay the same numbers. */
 const BOOKING_CUTOFF_DAY = 0, BOOKING_CUTOFF_HOUR = 9, BOOKING_CUTOFF_MIN = 30;
 const RUN_BACKSTOP_HOUR = 12, RUN_BACKSTOP_MIN = 0;
-const TRIP_QUIET_MINUTES = 15;
 const TRIP_MAX_EARLY = 12;
 const TRIP_IMMINENT_MINUTES = 1;
 const RUN_DONE_MARGIN_MIN = 30;
@@ -2024,14 +2023,13 @@ function tripProjectable(state, set) {
      It stops being the truth after a while. Without this, a run where the
      driver never tapped anything said "on its way, left church at 10:05" at
      half past twelve with the bus back and the service half over. */
-  if (!state.lastStop && (Date.now() - state.started) / 60000 > TRIP_QUIET_MINUTES) {
-    return { ok: false, why: "silent" };
-  }
+  /* NO LONGER DROPPED FOR SILENCE, from w2.69.0 (Asim, 18 Oct 2026). A leg
+     that ran long, Westbrook Road to Ottley Street, left the estimate a
+     minute away and the page saying "No update yet" because nothing had been
+     tapped for 15 minutes. While a run is open the estimate stays; the
+     server's own close (last stop plus 30 minutes, 30 quiet) ends it. */
   if (!state.lastAt) return { ok: false, why: "noevents" };
   if (state.offset === null) return { ok: false, why: "noevents" };
-
-  const quiet = (Date.now() - state.lastAt) / 60000;
-  if (quiet > TRIP_QUIET_MINUTES) return { ok: false, why: "quiet" };
   /* A late bus is still a bus. The cap is a setting from w2.16.0 and off by
      default: see maxBehindMinutes in ETA_FALLBACK. */
   const behind = Number(set && set.maxBehindMinutes) || 0;
@@ -2510,7 +2508,9 @@ async function tripPayload(env, ref, want, askedStop, pid) {
      its way to that kerb. It now stays for keepMinutes, a setting, and the
      page goes on telling him to be at his stop. The quiet rule above still
      ends it if the bus stops being heard from. */
-  if (mins < -set.keepMinutes) { out.mine = "quiet"; return out; }
+  /* From w2.69.0 it is not dropped at all: once its time has come with the
+     stop still unmarked, the page says "Be at your stop" with the time it
+     was due. keepMinutes is no longer read. */
 
   out.mine = "eta";
   out.offset = state.offset;
@@ -4749,7 +4749,7 @@ async function wakeParkAsk(env) {
     const d = due[who], buses = andList(d.regs);
     const r = await wake(env, await driverWakeSubs(env, d.driver), "parkask|" + day + "|" + buses);
     n += r;
-    await trail(env, { once: "d|parkask|" + day + "|" + buses, title: buses + ": Parked mileage",
+    await trail(env, { once: "d|parkask|" + day + "|" + buses, title: buses + ": Parked mileage not received",
                        body: "To " + d.driver + ": " + trailPhones(r) + ".", not: [d.driver] });
   }
   return n;
@@ -4780,8 +4780,10 @@ async function parkedWordsFor(env, driver, kind) {
     if (await cacheGet(env, "parkask:" + o.checkId)) owed.push(o.reg);
   }
   if (!owed.length) return null;
-  return { ok: true, tag: "parkask", url: "./", title: "Parked mileage",
-           body: "Record the bus parked mileage for " + andList(owed) + " when you return from the afternoon run." };
+  /* Only that it has not come in (Asim, 18 Oct 2026). Trip ended carries
+     the reminder itself. */
+  return { ok: true, tag: "parkask", url: "./", title: "Parked mileage not received",
+           body: andList(owed) + "." };
 }
 
 /* What Apps Script has not taken a copy of yet. It marks them done with
@@ -5223,7 +5225,7 @@ async function tellNewTime(env, b, stop, key) {
                              body: shortDay(key) + ": " + stop.time + "." });
   if (!msg) return 0;
   const subs = [], had = {};
-  if (b.device) for (const s of await subsWhere(env, "role='passenger' AND ref=?", [b.device])) {
+  if (b.device && !b.pid) for (const s of await subsWhere(env, "role='passenger' AND ref=?", [b.device])) {
     if (!had[s.id]) { had[s.id] = 1; subs.push(s); }
   }
   if (b.pid) for (const s of await subsWhere(env, "role='passenger' AND pid=?", [b.pid])) {
@@ -5736,14 +5738,19 @@ async function subsWhere(env, where, binds) {
 }
 
 /* The passengers booked at one stop today. Matched on BOTH handles, because a
-   booking made on a laptop and watched on a phone is one person. */
+   booking made on a laptop and watched on a phone is one person.
+
+   The device handle counts only for a booking with no number on it, as in
+   bookingFor. From w2.69.0 (Asim, 18 Oct 2026): a phone that once booked for
+   somebody else's number keeps its handle on that row, and was woken all
+   morning for a seat its own page rightly said it did not have. */
 async function subsAtStop(env, key, stopId) {
   const rows = await liveBookings(env, key);
   const want = rows.filter((b) => b.stopId === stopId && b.seats > 0);
   if (!want.length) return [];
   const subs = [], seen = {};
   for (const b of want) {
-    if (b.device) {
+    if (b.device && !b.pid) {
       for (const s of await subsWhere(env, "role='passenger' AND ref=?", [b.device])) {
         if (!seen[s.id]) { seen[s.id] = 1; subs.push(s); }
       }
@@ -6137,7 +6144,7 @@ async function wakeBookingReminders(env) {
   for (const b of await liveBookings(env, target)) {
     if (!(Number(b.seats) > 0)) continue;
     const hold = off.length > 0 && off.indexOf(byStop[String(b.stopId)] || "") !== -1;
-    if (b.device) { booked["d:" + b.device] = 1; if (hold) held["d:" + b.device] = 1; }
+    if (b.device && !b.pid) { booked["d:" + b.device] = 1; if (hold) held["d:" + b.device] = 1; }
     if (b.pid) { booked["p:" + b.pid] = 1; if (hold) held["p:" + b.pid] = 1; }
   }
 
@@ -6646,7 +6653,7 @@ async function seatFor(env, sub) {
   let rows = [];
   try { rows = await liveBookings(env, target); } catch (e) { return null; }
   const mine = rows.find((b) => Number(b.seats) > 0 &&
-    ((sub.ref && b.device === sub.ref) || (sub.pid && b.pid === sub.pid)));
+    ((sub.ref && !b.pid && b.device === sub.ref) || (sub.pid && b.pid === sub.pid)));
   if (!mine) return null;
   let stop = null;
   try {
@@ -6699,9 +6706,11 @@ function seatWords(seat) {
                body: "Bookings close at " + cutoffClock() + " " +
                      (today ? "today" : "tomorrow") + "." };
     }
+    /* Asim's own words, 18 Oct 2026, with the Sunday it is for. */
+    const cp = cut ? keyParts(londonKey(new Date(cut))) : null;
     return { ok: true, tag: "book", url: "./",
-             title: "Book your seat for Sunday",
-             body: "There is room on the bus. Bookings close " + cutoffWords() + "." };
+             title: "Book your seat(s) for Sunday" + (cp ? " " + cp.d + " " + MON_SHORT[cp.mo - 1] : ""),
+             body: "Bookings close on Sunday morning " + cutoffClock() + "." };
   }
 
   /* HIS SEAT'S OWN SUNDAY, COMPARED WITH TODAY. On the day it is a time to be
@@ -6972,7 +6981,7 @@ function sentTitle(tag, driver, where) {
     if (k === "chk") return rt + ": Time for the vehicle check";
     if (k === "chkl") return rt + ": Vehicle check not started";
     if (k === "ended") return rt + ": Trip ended";
-    if (k === "parkask") return rt + ": Parked mileage";
+    if (k === "parkask") return rt + ": Parked mileage not received";
     if (k === "parkok") return rt + ": Parked mileage received";
     return "Driver alert";
   }
@@ -6986,7 +6995,7 @@ function sentTitle(tag, driver, where) {
   if (k === "empty") return pre("Nobody there");
   if (k === "fix") return pre("Corrected after an Undo");
   if (k === "morn") return pre("Your bus today");
-  if (k === "book") return "Book your seat for Sunday";
+  if (k === "book") return "Book your seat(s) for Sunday";
   if (k === "booked") return "You are booked for Sunday";
   return pre("Passenger alert");
 }
@@ -10410,7 +10419,7 @@ async function messageSend(env, me, id, to, text, key) {
     if (onlyBooked || onlyNot) {
       for (const b of await liveBookings(env, key)) {
         if (!(Number(b.seats) > 0)) continue;
-        if (b.device) booked["d:" + b.device] = 1;
+        if (b.device && !b.pid) booked["d:" + b.device] = 1;
         if (b.pid) booked["p:" + b.pid] = 1;
       }
     }

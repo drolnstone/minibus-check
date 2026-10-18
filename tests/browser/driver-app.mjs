@@ -579,7 +579,9 @@ if (want("T17")) {
   await startRun(me);
   await me.jump(44); await me.wait(1500);             /* 10:48, every stop plausible */
   me.world.tripDelayMs = 3000;
-  for (const id of ["N01", "N02", "N04"]) { await tap(me, "pickup", id); await me.wait(500); }
+  /* A minute between them from v1.128.0: the next stop waits until the bus
+     has left the last (this phone reports no speed). */
+  for (const id of ["N01", "N02", "N04"]) { await tap(me, "pickup", id); await me.jump(1); }
   await me.wait(12000);
   const served = Object.keys((me.world.trips.North || {}).served || {}).sort();
   const left = (await queueOf(me)).length;
@@ -904,7 +906,8 @@ if (want("T26")) {
   await me.signIn("Bro Cedric"); await me.toStops(); await me.close(); await me.wait(800);
   const panel = () => me.pg.evaluate(() => { const e = document.querySelector("#dwPanel .dw"); return e ? e.textContent : ""; });
   const tapRow = (id) => me.pg.evaluate(i => { const r = document.querySelector('[data-dwstop="' + i + '"]'); if (r) { r.click(); return true; } return false; }, id);
-  const hint = /Tap a stop to watch the bus/.test(await me.text("#stopsBody"));
+  /* No "Tap a stop to watch the bus" line from v1.128.0 (facts only). */
+  const hint = !/Tap a stop/.test(await me.text("#stopsBody"));
   const tapped = await tapRow("N06"); await me.wait(800);
   const first = await panel();
   await me.shot("T26-following");
@@ -922,7 +925,7 @@ if (want("T26")) {
   await me.shot("T26-hub");
   await me.toStops(); await me.close(); await me.wait(800);
   await me.pg.click("#dwOff"); await me.wait(300);
-  const gone = !(await panel()) && /Tap a stop/.test(await me.text("#stopsBody"));
+  const gone = !(await panel());
   /* South: follow a South stop, and the screen opens on South next time. */
   await me.pg.click('[data-stoproute="South"]'); await me.wait(600);
   await tapRow("S03"); await me.wait(600);
@@ -988,8 +991,13 @@ if (want("T27")) {
   await me.pg.click("[data-pick='pickup']"); await me.wait(1200);
   const after = await pop();
   const sent = (world.trips.North || { served: {} }).served.N01 || {};
-  /* The next stop, by tapping its row, and Nobody here. */
+  /* The next stop, by tapping its row, and Nobody here: once the bus has
+     left Scarisbrick Drive (v1.128.0). Before that the row does not open it. */
   etas.North.N02 = T("10:25");
+  await again();
+  await me.pg.click('[data-pickopen="N02"]'); await me.wait(1200);
+  const tooSoon = await pop();
+  await moveFor(me, 6); await stopFor(me, 4);
   await again();
   await me.pg.click('[data-pickopen="N02"]'); await me.wait(1200);
   const two = await pop();
@@ -1005,9 +1013,9 @@ if (want("T27")) {
         stays.up && moving.up && moving.moving && moving.dead.every(Boolean) &&
         still.up && !still.moving && still.dead.every(x => !x) &&
         !after.up && sent.event === "pickup" &&
-        two.up && two.calls.length === 2 && /2 seats/.test(two.text) && !twoAfter.up && sent2.event === "empty" &&
+        !tooSoon.up && two.up && two.calls.length === 2 && /2 seats/.test(two.text) && !twoAfter.up && sent2.event === "empty" &&
         who.driver === SAMPLE && who.route === "North" && who.pin === "1234" && !me.errs.length,
-        JSON.stringify({ early, rowOpens, rowBtns, due, stays: stays.up, moving, still, after: after.up, sent, two, twoAfter: twoAfter.up, sent2, who, errs: me.errs }));
+        JSON.stringify({ early, rowOpens, rowBtns, due, stays: stays.up, moving, still, after: after.up, sent, tooSoon: tooSoon.up, two, twoAfter: twoAfter.up, sent2, who, errs: me.errs }));
   await me.ctx.close();
 }
 
@@ -1119,7 +1127,9 @@ if (want("T30")) {
   const up = () => me.pg.evaluate(() => document.getElementById("pickModal").classList.contains("is-on"));
   const AT = { lat: 53.4497, lng: -2.9365 };
   const far = await up();
-  for (let i = 0; i < 8; i++) { await me.emit(Object.assign({ acc: 8, speed: 11 }, AT)); await me.wait(500); }
+  /* Long enough to count as moving (4 s), so the bus has left church
+     (v1.128.0: the pop-up waits until it has). */
+  for (let i = 0; i < 12; i++) { await me.emit(Object.assign({ acc: 8, speed: 11 }, AT)); await me.wait(500); }
   const passing = await up();
   for (let i = 0; i < 8; i++) { await me.emit(Object.assign({ acc: 400, speed: 0 }, AT)); await me.wait(500); }
   const vague = await up();
@@ -1327,6 +1337,35 @@ if (want("T36")) {
         mode.first === "modeFull" && mode.full && /^\d+ items$/.test(mode.hint) && !me.errs.length && !co.errs.length,
         JSON.stringify({ card, driverMode, go, coCard, mode, errs: me.errs.concat(co.errs) }));
   await co.ctx.close();
+}
+
+/* T39 — v1.128.0 (Asim, 18 Oct 2026: "Nobody goes back to pick you when
+   you've been left behind"). Only the stretch from the last marked stop to
+   the next booked one can be tapped; Undo and the other answer are on the
+   last marked stop only, and one step back only. */
+if (want("T39")) {
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck() } });
+  await startRun(me);
+  await me.jump(11); await me.wait(300);
+  const has = (sel) => me.pg.evaluate(q => [...document.querySelectorAll(q)].some(x => x.offsetParent), sel);
+  const aheadShut = !(await has('[data-triptap="N03"]')) && !(await has('[data-triptap="N05"]'));
+  await tap(me, "pickup", "N01"); await me.wait(1500);
+  const undo1 = await has('[data-tripundo="N01"]');
+  await me.jump(1); await me.wait(300);
+  await tap(me, "pickup", "N02"); await me.wait(1500);
+  const behind = !(await has('[data-tripundo="N01"]')) && !(await has('.trip-row-btns [data-triptap="N01"]'));
+  const undo2 = await has('[data-tripundo="N02"]');
+  const someone = await has('[data-triptap="N03"][data-tripkind="pickup"]');
+  const past = !(await has('[data-triptap="N05"]'));
+  await me.pg.click('[data-tripundo="N02"]'); await me.wait(600);
+  await me.pg.click("#undoYes"); await me.wait(1500);
+  const oneStep = !(await has('[data-tripundo="N01"]'));
+  const refused = await me.pg.evaluate(() => { tripTap(rotaStops.find(x => x.id === "N05"), "pickup");
+                                               return !trip.served.N05; });
+  check("T39", "only the stretch to the next booked stop can be tapped; Undo on the last marked stop, one step back",
+        aheadShut && undo1 && behind && undo2 && someone && past && oneStep && refused && !me.errs.length,
+        JSON.stringify({ aheadShut, undo1, behind, undo2, someone, past, oneStep, refused, errs: me.errs }));
+  await me.ctx.close();
 }
 
 await done();

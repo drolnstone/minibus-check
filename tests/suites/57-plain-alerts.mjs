@@ -21,7 +21,18 @@ const GONE = [
   "Check the app on the day", "Open the app to see who", "Tap the bell to get alerts",
   "Authorise it or arrange", "Arrange a second trip", "Swap the buses", "Record it in the coordinator app",
   "Record the new", "Move a bus or a booking", "Type it like", "Refresh and try again",
-  "Correct the correction", "Ask for the current one", "Turn alerts off and on again"
+  "Correct the correction", "Ask for the current one", "Turn alerts off and on again",
+  /* 18 Oct 2026 (Asim, after the run): the 2pm reminder says only what has
+     not come in, and the booking nudge is in his own words. */
+  "Record the bus parked mileage for", "There is room on the bus"
+];
+
+/* And on the three apps' screens, from v1.128.0: lines that crept in after
+   the 11 Oct sweep, and the driver phone's own end-of-run notice, which the
+   live server's Trip ended replaces. */
+const GONE_PAGES = [
+  "stays stopped. Ring the coordinator", "Tap a stop to watch the bus", "to confirm it is you",
+  "Record the bus parked mileage for", "There is room on the bus", "Run ended, back at church"
 ];
 
 export default function (root) {
@@ -31,6 +42,13 @@ export default function (root) {
       const src = readFileSync(join(root, f), "utf8")
         .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
       for (const g of GONE) a.hasnt(src, g, f + " still says \"" + g + "\"");
+    });
+  }
+  for (const f of ["index.html", "sunday/index.html", "coord/index.html"]) {
+    s.test(f + " shows none of them", (a) => {
+      const src = readFileSync(join(root, f), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      for (const g of GONE_PAGES) a.hasnt(src, g, f + " still says \"" + g + "\"");
     });
   }
   return s;

@@ -449,7 +449,7 @@ export default async function (root) {
     const booked = await atTime(WED_ON, () => W.pushWhat(env, "https://push.example/booked"));
     a.eq(booked.title, "You are booked for Sunday", "got " + JSON.stringify(booked));
     const none = await atTime(WED_ON, () => W.pushWhat(env, "https://push.example/noseat"));
-    a.eq(none.title, "Book your seat for Sunday", "got " + JSON.stringify(none));
+    a.has(none.title, "Book your seat(s) for Sunday", "got " + JSON.stringify(none));
   });
 
   s.test("a route called off during a rehearsal is told when it ends, and nothing says so before", async (a) => {
