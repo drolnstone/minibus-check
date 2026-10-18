@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.127.1 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.128.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -753,7 +753,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.127.1";
+var PAGE_VERSION = "v1.128.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -1804,7 +1804,7 @@ function pushLook(){
     navigator.serviceWorker.ready.then(function(reg){
       return reg.pushManager.getSubscription();
     }).then(function(sub){
-      if(sub){ pushOn = true; paintAlerts(); }
+      if(sub){ pushOn = true; paintAlerts(); pushResync(sub); }
       pushDone();
     }).catch(pushDone);
   }catch(e){ pushDone(); }
@@ -1814,6 +1814,24 @@ function pushLook(){
    pushOn is still the false it was initialised to, and offering alerts to
    somebody who turned them on a fortnight ago is a question already
    answered. */
+/* THE NUMBER THIS PHONE HOLDS NOW, told to the live server each time the
+   page opens with alerts on. From v1.128.0 (Asim, 18 Oct 2026): alerts go to
+   every phone signed in with the booked number and to no other. The server
+   heard the number only when one was given or a booking made, so a phone
+   whose number had since gone was still woken for it. Quiet, and nothing is
+   said if it fails: the next opening tries again. */
+function pushResync(sub){
+  try{
+    var j = sub.toJSON();
+    callFetch(ENDPOINT, {
+      method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify({ action:"subscribe", endpoint: j.endpoint,
+                             keys: j.keys, role:"passenger",
+                             ref: REF, pid: PID })
+    }).catch(function(){});
+  }catch(e){}
+}
+
 function pushDone(){
   pushChecked = true;
   try{ alertAskMaybe(); }catch(e){}

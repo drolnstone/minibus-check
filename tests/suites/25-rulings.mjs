@@ -310,8 +310,13 @@ export default async function (root) {
 
       await setting(db, "eta_rules", { dwellSeconds: 75, skipSaves: 0.8, speedMph: 18, maxSkipMinutes: 6,
                                        maxBehindMinutes: 0, keepMinutes: 3 });
+      /* From w2.69.0 (Asim, 18 Oct 2026) nothing drops it while the run is
+         open: keepMinutes is no longer read, and a long silence is not a
+         reason either. */
       const q = await mod.tripPayload(env, "me", "", "", "pid-me");
-      a.eq(q.mine, "quiet", "keepMinutes is not the setting that decides it");
+      a.eq(q.mine, "eta", "keepMinutes still drops the estimate");
+      const r = await atTime("2026-09-27T10:50:00+01:00", () => mod.tripPayload(env, "me", "", "", "pid-me"));
+      a.eq(r.mine, "eta", "30 minutes without a tap still drops the estimate");
     });
   });
 

@@ -1778,7 +1778,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.127.1";
+var APP_VERSION = "v1.128.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -4658,7 +4658,7 @@ function sendRecKeyed(rec, alsoSheet, key){
       try{ sendRecTo(CFG.endpoint, rec, fresh, key).catch(function(){}); }catch(e){}
     }
     /* Not confirmed, after a stop today: the stop stands. */
-    if(out && out.stopHeld) toast(rec.reg+" stays stopped. Ring the coordinator.", true);
+    if(out && out.stopHeld) toast(rec.reg+" stays stopped.", true);
     return out;
   }, function(){
     return sendRecTo(CFG.endpoint, rec, fresh, key);
@@ -5288,6 +5288,13 @@ var tripCoverArmed="";
    question is worth asking once, and a driver who has said "not now" to a
    stop two miles back has answered it. */
 var tripSkipAsked={};
+/* The stops the driving phone may tap, and the one stop that may be undone,
+   as of the last paint of Stops and bookings (v1.128.0). */
+var tripLiveKnown=false, tripLiveIds={}, tripUndoId="";
+function tripStopShut(stop){
+  if(!tripLiveKnown || !stop) return false;
+  return trip.served[stop.id] ? stop.id!==tripUndoId : !tripLiveIds[stop.id];
+}
 
 
 /* ---- arriving back at church, without being told ------------------------
@@ -5987,30 +5994,8 @@ function tripAutoEnd(){
   tripWatchStop();
   wakeDrop();
   tripPaint();
-  tripAutoEndTell();
-}
-
-/* Shown by the app's own service worker rather than sent from the server.
-
-   The server could not do it: it does not know the run has ended until the
-   queue reaches it, and the whole point is that this lands the moment it
-   happens. A page may raise its own notification once permission has been
-   given, which it has, because he turned reminders on. */
-function tripAutoEndTell(){
-  try{
-    if(!("Notification" in window) || Notification.permission!=="granted") return;
-    if(!navigator.serviceWorker) return;
-    navigator.serviceWorker.ready.then(function(reg){
-      /* Tagged as the live server's Trip ended push, from v1.124.0, so that
-         one, with the parked mileage line, takes its place: one notice. */
-      reg.showNotification("Run ended, back at church", {
-        body: "",
-        tag: "ended", renotify: true,
-        icon: "./icon-192.png", badge: "./icon-192.png",
-        data: { url: "./" }
-      });
-    }).catch(function(){});
-  }catch(e){}
+  /* No notice of its own from v1.128.0: the live server's Trip ended is the
+     one alert (Asim, 18 Oct 2026). */
 }
 
 /* The way back. Offered only after an end this app made by itself, and only
@@ -6135,12 +6120,13 @@ function wakeDrop(){
    way of a thumb. */
 var tripTapAt=0;
 var tripMovingNow=false, tripMovingSince=0;
+var tripMovedAt=0;   /* the last moment the bus was judged moving, on tripNow's clock */
 function tripMoving(){
   var fresh = tripSpeed!==null && (Date.now()-tripSpeedAt <= 12000);
   var over  = fresh && tripSpeed > TRIP_MOVING_MS;
   var now   = Date.now();
 
-  if(over === tripMovingNow){ tripMovingSince = 0; return tripMovingNow; }
+  if(over === tripMovingNow){ tripMovingSince = 0; if(tripMovingNow) tripMovedAt = tripNow(); return tripMovingNow; }
   if(!tripMovingSince) tripMovingSince = now;
   /* Slower to lock than to release: a wrongly dead button costs a driver a
      stop, a wrongly live one costs nothing but a tap he could have made
@@ -6149,6 +6135,7 @@ function tripMoving(){
     tripMovingNow = over;
     tripMovingSince = 0;
   }
+  if(tripMovingNow) tripMovedAt = tripNow();
   return tripMovingNow;
 }
 
@@ -6570,7 +6557,7 @@ function parkSend(id, inp){
   }
   if(!st.driver){ show("driver"); return; }
   if(!driverKey(st.driver) && pinGateNeeded()){
-    toast("Enter your four digit PIN to confirm it is you.", true);
+    toast("Enter your four digit PIN.", true);
     show("driver");
     try{ $("pin").focus(); }catch(e){}
     return;
@@ -7030,6 +7017,8 @@ function tripTap(stop,kind){
   /* Never onto a test run whose round is over by the clock. */
   if(tripRoundTick()) return;
   if(!trip.started || trip.ended) return;
+  if(tripStopShut(stop)){ tripPaint(); return; }
+  if(!trip.served[stop.id] && pickNext && stop.id===pickNext.id && !pickLeft()){ tripPaint(); return; }
   if(tripMoving()){ toast("Not while the bus is moving.", true); return; }
   /* The same gate Start trip has, and for the same reason. A tap is a record
      filed under a driver's name — it is the record the Monday question rests
@@ -7102,6 +7091,7 @@ function tripUndoAsk(stop){
   if(tripRoundTick()) return;
   var was=trip.served[stop.id];
   if(!was) return;
+  if(tripStopShut(stop)){ tripPaint(); return; }
   if(tripMoving()){ toast("Not while the bus is moving.", true); return; }
   if(pinGateNeeded()){ pinGateFocus(); return; }
   undoAskId=stop.id;
@@ -8380,9 +8370,6 @@ function rotaPaintStops(){
   if(mayTap || watching){
     html+=tripHeaderHtml(route,mayTap,onThis,queued,view);
   }
-  if(dwOk && !(dwOn && dwOn.route===route)){
-    html+='<p class="dw-hint">Tap a stop to watch the bus.</p>';
-  }
 
   /* How far along the route he actually is: the LAST stop he marked, not the
      first he has not. Taking the first unserved stop looked right until a
@@ -8427,7 +8414,32 @@ function rotaPaintStops(){
       if(view.served[s.id] && (rotaStopCounts[s.id]||0)>0) churchSig+=s.id+":"+view.served[s.id].event+",";
     });
   }
-  var pickRowBtns = !!(nextStop && !pickTimed(nextStop));
+  var pickRowBtns = !!(nextStop && !pickTimed(nextStop) && pickLeft());
+
+  /* THE STOPS HE CAN STILL TAP, from v1.128.0 (Asim, 18 Oct 2026: "Nobody
+     goes back to pick you when you've been left behind"). Only the stretch
+     he is on: after the last stop he marked, up to and including the next
+     booked one. Everything ahead of that and everything behind it is shut,
+     from the start of the run.
+
+     Undo, and the other answer, only on the last stop he marked, and one
+     step back only: once an Undo has opened the stretch again, the stop
+     before it does not offer its own Undo until he has marked past it. */
+  var nextIdx = nextStop ? list.indexOf(nextStop) : -1;
+  function liveAt(i){ return i < list.length && i > lastIdx && (nextIdx < 0 || i <= nextIdx); }
+  var undoId = "";
+  if(lastIdx >= 0){
+    var lastS = list[lastIdx];
+    var lastAt = Number((view.served[lastS.id]||{}).at) || 0, stepped = false;
+    list.forEach(function(s,i){
+      if(i > lastIdx && !view.served[s.id] && Number((trip.undone||{})[s.id]) > lastAt) stepped = true;
+    });
+    if(!stepped) undoId = lastS.id;
+  }
+  tripLiveKnown = !!(onThis && mayTap);
+  tripLiveIds = {};
+  list.forEach(function(s,i){ if(liveAt(i)) tripLiveIds[s.id] = 1; });
+  tripUndoId = undoId;
 
   /* THE STOP HE HAS GONE PAST WITHOUT MARKING.
 
@@ -8444,12 +8456,8 @@ function rotaPaintStops(){
      suppressed below. The same stop asking to be dealt with in two places is
      the fault that got the old warning cards removed, and it would be the
      same fault again. */
+  /* Not asked any more, from v1.128.0: a stop behind him is shut. */
   var askStop=null;
-  if(onThis && mayTap){
-    for(var mi=0; mi<missed.length; mi++){
-      if(!tripSkipAsked[missed[mi].id]){ askStop=missed[mi]; break; }
-    }
-  }
   if(churchSig && !askStop){ churchFor=arr[0]; churchKey=trip.id+"|"+churchSig; }
   if(askStop){
     var askN=rotaStopCounts[askStop.id]||0;
@@ -8466,7 +8474,7 @@ function rotaPaintStops(){
           '</div>';
   }
 
-  list.concat(arr).forEach(function(s){
+  list.concat(arr).forEach(function(s,i){
     /* How many are booked there. Shown, never acted on: the app does not
        tell anybody to skip a stop. Somebody who did not book still turns
        up, with a dead phone or no phone or because nobody told them, and
@@ -8523,13 +8531,13 @@ function rotaPaintStops(){
                  tripClock(done.at)+'</span>':'')+
               ((!done&&missedIds[s.id])?'<span class="trip-past">Gone past, not marked</span>':'')+
             '</span>'+
-            (done&&mayTap&&onThis
+            (done&&mayTap&&onThis&&s.id===undoId
               ? '<button class="trip-undo" data-tripundo="'+esc(s.id)+'" '+
                 'aria-label="Undo '+esc(s.stop)+'">Undo</button>'
               : '')+
           '</div>'+
           /* The other answer on a stop he has marked (v1.103.0, Asim). */
-          ((onThis&&mayTap&&done&&!s.arrival&&!(n===0&&done.event!=="empty"))
+          ((onThis&&mayTap&&done&&!s.arrival&&s.id===undoId&&!(n===0&&done.event!=="empty"))
             ? '<div class="trip-row-btns">'+
                 (done.event==="empty"
                   ? '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="pickup">Picked up</button>'
@@ -8541,7 +8549,7 @@ function rotaPaintStops(){
              driver never needs and which put a pair of buttons on most rows.
              The big button covers the stop in front of him. */
           ((onThis&&mayTap&&!done&&!s.arrival&&
-            (missedIds[s.id]||!showCounts||(pickRowBtns&&s.id===nextStop.id))&&
+            ((!showCounts&&liveAt(i))||(pickRowBtns&&s.id===nextStop.id))&&
             !(askStop&&askStop.id===s.id))
             ? '<div class="trip-row-btns">'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="empty">Nobody here</button>'+
@@ -8562,7 +8570,7 @@ function rotaPaintStops(){
              the default and records nothing worth having. The only fact here
              is that somebody WAS waiting. */
           ((onThis&&mayTap&&!done&&!s.arrival&&showCounts&&
-            !(rotaStopCounts[s.id]||0)&&!missedIds[s.id]&&
+            !(rotaStopCounts[s.id]||0)&&!missedIds[s.id]&&liveAt(i)&&
             view.started&&!view.ended)
             ? '<div class="trip-row-btns">'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="pickup">'+
@@ -8609,6 +8617,7 @@ function rotaPaintStops(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-pickopen]"),function(r){
     r.addEventListener("click",function(e){
       if(e.target && e.target.closest && e.target.closest("a,button")) return;
+      if(!pickLeft()) return;
       pickStopId=this.getAttribute("data-pickopen");
       pickSync();
     });
@@ -9259,7 +9268,7 @@ function pinGateAutoFocus(){
    box further down that had never asked him for anything. The button is off
    rather than disabled, so the tap is the prompt, and this is the answer. */
 function pinGateFocus(){
-  toast("Enter your four digit PIN to confirm it is you.", true);
+  toast("Enter your four digit PIN.", true);
   if(rotaStopsOpen){ pinModalOpen(pinWhy); return; }
   /* Anywhere else — the request form — the box is inline where it always
      was, so take him to it. */
@@ -9311,7 +9320,26 @@ function pickEta(s){
   return at > 0 ? at : 0;
 }
 function pickTimed(s){ return !!pickEta(s); }
+
+/* HAS THE BUS LEFT THE LAST STOP, from v1.128.0 (Asim, 18 Oct 2026: Wilburn
+   Street came up while he was still standing at Bedford Road). The next
+   stop's pop-up waits until the phone has seen the bus moving since the last
+   tap, or since the start of the run. A phone that does not report its speed
+   waits PICK_LEAVE_MS instead. */
+var PICK_LEAVE_MS = 60000;
+function pickLeft(){
+  var ref = Number(trip.started) || 0;
+  Object.keys(trip.served || {}).forEach(function(k){
+    ref = Math.max(ref, Number(trip.served[k] && trip.served[k].at) || 0);
+  });
+  if(!ref) return true;
+  if(tripMovedAt > ref) return true;
+  var speedKnown = tripSpeed !== null && (Date.now() - tripSpeedAt <= 12000);
+  return !speedKnown && tripNow() - ref >= PICK_LEAVE_MS;
+}
+
 function pickDue(s){
+  if(!pickLeft()) return false;
   var at = pickEta(s);
   if(at && Math.round((at - tripNow())/60000) <= PICK_CLOSE_MIN) return true;
   return pickHere(s);

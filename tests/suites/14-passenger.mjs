@@ -552,7 +552,9 @@ export default async function (root) {
 
   s.test("somebody with no seat is asked to book one", async (a) => {
     const out = await words(WHEN.wednesdayEvening, async () => {});
-    a.eq(out.title, "Book your seat for Sunday");
+    /* Asim's words, 18 Oct 2026, naming the Sunday. */
+    a.has(out.title, "Book your seat(s) for Sunday ");
+    a.ok(/Sunday \d{1,2} [A-Z][a-z]{2}$/.test(out.title), "no date in " + out.title);
     a.hasnt(out.body, "Tap", "an instruction in the reminder");
   });
 
@@ -569,7 +571,7 @@ export default async function (root) {
        rather than the rule — so the phone promises a deadline the server
        does not keep. */
     const out = await words(WHEN.wednesdayEvening, async () => {});
-    a.has(out.body, W.cutoffWords(), "got: " + out.body);
+    a.has(out.body, "Sunday morning " + W.cutoffClock(), "got: " + out.body);
   });
 
   s.test("on Saturday evening it is a deadline, not a fact about Sundays", async (a) => {

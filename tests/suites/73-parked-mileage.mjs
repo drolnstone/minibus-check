@@ -32,11 +32,11 @@ const WED_1000 = "2026-10-21T10:00:00+01:00";
 const TREVOR = "4321";
 const REG = "YS70 PWE";
 
-/* The Checks tab once Set up has run on v1.122.0: the live export with the
-   two new headings beside Mileage, spliced in rather than typed out. */
+/* The Checks tab once Set up has run on v1.125.0: the live export with the
+   three new headings beside Mileage, spliced in rather than typed out. */
 const NEW_CHECKS = (() => {
   const h = TABS["Checks"].slice();
-  h.splice(h.indexOf("Mileage flag") + 1, 0, "Parked mileage", "Since parked");
+  h.splice(h.indexOf("Mileage flag") + 1, 0, "Parked mileage", "Parked at", "Since parked");
   return h;
 })();
 const newRow = (v) => NEW_CHECKS.map((h) => (h in v ? v[h] : ""));
@@ -330,8 +330,8 @@ export default async function (root) {
       await atTime("2026-10-18T14:00:00+01:00", () => W.wakeParkAsk(env));
       a.eq(lastOf(db), "parkask|" + KEY + "|" + REG, "not reminded at two");
       const said = await atTime("2026-10-18T14:00:00+01:00", () => W.pushWhat(env, "https://push.example/trevor"));
-      a.eq(said.title, "Parked mileage");
-      a.eq(said.body, "Record the bus parked mileage for " + REG + " when you return from the afternoon run.");
+      a.eq(said.title, "Parked mileage not received");
+      a.eq(said.body, REG + ".");
       await db.prepare("UPDATE push_subs SET last=''").run();
       await atTime("2026-10-18T14:05:00+01:00", () => W.wakeParkAsk(env));
       a.eq(lastOf(db), "", "reminded twice");
@@ -382,7 +382,7 @@ export default async function (root) {
         a.eq(await W.wakeParkAsk(env) >= 0, true);
         a.eq(lastOf(db), "parkask|" + KEY + "|NH56 FWP and " + REG, "not one reminder naming both buses");
         const said = await W.pushWhat(env, "https://push.example/trevor");
-        a.eq(said.body, "Record the bus parked mileage for NH56 FWP and " + REG + " when you return from the afternoon run.");
+        a.eq(said.body, "NH56 FWP and " + REG + ".");
       });
     }
   });
@@ -442,6 +442,7 @@ export default async function (root) {
       a.eq(cell(L, 2, "Parked mileage"), 57410, "not on the walkaround's row");
       const note = L.gas.ss.getSheetByName("Checks").getRange(2, col("Parked mileage")).getNote();
       a.ok(/Keyed by Bro Trevor on 18\/10\/2026 at 15:00/.test(note), "no note of who and when: " + note);
+      a.eq(cell(L, 2, "Parked at"), "15:00", "no Parked at time (Asim, 18 Oct 2026)");
       const done = sent.find((b) => b.action === "drained");
       a.ok(done && (done.parked || []).indexOf(3) > -1, "not reported done");
     });
@@ -578,7 +579,7 @@ export default async function (root) {
     });
   });
 
-  s.test("an older tab gains the two columns beside Mileage, and its rows keep their values", async (a) => {
+  s.test("an older tab gains the three columns beside Mileage, and its rows keep their values", async (a) => {
     await atTime(NEXT, () => {
       const old = TABS["Checks"];
       const prev = old.map((h) => ({ Received: new Date("2026-10-18T07:00:00Z"), "Check ID": "c1", Date: "18/10/2026",
@@ -598,7 +599,8 @@ export default async function (root) {
       const sh = L.gas.ss.getSheetByName("Checks");
       const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
       a.eq(head.indexOf("Parked mileage"), head.indexOf("Mileage flag") + 1, "not beside Mileage");
-      a.eq(head.indexOf("Since parked"), head.indexOf("Parked mileage") + 1);
+      a.eq(head.indexOf("Parked at"), head.indexOf("Parked mileage") + 1);
+      a.eq(head.indexOf("Since parked"), head.indexOf("Parked at") + 1);
       a.eq(sh.getRange(2, head.indexOf("Outcome") + 1).getValue(), "Clear", "an old row's Outcome moved");
       a.eq(sh.getRange(2, head.indexOf("PIN check") + 1).getValue(), "Verified", "an old row's PIN check moved");
       a.eq(sh.getRange(3, head.indexOf("Mileage") + 1).getValue(), "57400");

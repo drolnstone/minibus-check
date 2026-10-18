@@ -904,7 +904,8 @@ if (want("T26")) {
   await me.signIn("Bro Cedric"); await me.toStops(); await me.close(); await me.wait(800);
   const panel = () => me.pg.evaluate(() => { const e = document.querySelector("#dwPanel .dw"); return e ? e.textContent : ""; });
   const tapRow = (id) => me.pg.evaluate(i => { const r = document.querySelector('[data-dwstop="' + i + '"]'); if (r) { r.click(); return true; } return false; }, id);
-  const hint = /Tap a stop to watch the bus/.test(await me.text("#stopsBody"));
+  /* No "Tap a stop to watch the bus" line from v1.128.0 (facts only). */
+  const hint = !/Tap a stop/.test(await me.text("#stopsBody"));
   const tapped = await tapRow("N06"); await me.wait(800);
   const first = await panel();
   await me.shot("T26-following");
@@ -922,7 +923,7 @@ if (want("T26")) {
   await me.shot("T26-hub");
   await me.toStops(); await me.close(); await me.wait(800);
   await me.pg.click("#dwOff"); await me.wait(300);
-  const gone = !(await panel()) && /Tap a stop/.test(await me.text("#stopsBody"));
+  const gone = !(await panel());
   /* South: follow a South stop, and the screen opens on South next time. */
   await me.pg.click('[data-stoproute="South"]'); await me.wait(600);
   await tapRow("S03"); await me.wait(600);

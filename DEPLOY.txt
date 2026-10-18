@@ -1,17 +1,24 @@
 MINIBUS
 =======
-  pages v1.127.1 · server w2.69.0 · sheet v1.124.0
+  pages v1.128.0 · server w2.69.0 · sheet v1.125.0
 
 YOU ARE ON   app v1.127.1 · server w2.68.0 · sheet v1.124.0
-GOING TO     app v1.127.1 · server w2.69.0 · sheet v1.124.0
+GOING TO     app v1.128.0 · server w2.69.0 · sheet v1.125.0
 
-A phone is woken only for its own seat. A booking keeps the handle of the
-phone that last made or changed it, and the alerts also matched on that
-handle, so a phone that once booked for somebody else's number and went
-back to its own was still told when the bus was near that person's stop,
-while its own page rightly showed no booking. The handle now counts only
-for an old booking with no number on it, as the page already did. Server
-only.
+The list from the run of 18 October:
+1. Passenger alerts go only to phones signed in with the booked number. The
+   passenger app tells the server its number each time it opens.
+2. Driver stop buttons follow the run order: live only from after the last
+   marked stop to the next booked one. Undo only on the last marked stop,
+   one step back.
+3. A passenger's estimate stays while the run is open; once due it reads
+   "Be at your stop".
+4. The next stop's pop-up waits until the bus has left the last stop.
+5. The 2pm alert says "Parked mileage not received". Trip ended unchanged.
+   The driver phone's own "Run ended, back at church" is gone. A "Parked at"
+   column beside Parked mileage on the Checks tab. The booking nudge reads
+   "Book your seat(s) for Sunday 25 Oct" / "Bookings close on Sunday
+   morning 09:30."
 
 GOING LIVE
 ----------
@@ -22,8 +29,8 @@ Merge the pull request. The pages go live by themselves.
 AFTER IT (give it ten minutes)
 --------
 
-B. The foot of the apps reads  app v1.127.1 · server w2.69.0 · sheet
-   v1.124.0 .
+B. The foot of the apps reads  app v1.128.0 · server w2.69.0 · sheet
+   v1.125.0 .
 
 
 A FRESH ADDRESS (not on a Sunday, after B and C)

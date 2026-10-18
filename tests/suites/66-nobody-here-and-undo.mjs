@@ -133,7 +133,7 @@ export default async function (root) {
       a.eq(lastOf(db, "N01"), "fix|" + KEY + "|N01|" + (at + 30000));
       a.eq(pushesTo(ep), 1, "the correction did not go");
       const out = await W.pushWhat(env, ep);
-      a.eq(out.title, "The bus has left church", "after the Undo the phone still says gone past");
+      a.ok(/^Be at your stop/.test(out.title), "after the Undo the phone still says gone past, got " + out.title);
       const line = (await W.sentList(env)).find((m) => m.title === "North: Corrected after an Undo");
       a.ok(line, "not on the Alerts list");
     });
@@ -150,7 +150,8 @@ export default async function (root) {
       await trip(env, [{ event: "undo", undoes: EMPTY, stopId: "N03", at: at + 30000 }]);
       a.has(lastOf(db, "N03"), "fix|");
       a.eq(pushesTo(ep), 1);
-      a.eq((await W.pushWhat(env, ep)).title, "The bus has left church");
+      const t = (await W.pushWhat(env, ep)).title;
+      a.ok(/^Be at your stop/.test(t), "expected the estimate back, got " + t);
     });
   });
 

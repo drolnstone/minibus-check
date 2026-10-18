@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.124.0";
+var SCRIPT_VERSION = "v1.125.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -237,17 +237,6 @@ var TRIP_SHEET = "Trip Events";
    where the question being asked is only ever about today. Same reasoning
    and the same number as MILEAGE_SCAN_ROWS. */
 var TRIP_SCAN_ROWS = 400;
-
-/* How long a run may go without a tap before the passenger page stops giving
-   times and says only what it last knew. Stops are four to six minutes apart,
-   so this is roughly three missed ones: long enough to absorb a wheelchair, a
-   slow family and a bad set of lights, short enough that somebody standing in
-   the rain is not reading a stale promise.
-
-   This is a GUESS. Nothing derives it. Trip Events records the gap between
-   every tap on both routes, so after four or five Sundays the real spread can
-   be read off the tab and this set from data instead. */
-var TRIP_QUIET_MINUTES = 15;
 
 /* How far BEHIND a run may be and still be given an estimate is a setting
    from v1.80.0: maxBehindMinutes in ETA_RULES, 0 for no limit. It was a fixed
@@ -506,7 +495,7 @@ var STOPS_HEADERS = ["Route", "Stop ID", "Time", "Stop", "Postcode", "Active", "
    so the rows already on the tab move across with the new columns. */
 var CHECK_HEADERS = [
   "Received", "Check ID", "Date", "Time", "Vehicle", "Registration",
-  "Driver", "Role", "Mileage", "Mileage flag", "Parked mileage", "Since parked", "Outcome",
+  "Driver", "Role", "Mileage", "Mileage flag", "Parked mileage", "Parked at", "Since parked", "Outcome",
   "Items checked", "Defect count", "Defects", "Renewals due", "Signed",
   "Not applicable", "Check type", "Where checked", "Accuracy (yd)",
   "Distance from base (yd)", "Location note", "Fuel", "To arrange", "PIN check",
@@ -5405,6 +5394,14 @@ function drainFromWorker() {
         }
         psh.getRange(prow, pcc.parked).setValue(Number(pk.miles) || "");
         try { psh.getRange(prow, pcc.parked).setNote(parkedNote(pk)); } catch (e) {}
+        /* Parked at, from v1.125.0 (Asim, 18 Oct 2026): when the driver keyed
+           it, which is when he finished for the day. */
+        if (pcc.parkedAt) {
+          try {
+            psh.getRange(prow, pcc.parkedAt).setNumberFormat("@").setValue(
+              Utilities.formatDate(new Date(Number(pk.at) || Date.now()), Session.getScriptTimeZone(), "HH:mm"));
+          } catch (e) {}
+        }
         pretty("Parked mileage, the walkaround after", function () { parkedLate(psh, pcc, prow, pk.miles); });
         doneP.push(pk.id);
       });
@@ -9101,16 +9098,10 @@ function tripProjectable(state) {
      The quiet test below cannot catch it either. It measures staleness from
      lastAt, which the departure keeps fresh-looking for exactly as long as
      the run lasts. */
-  if (!state.lastStop &&
-      (Date.now() - state.started) / 60000 > TRIP_QUIET_MINUTES) {
-    return { ok: false, why: "silent" };
-  }
-
+  /* From v1.125.0 (Asim, 18 Oct 2026), as the live server from w2.69.0: an
+     open run keeps its estimate however long since the last tap. */
   if (!state.lastAt)       return { ok: false, why: "noevents" };
   if (state.offset === null) return { ok: false, why: "noevents" };
-
-  var quiet = (Date.now() - state.lastAt) / 60000;
-  if (quiet > TRIP_QUIET_MINUTES) return { ok: false, why: "quiet" };
   var behind = Number(ETA_RULES.maxBehindMinutes) || 0;
   if (behind > 0 && state.offset > behind) return { ok: false, why: "wild" };
   if (state.offset < -TRIP_MAX_EARLY)  return { ok: false, why: "wild" };
@@ -9337,7 +9328,8 @@ function tripPayload(ref, want, askedStop, pid) {
   /* Kept for keepMinutes after its time, a setting from v1.80.0. It was two
      minutes, and the page dropped back to the timetable while the bus was
      still on its way to that kerb. The quiet rule above still ends it. */
-  if (mins < -(Number(ETA_RULES.keepMinutes) || 0)) { out.mine = "quiet"; return out; }
+  /* Not dropped at all from v1.125.0: past its time with the stop unmarked,
+     the page says "Be at your stop". keepMinutes is no longer read. */
 
   out.mine    = "eta";
   out.offset  = state.offset;
@@ -9986,15 +9978,9 @@ function runComplete() {
    past the arrival is the same grace measured from the thing that matters. */
 var RUN_DONE_MARGIN_MIN = 30;
 
-/* And how long it must have been silent. Deliberately NOT TRIP_QUIET_MINUTES.
-
-   That fifteen minutes decides when the passenger page stops offering a
-   countdown, which is a small claim to withdraw and easily made again on the
-   next tap. This decides whether to take the whole morning off the screen,
-   which cannot be undone for the person who was reading it. A bus fifty
-   minutes late that has just gone fifteen minutes without a tap is genuinely
-   ambiguous; at half an hour it is not. Two different questions, two
-   thresholds, and the more destructive one gets the longer wait. */
+/* And how long it must have been silent. From v1.125.0 this is also what
+   ends a passenger's estimate: the countdown no longer gives up after fifteen
+   quiet minutes on its own (Asim, 18 Oct 2026). */
 var RUN_DONE_QUIET_MIN = 30;
 
 /**
@@ -15076,7 +15062,7 @@ FIELDS[CHECKS_SHEET] = {
   received: "Received", id: "Check ID", date: "Date", time: "Time",
   vehicle: "Vehicle", reg: "Registration", driver: "Driver", role: "Role",
   mileage: "Mileage", mileageFlag: "Mileage flag",
-  parked: "Parked mileage", sinceParked: "Since parked", outcome: "Outcome",
+  parked: "Parked mileage", parkedAt: "Parked at", sinceParked: "Since parked", outcome: "Outcome",
   items: "Items checked", defectCount: "Defect count", defects: "Defects",
   renewals: "Renewals due", signed: "Signed", na: "Not applicable",
   type: "Check type", where: "Where checked", acc: "Accuracy (yd)",
