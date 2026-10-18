@@ -7018,7 +7018,10 @@ function tripTap(stop,kind){
   if(tripRoundTick()) return;
   if(!trip.started || trip.ended) return;
   if(tripStopShut(stop)){ tripPaint(); return; }
-  if(!trip.served[stop.id] && pickNext && stop.id===pickNext.id && !pickLeft()){ tripPaint(); return; }
+  if(!trip.served[stop.id] && pickNext && stop.id===pickNext.id && !pickLeft()){
+    toast("The bus has not left "+(trip.lastStop || "church")+" yet.", true);
+    return;
+  }
   if(tripMoving()){ toast("Not while the bus is moving.", true); return; }
   /* The same gate Start trip has, and for the same reason. A tap is a record
      filed under a driver's name — it is the record the Monday question rests
@@ -8414,7 +8417,7 @@ function rotaPaintStops(){
       if(view.served[s.id] && (rotaStopCounts[s.id]||0)>0) churchSig+=s.id+":"+view.served[s.id].event+",";
     });
   }
-  var pickRowBtns = !!(nextStop && !pickTimed(nextStop) && pickLeft());
+  var pickRowBtns = !!(nextStop && !pickTimed(nextStop));
 
   /* THE STOPS HE CAN STILL TAP, from v1.128.0 (Asim, 18 Oct 2026: "Nobody
      goes back to pick you when you've been left behind"). Only the stretch
