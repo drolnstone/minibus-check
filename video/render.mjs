@@ -20,7 +20,7 @@ const FPS = 25;
 const mode = process.argv[2] || "preview";
 const which = (process.argv[3] || "1,2,3,driver").split(",").filter(Boolean);
 const NAMES = { 1: "Sunday-Bus-1-Put-it-on-your-phone", 2: "Sunday-Bus-2-Book-your-seat", 3: "Sunday-Bus-3-Sunday-morning",
-                driver: "Driver-Sunday-morning-to-the-end-of-the-run" };
+                driver: "Driver-from-your-name-to-the-parked-mileage" };
 
 /* The marks shots.mjs recorded, as a script the stage can load from disk. */
 writeFileSync(join(BUILD, "marks.js"), "window.MARKS = " + readFileSync(join(BUILD, "shots", "marks.json"), "utf8") + ";\n");

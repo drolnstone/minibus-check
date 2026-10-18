@@ -25,7 +25,7 @@ And for drivers:
    church pop-up, the run ending by itself back at church, the Trip ended and
    2pm reminders, and the parked mileage on the hub.
 
-Captions only, no voice. Portrait, 1080 x 1920, each under 5 MB, so they send
+Captions only, no voice. Portrait, 1080 x 1920, each under 6 MB, so they send
 on WhatsApp as they are.
 
 **Nothing from the spreadsheet is needed or kept here.** The stops come from
