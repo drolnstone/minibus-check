@@ -1,4 +1,4 @@
-/* THE DRIVER APP, FROM SUNDAY MORNING TO THE END OF THE RUN, for the driver video.
+/* THE DRIVER APP, FROM CHOOSING YOUR NAME TO THE PARKED MILEAGE, for the driver video.
 
    The real driver app (index.html at the top of the repo) in Chromium at
    phone width, with the stand-in servers of tests/browser/lib.mjs: the real
@@ -144,10 +144,12 @@ scene("d-signin", async () => {
   return me;
 });
 
+/* The duty card, as the live server's action duty gives it (v1.117.0). */
+const DUTY = (post) => ({ ok: true, sunday: "2026-09-27", route: "North", check: "09:45", depart: "10:05", state: "due" });
 scene("d-hub", async () => {
-  const me = await phone({ world: { closed: true }, clock: "2026-09-27T09:20:00+01:00" });
-  await hub(me);
-  await shot(me, "d-hub", { marks: { check: "#toCheck", stops: "#toStops" } });
+  const me = await phone({ world: { closed: true, duty: DUTY }, clock: "2026-09-27T09:45:00+01:00" });
+  await hub(me); await me.wait(1200);
+  await shot(me, "d-hub", { top: true, marks: { duty: "#hubDuty .dw", check: "#toCheck", stops: "#toStops" } });
   return me;
 });
 
@@ -214,7 +216,7 @@ scene("d-run", async () => {
   await me.click("Start trip · NH56 FWP", "#s-stops"); await me.wait(1500); await me.close();
   etas.North.N01 = T("10:15");
   await again(me);
-  await shot(me, "d-running", { marks: { next: "#stopsBody .stop-row.trip-next", end: "#tripEnd", map: "#stopsBody .stop-go" } });
+  await shot(me, "d-running", { marks: { next: "#stopsBody .stop-row.trip-next", map: "#stopsBody .stop-go" } });
   /* A minute away: the pop-up. */
   await me.jump(9); await again(me);
   await stopFor(me, 2);
@@ -232,13 +234,18 @@ scene("d-run", async () => {
   return me;
 });
 
-/* All marked, back at church: End trip. */
+/* All marked: the church pop-up, then back inside the church fence the run
+   ends by itself (v1.106.0, v1.127.0). */
+const CHURCH = { lat: 53.424169, lng: -2.936799, acc: 10, speed: 0 };
+const AWAY = { lat: 53.463563, lng: -2.959062, acc: 10, speed: 0 };
 scene("d-end", async () => {
-  const world = { checks: okCheck(), trips: { North: null, South: null }, people: PEOPLE };
-  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world });
+  const etas = { North: {}, South: {} };
+  const world = { checks: okCheck(), etas, trips: { North: null, South: null }, people: PEOPLE };
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world, permissions: ["geolocation", "notifications"] });
   await hub(me); await me.toStops(); await me.close();
   await me.jump(2);
   await me.click("Start trip · NH56 FWP", "#s-stops"); await me.wait(1500); await me.close();
+  await me.emit(AWAY); await me.wait(500);
   /* Each booked stop at its timetable time; nobody at the last one. */
   let at = T("10:05");
   for (const [id, kind] of [["N01", "pickup"], ["N02", "pickup"], ["N04", "pickup"], ["N06", "pickup"], ["N07", "empty"]]) {
@@ -246,10 +253,44 @@ scene("d-end", async () => {
     await me.jump((due - at) / 60000); at = due;
     await tapStop(me, kind, id); await me.wait(1800);
   }
-  await me.jump(12); await me.wait(3000);
-  await shot(me, "d-arrived", { marks: { end: "End trip" } });
-  await me.click("End trip, arrived at church", "#footbar"); await me.wait(2200);
-  await shot(me, "d-finished", { top: true, marks: { done: "Trip finished@1" } });
+  etas.North.N09 = T("10:58");
+  await again(me); await me.close(); await me.wait(1500);
+  await shot(me, "d-church", { marks: { body: "#churchBody", title: "#churchTitle" } });
+  await me.jump(9); await me.emit(AWAY); await me.wait(500);
+  await me.jump(1); await me.emit(CHURCH); await me.wait(500);
+  await me.jump(4); await me.emit(CHURCH); await me.wait(3000);
+  await shot(me, "d-ended", { top: true, marks: { done: "Trip finished@1", auto: "Ended automatically" } });
+  return me;
+});
+
+/* After the afternoon run: the parked mileage on the hub (v1.124.0). The
+   live server's ?last=1 says which bus is owed one, and by whom. */
+scene("d-park", async () => {
+  const me = await phone({ clock: "2026-09-27T14:40:00+01:00" });
+  const REG = "NH56 FWP";
+  const open = [{ reg: REG, checkId: "c1", day: "2026-09-27", miles: 48262, driver: SAMPLE, parked: null }];
+  await me.pg.route("**://*.workers.dev/**", async (route) => {
+    const req = route.request();
+    const u = new URL(req.url());
+    let post = {};
+    try { post = JSON.parse(req.postData() || "{}"); } catch (e) {}
+    if (u.searchParams.get("last")) {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+        ok: true, cache: "worker", sheet: STAMPS.sheet, server: STAMPS.server,
+        last: { [REG]: { miles: 48262, date: "27/09/2026", time: "09:40", driver: SAMPLE, checkId: "c1" } },
+        parkOpen: open, parked: {} }) });
+    }
+    if (post.action === "parked") {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true,
+        parked: { reg: REG, checkId: "c1", miles: Number(post.parked.miles), driver: post.parked.driver, at: T("14:41") } }) });
+    }
+    return route.fallback();
+  });
+  await hub(me); await me.wait(1500);
+  await me.pg.fill("#parkMiles0", "48296"); await me.wait(200);
+  await shot(me, "d-park", { scrollTo: "#hubParked", marks: { box: "#parkMiles0", save: "#hubParked [data-park-save]", card: "#hubParked .dw" } });
+  await me.click("Save", "#hubParked"); await me.wait(1500);
+  await shot(me, "d-park-done", { scrollTo: "#hubParked", marks: { card: "#hubParked .dw" } });
   return me;
 });
 

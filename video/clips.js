@@ -218,13 +218,13 @@
       head(2, "Book your seat");
       cap(["With alerts on, and no seat", "booked yet, you are reminded:"]);
       a.write(["Sunday 3–4pm and Wednesday 6–7pm"], CX, 236, { size: 26, color: a.RED, read: false });
-      const n1 = a.note(30, 252, 480, "Book your seat for Sunday", "There is room on the bus. Bookings close Sunday 09:30. Tap to pick your stop.");
+      const n1 = a.note(30, 252, 480, "Book your seat for Sunday", "There is room on the bus. Bookings close Sunday 09:30.");
       a.wait(1.2);
       a.write(["Saturday 6–7pm"], CX, 268 + n1.h + 30, { size: 26, color: a.RED, read: false });
-      const n2 = a.note(30, 284 + n1.h + 30, 480, "Last chance to book for Sunday", "Bookings close at 09:30 tomorrow. Tap to pick your stop.");
+      const n2 = a.note(30, 284 + n1.h + 30, 480, "Last chance to book for Sunday", "Bookings close at 09:30 tomorrow.");
       a.wait(1.2);
       a.write(["Already booked? On Saturday", "evening you get this instead:"], CX, 330 + n1.h + n2.h + 60, { size: 28 });
-      a.note(30, 400 + n1.h + n2.h + 50, 480, "You are booked for Sunday", "Fountains Road by Stanley Close, 10:36. 2 seats. Tap to change or cancel.");
+      a.note(30, 400 + n1.h + n2.h + 50, 480, "You are booked for Sunday", "Fountains Road by Stanley Close, 10:36. 2 seats.");
       a.hold(6);
     });
 
@@ -339,7 +339,7 @@
       when("Sunday, 3–4pm");
       a.write(["Not booked for next week yet?", "A reminder comes."], CX, CY + 44, { size: 34 });
       lock("3:10", "Sunday 27 September");
-      a.note(90, 480, 360, "Book your seat for Sunday", "There is room on the bus. Bookings close Sunday 09:30. Tap to pick your stop.");
+      a.note(90, 480, 360, "Book your seat for Sunday", "There is room on the bus. Bookings close Sunday 09:30.");
       a.hold(3.6);
     });
 
