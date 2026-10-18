@@ -1197,8 +1197,12 @@ if (want("C35")) {
     const afterBookings = await screenIs(p);
     await p.pg.click('#homeBody [data-go="runs"]');
     await p.wait(900);
-    const dates = await p.pg.$$eval("#runsBody .chips button", (bs) => bs.map((b) => b.getAttribute("data-go")));
-    for (let i = 0; i < 4; i++) { const g = dates[i % dates.length]; await p.pg.click('#runsBody .chips [data-go="' + g + '"]'); await p.wait(600); }
+    const chips = () => p.pg.$$eval("#runsBody .chips button", (bs) => bs.map((b) => b.getAttribute("data-go")));
+    const dates = await chips();
+    /* The row is read again before each tap: on a Sunday before any run,
+       today's chip is there only while today is the one shown. */
+    for (let i = 0; i < 4; i++) { const now = await chips(); const g = now[i % now.length];
+      await p.pg.click('#runsBody .chips [data-go="' + g + '"]'); await p.wait(600); }
     /* And the phone's own back gesture, which is the browser's. */
     await p.pg.goBack(); await p.wait(450);
     const afterRuns = await screenIs(p);
@@ -1591,6 +1595,10 @@ if (want("C47")) {
                                                  return document.getElementById("toTop").classList.contains("is-on"); });
     await p.signIn(PIN);
     await p.pg.click('#homeBody [data-go="runs"]');
+    await p.wait(900);
+    /* Last Sunday's runs make the long screen; on a Sunday the record opens
+       on today, which has none yet. */
+    await p.pg.click('#runsBody .chips [data-go="runs/' + LAST + '"]');
     await p.wait(900);
     const atTop = await p.pg.$eval("#toTop", (b) => getComputedStyle(b).display);
     await p.pg.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
