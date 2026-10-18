@@ -1778,7 +1778,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.128.0";
+var APP_VERSION = "v1.128.1";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -7018,7 +7018,7 @@ function tripTap(stop,kind){
   if(tripRoundTick()) return;
   if(!trip.started || trip.ended) return;
   if(tripStopShut(stop)){ tripPaint(); return; }
-  if(!trip.served[stop.id] && pickNext && stop.id===pickNext.id && !pickLeft()){
+  if(!trip.served[stop.id] && pickNext && stop.id===pickNext.id && !pickLeft(true)){
     toast("The bus has not left "+(trip.lastStop || "church")+" yet.", true);
     return;
   }
@@ -8620,7 +8620,7 @@ function rotaPaintStops(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-pickopen]"),function(r){
     r.addEventListener("click",function(e){
       if(e.target && e.target.closest && e.target.closest("a,button")) return;
-      if(!pickLeft()) return;
+      if(!pickLeft(true)) return;
       pickStopId=this.getAttribute("data-pickopen");
       pickSync();
     });
@@ -9328,15 +9328,18 @@ function pickTimed(s){ return !!pickEta(s); }
    Street came up while he was still standing at Bedford Road). The next
    stop's pop-up waits until the phone has seen the bus moving since the last
    tap, or since the start of the run. A phone that does not report its speed
-   waits PICK_LEAVE_MS instead. */
+   waits PICK_LEAVE_MS instead. A tap (tapped true) is let through after
+   PICK_LEAVE_MS on any phone, from v1.128.1 (Asim, 18 Oct 2026), so a bad
+   GPS signal never shuts the next stop. */
 var PICK_LEAVE_MS = 60000;
-function pickLeft(){
+function pickLeft(tapped){
   var ref = Number(trip.started) || 0;
   Object.keys(trip.served || {}).forEach(function(k){
     ref = Math.max(ref, Number(trip.served[k] && trip.served[k].at) || 0);
   });
   if(!ref) return true;
   if(tripMovedAt > ref) return true;
+  if(tapped && tripNow() - ref >= PICK_LEAVE_MS) return true;
   var speedKnown = tripSpeed !== null && (Date.now() - tripSpeedAt <= 12000);
   return !speedKnown && tripNow() - ref >= PICK_LEAVE_MS;
 }
