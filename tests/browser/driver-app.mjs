@@ -1368,6 +1368,26 @@ if (want("T39")) {
   await me.ctx.close();
 }
 
+/* T40 — v1.128.1 (Asim, 18 Oct 2026, "Add 60 s"). A phone that reports its
+   speed but never sees the bus move: the next stop is refused at first, and
+   taken 60 seconds after the last tap. */
+if (want("T40")) {
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck() } });
+  await startRun(me);
+  await me.jump(11); await me.wait(300);
+  await tap(me, "pickup", "N01"); await me.wait(1500);
+  const still = { lat: 53.45, lng: -2.94, acc: 8, speed: 0 };
+  await me.emit(still); await me.wait(300);
+  const tryN02 = () => me.pg.evaluate(() => { tripTap(rotaStops.find(x => x.id === "N02"), "pickup");
+                                             return !!trip.served.N02; });
+  const early = await tryN02();
+  await me.jump(1); await me.emit(still); await me.wait(300);
+  const later = await tryN02();
+  check("T40", "a phone that never sees the bus move may tap the next stop 60 seconds after the last tap, not before",
+        !early && later && !me.errs.length, JSON.stringify({ early, later, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");
