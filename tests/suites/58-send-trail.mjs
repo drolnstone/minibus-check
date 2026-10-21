@@ -199,6 +199,83 @@ export default async function (root) {
     a.eq(JSON.stringify(m[1].to), JSON.stringify(["Bro Adrian"]));
   });
 
+  /* From w2.70.0 (Asim, 21 Oct 2026): a notice his coordinator app never
+     showed. Phones best first, a minute later once more, then email. */
+  const DRIVER_EP = "https://push.test/driver-arthur";
+  const refuse = (eps) => { for (let i = 0; i < 60; i++) G.reply((url) =>
+    new Response("", { status: eps.some((e) => String(url) === e) ? 500 : 201 })); };
+  const driverApp = (db) => db.prepare(
+    "INSERT INTO push_subs (endpoint, p256dh, auth, role, driver, made, app) VALUES (?,?,?,?,?,?,?)")
+    .bind(DRIVER_EP, "p", "a", "driver", "Bro Arthur", Date.now(), "driver").run();
+  const boxOf = async (env, ep) => ((await W.cacheGet(env, "calert:" + ep)) || []).filter((m) => m.kind === "trail");
+
+  s.test("a notice the coordinator app's push service refuses goes to the driver app", async (a) => {
+    const WED = "2026-10-21T18:01:00+01:00";
+    const { db, env } = await fresh(WED);
+    await driverApp(db);
+    await passenger(db, "N03");
+    refuse([COORD_EP]);
+    await atTime(WED, () => W.wakeBookingReminders(env));
+    a.eq((await boxOf(env, COORD_EP)).length, 0, "not left waiting in the refused phone's box");
+    const d = await boxOf(env, DRIVER_EP);
+    a.eq(d.length, 1);
+    a.eq(d[0].title, "Sent: Booking reminders");
+    a.eq(((await W.cacheGet(env, "trail_retry")) || []).length, 0, "nothing to try again");
+    const line = (await W.sentList(env)).find((m) => m.title === "Book your seat(s) for Sunday");
+    a.ok(line, JSON.stringify(await W.sentList(env)));
+    a.eq(line.body, "To 1 passenger phone. Coordinator notice: 1 phone.");
+    G.reset();
+  });
+
+  s.test("only the coordinator app, while it takes it", async (a) => {
+    const WED = "2026-10-21T18:01:00+01:00";
+    const { db, env } = await fresh(WED);
+    await driverApp(db);
+    await passenger(db, "N03");
+    await atTime(WED, () => W.wakeBookingReminders(env));
+    a.eq((await boxOf(env, COORD_EP)).length, 1);
+    a.eq((await boxOf(env, DRIVER_EP)).length, 0);
+  });
+
+  s.test("no phone took it: once more a minute later, then the sheet emails it", async (a) => {
+    const WED = "2026-10-21T18:01:00+01:00";
+    const { db, env } = await fresh(WED);
+    await driverApp(db);
+    await passenger(db, "N03");
+    refuse([COORD_EP, DRIVER_EP]);
+    await atTime(WED, () => W.wakeBookingReminders(env));
+    const held = (await W.cacheGet(env, "trail_retry")) || [];
+    a.eq(held.length, 1);
+    a.eq(JSON.stringify(held[0].names), JSON.stringify(["Bro Arthur"]));
+    a.eq(await atTime("2026-10-21T18:01:30+01:00", () => W.retryTrails(env)), 0, "not yet a minute");
+    a.eq(((await W.cacheGet(env, "trail_retry")) || []).length, 1);
+    await atTime("2026-10-21T18:02:10+01:00", () => W.retryTrails(env));
+    a.eq(((await W.cacheGet(env, "trail_retry")) || []).length, 0, "tried once more only");
+    a.eq((await J(await post(env, { action: "drain", limit: 1 }))).trailMail.length, 0,
+         "the health check's drain does not take it");
+    const mail = (await J(await post(env, { action: "drain", limit: 300, mail: true }))).trailMail;
+    a.eq(mail.length, 1);
+    a.eq(mail[0].title, "Sent: Booking reminders");
+    a.eq(JSON.stringify(mail[0].names), JSON.stringify(["Bro Arthur"]));
+    a.eq((await J(await post(env, { action: "drain", limit: 300, mail: true }))).trailMail.length, 0, "once");
+    G.reset();
+  });
+
+  s.test("the minute later reaches it, and the line counts it", async (a) => {
+    const WED = "2026-10-21T18:01:00+01:00";
+    const { db, env } = await fresh(WED);
+    await passenger(db, "N03");
+    refuse([COORD_EP]);
+    await atTime(WED, () => W.wakeBookingReminders(env));
+    G.reset();
+    a.eq(await atTime("2026-10-21T18:02:10+01:00", () => W.retryTrails(env)), 1);
+    a.eq((await boxOf(env, COORD_EP)).length, 1);
+    const line = (await atTime("2026-10-21T18:03:00+01:00", () => W.sentList(env)))
+      .find((m) => m.title === "Book your seat(s) for Sunday");
+    a.eq(line.body, "To 1 passenger phone. Coordinator notice: 1 phone.");
+    a.eq((await J(await post(env, { action: "drain", limit: 300, mail: true }))).trailMail.length, 0);
+  });
+
   s.test("the duty emails reach the trail as one batch", (a) => {
     const { L, told } = sheet();
     call(L, "dutyTrail", ["2026-10-11|2"], { sent: ["Bro Adrian, North Liverpool"], already: [], off: [] },

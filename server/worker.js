@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.69.0";
+const SCRIPT_VERSION = "w2.70.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -4995,6 +4995,10 @@ async function handleDrain(env, body) {
 
   return json({ ok: true, claim: claim, bookings: b.results || [], trips: t.results || [],
                 requests: requests, coord: coord, parked: parked,
+                /* From w2.70.0: "Sent:" notices no phone of these coordinators
+                   took, for the sheet to email. Only to the sync's own drain,
+                   which asks, never to the health check's. */
+                trailMail: body.mail === true ? await takeTrailMail(env) : [],
                 checks: checks, auths: auths, decisions: decisions, cacheAgeMin: age,
                 clockAgoSec: clockAgoSec, poke: poke, pinSalt: !!pinSaltOf(env),
                 /* From w2.66.0, for the sheet's health check. */
@@ -5301,6 +5305,7 @@ async function clockTick(env) {
   await sweeps(env);
   try { await pokeIfWaiting(env); } catch (e) {}
   try { await releaseCoordAlerts(env); } catch (e) {}
+  try { await retryTrails(env); } catch (e) {}
 }
 
 /* ---- telling the sheet there is something to collect -------------------
@@ -6178,6 +6183,7 @@ async function wakeBookingReminders(env) {
   n = nBook + nBooked;
   /* Once a window, from its first sweep, whatever it reached. */
   await trail(env, { once: "p|book|" + target + "|d" + hit.day, title: "Booking reminders",
+                     line: "p|" + sentGroup(tag),
                      body: "Book your seat: " + trailPhones(nBook, "passenger") + "." +
                            (hit.booked ? " You are booked: " + trailPhones(nBooked, "passenger") + "." : "") });
   return n;
@@ -6566,6 +6572,7 @@ async function wakeDrivers(env) {
     const r = await wake(env, subs, nudge.tag);
     n += r;
     await trail(env, { once: "d|" + nudge.tag, title: sentTitle(nudge.tag, true),
+                       line: "d|" + sentGroup(nudge.tag),
                        body: "To " + nudge.who + ": " + trailPhones(r) + ".", not: [nudge.who] });
   }
   return n;
@@ -6790,7 +6797,7 @@ const COORD_ALERT_MAX_AGE_MS = 24 * 3600 * 1000;
 const coordBoxKey = (endpoint) => "calert:" + String(endpoint || "");
 
 /* Every coordinator's phone, less whoever the alert is about. */
-async function coordinatorSubs(env, not) {
+async function coordinatorSubs(env, not, every) {
   const rules = await authRules(env);
   if (!rules.roles.length) return [];
   await ensurePushApp(env);
@@ -6808,8 +6815,9 @@ async function coordinatorSubs(env, not) {
     return skip.indexOf(String(sub.driver || "").trim().toLowerCase()) === -1;
   });
   /* From w2.43.0: once, to the coordinator app, when this person has it;
-     from w2.62.0 only its own install's phones when it has one. */
-  return oneAppEach(subs, APP_RANK_COORD);
+     from w2.62.0 only its own install's phones when it has one. Every one
+     of them, best first, for a notice that falls back (w2.70.0). */
+  return every ? subs : oneAppEach(subs, APP_RANK_COORD);
 }
 
 function coordAlertOf(a) {
@@ -6939,6 +6947,27 @@ const SENT_LOG_KEY = "sent_log";
 const SENT_LOG_MAX = 400;
 const SENT_JOIN_MS = 60 * 60000;
 
+/* Each stop tapped is its own line of "on its way"; everything else is one
+   line for the route, or for the reminder. Behind "d|" for drivers' phones
+   and "p|" for passengers'. */
+function sentGroup(tag, where) {
+  const p = String(tag || "").split("|");
+  return p[0] + "|" + (p[1] || "") + "|" + ((where && where.route) || p[2] || "") +
+         (p[0] === "next" ? "|" + (p[4] || "") : "");
+}
+
+/* How many coordinator phones took the notice about a line, from w2.70.0,
+   so a notice that went nowhere shows on the line it is about. */
+async function sentCoord(env, g, n) {
+  const now = Date.now();
+  const log = (await cacheGet(env, SENT_LOG_KEY)) || [];
+  let e = null;
+  for (const m of log) if (m && m.g === g && now - (Number(m.at) || 0) < 30 * 60000) e = m;
+  if (!e) return;
+  e.coord = (Number(e.coord) || 0) + (Number(n) || 0);
+  await cachePut(env, SENT_LOG_KEY, log).run();
+}
+
 async function sentNote(env, n) {
   const now = Date.now();
   const log = ((await cacheGet(env, SENT_LOG_KEY)) || [])
@@ -7001,13 +7030,9 @@ function sentTitle(tag, driver, where) {
 }
 
 async function sentPushes(env, tag, subs, where) {
-  const p = String(tag || "").split("|");
   const drivers = subs.filter((s) => s.role === "driver");
   const riders = subs.filter((s) => s.role !== "driver");
-  /* Each stop tapped is its own line of "on its way"; everything else is
-     one line for the route, or for the reminder. */
-  const g = p[0] + "|" + (p[1] || "") + "|" + ((where && where.route) || p[2] || "") +
-            (p[0] === "next" ? "|" + (p[4] || "") : "");
+  const g = sentGroup(tag, where);
   if (drivers.length) {
     await sentNote(env, { g: "d|" + g, title: sentTitle(tag, true, where),
                           who: drivers.map((s) => s.driver) });
@@ -7047,7 +7072,10 @@ async function sentList(env) {
         : who && n ? "To " + who + " and " + phones + "."
         : who ? "To " + who + "."
         : "To " + phones + (stops ? ": " + stops : "") + ".";
-      return { id: m.id, kind: "sent", mail: !!m.mail, title: m.title, body: to, at: m.at,
+      /* From w2.70.0, on a line a "Sent:" notice is about. */
+      const told = typeof m.coord === "number"
+        ? " Coordinator notice: " + m.coord + " phone" + (m.coord === 1 ? "" : "s") + "." : "";
+      return { id: m.id, kind: "sent", mail: !!m.mail, title: m.title, body: to + told, at: m.at,
                urgent: false, unread: false };
     });
 }
@@ -7091,8 +7119,114 @@ async function trail(env, t) {
       not: Array.isArray(t.not) ? t.not : []
     });
     if (!msg) return 0;
-    return await deliverCoordAlert(env, msg);
+    const r = await deliverTrail(env, msg);
+    if (r.missed.length) {
+      await trailKeep(env, TRAIL_RETRY_KEY, { msg, names: r.missed, line: t.line || "", at: Date.now() });
+    }
+    /* Not on a line when no coordinator has alerts on at all. */
+    if (t.line && (r.sent || r.missed.length)) await sentCoord(env, t.line, r.sent);
+    return r.sent;
   } catch (e) { return 0; }
+}
+
+/* A NOTICE NO PHONE TOOK, from w2.70.0 (Asim, 21 Oct 2026: the Wednesday
+   booking reminders went out and "Sent: Booking reminders" never reached
+   his coordinator app, though its test did).
+
+   Each coordinator's phones are tried best first: the coordinator app, then
+   a shared one, then the driver app, moving on only when no phone of the
+   kind before was taken by its push service. A coordinator none of whose
+   phones took it is tried again on the next tick a minute later, and after
+   that emailed, once, by the sheet. A coordinator with alerts on no phone
+   at all is not emailed every notice: that is as before. */
+const TRAIL_RETRY_KEY = "trail_retry";
+const TRAIL_MAIL_KEY = "trail_mail";
+const TRAIL_RETRY_MS = 60000;
+
+async function deliverTrail(env, msg, only) {
+  const subs = await coordinatorSubs(env, msg.not, true);
+  const people = {};
+  for (const sub of subs) {
+    const k = String(sub.driver || "").trim().toLowerCase();
+    if (!k || (only && only.indexOf(k) === -1)) continue;
+    (people[k] = people[k] || { name: String(sub.driver || "").trim(), subs: [] }).subs.push(sub);
+  }
+  const rank = (sub) => (String(sub.app || "") in APP_RANK_COORD) ? APP_RANK_COORD[String(sub.app || "")] : 9;
+  const keys = Object.keys(people).length ? await vapidKeys(env) : null;
+  let sent = 0;
+  const missed = [];
+  for (const k of Object.keys(people)) {
+    const p = people[k];
+    const ranks = p.subs.map(rank).filter((r, i, a) => a.indexOf(r) === i).sort((a, b) => a - b);
+    let took = 0;
+    for (const r of ranks) {
+      for (const sub of p.subs.filter((x) => rank(x) === r)) {
+        if (await boxAndPush(env, sub, msg, keys)) took++;
+      }
+      if (took) break;
+    }
+    if (took) sent += took; else missed.push(p.name);
+  }
+  return { sent, missed };
+}
+
+/* Into the phone's box and woken; out of the box again if its push service
+   refused, so the next thing that phone is woken for is not this. */
+async function boxAndPush(env, sub, msg, keys) {
+  const k = coordBoxKey(sub.endpoint);
+  const box = ((await cacheGet(env, k)) || [])
+    .filter((m) => m && Date.now() - (Number(m.at) || 0) < COORD_ALERT_MAX_AGE_MS && m.id !== msg.id);
+  box.push(msg);
+  while (box.length > COORD_BOX_MAX) box.shift();
+  await cachePut(env, k, box).run();
+  if (await pushOne(env, sub, keys)) return true;
+  const left = ((await cacheGet(env, k)) || []).filter((m) => m && m.id !== msg.id);
+  if (left.length) await cachePut(env, k, left).run();
+  else await env.DB.prepare("DELETE FROM settings WHERE k=?").bind(k).run();
+  return false;
+}
+
+async function trailKeep(env, key, item) {
+  const list = ((await cacheGet(env, key)) || []).slice(-49);
+  list.push(item);
+  await cachePut(env, key, list).run();
+}
+
+/* On the clock: each notice a minute after it missed, once more, then the
+   names still missed are handed to the sheet to email. */
+async function retryTrails(env) {
+  const list = (await cacheGet(env, TRAIL_RETRY_KEY)) || [];
+  if (!list.length) return 0;
+  const now = Date.now();
+  const due = list.filter((x) => x && now - (Number(x.at) || 0) >= TRAIL_RETRY_MS);
+  if (!due.length) return 0;
+  const wait = list.filter((x) => x && now - (Number(x.at) || 0) < TRAIL_RETRY_MS);
+  if (wait.length) await cachePut(env, TRAIL_RETRY_KEY, wait).run();
+  else await env.DB.prepare("DELETE FROM settings WHERE k=?").bind(TRAIL_RETRY_KEY).run();
+  let sent = 0;
+  for (const x of due) {
+    if (!x.msg || now - (Number(x.at) || 0) >= COORD_ALERT_MAX_AGE_MS) continue;
+    const names = (x.names || []).map((n) => String(n || "").trim().toLowerCase());
+    const r = await deliverTrail(env, x.msg, names);
+    sent += r.sent;
+    if (x.line && r.sent) await sentCoord(env, x.line, r.sent);
+    if (r.missed.length) {
+      await trailKeep(env, TRAIL_MAIL_KEY, { id: x.msg.id, title: x.msg.title, body: x.msg.body,
+                                             names: r.missed, at: now });
+    }
+  }
+  return sent;
+}
+
+/* For the sheet's drain, which emails them. Taken as they are handed over:
+   an email lost on the way is better than the same one twice. */
+async function takeTrailMail(env) {
+  const list = (await cacheGet(env, TRAIL_MAIL_KEY)) || [];
+  if (!list.length) return [];
+  await env.DB.prepare("DELETE FROM settings WHERE k=?").bind(TRAIL_MAIL_KEY).run();
+  return list.filter((x) => x && Date.now() - (Number(x.at) || 0) < COORD_ALERT_MAX_AGE_MS)
+    .map((x) => ({ id: String(x.id || ""), title: String(x.title || ""), body: String(x.body || ""),
+                   names: (x.names || []).map(String) }));
 }
 
 const trailPhones = (n, who) => n + " " + (who ? who + " " : "") + "phone" + (n === 1 ? "" : "s");
