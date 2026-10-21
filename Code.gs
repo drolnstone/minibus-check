@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.125.0";
+var SCRIPT_VERSION = "v1.126.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -5217,7 +5217,7 @@ function coverReport() {
 }
 
 function drainFromWorker() {
-  var got = workerCall("drain", { limit: 300 });
+  var got = workerCall("drain", { limit: 300, mail: true });
   if (!got || got.ok !== true) {
     try { PropertiesService.getScriptProperties()
             .setProperty("liveError", String((got && got.error) || "drain failed")); } catch (e) {}
@@ -5228,6 +5228,16 @@ function drainFromWorker() {
     try { PropertiesService.getScriptProperties()
             .setProperty("workerMorning", JSON.stringify({ seen: Date.now(), m: got.morning })); } catch (e) {}
   }
+
+  /* A "Sent:" notice that no phone of a coordinator's took, even a minute
+     later, from v1.126.0 (Asim, 21 Oct 2026). One email each, to where
+     coordinator emails go. */
+  (got.trailMail || []).forEach(function (m) {
+    var to = safetyTo();
+    if (!to || !m || !m.title) return;
+    try { sendMail({ to: to, subject: String(m.title).substring(0, 140),
+                     body: m.title + (m.body ? "\n" + m.body : "") }); } catch (err) {}
+  });
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var doneB = [], doneT = [];
