@@ -1,16 +1,26 @@
 MINIBUS
 =======
-  pages v1.129.0 · server w2.71.0 · sheet v1.127.0
+  pages v1.130.0 · server w2.72.0 · sheet v1.128.0
 
-YOU ARE ON   app v1.128.1 · server w2.70.0 · sheet v1.126.0
-GOING TO     app v1.129.0 · server w2.71.0 · sheet v1.127.0
+YOU ARE ON   app v1.129.0 · server w2.71.0 · sheet v1.127.0
+GOING TO     app v1.130.0 · server w2.72.0 · sheet v1.128.0
 
-Driver app, after the last booked stop: the Church pop-up reads "Do not
-close until Church", then the time, then Cancel. A tap on it does nothing.
-Cancel puts it away for Undo; it comes back once the bus moves, a minute
-after Cancel, when an answer changes, or when the app is opened again.
+The estimate from where the bus is. While a run is open and the Stops
+screen is on, the driving phone sends its location with every board
+poll. Once a minute the server asks the sheet, which asks Google Maps,
+how long the drive is to the next booked stop in traffic; every ten
+minutes each leg after it. Every stop's time, the driver's pop-up and
+the passengers' page and alerts all use it. No location for two
+minutes, or no answer from Google: the estimate from the stop taps, as
+before.
 
-Church has a capital C on every screen, alert and email.
+Pickup pop-up: on every tap the held estimates go until the server has
+the tap. The estimate only raises a pop-up within 1 km of the stop's
+pin, and one it raised goes back down if the stop moves more than a
+minute away.
+
+The sheet's health report says whether Google's traffic times are coming
+through.
 
 GOING LIVE
 ----------
@@ -21,8 +31,8 @@ Merge the pull request. The pages go live by themselves.
 AFTER IT (give it ten minutes)
 --------
 
-B. The foot of the apps reads  app v1.129.0 · server w2.71.0 · sheet
-   v1.127.0 .
+B. The foot of the apps reads  app v1.130.0 · server w2.72.0 · sheet
+   v1.128.0 .
 
 
 A FRESH ADDRESS (not on a Sunday, after B and C)

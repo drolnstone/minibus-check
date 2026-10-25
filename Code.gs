@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.127.0";
+var SCRIPT_VERSION = "v1.128.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -2406,7 +2406,7 @@ function doPost(e) {
     /* Only the live server asks these, so they want the sheet's own password
        as well as the public one. report and pdf from v1.124.0: they read
        every tab, and pdf can save a file in Drive. */
-    var fromServer = ["decision", "report", "pdf", "drainnow"];
+    var fromServer = ["decision", "report", "pdf", "drainnow", "route"];
     if (fromServer.indexOf(String(body.action || "")) !== -1 && !sheetTokenOk(body)) {
       return reply({ ok: false, error: "bad sheet token" });
     }
@@ -2488,6 +2488,11 @@ function doPost(e) {
         }
         return reply(pdfReport(String(body.name || ""), body.from, body.to));
       } catch (err) { return reply({ ok: false, error: String(err) }); }
+    }
+
+    /* DRIVE TIMES FOR THE LIVE ESTIMATE, from v1.128.0: see routeTimes. */
+    if (String(body.action || "") === "route") {
+      return reply(routeTimes(body));
     }
 
     if (String(body.action || "") === "drainnow") {
@@ -13434,6 +13439,80 @@ function healthCheck() {
   ui.alert(r.title, r.msg, ui.ButtonSet.OK);
 }
 
+/* DRIVE TIMES FOR THE LIVE ESTIMATE, from v1.128.0 (Asim, 25 Oct 2026).
+
+   The live server sends where the bus is and the next stop it calls at,
+   and now and then the legs after that, one stop to the next. Google Maps
+   in this script answers each one: no key, no card, and the daily allowance
+   is far more than two buses for an hour on a Sunday. The time in traffic
+   when Google gives one, which it does only for a route with no stops on
+   the way, so every leg is asked on its own. The road time when it does not.
+
+   The last answer is kept in the Script Property LIVE_ROUTE for the health
+   report: when, how many came with traffic, and the last failure. */
+function routeLeg(from, to, departMs) {
+  var when = new Date(Math.max(Date.now() + 60000, Number(departMs) || 0));
+  var dir = Maps.newDirectionFinder()
+    .setOrigin(Number(from.lat), Number(from.lng))
+    .setDestination(Number(to.lat), Number(to.lng))
+    .setMode(Maps.DirectionFinder.Mode.DRIVING)
+    .setDepart(when)
+    .getDirections();
+  var leg = dir && dir.routes && dir.routes[0] && dir.routes[0].legs && dir.routes[0].legs[0];
+  if (!leg || !leg.duration || typeof leg.duration.value !== "number") return null;
+  var traffic = !!(leg.duration_in_traffic && typeof leg.duration_in_traffic.value === "number");
+  return { sec: traffic ? leg.duration_in_traffic.value : leg.duration.value, traffic: traffic };
+}
+
+function routeTimes(body) {
+  var props = PropertiesService.getScriptProperties();
+  var kept = {};
+  try { kept = JSON.parse(props.getProperty("LIVE_ROUTE") || "{}") || {}; } catch (err) { kept = {}; }
+  var traffic = 0, plain = 0;
+  var out = { ok: false };
+  try {
+    var next = (body && body.from && body.to) ? routeLeg(body.from, body.to, body.depart) : null;
+    if (!next) throw new Error("Google Maps found no route to the next stop.");
+    if (next.traffic) traffic++; else plain++;
+    var legs = {};
+    var asked = (body && body.legs && body.legs.length) ? body.legs.slice(0, 6) : [];
+    for (var i = 0; i < asked.length; i++) {
+      var q = asked[i];
+      if (!q || !q.key || !q.from || !q.to) continue;
+      try {
+        var g = routeLeg(q.from, q.to, q.depart);
+        if (g) { legs[String(q.key)] = g; if (g.traffic) traffic++; else plain++; }
+      } catch (err) { /* that leg takes the timetable's gap */ }
+    }
+    out = { ok: true, next: next, legs: legs };
+    kept.at = Date.now(); kept.traffic = traffic; kept.plain = plain;
+  } catch (err) {
+    out = { ok: false, error: String(err && err.message || err).slice(0, 200) };
+    kept.errAt = Date.now(); kept.err = out.error;
+  }
+  try { props.setProperty("LIVE_ROUTE", JSON.stringify(kept)); } catch (err) {}
+  return out;
+}
+
+/* The health report's line about it. null before a route was ever asked. */
+function liveRouteHealth(kept) {
+  if (!kept || (!kept.at && !kept.errAt)) return null;
+  var when = function (ms) {
+    var d = new Date(Number(ms));
+    return Utilities.formatDate(d, "Europe/London", "EEE d MMM") + " " +
+           Utilities.formatDate(d, "Europe/London", "HH:mm");
+  };
+  if (kept.errAt && (!kept.at || Number(kept.errAt) > Number(kept.at))) {
+    return { bad: "Google Maps did not answer the live estimate at " + when(kept.errAt) + ": " +
+                  String(kept.err || "no reason given") + " The estimate used stop taps." };
+  }
+  if (Number(kept.traffic) > 0) {
+    return { good: "Traffic times from Google Maps: coming through, last " + when(kept.at) + "." };
+  }
+  return { bad: "Traffic times from Google Maps: not given, last " + when(kept.at) +
+                ". The estimate used road times without traffic." };
+}
+
 function healthReport() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   /* THREE BUCKETS, because two were not enough.
@@ -13456,6 +13535,11 @@ function healthReport() {
      this is not the version just pasted, nothing else in this report is
      about the code that was meant to be running. */
   good.push("Script is " + SCRIPT_VERSION + ".");
+  try {
+    var lr = liveRouteHealth(JSON.parse(PropertiesService.getScriptProperties().getProperty("LIVE_ROUTE") || "{}"));
+    if (lr && lr.good) good.push(lr.good);
+    if (lr && lr.bad) bad.push(lr.bad);
+  } catch (err) {}
   try { var pl = periodHealthLine(new Date()); if (pl) bad.push(pl); } catch (err) {}
   try {
     var suProps = PropertiesService.getScriptProperties();

@@ -552,15 +552,41 @@ export function makeGas(opts) {
 
   const Logger = { log(...a) { logs.push(a); }, clear() { logs.length = 0; }, getLog: () => logs.map(String).join("\n") };
 
+  /* Google Maps' DirectionFinder, from v1.128.0. Each getDirections asks
+     mapsReply(question) for the answer; none set means Maps is not there,
+     which throws as a quota or permission failure would. */
+  let mapsReply = null;
+  const mapsAsked = [];
+  const Maps = {
+    DirectionFinder: { Mode: { DRIVING: "driving" } },
+    newDirectionFinder() {
+      const q = {};
+      const b = {
+        setOrigin(lat, lng) { q.from = [lat, lng]; return b; },
+        setDestination(lat, lng) { q.to = [lat, lng]; return b; },
+        setMode(m) { q.mode = m; return b; },
+        setDepart(d) { q.depart = d; return b; },
+        getDirections() {
+          mapsAsked.push(q);
+          if (!mapsReply) throw new Error("Service invoked too many times for one day: route.");
+          return mapsReply(q);
+        }
+      };
+      return b;
+    }
+  };
+
   return {
     ss, mail, triggers, logs, fetched, props, cache,
     setFetchReply(r) { fetchReply = r; },
+    setMapsReply(fn) { mapsReply = fn; },
+    mapsAsked,
     /* Stand somebody else in the critical section. */
     holdTheLock(yes) { lockHeldByAnother = yes !== false; },
     globals: {
       SpreadsheetApp, PropertiesService, CacheService, Session, Utilities,
       MailApp, GmailApp: MailApp, ScriptApp, LockService, UrlFetchApp,
-      ContentService, Logger,
+      ContentService, Logger, Maps,
       HtmlService: { createHtmlOutput: (h) => ({ _h: h, setTitle: () => ({}), getContent: () => h }) }
     }
   };

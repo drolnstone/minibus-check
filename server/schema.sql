@@ -413,3 +413,23 @@ CREATE TABLE IF NOT EXISTS driver_keys (
   name TEXT NOT NULL,
   made INTEGER NOT NULL
 );
+
+-- Where the bus is, from w2.72.0: one row per run, from the driving phone's
+-- board polls, and the drive times the sheet got from Google Maps for it.
+-- Rows older than a week go when a run's first fix arrives. The Worker also
+-- creates this itself.
+CREATE TABLE IF NOT EXISTS run_live (
+  trip          TEXT PRIMARY KEY,
+  lat           REAL,
+  lng           REAL,
+  acc           REAL,                 -- metres, as the phone reported it
+  fix_at        INTEGER NOT NULL DEFAULT 0,   -- ms, when the phone took the fix
+  next_id       TEXT,                 -- the called stop the route was asked to
+  next_ms       INTEGER,              -- ms, when the bus should be there
+  next_traffic  INTEGER,              -- 1 when that time counts traffic
+  routed_fix_at INTEGER NOT NULL DEFAULT 0,   -- the fix that route was asked from
+  ask_at        INTEGER NOT NULL DEFAULT 0,   -- ms, the last time a route was asked for
+  ask_next      TEXT,
+  legs          TEXT,                 -- JSON { "A>B": { sec, traffic, at } }
+  err           TEXT                  -- why the last ask failed, if it did
+);
