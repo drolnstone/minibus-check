@@ -239,6 +239,8 @@ export default async function (root) {
 
   s.test("no phone took it: once more a minute later, then the sheet emails it", async (a) => {
     const WED = "2026-10-21T18:01:00+01:00";
+    /* The sheet's drain on the same evening, not on the real clock. */
+    const LATER = "2026-10-21T18:03:00+01:00";
     const { db, env } = await fresh(WED);
     await driverApp(db);
     await passenger(db, "N03");
@@ -251,13 +253,13 @@ export default async function (root) {
     a.eq(((await W.cacheGet(env, "trail_retry")) || []).length, 1);
     await atTime("2026-10-21T18:02:10+01:00", () => W.retryTrails(env));
     a.eq(((await W.cacheGet(env, "trail_retry")) || []).length, 0, "tried once more only");
-    a.eq((await J(await post(env, { action: "drain", limit: 1 }))).trailMail.length, 0,
+    a.eq((await J(await atTime(LATER, () => post(env, { action: "drain", limit: 1 })))).trailMail.length, 0,
          "the health check's drain does not take it");
-    const mail = (await J(await post(env, { action: "drain", limit: 300, mail: true }))).trailMail;
+    const mail = (await J(await atTime(LATER, () => post(env, { action: "drain", limit: 300, mail: true })))).trailMail;
     a.eq(mail.length, 1);
     a.eq(mail[0].title, "Sent: Booking reminders");
     a.eq(JSON.stringify(mail[0].names), JSON.stringify(["Bro Arthur"]));
-    a.eq((await J(await post(env, { action: "drain", limit: 300, mail: true }))).trailMail.length, 0, "once");
+    a.eq((await J(await atTime(LATER, () => post(env, { action: "drain", limit: 300, mail: true })))).trailMail.length, 0, "once");
     G.reset();
   });
 
