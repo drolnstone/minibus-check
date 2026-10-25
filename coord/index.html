@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.130.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.131.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -716,7 +716,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.130.0";
+var PAGE_VERSION = "v1.131.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1544,7 +1544,7 @@ function paintRota(){
 function paintSunday(key){
   var r = rowFor(key);
   if(!r){ $("sundayBody").innerHTML = '<h1>'+esc(longDay(key))+'</h1><div class="card"><p class="tiny">Not on the live server’s rota.</p></div>'; return; }
-  var l = legs(r), past = key < D.today;
+  var l = legs(r), past = key < D.today, seats = (D.seats && D.seats[key]) || {};
   var st = String(r.status || "");
   var mode = st === "Cancelled/declined" ? "all" : st === "North cancelled" ? "North" : st === "South cancelled" ? "South" : "on";
   var h = '<p class="eyebrow">Rota '+statusTag(st)+(r.coordPending ? ' <span class="tag info">To the sheet</span>' : '')+'</p>' +
@@ -1561,6 +1561,12 @@ function paintSunday(key){
     h += '<div class="row"><span class="k">Driver</span><span class="v'+(g.sched?'':' none')+'">'+esc(g.sched || 'Nobody')+'</span>' + btn(lo, "Change") + '</div>';
     h += '<div class="row"><span class="k">Cover</span><span class="v'+(g.cover?'':' none')+'">'+esc(g.cover || 'Nobody')+'</span>' + btn(lo + "Cover", g.cover ? "Change" : "Add") + '</div>';
     h += '<div class="row"><span class="k">Bus</span><span class="v">'+(g.bus ? '<span class="plate">'+esc(g.bus)+'</span>' : '<span class="none">Not known</span>')+'</span>' + btn("bus", "Change") + '</div>';
+    /* The seats the Sunday card shows, and the way on to who holds them
+       (Asim, 25 Oct 2026, from v1.131.0). Only where the card has them. */
+    var sv = seats[rt];
+    if(sv && sv.seats && !off)
+      h += '<div class="row"><span class="k">Seats</span><span class="v"><span class="seats'+(sv.booked > sv.seats ? ' over' : '')+'">'+sv.booked+'/'+sv.seats+'</span></span>' +
+           '<span class="acts"><button class="mini" type="button" data-go="bookings/'+esc(key)+'">Bookings</button></span></div>';
     h += '</div>';
   });
   var notes = noteLines(r);
