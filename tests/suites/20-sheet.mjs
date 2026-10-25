@@ -527,7 +527,7 @@ export default function (root) {
     const m = dutyMail("Bro Adrian");
     const body = m.body || "";
     a.has(body, "Vehicle check: 09:32", body);
-    a.has(body, "Depart church: 09:52", body);
+    a.has(body, "Depart Church: 09:52", body);
     a.has(m.htmlBody || "", "Vehicle check: <b>09:32</b>");
   });
   s.test("the reminder's own route name, North Liverpool, finds the North timetable", (a) => {

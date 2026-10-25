@@ -1020,8 +1020,10 @@ if (want("T27")) {
 }
 
 /* T37 — v1.127.0 (Asim, 17 Oct 2026). Once the last booked stop is
-   answered, a pop-up with no buttons gives the time at church, then "Due at
-   church" once it has passed. A tap puts it away, so Undo stays in reach.
+   answered, a pop-up gives the time at Church, then "Due at Church" once it
+   has passed. From v1.129.0 (Asim, 25 Oct 2026) it reads "Do not close until
+   Church", a tap on it does nothing, Cancel puts it away so Undo is in reach,
+   and it comes back 60 s later.
    It closes when the run ends back inside the fence, and the end carries the
    moment the bus came back, not three minutes later. */
 if (want("T37")) {
@@ -1033,7 +1035,8 @@ if (want("T37")) {
     const m = document.getElementById("churchModal");
     const h = document.getElementById("churchTitle");
     return { up: m.classList.contains("is-on"), text: h ? h.textContent.trim() : "",
-             buttons: m.querySelectorAll("button").length };
+             buttons: m.querySelectorAll("button").length,
+             keep: (m.querySelector(".church-keep") || {}).textContent || "" };
   });
   const again = async () => { await me.clickId("stopsBack"); await me.toStops(); await me.close(); await me.wait(1500); };
   const before = await pop();
@@ -1044,20 +1047,25 @@ if (want("T37")) {
   await me.shot("T37-church");
   await me.jump(45); await me.wait(11000);
   const due = await pop();
-  await me.pg.evaluate(() => document.getElementById("churchModal").click()); await me.wait(400);
+  await me.pg.evaluate(() => document.getElementById("churchTitle").click()); await me.wait(400);
+  const stays = await pop();
+  await me.pg.evaluate(() => document.querySelector("[data-churchcancel]").click()); await me.wait(400);
   const away = await pop();
   const undo = await me.pg.evaluate(() => !!document.querySelector('[data-tripundo="N01"]'));
+  await me.jump(1); await me.wait(11000);
+  const returned = await pop();
   await me.jump(1); await me.emit(AWAY); await me.wait(500);
   await me.jump(1); await me.emit(CHURCH); await me.wait(500);
   const back = await me.pg.evaluate(() => Date.now());
   await me.jump(4); await me.emit(CHURCH); await me.wait(1500);
   const end = me.posted.map(p => p.trip && (p.trip.events || []).find(e => e.event === "end")).find(Boolean) || {};
   const gone = await pop();
-  check("T37", "after the last pickup the church pop-up gives the time, then Due at church; a tap puts it away; the end is the time back inside",
-        !before.up && up.up && up.text === "Church about 10:58" && up.buttons === 0 &&
-        due.up && due.text === "Due at church 10:58" && !away.up && undo &&
+  check("T37", "after the last pickup the church pop-up says Do not close until Church and gives the time, then Due at Church; a tap leaves it up; Cancel puts it away for Undo and it is back a minute later; the end is the time back inside",
+        !before.up && up.up && up.text === "Church about 10:58" && up.buttons === 1 &&
+        up.keep === "Do not close until Church" &&
+        due.up && due.text === "Due at Church 10:58" && stays.up && !away.up && undo && returned.up &&
         !gone.up && Math.abs(Number(end.at) - back) < 60000 && !me.errs.length,
-        JSON.stringify({ tapped, before, up, due, away: away.up, undo, gone: gone.up, endAt: end.at, back, errs: me.errs }));
+        JSON.stringify({ tapped, before, up, due, stays: stays.up, away: away.up, undo, returned: returned.up, gone: gone.up, endAt: end.at, back, errs: me.errs }));
   await me.ctx.close();
 }
 

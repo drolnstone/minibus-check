@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.70.0";
+const SCRIPT_VERSION = "w2.71.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5862,7 +5862,7 @@ async function wakeNotLeft(env) {
     /* Critical, so on the coordinators' trail (Asim): someone may need to
        ring the driver. */
     await trail(env, { once: "p|late|" + key + "|" + route,
-                       title: route + ": No word yet that the bus has left church",
+                       title: route + ": No word yet that the bus has left Church",
                        body: "To " + trailPhones(r, "passenger") + "." });
   }
   return n;
@@ -7017,8 +7017,8 @@ function sentTitle(tag, driver, where) {
   const route = (where && where.route) || "";
   const pre = (t) => (route ? route + ": " : "") + t;
   if (k === "off") return pre(p[1] === londonKey(new Date()) ? "No bus today" : "No bus on Sunday");
-  if (k === "late") return pre("No word yet that the bus has left church");
-  if (k === "left") return pre("The bus has left church");
+  if (k === "late") return pre("No word yet that the bus has left Church");
+  if (k === "left") return pre("The bus has left Church");
   if (k === "next") return pre("Be at your stop");
   if (k === "past") return pre("The bus has gone past");
   if (k === "empty") return pre("Nobody there");
@@ -7478,7 +7478,7 @@ async function pushWhat(env, endpoint, opts) {
       if (due && now >= due.getTime() && now - due.getTime() < 10 * 60000) {
         return { ok: true, tag: "start", url: "./",
                  title: "Time to set off",
-                 body: "Your " + route + " run is due to leave church" + (when ? " at " + when : " now") +
+                 body: "Your " + route + " run is due to leave Church" + (when ? " at " + when : " now") +
                        "." };
       }
       if (due && now - due.getTime() >= 10 * 60000) {
@@ -7646,11 +7646,11 @@ async function pushWhat(env, endpoint, opts) {
              body: stop + ". " +
                    (p.etaWords ? "Around " + p.etaWords + ". " : "") +
                    (p.lastStop ? "It has just left " + p.lastStop + "."
-                               : "It has left church.") };
+                               : "It has left Church.") };
   }
   if (p.started) {
     return { ok: true, tag: "bus", url: "./",
-             title: "The bus has left church",
+             title: "The bus has left Church",
              body: "Yours is timetabled " + (p.scheduled || "shortly") + " at " + stop + "." };
   }
 
@@ -7661,7 +7661,7 @@ async function pushWhat(env, endpoint, opts) {
     try { dueAt = notLeftDue(await getStops(env), runSunday(), p.route, Date.now()); } catch (e) {}
     if (dueAt) {
       return { ok: true, tag: "bus", url: "./",
-               title: "No word yet that your bus has left church",
+               title: "No word yet that your bus has left Church",
                body: "It was due to leave at " + dueAt + "." +
                      (p.scheduled ? " Yours is timetabled " + p.scheduled + " at " + String(p.stop || "your stop") + "." : "") };
     }
@@ -11482,7 +11482,7 @@ async function actDefect(env, me, act) {
                   (action ? ". " + action : "") + "." };
 }
 
-const EVENT_WORDS = { start: "left church", end: "back at church" };
+const EVENT_WORDS = { start: "left Church", end: "back at Church" };
 
 async function actFix(env, me, act) {
   const key = anyToKey(act.sunday);

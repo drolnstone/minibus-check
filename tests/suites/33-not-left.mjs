@@ -91,7 +91,7 @@ export default async function (root) {
       a.eq(lastOf(db, PAX_S), "", "the South passenger was told about North, or South before it was due");
       a.eq(await W.wakeNotLeft(env), 0, "told twice");
       const out = await W.pushWhat(env, PAX_N);
-      a.eq(out.title, "No word yet that your bus has left church");
+      a.eq(out.title, "No word yet that your bus has left Church");
       a.has(out.body, "09:52");
       a.has(out.body, "10:52", "his own time was lost");
       a.has(out.body, "It was due to leave at");

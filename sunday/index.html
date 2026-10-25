@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.128.1 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.129.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -60,7 +60,7 @@
       href="https://drolnstone.github.io/minibus-check/icon-sunday-180.png">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Sunday Bus · RCCG Dominion Assembly Liverpool">
-<meta property="og:description" content="Book your seat on the church minibus. Tap your stop, say how many are boarding.">
+<meta property="og:description" content="Book your seat on the Church minibus. Tap your stop, say how many are boarding.">
 <meta property="og:url" content="https://drolnstone.github.io/minibus-check/sunday/">
 <meta property="og:image" content="https://drolnstone.github.io/minibus-check/icon-sunday-512.png">
 <meta property="og:image:width" content="512">
@@ -614,7 +614,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
     </span>
   </div>
 
-  <p class="eyebrow">Getting you to church</p>
+  <p class="eyebrow">Getting you to Church</p>
   <h1>Sunday Bus</h1>
   <!-- Frozen while the timetable scrolls underneath.
 
@@ -753,7 +753,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.128.1";
+var PAGE_VERSION = "v1.129.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -1976,8 +1976,8 @@ function liveRiding(l){
 function churchWords(c){
   if(!c) return "";
   if(c.state==="eta") return "Church about <b>"+esc(c.words)+"</b>";
-  if(c.state==="due") return "Due at church "+esc(c.words)+". Arrival not recorded.";
-  if(c.state==="at") return "At church at "+esc(c.words);
+  if(c.state==="due") return "Due at Church "+esc(c.words)+". Arrival not recorded.";
+  if(c.state==="at") return "At Church at "+esc(c.words);
   if(c.state==="done") return "The bus has finished its run";
   return "";
 }
@@ -2162,7 +2162,7 @@ function paintLive(){
         (live.lastStop
           ? ". Left "+esc(live.lastStop)+
             (live.lastAtWords? " "+esc(live.lastAtWords) : "")+"."
-          : ". Left church"+
+          : ". Left Church"+
             (live.startedAtWords? " "+esc(live.startedAtWords) : "")+".");
   } else if(live.mine==="ended"){
     head="The bus has finished its run";
@@ -2184,7 +2184,7 @@ function paintLive(){
        up as progress. */
     cls="live-warn";
     head="No update since it left";
-    sub="Left church"+(live.startedAtWords? " at "+esc(live.startedAtWords) : "")+
+    sub="Left Church"+(live.startedAtWords? " at "+esc(live.startedAtWords) : "")+
         ", and no stop has been marked since. Yours is timetabled "+
         esc(live.scheduled)+". "+turnTo("Still waiting?");
   } else if(!live.lastStop){
@@ -2192,7 +2192,7 @@ function paintLive(){
 
        No warning colour: a bus that has set off on time is good news. */
     head="On its way";
-    sub="Left church"+(live.startedAtWords? " at "+esc(live.startedAtWords) : "")+
+    sub="Left Church"+(live.startedAtWords? " at "+esc(live.startedAtWords) : "")+
         ". Yours is timetabled "+esc(live.scheduled)+".";
   } else {
     /* quiet, wild: it set off, it marked a stop, and then it went silent.
@@ -2574,7 +2574,7 @@ function paint(){
   var arr=ARRIVALS.filter(function(s){ return !s.route || s.route===route; });
   if(!arr.length) arr=ARRIVALS;
   if(arr.length){
-    html+='<div class="group-label">Arriving at church</div>';
+    html+='<div class="group-label">Arriving at Church</div>';
     arr.forEach(function(s){
       html+='<div class="stop stop-arrival">'+
               '<span class="stop-time">'+esc(s.time)+'</span>'+

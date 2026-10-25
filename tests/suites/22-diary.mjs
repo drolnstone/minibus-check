@@ -117,7 +117,7 @@ export default async function (root) {
 
   s.test("the bus moving replaces the timetable with where it actually is", async (a) => {
     const d = await day(TODAY);
-    a.has(d["09:53 just left church"].all, "left church");
+    a.has(d["09:53 just left church"].all, "left Church");
     a.ok(/\d+ min|stop now/.test(d["09:53 just left church"].title),
          "no estimate a minute after it set off: " + d["09:53 just left church"].title);
     a.has(d["10:16 just picked up"].title, "Picked up");
@@ -130,7 +130,7 @@ export default async function (root) {
     for (const h of ["11:05 run ended", "13:00 early afternoon",
                      "15:20 the nudge window", "19:00 Sunday evening"]) {
       a.hasnt(d[h].all, "Picked up", h + ": " + d[h].title);
-      a.hasnt(d[h].all, "left church", h + ": " + d[h].title);
+      a.hasnt(d[h].all, "left Church", h + ": " + d[h].title);
       a.hasnt(d[h].all, "Be at your stop", h + ": " + d[h].all);
       a.has(d[h].title, "Book your seat", h + ": " + d[h].title);
     }
@@ -154,7 +154,7 @@ export default async function (root) {
   s.test("and he is never shown this morning's bus, which is not his", async (a) => {
     const d = await day(NEXT);
     for (const h of ["09:53 just left church", "10:10 on its way", "10:16 just picked up"]) {
-      a.hasnt(d[h].all, "left church", h + ": " + d[h].all);
+      a.hasnt(d[h].all, "left Church", h + ": " + d[h].all);
       a.hasnt(d[h].all, "Picked up", h + ": " + d[h].all);
     }
     a.has(d["11:05 run ended"].title, "booked", "his own seat is still his: " +

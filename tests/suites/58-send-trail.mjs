@@ -127,7 +127,7 @@ export default async function (root) {
     await passenger(db, "N03");
     await atTime(AT, () => W.wakeNotLeft(env));
     await atTime("2026-10-11T10:00:00+01:00", () => W.wakeNotLeft(env));
-    const t = (await trailOf(env)).filter((m) => m.title === "Sent: North: No word yet that the bus has left church");
+    const t = (await trailOf(env)).filter((m) => m.title === "Sent: North: No word yet that the bus has left Church");
     a.eq(t.length, 1, JSON.stringify(await trailOf(env)));
     a.eq(t[0].body, "To 1 passenger phone.");
   });

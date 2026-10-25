@@ -1,14 +1,16 @@
 MINIBUS
 =======
-  pages v1.128.1 · server w2.70.0 · sheet v1.126.0
+  pages v1.129.0 · server w2.71.0 · sheet v1.127.0
 
-YOU ARE ON   app v1.128.1 · server w2.69.0 · sheet v1.125.0
-GOING TO     app v1.128.1 · server w2.70.0 · sheet v1.126.0
+YOU ARE ON   app v1.128.1 · server w2.70.0 · sheet v1.126.0
+GOING TO     app v1.129.0 · server w2.71.0 · sheet v1.127.0
 
-Coordinator "Sent:" notices: when no coordinator-app phone takes one, it
-goes to the driver app; when no phone at all takes it, it is tried again a
-minute later and then emailed to the coordinator address. The Alerts line it
-is about reads "Coordinator notice: N phones".
+Driver app, after the last booked stop: the Church pop-up reads "Do not
+close until Church", then the time, then Cancel. A tap on it does nothing.
+Cancel puts it away for Undo; it comes back once the bus moves, a minute
+after Cancel, when an answer changes, or when the app is opened again.
+
+Church has a capital C on every screen, alert and email.
 
 GOING LIVE
 ----------
@@ -19,8 +21,8 @@ Merge the pull request. The pages go live by themselves.
 AFTER IT (give it ten minutes)
 --------
 
-B. The foot of the apps reads  app v1.128.1 · server w2.70.0 · sheet
-   v1.126.0 .
+B. The foot of the apps reads  app v1.129.0 · server w2.71.0 · sheet
+   v1.127.0 .
 
 
 A FRESH ADDRESS (not on a Sunday, after B and C)

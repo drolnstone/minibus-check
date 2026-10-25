@@ -128,7 +128,7 @@ if (want("P3")) {
   await me.shot("P3-estimate-leaving-church");
   check("P3", "straight out of church the panel gives the estimate, in bold, with no timetabled time",
         big === "12 min" && bold.indexOf("10:41") > -1 && sub.indexOf("timetabled") === -1 &&
-        sub.indexOf("4 minutes behind schedule") > -1 && sub.indexOf("Left church 10:25") > -1,
+        sub.indexOf("4 minutes behind schedule") > -1 && sub.indexOf("Left Church 10:25") > -1,
         "big '" + big + "', sub '" + sub + "', bold " + JSON.stringify(bold));
   check("P3b", "his own stop's row shows the estimate in bold, and the other rows the timetable in plain",
         rowTime.text === "10:41" && Number(rowTime.weight) >= 700 && other.text === "10:36" && Number(other.weight) < 600,
@@ -264,8 +264,8 @@ if (want("P11")) {
     await me.ctx.close();
   }
   const want11 = ["Picked up at 10:42 | Church about 10:58",
-                  "Picked up at 10:42 | Due at church 10:58. Arrival not recorded.",
-                  "Picked up at 10:42 | At church at 10:57",
+                  "Picked up at 10:42 | Due at Church 10:58. Arrival not recorded.",
+                  "Picked up at 10:42 | At Church at 10:57",
                   "Picked up at 10:42 | The bus has finished its run"];
   check("P11", "picked up: Church about, Due at church, At church at, or finished with no time",
         got.join("\n") === want11.join("\n"), got.join(" / "));

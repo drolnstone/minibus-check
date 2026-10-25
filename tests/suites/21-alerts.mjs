@@ -778,7 +778,7 @@ export default async function (root) {
          has a shape of its own — "in about 16 min" — and that is what must not
          appear before the cutoff. */
       a.hasnt(all, "in about", "it gave him a live estimate before bookings closed: " + all);
-      a.hasnt(all, "left church", "or told him the bus was moving");
+      a.hasnt(all, "left Church", "or told him the bus was moving");
       a.hasnt(all, "gone past");
     });
   });
