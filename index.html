@@ -1780,7 +1780,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.129.0";
+var APP_VERSION = "v1.130.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -7086,6 +7086,7 @@ function tripTap(stop,kind){
   trip.lastAt=at; trip.lastStop=stop.stop;
   tripSaveState();
   tripQueue({ event:kind, stopId:stop.id, at:at });
+  pickEtaHold(stop.id, kind);
   tripPaint();
 }
 
@@ -7149,7 +7150,27 @@ function tripUndo(stop){
   trip.undone[stop.id]=undoAt;
   tripSaveState();
   tripQueue({ event:"undo", undoes:was.event, stopId:stop.id, at:undoAt });
+  pickEtaHold(stop.id, "");
   tripPaint();
+}
+
+/* DROPPED ON EVERY TAP, from v1.130.0 (Asim, 25 Oct 2026). The estimates
+   held from before a tap belong to the run as it was, and on 25 Oct they put
+   Ottley Street a minute away the moment Westbrook Road was tapped. Until a
+   board answer shows the server has this tap (or this Undo), there are no
+   estimates, and only the bus pulling up at a stop raises its pop-up. */
+var pickEtaWait = null;     /* { id, event } the server has to show first */
+function pickEtaHold(id, event){
+  rotaStopEtas = {};
+  pickEtaWait = { id:String(id), event:String(event||"") };
+}
+function pickEtaHeard(served){
+  if(!pickEtaWait) return true;
+  var got = served && served[pickEtaWait.id];
+  var ev = got ? String(got.event||"") : "";
+  var ok = pickEtaWait.event ? ev === pickEtaWait.event : (!got || ev === "undo");
+  if(ok) pickEtaWait = null;
+  return ok;
 }
 
 /* ---- booking counts on their own ----------------------------------------
@@ -7201,6 +7222,19 @@ var rotaStopEtas={};
    taken in a round include its test seats, and go when the round does. */
 var rotaBoardRound=0;
 
+/* WHERE THE BUS IS, with every board poll, from v1.130.0 (Asim, 25 Oct
+   2026): the last location fix, on the run this phone is driving. The
+   server takes it only from the phone that holds the run, and works the
+   estimate out from it with Google Maps' drive times. No fix in the last
+   twenty seconds, nothing is sent, and the estimate is the stop taps'. */
+function boardFixPart(route){
+  var f = pickFix;
+  if(!f || Date.now() - f.at > 20000) return "";
+  if(!trip.started || trip.ended || !trip.route || trip.route !== route) return "";
+  return "&lat="+f.lat.toFixed(6)+"&lng="+f.lng.toFixed(6)+
+         "&acc="+Math.round(f.acc||0)+"&fixAge="+Math.max(0, Date.now() - f.at);
+}
+
 var rotaCountsAgain=null;
 /* Also learned here, because a driver can spend a whole morning on the stops
    screen without the rota ever being fetched. */
@@ -7217,7 +7251,8 @@ function rotaCountsFetch(route,cb){
   var boardAskedAt = Date.now();
   var who=(st.driver||"").trim();
   callFetch(LIVE_ENDPOINT+"?board=1&route="+encodeURIComponent(route)+
-            (who ? "&phone="+encodeURIComponent(myPhone())+"&driver="+encodeURIComponent(who) : ""),
+            (who ? "&phone="+encodeURIComponent(myPhone())+"&driver="+encodeURIComponent(who) : "")+
+            (who ? boardFixPart(route) : ""),
             {method:"GET",redirect:"follow"}, POLL_TIMEOUT)
     .then(function(r){return r.text();})
     .then(function(t){
@@ -7242,6 +7277,10 @@ function rotaCountsFetch(route,cb){
          which on the row. An older live server sends nothing here and the
          list quietly goes back to timetable times. */
       rotaStopEtas = (out.etas && typeof out.etas === "object") ? out.etas : {};
+      /* None until the server has the last tap (pickEtaHold). Only an answer
+         about the run's own route can say so. */
+      if(pickEtaWait && !(out.trip && trip.route && route === trip.route && pickEtaHeard(out.trip.served)))
+        rotaStopEtas = {};
       rotaCountsAt     = Date.now();
 
       /* Who has checked what today, keyed by reg. The answer to "has anyone
@@ -8624,6 +8663,7 @@ function rotaPaintStops(){
       if(e.target && e.target.closest && e.target.closest("a,button")) return;
       if(!pickLeft(true)) return;
       pickStopId=this.getAttribute("data-pickopen");
+      pickWhy="tap";
       pickSync();
     });
   });
@@ -9312,6 +9352,7 @@ function pinGateFocus(){
 var PICK_CLOSE_MIN = 1;     /* TRIP_IMMINENT_MINUTES on the server */
 var pickNext = null;        /* the next booked stop, as of the last paint */
 var pickStopId = "";        /* the stop the pop-up is up for, until answered */
+var pickWhy = "";           /* what put it up: "eta", "near" or "tap" */
 var pickPeople = null;      /* { trip, at, people:{ stopId:[{phone,seats}] } } */
 var pickBusy = false;
 var pickDrawn = "";         /* what is on it, so a poll never rebuilds it under a thumb */
@@ -9346,11 +9387,30 @@ function pickLeft(tapped){
   return !speedKnown && tripNow() - ref >= PICK_LEAVE_MS;
 }
 
-function pickDue(s){
-  if(!pickLeft()) return false;
+/* Why the pop-up should come up for this stop now: "near" (stopped at its
+   pin), "eta" (a minute or less away) or "" (not yet). From v1.130.0 (Asim,
+   25 Oct 2026: Ottley Street came up straight after Westbrook Road) the
+   estimate only raises it while the phone's location, when it has one,
+   puts the bus within PICK_FAR_M of the stop's pin. */
+var PICK_FAR_M = 1000;
+function pickDueWhy(s){
+  if(!pickLeft()) return "";
+  if(pickHere(s)) return "near";
   var at = pickEta(s);
-  if(at && Math.round((at - tripNow())/60000) <= PICK_CLOSE_MIN) return true;
-  return pickHere(s);
+  if(!at || Math.round((at - tripNow())/60000) > PICK_CLOSE_MIN) return "";
+  var m = pickFar(s);
+  return (m === null || m <= PICK_FAR_M) ? "eta" : "";
+}
+function pickDue(s){ return !!pickDueWhy(s); }
+/* Metres from the bus to the stop's pin, on a recent fix sure to within
+   PICK_FAR_M. null with no such fix or no pin: the estimate decides alone. */
+function pickFar(s){
+  var f = pickFix;
+  var lat = Number(s && s.lat), lng = Number(s && s.lng);
+  if(!f || Date.now() - f.at > 15000 || f.acc > PICK_FAR_M) return null;
+  if(!s || s.lat === "" || s.lat == null || s.lng === "" || s.lng == null ||
+     !isFinite(lat) || !isFinite(lng)) return null;
+  return geoTo(f.lat, f.lng, { lat:lat, lng:lng });
 }
 /* Stopped at the stop, by the phone's location, for three seconds. Not on
    a stale fix, a fix too vague to say, a phone that does not report its
@@ -9389,10 +9449,22 @@ function pickClose(){
    seconds while it is open, because "a minute away" arrives between polls. */
 function pickSync(){
   var s = rotaStopsOpen ? pickNext : null;
-  if(!s){ pickStopId = ""; pickClose(); return; }
-  /* Once up for a stop it stays up for it, whatever the estimate does next.
-     Only an answer, or the stop no longer being next, takes it down. */
-  if(pickStopId !== s.id) pickStopId = pickDue(s) ? s.id : "";
+  if(!s){ pickStopId = ""; pickWhy = ""; pickClose(); return; }
+  /* Once up for a stop it stays up for it. Only an answer, or the stop no
+     longer being next, takes it down; and from v1.130.0 one the estimate put
+     up goes back down when a fresh estimate puts the stop more than a minute
+     away, unless the bus is stopped at it. */
+  if(pickStopId === s.id && pickWhy === "eta"){
+    var at = pickEta(s);
+    if(at && Math.round((at - tripNow())/60000) > PICK_CLOSE_MIN && !pickHere(s)){
+      pickStopId = ""; pickWhy = "";
+    }
+  }
+  if(pickStopId !== s.id){
+    var why = pickDueWhy(s);
+    pickStopId = why ? s.id : "";
+    pickWhy = why;
+  }
   if(!pickStopId){ pickClose(); return; }
   pickPaint(s);
 }

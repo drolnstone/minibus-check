@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.71.0";
+const SCRIPT_VERSION = "w2.72.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1042,6 +1042,271 @@ async function bookedStopIds(env, key, route) {
     if (Number(b.seats) > 0) out.add(String(b.stopId));
   }
   return out;
+}
+
+/* ==========================================================================
+   THE ESTIMATE FROM WHERE THE BUS IS, from w2.72.0 (Asim, 25 Oct 2026)
+
+   Until now the estimate only moved when a stop was tapped: the timetable,
+   moved by how early or late the last marked stop was. A long leg with
+   nothing to tap left it standing still.
+
+   Now the driving phone sends where it is with every board poll, and once
+   a minute this server asks the sheet, which asks Google Maps in Asim's own
+   Apps Script (no key, no card), how long the drive is from there to the
+   next stop that will be called at, in today's traffic. Every ten minutes it
+   also asks for each leg after that, one stop to the next, timed for when the
+   bus should be there. Google only gives a time in traffic for a route that
+   does not stop on the way, which is why it is asked one leg at a time.
+
+       next called stop   when the bus was there + the drive in traffic
+       each one after it  the one before + dwellSeconds + that leg
+
+   A leg not asked for yet takes the timetable's own gap, less what skipped
+   stops save, the same increment the tap estimate uses. A stop nobody booked
+   is placed by the timetable from the called stop before it.
+
+   FALLS BACK, never guesses. No fix for two minutes (phone locked, no
+   signal, app closed), a route the sheet could not answer, or the next
+   called stop no longer the one the route was asked for (a tap since): the
+   estimate is the tap estimate, exactly as before. One answer for the
+   driver's list, the pop-up, the passenger page and the alerts, because all
+   four ask liveEtaMap through stopEtaMs.
+
+   run_live: one row per run, made by this Worker on first use.
+   ========================================================================== */
+const LIVE_FRESH_MS = 2 * 60000;       /* a fix or a route older than this is not used */
+const LIVE_ROUTE_EVERY_MS = 60000;     /* the drive to the next stop, at most this often */
+const LIVE_LEG_EVERY_MS = 10 * 60000;  /* each later leg, at most this often */
+const LIVE_FIX_EVERY_MS = 15000;       /* a fix is written at most this often */
+const LIVE_MAX_ACC_M = 200;            /* a vaguer fix is not used */
+const LIVE_ROUTE_MS = 8000;            /* how long the sheet is waited for */
+const LIVE_LEGS_PER_ASK = 4;
+
+let runLiveReady = false;
+async function ensureRunLive(env) {
+  if (runLiveReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS run_live (" +
+    "  trip TEXT PRIMARY KEY," +
+    "  lat REAL, lng REAL, acc REAL," +
+    "  fix_at INTEGER NOT NULL DEFAULT 0," +
+    "  next_id TEXT, next_ms INTEGER, next_traffic INTEGER," +
+    "  routed_fix_at INTEGER NOT NULL DEFAULT 0," +
+    "  ask_at INTEGER NOT NULL DEFAULT 0, ask_next TEXT," +
+    "  legs TEXT, err TEXT)").run();
+  runLiveReady = true;
+}
+
+async function liveGet(env, trip) {
+  if (!trip) return null;
+  try {
+    await ensureRunLive(env);
+    const r = await env.DB.prepare("SELECT * FROM run_live WHERE trip=?").bind(String(trip)).first();
+    if (!r) return null;
+    let legs = {};
+    try { legs = JSON.parse(r.legs || "{}") || {}; } catch (e) { legs = {}; }
+    return Object.assign({}, r, { legs });
+  } catch (e) { return null; }
+}
+
+/* Where the driving phone says it is. Only a sure enough, recent fix. */
+async function liveFix(env, trip, fix, now) {
+  const lat = Number(fix && fix.lat), lng = Number(fix && fix.lng);
+  /* By its age, not the phone's clock, which may be minutes out. */
+  const acc = Number(fix && fix.acc) || 0;
+  const at = (fix && fix.at) ? Number(fix.at) : now - Math.max(0, Number(fix && fix.age) || 0);
+  if (!trip || !isFinite(lat) || !isFinite(lng) || (lat === 0 && lng === 0)) return null;
+  if (acc > LIVE_MAX_ACC_M || at > now + 60000 || now - at > LIVE_FRESH_MS) return null;
+  await ensureRunLive(env);
+  const had = await liveGet(env, trip);
+  if (had && Number(had.fix_at) >= at) return had;
+  if (had && at - Number(had.fix_at) < LIVE_FIX_EVERY_MS) return had;
+  if (!had) {
+    try {
+      await env.DB.prepare("DELETE FROM run_live WHERE fix_at < ?").bind(now - 7 * 86400000).run();
+    } catch (e) {}
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO run_live (trip, lat, lng, acc, fix_at) VALUES (?,?,?,?,?)")
+      .bind(String(trip), lat, lng, acc, at).run();
+  } else {
+    await env.DB.prepare("UPDATE run_live SET lat=?, lng=?, acc=?, fix_at=? WHERE trip=? AND fix_at<?")
+      .bind(lat, lng, acc, at, String(trip), at).run();
+  }
+  return await liveGet(env, trip);
+}
+
+/* The stops the bus will pull into after `from`, in run order: every
+   pickup somebody booked, and the church. */
+function liveCalled(ordered, from, booked) {
+  const out = [];
+  for (let i = from + 1; i < ordered.length; i++) {
+    const k = String(ordered[i].kind || "pickup");
+    if (k === "arrival" || (k === "pickup" && booked.has(String(ordered[i].id)))) out.push(i);
+  }
+  return out;
+}
+
+const liveLegKey = (a, b) => String(a.id) + ">" + String(b.id);
+
+function liveFrom(ordered, lastStopId) {
+  if (!lastStopId) return 0;
+  const i = ordered.findIndex((s) => String(s.id) === String(lastStopId));
+  return i < 0 ? 0 : i;
+}
+
+/* The tap estimate for one stop, in ms. Only its differences are used here,
+   so the run's offset is left out. */
+function tapEtaNoOffset(key, ordered, lastStopId, i, booked, set) {
+  const m = londonMoment(key, ordered[i].time);
+  if (!m) return null;
+  return m.getTime() - etaSavedMinutes(key, ordered, lastStopId, ordered[i].id, booked, set) * 60000;
+}
+
+/* Every stop ahead of the bus, id to ms, from where it is. null when the
+   live estimate cannot be used and the tap estimate stands. */
+function liveEtaMapFrom(key, ordered, lastStopId, booked, set, live, now) {
+  if (!live || !live.next_id || !(Number(live.next_ms) > 0)) return null;
+  if (now - Number(live.fix_at) > LIVE_FRESH_MS) return null;
+  if (now - Number(live.routed_fix_at) > LIVE_FRESH_MS) return null;
+  const from = liveFrom(ordered, lastStopId);
+  const called = liveCalled(ordered, from, booked);
+  if (!called.length || String(ordered[called[0]].id) !== String(live.next_id)) return null;
+
+  const tap = (i) => tapEtaNoOffset(key, ordered, lastStopId, i, booked, set);
+  const dwell = set.dwellSeconds * 1000;
+  const legs = live.legs || {};
+  const out = {};
+  let prev = called[0], at = Number(live.next_ms);
+  out[ordered[prev].id] = at;
+  for (let k = 1; k < called.length; k++) {
+    const i = called[k];
+    const leg = legs[liveLegKey(ordered[prev], ordered[i])];
+    let step = null;
+    if (leg && Number(leg.sec) >= 0) step = dwell + Number(leg.sec) * 1000;
+    else {
+      const a = tap(prev), b = tap(i);
+      if (a !== null && b !== null) step = Math.max(0, b - a);
+    }
+    if (step === null) break;
+    at += step;
+    out[ordered[i].id] = at;
+    prev = i;
+  }
+
+  /* A stop nobody booked, from the called stop before it, never after the
+     called stop after it. One before the next called stop counts back. */
+  const first = called[0];
+  for (let i = from + 1; i < ordered.length; i++) {
+    const s = ordered[i];
+    if (s.id in out) continue;
+    const k = String(s.kind || "pickup");
+    if (k !== "pickup" && k !== "arrival") continue;
+    const own = tap(i);
+    if (own === null) continue;
+    let p = -1, q = -1;
+    for (let j = i - 1; j > from; j--) if (ordered[j].id in out) { p = j; break; }
+    for (let j = i + 1; j < ordered.length; j++) if (ordered[j].id in out) { q = j; break; }
+    let v = null;
+    if (p >= 0) { const a = tap(p); if (a !== null) v = out[ordered[p].id] + Math.max(0, own - a); }
+    else if (q === first) { const b = tap(q); if (b !== null) v = out[ordered[q].id] - Math.max(0, b - own); }
+    if (v === null) continue;
+    if (q >= 0) v = Math.min(v, out[ordered[q].id]);
+    out[s.id] = Math.max(now, v);
+  }
+  return out;
+}
+
+async function liveEtaMap(env, key, route, all, state, booked, set) {
+  if (!state || !state.trip || !state.started || state.ended) return null;
+  const live = await liveGet(env, state.trip);
+  if (!live) return null;
+  return liveEtaMapFrom(key, stopsOnRoute(all, route), state.lastStopId, booked, set, live, Date.now());
+}
+
+/* ONE STOP'S ESTIMATE, in ms: from where the bus is when that can be used,
+   the tap estimate when not. The caller has already checked the run may be
+   projected at all. */
+async function stopEtaMs(env, key, route, all, state, stopId, booked, set, liveMap) {
+  const ordered = stopsOnRoute(all, route);
+  const stop = ordered.find((x) => String(x.id) === String(stopId));
+  if (!stop) return null;
+  const map = liveMap !== undefined ? liveMap : await liveEtaMap(env, key, route, all, state, booked, set);
+  if (map && map[stop.id] !== undefined) return map[stop.id];
+  const sched = londonMoment(key, stop.time);
+  if (!sched) return null;
+  const saved = etaSavedMinutes(key, ordered, state.lastStopId, stop.id, booked, set);
+  return sched.getTime() + Number(state.offset) * 60000 - saved * 60000;
+}
+
+/* ASK FOR THE ROUTE, at most once a minute per run, and at once when the
+   next called stop changes. The sheet answers { ok, next:{sec,traffic},
+   legs:{ key:{sec,traffic} } }. A failed ask is not repeated for a minute,
+   and leaves the last good answer to age out on its own. */
+async function liveRoute(env, key, route, all, state, booked, set, now) {
+  if (!state || !state.trip || !state.started || state.ended) return false;
+  const live = await liveGet(env, state.trip);
+  if (!live || now - Number(live.fix_at) > LIVE_FRESH_MS) return false;
+  const ordered = stopsOnRoute(all, route);
+  const from = liveFrom(ordered, state.lastStopId);
+  const called = liveCalled(ordered, from, booked);
+  if (!called.length) return false;
+  const N = ordered[called[0]];
+  if (!hasPin(N)) return false;
+
+  const same = String(live.next_id || "") === String(N.id);
+  const asked = String(live.ask_next || "") === String(N.id) && now - Number(live.ask_at) < LIVE_ROUTE_EVERY_MS;
+  if (asked) return false;
+  if (same && now - Number(live.routed_fix_at) < LIVE_ROUTE_EVERY_MS) return false;
+
+  /* Claimed before asking, so polls five seconds apart do not ask twice. */
+  const claim = await env.DB.prepare(
+    "UPDATE run_live SET ask_at=?, ask_next=? WHERE trip=? AND ask_at=?")
+    .bind(now, String(N.id), String(state.trip), Number(live.ask_at) || 0).run();
+  if (!(claim && claim.meta && claim.meta.changes)) return false;
+
+  const offset = Number(state.offset) || 0;
+  const tapAbs = (i) => {
+    const v = tapEtaNoOffset(key, ordered, state.lastStopId, i, booked, set);
+    return v === null ? now : v + offset * 60000;
+  };
+  /* Four legs an ask at most, nearest first, so the sheet answers well
+     inside LIVE_ROUTE_MS; the rest are asked on the minutes after. */
+  const legs = [];
+  for (let k = 1; k < called.length && legs.length < LIVE_LEGS_PER_ASK; k++) {
+    const a = ordered[called[k - 1]], b = ordered[called[k]];
+    if (!hasPin(a) || !hasPin(b)) continue;
+    const lk = liveLegKey(a, b), had = live.legs[lk];
+    if (had && now - Number(had.at) < LIVE_LEG_EVERY_MS) continue;
+    legs.push({ key: lk, from: { lat: a.lat, lng: a.lng }, to: { lat: b.lat, lng: b.lng },
+                depart: Math.max(now + 60000, tapAbs(called[k - 1])) });
+  }
+
+  const fixAt = Number(live.fix_at);
+  let got = null;
+  try {
+    got = await sheetAsk(env, { action: "route",
+      from: { lat: Number(live.lat), lng: Number(live.lng) },
+      to: { lat: N.lat, lng: N.lng }, depart: now + 30000, legs: legs }, LIVE_ROUTE_MS);
+  } catch (e) { got = null; }
+
+  if (!got || got.ok !== true || !got.next || !(Number(got.next.sec) >= 0)) {
+    const why = String((got && (got.error || got.message)) || "no answer").slice(0, 200);
+    try { await env.DB.prepare("UPDATE run_live SET err=? WHERE trip=?").bind(why, String(state.trip)).run(); }
+    catch (e) {}
+    return false;
+  }
+  const merged = Object.assign({}, live.legs);
+  const back = (got.legs && typeof got.legs === "object") ? got.legs : {};
+  for (const lk of Object.keys(back)) {
+    const v = back[lk];
+    if (v && Number(v.sec) >= 0) merged[lk] = { sec: Number(v.sec), traffic: v.traffic ? 1 : 0, at: now };
+  }
+  await env.DB.prepare(
+    "UPDATE run_live SET next_id=?, next_ms=?, next_traffic=?, routed_fix_at=?, legs=?, err=NULL WHERE trip=?")
+    .bind(String(N.id), fixAt + Number(got.next.sec) * 1000, got.next.traffic ? 1 : 0,
+          fixAt, JSON.stringify(merged), String(state.trip)).run();
+  return true;
 }
 
 /* ==========================================================================
@@ -2494,11 +2759,10 @@ async function tripPayload(env, ref, want, askedStop, pid) {
      everything the bus is not going to stop for between its last marked kerb
      and this one comes off. See THE ESTIMATE above for why the saving is
      dwell-led rather than distance-led, and why it leans early. */
-  const ordered = stopsOnRoute(all, myStop.route);
+  /* From w2.72.0 from where the bus is, when the driving phone has said
+     (THE ESTIMATE FROM WHERE THE BUS IS). */
   const booked = await bookedStopIds(env, key, myStop.route);
-  const saved = etaSavedMinutes(key, ordered, state.lastStopId, myStop.id, booked, set);
-
-  const eta = new Date(sched.getTime() + state.offset * 60000 - saved * 60000);
+  const eta = new Date(await stopEtaMs(env, key, myStop.route, all, state, myStop.id, booked, set));
   const mins = Math.round((eta.getTime() - Date.now()) / 60000);
 
   /* AN ESTIMATE WHOSE TIME HAS PASSED, WITH THE STOP STILL UNMARKED.
@@ -2538,10 +2802,8 @@ async function churchLine(env, key, all, route, state) {
   const sched = arr ? londonMoment(key, arr.time) : null;
   if (!sched) return null;
   const set = await etaSettings(env);
-  const ordered = stopsOnRoute(all, route);
   const booked = await bookedStopIds(env, key, route);
-  const saved = etaSavedMinutes(key, ordered, state.lastStopId, arr.id, booked, set);
-  const eta = Math.round((sched.getTime() + Number(state.offset) * 60000 - saved * 60000) / 60000) * 60000;
+  const eta = Math.round((await stopEtaMs(env, key, route, all, state, arr.id, booked, set)) / 60000) * 60000;
   return { state: Date.now() >= eta + 60000 ? "due" : "eta", words: londonHHMM(new Date(eta)) };
 }
 
@@ -2727,7 +2989,7 @@ async function checksToday(env) {
    thing the phone can safely tell from a fact. An empty object would be
    indistinguishable from "nobody booked anywhere" and would wipe good
    numbers off a driver's screen. */
-async function boardPayload(env, route, phone, driver) {
+async function boardPayload(env, route, phone, driver, fix, ctx) {
   const r = String(route || "").trim() || "North";
   const out = { ok: true };
   const key = runSunday();
@@ -2777,6 +3039,30 @@ async function boardPayload(env, route, phone, driver) {
     }
   } catch (e) { /* the board as before */ }
 
+  /* WHERE THE BUS IS, from w2.72.0: only from the phone driving the run,
+     or on a rehearsal from the phone signed in as its driver. The route is
+     asked for after the answer has gone, so the poll is never slowed; its
+     estimates arrive on the next one. */
+  try {
+    const t = out.trip;
+    const driving = t && t.trip && t.started && !t.ended &&
+      ((t.phone && t.phone.here) ||
+       (t.rehearsal && String(driver || "").trim() && sameName(t.driver, driver)));
+    if (driving && fix && fix.lat !== undefined && fix.lat !== null && fix.lat !== "") {
+      const now = Date.now();
+      if (await liveFix(env, t.trip, fix, now)) {
+        const go = (async () => {
+          try {
+            const set = await etaSettings(env);
+            const booked = await bookedStopIds(env, key, r);
+            await liveRoute(env, key, r, all, t, booked, set, Date.now());
+          } catch (e) {}
+        })();
+        if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(go); else await go;
+      }
+    }
+  } catch (e) { /* the board as before */ }
+
   /* THE ESTIMATE, PER STOP, FOR THE DRIVER'S OWN LIST.
 
      Worked out HERE and not in the page, for the same reason the push wording
@@ -2796,6 +3082,7 @@ async function boardPayload(env, route, phone, driver) {
       const counts = out.counts || {};
       const booked = new Set(Object.keys(counts).filter((id) => Number(counts[id]) > 0));
       const etas = {};
+      const live = await liveEtaMap(env, key, r, all, st, booked, set);
       for (const stop of ordered) {
         /* From w2.44.0 the church arrival too, so a late run does not show
            11:00 under a pickup at 11:04. */
@@ -2803,9 +3090,8 @@ async function boardPayload(env, route, phone, driver) {
         if (kind !== "pickup" && kind !== "arrival") continue;
         const sched = londonMoment(key, stop.time);
         if (!sched) continue;
-        const saved = etaSavedMinutes(key, ordered, st.lastStopId, stop.id, booked, set);
         etas[stop.id] = Math.round(
-          (sched.getTime() + Number(st.offset) * 60000 - saved * 60000) / 60000) * 60000;
+          (await stopEtaMs(env, key, r, all, st, stop.id, booked, set, live)) / 60000) * 60000;
       }
       /* From w2.44.0: never later than the stop after it. A stop nobody
          booked was timed as if the bus pulls in there, but the stop after
@@ -2822,6 +3108,8 @@ async function boardPayload(env, route, phone, driver) {
       }
       out.etas = etas;
       out.etaAt = Date.now();
+      /* Whether these came from where the bus is, for the driver app. */
+      out.etaLive = !!live;
     }
   } catch (e) { out.etaError = String(e); }
 
@@ -5904,8 +6192,7 @@ async function minutesToStop(env, key, route, all, state, stopId) {
   if (!sched) return null;
   const set = await etaSettings(env);
   const booked = await bookedStopIds(env, key, route);
-  const saved = etaSavedMinutes(key, ordered, state.lastStopId, stop.id, booked, set);
-  return Math.round((sched.getTime() + Number(state.offset) * 60000 - saved * 60000 - Date.now()) / 60000);
+  return Math.round(((await stopEtaMs(env, key, route, all, state, stop.id, booked, set)) - Date.now()) / 60000);
 }
 
 /* EVERY BOOKED STOP IN FRONT OF THE ONE JUST MARKED, not only the next.
@@ -11712,7 +11999,8 @@ export default {
         if (p.get("rota")) return json(await cachedRota(env, p.get("from"), p.get("weeks")));
         if (p.get("last")) return json(await cachedLast(env));
         if (p.get("bus")) return json(await busPayload(env, "", p.get("ref"), p.get("pid")));
-        if (p.get("board")) return json(await boardPayload(env, p.get("route"), p.get("phone"), p.get("driver")));
+        if (p.get("board")) return json(await boardPayload(env, p.get("route"), p.get("phone"), p.get("driver"),
+          p.get("lat") ? { lat: p.get("lat"), lng: p.get("lng"), acc: p.get("acc"), age: p.get("fixAge") } : null, ctx));
         if (p.get("trip")) {
           return p.get("route")
             ? json(await tripDriverPayload(env, p.get("route")))
