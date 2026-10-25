@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.128.1 · THE COORDINATOR'S APP.
+<!-- BUILD v1.129.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -716,7 +716,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.128.1";
+var PAGE_VERSION = "v1.129.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -2756,7 +2756,7 @@ function editBus(reg){
           '<p class="tiny" style="margin:0 0 4px">Active</p>' + chips("buActive", [["YES", "In use"], ["NO", "Not in use"]], pick.active) +
           '<p class="tiny" style="margin:0 0 4px">Route in odd months</p>' + chips("buRoute", [["North", "North"], ["South", "South"], ["-", "Standby"]], pick.oddRoute) +
           '<p class="preview" id="buSwap" hidden></p>' +
-          (x && x.noNotes ? '' : '<div class="field"><label for="buNotes">Notes</label><textarea id="buNotes" maxlength="500" placeholder="e.g. Wheelchair lift, spare key in the church office">' + esc(v.notes) + '</textarea></div>'),
+          (x && x.noNotes ? '' : '<div class="field"><label for="buNotes">Notes</label><textarea id="buNotes" maxlength="500" placeholder="e.g. Wheelchair lift, spare key in the Church office">' + esc(v.notes) + '</textarea></div>'),
     go: add ? "Add" : "Save",
     onGo: function(){
       var r = regOf();
@@ -3121,9 +3121,9 @@ function paintRuns(key){
            (run.reg ? '<span class="plate">'+esc(run.reg)+'</span>' : '') + '</div>' +
            '<p class="tiny" style="margin:2px 0 4px">'+esc(run.driver || "")+
              (run.endedBy && !same(run.endedBy, run.driver) ? ', ended by ' + esc(run.endedBy) : '')+'</p>';
-      h += evRow("Left church", "", run.start, run, "start");
+      h += evRow("Left Church", "", run.start, run, "start");
       run.stops.forEach(function(s){ h += evRow(s.stop, s.time, s.ev, run, s.id, s); });
-      h += evRow("Back at church", "", run.end, run, "end");
+      h += evRow("Back at Church", "", run.end, run, "end");
       h += '</div>';
     });
   });
@@ -3473,7 +3473,7 @@ function authorise(reg){
 function endRun(route){
   var r = (D.runs || {})[route] || {};
   openSheet({ eyebrow: "Run", title: "End the " + route + " run?",
-    line: (r.driver ? r.driver + "’s run" : "The run") + (r.started ? ", left church " + hhmm(r.started) : "") + ".",
+    line: (r.driver ? r.driver + "’s run" : "The run") + (r.started ? ", left Church " + hhmm(r.started) : "") + ".",
     go: "End the run", stop: true,
     onGo: function(){
       if(busy) return; busy = true; sheetBusy(true); sheetSay("Sending…");
@@ -3506,8 +3506,8 @@ var REH_SHAPES = [["quiet", "A quiet morning", "20 to 40% full"],
 function rehRunWords(r){
   if(!r.started) return "No test run yet.";
   var who2 = r.driver ? r.driver + ", " : "";
-  if(r.ended) return "Test run: " + who2 + "left church " + hhmm(r.started) + ", back " + hhmm(r.ended) + ".";
-  return "Test run: " + who2 + "left church " + hhmm(r.started) + ", " +
+  if(r.ended) return "Test run: " + who2 + "left Church " + hhmm(r.started) + ", back " + hhmm(r.ended) + ".";
+  return "Test run: " + who2 + "left Church " + hhmm(r.started) + ", " +
          r.marked + (r.marked === 1 ? " stop" : " stops") + " marked.";
 }
 

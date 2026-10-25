@@ -82,8 +82,8 @@ export default async function (root) {
 
   s.test("the passenger page's words, and it keeps asking while riding", (a) => {
     a.ok(sunday.includes('"Church about <b>"'));
-    a.ok(sunday.includes('"Due at church "+esc(c.words)+". Arrival not recorded."'));
-    a.ok(sunday.includes('"At church at "+esc(c.words)'));
+    a.ok(sunday.includes('"Due at Church "+esc(c.words)+". Arrival not recorded."'));
+    a.ok(sunday.includes('"At Church at "+esc(c.words)'));
     a.ok(sunday.includes('out.mine==="served" && !liveRiding(out)'));
   });
 
@@ -91,7 +91,7 @@ export default async function (root) {
     const at = driver.indexOf('id="churchModal"');
     a.ok(at > 0);
     a.ok(driver.slice(at, driver.indexOf("</div>", at)).indexOf("<button") === -1);
-    a.ok(driver.includes("'Due at church '+esc(t)"));
+    a.ok(driver.includes("'Due at Church '+esc(t)"));
     a.ok(driver.includes("'Church about <b>'+esc(t)+'</b>'"));
     a.ok(/trip\.ended = \(back && back <= tripNow\(\)\) \? back : tripNow\(\);/.test(driver));
   });

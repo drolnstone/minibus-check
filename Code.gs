@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.126.0";
+var SCRIPT_VERSION = "v1.127.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -7664,7 +7664,7 @@ var STOP_TYPE_NOTE =
   "Pickup, Arrival or Depart.\n\n" +
   "Pickup  somewhere people wait.\n" +
   "Arrival where the run ends. Nobody boards there.\n" +
-  "Depart  when the bus leaves church. One row per route, and it is a time " +
+  "Depart  when the bus leaves Church. One row per route, and it is a time " +
   "rather than a place \u2014 it is what lets the app say how many minutes " +
   "behind or ahead the run is before the first stop has been reached. " +
   "Nobody can book it and no driver taps it.";
@@ -12488,7 +12488,7 @@ function sendDutyEmail(to, who, sunday, daysAhead, covering, route, bus) {
   try { times = dutyTimes(SpreadsheetApp.getActiveSpreadsheet(), route, who); } catch (err) {}
   if (times) {
     lines.push("Vehicle check: <b>" + esc(times.check) + "</b>");
-    lines.push("Depart church: <b>" + esc(times.depart) + "</b>");
+    lines.push("Depart Church: <b>" + esc(times.depart) + "</b>");
   }
   if (bus) lines.push("Bus: <b>" + esc(bus) + "</b>");
   if (covering) lines.push("Covering for " + esc(covering) + ".");
@@ -12504,7 +12504,7 @@ function sendDutyEmail(to, who, sunday, daysAhead, covering, route, bus) {
      nothing else. */
   var rows = ["You are down to drive the minibus" + onPlain + " " + lead + ".",
               "", when];
-  if (times) rows.push("Vehicle check: " + times.check, "Depart church: " + times.depart);
+  if (times) rows.push("Vehicle check: " + times.check, "Depart Church: " + times.depart);
   if (bus) rows.push("Bus: " + bus);
   if (covering) rows.push("Covering for " + covering + ".");
   var plain = rows.join("\n");
@@ -12539,7 +12539,7 @@ function dutyIcs(sunday, who, covering, route, bus) {
   /* The calendar entry is the thing he actually sees on his lock screen, the
      morning before he leaves. The registration belongs here more than it
      belongs in the email. */
-  var desc = "You are down to drive the church minibus" +
+  var desc = "You are down to drive the Church minibus" +
              (route ? " on " + route : "") + "." +
              (bus ? " Bus: " + bus + "." : "") +
              (covering ? " Covering for " + covering + "." : "");
@@ -12570,7 +12570,7 @@ function dutyIcs(sunday, who, covering, route, bus) {
   /* From v1.118.0 the entry starts at the vehicle check, and says both. */
   var times = null;
   try { times = dutyTimes(SpreadsheetApp.getActiveSpreadsheet(), route, who); } catch (err) {}
-  if (times) desc += " Vehicle check: " + times.check + ". Depart church: " + times.depart + ".";
+  if (times) desc += " Vehicle check: " + times.check + ". Depart Church: " + times.depart + ".";
 
   var from = times ? stopMomentOn(dateToKey(sunday), times.check)
            : depart && depart.time ? stopMomentOn(dateToKey(sunday), depart.time) : null;
@@ -12927,7 +12927,7 @@ function notifyDutyChange(ss, key, before, after, route) {
       "You are now down to drive the minibus on <b>" + esc(when) + "</b>" + on + ".",
       "&nbsp;",
       nowTimes ? ("Vehicle check: <b>" + esc(nowTimes.check) + "</b>") : "",
-      nowTimes ? ("Depart church: <b>" + esc(nowTimes.depart) + "</b>") : "",
+      nowTimes ? ("Depart Church: <b>" + esc(nowTimes.depart) + "</b>") : "",
       busNow ? ("Bus: <b>" + esc(busNow) + "</b>") : "",
       before ? ("Covering for " + esc(before) + ".") : "",
       "&nbsp;",
@@ -12938,7 +12938,7 @@ function notifyDutyChange(ss, key, before, after, route) {
       to: emails[after],
       subject: "Minibus duty" + (route ? ": " + route : "") + " on " + when,
       body: "You are now down to drive the minibus on " + when + onPlain + ".\n\n" +
-            (nowTimes ? "Vehicle check: " + nowTimes.check + "\nDepart church: " + nowTimes.depart + "\n\n" : "") +
+            (nowTimes ? "Vehicle check: " + nowTimes.check + "\nDepart Church: " + nowTimes.depart + "\n\n" : "") +
             (busNow ? "Bus: " + busNow + ".\n\n" : "") +
             (before ? "Covering for " + before + "." : ""),
       htmlBody: htmlShell("You are now driving", "#1B3A57", onLines, ""),
@@ -13826,7 +13826,7 @@ function healthReport() {
               ". Not a fault: those routes simply say the bus is on its way " +
               "until the first stop is marked.\n     " +
               "To add one, put a row on the Bus Stops tab with Type set to " +
-              "Depart and the time the bus is due to leave church.");
+              "Depart and the time the bus is due to leave Church.");
   }
 
   /* ---- how big the tabs have got ---------------------------------------
@@ -14429,7 +14429,7 @@ function calendarLink(sunday, covering, route, bus, who) {
   bus = String(bus || "").trim();
   /* The same words as the attached file. Two routes into a calendar that
      disagreed about which bus would be worse than neither. */
-  var details = "You are down to drive the church minibus" +
+  var details = "You are down to drive the Church minibus" +
                 (route ? " on " + route : "") + "." +
                 (bus ? " Bus: " + bus + "." : "") +
                 (covering ? " Covering for " + covering + "." : "");
@@ -14439,7 +14439,7 @@ function calendarLink(sunday, covering, route, bus, who) {
   try { times = dutyTimes(SpreadsheetApp.getActiveSpreadsheet(), route, who); } catch (err) {}
   var dates = day + "/" + dayAfter;
   if (times) {
-    details += " Vehicle check: " + times.check + ". Depart church: " + times.depart + ".";
+    details += " Vehicle check: " + times.check + ". Depart Church: " + times.depart + ".";
     var a = stopMomentOn(dateToKey(sunday), times.check), b = stopMomentOn(dateToKey(sunday), times.depart);
     if (a && b) dates = Utilities.formatDate(a, "UTC", "yyyyMMdd'T'HHmmss'Z'") + "/" +
                         Utilities.formatDate(b, "UTC", "yyyyMMdd'T'HHmmss'Z'");
@@ -15602,7 +15602,7 @@ function pdfSunday(ss, key) {
   });
   sections.push(pdfSection("Rota", ["Route", "Status", "Scheduled", "Cover", "Rota bus", "Drove", "Bus driven"], rows));
   if (r && r.notes) sections.push(pdfSection("Rota notes", ["Note"], r.notes.split("\n").filter(Boolean).map(function (n) { return [n]; })));
-  sections.push(pdfSection("Runs", ["Route", "Driver", "Bus", "Left church", "Ended", "Ended by", "Stops marked"],
+  sections.push(pdfSection("Runs", ["Route", "Driver", "Bus", "Left Church", "Ended", "Ended by", "Stops marked"],
     runs.map(function (x) {
       return [x.route, x.driver, x.reg, x.left, x.ended, x.endedBy && x.endedBy !== x.driver ? x.endedBy : "", String(x.stops.length)];
     }), "No runs recorded."));

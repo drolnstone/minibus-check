@@ -51,7 +51,7 @@ export default async function (root) {
     const k = await J(await coord(env, "Bro Arthur", "load"));
     const lines = sent(k);
     a.eq(lines.length, 1, JSON.stringify(lines));
-    a.eq(lines[0].title, "North: The bus has left church");
+    a.eq(lines[0].title, "North: The bus has left Church");
     a.eq(lines[0].body, "To 3 passenger phones: Hannan Road, Ottley Street.");
     a.not(lines[0].unread);
     a.eq(k.alerts.unread, 0);

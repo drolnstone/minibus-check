@@ -32,7 +32,7 @@ const GONE = [
    live server's Trip ended replaces. */
 const GONE_PAGES = [
   "stays stopped. Ring the coordinator", "Tap a stop to watch the bus", "to confirm it is you",
-  "Record the bus parked mileage for", "There is room on the bus", "Run ended, back at church"
+  "Record the bus parked mileage for", "There is room on the bus", "Run ended, back at church", "Run ended, back at Church"
 ];
 
 export default function (root) {
