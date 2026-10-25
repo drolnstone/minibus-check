@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.131.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.132.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -716,7 +716,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.131.0";
+var PAGE_VERSION = "v1.132.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1819,7 +1819,7 @@ function paintBookings(key){
     return;
   }
   var b = BOOK.data;
-  if(b.mayAct) h += '<button class="btn btn-main btn-wide" type="button" data-do="book" data-key="'+esc(key)+'" style="margin:0 0 12px">Book a seat for someone</button>';
+  if(b.mayAct && !bookShut(b)) h += '<button class="btn btn-main btn-wide" type="button" data-do="book" data-key="'+esc(key)+'" style="margin:0 0 12px">Book a seat for someone</button>';
   b.routes.forEach(function(rt){
     var bus = rt.bus || {};
     var head = rt.off ? '<span class="tag stop">Called off</span>'
@@ -1888,14 +1888,27 @@ function cancelBooking(id){
               onGo: function(){ act({ kind:"booking", op:"cancel", bookingId:id }); } });
 }
 
+/* Why nothing can be booked that Sunday, or "" while a route still takes
+   seats. From v1.132.0 the button goes once every run is over (Asim, 25 Oct
+   2026: "No route is taking seats" read like a refusal for a Sunday ahead). */
+function bookShut(b){
+  var on = b.routes.filter(function(r){ return !r.off; });
+  if(!on.length) return "No bus is running that Sunday.";
+  var open = on.filter(function(r){ return !r.ended && r.stops.some(function(s){ return !s.passed; }); });
+  if(open.length) return "";
+  return on.length === 1 ? "The " + on[0].route + " run is over." : "Both runs are over.";
+}
+
 function bookFor(key){
   var b = BOOK.data; if(!b) return;
+  var shut = bookShut(b);
+  if(shut){ toast(shut, true); return; }
   var opts = b.routes.filter(function(r){ return !r.off && !r.ended; }).map(function(r){
     return '<optgroup label="'+esc(r.route)+'">' + r.stops.filter(function(s){ return !s.passed; }).map(function(s){
       return '<option value="'+esc(s.id)+'">'+esc(s.id+"  "+s.time+"  "+s.stop)+'</option>';
     }).join("") + '</optgroup>';
   }).join("");
-  if(!opts){ toast("No route is taking seats that Sunday.", true); return; }
+  if(!opts){ toast("Both runs are over.", true); return; }
   var n = 1;
   openSheet({ eyebrow: shortDay(key), title: "Book a seat for someone",
     body: '<div class="field"><label for="bkStop">Stop</label><select id="bkStop">'+opts+'</select></div>' +

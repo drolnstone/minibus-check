@@ -1,14 +1,14 @@
 MINIBUS
 =======
-  pages v1.131.0 · server w2.72.0 · sheet v1.128.0
+  pages v1.132.0 · server w2.72.0 · sheet v1.128.0
 
-YOU ARE ON   app v1.130.0 · server w2.72.0 · sheet v1.128.0
-GOING TO     app v1.131.0 · server w2.72.0 · sheet v1.128.0
+YOU ARE ON   app v1.131.0 · server w2.72.0 · sheet v1.128.0
+GOING TO     app v1.132.0 · server w2.72.0 · sheet v1.128.0
 
-Coordinator app, Rota, a Sunday: each running route shows Seats
-(booked/seats, as on its card) with a Bookings button that opens that
-Sunday's Bookings. Shown for the Sundays the card has seats for. Pages
-only.
+Coordinator app, Bookings: Book a seat for someone goes once every run
+that Sunday is over (or no bus is running). If it is ever refused, it
+says "Both runs are over." (or "The North run is over." with one route,
+"No bus is running that Sunday." when both are called off). Pages only.
 
 GOING LIVE
 ----------
@@ -19,7 +19,7 @@ Merge the pull request. The pages go live by themselves.
 AFTER IT (give it ten minutes)
 --------
 
-B. The foot of the apps reads  app v1.131.0 · server w2.72.0 · sheet
+B. The foot of the apps reads  app v1.132.0 · server w2.72.0 · sheet
    v1.128.0 .
 
 
