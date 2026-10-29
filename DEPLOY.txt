@@ -1,21 +1,18 @@
 MINIBUS
 =======
-  pages v1.135.0 · server w2.74.0 · sheet v1.130.0
+  pages v1.136.0 · server w2.74.0 · sheet v1.130.0
 
-YOU ARE ON   app v1.134.0 · server w2.74.0 · sheet v1.130.0
-GOING TO     app v1.135.0 · server w2.74.0 · sheet v1.130.0
+YOU ARE ON   app v1.135.0 · server w2.74.0 · sheet v1.130.0
+GOING TO     app v1.136.0 · server w2.74.0 · sheet v1.130.0
 
-Screen tidy-up. Pages only.
-
-- Driver app: the alerts prompt reads "Turn on alerts on this phone?",
-  as the coordinator app's does.
-- Coordinator app: "Change PIN", as the driver app has it.
-- Coordinator home list: Bookings, Run record, Send a message, Alerts;
-  then Rota requests, Defects, Buses, Drivers, Bus stops; then PDF
-  reports, Have a look, What has been done.
+Coordinator app, first screen: the Sunday card, Due dates and Emergency
+calls stay put under the bar; only the list below them scrolls. When
+they would fill more than half the screen (many due dates or notices),
+the whole screen scrolls as before. Pages only.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: app v1.135.0.
-B. Coordinator home: the list starts with Bookings.
+A. Coordinator app, App info: app v1.136.0.
+B. First screen: scroll the list; the Sunday card and Emergency calls
+   stay in place.

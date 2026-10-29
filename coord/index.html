@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.135.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.136.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -268,6 +268,14 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .chips.stick{position:sticky;top:var(--bar-h,60px);z-index:50;background:var(--paper);
   margin:-16px calc(-14px - var(--safe-r)) 12px calc(-14px - var(--safe-l));
   padding:10px calc(14px + var(--safe-r)) 10px calc(14px + var(--safe-l));border-bottom:1px solid var(--hair)}
+
+/* The first screen's top, from v1.136.0 (Asim, 29 Oct 2026): the Sunday,
+   due dates and emergency calls stay put under the bar and only the list
+   below them scrolls. paintHome lets it go when it would take more than
+   half the screen, so the list is never out of reach. */
+.home-top.stick{position:sticky;top:var(--bar-h,60px);z-index:50;background:var(--paper);
+  margin:-16px calc(-14px - var(--safe-r)) 0 calc(-14px - var(--safe-l));
+  padding:16px calc(14px + var(--safe-r)) 2px calc(14px + var(--safe-l));border-bottom:1px solid var(--hair)}
 
 /* ---- small labels ---- */
 .tag{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:11px;
@@ -715,7 +723,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.135.0";
+var PAGE_VERSION = "v1.136.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1105,6 +1113,14 @@ function go(where){
   if(to === "sunday" && now === "home"){ seq++; history.pushState({ n: seq }, "", "#rota"); }
   seq++; history.pushState({ n: seq }, "", "#" + where); route();
 }
+function homeTopFit(){
+  var t = $("homeTop");
+  if(!t) return;
+  t.classList.remove("stick");
+  barHeight();
+  if(t.offsetHeight && t.offsetHeight < window.innerHeight * 0.5) t.classList.add("stick");
+}
+window.addEventListener("resize", homeTopFit);
 function barHeight(){
   var b = document.querySelector(".bar");
   if(b && b.offsetHeight) document.documentElement.style.setProperty("--bar-h", b.offsetHeight + "px");
@@ -1349,7 +1365,7 @@ function needs(){
 }
 
 function paintHome(){
-  var h = '';
+  var h = '<div class="home-top" id="homeTop">';
   needs().forEach(function(n){
     if(n.go) h += '<button class="need '+n.tone+'" type="button" data-go="'+esc(n.go)+'"><p>'+esc(n.text)+'</p><span class="go">\u203A</span></button>';
     else h += '<div class="need '+n.tone+'"><p>'+esc(n.text)+'</p><button class="mini" type="button" '+n.data+'>'+esc(n.btn)+'</button></div>';
@@ -1363,6 +1379,7 @@ function paintHome(){
 
   h += renewalsHtml();
   h += contactHtml();
+  h += '</div>';
 
   var pend = (D.requests || []).filter(function(q){ return q.status === "Pending"; }).length;
   var bk = D.open || D.today;
@@ -1400,6 +1417,7 @@ function paintHome(){
        '<a class="foot-link" href="../" data-do="check">Vehicle check</a></div>' +
        '<button class="foot-link" type="button" data-do="mypin" style="background:none;border:0;padding:0">Change PIN</button>';
   $("homeBody").innerHTML = h;
+  homeTopFit();
 }
 
 /* ---- who takes emergency calls, from v1.96.8 --------------------------------
