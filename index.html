@@ -1518,7 +1518,7 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
 <div class="rota-modal" id="alertAsk" aria-hidden="true">
   <div class="rota-sheet" role="dialog" aria-modal="true" aria-labelledby="alertAskTitle">
     <p class="eyebrow" id="alertAskEyebrow">Driver</p>
-    <h2 id="alertAskTitle">Remind you to end the trip?</h2>
+    <h2 id="alertAskTitle">Turn on alerts on this phone?</h2>
     <div class="rota-modal-actions">
       <button class="btn btn-ghost" id="alertAskNot" type="button">Not now</button>
       <button class="btn btn-main" id="alertAskGo" type="button">Turn on</button>
@@ -1775,7 +1775,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.134.0";
+var APP_VERSION = "v1.135.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -3073,12 +3073,12 @@ function alertAskMaybe(){
   if(!box) return;
   alertAsked = true;
   /* The eyebrow says what the sheet is about, so it must not be the heading
-     again in fewer words. "Reminders" over "Remind you to end the trip?" was
+     again in fewer words. "Reminders" over "Turn on alerts on this phone?" was
      the same sentence twice. */
   $("alertAskEyebrow").textContent = needsHome ? "This app" : "Driver";
   $("alertAskTitle").textContent = needsHome
     ? "Add this app to your Home Screen"
-    : "Remind you to end the trip?";
+    : "Turn on alerts on this phone?";
   $("alertAskGo").textContent = needsHome ? "Show me how" : "Turn on";
   box.setAttribute("data-how", needsHome ? "1" : "");
   box.classList.add("is-on");
