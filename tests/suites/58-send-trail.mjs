@@ -221,8 +221,11 @@ export default async function (root) {
     a.eq(d.length, 1);
     a.eq(d[0].title, "Sent: Booking reminders");
     a.eq(((await W.cacheGet(env, "trail_retry")) || []).length, 0, "nothing to try again");
-    const line = (await W.sentList(env)).find((m) => m.title === "Book your seat(s) for Sunday");
-    a.ok(line, JSON.stringify(await W.sentList(env)));
+    /* Read on the same evening: the list keeps a week, and the real clock
+       is long past it. */
+    const list = await atTime(WED, () => W.sentList(env));
+    const line = list.find((m) => m.title === "Book your seat(s) for Sunday");
+    a.ok(line, JSON.stringify(list));
     a.eq(line.body, "To 1 passenger phone. Coordinator notice: 1 phone.");
     G.reset();
   });

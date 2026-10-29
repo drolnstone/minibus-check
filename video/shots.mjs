@@ -86,7 +86,7 @@ async function passenger(o = {}) {
       try { navigator.serviceWorker.register = async () => ({ pushManager: pm }); } catch (e) {}
     }
   })()`);
-  const bus = () => ({ ok: true, server: SERVER, sheet: SHEET, date: w.date, closed: w.closed, rehearsal: false,
+  const bus = () => ({ ok: true, server: SERVER, sheet: SHEET, date: w.date, closed: w.closed,
     rolled: w.rolled, cutoff: "Sunday 09:30", stops: STOPS, arrivals: ARRIVALS, off: [], counts: w.counts,
     driver: null, phone: w.mine ? PHONE : "", stopGone: "", mine: w.mine, seats: {} });
   await pg.route("**://*.workers.dev/**", async (route) => {
@@ -232,7 +232,7 @@ scene("p-book", async () => {
    after Grace Road (N02) is marked at 10:24, a minute behind, it is 10:35. */
 const MINEW = { mine: { stopId: "N04", seats: 2 }, counts: Object.assign({}, COUNTS, { N04: COUNTS.N04 + 2 }) };
 const trip = (o) => Object.assign({ live: true, date: KEY, now: Date.now(), route: "North", watching: false,
-  rehearsal: false, routes: [], stop: MINE.stop, stopId: "N04", scheduled: MINE.time, started: false, ended: false,
+  stop: MINE.stop, stopId: "N04", scheduled: MINE.time, started: false, ended: false,
   startedAtWords: "", lastStop: "", lastAgo: 0, lastAtWords: "", mine: "", offset: 0 }, o);
 
 scene("p-closed", async () => {

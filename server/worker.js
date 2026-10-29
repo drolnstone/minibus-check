@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.72.0";
+const SCRIPT_VERSION = "w2.73.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -199,7 +199,7 @@ const tokenOf = (env) => (env && env.TOKEN) || TOKEN_FALLBACK;
    Not set, nothing changes, so a Worker deployed before the Secret is added
    keeps working. "Is the live server working?" says when it is missing. */
 const sheetTokenOf = (env) => String((env && env.SHEET_TOKEN) || "");
-const SHEET_ONLY_ACTIONS = ["ping", "mint", "outcome", "cleartrips", "rehearsal", "sync",
+const SHEET_ONLY_ACTIONS = ["ping", "mint", "outcome", "cleartrips", "sync",
                             "coordAlert", "drain", "drained", "sheetbookings", "sentMail",
                             "trail", "sheettrips", "keyok", "sheetparked"];
 function sheetTokenOk(env, body) {
@@ -217,7 +217,6 @@ const TRIP_MAX_EARLY = 12;
 const TRIP_IMMINENT_MINUTES = 1;
 const RUN_DONE_MARGIN_MIN = 30;
 const RUN_DONE_QUIET_MIN = 30;
-const REHEARSAL_HOURS = 2;
 const IDENTIFY_MAX_TRIES = 25;
 const IDENTIFY_WINDOW_MINUTES = 15;
 
@@ -1581,450 +1580,6 @@ async function busFor(env, key, route, buses, rotaRow) {
    BOOKINGS
    ========================================================================== */
 
-async function rehearsalOn(env) {
-  const row = await env.DB.prepare("SELECT v FROM settings WHERE k='rehearsal'").first();
-  if (!row) return null;
-  let st; try { st = JSON.parse(row.v); } catch { return null; }
-  if (!st || !st.at) return null;
-
-  const ends = rehearsalEnds(st.at);
-  if (Date.now() >= ends) {
-    /* Run out. Cleared the same way as one ended by hand, test seats and
-       taps and all, and the sheet told to clear its tabs. rehearsalClear
-       claims the row first, so of two requests that notice together only
-       one does the clearing. */
-    try { await rehearsalClear(env, row.v, "the clock", true); } catch (e) {}
-    return null;
-  }
-  st.ends = ends;
-  return st;
-}
-
-/* Two hours from the start, or the first booking cutoff or the first
-   Sunday midnight after it, whichever comes first, so a rehearsal can never
-   run into a Sunday.
-
-   Both are reckoned from when it STARTED. Until w2.20.1 the cutoff was
-   reckoned from "now", and once the cutoff had passed there was no next one
-   that week, so a rehearsal started at half past eight on a Sunday ran on
-   through the real morning until half past ten, silencing the passengers'
-   alerts and tagging the real taps as a test. */
-function rehearsalEnds(at) {
-  const t = Number(at) || 0;
-  let ends = t + REHEARSAL_HOURS * 3600000;
-  const cut = firstAfter(t, (key) => cutoffOf(key));
-  const midnight = firstAfter(t, (key) => londonMoment(key, "00:00"));
-  if (cut && cut < ends) ends = cut;
-  if (midnight && midnight < ends) ends = midnight;
-  return ends;
-}
-
-/* The booking cutoff for a Sunday, as a moment. */
-function cutoffOf(key) {
-  let cutKey = key;
-  if (BOOKING_CUTOFF_DAY !== 0) cutKey = shiftDays(key, -(7 - BOOKING_CUTOFF_DAY));
-  return londonMoment(cutKey, p2(BOOKING_CUTOFF_HOUR) + ":" + p2(BOOKING_CUTOFF_MIN));
-}
-
-/* The first moment after `t` that a rule gives for a Sunday: the Sunday of
-   `t` first, then the one after. 0 if neither gives one. */
-function firstAfter(t, rule) {
-  let key = sundayKeyOf(new Date(t));
-  for (let i = 0; i < 2; i++) {
-    const m = rule(key);
-    if (m && m.getTime() > t) return m.getTime();
-    key = keyAddWeeks(key, 1);
-  }
-  return 0;
-}
-
-/* What a page is told about it. The round is the moment it started: a
-   phone that made a run in one round drops it once the round is over. */
-function rehearsalInfo(reh) {
-  return reh ? { round: Number(reh.at) || 0, ends: Number(reh.ends) || rehearsalEnds(reh.at),
-                 shape: String(reh.shape || "") } : false;
-}
-
-/* ==========================================================================
-   A REHEARSAL, OWNED HERE FROM w2.20.0
-
-   It used to belong to the spreadsheet: a menu item that only a computer can
-   reach, a flag in Script Properties pushed over on the next sync, and test
-   seats drawn onto the Bus Bookings tab. Three things went wrong with that,
-   every time.
-
-   A phone that had made a run in a rehearsal kept it. The run was saved on
-   the phone for the day, the live server stopped mentioning it the moment
-   the rehearsal ended, and silence reads to the phone as "nothing new", so
-   the screen went on showing a finished run and would not offer Start trip
-   again. One rehearsal a day per phone was the real limit.
-
-   The record kept it too. Its taps stayed on the Trip Events tab, tagged,
-   "so you can see it happened", and there was no way to take them off short
-   of a separate menu item that clears the whole Sunday.
-
-   And a tap that reached this server after the rehearsal ended was taken as
-   a real one, because what a tap was used to be decided by whether a
-   rehearsal happened to be on when it arrived.
-
-   So: the flag, the test seats and the clearing-up all live here. The
-   coordinator's app starts one, starts it over and ends it, under his PIN;
-   the spreadsheet's menu items ask this server to do the same. Each start is
-   a new ROUND, and a phone drops any run it made in a round that is over,
-   taps still waiting included. Ending one, by hand or by the clock, deletes
-   its seats and its taps here, and the sheet is told to delete its own
-   Rehearsal rows. A tap says which round it was made in, and a tap from a
-   round that is over is not recorded at all.
-   ========================================================================== */
-
-/* How busy the test morning is: a share of the seats on that route's bus
-   that Sunday, so "full" means full on whichever bus the rota gave it. */
-const REHEARSAL_SHAPES = {
-  quiet:  { words: "a quiet morning",        lo: 0.20, hi: 0.40 },
-  normal: { words: "an ordinary morning",    lo: 0.50, hi: 0.80 },
-  full:   { words: "a nearly full bus",      lo: 0.93, hi: 1.00 },
-  over:   { words: "more booked than seats", lo: 1.10, hi: 1.35 }
-};
-
-/* A number of seats across a number of stops, at least one each, the rest
-   dropped a seat at a time onto random stops, capped at four unless the
-   total will not otherwise fit. A morning where every stop has exactly two
-   is not a morning anybody has driven. */
-function rehearsalSplit(total, buckets, rnd) {
-  rnd = rnd || Math.random;
-  const out = [];
-  if (buckets < 1) return out;
-  for (let i = 0; i < buckets; i++) out.push(1);
-  let left = total - buckets;
-  let cap = 4;
-  while (cap * buckets < total) cap++;
-  let guard = 0;
-  while (left > 0 && guard++ < 10000) {
-    const i = Math.floor(rnd() * buckets);
-    if (out[i] < cap) { out[i]++; left--; }
-  }
-  return out;
-}
-
-/* The test seats for one Sunday: statements to insert them, and the words
-   for what was drawn. Two routes, each spread over some of its stops and
-   never all of them where there is a choice, because an untouched stop is
-   what lets "Nobody there" be rehearsed at all.
-
-   They go to the sheet on the drain like any booking, so the Bus Bookings
-   tab and the sheet's own seat counts show the test morning while it runs,
-   and the sheet takes them off again when it is told the round is over. */
-async function rehearsalSeeds(env, key, shape, round, rnd) {
-  rnd = rnd || Math.random;
-  const band = REHEARSAL_SHAPES[shape] || REHEARSAL_SHAPES.normal;
-  const stops = pickupsAndArrivals(await getStops(env)).filter((x) => !x.arrival);
-  const buses = await getBuses(env);
-  const rotaRow = await getRotaRow(env, key);
-  const stmts = [], summary = [], routes = [];
-  for (const route of routeNames(stops)) {
-    const list = stops.filter((x) => x.route === route);
-    if (!list.length) continue;
-    let seats = 14;
-    try { seats = (await busFor(env, key, route, buses, rotaRow)).seats || 14; } catch (e) {}
-    let target = Math.round(seats * (band.lo + rnd() * (band.hi - band.lo)));
-    if (target < 1) target = 1;
-    const least = Math.ceil(target / 4);
-    let most = list.length > 2 ? list.length - 1 : list.length;
-    if (most < least) most = Math.min(least, list.length);
-    let use = least + Math.floor(rnd() * (most - least + 1));
-    if (use > list.length) use = list.length;
-    if (use > target) use = target;
-    if (use < 1) use = 1;
-    const idx = list.map((_, i) => i);
-    for (let i = idx.length - 1; i > 0; i--) {
-      const j = Math.floor(rnd() * (i + 1));
-      const t = idx[i]; idx[i] = idx[j]; idx[j] = t;
-    }
-    const at = idx.slice(0, use).sort((a, b) => a - b);
-    const split = rehearsalSplit(target, use, rnd);
-    let placed = 0;
-    at.forEach((k, n) => {
-      const st = list[k];
-      placed += split[n];
-      stmts.push(env.DB.prepare(
-        "INSERT INTO bookings (sunday, route, stop_id, stop, seats, device, pid, phone, status, received, synced) " +
-        "VALUES (?,?,?,?,?,?,'','','Rehearsal',?,0)")
-        .bind(key, route, st.id, st.stop, split[n],
-              "rehearsal-" + route.toLowerCase() + "-" + n + "-" + Number(round).toString(36), Date.now()));
-    });
-    routes.push({ route: route, booked: placed, stops: use, of: list.length, seats: seats });
-    summary.push(route + ": " + placed + " booked at " + use + " of " + list.length +
-                 " stops, on a " + seats + "-seat bus" + (placed > seats ? ", over by " + (placed - seats) : "") + ".");
-  }
-  return { stmts, summary, routes, words: band.words };
-}
-
-/* A real morning in progress: a real run out on either route, or a Sunday
-   between the booking cutoff and the run backstop. A rehearsal started then
-   would turn every phone's screen over to the test, the passenger page
-   included, while a real bus was on the road. */
-async function liveMorning(env) {
-  const key = runSunday();
-  const stops = pickupsAndArrivals(await getStops(env));
-  for (const rt of routeNames(stops)) {
-    let t = null, over = false;
-    try { t = await tripState(env, key, rt, "real"); } catch (e) {}
-    /* A run nobody ended is over once its last stop is well past and it has
-       gone quiet, by the same rule that rolls the passenger page. */
-    try { over = await routeOver(env, key, rt, stops, "real"); } catch (e) {}
-    if (t && t.started && !t.ended && !over) return "The " + rt + " bus is out. A rehearsal waits until the real run has ended.";
-  }
-  /* The whole of Sunday up to the backstop, and from the cutoff if that
-     comes earlier. Before the cutoff on a Sunday morning is not safe
-     either: the morning message goes out then, and a rehearsal holds every
-     passenger alert back. */
-  const now = Date.now();
-  const cut = cutoffOf(key), dayStart = londonMoment(key, "00:00");
-  const back = londonMoment(key, p2(RUN_BACKSTOP_HOUR) + ":" + p2(RUN_BACKSTOP_MIN));
-  let from = dayStart ? dayStart.getTime() : 0;
-  if (cut && cut.getTime() < from) from = cut.getTime();
-  if (from && back && now >= from && now < back.getTime()) {
-    const at = p2(RUN_BACKSTOP_HOUR) + ":" + p2(RUN_BACKSTOP_MIN);
-    return londonParts(new Date()).dow === 0
-      ? "It is Sunday morning. A rehearsal can start from " + at + "."
-      : "Bookings for Sunday have closed. A rehearsal can start from " + at + " on Sunday.";
-  }
-  return "";
-}
-
-/* A test tap made on its own Sunday between the cutoff and the backstop.
-   None can be made there from w2.20.1. One from before may be a REAL run:
-   an older version let a rehearsal started on a Sunday morning run on into
-   the real one, and tagged the real taps as a test. So such a run is never
-   cleared away, here or on the sheet, and is left for a person to judge. */
-function inLiveMorning(sunday, at) {
-  const a = cutoffOf(String(sunday || ""));
-  const b = londonMoment(String(sunday || ""), p2(RUN_BACKSTOP_HOUR) + ":" + p2(RUN_BACKSTOP_MIN));
-  const t = Number(at) || 0;
-  return !!(a && b && t >= a.getTime() && t < b.getTime());
-}
-
-/* What a clear-up may take.
-
-   A TEST RUN IS ONE WHOSE START WAS A TEST. All of its rows go, a taken-back
-   tap included (Undone loses the word Rehearsal on the way), and the sheet is
-   told the run's trip so it can do the same.
-
-   A REAL RUN IS NEVER TAKEN, even when one of its taps was stored as a test.
-   A page from before v1.79.0 names no round, so its taps are judged by
-   whether a rehearsal is on as they arrive, and the End of a real run nobody
-   closed, tapped during an afternoon rehearsal, is stored as one. Such a row
-   is left where it is, for a person.
-
-   A test row that belongs to no run, or to a run whose start is not here,
-   goes on its own. And see inLiveMorning for what is kept whatever it is. */
-async function rehearsalFind(env) {
-  const out = { trips: [], keepTrips: [], keepIds: [] };
-  try {
-    const r = await env.DB.prepare(
-      "SELECT id, trip, sunday, happened, event, status FROM trip_events WHERE lower(status)='rehearsal' " +
-      "OR trip IN (SELECT trip FROM trip_events WHERE lower(status)='rehearsal' AND trip<>'')").all();
-    const rows = r.results || [];
-    const startOf = {};
-    for (const x of rows) {
-      if (x.trip && String(x.event || "").toLowerCase() === "start") startOf[x.trip] = String(x.status || "").toLowerCase();
-    }
-    const keep = new Set(), test = new Set();
-    for (const x of rows) {
-      const trip = String(x.trip || "");
-      if (String(x.status || "").toLowerCase() === "rehearsal" && inLiveMorning(x.sunday, x.happened)) {
-        if (trip) keep.add(trip); else out.keepIds.push(Number(x.id));
-      }
-      if (trip && startOf[trip] === "rehearsal") test.add(trip);
-    }
-    out.keepTrips = [...keep];
-    out.trips = [...test].filter((t) => !keep.has(t));
-  } catch (e) {}
-  return out;
-}
-
-/* The test runs swept away, by trip, for a fortnight. A tap of one that
-   arrives afterwards, from a phone that was out of signal, is thrown away
-   rather than taken as the start of a real run on the coming Sunday: a page
-   from before v1.79.0 names no round, and nothing else would tell. */
-const GONE_DAYS = 14;
-async function rehearsalGoneMap(env) {
-  let m = {};
-  try { m = (await cacheGet(env, "rehearsal_gone")) || {}; } catch (e) { m = {}; }
-  const cut = Date.now() - GONE_DAYS * 86400000;
-  for (const k of Object.keys(m)) if (!(Number(m[k]) > cut)) delete m[k];
-  return m;
-}
-async function rehearsalGone(env, trip) {
-  if (!trip) return false;
-  return !!(await rehearsalGoneMap(env))[trip];
-}
-
-/* The rounds that have ended, for a fortnight: when each began and when it
-   ended. A run that reaches this server only after its round is over, from a
-   page that says nothing or from a phone that had not heard of the round
-   yet, never swept because none of it was here, is judged by when it
-   STARTED: inside a finished round, it was a test. No real run starts inside
-   one: none can start on a Sunday morning, and one reaching Sunday ends at
-   midnight. */
-async function rehearsalRoundsDone(env) {
-  let list = [];
-  try { list = (await cacheGet(env, "rehearsal_rounds")) || []; } catch (e) { list = []; }
-  const cut = Date.now() - GONE_DAYS * 86400000;
-  return (Array.isArray(list) ? list : []).filter((r) => r && Number(r.end) > cut).slice(-50);
-}
-
-/* A round that has just ended, onto that list. `guard` as for the sweep. */
-async function rehearsalRoundEnded(env, round, end, guard) {
-  const list = await rehearsalRoundsDone(env);
-  list.push({ at: Number(round) || 0, end: Number(end) || Date.now() });
-  return env.DB.prepare("INSERT INTO settings (k,v) SELECT 'rehearsal_rounds', ? WHERE 1=1" + (guard || "") +
-    " ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(JSON.stringify(list));
-}
-
-/* Its seats and its taps, here. Every Sunday's, not only the one it was
-   for: a rehearsal that ran before this version left its rows behind, and
-   there is no reason to keep them. Written as tests on the rows rather than
-   a list of ids, so a tap that lands between the look and the delete goes
-   too. `onlyIfEnded` makes every statement wait on the flag being gone, for
-   the clock's clear, which claims the flag in the same batch. */
-async function rehearsalSweep(env, onlyIfEnded) {
-  const f = await rehearsalFind(env);
-  const g = onlyIfEnded ? " AND NOT EXISTS (SELECT 1 FROM settings WHERE k='rehearsal')" : "";
-  const stmts = [env.DB.prepare("DELETE FROM bookings WHERE lower(status)='rehearsal'" + g)];
-  const kept = f.keepTrips.length + f.keepIds.length;
-  /* More than a D1 statement can name is not a thing that happens. If it
-     ever did, leaving the taps is the safe way to be wrong. */
-  if (kept > 80) return { stmts: stmts, trips: [] };
-  const notTrips = f.keepTrips.length ? " AND trip NOT IN (" + f.keepTrips.map(() => "?").join(",") + ")" : "";
-  const notIds = f.keepIds.length ? " AND id NOT IN (" + f.keepIds.map(() => "?").join(",") + ")" : "";
-  stmts.push(env.DB.prepare("DELETE FROM trip_events WHERE trip IN " +
-    "(SELECT trip FROM trip_events WHERE event='start' AND lower(status)='rehearsal' AND trip<>'')" + notTrips + g)
-    .bind(...f.keepTrips));
-  stmts.push(env.DB.prepare("DELETE FROM trip_events WHERE lower(status)='rehearsal' AND trip NOT IN " +
-    "(SELECT trip FROM trip_events WHERE event='start' AND lower(status)<>'rehearsal' AND trip<>'')" + notTrips + notIds + g)
-    .bind(...f.keepTrips, ...f.keepIds));
-  if (f.trips.length) {
-    const gone = await rehearsalGoneMap(env);
-    for (const t of f.trips) gone[t] = Date.now();
-    stmts.push(env.DB.prepare("INSERT INTO settings (k,v) SELECT 'rehearsal_gone', ? WHERE 1=1" + g +
-      " ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(JSON.stringify(gone)));
-  }
-  return { stmts: stmts, trips: f.trips };
-}
-
-/* An action on the list the sheet drains, so it clears its own tabs, keeps
-   its copy of the flag, and it shows in What I have done. */
-function rehearsalNote(env, id, body, by, words, onlyIfEnded) {
-  return env.DB.prepare(
-    "INSERT OR IGNORE INTO coord_actions (id, kind, sunday, body, by_name, made, words) " +
-    "SELECT ?,?,?,?,?,?,? WHERE 1=1" + (onlyIfEnded ? " AND NOT EXISTS (SELECT 1 FROM settings WHERE k='rehearsal')" : ""))
-    .bind(id, "rehearsal", String(body.sunday || ""), JSON.stringify(body), by, Date.now(), words);
-}
-
-/* Ended by the clock, or found run out on a read. `v` is the row as read, so
-   the claim is on that exact rehearsal: one that has just been started over
-   is not cleared by a request still holding the old one. */
-async function rehearsalClear(env, v, by, expired) {
-  /* ONE BATCH, AND EVERY PART OF IT WAITS ON THE CLAIM. As separate steps, a
-     round started between the claim and the sweep lost its test seats, and
-     the sheet was told "ended" after it had been told "started". Within one
-     transaction, a flag that is still there (the claim found a newer round)
-     stops the sweep and the note. The note's id is the round's, so two
-     requests clearing the same one leave one note. */
-  await ensureCoord(env);
-  let st = null; try { st = JSON.parse(v); } catch (e) {}
-  const round = Number(st && st.at) || 0;
-  const sw = await rehearsalSweep(env, true);
-  const body = { op: "end", sunday: (st && st.key) || "", round: round, trips: sw.trips };
-  const guard = " AND NOT EXISTS (SELECT 1 FROM settings WHERE k='rehearsal')";
-  const done = await rehearsalRoundEnded(env, round, Math.min(Date.now(), rehearsalEnds(round)), guard);
-  const res = await env.DB.batch([env.DB.prepare("DELETE FROM settings WHERE k='rehearsal' AND v=?").bind(v)]
-    .concat(sw.stmts, [done, rehearsalNote(env, "reh-end-" + round.toString(36), body, by,
-                                           expired ? "The rehearsal ran out and was cleared." : "Rehearsal ended.", true)]));
-  return !!(res && res[0] && res[0].meta && res[0].meta.changes);
-}
-
-/* Start, start over or end. Returns what to write, so the coordinator's app
-   can write it in the same batch as its own record of the change, and the
-   words for the answer. Nothing is written here. */
-async function rehearsalPlan(env, op, shape, rnd) {
-  const cur = await rehearsalOn(env);
-  if (op === "end") {
-    const sw = await rehearsalSweep(env);
-    const done = cur ? [await rehearsalRoundEnded(env, cur.at, Date.now())] : [];
-    return { ok: true, sunday: (cur && cur.key) || runSunday(),
-             stmts: sw.stmts.concat(done, [env.DB.prepare("DELETE FROM settings WHERE k='rehearsal'")]),
-             body: { op: "end", sunday: (cur && cur.key) || "", round: Number(cur && cur.at) || 0, trips: sw.trips },
-             words: cur ? "Rehearsal ended." : "No rehearsal was running. Anything left from one was cleared.",
-             reply: { rehearsal: false } };
-  }
-  if (op !== "start" && op !== "over") return { ok: false, error: "Start, start over or end." };
-  const busy = await liveMorning(env);
-  if (busy) return { ok: false, error: busy };
-  const key = runSunday();
-  const at = Date.now();
-  const kind = REHEARSAL_SHAPES[shape] ? shape : "normal";
-  const seeds = await rehearsalSeeds(env, key, kind, at, rnd);
-  const sw = await rehearsalSweep(env);
-  const trips = sw.trips;
-  const flag = JSON.stringify({ at: at, key: key, shape: kind });
-  const ends = rehearsalEnds(at);
-  const again = !!cur;
-  const done = cur ? [await rehearsalRoundEnded(env, cur.at, at)] : [];
-  return { ok: true, sunday: key,
-           stmts: sw.stmts.concat(done, seeds.stmts, [env.DB.prepare(
-             "INSERT INTO settings (k,v) VALUES ('rehearsal',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(flag)]),
-           body: { op: again ? "over" : "start", sunday: key, round: at, ends: ends, shape: kind,
-                   trips: trips, routes: seeds.routes },
-           words: (again ? "Rehearsal started over: " : "Rehearsal started: ") + seeds.words +
-                  ", until " + londonHHMM(new Date(ends)) + ".",
-           reply: { rehearsal: { round: at, ends: ends, shape: kind }, summary: seeds.summary } };
-}
-
-/* From the spreadsheet's menu. Token checked by the router, like the rest of
-   what the sheet asks this server to do. */
-async function handleRehearsal(env, body) {
-  await ensureCoord(env);
-  const op = String((body && body.do) || "");
-  const plan = await rehearsalPlan(env, op, String((body && body.shape) || ""));
-  if (!plan.ok) return { ok: false, error: plan.error };
-  const id = "sheet-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36);
-  await env.DB.batch(plan.stmts.concat([rehearsalNote(env, id, plan.body, "the spreadsheet", plan.words)]));
-  /* made is this server's clock, so the sheet can tell an end made here from
-     a round started after it, whatever its own clock says. */
-  return Object.assign({ ok: true, words: plan.words, id: id, body: plan.body, made: Date.now() }, plan.reply || {});
-}
-
-/* What the coordinator's app shows of one while it runs. */
-async function rehearsalDetail(env, reh) {
-  if (!reh) return null;
-  const key = reh.key || runSunday();
-  const out = { round: Number(reh.at) || 0, ends: reh.ends, sunday: key,
-                words: (REHEARSAL_SHAPES[reh.shape] || REHEARSAL_SHAPES.normal).words, routes: [] };
-  const stops = pickupsAndArrivals(await getStops(env));
-  let rows = [];
-  try {
-    const r = await env.DB.prepare(
-      "SELECT route, stop_id, seats FROM bookings WHERE sunday=? AND lower(status)='rehearsal'").bind(key).all();
-    rows = r.results || [];
-  } catch (e) {}
-  const buses = await getBuses(env);
-  const rotaRow = await getRotaRow(env, key);
-  for (const rt of routeNames(stops)) {
-    const mine = rows.filter((b) => b.route === rt);
-    let seats = 0;
-    try { seats = (await busFor(env, key, rt, buses, rotaRow)).seats || 0; } catch (e) {}
-    let t = null;
-    try { t = await tripState(env, key, rt, "rehearsal"); } catch (e) {}
-    out.routes.push({ route: rt, booked: mine.reduce((n, b) => n + (Number(b.seats) || 0), 0),
-                      stops: mine.length, seats: seats,
-                      started: (t && t.started) || 0, ended: (t && t.ended) || 0,
-                      marked: t ? Object.keys(t.served || {}).length : 0, driver: (t && t.driver) || "" });
-  }
-  return out;
-}
-
 function nextCutoffMs() {
   const sunday = sundayKeyOf(new Date());
   let key = sunday;
@@ -2060,18 +1615,10 @@ function cutoffWords() {
 const runSunday = () => sundayKeyOf(new Date());
 
 async function liveBookings(env, key) {
-  const rehearsing = !!(await rehearsalOn(env));
   const { results } = await env.DB.prepare(
     "SELECT id, sunday, route, stop_id, stop, seats, device, pid, phone, status " +
     "FROM bookings WHERE sunday = ?").bind(key).all();
-  return (results || []).filter((b) => {
-    const st = String(b.status || "").toLowerCase();
-    if (st === "cancelled") return false;
-    /* Seeded test bookings are inert unless a rehearsal is actually running,
-       so a row left behind by a crash cannot inflate a real Sunday. */
-    if (st === "rehearsal" && !rehearsing) return false;
-    return true;
-  }).map((b) => ({
+  return (results || []).filter((b) => String(b.status || "").toLowerCase() !== "cancelled").map((b) => ({
     row: b.id, sunday: b.sunday, stopId: b.stop_id, seats: Number(b.seats) || 0,
     device: b.device || "", pid: b.pid || "", phone: b.phone || "", status: b.status,
     /* What the stop was called when this seat was taken. The number is the
@@ -2125,7 +1672,7 @@ async function bookedTimes(env, key, route) {
       .bind(key, route).all();
     for (const b of (q.results || [])) {
       const st = String(b.status || "").toLowerCase();
-      if (st === "cancelled" || st === "rehearsal") continue;
+      if (st === "cancelled") continue;
       if (!out[b.stop_id]) out[b.stop_id] = String(b.sched);
     }
   } catch (e) {}
@@ -2162,10 +1709,7 @@ async function seatsFor(env, key, route, stops, buses, rotaRow, rows) {
    THE RUN
    ========================================================================== */
 
-/* `mode` asks for the real run ("real") or the rehearsal's ("rehearsal")
-   whatever is running; left out, it is whichever is running now. */
-async function tripState(env, key, route, mode) {
-  const rehearsing = mode === "real" ? false : mode === "rehearsal" ? true : !!(await rehearsalOn(env));
+async function tripState(env, key, route) {
   const { results } = await env.DB.prepare(
     "SELECT * FROM trip_events WHERE sunday = ? AND route = ? ORDER BY happened").bind(key, route).all();
 
@@ -2190,9 +1734,6 @@ async function tripState(env, key, route, mode) {
   for (const r of results || []) {
     const st = String(r.status || "").toLowerCase();
     if (st === "undone") continue;
-    /* Both ways round: a real run never counts rehearsal rows, and a
-       rehearsal never counts real ones. */
-    if ((st === "rehearsal") !== rehearsing) continue;
     if (!(Number(r.happened) || 0)) continue;
     live.push(r);
   }
@@ -2307,8 +1848,8 @@ function tripProjectable(state, set) {
   return { ok: true };
 }
 
-async function routeOver(env, key, route, stops, mode) {
-  const t = await tripState(env, key, route, mode);
+async function routeOver(env, key, route, stops) {
+  const t = await tripState(env, key, route);
   if (t.ended) return true;
   if (!t.started) return false;            /* never left: the backstop's job */
 
@@ -2345,12 +1886,11 @@ async function closeFinishedRuns(env) {
   let n = 0;
   for (const route of routeNames(stops)) {
     let t = null;
-    try { t = await tripState(env, key, route, "real"); } catch (e) { continue; }
+    try { t = await tripState(env, key, route); } catch (e) { continue; }
     if (!t || !t.started || t.ended || !t.trip) continue;
-    if (!(await routeOver(env, key, route, stops, "real"))) continue;
+    if (!(await routeOver(env, key, route, stops))) continue;
     const res = await handleTrip(env, {
       trip: t.trip, route: route, driver: t.driver, reg: t.reg, sunday: key,
-      rehearsal: 0,
       events: [{ event: "end", stopId: "", at: Date.now(), auto: "server" }]
     });
     let out = null;
@@ -2368,7 +1908,7 @@ async function runEndedToday(env, key, driver, stops) {
   let last = null, lastRoute = "";
   for (const rt of routeNames(stops)) {
     let t = null;
-    try { t = await tripState(env, key, rt, "real"); } catch (e) { continue; }
+    try { t = await tripState(env, key, rt); } catch (e) { continue; }
     if (!t || !t.trip || !t.started || !sameName(t.driver, driver)) continue;
     if (!t.ended) return null;
     if (!last || Number(t.ended) > Number(last.ended)) { last = t; lastRoute = rt; }
@@ -2402,7 +1942,7 @@ async function wakeRunEnded(env) {
   let n = 0;
   for (const route of routeNames(stops)) {
     let t = null;
-    try { t = await tripState(env, key, route, "real"); } catch (e) { continue; }
+    try { t = await tripState(env, key, route); } catch (e) { continue; }
     if (!t || !t.trip || !t.started || !t.ended || !t.driver) continue;
     if (now.getTime() - Number(t.ended) > RUN_ENDED_TELL_MS) continue;
     /* Each end once, by its run and its time: a second run on the route, or
@@ -2503,10 +2043,6 @@ async function busPayload(env, keyIn, ref, pid) {
     ok: true,
     date: key,
     closed: bookingsClosed(key),
-    /* Separate from closed on purpose. A rehearsal must not tell the page
-       bookings have shut, or a member booking on a Tuesday is turned away by
-       a test. It only tells the page to start watching. */
-    rehearsal: rehearsalInfo(await rehearsalOn(env)),
     rolled,
     cutoff: cutoffWords(),
     stops: publicStops(stops.filter((s) => !s.arrival)),
@@ -2562,7 +2098,6 @@ async function tripPayload(env, ref, want, askedStop, pid) {
   const key = runSunday();
   const all = await getStops(env);
   const stops = pickupsAndArrivals(all);
-  const reh = await rehearsalOn(env);
 
   const stopById = {};
   for (const s of stops) stopById[s.id] = s;
@@ -2595,8 +2130,7 @@ async function tripPayload(env, ref, want, askedStop, pid) {
      tracking. So the Rota is asked first, and the gate keeps its real job.
 
      The later cancellation check stays where it is. It covers what this one
-     cannot: a phone with no booking that has named a kerb, and a rehearsal's
-     seeded seat. Two checks, and the one that matters runs first.
+     cannot: a phone with no booking that has named a kerb. Two checks, and the one that matters runs first.
 
      THE ROTA IS ASKED FIRST, AND THE SEATS ONLY IF IT SAYS SOMETHING.
 
@@ -2618,50 +2152,21 @@ async function tripPayload(env, ref, want, askedStop, pid) {
       const seat = bookingFor(seats, String(pid || "").trim(), String(ref || "").trim());
       const at = seat && seat.stopId ? stopById[seat.stopId] : null;
       if (at && off.indexOf(at.route) !== -1) {
-        return { ok: true, live: false, why: "cancelled", date: key, rehearsal: rehearsalInfo(reh),
+        return { ok: true, live: false, why: "cancelled", date: key,
                  route: at.route, stop: at.stop, stopId: at.id, scheduled: at.time };
       }
     }
   }
 
-  /* The gate: tracking is visible only once bookings have closed — or while
-     a rehearsal is running, which is a separate switch on purpose. */
-  if (!(reh || bookingsClosed(key))) {
-    return { ok: true, live: false, why: "open", date: key, cutoff: cutoffWords(), rehearsal: false };
+  /* The gate: tracking is visible only once bookings have closed. */
+  if (!bookingsClosed(key)) {
+    return { ok: true, live: false, why: "open", date: key, cutoff: cutoffWords() };
   }
 
   const rows = await liveBookings(env, key);
 
   let mine = bookingFor(rows, String(pid || "").trim(), String(ref || "").trim());
   if (mine && !mine.stopId) mine = null;
-
-  /* Rehearsing. The live view is only ever shown to a phone with a booking,
-     so without this the person running the rehearsal sees nothing unless
-     they first make a real booking and remember to cancel it. An explicit
-     route asked for by the page wins even when the phone holds a booking —
-     without that, a tester who had booked a seat was pinned to his own
-     stop's route and the North/South switch did nothing at all. */
-  const askedRoute = String(want || "").trim();
-  if (reh && (askedRoute || !mine)) {
-    const seeds = rows.filter((b) => b.stopId && String(b.device || "").indexOf("rehearsal-") === 0);
-    if (askedRoute) {
-      mine = null;
-      for (const b of seeds) {
-        const s = stopById[b.stopId];
-        if (!mine && s && s.route === askedRoute) mine = b;
-      }
-    }
-    if (!mine) {
-      for (const b of seeds) {
-        if (mine) continue;
-        const s = stopById[b.stopId];
-        if (!s) continue;
-        const t = await tripState(env, key, s.route);
-        if (t.started && !t.ended) mine = b;
-      }
-    }
-    if (!mine && seeds.length) mine = seeds[0];
-  }
 
   /* No booking on this phone, but the passenger has said which kerb they are
      standing at. Everything below is a fact about the STOP — when the bus is
@@ -2676,10 +2181,10 @@ async function tripPayload(env, ref, want, askedStop, pid) {
       watching = true;
     }
   }
-  if (!mine) return { ok: true, live: false, why: "nobooking", date: key, rehearsal: rehearsalInfo(reh) };
+  if (!mine) return { ok: true, live: false, why: "nobooking", date: key };
 
   const myStop = stopById[mine.stopId] || null;
-  if (!myStop) return { ok: true, live: false, why: "nobooking", date: key, rehearsal: rehearsalInfo(reh) };
+  if (!myStop) return { ok: true, live: false, why: "nobooking", date: key };
 
   /* THE BUS THAT IS NOT COMING.
 
@@ -2692,7 +2197,7 @@ async function tripPayload(env, ref, want, askedStop, pid) {
     let rotaRow = null;
     try { rotaRow = await getRotaRow(env, key); } catch (e) {}
     if (routeCancelled(rotaRow, myStop.route)) {
-      return { ok: true, live: false, why: "cancelled", date: key, rehearsal: rehearsalInfo(reh),
+      return { ok: true, live: false, why: "cancelled", date: key,
                route: myStop.route, stop: myStop.stop, stopId: myStop.id,
                scheduled: myStop.time };
     }
@@ -2702,8 +2207,6 @@ async function tripPayload(env, ref, want, askedStop, pid) {
   const out = {
     ok: true, live: true, date: key, now: Date.now(), route: myStop.route,
     watching,
-    rehearsal: rehearsalInfo(reh),
-    routes: reh ? routeNames(stops) : [],
     stop: myStop.stop, stopId: myStop.id, scheduled: myStop.time,
     started: !!state.started, ended: !!state.ended,
     startedAtWords: state.started ? londonHHMM(new Date(state.started)) : "",
@@ -2810,17 +2313,15 @@ async function churchLine(env, key, all, route, state) {
 /* `mode` as for tripState. The driver's board leaves it out; the driver's
    reminders ask for the real run, because a test run is nobody's to be
    reminded about. */
-async function tripDriverPayload(env, route, mode) {
+async function tripDriverPayload(env, route) {
   const key = runSunday();
   const rt = String(route || "").trim() || "North";
   const all = await getStops(env);
-  const state = await tripState(env, key, rt, mode);
-  const reh = await rehearsalOn(env);
+  const state = await tripState(env, key, rt);
   const d = departStopFor(all, rt);
   return {
     ok: true, date: key, route: rt, now: Date.now(),
-    closed: !!(reh || bookingsClosed(key)), cutoff: cutoffWords(),
-    rehearsal: rehearsalInfo(reh),
+    closed: bookingsClosed(key), cutoff: cutoffWords(),
     trip: state.trip, driver: state.driver, reg: state.reg,
     started: state.started || 0, ended: state.ended || 0,
     lastAt: state.lastAt || 0, lastStop: state.lastStop,
@@ -2841,7 +2342,6 @@ async function tripDriverPayload(env, route, mode) {
 
    The phone is a random handle the driver app makes once and keeps. A phone
    on an app from before v1.114.0 sends none and is judged the old way.
-   Real runs only: a rehearsal is driven from one phone anyway.
 
    run_phones: trip  the run's id
                phone the handle of the phone that holds it
@@ -2898,7 +2398,7 @@ async function runOnOtherPhone(env, name, phone) {
   const key = runSunday();
   const stops = pickupsAndArrivals(await getStops(env));
   for (const rt of routeNames(stops)) {
-    const s = await tripState(env, key, rt, "real");
+    const s = await tripState(env, key, rt);
     if (!s.started || s.ended || !s.trip || !sameName(s.driver, name)) continue;
     await ensureRunPhones(env);
     const row = await env.DB.prepare(
@@ -3030,24 +2530,21 @@ async function boardPayload(env, route, phone, driver, fix, ctx) {
   /* ONE PHONE PER RUN (w2.59.0). A phone signed in as the run's driver says
      who it is with every poll: the run's phone is heard from, and another of
      his phones takes the run over once that one has gone quiet. here says
-     whether the asking phone holds it. Real runs only. */
+     whether the asking phone holds it. */
   try {
     const t = out.trip, ph = phoneOf(phone);
-    if (ph && t && t.trip && t.started && !t.ended && !t.rehearsal &&
+    if (ph && t && t.trip && t.started && !t.ended &&
         String(driver || "").trim() && sameName(t.driver, driver)) {
       t.phone = { here: await runPhoneTake(env, t.trip, ph, Date.now()) };
     }
   } catch (e) { /* the board as before */ }
 
-  /* WHERE THE BUS IS, from w2.72.0: only from the phone driving the run,
-     or on a rehearsal from the phone signed in as its driver. The route is
+  /* WHERE THE BUS IS, from w2.72.0: only from the phone driving the run. The route is
      asked for after the answer has gone, so the poll is never slowed; its
      estimates arrive on the next one. */
   try {
     const t = out.trip;
-    const driving = t && t.trip && t.started && !t.ended &&
-      ((t.phone && t.phone.here) ||
-       (t.rehearsal && String(driver || "").trim() && sameName(t.driver, driver)));
+    const driving = t && t.trip && t.started && !t.ended && t.phone && t.phone.here;
     if (driving && fix && fix.lat !== undefined && fix.lat !== null && fix.lat !== "") {
       const now = Date.now();
       if (await liveFix(env, t.trip, fix, now)) {
@@ -3311,72 +2808,9 @@ async function subsFollow(env, ref, pid) {
    free, and SQLite gives us that for nothing — which is the whole reason the
    ten-second script lock that every other driver used to queue behind is
    gone rather than reimplemented. */
-/* WHAT A TAP IS: "real", "test", or "over" (a test from a round that has
-   ended, taken and thrown away, never written). Decided by the run, never by
-   the moment the tap happened to arrive.
-
-   - A run swept away with its rehearsal is over, whatever the page says.
-   - A tap that names a round is a test in the round running now, and over
-     in any other.
-   - A tap that says real, or says nothing (a page from before v1.79.0), is
-     whatever its run's start was, when the start is here.
-   - With no start here, the run is judged by when it started: the start in
-     the batch, or, from a page that says nothing, its first tap. Made after
-     the running rehearsal began, it is a test: no real run starts during
-     one, and a phone that had not heard of the round yet would otherwise
-     put a test run on the day's record. Made inside a round that has ended,
-     it is over.
-
-   Five minutes' grace, for a phone whose clock is a little behind. On a real
-   Sunday none of this finds anything: no round runs on a Sunday morning. */
-const ROUND_GRACE_MS = 5 * 60000;
-async function rehearsalVerdict(env, trip, payload, reh) {
-  if (trip && await rehearsalGone(env, trip)) return "over";
-  const claimed = payload.rehearsal;
-  const silent = claimed === undefined || claimed === null;
-  if (!silent && Number(claimed)) return reh && Number(reh.at) === Number(claimed) ? "test" : "over";
-  if (trip) {
-    let s = null;
-    try {
-      s = await env.DB.prepare("SELECT status FROM trip_events WHERE trip=? AND event='start' ORDER BY id LIMIT 1")
-        .bind(trip).first();
-    } catch (e) {}
-    if (s) return String(s.status || "").toLowerCase() === "rehearsal" ? "test" : "real";
-  }
-  const list = (payload.events || []).filter((e) => Number(e && e.at));
-  const start = list.find((e) => String(e.event || "").trim().toLowerCase() === "start");
-  const t0 = start ? Number(start.at)
-           : silent ? list.reduce((m, e) => Math.min(m, Number(e.at)), Infinity) : NaN;
-  if (!isFinite(t0)) return "real";
-  if (reh && t0 >= Number(reh.at) - ROUND_GRACE_MS) return "test";
-  for (const r of await rehearsalRoundsDone(env)) {
-    if (t0 >= Number(r.at) - ROUND_GRACE_MS && t0 <= Number(r.end)) return "over";
-  }
-  return "real";
-}
-
 async function handleTrip(env, payload) {
   if (!payload) return json({ ok: false, error: "no trip data" });
 
-  /* WHAT A TAP IS, SAID BY THE PHONE THAT MADE IT.
-
-     From v1.79.0 a run knows the rehearsal round it was started in, and
-     every tap in it says so: 0 for a real run. A tap from a round that is
-     over is taken and thrown away, never written, so a phone that comes back
-     into signal after the rehearsal has ended cannot put its taps on the
-     record as a real morning. A real tap that arrives during a rehearsal is a
-     real tap. Only a page from before v1.79.0, which says nothing, is judged
-     the old way, by whether a rehearsal is on as it arrives. */
-  const reh = await rehearsalOn(env);
-  const tripId = String(payload.trip || "").trim();
-  /* See rehearsalVerdict. "over" is answered yes, so a phone does not send
-     it for ever, and says so, so a phone of this version lets the run go. */
-  const verdict = await rehearsalVerdict(env, tripId, payload, reh);
-  if (verdict === "over") {
-    return json({ ok: true, written: 0, dropped: (payload.events || []).length,
-                  rehearsalOver: true, rehearsal: rehearsalInfo(reh) });
-  }
-  const rehearsing = verdict === "test";
   const key = anyToKey(payload.sunday) || runSunday();
   const route = String(payload.route || "").trim() || "North";
   const trip = String(payload.trip || "").trim();
@@ -3418,11 +2852,9 @@ async function handleTrip(env, payload) {
      start must never be refused his own run. */
   const startsHere = events.some(
     (e) => String(e.event || "").trim().toLowerCase() === "start");
-  if (startsHere && !rehearsing) {
+  if (startsHere) {
     let open = null;
-    /* The real run on the route, even while a rehearsal is on: a real start
-       is only ever refused by another real run. */
-    try { open = await tripState(env, key, route, "real"); } catch (e) {}
+    try { open = await tripState(env, key, route); } catch (e) {}
     if (open && open.started && !open.ended && open.trip && open.trip !== trip) {
       return json({ ok: false, error: "route busy", busy: {
         driver: String(open.driver || ""), reg: String(open.reg || ""),
@@ -3435,7 +2867,7 @@ async function handleTrip(env, payload) {
      phone with an old copy of the dates may not, and refusing the start here
      would hold every tap behind it. So the run is taken and the coordinators
      are told at once. From w2.36.0. */
-  if (startsHere && !rehearsing && reg) {
+  if (startsHere && reg) {
     try {
       const bus = buses.find((b) => String(b.reg).toUpperCase() === reg.toUpperCase());
       const ps = bus && papersStop(bus.dates, londonKey(new Date()));
@@ -3451,7 +2883,7 @@ async function handleTrip(env, payload) {
   /* ONE PHONE PER RUN (w2.59.0). Taps from a phone other than the one that
      holds the run are refused while that phone is still talking. */
   const phone = phoneOf(payload.phone);
-  if (phone && !rehearsing) {
+  if (phone) {
     if (!(await runPhoneTake(env, trip, phone, Date.now()))) {
       return json({ ok: false, error: "other phone", run: { driver: who, route: route } });
     }
@@ -3489,7 +2921,7 @@ async function handleTrip(env, payload) {
     (e) => String(e.event || "").trim().toLowerCase() === "end");
   let endIgnored = 0;
 
-  if (endsHere && !rehearsing) {
+  if (endsHere) {
     await ensureTripCols(env);
 
     const startRow = await env.DB.prepare(
@@ -3542,9 +2974,8 @@ async function handleTrip(env, payload) {
   let wantBus = "";
   try { wantBus = (await busFor(env, key, route, buses, rotaRow)).reg || ""; } catch {}
 
-  /* The times passengers were given at the stops they booked. Not for a
-     rehearsal: its seats were drawn this morning from today's timetable. */
-  const promised = rehearsing ? {} : await bookedTimes(env, key, route);
+  /* The times passengers were given at the stops they booked. */
+  const promised = await bookedTimes(env, key, route);
 
   const stmts = [];
   let written = 0, undone = 0;
@@ -3598,9 +3029,7 @@ async function handleTrip(env, payload) {
        of the two the ladder reached first, and the other fact was simply
        gone. */
     let status;
-    if (rehearsing) {
-      status = "Rehearsal";
-    } else if (kind === "start") {
+    if (kind === "start") {
       /* More than one fact at a time. A run can be unchecked AND driven by
          cover, and the ladder this replaced would record whichever it reached
          first and lose the other.
@@ -3680,7 +3109,7 @@ async function handleTrip(env, payload) {
      tap being taken back went on the record: a phone woken since then may
      have been told something the Undo makes untrue. See wakeAfterUndo. */
   let undoBefore = null, undoSince = 0, undoAt = 0;
-  const undos = rehearsing ? [] : events.filter((e) =>
+  const undos = events.filter((e) =>
     String(e.event || "").trim().toLowerCase() === "undo" && isStopTap(e.undoes) && Number(e.at));
   if (undos.length) {
     try {
@@ -3692,7 +3121,7 @@ async function handleTrip(env, payload) {
         if (t && (!undoSince || t < undoSince)) undoSince = t;
       }
       if (undoSince) {
-        undoBefore = stopVerdicts(await tripState(env, key, route, "real"), stops, route);
+        undoBefore = stopVerdicts(await tripState(env, key, route), stops, route);
         undoAt = Number(undos[0].at) || 0;
       }
     } catch (e) { undoBefore = null; }
@@ -3727,29 +3156,27 @@ async function handleTrip(env, payload) {
      not announced is a small problem; a tap announced and not recorded is the
      kind that loses a Sunday. */
   try {
-    if (!rehearsing) {
-      const fixes = undoBefore ? await undoFixes(env, key, route, stops, undoBefore, undoSince) : [];
-      const marked = {}, liveTap = {};
-      const done = await env.DB.prepare(
-        "SELECT stop_id, event FROM trip_events WHERE trip=? AND status<>'Undone'").bind(trip).all();
-      for (const r of (done.results || [])) {
-        marked[r.stop_id] = 1;
-        if (isStopTap(r.event)) liveTap[r.stop_id + "|" + String(r.event).trim().toLowerCase()] = 1;
-      }
-
-      for (const ev of events) {
-        const kind = String(ev.event || "").trim().toLowerCase();
-        const stopId = String(ev.stopId || "").trim();
-        if (kind === "start") {
-          await wakeDeparture(env, key, route, stops, null);
-        } else if (isStopTap(kind) && liveTap[stopId + "|" + kind]) {
-          /* Only a tap still on the record (w2.57.0): one taken back in the
-             same send, by a phone that was out of signal, tells nobody. */
-          await wakeAfterTap(env, key, route, all, stops, stopId, marked, kind);
-        }
-      }
-      if (fixes.length) await wakeAfterUndo(env, key, route, fixes, undoAt);
+    const fixes = undoBefore ? await undoFixes(env, key, route, stops, undoBefore, undoSince) : [];
+    const marked = {}, liveTap = {};
+    const done = await env.DB.prepare(
+      "SELECT stop_id, event FROM trip_events WHERE trip=? AND status<>'Undone'").bind(trip).all();
+    for (const r of (done.results || [])) {
+      marked[r.stop_id] = 1;
+      if (isStopTap(r.event)) liveTap[r.stop_id + "|" + String(r.event).trim().toLowerCase()] = 1;
     }
+
+    for (const ev of events) {
+      const kind = String(ev.event || "").trim().toLowerCase();
+      const stopId = String(ev.stopId || "").trim();
+      if (kind === "start") {
+        await wakeDeparture(env, key, route, stops, null);
+      } else if (isStopTap(kind) && liveTap[stopId + "|" + kind]) {
+        /* Only a tap still on the record (w2.57.0): one taken back in the
+           same send, by a phone that was out of signal, tells nobody. */
+        await wakeAfterTap(env, key, route, all, stops, stopId, marked, kind);
+      }
+    }
+    if (fixes.length) await wakeAfterUndo(env, key, route, fixes, undoAt);
   } catch (e) { /* the record is written; this was only the courtesy */ }
 
   return json({ ok: true, written, undone, endIgnored });
@@ -3824,9 +3251,8 @@ async function handleRotaRequest(env, rq) {
 /* CLEARING A SUNDAY THAT HAS NOT BEEN DRIVEN YET.
 
    There was no way to do this, and on 23 September at three in the morning
-   there needed to be. A rehearsal had run while this server still believed it
-   was an ordinary night — the flag never reached it — so every tap went in as
-   a REAL run on the real Sunday, and the only way out was a SQL console.
+   there needed to be: test taps had gone in as a REAL run on the real Sunday,
+   and the only way out was a SQL console.
 
    TWO GUARDS, AND THEY ARE THE WHOLE SAFETY OF IT.
 
@@ -3855,30 +3281,18 @@ async function handleClearTrips(env, body) {
   /* A run that started and has not ended. tripState is asked per route
      because that is where the one-run-at-a-time rule lives. */
   for (const route of ["North", "South"]) {
-    /* Real and rehearsal both: this clears every tap on the Sunday. */
-    for (const mode of ["real", "rehearsal"]) {
-      let t = null;
-      try { t = await tripState(env, key, route, mode); } catch (e) {}
-      if (t && t.started && !t.ended) {
-        return json({ ok: false, error: "the " + route + " run is still open. End it first." });
-      }
+    let t = null;
+    try { t = await tripState(env, key, route); } catch (e) {}
+    if (t && t.started && !t.ended) {
+      return json({ ok: false, error: "the " + route + " run is still open. End it first." });
     }
   }
 
   const before = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM trip_events WHERE sunday = ?").bind(key).first();
-  const seats = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM bookings WHERE sunday = ? AND lower(status) = 'rehearsal'"
-  ).bind(key).first();
+  await env.DB.prepare("DELETE FROM trip_events WHERE sunday = ?").bind(key).run();
 
-  await env.DB.batch([
-    env.DB.prepare("DELETE FROM trip_events WHERE sunday = ?").bind(key),
-    env.DB.prepare("DELETE FROM bookings WHERE sunday = ? AND lower(status) = 'rehearsal'").bind(key)
-  ]);
-
-  return json({ ok: true, sunday: key,
-                trips: Number(before && before.n) || 0,
-                seats: Number(seats && seats.n) || 0 });
+  return json({ ok: true, sunday: key, trips: Number(before && before.n) || 0 });
 }
 
 async function handleSync(env, body) {
@@ -3930,11 +3344,6 @@ async function handleSync(env, body) {
           ).bind(...common));
     });
   }
-  /* THE TEST BOOKINGS A REHEARSAL DRAWS, and the flag, came from the sheet
-     until w2.20.0, and are ignored now. This server owns the rehearsal, and a
-     sheet a version behind would otherwise end one on every sync: its push
-     said "no rehearsal" whenever its own copy said so. */
-
   if (Array.isArray(body.buses)) {
     /* The dates and the pairing, when this sheet sends them (v1.87.0 on). */
     if (body.buses.some((b) => b && (b.dates || b.oddRoute !== undefined))) {
@@ -4853,7 +4262,7 @@ async function runsByBus(env, day) {
   try { routes = routeNames(pickupsAndArrivals(await getStops(env))); } catch (e) { return out; }
   for (const route of routes) {
     let t = null;
-    try { t = await tripState(env, day, route, "real"); } catch (e) { continue; }
+    try { t = await tripState(env, day, route); } catch (e) { continue; }
     if (!t || !t.trip || !t.started || !t.reg) continue;
     out[String(t.reg).trim().toUpperCase()] = { driver: String(t.driver || ""), ended: Number(t.ended) || 0, route };
   }
@@ -5306,8 +4715,7 @@ async function handleDrain(env, body) {
 async function morningSeen(env) {
   try {
     const m = await cacheGet(env, "morning_done");
-    return { key: String((m && m.key) || ""), off: !(await passengerRules(env)).morningMessage,
-             rehearsal: !!(await rehearsalOn(env)) };
+    return { key: String((m && m.key) || ""), off: !(await passengerRules(env)).morningMessage };
   } catch (e) { return null; }
 }
 
@@ -5469,7 +4877,6 @@ async function fitBookingsToStops(env) {
   }
   if (Date.now() - (Number(seen.since) || 0) < TIMETABLE_SETTLE_MS) return 0;
   if (!(await ensureBookSched(env))) return 0;
-  if (await rehearsalOn(env)) return 0;
 
   const quiet = quietNow(await passengerRules(env));
   const thisSunday = sundayKeyOf(new Date());
@@ -5478,7 +4885,7 @@ async function fitBookingsToStops(env) {
     if (bookingsClosed(key)) continue;
     const q = await env.DB.prepare(
       "SELECT id, route, stop_id, stop, seats, device, pid, sched, status FROM bookings " +
-      "WHERE sunday=? AND lower(status) NOT IN ('cancelled','rehearsal')").bind(key).all();
+      "WHERE sunday=? AND lower(status)<>'cancelled'").bind(key).all();
     for (const b of (q.results || [])) {
       let stop = stops.find((s) => s.id === b.stop_id) || null;
       let moved = false;
@@ -5586,10 +4993,22 @@ async function forgetOldNumbers(env) {
   return Number((r && r.meta && r.meta.changes) || 0);
 }
 
+/* REHEARSAL WAS TAKEN OUT IN w2.73.0 (Asim, 29 Oct 2026). Whatever one left
+   on this server goes once: its flag and lists, and any seat or tap still
+   tagged Rehearsal. The sheet clears its own tabs the same way. */
+async function dropRehearsalLeftovers(env) {
+  if (await cacheGet(env, "rehearsal_dropped")) return;
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM settings WHERE k IN ('rehearsal','rehearsal_gone','rehearsal_rounds')"),
+    env.DB.prepare("DELETE FROM bookings WHERE lower(status)='rehearsal'"),
+    env.DB.prepare("DELETE FROM trip_events WHERE lower(status)='rehearsal'"),
+    cachePut(env, "rehearsal_dropped", { at: Date.now() })
+  ]);
+}
+
 async function clockTick(env) {
   try { await cachePut(env, "clock", { at: Date.now() }).run(); } catch (e) {}
-  /* Asking is what clears one that has run out. */
-  try { await rehearsalOn(env); } catch (e) {}
+  try { await dropRehearsalLeftovers(env); } catch (e) {}
   await sweeps(env);
   try { await pokeIfWaiting(env); } catch (e) {}
   try { await releaseCoordAlerts(env); } catch (e) {}
@@ -5670,8 +5089,8 @@ async function pokeIfWaiting(env) {
    time }] }, id the row's Live ID, time hours and minutes. It is corrected
    the way Fix corrects it, said so in the row's note, and left pending, so
    the next drain writes this copy, which is now what was typed, back onto the
-   tab. Rehearsal rows, taps taken back and runs older than the Fix window
-   are refused with a reason. */
+   tab. Taps taken back and runs older than the Fix window are refused with
+   a reason. */
 async function handleSheetTrips(env, body) {
   const edits = Array.isArray(body && body.edits) ? body.edits.slice(0, 50) : [];
   await ensureTripCols(env);
@@ -5687,7 +5106,6 @@ async function handleSheetTrips(env, body) {
     const row = await env.DB.prepare("SELECT * FROM trip_events WHERE id=?").bind(id).first();
     if (!row) { say("not here"); continue; }
     const st = String(row.status || "");
-    if (/rehearsal/i.test(st)) { say("rehearsal"); continue; }
     if (st === "Undone") { say("taken back"); continue; }
     const key = String(row.sunday || "");
     if (key < keyAddWeeks(runSunday(), -FIX_WINDOW_WEEKS)) { say("too old"); continue; }
@@ -6067,12 +5485,6 @@ async function subsAtStop(env, key, stopId) {
    Tagged per route per Sunday, so marking the Rota, changing your mind, and
    marking it again does not buzz the same pocket twice. */
 async function wakeCancelled(env) {
-  /* A rehearsal holds this back, and on purpose: the README's checklist
-     calls a route off to watch the passenger page do it, and during a
-     rehearsal that must reach nobody. A real route called off while one is
-     running is told the minute it ends, on the next tick. */
-  if (await rehearsalOn(env)) return 0;
-
   const key = runSunday();
   const all = await getStops(env);
   const stops = pickupsAndArrivals(all);
@@ -6109,7 +5521,7 @@ async function wakeCancelled(env) {
    the moment he taps it.
 
    Not on a route called off (that has its own words, and they come first),
-   not during a rehearsal, and not past an hour, when a stale buzz helps
+   and not past an hour, when a stale buzz helps
    nobody and the coordinator is already on it. */
 const NOT_LEFT_AFTER_MS = 5 * 60000;
 const NOT_LEFT_UNTIL_MS = 60 * 60000;
@@ -6123,7 +5535,6 @@ function notLeftDue(all, key, route, now) {
 }
 
 async function wakeNotLeft(env) {
-  if (await rehearsalOn(env)) return 0;
   const key = runSunday();
   const all = await getStops(env);
   const stops = pickupsAndArrivals(all);
@@ -6135,7 +5546,7 @@ async function wakeNotLeft(env) {
     if (routeCancelled(rotaRow, route)) continue;
     if (!notLeftDue(all, key, route, now)) continue;
     let state = null;
-    try { state = await tripState(env, key, route, "real"); } catch (e) { continue; }
+    try { state = await tripState(env, key, route); } catch (e) { continue; }
     if (state && state.started) continue;
     const seen = {};
     let r = 0;
@@ -6327,7 +5738,7 @@ function stopVerdicts(state, stops, route) {
    before the same send's own taps wake anybody. */
 async function undoFixes(env, key, route, stops, before, since) {
   let state = null;
-  try { state = await tripState(env, key, route, "real"); } catch (e) { return []; }
+  try { state = await tripState(env, key, route); } catch (e) { return []; }
   if (!state || state.ended) return [];
   const after = stopVerdicts(state, stops, route);
   const out = [];
@@ -6389,14 +5800,6 @@ async function wakeAfterUndo(env, key, route, fixes, when) {
    A window rather than a moment, like every other sweep here, because this
    Worker has no clock of its own and runs when Apps Script calls in. */
 async function wakeBookingReminders(env) {
-  /* NOT HELD BACK BY A REHEARSAL, from w2.20.1.
-
-     Everything else that wakes a passenger is about the run, and waits while
-     a test run is on the road. This is not: it asks people to book, or tells
-     a man what he has booked, from the real bookings, and says nothing about
-     any bus. Held back, a rehearsal on a Saturday evening swallowed the one
-     reminder a booked passenger gets before Sunday, and that is the evening
-     a rehearsal is most likely to be run. */
   const rules = await bookingRules(env);
   if (!rules.on) return 0;
   if (quietNow(await passengerRules(env))) return 0;
@@ -6414,30 +5817,11 @@ async function wakeBookingReminders(env) {
   const now = runSunday();
   const target = bookingsClosed(now) ? keyAddWeeks(now, 1) : now;
 
-  /* EXCEPT FOR A SEAT ON A ROUTE THE ROTA HAS OFF, while a rehearsal runs.
-     The checklist calls a route off during one, so a route off then may be
-     a test or may be real, and nothing here can tell which. "You are booked"
-     reads as if the bus runs, and "No bus" may be untrue, so he is not woken
-     at all. Nothing claims his reminder: it goes in the window once the
-     rehearsal is over, saying what is true then, and a route still off is
-     told by its own message. See rehearsalSeatWords. */
-  const held = {};
-  let off = [];
-  const byStop = {};
-  if (await rehearsalOn(env)) {
-    try {
-      const stops = pickupsAndArrivals(await getStops(env));
-      for (const x of stops) byStop[String(x.id)] = x.route;
-      off = cancelledRoutes(await getRotaRow(env, target), stops);
-    } catch (e) { off = []; }
-  }
-
   const booked = {};
   for (const b of await liveBookings(env, target)) {
     if (!(Number(b.seats) > 0)) continue;
-    const hold = off.length > 0 && off.indexOf(byStop[String(b.stopId)] || "") !== -1;
-    if (b.device && !b.pid) { booked["d:" + b.device] = 1; if (hold) held["d:" + b.device] = 1; }
-    if (b.pid) { booked["p:" + b.pid] = 1; if (hold) held["p:" + b.pid] = 1; }
+    if (b.device && !b.pid) booked["d:" + b.device] = 1;
+    if (b.pid) booked["p:" + b.pid] = 1;
   }
 
   const subs = await subsWhere(env, "role <> 'driver'", []);
@@ -6461,8 +5845,7 @@ async function wakeBookingReminders(env) {
   for (const sub of subs) {
     const has = (sub.ref && booked["d:" + sub.ref]) || (sub.pid && booked["p:" + sub.pid]);
     if (has) {
-      const hold = (sub.ref && held["d:" + sub.ref]) || (sub.pid && held["p:" + sub.pid]);
-      if (hit.booked && !hold) nBooked += await wake(env, [sub], bookedTag);
+      if (hit.booked) nBooked += await wake(env, [sub], bookedTag);
       continue;
     }
     nBook += await wake(env, [sub], tag);
@@ -6488,7 +5871,6 @@ async function wakeBookingReminders(env) {
    The tag sees to it that the first sweep inside the window is the only one
    that sends. */
 async function wakeMorning(env) {
-  if (await rehearsalOn(env)) return 0;
   const rules = await passengerRules(env);
   if (!rules.morningMessage) return 0;
 
@@ -6727,10 +6109,7 @@ async function driverNudgeFor(env, key, route, all, stops, rotaRow, buses) {
   if (!who) return null;                       /* nobody rostered, nobody to tell */
 
   let t = null;
-  /* The real run, even while a rehearsal is on. On a Sunday afternoon a test
-     run past the timetable's arrival would otherwise tell the rostered
-     driver to end a run somebody else is rehearsing. */
-  try { t = await tripDriverPayload(env, route, "real"); } catch (e) { return null; }
+  try { t = await tripDriverPayload(env, route); } catch (e) { return null; }
   if (!t) return null;
 
   const now = Date.now();
@@ -7027,30 +6406,6 @@ function seatWords(seat) {
            title: "You are booked for Sunday",
            body: seat.stop + (seat.time ? ", " + seat.time : "") + "." +
                  (n ? " " + n + (n === 1 ? " seat." : " seats.") : "") };
-}
-
-/* WHAT A MAN WITH A SEAT IS TOLD WHILE A REHEARSAL RUNS.
-
-   His seat, from the real bookings, unless the Rota has his route off. The
-   checklist calls a route off during a rehearsal to watch the passenger
-   page, so a route off then may be a test, and "No bus" on its word would
-   keep at home people whose bus is running. "You are booked" would read as
-   if the bus runs when the route may really be off. So he is told to open
-   the app, under the tag the booking reminders use, which leaves a "No bus"
-   already on his screen where it is.
-
-   Except when the last thing he was woken with was that route called off.
-   A rehearsal holds that message back, so it went out before this one began
-   and was real, and he is told it again. */
-async function rehearsalSeatWords(env, sub, seat) {
-  if (!seat || !seat.route) return seatWords(seat);
-  let off = [];
-  try { off = cancelledRoutes(await getRotaRow(env, seat.key), pickupsAndArrivals(await getStops(env))); } catch (e) { off = []; }
-  if (off.indexOf(seat.route) === -1) return seatWords(seat);
-  if (String((sub && sub.last) || "") === "off|" + seat.key + "|" + seat.route) {
-    return offWords(seat.stop, seat.route, seat.key);
-  }
-  return { ok: true, tag: "book", url: "./", title: "Sunday Bus", body: "Open the app for the latest." };
 }
 
 /* ==========================================================================
@@ -7709,7 +7064,7 @@ async function pushWhat(env, endpoint, opts) {
        true when he reads it, and two pushes say the one thing that matters
        most rather than the last thing that happened. */
     let t = null;
-    try { t = await tripDriverPayload(env, route, "real"); } catch (e) {}
+    try { t = await tripDriverPayload(env, route); } catch (e) {}
 
     const d = departStopFor(all, route);
     const due = d && d.time ? londonMoment(key, d.time) : null;
@@ -7836,13 +7191,6 @@ async function pushWhat(env, endpoint, opts) {
 
     return { ok: true, tag: "end", url: "./", title: "Dominion Assembly Transport", body: "Nothing outstanding." };
   }
-
-  /* NEVER THE TEST RUN. While a rehearsal is on, tripPayload describes it:
-     the gate is open, and a phone with no seat is lent a test one. So a
-     passenger woken then, by a booking reminder or a route called off, is
-     told only what is true of his real seat and the real Rota. */
-  /* Nor the Rota, on its own word. See rehearsalSeatWords. */
-  if (await rehearsalOn(env)) return rehearsalSeatWords(env, sub, await seatFor(env, sub));
 
   let p = null;
   try { p = await tripPayload(env, sub.ref || "", "", "", sub.pid || ""); } catch (e) {}
@@ -8879,8 +8227,7 @@ async function handleUnsubscribe(env, body) {
 
 /* ---- proving the chain --------------------------------------------------
 
-   A rehearsal wakes nobody, deliberately, and the driver's End trip reminder
-   waits for a run to be past its arrival time, which a weekday evening never
+   The driver's End trip reminder waits for a run to be past its arrival time, which a weekday evening never
    is. Between them they left one question permanently unanswered: does the
    push service ACCEPT what this Worker signs. Everything up to that moment is
    exercised; the answer itself never was, and a malformed token looks exactly
@@ -10929,14 +10276,6 @@ async function coordLoad(env, me) {
   try { out.open = await busCurrentSunday(env, stops); } catch (e) { out.open = today; }
   out.cutoff = cutoffWords();
 
-  /* The rehearsal, if one is running, with its seats and its runs so far. */
-  try {
-    const reh = await rehearsalOn(env);
-    out.rehearsal = rehearsalInfo(reh);
-    out.rehearsalDetail = await rehearsalDetail(env, reh);
-    out.rehearsalBlocked = reh ? "" : await liveMorning(env);
-  } catch (e) { out.rehearsal = false; out.rehearsalDetail = null; out.rehearsalBlocked = ""; }
-
   /* Twelve weeks back, for who drove last, and a year ahead. Inside what the
      shelf holds (LIVE_CACHE_BACK and LIVE_CACHE_AHEAD in Code.gs). */
   const rota = await cachedRota(env, keyAddWeeks(today, -12), 64);
@@ -11042,20 +10381,17 @@ async function coordBookings(env, me, sundayIn) {
   }
   const all = await getStops(env);
   const stops = pickupsAndArrivals(all);
-  const rehearsing = !!(await rehearsalOn(env));
   const q = await env.DB.prepare(
     "SELECT id, route, stop_id, stop, seats, device, pid, phone, status, received, note " +
     "FROM bookings WHERE sunday=? ORDER BY received, id").bind(key).all();
-  const rows = (q.results || []).filter((b) =>
-    String(b.status || "").toLowerCase() !== "rehearsal" || rehearsing);
+  const rows = q.results || [];
   const live = await liveBookings(env, key);
   const buses = await getBuses(env);
   const rotaRow = await getRotaRow(env, key);
 
   const one = (b) => ({ id: Number(b.id), stopId: b.stop_id, stop: b.stop, seats: Number(b.seats) || 0,
                         phone: b.phone || "", status: b.status, received: Number(b.received) || 0,
-                        note: b.note || "", coord: String(b.device || "").indexOf("coord-") === 0,
-                        rehearsal: String(b.status || "").toLowerCase() === "rehearsal" });
+                        note: b.note || "", coord: String(b.device || "").indexOf("coord-") === 0 });
   const out = { ok: true, sunday: key, cutoff: cutoffWords(), closed: bookingsClosed(key),
                 mayAct: busDateAllowed(key), routes: [], cancelled: [] };
   for (const rt of routeNames(stops)) {
@@ -11076,10 +10412,8 @@ async function coordBookings(env, me, sundayIn) {
      above, so listed on their own (fitBookingsToStops moves the ones it can). */
   const onTable = {};
   for (const s of stops) if (!s.arrival) onTable[s.id] = 1;
-  out.gone = rows.filter((b) => {
-    const st = String(b.status || "").toLowerCase();
-    return st !== "cancelled" && st !== "rehearsal" && !onTable[b.stop_id];
-  }).map(one);
+  out.gone = rows.filter((b) =>
+    String(b.status || "").toLowerCase() !== "cancelled" && !onTable[b.stop_id]).map(one);
   out.cancelled = rows.filter((b) => String(b.status || "").toLowerCase() === "cancelled")
     .sort((a, b) => (Number(b.received) || 0) - (Number(a.received) || 0)).slice(0, 30).map(one);
   return out;
@@ -11093,7 +10427,7 @@ async function coordRuns(env, me, sundayIn) {
   const out = { ok: true, sunday: key, earliest: earliest, routes: [], recent: [] };
   try {
     const r = await env.DB.prepare(
-      "SELECT DISTINCT sunday FROM trip_events WHERE sunday>=? AND sunday<=? AND status<>'Rehearsal' " +
+      "SELECT DISTINCT sunday FROM trip_events WHERE sunday>=? AND sunday<=? " +
       "ORDER BY sunday DESC").bind(earliest, londonKey(new Date())).all();
     out.recent = (r.results || []).map((x) => x.sunday);
   } catch (e) {}
@@ -11103,19 +10437,15 @@ async function coordRuns(env, me, sundayIn) {
   const all = await getStops(env);
   const q = await env.DB.prepare(
     "SELECT * FROM trip_events WHERE sunday=? ORDER BY happened, id").bind(key).all();
-  const rows = (q.results || []).filter((r) => {
-    const st = String(r.status || "");
-    return st !== "Undone" && !/rehearsal/i.test(st);
-  });
+  const rows = (q.results || []).filter((r) => String(r.status || "") !== "Undone");
   /* WHAT WAS BOOKED, BY NUMBER. A stop nobody tapped is either one nobody
      booked, where the driver app asks for no tap at all, or one with seats
      the driver did not mark. The record has to tell those apart, or every
-     quiet stop reads as a missed one. Real seats only: a rehearsal's are
-     not this morning's. */
+     quiet stop reads as a missed one. */
   const booked = {};
   try {
     for (const b of await liveBookings(env, key)) {
-      if (!b.stopId || /rehearsal/i.test(String(b.status || ""))) continue;
+      if (!b.stopId) continue;
       const x = booked[b.stopId] || (booked[b.stopId] = { seats: 0, stop: "" });
       x.seats += b.seats;
       if (!x.stop) x.stop = b.stop;
@@ -11639,7 +10969,6 @@ async function actBooking(env, me, act, actionId) {
     if (String(row.sunday) < runSunday()) return { ok: false, error: "That Sunday has been and gone." };
     const st = String(row.status || "").toLowerCase();
     if (st === "cancelled") return { ok: false, error: "That booking is already cancelled." };
-    if (st === "rehearsal") return { ok: false, error: "That is a rehearsal seat." };
     const note = "Cancelled by " + me.name + " in the coordinator's app at " + londonHHMM(new Date()) + ".";
     const tail = row.phone ? ", number ending " + String(row.phone).slice(-3) : "";
     return { ok: true, sunday: row.sunday,
@@ -11792,7 +11121,6 @@ async function actFix(env, me, act) {
       .bind(Number(act.eventId), key).first();
     if (!row) return { ok: false, error: "That time is not on the live server." };
     const st = String(row.status || "");
-    if (/rehearsal/i.test(st)) return { ok: false, error: "That was a rehearsal." };
     if (st === "Undone") return { ok: false, error: "The driver took that tap back." };
     const wasAt = Number(row.happened) || 0;
     const wasHHMM = wasAt ? londonHHMM(new Date(wasAt)) : "";
@@ -11819,7 +11147,6 @@ async function actFix(env, me, act) {
     "SELECT * FROM trip_events WHERE trip=? AND sunday=? AND status<>'Undone' ORDER BY id LIMIT 1")
     .bind(trip, key).first() : null;
   if (!any) return { ok: false, error: "That run is not on the live server." };
-  if (/rehearsal/i.test(String(any.status || ""))) return { ok: false, error: "That was a rehearsal." };
   const all = await getStops(env);
   const stop = all.find((s) => s.id === String(act.stopId || "").trim() &&
                                s.route === any.route && !s.depart && !s.arrival) || null;
@@ -11880,7 +11207,6 @@ async function coordAct(env, me, act) {
   else if (kind === "pin") r = await actPinReset(env, me, act);
   else if (kind === "contact") r = await actContact(env, me, act);
   else if (kind === "message") r = await actMessage(env, me, act, id);
-  else if (kind === "rehearsal") r = await rehearsalPlan(env, String(act.op || ""), String(act.shape || ""));
   else return { ok: false, error: "unknown kind" };
   if (!r || !r.ok) return r || { ok: false, error: "refused" };
 
@@ -12137,9 +11463,6 @@ export default {
         if (action === "mint") return await handleMintLink(env, body);
         if (action === "outcome") return await handleOutcome(env, body);
         if (action === "cleartrips") return await handleClearTrips(env, body);
-        /* The spreadsheet's Rehearse and Stop rehearsing. The knock is so the
-           sheet clears its own tabs within seconds. */
-        if (action === "rehearsal") return knock(json(await handleRehearsal(env, body)), "rehearsal");
         if (action === "sync") return await handleSync(env, body);
         /* An alert Apps Script has just emailed, for the coordinators' phones. */
         if (action === "coordAlert") return await handleCoordAlert(env, body);

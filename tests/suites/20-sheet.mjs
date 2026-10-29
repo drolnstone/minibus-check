@@ -1288,285 +1288,43 @@ export default function (root) {
   });
 
 
-  /* ---- a rehearsal, owned by the live server from v1.84.0 ----------------
+  /* ---- rehearsal, taken out in v1.129.0 ----------------------------------
 
-     This file used to own it: the flag in Script Properties, the seats drawn
-     onto the Bus Bookings tab, both carried to the live server on the next
-     push. A sheet whose copy said "none" then ended a rehearsal started
-     anywhere else on its next sync, and ending one left its taps on the Trip
-     Events tab on purpose. Now the two menu items ask the live server, the
-     drain tells this file what happened, and this file keeps a copy of the
-     flag and takes the rows off its tabs.
-
-     Every check here fails on v1.83.0. */
+     Anything one left on the tabs, and this file's copy of its flag, goes on
+     the nightly pass. Real rows stay. */
 
   const BOOK_H = TABS["Bus Bookings"], TRIP_H = TABS["Trip Events"];
 
-  /* Two rounds: one that is over, and one that began five minutes ago and
-     whose first tap and seat the drain has already written. */
-  function withRehearsalRows(on) {
-    const now = Date.now();
-    const OLD = now - 20 * 60000, NEW = now - 5 * 60000;
-    const key = "2026-10-04";
+  s.test("the nightly pass takes what a rehearsal left off both tabs, and nothing real", (a) => {
+    const key = "2026-10-04", at = Date.now() - 20 * 60000;
     const t = tabs();
-    const trip = (logged, id, status, live) =>
-      [new Date(logged), id, key, "North", "Bro Adrian", "picked", "N02", "Grace Road bus stop, Walton Vale",
-       "", new Date(logged), 0, status, "YS70 PWE", "", "", "", "", "", live];
-    t["Trip Events"] = [TRIP_H,
-      trip(OLD + 1000, "t-old", "Rehearsal", "1"),
-      trip(OLD + 2000, "t-old", "Undone", "2"),        /* taken back: lost the word */
-      trip(OLD + 3000, "t-real", "Logged", "3"),       /* a real tap */
-      trip(NEW + 2000, "t-new", "Rehearsal", "4")];    /* the new round's */
+    const trip = (id, status, live) =>
+      [new Date(at), id, key, "North", "Bro Adrian", "picked", "N02", "Grace Road bus stop, Walton Vale",
+       "", new Date(at), 0, status, "YS70 PWE", "", "", "", "", "", live];
+    t["Trip Events"] = [TRIP_H, trip("t-old", "Rehearsal", "1"), trip("t-real", "Logged", "3")];
     t["Bus Bookings"] = [BOOK_H,
-      [new Date(OLD), key, "North", "N02", "Grace Road bus stop, Walton Vale", 3, "rehearsal-north-0-a", "Rehearsal", "", "", "11"],
-      [new Date(NEW + 10), key, "North", "N01", "Scarisbrick Drive by Ardville Road", 2, "rehearsal-north-0-b", "Rehearsal", "", "", "12"],
-      [new Date(OLD - 86400000), key, "North", "N01", "Scarisbrick Drive by Ardville Road", 1, "d-real", "Booked", "07700900001", "p1", "13"]];
-    const props = { COORDINATOR_EMAIL: "a@b.c", WORKER_URL: "https://example.invalid", rotaVersion: "7" };
-    if (on) props.rehearsal = JSON.stringify({ at: on === "new" ? NEW : OLD, key: key, shape: "normal" });
-    return { L2: loadCodeGs(root, { tabs: t, props: props }), OLD, NEW, key };
-  }
-  const liveIds = (L2, tab) => {
-    const v = L2.ctx.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(tab).getDataRange().getValues();
-    const i = v[0].indexOf("Live ID");
-    return v.slice(1).map((r) => String(r[i]));
-  };
-  const mirror = (L2) => {
-    const raw = L2.ctx.PropertiesService.getScriptProperties().getProperty("rehearsal");
-    return raw ? JSON.parse(raw) : null;
-  };
-  const lastAlert = (L2) => L2.gas.logs.filter((l) => l[0] === "alert").pop() || [];
-  const asked = (L2, action) => L2.gas.fetched.map((f) => {
-    try { return JSON.parse(String(f.opts.payload || "{}")); } catch (e) { return {}; }
-  }).filter((b) => b.action === action);
-  const ssOf = (L2) => L2.ctx.SpreadsheetApp.getActiveSpreadsheet();
+      [new Date(at), key, "North", "N02", "Grace Road bus stop, Walton Vale", 3, "rehearsal-north-0-a", "Rehearsal", "", "", "11"],
+      [new Date(at), key, "North", "N01", "Scarisbrick Drive by Ardville Road", 1, "d-real", "Booked", "07700900001", "p1", "13"]];
+    const L2 = loadCodeGs(root, { tabs: t, props: { COORDINATOR_EMAIL: "a@b.c", WORKER_URL: "https://example.invalid",
+                                                    rehearsal: JSON.stringify({ at: at, key: key }) } });
+    const ss = L2.ctx.SpreadsheetApp.getActiveSpreadsheet();
+    const gone = call(L2, "dropRehearsalRows", ss);
+    a.eq(gone.taps, 1, "taps"); a.eq(gone.seats, 1, "seats");
+    const ids = (tab) => {
+      const v = ss.getSheetByName(tab).getDataRange().getValues();
+      const i = v[0].indexOf("Live ID");
+      return v.slice(1).map((r) => String(r[i]));
+    };
+    a.eq(ids("Trip Events").join(","), "3", "the real tap stays");
+    a.eq(ids("Bus Bookings").join(","), "13", "the real seat stays");
+    a.eq(L2.ctx.PropertiesService.getScriptProperties().getProperty("rehearsal"), null, "the flag is gone");
+  });
 
-  const sent = (L2) => {
-    const hit = asked(L2, "sync");
-    return hit.length ? hit[hit.length - 1] : null;
-  };
-
-  s.test("the push no longer carries a rehearsal, running or not", (a) => {
-    /* On v1.83.0 it did, and a copy that said "none" ended the one the
-       coordinator had just started on his phone. */
-    for (const on of [true, false]) {
-      const { L2 } = withRehearsalRows(on);
-      call(L2, "pushToWorker");
-      const body = sent(L2);
-      a.ok(body, "no sync was sent at all");
-      a.not("rehearsal" in body, "the push still says whether one is running");
-      a.not("rehearsalSeeds" in body, "the push still carries test seats");
+  s.test("nothing of rehearsal is left in the sheet's code or its menu", (a) => {
+    const src = readFileSync(join(root, "Code.gs"), "utf8");
+    for (const gone of ["startRehearsal", "stopRehearsal", "Rehearse this Sunday", "rehearsalOn(", "coordRehearsal"]) {
+      a.hasnt(src, gone, gone + " is still there");
     }
-  });
-
-  s.test("starting over takes the last round's rows off both tabs and keeps the new round's", (a) => {
-    const { L2, NEW, key } = withRehearsalRows(true);
-    const res = call(L2, "applyCoordAction", ssOf(L2), { id: "act-1-over", kind: "rehearsal", made: NEW,
-      by: "Bro Arthur", body: { op: "over", sunday: key, round: NEW, ends: NEW + 7200000, shape: "full", trips: ["t-old"] } }, {});
-    a.ok(res.done && res.ok !== false, JSON.stringify(res));
-    a.same(liveIds(L2, "Trip Events"), ["3", "4"], "the taken-back tap is found by its trip, and the new round's is kept");
-    a.same(liveIds(L2, "Bus Bookings"), ["12", "13"]);
-    a.eq(mirror(L2).at, NEW, "the copy of the flag is not the new round");
-    a.eq(mirror(L2).shape, "full");
-    a.eq(res.result, "Taken off the tabs: 2 taps and 1 test seat.");
-  });
-
-  s.test("ending one clears the copy and every test row made before the end", (a) => {
-    const { L2, OLD, key } = withRehearsalRows(true);
-    call(L2, "applyCoordAction", ssOf(L2), { id: "act-2-end", kind: "rehearsal", made: Date.now(),
-      by: "the clock", body: { op: "end", sunday: key, round: OLD, trips: ["t-old"] } }, {});
-    a.eq(mirror(L2), null, "this file still thinks one is running");
-    a.same(liveIds(L2, "Trip Events"), ["3"], "only the real tap should be left");
-    a.same(liveIds(L2, "Bus Bookings"), ["13"], "only the real seat should be left");
-  });
-
-  s.test("an end made before the round this file holds leaves that round alone", (a) => {
-    /* The clock's end of the last round, drained after the menu has
-       already started the next. */
-    const { L2, NEW, key } = withRehearsalRows("new");
-    call(L2, "applyCoordAction", ssOf(L2), { id: "act-3-end", kind: "rehearsal", made: NEW - 60000,
-      by: "the clock", body: { op: "end", sunday: key, round: NEW - 900000, trips: ["t-old"] } }, {});
-    a.eq(mirror(L2) && mirror(L2).at, NEW, "a late end cleared the round after it");
-    a.same(liveIds(L2, "Trip Events"), ["3", "4"]);
-    a.same(liveIds(L2, "Bus Bookings"), ["12", "13"]);
-  });
-
-  /* The live server as the two menu items meet it: the rehearsal call, then
-     the drain that brings the same change back to be applied in the drain's
-     own turn, then the drain's receipt. */
-  const liveServer = (answer, made) => (url, opts) => {
-    let b = {}; try { b = JSON.parse(String(opts.payload || "{}")); } catch (e) {}
-    const said = b.action === "rehearsal" ? answer
-               : b.action === "drain" ? { ok: true, bookings: [], trips: [], checks: [], auths: [], requests: [],
-                   decisions: [], coord: answer.ok && !drained.done
-                     ? [{ id: answer.id, seq: 1, kind: "rehearsal", sunday: answer.body.sunday, by: "the spreadsheet",
-                          made: made, body: answer.body }] : [] }
-               : { ok: true };
-    if (b.action === "drained") drained.done = true;
-    return { code: 200, body: JSON.stringify(said) };
-  };
-  const drained = { done: false };
-
-  s.test("Rehearse this Sunday asks the live server, and applies its answer here", (a) => {
-    const { L2, key } = withRehearsalRows(true);
-    const round = Date.now();
-    drained.done = false;
-    L2.gas.setFetchReply(liveServer({
-      ok: true, id: "sheet-abc-1", words: "Rehearsal started over: a nearly full bus, until 22:00.",
-      body: { op: "over", sunday: key, round: round, ends: round + 7200000, shape: "full", trips: ["t-old"] },
-      rehearsal: { round: round, ends: round + 7200000, shape: "full" },
-      summary: ["North: 15 booked at 6 of 8 stops, on a 16-seat bus."] }, round));
-    call(L2, "startRehearsal");
-    const q = asked(L2, "rehearsal");
-    a.eq(q.length, 1, "the live server was not asked");
-    a.eq(q[0].do, "start");
-    a.eq(q[0].shape, "normal", "a blank answer is an ordinary morning");
-    a.eq(mirror(L2).at, round);
-    const said = lastAlert(L2);
-    a.eq(said[1], "Rehearsal started over");
-    a.has(said[2], "a nearly full bus");
-    a.has(said[2], "15 booked at 6 of 8 stops");
-    a.has(said[2], "The Bus Bookings and Trip Events tabs are up to date.");
-    a.same(liveIds(L2, "Trip Events"), ["3"], "the last round's rows are still on the tab");
-    a.ok(call(L2, "coordAppliedFind", "sheet-abc-1"), "the drain would apply it a second time");
-  });
-
-  s.test("Stop rehearsing clears the copy and the tabs on the live server's word", (a) => {
-    const { L2, OLD, key } = withRehearsalRows(true);
-    drained.done = false;
-    L2.gas.setFetchReply(liveServer({
-      ok: true, id: "sheet-end-1", words: "Rehearsal ended.",
-      body: { op: "end", sunday: key, round: OLD, trips: ["t-old"] }, rehearsal: false }, Date.now()));
-    call(L2, "stopRehearsal");
-    a.eq(asked(L2, "rehearsal")[0].do, "end");
-    a.eq(mirror(L2), null);
-    a.eq(lastAlert(L2)[1], "Rehearsal ended");
-    a.same(liveIds(L2, "Trip Events"), ["3"]);
-    a.same(liveIds(L2, "Bus Bookings"), ["13"]);
-  });
-
-  s.test("no row is taken off a tab while a drain is filing, from the menu or at night", (a) => {
-    /* A drain keeps the row numbers it has read. A row deleted under it from
-       another run of the script puts its next write on somebody else's row. */
-    const { L2, OLD, key } = withRehearsalRows(true);
-    const props = L2.ctx.PropertiesService.getScriptProperties();
-    props.setProperty("drainBusy", String(Date.now()));
-    drained.done = false;
-    L2.gas.setFetchReply(liveServer({
-      ok: true, id: "sheet-end-2", words: "Rehearsal ended.",
-      body: { op: "end", sunday: key, round: OLD, trips: ["t-old"] }, rehearsal: false }, Date.now()));
-    call(L2, "stopRehearsal");
-    a.eq(liveIds(L2, "Trip Events").length, 4, "rows were deleted under a running drain");
-    a.eq(mirror(L2), null, "the copy of the flag waits for nothing");
-    a.has(lastAlert(L2)[2], "catch up within a minute");
-    let ran = false;
-    a.eq(call(L2, "tabsTurn", () => { ran = true; return 1; }), null);
-    a.not(ran, "the night's tidy-up ran under a drain");
-    a.eq(props.getProperty("drainAgain"), "1", "and the running drain was not asked to go round again");
-  });
-
-  s.test("the copy of the flag ends by the live server's rule: two hours, the cutoff, or Sunday midnight", (a) => {
-    /* Local times, because Apps Script's are. Until v1.84.1 the cutoff was
-       reckoned from now, and one started at 08:30 on a Sunday ran on through
-       the real morning. */
-    const L2 = withRehearsalRows(false).L2;
-    const at = (d, h, m) => new Date(2026, 9, d, h, m).getTime();
-    a.eq(call(L2, "rehearsalEnds", at(1, 20, 0)), at(1, 22, 0), "a Thursday evening");
-    a.eq(call(L2, "rehearsalEnds", at(3, 23, 0)), at(4, 0, 0), "late on Saturday");
-    a.eq(call(L2, "rehearsalEnds", at(4, 8, 30)), at(4, 9, 30), "a Sunday morning, as an older version may have left it");
-    a.eq(call(L2, "rehearsalEnds", at(4, 13, 0)), at(4, 15, 0), "a Sunday afternoon");
-  });
-
-  s.test("a real run stays on the tab whole, even with one of its taps stored as a test", (a) => {
-    /* A page from before v1.79.0 could store the End of a real run as a test.
-       The run is never taken for one of its rows. */
-    const { L2, key } = withRehearsalRows(false);
-    const sh = ssOf(L2).getSheetByName("Trip Events");
-    const t0 = Date.now() - 3 * 3600000;
-    const row = (ev, off, status, live) => [new Date(t0 + off), "REAL-1", key, "North", "Bro Adrian", ev, ev === "picked" ? "N01" : "",
-      "", "", new Date(t0 + off), 0, status, "YS70 PWE", "", "", "", "", "", live];
-    sh.appendRow(row("start", 0, "Logged", "21"));
-    sh.appendRow(row("picked", 60000, "Logged", "22"));
-    sh.appendRow(row("end", 120000, "Rehearsal", "23"));
-    call(L2, "applyCoordAction", ssOf(L2), { id: "act-5-end", kind: "rehearsal", made: Date.now(),
-      by: "the clock", body: { op: "end", sunday: key, round: 0, trips: ["t-old"] } }, {});
-    const ids = liveIds(L2, "Trip Events");
-    a.ok(["21", "22", "23"].every((x) => ids.indexOf(x) !== -1), "a real run lost rows: " + JSON.stringify(ids));
-  });
-
-  s.test("the menu's end, reckoned by the live server's clock, leaves a round started after it", (a) => {
-    /* Stop rehearsing ends round 1; the coordinator's app starts round 2 a
-       moment later, and the knock's drain has already set this file's copy
-       to it. The menu's own clock must not clear round 2. */
-    const { L2, NEW, key } = withRehearsalRows("new");
-    L2.gas.setFetchReply({ code: 500, body: "the drain is not answering" });
-    call(L2, "rehearsalHere", { id: "sheet-end-3", made: NEW - 60000,
-      body: { op: "end", sunday: key, round: NEW - 900000, trips: [] } });
-    a.eq(mirror(L2) && mirror(L2).at, NEW, "the newer round was cleared by the menu");
-  });
-
-  s.test("a Sunday's test run is not cleared once its cutoff has passed", async (a) => {
-    /* On a Sunday afternoon the coming Sunday is today, and its morning is the
-       record. The live server refuses it as well; this refuses before asking.
-       The sandbox is made on a Sunday evening, so its clock stays there. */
-    const L3 = await atTime("2026-10-04T20:00:00+01:00", () => withRehearsalRows(false).L2);
-    const today = call(L3, "dateToKey", call(L3, "sundayOf", new L3.ctx.Date()));
-    a.eq(today, "2026-10-04", "the sandbox is not on the Sunday");
-    a.ok(call(L3, "bookingsClosed", today), "the cutoff has not passed in the sandbox");
-    call(L3, "clearTestRun");
-    a.eq(lastAlert(L3)[1], "That Sunday has been and gone", "it offered to clear the Sunday just driven");
-    a.eq(asked(L3, "cleartrips").length, 0, "and it asked the live server to");
-  });
-
-  s.test("a test row inside a real Sunday morning, from before, stays on the tab", (a) => {
-    const { L2, key } = withRehearsalRows(false);
-    const sh = ssOf(L2).getSheetByName("Trip Events");
-    const when = new Date(2026, 8, 27, 10, 12);
-    sh.appendRow([when, "t-then", "2026-09-27", "North", "Bro Adrian", "picked", "N02", "Grace Road bus stop, Walton Vale",
-                  "", when, 0, "Rehearsal", "YS70 PWE", "", "", "", "", "", "9"]);
-    call(L2, "applyCoordAction", ssOf(L2), { id: "act-4-end", kind: "rehearsal", made: Date.now(),
-      by: "the clock", body: { op: "end", sunday: key, round: 0, trips: ["t-old"] } }, {});
-    a.ok(liveIds(L2, "Trip Events").indexOf("9") !== -1, "a run inside a real morning was deleted");
-    a.same(liveIds(L2, "Trip Events"), ["3", "9"], "and the ordinary test rows should have gone");
-  });
-
-  s.test("when the live server does not answer, nothing changes here and it says so", (a) => {
-    const { L2 } = withRehearsalRows(true);
-    L2.gas.setFetchReply({ code: 500, body: "nope" });
-    call(L2, "stopRehearsal");
-    const said = lastAlert(L2);
-    a.eq(said[1], "Not ended");
-    a.has(said[2], "The live server did not answer.");
-    a.has(said[2], "Nothing was changed.");
-    a.ok(mirror(L2), "the copy was cleared anyway");
-    a.eq(liveIds(L2, "Trip Events").length, 4, "rows were taken off anyway");
-  });
-
-  s.test("a live server older than this file is named as the reason", (a) => {
-    const { L2 } = withRehearsalRows(false);
-    L2.gas.setFetchReply({ code: 200, body: JSON.stringify({ ok: false, error: "unknown action" }) });
-    call(L2, "startRehearsal");
-    const said = lastAlert(L2);
-    a.eq(said[1], "Not started");
-    a.has(said[2], "older than this spreadsheet");
-    a.eq(mirror(L2), null);
-  });
-
-  s.test("the pages are told the round, in the live server's shape", (a) => {
-    const { L2, OLD } = withRehearsalRows(true);
-    const info = call(L2, "rehearsalInfo");
-    a.eq(info.round, OLD);
-    a.eq(info.shape, "normal");
-    a.ok(info.ends > Date.now(), JSON.stringify(info));
-    a.eq(call(L2, "tripDriverPayload", "North").rehearsal.round, OLD, "the driver's board from this file");
-    a.eq(call(withRehearsalRows(false).L2, "rehearsalInfo"), false);
-  });
-
-  s.test("a tap from a round that is over is not written here either", (a) => {
-    const { L2, OLD, key } = withRehearsalRows(true);
-    const out = JSON.parse(call(L2, "handleTrip", { trip: "t-late", route: "North", driver: "Bro Adrian",
-      sunday: key, rehearsal: OLD - 60000, events: [{ event: "picked", stopId: "N02", at: Date.now() }] }).getContent());
-    a.ok(out.ok && out.rehearsalOver, JSON.stringify(out));
-    a.eq(liveIds(L2, "Trip Events").length, 4, "it was written");
   });
 
 

@@ -210,7 +210,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS trip_once ON trip_events(trip, event, stop_id)
 CREATE INDEX IF NOT EXISTS trip_day  ON trip_events(sunday, route);
 CREATE INDEX IF NOT EXISTS trip_sync ON trip_events(synced);
 
--- Rehearsal state and anything else small that has to outlive a request.
+-- Anything small that has to outlive a request.
 CREATE TABLE IF NOT EXISTS settings (
   k TEXT PRIMARY KEY,
   v TEXT NOT NULL

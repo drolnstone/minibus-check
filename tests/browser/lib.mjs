@@ -94,7 +94,7 @@ export async function phone(opts = {}) {
   const clk = { shift: at - Date.now() };
   const sNow = () => Date.now() + clk.shift;
   const world = Object.assign({
-    closed: true, cutoff: "09:30", rehearsal: false,
+    closed: true, cutoff: "09:30",
     counts: { North: { N01: 2, N02: 3, N04: 1, N06: 2, N07: 1 },
               South: { S01: 2, S03: 1, S05: 2, S07: 1 } },
     etas: { North: {}, South: {} },
@@ -132,10 +132,6 @@ export async function phone(opts = {}) {
     if (req.method() === "POST") posted.push(post);
     if (world.down) return route.abort();
     const row = world.rows.find(r => r.date === KEY) || {};
-    /* The round running now: world.rehearsal is false, true (a live server
-       from before w2.20.0, round 1) or { round, ends, shape }. */
-    const roundNow = () => !world.rehearsal ? 0
-      : (typeof world.rehearsal === "object" ? (Number(world.rehearsal.round) || 1) : 1);
     /* The versions the stand-in claims, and each bus's renewal dates as the
        Buses tab gives them from w2.24.0. */
     const stamp = Object.assign({ sheet: "v1.79.0", server: "w2.15.0" }, world.stamps || {});
@@ -154,19 +150,10 @@ export async function phone(opts = {}) {
     else if (post.action === "pinkeep") body = { ok: true, valid: true, kept: true };
     else if (post.action === "trip") {
       /* Echoed back the way the Worker does, so the board and the phone agree
-         about the run and the board can carry the timetable offset. A tap
-         names its rehearsal round from v1.79.0, and w2.20.0 keeps the
-         rehearsal's runs apart from the real ones and throws away a tap from
-         a round that is over. A tap that names none is judged by whether a
-         rehearsal is on, as before. */
+         about the run and the board can carry the timetable offset. */
       const tr = post.trip || {}, rt = tr.route || "North";
-      const claimed = tr.rehearsal;
-      const inRound = (claimed === undefined || claimed === null) ? !!roundNow()
-                    : !Number(claimed) ? false
-                    : Number(claimed) === roundNow() ? true : null;
-      const store = inRound ? (world.rehTrips = world.rehTrips || { North: null, South: null }) : world.trips;
-      if (inRound === null) { world.dropped = (world.dropped || 0) + (tr.events || []).length; }
-      else if (!world.noEcho) {
+      const store = world.trips;
+      if (!world.noEcho) {
         const cur = store[rt] && store[rt].trip === tr.trip ? store[rt]
           : { trip: tr.trip, route: rt, reg: tr.reg, driver: tr.driver, started: 0, ended: 0, served: {}, lastStop: "", lastAt: 0, offset: null };
         for (const ev of tr.events || []) {
@@ -188,8 +175,7 @@ export async function phone(opts = {}) {
         if (world.offset && world.offset[rt] !== undefined) cur.offset = world.offset[rt];
         store[rt] = cur;
       }
-      body = world.tripFails ? { ok: false }
-           : inRound === null ? { ok: true, written: 0, rehearsalOver: true } : { ok: true };
+      body = world.tripFails ? { ok: false } : { ok: true };
       /* Taken at once, answered slowly, as on a weak signal. */
       if (world.tripDelayMs) await new Promise((r) => setTimeout(r, world.tripDelayMs));
     }
@@ -233,15 +219,14 @@ export async function phone(opts = {}) {
     }
     else if (p.get("board")) {
       const r = String(p.get("route") || "North");
-      /* The rehearsal's run while one is on, the real one otherwise. */
-      const t = roundNow() ? (world.rehTrips || {})[r] : world.trips[r];
+      const t = world.trips[r];
       body = {
         ok: true, date: KEY, sheet: stamp.sheet, server: stamp.server,
         counts: world.counts[r] || {}, etas: world.etas[r] || {},
         checks: world.checks, others: world.others, seats,
         buses: REAL.buses.map(b => ({ reg: b.reg, seats: b.seats, active: true, dates: datesOf(b) })),
         trip: Object.assign({ ok: true, now: sNow(), closed: world.closed, cutoff: world.cutoff,
-          rehearsal: world.rehearsal, departWords: world.departWords[r] || "",
+          departWords: world.departWords[r] || "",
           trip: "", route: r, reg: "", driver: "", started: 0, ended: 0, served: {},
           lastAt: 0, lastStop: "", offset: null }, t || {})
       };

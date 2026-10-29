@@ -1,0 +1,29 @@
+MINIBUS
+=======
+  pages v1.133.0 · server w2.73.0 · sheet v1.129.0
+
+YOU ARE ON   app v1.132.0 · server w2.72.0 · sheet v1.128.0
+GOING TO     app v1.133.0 · server w2.73.0 · sheet v1.129.0
+
+Rehearsal is taken out (Asim, 29 Oct 2026). Gone: the Rehearsal screen
+in the coordinator app, the red Rehearsal box in the driver app, the
+Rehearsal card on the passenger page, and "Rehearse this Sunday" and
+"Stop rehearsing" on the sheet's Minibus menu. Alerts are no longer held
+back for one. "Clear a Sunday's test run" stays on the menu.
+
+Anything a rehearsal left behind goes by itself: the live server clears
+its own copy on its next tick, and the sheet takes any Rehearsal rows off
+Trip Events and Bus Bookings on its nightly pass.
+
+GOING LIVE
+----------
+
+Merge the pull request. Pages, live server and sheet go live by
+themselves.
+
+
+AFTER IT (give it ten minutes)
+--------
+
+B. The foot of the apps reads  app v1.133.0 · server w2.73.0 · sheet
+   v1.129.0 .

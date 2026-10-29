@@ -1,35 +1,29 @@
 MINIBUS
 =======
-  pages v1.132.0 · server w2.72.0 · sheet v1.128.0
+  pages v1.133.0 · server w2.73.0 · sheet v1.129.0
 
-YOU ARE ON   app v1.131.0 · server w2.72.0 · sheet v1.128.0
-GOING TO     app v1.132.0 · server w2.72.0 · sheet v1.128.0
+YOU ARE ON   app v1.132.0 · server w2.72.0 · sheet v1.128.0
+GOING TO     app v1.133.0 · server w2.73.0 · sheet v1.129.0
 
-Coordinator app, Bookings: Book a seat for someone goes once every run
-that Sunday is over (or no bus is running). If it is ever refused, it
-says "Both runs are over." (or "The North run is over." with one route,
-"No bus is running that Sunday." when both are called off). Pages only.
+Rehearsal is taken out (Asim, 29 Oct 2026). Gone: the Rehearsal screen
+in the coordinator app, the red Rehearsal box in the driver app, the
+Rehearsal card on the passenger page, and "Rehearse this Sunday" and
+"Stop rehearsing" on the sheet's Minibus menu. Alerts are no longer held
+back for one. "Clear a Sunday's test run" stays on the menu.
+
+Anything a rehearsal left behind goes by itself: the live server clears
+its own copy on its next tick, and the sheet takes any Rehearsal rows off
+Trip Events and Bus Bookings on its nightly pass.
 
 GOING LIVE
 ----------
 
-Merge the pull request. The pages go live by themselves.
+Merge the pull request. Pages, live server and sheet go live by
+themselves.
 
 
 AFTER IT (give it ten minutes)
 --------
 
-B. The foot of the apps reads  app v1.132.0 · server w2.72.0 · sheet
-   v1.128.0 .
-
-
-A FRESH ADDRESS (not on a Sunday, after B and C)
------------------
-
-1. Apps Script, Deploy, New deployment, Web app, Execute as Me, Who has
-   access Anyone, Deploy. Copy the Web app URL and the Deployment ID.
-2. Project Settings, Script Properties: WEB_APP_URL is the new Web app URL.
-3. GitHub secret DEPLOYMENT_ID: Update, the new Deployment ID.
-4. Minibus menu, Send everything to the live server now. "Is everything
-   working?" names the web app ending in the new ID's last six.
-5. Deploy, Manage deployments: Archive the one ending …1XxMSA.
+B. The foot of the apps reads  app v1.133.0 · server w2.73.0 · sheet
+   v1.129.0 .

@@ -776,16 +776,6 @@ add(table(["Notification", "When"], [
 p("**Time to set off** is the moment to tap Start as you pull away. It is what tells the passengers the bus has left: "
   "until Start is tapped, the record has the bus still at church, and five minutes after the departure time everybody "
   "booked on your route is told there is no word yet that it has left.")
-sec("5.11", "A rehearsal")
-add(figure("rehearsal", "During a rehearsal", [
-    "**Rehearsal** **Nothing here is real. Bookings shown are test data and no bus is running. It ends at 10:30.**",
-    P("Now and then the coordinator runs a rehearsal, to try the morning out. While one is on, **Stops and bookings** has "
-      "this red box at the top. Nothing you tap then is real, and the bookings are test ones."),
-    P("A rehearsal ends by itself, and the box says when: two hours after it starts at the most. It never runs during a "
-      "real Sunday morning: one cannot be started then, and one started earlier ends before bookings close.")]))
-p("When it ends, a test run on your phone is cleared and the screen goes back to the start: **The rehearsal has ended. "
-  "Your test run was cleared.** If the coordinator starts it again, a new round begins: **The rehearsal was started "
-  "again. Your test run was cleared.**")
 
 # ============================================================== 6
 part("6", "The driving rota")
@@ -972,7 +962,7 @@ sec("8.6", "The coordinator’s app")
 add(figure("hub-coordinator", "A coordinator’s home screen", [
     "**Coordinator** opens the coordinator’s app: a page of its own, on the same site, for running the morning "
     "without the spreadsheet. Its menu: **Rota**, **Rota requests**, **Bookings**, **Defects**, **Run record**, "
-    "**Rehearsal**, **Have a look** and **What I have done**. **Have a look** holds the reports and the **Bus link for "
+    "**Have a look** and **What I have done**. **Have a look** holds the reports and the **Bus link for "
     "this Sunday**.",
     P("If your PIN has been checked on this phone, it goes with you once, so the coordinator’s app does not ask for it "
       "again. Otherwise it asks."),
@@ -1053,7 +1043,6 @@ AZ = [
  ("PIN not keyed yet / PIN not keyed. Vehicle check needs it. Key it now", "Sign in, home screen", "Key your PIN."),
  ("Recorded to within 13 yd. You are about 1.5 miles from where the buses are kept.", "Before you start (amber)", "Do the check at the bus."),
  ("Recorded to within 9 yd. You are at the buses.", "Before you start", "Location recorded."),
- ("Rehearsal · Nothing here is real. … It ends at 10:30.", "Stops and bookings", "A rehearsal is on. Nothing is real. §5.11"),
  ("Remind me to end the trip. Turn on", "Home screen", "Turn reminders on. §1.5"),
  ("Reminders on.", "Reminders", "Done."),
  ("Renewal coming up / Renewal overdue", "Before you start", "A document is due within 30 days, or has run out. Tell the coordinator if overdue."),
@@ -1087,8 +1076,6 @@ AZ = [
  ("The bus has not gone out · Your North run was due at 10:05. Nothing has started.", "Phone notification", "Start the run, or ring the coordinator. §5.10"),
  ("The bus is moving. Taps come back when you pull up.", "Stops, during the run", "The buttons wait until you stop."),
  ("The record did not accept it.", "Held on this phone", "Try again later; tell the coordinator if it keeps happening."),
- ("The rehearsal has ended. Your test run was cleared.", "Stops and bookings", "The rehearsal is over. Nothing you tapped in it counts. §5.11"),
- ("The rehearsal was started again. Your test run was cleared.", "Stops and bookings", "A new round of the rehearsal. Start again if asked. §5.11"),
  ("The timetable did not come through. … Try again", "Stops and bookings", "Tap **Try again**."),
  ("This phone cannot give a location. Carry on as normal.", "Before you start", "Carry on."),
  ("Tick the box to confirm the two of you have already agreed.", "Swap request", "Agree it first, then tick."),
@@ -1148,7 +1135,6 @@ add(table(["What you see", "What to do"], [
     ["I ended the run too early myself.", "There is no undo. Ring the coordinator and carry on driving the route."],
     ["**Nobody is signed in. Your run is still going.**", "Tap **Sign in**, choose your name, key your PIN, then back to **Stops and bookings**. §5.7"],
     ["I am covering and have no Start button.", "After 09:30, on the route’s tab, tap **I am covering this run** and confirm. No offer? You are on the rota for the other route, or somebody is already out: ring the coordinator. §5.9"],
-    ["A red **Rehearsal** box is at the top.", "A rehearsal is on. Nothing there is real. §5.11"],
     ["The rota looks wrong.", "Open the rota again with signal. If it is still wrong, ring the coordinator; the spreadsheet is the real rota."],
     ["No reminders on my iPhone.", "Add the app to the Home Screen and open it from there, then **Turn on**. §1.5"],
     ["The reminder offer has gone.", "Notifications are blocked for the app. Allow them in the phone’s settings."],

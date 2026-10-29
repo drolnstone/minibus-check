@@ -34,8 +34,7 @@ by leaving the fix in place.
 Worker, built from the same real stops. Its first six checks are the v1.75.0
 rulings on that page, and each one fails on v1.74.10. T10 and T11 in
 `driver-app.mjs` are the same rulings on the driver's stop list and trip
-strip. P6, from v1.79.0, is the page loading again when a rehearsal ends; it
-fails on v1.78.0, which went on showing the test morning.
+strip.
 
     node tests/browser/coordinator.mjs          the coordinator's app, v1.77.0
     node tests/browser/coordinator.mjs C2,C7    some
@@ -49,10 +48,7 @@ made, a defect closed, a stop time put right, the reports, the refused-change
 line, the idle lock, a stopped bus authorised from the first screen, the dark
 theme, and from v1.78.0 the PIN taken from the driver app (and a stale one
 refused), the cursor in the PIN box, and the landing page's three numbers,
-report and theme chips, and from v1.79.0 a rehearsal started, started over
-and ended on the Rehearsal screen (C19 to C19c), with no script error
-throughout. The live server there runs on the real clock, so on a Sunday
-between the cutoff and noon C19 checks the refusal instead. `SHOTS` names the folder for the
+report and theme chips, with no script error throughout. `SHOTS` names the folder for the
 photographs it takes on the way. Run against v1.76.0 it cannot start, because
 neither the page nor the Worker's half of it is there.
 
@@ -61,25 +57,11 @@ coordinator's name, and none for a driver's. T14 is where that button sits,
 and T15 is the checked PIN going with it once, and not going when only the
 name has been kept.
 
-T16, T16b and T16c are the rehearsal rounds of v1.79.0: a phone drops its
-test run and offers Start trip again when the round is over; a tap made in a
-round that is over is dropped with its run and never lands in the next round
-or as real; and a real run that has ended is put aside while a rehearsal
-runs. All three fail on v1.78.0. The sabotages S16, S16b and S16c take each
-fix back out in turn. From v1.79.1 the round is also checked by the clock,
-so S16 takes out the rule both paths use rather than the board's call to it.
-
-T16d, T17, T18 and T18b are faults found in v1.79.0 before it went up, and
-fixed in v1.79.1. T16d: a board answer built a moment before a round ends
-does not hand the phone its test run back as a real one. T17: taps made
-while an earlier one is still being sent all reach the record. T18: after a
-Saturday rehearsal, a run started on Sunday with no signal is a real run and
-stays. T18b: a test run left open overnight goes on the Sunday morning with
-no signal, and Start trip is offered. All four fail on v1.79.0, and T17
-fails on v1.78.0 too, so the lost tap is a fault of the live release. S16d,
-S17, S18, S18b and S18c take each fix back out in turn. S18b and S18c are the
-two halves of T18b's fix: the clock's check of the round, and dropping what
-the board said in a round that is over.
+T17 is a fault found in v1.79.0 before it went up, and fixed in v1.79.1:
+taps made while an earlier one is still being sent all reach the record. It
+fails on v1.78.0 too, so the lost tap was a fault of the live release. S17
+takes the fix back out. (Rehearsal, and its checks T16 to T18b, P6 and C19,
+were taken out in v1.133.0.)
 
 From 16 Oct 2026 GitHub runs all four (driver-app, coordinator, passenger,
 parked) on every pull request and push to main: .github/workflows/browser.yml,

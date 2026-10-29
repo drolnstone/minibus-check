@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.132.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.133.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -503,10 +503,6 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    number. The sentence wraps between the words instead. */
 .summary .ring{color:var(--ink);font-weight:600;text-decoration:underline;
   white-space:nowrap}
-.live-pick{display:flex;gap:6px;margin-top:10px}
-.live-pickbtn{flex:1;padding:7px 10px;border:1px solid currentColor;background:transparent;
-  border-radius:8px;font:inherit;font-size:13px;color:inherit;opacity:.6}
-.live-pickbtn.is-on{opacity:1;font-weight:600}
 .live-go{background:var(--pass-bg);border-color:var(--pass-line)}
 .live-go .live-big{color:var(--pass)}
 /* The one red thing on this page. See the comment beside "Be at your stop":
@@ -518,8 +514,6 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
 .live-now .live-big{color:var(--stop)}
 .live-now .callbtn{color:var(--stop);border-color:var(--stop-line)}
 .live-warn{background:var(--warn-bg);border-color:var(--warn-line)}
-.live-test{background:var(--stop-bg);border-color:var(--stop-line)}
-.live-test .live-eyebrow{color:var(--stop)}
 .foot{margin-top:24px;color:var(--muted);font-size:12px;line-height:1.55}
 .foot b{color:var(--ink);font-weight:600}
 /* Last thing on the page and the quietest. Nobody books a seat by reading
@@ -753,7 +747,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.132.0";
+var PAGE_VERSION = "v1.133.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -1075,13 +1069,6 @@ var STOPS=[], ARRIVALS=[], COUNTS={}, CLOSED=false, ROLLED=false, DATE="", CUTOF
 /* Routes the coordinator has marked off in the Rota. Usually empty. */
 var OFF=[];
 function routeOff(rt){ return OFF.indexOf(String(rt||"")) !== -1; }
-var REHEARSAL=false;
-/* Which rehearsal: the moment the live server started it, 0 for none. A
-   server from before w2.20.0 says only true, which counts as round 1. When
-   the round changes, the rehearsal has ended or been started again, and the
-   page loads again in full. */
-var REHEARSAL_ROUND=0;
-function roundOf(r){ return !r ? 0 : (typeof r==="object" ? (Number(r.round)||1) : 1); }
 /* seats is null until the passenger says. It used to start at 1 and then
    keep whatever the last answer was, which on a phone handed round a family
    or used twice in a morning meant the number already sitting there belonged
@@ -1134,8 +1121,6 @@ function applyBus(out){
   STOPS=out.stops||[]; ARRIVALS=out.arrivals||[]; COUNTS=out.counts||{};
   CLOSED=!!out.closed; ROLLED=!!out.rolled; DATE=out.date||""; CUTOFF=out.cutoff||"";
   OFF = (out.off && out.off.length) ? out.off : [];
-  REHEARSAL=!!out.rehearsal;
-  REHEARSAL_ROUND=roundOf(out.rehearsal);
 
   /* A WHOLE NUMBER, COERCED HERE AND NOWHERE ELSE.
 
@@ -1182,12 +1167,8 @@ function applyBus(out){
   paintStamp();
   paint();
 
-  /* After the cutoff, or during a rehearsal. The rehearsal case is why
-     the passenger side sat out the first test: bookings are open on a
-     Tuesday, so CLOSED was false and this never started watching. The
-     two are kept apart deliberately, because a rehearsal must not tell
-     anybody that bookings have shut. */
-  if(CLOSED || REHEARSAL) liveStart();
+  /* After the cutoff. */
+  if(CLOSED) liveStart();
   else { liveStop(); live=null; paintLive(); gateStart(); }
 
   /* The page has content now. Guarded to one attempt per load inside. */
@@ -1374,12 +1355,6 @@ var liveAt = 0;
 var liveAgeTimer = null;
 var liveTimer = null, liveBusy = false, live = null;
 
-/* Rehearsal only. A phone with no booking of its own is lent a seeded one,
-   and this says which route to be lent. Blank means "whichever bus is out",
-   which is what a tester wants nine times in ten. A real passenger never
-   sets this: they are watching their own stop. */
-var liveWant = "";
-
 /* A switch that lands while a poll is in flight used to be swallowed whole:
    liveFetch returned at the door, and the new route waited for the next turn
    of the timer with nothing on screen to say why. Remember it instead and go
@@ -1390,7 +1365,6 @@ function liveFetch(){
   if(liveBusy){ liveAgain=true; return; }
   liveBusy=true;
   callFetch(ENDPOINT+"?trip=1"+idq()+
-            (liveWant? "&r="+encodeURIComponent(liveWant) : "")+
             /* The kerb somebody without a booking said they were standing at.
                Sent only when there is no booking to answer with. */
             (watchStop? "&s="+encodeURIComponent(watchStop) : ""),
@@ -1401,15 +1375,6 @@ function liveFetch(){
       liveBusy=false;
       if(liveAgain){ liveAgain=false; liveFetch(); }
       if(!out || out.ok!==true) return;
-      /* The rehearsal this page was watching has ended, or was started
-         again. Loaded again in full, so the page goes back to what it shows
-         on an ordinary day, or to the new round's seats, rather than a test
-         morning with nothing moving. Until v1.79.0 it stayed on the test
-         until somebody reloaded it. Only an answer that names the
-         rehearsal decides it. */
-      if(REHEARSAL && ("rehearsal" in out) && roundOf(out.rehearsal)!==REHEARSAL_ROUND){
-        liveStop(); reloadAll(); return;
-      }
       live=out;
       liveAt=Date.now();
       paintLive();
@@ -1418,9 +1383,6 @@ function liveFetch(){
          at the end when the most phones are open. */
       if(out.live===false || (out.mine==="served" && !liveRiding(out)) || out.ended){
         liveStop();
-        /* Nothing left to watch in a rehearsal, but the page still has to
-           hear when it ends: the slow gate poll carries on asking. */
-        if(REHEARSAL) gateStart();
       }
     })
     .catch(function(){
@@ -1442,9 +1404,8 @@ function liveStart(){
 function liveStop(){ if(liveTimer){ clearInterval(liveTimer); liveTimer=null; } }
 
 /* ---- asking again whether it is time to watch --------------------------
-   CLOSED and REHEARSAL are the server's answer, and they were learned once,
-   at page load, and never revisited. That is the whole of the fault the
-   rehearsal exposed, and it is not only a rehearsal fault.
+   CLOSED is the server's answer, and it was learned once, at page load, and
+   never revisited.
 
    A passenger who opens this page at nine on a Sunday morning is told
    bookings are open, because they are. The cutoff passes at half past, the
@@ -1487,13 +1448,7 @@ function gateCheck(){
          Only the shared facts are taken. Nothing that belongs to the person
          holding the phone: a half-chosen stop, an open cancel question and a
          seat count they have not confirmed all survive untouched. */
-      /* A test morning on screen with nothing left to watch. Only a change
-         of round matters here: the rehearsal ended, or was started again. */
-      if(REHEARSAL){
-        if(roundOf(out.rehearsal)===REHEARSAL_ROUND){ applyShared(out); return; }
-        gateStop(); reloadAll(); return;
-      }
-      if(!out.closed && !out.rehearsal){ applyShared(out); return; }
+      if(!out.closed){ applyShared(out); return; }
       /* It has just opened. Reload in full rather than patching flags: the
          booking form is closing anyway, the banner above it changes, and the
          stop list becomes the list the driver is working from. Nothing a
@@ -1517,12 +1472,12 @@ function gateStop(){ if(gateTimer){ clearInterval(gateTimer); gateTimer=null; } 
 document.addEventListener("visibilitychange",function(){
   if(document.hidden){ liveStop(); gateStop(); retryStop(); return; }
   /* Never got a first answer, so there is nothing to resume — only to try
-     again. Everything below assumes CLOSED and REHEARSAL mean something, and
-     on this path they have never been set. */
+     again. Everything below assumes CLOSED means something, and
+     on this path it has never been set. */
   if(!loadedOk){ load(); retryStart(); return; }
   /* Coming back to the page is the cheapest moment to find out we were
      wrong, so the gate is asked at once rather than waiting out a minute. */
-  if(CLOSED || REHEARSAL) liveStart();
+  if(CLOSED) liveStart();
   else { gateStart(); gateCheck(); }
 });
 
@@ -1661,7 +1616,7 @@ function paintAlerts(){
 
 /* PROVE IT, ON THIS PHONE, NOW.
 
-   A rehearsal wakes nobody and the real alerts need a bus on the road, so
+   The real alerts need a bus on the road, so
    until this existed the only way to find out that alerts worked was to need
    one. A token the push service will not accept looks exactly like a quiet
    Sunday.
@@ -2035,31 +1990,6 @@ function paintLive(){
     box.innerHTML=""; paintStopTimes(); return;
   }
 
-  /* A rehearsal forces the tracking gate open on a weekday, so somebody who
-     booked on Thursday would otherwise open this and see a bus running that
-     is not. Said first and said plainly. */
-  /* The switch exists because a rehearsal used to be lent whichever seeded
-     booking came first, which was always North, so the South bus could run
-     the whole morning with this page showing nothing. It is on the rehearsal
-     banner and nowhere else: a real passenger watches their own stop and is
-     never shown anybody else's route. */
-  var pick = "";
-  if(live.rehearsal && (live.routes||[]).length>1){
-    pick='<div class="live-pick">';
-    live.routes.forEach(function(rt){
-      pick+='<button type="button" class="live-pickbtn'+
-            (rt===live.route?' is-on':'')+'" data-liveroute="'+esc(rt)+'">'+
-            esc(rt)+'</button>';
-    });
-    pick+='</div>';
-  }
-
-  var banner = live.rehearsal
-    ? '<div class="live live-test"><p class="live-eyebrow">Rehearsal</p>'+
-      '<p class="live-sub">No bus is running. Your booking still counts for '+
-      'Sunday.</p>'+pick+'</div>'
-    : "";
-
   var head="", sub="", cls="", churchLine="";
 
   /* Who to turn to when somebody has been left at a kerb.
@@ -2210,7 +2140,7 @@ function paintLive(){
               : live.watching ? "Watching "+esc(live.stop)
               : "Your stop";
 
-  box.innerHTML=banner+'<div class="live '+cls+'">'+
+  box.innerHTML='<div class="live '+cls+'">'+
     '<p class="live-eyebrow">'+eyebrow+'</p>'+
     '<p class="live-big">'+head+'</p>'+
     (churchLine ? '<p class="live-church" id="liveChurch">'+churchLine+'</p>' : '')+
@@ -2253,12 +2183,6 @@ function paintLive(){
     '';
   paintStamp();
 
-  Array.prototype.forEach.call(box.querySelectorAll("[data-liveroute]"),function(b){
-    b.addEventListener("click",function(){
-      liveWant=this.getAttribute("data-liveroute");
-      liveFetch();
-    });
-  });
   liveAgeStart();
   if($("watchOff")) $("watchOff").addEventListener("click",function(){
     watchStop=""; watchSave(""); live=null; paintLive(); paint();

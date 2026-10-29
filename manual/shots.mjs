@@ -620,14 +620,6 @@ scene("cover", async () => {
   return me;
 });
 
-scene("rehearsal", async () => {
-  const R = T("09:40");
-  const me = await phone({ world: RUN({ rehearsal: { round: R, ends: T("10:30"), shape: "normal" } }), clock: "2026-09-27T09:52:00+01:00", pushOn: true });
-  await hub(me); await me.toStops(); await me.close();
-  await me.shot("rehearsal", { marks: [ { n: 1, sel: ".trip-rehearsal" } ] });
-  return me;
-});
-
 /* ---------------------------------------------------------------- Part 6 */
 
 /* The rota as the export has it, with Bro Sample written into a few Sundays

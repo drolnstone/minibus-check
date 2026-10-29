@@ -50,10 +50,10 @@ that is ever awake, and no way to sign a push. See *Alerts*, below.
 app first**, and the spreadsheet applies it a few seconds later through its
 own code. The spreadsheet is still the record. See *The coordinator's app*.
 
-**From w2.20.0 the Worker owns a rehearsal**: the flag, the test seats, the
-rounds and the clearing up. The spreadsheet keeps a copy of the flag, told on
-the drain, and takes the rehearsal's rows off its tabs when it ends. See
-*Rehearsing*.
+**Rehearsal was taken out in v1.133.0 · w2.73.0 · v1.129.0** (Asim, 29 Oct
+2026). Anything one left goes by itself: the Worker clears its own copy on
+its next tick, and the sheet takes any `Rehearsal` rows off Trip Events and
+Bus Bookings on its nightly pass.
 
 **The Worker also keeps a shelf** — a copy of the finished rota and last
 week's mileage, built by Apps Script and posted over. It serves those back
@@ -436,17 +436,14 @@ Out of order, nothing breaks: the app asks a Worker with nothing on its shelf,
 gets a clean refusal, and falls back to Apps Script. It simply will not be any
 faster until the sync has run.
 
-### After the deploy: rehearse it
+### After the deploy: check it
 
-Run this on any evening before the Sunday it is meant for. Nothing in it
-touches the real record.
-
-It is longer than it was. Four releases went out together and this is the only
-thing that exercises them, so the checklist grew with them rather than staying
-comfortable — a ten minute check that says the app is fine without having
-touched most of what is new is worse than no check at all. **A, B and C are
-the ones that matter and take about fifteen minutes. D to H are worth doing
-once after a deploy and can be skipped on an ordinary week.**
+Run this on any weekday evening. **A and B are the ones that matter. The rest
+are worth doing once after a deploy and can be skipped on an ordinary week.**
+The morning itself, a run with its stop taps and what a passenger sees, is
+only driven on a real Sunday: rehearsal was taken out in v1.133.0 (Asim,
+29 Oct 2026), because it could not test the alerts, the Church fence or the
+live estimate, and every fix since September had come from real Sundays.
 
 #### A. Before you touch a phone
 
@@ -499,89 +496,14 @@ once after a deploy and can be skipped on an ordinary week.**
 
    Set the defect to **Not a defect** when you have finished with it.
 
-#### C. The morning
+#### C. Deciding from an email
 
-9. **Start a rehearsal from the coordinator's app.** First screen,
-   **Rehearsal**, **Start a rehearsal**, **More booked than seats**. It is the
-   shape most likely to show up a problem, and step 16 needs a route that is
-   over. The first screen then leads with *A rehearsal is running until …*,
-   and within a minute the test seats are on the Bus Bookings tab, tagged
-   `Rehearsal`. **Minibus → Rehearse this Sunday** on the sheet does the same
-   from a computer.
-
-10. **Driver phone.** Open the app, sign in, key the PIN. It should open the
-    gate with no perceptible wait and jump to the hub on its own. A wait of
-    seconds means the Worker has no hash for that name — either the sync has
-    not run or the two `PIN_SALT` values do not match. Go to Stops and
-    bookings, then **Start trip**.
-
-11. **Tap two stops**, one **Picked up** and one **Nobody here**. On a
-    booked stop the pickup pop-up asks for it once the stop is a minute away;
-    tap the stop in the list to bring it up sooner.
-
-12. **The estimate should lead.** Once a stop is marked, the times down the
-    left of the stop list are the **estimate**, with the timetable time small
-    underneath. On an *over* rehearsal they should be close together; ask for
-    **quiet** instead and they should pull apart, because the bus is skipping
-    empty stops. If there is only one number on each row, the board is not
-    sending estimates — check the server version.
-
-13. **Skip one deliberately.** Mark a stop further down the list without
-    marking the booked one before it. The app should ask you about the one you
-    passed, naming it, with three buttons. **Not now** should silence it and
-    leave that row amber with its own buttons back.
-
-14. **A second phone must not be able to end your run.** Sign in on another
-    handset as a **different driver** and open the same route. There should be
-    **no End trip button on it at all**. This is the 20 September fault and it
-    is the one thing in this list worth doing every single time.
-
-15. **The coordinator's way round it.** On that second phone, sign in as
-    yourself. Under the route somebody else is out on, **End this run**
-    appears. Key your PIN. The run closes, and on the Trip Events tab the end
-    row has the **driver's** name in Driver and **yours** in Ended by. Two
-    different names is the fact worth having.
-
-    If you would rather not close it yet, end the run from the driver's own
-    phone instead and check Ended by carries *his* name.
-
-16. **Minibus → Have a look → Are we over on seats?** One email should arrive,
-    carrying the line that says these are test bookings.
-
-17. **Start it over, then end it.** Coordinator's app, **Rehearsal**, **Start
-    over**, **A quiet morning**. Within about five seconds the driver phone
-    says the rehearsal was started again, drops its test run and offers
-    **Start trip** again; the Rehearsal screen shows the new seats. Start a
-    run and tap a stop if you want a second go. Then **End it**. The driver
-    phone says the rehearsal has ended and goes back to the real Sunday, the
-    passenger phone loads again, and within a minute the Trip Events and Bus
-    Bookings tabs have no `Rehearsal` rows left. **Minibus → Stop rehearsing**
-    does the same from the sheet. Left alone it ends itself after two hours,
-    or at midnight if it reaches Sunday, with the same clearing up.
-
-#### D. What a passenger sees
-
-18. **Open the passenger link** on a second phone while the rehearsal run is
-    going. The clock should tick and the panel should move down the list
-    within about five seconds of each tap.
-
-19. **The date line carries one Updated stamp.** At the top, beside the date.
-    There should be **no** Updated line under the bus panel — it moved in
-    v1.72.0, because it is a fact about the whole page and not about the bus.
-
-20. **Be at your stop, in red.** Book that phone onto a stop, then mark the
-    stop *before* it on the driver phone. The panel should turn red and read
-    **Be at your stop**. It is the one red thing on that page and it should
-    look like it.
-
-#### E. Deciding from an email
-
-21. **The page loads at all.** Open
+9. **The page loads at all.** Open
     `https://drolnstone.github.io/minibus-check/do/` with nothing after it. It
     should say the link is not complete. That is the whole of what step 5 of
     the deploy can get wrong.
 
-22. **A stopped bus, from the email.** Do step 6 again but do not touch the
+10. **A stopped bus, from the email.** Do step 6 again but do not touch the
     app. The **BUS STOPPED** email has a button.
 
     **Open it twice and close it without keying anything.** Then look at the
@@ -593,7 +515,7 @@ once after a deploy and can be skipped on an ordinary week.**
     Start trip button back within seconds. Open the link a third time: it says
     you already decided it.
 
-23. **A rota request, from the email.** Ask for a swap from a driver's phone.
+11. **A rota request, from the email.** Ask for a swap from a driver's phone.
     The email arrives with two buttons and a drop-down of who could cover it.
     Approve it, then watch the Rota Requests tab: the Status reads
     **Approved** before you have finished switching windows, the cell carries
@@ -605,57 +527,20 @@ once after a deploy and can be skipped on an ordinary week.**
     now"* is the push; *"within five minutes"* is the tick underneath it. Both
     are correct; only one of them is a lie if it says the wrong one.
 
-#### F. Cover, and a cancelled route
+#### D. Alerts
 
-24. **Cover.** Sign in as somebody not on the rota for that route and open
-    Stops and bookings. **I am covering this run** should appear, take two
-    taps, and then behave like an ordinary start. Sign in as a third name
-    while that run is open and you should be refused by name. A rehearsal run
-    is tagged `Rehearsal`, not `Cover`, so it writes nothing into the Rota.
-    Only a real run does that.
-
-25. **A cancelled route.** *Only while a rehearsal is running, and put it
-    back before the rehearsal ends.* Set the Rota's Status to *North
-    cancelled*, wait for the next sync, and open the passenger link on a phone
-    with a booking on North. The panel should say the bus is not running and
-    the stops should go grey. Put the Status back to *Confirmed*.
-
-    A rehearsal holds the message that a route is off. With none running, or
-    the minute one ends with the Status still set, every passenger booked on
-    North is told the bus is not running, and putting it back tells them
-    nothing. While the Status is set during a rehearsal, the Saturday
-    reminder of what was booked waits for everyone booked on North, and goes
-    once the rehearsal is over if its hour is not.
-
-#### G. Alerts, and what a rehearsal cannot test
-
-26. **Alerts, separately and deliberately.** **A rehearsal sends no push
-    about a bus**, and the driver's nudges are about the real run, so nothing
-    above tests the push chain. The booking reminders still go during one, at
-    their usual times, and say only what the phone has booked. Turn alerts on, then tap the **bell icon** in
+12. **Alerts, separately and deliberately.** Nothing above tests the push
+    chain. Turn alerts on, then tap the **bell icon** in
     the top right of the frozen pane on either app. A notification should
     arrive within a few seconds saying *Alerts are working*. If the push
     service refuses, the reason appears on screen. Do this on every phone that
     matters, and on an iPhone only after the app is on the Home Screen.
 
-**Four things a rehearsal cannot test at all.**
-
-- **The alerts themselves**, which is step 26 and why it is there.
-- **The run closing itself.** It needs the bus to physically leave the church
-  geofence and come back — a Thursday evening in the car park will never
-  produce one. Watch the first real Sunday for a `Logged (auto)` row.
-- **The passenger messages on the morning**, for the same reason as the
-  alerts. Step 20 shows the *wording* on the page; only a real Sunday shows
-  the buzzing, and the first one is where you find out whether
-  `resendMinutes` is right.
-- **The booking nudges**, which only fire in their windows: Sunday between
-  three and four, Wednesday and Saturday between six and seven.
-
-#### H. The coordinator's app
+#### E. The coordinator's app
 
 These are real changes. Each step says how to put it back.
 
-27. **The way in.** On the driver app, signed in as yourself with your PIN
+13. **The way in.** On the driver app, signed in as yourself with your PIN
     keyed, the hub has **Coordinator** on a line of its own. Tap it: this
     Sunday and next, and the menu, with no PIN asked. Signed in as a driver,
     the driver app has no Coordinator button.
@@ -666,20 +551,20 @@ These are real changes. Each step says how to put it back.
     numbers you deployed. Tap it for the report, and pick a theme from the
     chips under it: the driver app changes with it.
 
-28. **A stopped bus, from the first screen.** *On a weekday, like step 6.* Do
+14. **A stopped bus, from the first screen.** *On a weekday, like step 6.* Do
     step 6 again and leave the driver app alone. The coordinator's first screen
     says the bus was stopped at the walkaround, with **Authorise**. Tap it and
     confirm. Stops and bookings on the driver app has its Start trip button
     back. Set the defect to **Not a defect** afterwards, on the tab or in the
     app's Defects.
 
-29. **A note, both ways.** Rota, a Sunday about a month ahead, **Add a note**.
+15. **A note, both ways.** Rota, a Sunday about a month ahead, **Add a note**.
     It shows at once. Within about ten seconds it is in that Sunday's Notes on
     the Rota tab, with your name and `(app)` in Updated by, and *What I have
     done* then says **On the sheet**. A note emails nobody. Delete it on the
     tab.
 
-30. **A request, decided in the app.** On the driver app, signed in as
+16. **A request, decided in the app.** On the driver app, signed in as
     yourself, ask for a change on a Sunday of yours. The coordinator's first
     screen says a rota request is waiting. **Rota requests**, **Turn down**.
     Within about ten seconds the Rota Requests tab says **Rejected**, with a
@@ -687,23 +572,18 @@ These are real changes. Each step says how to put it back.
     it was turned down comes to you, as the man who asked. Nothing to put
     back.
 
-31. **A booking for somebody who rings.** **Bookings**, next Sunday, **Book a
+17. **A booking for somebody who rings.** **Bookings**, next Sunday, **Book a
     seat for someone**: any stop, 1 seat, your own number. It is on the
     driver's Stops and bookings at once, and on the Bus Bookings tab within a
     minute, noted as booked in the coordinator's app. **Cancel** it from the
     app, and the tab says Cancelled within a minute.
 
-32. **Over on seats.** The next time you rehearse *over* (step 9), open **Have
-    a look**, **Are we over on seats?** in the app while it runs. It names the
-    route that is over, as step 16's email does, and the first screen says so
-    too.
-
-33. **Is everything working, from the app.** **Have a look**, **Is everything
+18. **Is everything working, from the app.** **Have a look**, **Is everything
     working?** It comes back within about 25 seconds with what step 2 finds
     on the menu. If it says the spreadsheet did not answer, the deployed
     Apps Script is not the new version.
 
-34. **The lock.** Leave the app untouched for 15 minutes
+19. **The lock.** Leave the app untouched for 15 minutes
     (`coordApp.idleMinutes`). It asks for the PIN again, and keying it goes
     back to the screen you were on.
 
@@ -1033,7 +913,7 @@ Then fill in:
       dates; Set up fills the coming Sundays and anything can be typed over.
 
 **5. Go.** Minibus, **Send everything to the live server now**, then **Is the
-live server working?** until it shows no ✗, then the rehearsal in *After the
+live server working?** until it shows no ✗, then the checks in *After the
 deploy*.
 
 ## Configuration
@@ -1242,8 +1122,7 @@ bar** while the list scrolls, and **switching Sunday is not a step**: one Back
 leaves the screen however many Sundays were looked at.
 
 Left in the spreadsheet on purpose: setup, and
-free-form editing of any tab. The rehearsal controls are in the app from
-v1.79.0, on the Rehearsal screen; the sheet's menu items still work. The app
+free-form editing of any tab. The app
 does not work without a signal: a change kept on the phone and sent later
 could land on top of a decision somebody else made in the meantime.
 
@@ -1755,20 +1634,9 @@ queued, and there is no payload encryption to get subtly wrong. And the signing
 keys are **made by the Worker on first use** and kept in its own database:
 nothing to generate, paste or lose.
 
-**A rehearsal wakes nobody about a bus.** The Worker holds back every alert
-about a run while one is running, the stop alerts, the morning message and a
-route called off among them, and a route still off is told the minute it
-ends. The driver's nudges are about the real run and never about a test one.
-From w2.20.1 the booking reminders are not held back, because they say
-nothing about a bus: a rehearsal on a Saturday evening used to swallow the
-one reminder a booked passenger gets before Sunday. A phone woken during one
-is told only what it has booked, unless the Rota has its route off. That may
-be for the checklist or for real, so a seat on that route gets no Saturday
-reminder until the rehearsal is over, and a phone woken meanwhile is told to
-open the app, or "No bus" if that is what it was last told. Holding all this
-back is correct, and it used to leave one question permanently unanswered:
-whether Google and Apple accept what the Worker signs. A malformed token
-looked exactly like a quiet Sunday.
+**Only a real Sunday wakes anybody about a bus**, which used to leave one
+question permanently unanswered: whether Google and Apple accept what the
+Worker signs. A malformed token looked exactly like a quiet Sunday.
 
 ### Every alert in the app
 
@@ -2105,45 +1973,6 @@ downloading anything else to do it. Keep the two in step.
 It bypasses the Sunday dedup entirely, so it can be run as often as needed and
 changes nothing a real run depends on. One at a time per phone, twenty seconds
 apart.
-
-### Rehearsing
-
-A rehearsal puts test seats on both routes and lets you drive the whole
-morning on a Thursday evening. From v1.79.0 the live server runs it, and it
-is started, started over and ended on the coordinator's app (**Rehearsal** on
-the first screen) or from the sheet's **Rehearse this Sunday** and **Stop
-rehearsing**. Ask for a *quiet*, *ordinary*, *nearly full* or *over* morning;
-the stops and numbers are drawn fresh each time.
-
-- **Each start is a round.** A phone keeps the round its run was started in,
-  and every tap says which round it was made in. When the round is over,
-  ended or started over, the phone drops its test run and any taps still
-  waiting, and offers Start trip again. It knows the end time, so a phone
-  left open overnight lets the run go on its own, out of signal.
-- **A late test is never real.** A tap from a round that is over is thrown
-  away by the live server rather than recorded. So is anything more of a
-  test run already cleared away, and a run that reaches the server only
-  after its round ended, judged by when it started. A run started while a
-  rehearsal runs is a test, whatever the phone says: no real run starts
-  during one.
-- **A real run is never taken for a test.** A run is a test when its start
-  was one. A real run keeps all its rows, even one stored as a test by a
-  page from before v1.79.0, and a test tap made on a Sunday between the
-  cutoff and noon is never cleared away: none can be made there now, and
-  one from before may be a real run an older version tagged.
-- **Ending one clears it.** Its seats and its taps come off the live server
-  at once, and off the Bus Bookings and Trip Events tabs on the next drain,
-  a run's taken-back taps included. The same happens when it runs out: two
-  hours, or midnight if it reaches Sunday. The sheet takes rows off its tabs
-  only in the drain's turn, never beside a drain that is filing.
-- **As often as you like.** Start over is a new round with new seats, and
-  nothing from the last one is left anywhere.
-- **Never on a Sunday morning.** It will not start while a real bus is out,
-  or on a Sunday before noon; the Rehearsal screen says why. A real run a
-  phone has ended is put aside while one runs, so the same phone can
-  rehearse on a Sunday afternoon.
-- **Nothing it writes is real.** Test seats and taps are tagged `Rehearsal`,
-  a real run never counts them, and a rehearsal wakes nobody about a bus.
 
 ---
 

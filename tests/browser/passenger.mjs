@@ -57,7 +57,7 @@ async function passenger(o) {
     asked.push(u.search);
     let body = { ok: true, server: "w2.16.0", sheet: "v1.80.0" };
     if (p.get("bus")) {
-      body = Object.assign(body, { date: KEY, closed: !!o.closed, rehearsal: o.rehearsal || false, rolled: false,
+      body = Object.assign(body, { date: KEY, closed: !!o.closed, rolled: false,
         cutoff: "Sunday 09:30", stops: STOPS, arrivals: ARRIVALS, off: [], counts: { S03: 3, N02: 2 },
         driver: o.driver || null, phone: o.booked ? "07700900123" : "", stopGone: "",
         mine: o.booked ? { stopId: "S03", seats: 2 } : null, seats: {} });
@@ -107,7 +107,7 @@ if (want("P2")) {
 
 /* The live panel, once bookings have closed and the bus has left church. */
 const leftChurch = (over) => Object.assign({
-  live: true, date: KEY, now: Date.now(), route: "South", watching: false, rehearsal: false, routes: [],
+  live: true, date: KEY, now: Date.now(), route: "South", watching: false,
   stop: S03.stop, stopId: "S03", scheduled: S03.time, started: true, ended: false,
   startedAtWords: "10:25", lastStop: "", lastAgo: 2, lastAtWords: "10:25",
   mine: "eta", offset: 4, etaWords: "10:41", minutes: 12, imminent: false
@@ -159,32 +159,6 @@ if (want("P5")) {
   check("P5", "four minutes past the estimate the panel still says be at your stop, and not that the bus is a minute away",
         big === "Be at your stop" && sub.indexOf("a minute or two away") === -1 && sub.indexOf("10:41") > -1,
         "big '" + big + "', sub '" + sub + "'");
-  await me.ctx.close();
-}
-
-/* P6: the page lets go of a rehearsal when it ends. Until v1.79.0 it went
-   on showing the test morning until somebody reloaded it. */
-if (want("P6")) {
-  const R = Date.now() - 600000;
-  const round = { round: R, ends: R + 7200000, shape: "normal" };
-  const o = { closed: false, rehearsal: round, booked: true, pid: true,
-              trip: leftChurch({ rehearsal: round, routes: ["North", "South"] }) };
-  const me = await passenger(o);
-  await me.pg.evaluate(() => { const b = document.getElementById("alertAskNot"); if (b) b.click(); });
-  await me.pg.waitForTimeout(300);
-  const during = await me.text("#live");
-  const loads = () => me.asked.filter((q) => /[?&]bus=1/.test(q)).length;
-  const before = loads();
-  o.rehearsal = false;
-  o.trip = { live: false, why: "open", date: KEY, rehearsal: false };
-  await me.pg.waitForTimeout(7000);
-  const after = await me.text("#live");
-  const form = await me.pg.$$eval("[data-stop]", (b) => b.filter((x) => x.offsetParent).length).catch(() => 0);
-  await me.shot("P6-after-rehearsal");
-  check("P6", "when the rehearsal ends the page loads again and the test morning is gone",
-        /Rehearsal/i.test(during) && loads() > before && !/Rehearsal/i.test(after) && form > 0,
-        "during '" + during.slice(0, 60) + "', loads " + before + " then " + loads() + ", after '" + after.slice(0, 60) +
-        "', stops on screen " + form);
   await me.ctx.close();
 }
 

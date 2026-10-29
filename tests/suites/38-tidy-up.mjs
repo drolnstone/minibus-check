@@ -227,7 +227,6 @@ export default async function (root) {
       await seat(db, KEY, "N02", "Grace Rd", 2);
       await seat(db, KEY, "N02", "Grace Rd", 1);
       await seat(db, KEY, "N03", "Litherland Rd", 3, "Cancelled");
-      await seat(db, KEY, "N04", "Fountains Rd", 4, "rehearsal");
       const t0 = Date.parse("2026-10-04T09:52:00+01:00");
       await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian", reg: "YS70 PWE", sunday: KEY,
         events: [{ event: "start", at: t0 }, { event: "pickup", stopId: "N01", at: t0 + 11 * 60000 }] });
@@ -238,7 +237,6 @@ export default async function (root) {
       a.eq(by("N02").booked, 3, "two bookings at N02 are three seats");
       a.eq(by("N02").ev, null);
       a.eq(by("N03").booked, 0, "a cancelled seat was counted");
-      a.eq(by("N04").booked, 0, "a rehearsal seat was counted on a real run");
     });
   });
 
@@ -304,6 +302,26 @@ export default async function (root) {
       a.eq(t2.length, 0);
       a.has(g2.join(" "), "every seat for the coming Sundays is at the place its stop number names");
     });
+  });
+
+  /* ---- rehearsal, taken out in w2.73.0 ------------------------------------ */
+
+  s.test("what a rehearsal left on the live server goes on the next tick, and nothing real", async (a) => {
+    const { db, env } = await fresh();
+    await seat(db, KEY, "N02", "Grace Rd", 2);
+    await seat(db, KEY, "N04", "Fountains Rd", 4, "Rehearsal");
+    await W.cachePut(env, "rehearsal", { at: Date.now(), key: KEY }).run();
+    await W.cachePut(env, "rehearsal_rounds", []).run();
+    await W.dropRehearsalLeftovers(env);
+    const left = (await db.prepare("SELECT status FROM bookings").all()).results.map((r) => String(r.status));
+    a.eq(left.filter((x) => /rehearsal/i.test(x)).length, 0, "a rehearsal seat is still there");
+    a.eq(left.length, 1, "the real seat went too");
+    a.eq(await W.cacheGet(env, "rehearsal"), null, "the flag is still there");
+    a.eq(await W.cacheGet(env, "rehearsal_rounds"), null);
+    /* Once only: a second tick reads one row and does nothing. */
+    await seat(db, KEY, "N05", "Somewhere", 1, "Rehearsal");
+    await W.dropRehearsalLeftovers(env);
+    a.eq((await db.prepare("SELECT COUNT(*) AS n FROM bookings").first()).n, 2);
   });
 
   return s;
