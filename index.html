@@ -1362,7 +1362,6 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
       <button class="btn btn-ghost btn-wide" id="toPending" type="button" style="display:none">Waiting to send</button>
       <button class="btn btn-main btn-wide" id="toCheck" type="button">Vehicle check</button>
     </div>
-    <p class="tiny" id="modeNote"></p>
     <!-- From v1.96.0. Only once his PIN has been checked. -->
     <button class="how-link" id="toPinChange" type="button" style="display:none">Change PIN</button>
     <div class="footer-brand"><img src="logo.png" alt=""><span>RCCG Dominion Assembly Liverpool</span></div>
@@ -1776,7 +1775,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.133.0";
+var APP_VERSION = "v1.134.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -4691,7 +4690,6 @@ var sendingNow = false;
  */
 function refreshSendState(){
   if(sendingNow || !lastRec) return;
-  if(!LIVE){ paintSend("practice"); return; }
   var stillWaiting = loadQ().some(function(r){ return r.id===lastRec.id; });
   if(!stillWaiting) paintSend("ok");
 }
@@ -4704,9 +4702,6 @@ function paintSend(state, extra){
   } else if(state==="ok"){
     box.innerHTML='<div class="sendbox s-ok"><span class="ico">&#10003;</span>'+
       '<span><b>On the record</b><p>Saved to the coordinator\u2019s sheet.</p></span></div>';
-  } else if(state==="practice"){
-    box.innerHTML='<div class="sendbox s-hold"><span class="ico">!</span>'+
-      '<span><b>Practice mode</b><p>This check was not sent anywhere.</p></span></div>';
   } else {
     box.innerHTML='<div class="sendbox s-hold"><span class="ico">!</span>'+
       '<span><b>Held on this phone</b><p>'+esc(extra||"Could not reach the record.")+
@@ -4756,7 +4751,6 @@ function submit(){
   paintAuthorise(rec);
   show("sent");
 
-  if(!LIVE){ sendingNow=false; queueUp(rec); paintSend("practice"); return; }
   var picsSaved = pics.length ? photoPut(pics) : null;
   if(picsSaved){ PHOTO_WAIT += pics.length; paintBanner(); }
 
@@ -10810,8 +10804,6 @@ function showPinField(){
   showPinField();
 })();
 
-$("modeNote").textContent = LIVE ? "" : "Practice mode: nothing is being sent.";
-$("modeNote").hidden = LIVE;
 
 /* ---- Appearance ----------------------------------------------------
 

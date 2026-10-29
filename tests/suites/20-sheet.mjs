@@ -1288,41 +1288,9 @@ export default function (root) {
   });
 
 
-  /* ---- rehearsal, taken out in v1.129.0 ----------------------------------
-
-     Anything one left on the tabs, and this file's copy of its flag, goes on
-     the nightly pass. Real rows stay. */
-
-  const BOOK_H = TABS["Bus Bookings"], TRIP_H = TABS["Trip Events"];
-
-  s.test("the nightly pass takes what a rehearsal left off both tabs, and nothing real", (a) => {
-    const key = "2026-10-04", at = Date.now() - 20 * 60000;
-    const t = tabs();
-    const trip = (id, status, live) =>
-      [new Date(at), id, key, "North", "Bro Adrian", "picked", "N02", "Grace Road bus stop, Walton Vale",
-       "", new Date(at), 0, status, "YS70 PWE", "", "", "", "", "", live];
-    t["Trip Events"] = [TRIP_H, trip("t-old", "Rehearsal", "1"), trip("t-real", "Logged", "3")];
-    t["Bus Bookings"] = [BOOK_H,
-      [new Date(at), key, "North", "N02", "Grace Road bus stop, Walton Vale", 3, "rehearsal-north-0-a", "Rehearsal", "", "", "11"],
-      [new Date(at), key, "North", "N01", "Scarisbrick Drive by Ardville Road", 1, "d-real", "Booked", "07700900001", "p1", "13"]];
-    const L2 = loadCodeGs(root, { tabs: t, props: { COORDINATOR_EMAIL: "a@b.c", WORKER_URL: "https://example.invalid",
-                                                    rehearsal: JSON.stringify({ at: at, key: key }) } });
-    const ss = L2.ctx.SpreadsheetApp.getActiveSpreadsheet();
-    const gone = call(L2, "dropRehearsalRows", ss);
-    a.eq(gone.taps, 1, "taps"); a.eq(gone.seats, 1, "seats");
-    const ids = (tab) => {
-      const v = ss.getSheetByName(tab).getDataRange().getValues();
-      const i = v[0].indexOf("Live ID");
-      return v.slice(1).map((r) => String(r[i]));
-    };
-    a.eq(ids("Trip Events").join(","), "3", "the real tap stays");
-    a.eq(ids("Bus Bookings").join(","), "13", "the real seat stays");
-    a.eq(L2.ctx.PropertiesService.getScriptProperties().getProperty("rehearsal"), null, "the flag is gone");
-  });
-
   s.test("nothing of rehearsal is left in the sheet's code or its menu", (a) => {
     const src = readFileSync(join(root, "Code.gs"), "utf8");
-    for (const gone of ["startRehearsal", "stopRehearsal", "Rehearse this Sunday", "rehearsalOn(", "coordRehearsal"]) {
+    for (const gone of ["startRehearsal", "stopRehearsal", "Rehearse this Sunday", "rehearsalOn(", "coordRehearsal", "dropRehearsalRows"]) {
       a.hasnt(src, gone, gone + " is still there");
     }
   });

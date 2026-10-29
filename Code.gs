@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.129.0";
+var SCRIPT_VERSION = "v1.130.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -3424,8 +3424,6 @@ function nightlyMaintenance() {
   ensureRotaSheets(ss);
   fillRotaAhead(ss);
   try { fillBusesAhead(ss); } catch (err) { /* never block the rota on this */ }
-
-  try { tabsTurn(function () { return dropRehearsalRows(ss); }); } catch (err) {}
 
   /* The live server, refreshed whether or not anything changed. Cheap, and
      it means a push that failed quietly during the week is put right before
@@ -8305,18 +8303,6 @@ function dropTabRows(ss, tabName, hit, first) {
     i = top - 1;
   }
   return gone;
-}
-
-/* REHEARSAL WAS TAKEN OUT IN v1.129.0 (Asim, 29 Oct 2026). Any seat or tap
-   one left on the tabs, and this file's copy of its flag, go on the nightly
-   pass. Nothing writes a Rehearsal row any more, so this finds nothing after
-   the first night. */
-function dropRehearsalRows(ss) {
-  try { PropertiesService.getScriptProperties().deleteProperty("rehearsal"); } catch (err) {}
-  var isTest = function (r, c) {
-    return String(at1(r, c.status) || "").toLowerCase().indexOf("rehearsal") !== -1;
-  };
-  return { taps: dropTabRows(ss, TRIP_SHEET, isTest), seats: dropTabRows(ss, BOOKINGS_SHEET, isTest) };
 }
 
 /* CLEARING A SUNDAY THAT HAS NOT BEEN DRIVEN YET.
@@ -13615,7 +13601,8 @@ function onOpen() {
       .addSeparator()
       .addItem("Rebuild future Sundays from the pattern (asks first)", "rebuildFutureRota")
       .addItem("Rebuild the bus rotation (asks first)", "rebuildBuses")
-      .addItem("Archive old records now (asks first)", "archiveNow"))
+      .addItem("Archive old records now (asks first)", "archiveNow")
+      .addItem("Clear a Sunday's test run (asks first)", "clearTestRun"))
 
     .addSubMenu(ui.createMenu("Send an email now")
       .addItem("Test email and coordinators' phones", "sendTestEmail")
@@ -13629,9 +13616,6 @@ function onOpen() {
     .addSubMenu(ui.createMenu("Sheet protection")
       .addItem("Lock the sheet", "lockSheet")
       .addItem("Unlock the sheet (asks first)", "unlockSheet"));
-
-  menu.addSeparator()
-      .addItem("Clear a Sunday's test run (asks first)", "clearTestRun");
 
   menu.addToUi();
 }

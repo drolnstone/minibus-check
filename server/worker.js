@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.73.0";
+const SCRIPT_VERSION = "w2.74.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -4993,22 +4993,8 @@ async function forgetOldNumbers(env) {
   return Number((r && r.meta && r.meta.changes) || 0);
 }
 
-/* REHEARSAL WAS TAKEN OUT IN w2.73.0 (Asim, 29 Oct 2026). Whatever one left
-   on this server goes once: its flag and lists, and any seat or tap still
-   tagged Rehearsal. The sheet clears its own tabs the same way. */
-async function dropRehearsalLeftovers(env) {
-  if (await cacheGet(env, "rehearsal_dropped")) return;
-  await env.DB.batch([
-    env.DB.prepare("DELETE FROM settings WHERE k IN ('rehearsal','rehearsal_gone','rehearsal_rounds')"),
-    env.DB.prepare("DELETE FROM bookings WHERE lower(status)='rehearsal'"),
-    env.DB.prepare("DELETE FROM trip_events WHERE lower(status)='rehearsal'"),
-    cachePut(env, "rehearsal_dropped", { at: Date.now() })
-  ]);
-}
-
 async function clockTick(env) {
   try { await cachePut(env, "clock", { at: Date.now() }).run(); } catch (e) {}
-  try { await dropRehearsalLeftovers(env); } catch (e) {}
   await sweeps(env);
   try { await pokeIfWaiting(env); } catch (e) {}
   try { await releaseCoordAlerts(env); } catch (e) {}

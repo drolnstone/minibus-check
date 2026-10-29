@@ -4,6 +4,10 @@ Working notes for the ETA in v1.71.0. Not part of the release; kept beside it
 because the next person to change the arithmetic will want to know why it is
 shaped like this.
 
+Since v1.130.0 (#112) the estimate comes first from the driving phone's
+location and Google traffic times. What follows is the timetable model it
+falls back to, and the dwell model `lib.mjs` and `calibrate.mjs` fit.
+
 ## What is wrong with the estimate now
 
 At v1.70.1 the passenger's estimate is one line:

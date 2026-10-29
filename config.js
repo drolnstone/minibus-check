@@ -11,8 +11,7 @@
 
 window.CONFIG = {
 
-  /* The sheet, by way of the live server. Blank means practice mode:
-     nothing is sent.
+  /* The sheet, by way of the live server. Blank sends nothing.
 
      Until v1.126.0 this was the Apps Script web app's own address. It is not
      written in any file now: the live server keeps it, as the sheet sends it,
