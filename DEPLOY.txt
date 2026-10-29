@@ -1,24 +1,21 @@
 MINIBUS
 =======
-  pages v1.134.0 · server w2.74.0 · sheet v1.130.0
+  pages v1.135.0 · server w2.74.0 · sheet v1.130.0
 
-YOU ARE ON   app v1.133.0 · server w2.73.0 · sheet v1.129.0
-GOING TO     app v1.134.0 · server w2.74.0 · sheet v1.130.0
+YOU ARE ON   app v1.134.0 · server w2.74.0 · sheet v1.130.0
+GOING TO     app v1.135.0 · server w2.74.0 · sheet v1.130.0
 
-Tidy-up after rehearsal. Nothing changes on a Sunday.
+Screen tidy-up. Pages only.
 
-- The one-off clear of rehearsal leftovers is gone from the live server
-  and the sheet.
-- The sheet's Minibus menu: "Clear a Sunday's test run (asks first)" is
-  now under "Rota and setup", with the other "(asks first)" items,
-  instead of on its own at the bottom.
-- Driver app: the unused "Practice mode" lines are gone.
-- Old deploy notes (analysis/DEPLOY-*.txt) are gone; this file is the
-  only one. HANDOVER.md is cut back to what still holds.
+- Driver app: the alerts prompt reads "Turn on alerts on this phone?",
+  as the coordinator app's does.
+- Coordinator app: "Change PIN", as the driver app has it.
+- Coordinator home list: Bookings, Run record, Send a message, Alerts;
+  then Rota requests, Defects, Buses, Drivers, Bus stops; then PDF
+  reports, Have a look, What has been done.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: app v1.134.0 · server w2.74.0 · sheet v1.130.0.
-B. The sheet, Minibus menu, Rota and setup: "Clear a Sunday's test run
-   (asks first)" is the last item; nothing below Sheet protection.
+A. Coordinator app, App info: app v1.135.0.
+B. Coordinator home: the list starts with Bookings.

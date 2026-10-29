@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.134.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.135.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -715,7 +715,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.134.0";
+var PAGE_VERSION = "v1.135.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1377,24 +1377,18 @@ function paintHome(){
            (n ? '<span class="n '+(tone||'')+'">'+esc(n)+'</span>' : '') + '<span class="go">›</span></button></li>';
   };
   h += '<ul class="menu">' +
-       item("requests", "Rota requests", pend ? pend + " waiting" : "none waiting", pend ? "warn" : "") +
        item("bookings/" + bk, "Bookings", booked + " booked" + (bk !== D.today ? " for " + shortDay(bk) : ""), "") +
-       item("defects", "Defects", defs ? defs + " open" : "none open", defs ? "warn" : "") +
-       /* A live server from before w2.30.0 sends no vehicle log. */
-       (D && D.vehicles ? item("buses", "Buses", jobs ? (jobs === 1 ? "1 job to arrange" : jobs + " jobs to arrange") : "", jobs ? "warn" : "") : "") +
-       /* A live server from before w2.34.0 sends no register. */
-       (D && D.register ? item("drivers", "Drivers", D.register.drivers.filter(function(x){ return x.active; }).length + " active", "") : "") +
-       /* A live server from before w2.35.0, or a sheet before v1.99.0, sends no stops. */
-       (D && D.stopsReg ? item("stops", "Bus stops", D.stopsReg.stops.filter(function(x){ return x.active && x.type === "Pickup"; }).length + " in use", "") : "") +
        item("runs", "Run record", "") +
-       /* A live server from before w2.37.0 cannot make one. */
+       (D && D.message ? '<li><button type="button" data-do="message"><span class="t">Send a message</span><span class="go">›</span></button></li>' : '') +
+       (ALERTS.known ? item("alerts", "Alerts", ALERTS.unread ? ALERTS.unread + " new" : "", ALERTS.unread ? "stop" : "") : "") +
+       item("requests", "Rota requests", pend ? pend + " waiting" : "none waiting", pend ? "warn" : "") +
+       item("defects", "Defects", defs ? defs + " open" : "none open", defs ? "warn" : "") +
+       (D && D.vehicles ? item("buses", "Buses", jobs ? (jobs === 1 ? "1 job to arrange" : jobs + " jobs to arrange") : "", jobs ? "warn" : "") : "") +
+       (D && D.register ? item("drivers", "Drivers", D.register.drivers.filter(function(x){ return x.active; }).length + " active", "") : "") +
+       (D && D.stopsReg ? item("stops", "Bus stops", D.stopsReg.stops.filter(function(x){ return x.active && x.type === "Pickup"; }).length + " in use", "") : "") +
        (D && D.pdf ? item("pdf", "PDF reports", "") : "") +
        item("look", "Have a look", "") +
        item("activity", "What has been done", waiting ? waiting + " on the way" : "", waiting ? "warn" : "") +
-       /* A live server from before w2.56.0 cannot send one. */
-       (D && D.message ? '<li><button type="button" data-do="message"><span class="t">Send a message</span><span class="go">›</span></button></li>' : '') +
-       /* A live server from before w2.40.0 keeps no list. */
-       (ALERTS.known ? item("alerts", "Alerts", ALERTS.unread ? ALERTS.unread + " new" : "", ALERTS.unread ? "stop" : "") : "") +
        '</ul>';
   /* Signed in, so the way back carries him: to the driver app's hub, not its
      name screen. The link on the sign-in screen has no PIN to carry and stays
@@ -1404,7 +1398,7 @@ function paintHome(){
   h += '<div class="foot-links">' +
        '<a class="foot-link" href="../" data-do="driverapp">Driver app</a>' +
        '<a class="foot-link" href="../" data-do="check">Vehicle check</a></div>' +
-       '<button class="foot-link" type="button" data-do="mypin" style="background:none;border:0;padding:0">Change your PIN</button>';
+       '<button class="foot-link" type="button" data-do="mypin" style="background:none;border:0;padding:0">Change PIN</button>';
   $("homeBody").innerHTML = h;
 }
 
@@ -1414,7 +1408,7 @@ function paintHome(){
    server, with who made it. Every "Call ..." button in all three apps shows
    whoever is picked. Today only runs out at midnight by itself; Until changed
    back stays. Picking the usual person puts it back to the Drivers tab's
-   answer. A live server from before w2.41.0 sends no contact, and nothing
+   answer. With no contact, nothing
    is shown. */
 function contactHtml(){
   var c = D && D.contact;
@@ -2255,7 +2249,7 @@ function myPin(){
            'class="mono pinbox" placeholder="&bull;&bull;&bull;&bull;"></div>';
   };
   var ids = ["myPinOld", "myPinNew", "myPinAgain"];
-  openSheet({ eyebrow: "Your PIN", title: "Change your PIN",
+  openSheet({ eyebrow: "Your PIN", title: "Change PIN",
     line: "The PIN you sign in with, here and in the driver app.",
     body: box("myPinOld", "Current PIN") + box("myPinNew", "New PIN (4 digits)") + box("myPinAgain", "New PIN again"),
     go: "Change PIN", onGo: function(){ send(); } });
@@ -2632,7 +2626,6 @@ function dueRows(b, only){
 }
 
 function paintBuses(){
-  /* A live server from before w2.35.0 cannot take a change to a bus. */
   var h = (D && D.busEdits) ? '<button class="btn btn-main btn-wide" type="button" data-do="addbus">Add a bus</button>' : '';
   var list = busList().slice().sort(function(a, b){ return (b.active ? 1 : 0) - (a.active ? 1 : 0) || String(a.reg).localeCompare(String(b.reg)); });
   if(!list.length){ $("busesBody").innerHTML = h + '<div class="card"><p class="tiny" style="margin:0">No buses have reached the live server.</p></div>'; return; }
@@ -2684,7 +2677,7 @@ function paintBus(reg){
   var h = '<h1><span class="plate plate-big">' + esc(b.reg) + '</span></h1>';
   h += '<div class="card">' + dueRows(b) + '</div>';
   /* From v1.124.0: the last walkaround's mileage and the parked reading
-     after it. A live server from before w2.65.0 sends no parked. */
+     after it. */
   if(D && D.parked){
     var lm = milesOf(b.reg), pk = null;
     for(var pr in D.parked) if(Object.prototype.hasOwnProperty.call(D.parked, pr) && same(pr, b.reg)) pk = D.parked[pr];
@@ -3148,8 +3141,8 @@ function paintRuns(key){
    booked and no tap, the driver was asked and nothing was marked: amber,
    with Add. With nobody booked the driver app asks for no tap at all, so
    nothing is missing: grey, and Add stays, small, for somebody who turned up
-   and was not noted. A live server from before w2.31.0 sends no booked
-   figure, and every untapped stop reads as it always did. */
+   and was not noted. With no booked
+   figure, every untapped stop reads plainly. */
 function evRow(label, tt, ev, run, stopId, st){
   var fixable = !!ev || (stopId !== "start" && stopId !== "end");
   var late = ev && ev.off !== null && ev.off !== undefined && Number(ev.off) > 2;
