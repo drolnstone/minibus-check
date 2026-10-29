@@ -1,13 +1,13 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
 const CACHE_PREFIX = "minibus-check-";
-const CACHE = CACHE_PREFIX + "v1.133.0";
+const CACHE = CACHE_PREFIX + "v1.134.0";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
    receive a page of HTML where the settings file should be. That fails as a
    syntax error, window.CONFIG never gets set, and the app boots with no
-   vehicles, no drivers and no endpoint: practice mode, silently. */
+   vehicles, no drivers and no endpoint, silently. */
 const SHELL = [
   "./",
   "./index.html",

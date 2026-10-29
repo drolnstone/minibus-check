@@ -51,9 +51,8 @@ app first**, and the spreadsheet applies it a few seconds later through its
 own code. The spreadsheet is still the record. See *The coordinator's app*.
 
 **Rehearsal was taken out in v1.133.0 · w2.73.0 · v1.129.0** (Asim, 29 Oct
-2026). Anything one left goes by itself: the Worker clears its own copy on
-its next tick, and the sheet takes any `Rehearsal` rows off Trip Events and
-Bus Bookings on its nightly pass.
+2026). The Worker cleared what one left on its next tick; that one-off
+clear, and the sheet's, came out again in w2.74.0 · v1.130.0.
 
 **The Worker also keeps a shelf** — a copy of the finished rota and last
 week's mileage, built by Apps Script and posted over. It serves those back

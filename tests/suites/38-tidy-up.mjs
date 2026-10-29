@@ -304,25 +304,5 @@ export default async function (root) {
     });
   });
 
-  /* ---- rehearsal, taken out in w2.73.0 ------------------------------------ */
-
-  s.test("what a rehearsal left on the live server goes on the next tick, and nothing real", async (a) => {
-    const { db, env } = await fresh();
-    await seat(db, KEY, "N02", "Grace Rd", 2);
-    await seat(db, KEY, "N04", "Fountains Rd", 4, "Rehearsal");
-    await W.cachePut(env, "rehearsal", { at: Date.now(), key: KEY }).run();
-    await W.cachePut(env, "rehearsal_rounds", []).run();
-    await W.dropRehearsalLeftovers(env);
-    const left = (await db.prepare("SELECT status FROM bookings").all()).results.map((r) => String(r.status));
-    a.eq(left.filter((x) => /rehearsal/i.test(x)).length, 0, "a rehearsal seat is still there");
-    a.eq(left.length, 1, "the real seat went too");
-    a.eq(await W.cacheGet(env, "rehearsal"), null, "the flag is still there");
-    a.eq(await W.cacheGet(env, "rehearsal_rounds"), null);
-    /* Once only: a second tick reads one row and does nothing. */
-    await seat(db, KEY, "N05", "Somewhere", 1, "Rehearsal");
-    await W.dropRehearsalLeftovers(env);
-    a.eq((await db.prepare("SELECT COUNT(*) AS n FROM bookings").first()).n, 2);
-  });
-
   return s;
 }
