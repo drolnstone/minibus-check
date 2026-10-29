@@ -904,10 +904,6 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
 .trip-ask-no{opacity:.75}
 .trip-buses{display:grid;gap:8px;margin-top:2px}
 .trip-buses .btn{width:100%}
-.trip-rehearsal{background:var(--stop-bg);border:1px solid var(--stop-line);color:var(--stop);
-  border-radius:var(--r);padding:13px;margin:0 0 12px;font-size:13px;line-height:1.5}
-.trip-rehearsal b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:15px;
-  letter-spacing:.12em}
 .trip-row-btns{display:flex;gap:6px;padding:0 0 8px 62px}
 /* Small, but unmistakably a button: a border, a fill, and the same condensed
    uppercase face every other button in the app uses. They were grey text on
@@ -1780,7 +1776,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.132.0";
+var APP_VERSION = "v1.133.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2864,7 +2860,7 @@ function pushTurnOn(){
 
 /* PROVE IT, ON THIS PHONE, NOW.
 
-   A rehearsal wakes nobody and the End trip reminder waits for a run to be
+   The End trip reminder waits for a run to be
    past its arrival time, so until this existed there was no way to find out
    that alerts worked except to need one. A token the push service will not
    accept looks exactly like a quiet morning.
@@ -3145,8 +3141,8 @@ function paintLinks(){
      never to a phone that cannot receive one.
 
      It used to disappear the moment reminders were on, which was right while
-     there was nothing left to say. There is now: a rehearsal wakes nobody and
-     the real reminder only comes on a Sunday, so a driver who has turned them
+     there was nothing left to say. There is now: the real reminder only
+     comes on a Sunday, so a driver who has turned them
      on has no way of knowing they work. */
   var al=$("hubAlert");
   if(al){
@@ -5068,7 +5064,7 @@ function rotaSaveCache(){
          nothing on screen to say why. */
       seats: SEATS, buses: BUSES,
       stops: rotaStops, counts: rotaStopCounts, countsFor: rotaStopCountsFor,
-      countsAt: rotaCountsAt, countsRound: rotaBoardRound
+      countsAt: rotaCountsAt
     }));
   }catch(e){}
 }
@@ -5087,8 +5083,7 @@ function rotaLoadCache(){
     if(c.seats && Object.keys(c.seats).length) SEATS = c.seats;
     if(c.buses && c.buses.length) BUSES = c.buses;
     if(c.stops && c.stops.length) rotaStops = c.stops;
-    if(c.counts){ rotaStopCounts = c.counts; rotaStopCountsFor = c.countsFor||"";
-                  rotaBoardRound = Number(c.countsRound)||0; }
+    if(c.counts){ rotaStopCounts = c.counts; rotaStopCountsFor = c.countsFor||""; }
     rotaCountsAt = Number(c.countsAt)||0;
     return true;
   }catch(e){ return false; }
@@ -5579,10 +5574,7 @@ var TSKEY = "fleet.trip.state.v1";
 var TRIP_MOVING_MS = 2.2;
 
 var trip = { id:"", route:"", reg:"", started:0, ended:0, served:{}, undone:{},
-             lastAt:0, lastStop:"", offset:null, reopened:0, driver:"",
-             /* The rehearsal round it was started in, 0 for a real run. See
-                tripRoundCheck. */
-             rehearsal:0 };
+             lastAt:0, lastStop:"", offset:null, reopened:0, driver:"" };
 
 /* Every route the board has answered about, exactly as it answered, kept
    apart from the run this phone is driving.
@@ -5618,9 +5610,7 @@ function tripView(route){
   return tripSeen[route] || { id:"", route:route, reg:"", started:0, ended:0,
                               served:{}, lastAt:0, lastStop:"", offset:null };
 }
-/* tripRehearsal is the round of the rehearsal running now, 0 for none, and
-   tripRehearsalEnds when it ends. Both from the board. */
-var tripClosed = false, tripCutoff = "", tripRehearsal = 0, tripRehearsalEnds = 0;
+var tripClosed = false, tripCutoff = "";
 /* When this route is timetabled to leave church, "HH:MM", or "" if the Bus
    Stops tab has no Depart row for it. Used only by the too-early guard. */
 var tripDepartWords = "";
@@ -5684,8 +5674,7 @@ function tripSaveState(){
                                     undone:trip.undone, reopened:trip.reopened||0,
                                     autoEnded:tripAutoEndedAt||0,
                                     away:tripAwayEver?1:0,
-                                    driver:trip.driver||"",
-                                    rehearsal:Number(trip.rehearsal)||0 }));
+                                    driver:trip.driver||"" }));
 }
 /* Restored only when it is TODAY'S run.
 
@@ -5718,7 +5707,6 @@ function tripLoadState(){
     trip.undone=s.undone||{};
     trip.reopened=Number(s.reopened)||0;
     trip.driver=String(s.driver||"");
-    trip.rehearsal=Number(s.rehearsal)||0;
     /* The way back after an automatic end, kept like the end itself. Held in
        memory only, it went with any reload: the notification says "Open the
        app to undo", and a phone that had put the app away opened it fresh,
@@ -5735,18 +5723,13 @@ function tripLoadState(){
    — which is fine for one phone, one driver, one route, and that is every
    real Sunday. It is not fine on a phone that has just done North and is now
    starting South: any North tap still waiting would go up labelled South and
-   land on the sheet under a route it never happened on. Rehearsing on one
-   phone is exactly how that gets discovered, and it looks like South tracking
-   misbehaving when nothing about South is wrong. */
+   land on the sheet under a route it never happened on. */
 function tripQueue(ev, hold){
   if(ev.route  === undefined) ev.route  = trip.route || "";
   if(ev.trip   === undefined) ev.trip   = trip.id    || "";
   if(ev.reg    === undefined) ev.reg    = trip.reg   || "";
   if(ev.driver === undefined) ev.driver = st.driver  || "";
   if(ev.sunday === undefined) ev.sunday = rotaKey(rotaBaseSunday(0));
-  /* Which rehearsal round, 0 for a real run. The live server throws away a
-     tap from a round that is over rather than record it as real. */
-  if(ev.rehearsal === undefined) ev.rehearsal = Number(trip.rehearsal)||0;
   /* Its own name in the queue, so a send takes off exactly what it sent. */
   if(ev.qid === undefined) ev.qid = Date.now().toString(36)+Math.random().toString(36).slice(2,8);
   var q=tripLoadQ(); q.push(ev); tripSaveQ(q);
@@ -5795,9 +5778,6 @@ function tripFlush(){
       route: rt,
       reg: head.reg || trip.reg || "",
       driver: head.driver || st.driver || "",
-      /* Left out for a tap queued by a copy of this app from before v1.79.0,
-         which the live server then judges the old way. */
-      rehearsal: head.rehearsal,
       phone: myPhone(),
       events: batch
     }})
@@ -5829,14 +5809,6 @@ function tripFlush(){
     batch.forEach(function(e){ sentKeys[tripQKey(e)]=1; });
     rest=tripLoadQ().filter(function(e){ return !sentKeys[tripQKey(e)]; });
     tripSaveQ(rest);
-    /* Taken and thrown away: the rehearsal round they were made in is over.
-       The run goes too, at once rather than on the next board answer. */
-    if(out.rehearsalOver && trip.id && trip.id===runId){
-      tripClearRun();
-      toast(out.rehearsal ? "The rehearsal was started again. Your test run was cleared."
-                          : "The rehearsal has ended. Your test run was cleared.");
-      tripPaint();
-    }
     tripPaintWait();
     /* Another run still has taps waiting. Straight on, so a phone that did
        both routes does not sit on the older one until the next timer. */
@@ -6186,9 +6158,6 @@ function tripOpenBy(route){
 function tripMayCover(route){
   var me=(st.driver||"").trim();
   if(!me) return false;
-  /* A rehearsal already hands a coordinator every route. Offering to cover one
-     he has been given puts two ways to start the same run on one screen. */
-  if(tripRoundNow() && tripSeesAll()) return false;
   if(tripRostered(me,route)) return false;    /* he is not covering, he is on */
   /* On the rota for the OTHER route today. Without this, from half nine every
      rostered driver looking at the other tab was invited to cover it, a
@@ -6204,11 +6173,6 @@ function tripMayCover(route){
 function tripMayTap(route){
   var me=(st.driver||"").trim();
   if(!me) return false;
-  /* The one exception, and it is the intersection of two things: a rehearsal
-     IS running AND you are a coordinator. A rehearsal on its own loosens
-     nothing for anybody else, so a driver who opens his phone in the middle
-     of one still only has his own route. */
-  if(tripRoundNow() && tripSeesAll()) return true;
   if(tripRostered(me,route)) return true;
   /* A claim made on this phone, a moment ago, by this man. It unlocks nothing
      more than the ordinary Start trip flow: he still picks his bus, still
@@ -6224,8 +6188,7 @@ function tripMayTap(route){
 }
 
 /* Coordinator and Minister in Charge. They are the ones rung when a bus is
-   late, and this is what lets a rehearsal be driven from one phone. It is a
-   ROLE, and it stays one: see tripMayWatch below for the thing that was
+   late. It is a ROLE, and it stays one: see tripMayWatch below for the thing that was
    widened, and note carefully that these are two different questions. */
 function tripSeesAll(){
   return roleAllowed(st.role);
@@ -6261,9 +6224,7 @@ function tripMayWatch(){
    up. The answer comes from the same server call the passenger page makes
    (?trip=1&s=), so the two phones cannot disagree about the same kerb.
 
-   Kept for the Sunday on this phone, one stop at a time. Not offered during a
-   rehearsal: the server lends a phone with no booking a test seat then, not
-   the stop it asked about. */
+   Kept for the Sunday on this phone, one stop at a time. */
 var DW_KEY = "driver.watch.v1";
 var dwLive = null, dwBusy = false;
 function dwLoad(){
@@ -6281,7 +6242,6 @@ function dwSave(stopId){
 /* The stop this phone is following, only for the Sunday on screen and only
    while it is still on the timetable. */
 function dwStopNow(){
-  if(tripRoundNow()) return null;
   var w = dwLoad();
   if(!w || w.date !== rotaKey(rotaBaseSunday(0))) return null;
   var hit = null;
@@ -6938,8 +6898,6 @@ function tripStart(route, reg, anyway){
      through a reload (tripCoverClaimed), so this is the one place the phone
      still knows it is his once the run has ended. See tripMayReopen. */
   trip.driver = (st.driver||"").trim();
-  /* The round, on the run, so every tap it makes says which one it was. */
-  trip.rehearsal = tripRoundNow();
   tripSkipAsked={};              /* last run's "not now" answers are not this run's */
   tripAwayEver=false; tripHomeSince=0; tripAutoEndedAt=0;
   tripUncheckedAsked="";
@@ -7016,8 +6974,6 @@ function tripTooSoon(stop){
 }
 
 function tripTap(stop,kind){
-  /* Never onto a test run whose round is over by the clock. */
-  if(tripRoundTick()) return;
   if(!trip.started || trip.ended) return;
   if(tripStopShut(stop)){ tripPaint(); return; }
   if(!trip.served[stop.id] && pickNext && stop.id===pickNext.id && !pickLeft(true)){
@@ -7094,7 +7050,6 @@ function tripTap(stop,kind){
    the Undo itself, so a driver is never asked a question he cannot answer. */
 var undoAskId="";
 function tripUndoAsk(stop){
-  if(tripRoundTick()) return;
   var was=trip.served[stop.id];
   if(!was) return;
   if(tripStopShut(stop)){ tripPaint(); return; }
@@ -7133,7 +7088,6 @@ function tripUndoClose(){
 }
 
 function tripUndo(stop){
-  if(tripRoundTick()) return;
   var was=trip.served[stop.id];
   if(!was) return;
   /* The same rule as the tap it takes back. Undo was the one stop control
@@ -7218,9 +7172,6 @@ function rotaCountsRetry(){
    run is out, when the server is an older one, or when that part of the board
    answer was fenced off by a failure. Empty is a fact the list can draw. */
 var rotaStopEtas={};
-/* The rehearsal round the counts above were taken in, 0 for none. Counts
-   taken in a round include its test seats, and go when the round does. */
-var rotaBoardRound=0;
 
 /* WHERE THE BUS IS, with every board poll, from v1.130.0 (Asim, 25 Oct
    2026): the last location fix, on the run this phone is driving. The
@@ -7263,14 +7214,11 @@ function rotaCountsFetch(route,cb){
       seatsSeen(out);
 
       var before=tripSig();
-      var roundDropped=false;
-
       /* A part of the answer may be missing now: the server fences each one
          off so a fault in one does not cost the screen. Keep what arrived
          and leave the rest as it was, rather than blanking good numbers
          because a different part failed. */
-      if(out.counts){ rotaStopCounts = out.counts; rotaStopCountsFor = out.date||"";
-                      rotaBoardRound = tripRoundOf(out.trip && out.trip.rehearsal); }
+      if(out.counts){ rotaStopCounts = out.counts; rotaStopCountsFor = out.date||""; }
       /* Replaced whole or cleared whole, never merged. A stale estimate for
          one stop mixed in with fresh ones for the rest is the worst of both:
          it looks current and it is not, and there is no way to see which is
@@ -7300,16 +7248,11 @@ function rotaCountsFetch(route,cb){
       if(tp && tp.ok!==false){
         tripNoteSkew(tp.now);
 
-        /* The cutoff, the clock and whether a rehearsal is running are the
-           same answer whichever route was asked about, so they are always
-           taken. Everything below belongs to one route. */
+        /* The cutoff and the clock are the same answer whichever route was
+           asked about, so they are always taken. Everything below belongs to
+           one route. */
         tripClosed  = !!tp.closed;
         tripCutoff  = tp.cutoff||"";
-        tripRehearsal = tripRoundOf(tp.rehearsal);
-        tripRehearsalEnds = (tp.rehearsal && Number(tp.rehearsal.ends)) || 0;
-        /* Before anything below reads `trip`: a run from a round that is over
-           is gone by then, and this answer can hand over the new round's. */
-        if(tripRoundCheck()) roundDropped = true;
         if(typeof tp.departWords==="string") tripDepartWords=tp.departWords;
 
         /* A run in progress owns its own route, and an answer about a
@@ -7333,7 +7276,7 @@ function rotaCountsFetch(route,cb){
         /* Kept for every route, always, whether or not it is ours. This is
            what the other tab draws from. */
         tripSeen[route] = { id:String(tp.trip||""), route:route, reg:tp.reg||"",
-                            driver:tp.driver||"", rehearsal:Number(tripRehearsal)||0,
+                            driver:tp.driver||"",
                             started:tp.started||0, ended:tp.ended||0,
                             served:tp.served||{}, lastAt:tp.lastAt||0,
                             lastStop:tp.lastStop||"",
@@ -7355,9 +7298,7 @@ function rotaCountsFetch(route,cb){
       rotaSaveCache();
 
       var after=tripSig();
-      /* A run dropped with its round is always drawn: the screen must not go
-         on showing it. */
-      if(cb) cb(after!==before || roundDropped);
+      if(cb) cb(after!==before);
       rotaCountsRetry();
     })
     .catch(function(){
@@ -7369,48 +7310,10 @@ function rotaCountsFetch(route,cb){
     });
 }
 
-/* ---- a rehearsal is a round, and a round ends ---------------------------
-
-   From v1.79.0 a run knows the rehearsal round it was started in: 0 for a
-   real run, otherwise the moment the live server started that rehearsal.
-   Every tap carries it, and the live server throws away a tap from a round
-   that is over.
-
-   This is the phone's half. Until v1.79.0 a run made in a rehearsal stayed on
-   the phone for the rest of the day. The board stopped mentioning it the
-   moment the rehearsal ended, silence reads here as "nothing new" (see
-   tripMerge), so the screen went on showing a finished test run and would not
-   offer Start trip again. One rehearsal a day per phone was the real limit.
-
-   So a run from a round that is over is dropped, with any of its taps still
-   waiting, and the screen goes back to the start. While a rehearsal is on, a
-   real run of this phone's that has ended, with nothing left to send, is put
-   aside too, so the rehearsal can be driven: it is on the record already. */
-
-/* The round running now, by the board's last word AND the clock. A phone
-   left open overnight after a Saturday rehearsal still holds the board's
-   last answer, and a run started from it on the Sunday, out of signal at the
-   yard, would carry a round long over: every tap thrown away by the live
-   server and the real morning lost. So a round past its end time is none. */
-function tripRoundNow(){
-  var r=Number(tripRehearsal)||0;
-  if(!r) return 0;
-  if(tripRehearsalEnds && tripNow()>=tripRehearsalEnds) return 0;
-  return r;
-}
-
-/* The round a board answer names. A live server from before w2.20.0 says only
-   true, which counts as round 1. */
-function tripRoundOf(r){
-  if(!r) return 0;
-  if(typeof r==="object") return Number(r.round)||1;
-  return 1;
-}
-
 function tripClearRun(){
   trip.id=""; trip.route=""; trip.reg=""; trip.started=0; trip.ended=0;
   trip.served={}; trip.undone={}; trip.lastAt=0; trip.lastStop=""; trip.offset=null;
-  trip.reopened=0; trip.driver=""; trip.rehearsal=0;
+  trip.reopened=0; trip.driver="";
   tripAutoEndedAt=0; tripSkipAsked={}; tripAwayEver=false; tripHomeSince=0;
   tripUncheckedAsked="";
   /* Not a thumb on the list: the list has to be drawn again at once, and the
@@ -7421,54 +7324,6 @@ function tripClearRun(){
   tripSaveState();
 }
 
-/* The round checked by the clock alone, for the times no board answer comes:
-   out of signal at the yard, or a page that has been asleep. A test run whose
-   round is over by the clock goes, and the screen is drawn again. True if it
-   went, so a tap about to be made on it is not. */
-function tripRoundTick(){
-  var c=tripRoundCheck();
-  if(c) tripPaint();
-  return c===2;
-}
-
-function tripRoundCheck(){
-  var round = tripRoundNow();
-  var mine  = Number(trip.rehearsal)||0;
-  var q = tripLoadQ();
-  var ownWaiting = q.some(function(e){ return trip.id && e.trip===trip.id; });
-  var drop = false, why = "";
-  if(trip.id && mine && mine!==round){
-    drop = true;
-    why = round ? "The rehearsal was started again. Your test run was cleared."
-                : "The rehearsal has ended. Your test run was cleared.";
-  } else if(trip.id && !mine && round && trip.ended && !ownWaiting){
-    drop = true;
-  }
-  /* Taps from a round that is over, whichever run they belong to. */
-  var gone = drop ? trip.id : "";
-  var keep = q.filter(function(e){
-    var r = Number(e.rehearsal)||0;
-    if(r && r!==round) return false;
-    return !(gone && e.trip===gone);
-  });
-  if(keep.length!==q.length) tripSaveQ(keep);
-  /* What the board said in a round that is over goes with it: its runs,
-     which would otherwise go on showing as a bus out, and its counts, which
-     hold the test seats. Offline, nothing else would replace them. */
-  var seenGone=false;
-  Object.keys(tripSeen).forEach(function(k){
-    var r=Number(tripSeen[k] && tripSeen[k].rehearsal)||0;
-    if(r && r!==round){ delete tripSeen[k]; seenGone=true; }
-  });
-  if(rotaBoardRound && rotaBoardRound!==round){
-    rotaStopCounts={}; rotaStopCountsFor=""; rotaStopEtas={}; rotaBoardRound=0; seenGone=true;
-    try{ rotaSaveCache(); }catch(e){}
-  }
-  if(!drop) return seenGone ? 1 : 0;
-  tripClearRun();
-  if(why) toast(why);
-  return 2;
-}
 
 /* ---- what a board answer is allowed to change --------------------------
 
@@ -7535,19 +7390,13 @@ function tripMerge(route, tp){
          stays exactly where it is. */
       if(trip.id && !today){
         trip.id=""; trip.route=""; trip.reg=""; trip.started=0; trip.ended=0;
-        trip.driver=""; trip.rehearsal=0;
+        trip.driver="";
         trip.served={}; trip.undone={}; trip.lastAt=0; trip.lastStop="";
         trip.offset=null;
         tripSaveState();
       }
       return;
     }
-
-    /* Never a test run from a round the clock says is over. A board answer
-       built a moment before the end can arrive after it, still naming the
-       run this phone has just let go, and taking it back would keep a
-       finished test run on screen for the rest of the day. */
-    if(Number(tripRehearsal) && !tripRoundNow()) return;
 
     /* A different run of OUR OWN, or none of ours worth keeping. Take it
        entire: this is how a phone adopts its run after a reinstall, and how
@@ -7561,9 +7410,6 @@ function tripMerge(route, tp){
     trip.undone = {};
     trip.reopened = 0;
     trip.driver = theirs;         /* checked above to be the man signed in */
-    /* The board shows the rehearsal's run while one is on, and the real run
-       otherwise, so the round now is the round of what it handed over. */
-    trip.rehearsal = tripRoundNow();
     tripAutoEndedAt = 0;          /* another run's end is not this one's */
     trip.lastAt = tp.lastAt||0;
     trip.lastStop=tp.lastStop||"";
@@ -7575,11 +7421,6 @@ function tripMerge(route, tp){
   /* The same run, seen from two places. Forwards only. */
   trip.route = route;
   if(srvId)  trip.id  = srvId;
-  /* Named by the board while a rehearsal is on means the live server took
-     this run for a test: a start made after the rehearsal began is one, even
-     from a phone that had not yet heard of the round. So it is this round's,
-     and goes when the round does. */
-  if(srvId && srvId===trip.id && tripRoundNow() && !Number(trip.rehearsal)) trip.rehearsal = tripRoundNow();
   if(tp.reg) trip.reg = tp.reg;
   /* A run started before the name was kept on it learns it from the board. */
   if(!trip.driver && tp.driver) trip.driver = String(tp.driver).trim();
@@ -7680,8 +7521,6 @@ function rotaCountsStart(){
   if(document.hidden) return;
   rotaCountsTimer=setInterval(function(){
     if(!rotaStopsOpen || document.hidden){ rotaCountsStop(); return; }
-    /* The round by the clock first, which needs no signal. */
-    tripRoundTick();
     /* Also the retry for anything a blackspot left in the queue, so a driver
        never has to think about sending. */
     tripFlush();
@@ -7742,9 +7581,6 @@ document.addEventListener("visibilitychange",function(){
   wakeAsk();
 
   if(!rotaStopsOpen) return;
-  /* A run left over from a rehearsal that ended while the phone slept goes
-     before anything is drawn, with or without a signal. */
-  tripRoundTick();
   /* Back from the lock screen. Whatever is on there is at least as old as
      the time it spent in his pocket, so ask before he reads it. */
   rotaCountsFetch(function(){ if(rotaStopsOpen) tripPaint(); });
@@ -8133,9 +7969,6 @@ function rotaOpenStops(){
      signal; the one fetch then corrects both the counts and the run, so a
      reinstalled phone or a second one picks it up where it actually is. */
   tripLoadState();
-  /* A test run whose round the clock says is over goes before the first
-     paint, signal or none. */
-  tripRoundCheck();
   tripChecksLoad();
   tripCheckAsked = false;
   rotaPaintStops();
@@ -8393,18 +8226,10 @@ function rotaPaintStops(){
   var mayTap   = tripMayTap(route);
   var watching = !mayTap && tripMayWatch();
   var queued   = tripLoadQ().length;
-  /* Any pickup on a route he cannot tap can be followed, outside a rehearsal. */
-  var dwOk     = watching && !tripRoundNow();
+  /* Any pickup on a route he cannot tap can be followed. */
+  var dwOk     = watching;
   var dwOn     = dwOk ? dwStopNow() : null;
 
-  if(tripRoundNow()){
-    /* Unmissable on purpose. A driver who opens the app during a rehearsal
-       must not spend even a moment believing any of it is real. */
-    html='<div class="trip-rehearsal"><b>REHEARSAL</b> Nothing here is real. '+
-         'Bookings shown are test data and no bus is running.'+
-         (tripRehearsalEnds ? ' It ends at '+tripClock(tripRehearsalEnds)+'.' : '')+
-         '</div>'+html;
-  }
   /* Why the PIN is being asked for, on this paint. Cleared HERE rather than
      inside tripHeaderHtml, because that is not always reached: a coordinator
      looking at somebody else's route gets neither taps nor a watch, and a

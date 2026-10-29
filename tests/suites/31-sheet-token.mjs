@@ -30,7 +30,7 @@ export default async function (root) {
 
   s.test("with SHEET_TOKEN set, the sheet's messages without it are refused", async (a) => {
     const env = fresh({ SHEET_TOKEN: SECRET });
-    for (const action of ["sync", "drain", "drained", "coordAlert", "ping", "mint", "outcome", "rehearsal", "sheetbookings", "cleartrips"]) {
+    for (const action of ["sync", "drain", "drained", "coordAlert", "ping", "mint", "outcome", "sheetbookings", "cleartrips"]) {
       const out = await J(await post(env, { action }));
       a.eq(out.error, "bad sheet token", action + " went through on the public token alone");
     }

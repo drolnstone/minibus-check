@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.128.0";
+var SCRIPT_VERSION = "v1.129.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1573,7 +1573,7 @@ function stopsMovedUnderBookings(ss) {
   var from = dateToKey(sundayOf(new Date()));
   var by = {}, out = [];
   bookingRows(ss).forEach(function (b) {
-    if (b.sunday < from || b.status === "cancelled" || b.status === "rehearsal") return;
+    if (b.sunday < from || b.status === "cancelled") return;
     if (!b.stopId || !b.stop) return;
     var s = now[b.stopId];
     if (!s || s.active === "NO" || stopWords(s.stop) === stopWords(b.stop)) return;
@@ -3425,16 +3425,7 @@ function nightlyMaintenance() {
   fillRotaAhead(ss);
   try { fillBusesAhead(ss); } catch (err) { /* never block the rota on this */ }
 
-  /* Reading it is what expires it. Belt and braces: the apps call it often
-     enough on any normal day, but a week with nobody opening anything should
-     not leave a rehearsal standing. */
-  try {
-    var wasOn = !!rehearsalOn();
-    /* Nothing running, so any test seat or test tap still on a tab is a
-       leftover: from one whose end never reached this file, or from a
-       rehearsal run before v1.84.0, which left its taps on purpose. */
-    if (!wasOn) tabsTurn(function () { return rehearsalOffTabs(ss, [], Date.now()); });
-  } catch (err) {}
+  try { tabsTurn(function () { return dropRehearsalRows(ss); }); } catch (err) {}
 
   /* The live server, refreshed whether or not anything changed. Cheap, and
      it means a push that failed quietly during the week is put right before
@@ -3829,9 +3820,6 @@ function archiveTab(spec, dryRun) {
 function archiveRun(dryRun) {
   var report = { when: new Date(), dry: !!dryRun, tabs: [], blocked: "" };
 
-  /* A rehearsal writes rows that look like a Sunday and are not one. */
-  if (rehearsalOn()) { report.blocked = "a rehearsal is running"; return report; }
-
   /* A bus still out is not history. runComplete only answers usefully ON a
      Sunday — on a weekday bookings for the coming Sunday are still open and
      it is false all day — so it is asked only when the day is Sunday. That
@@ -4104,12 +4092,6 @@ function pushToWorker() {
     try { PropertiesService.getScriptProperties()
             .setProperty("liveCacheError", String((err && err.message) || err)); } catch (e2) {}
   }
-
-  /* A REHEARSAL IS NOT SENT FROM HERE. From v1.84.0 the live server owns it
-     and draws its seats, and this file keeps a copy of the flag it is told
-     about on the drain (see coordRehearsal). Until then this push carried the
-     flag and the seats, and a sheet whose copy said "none" ended a rehearsal
-     started anywhere else on the next sync. */
 
   /* The requests and defects as the coordinator's app shows them. Guarded on
      its own like the cache above: a tab that will not read must not stop the
@@ -4923,9 +4905,6 @@ function applyCoordAction(ss, a, ctx) {
     return coordOnTab(ss, TRIP_SHEET, b.eventId, a, ctx || {},
                       "On the Trip Events tab.", "That time is not on the Trip Events tab.");
   }
-  /* See REHEARSAL. The live server has done the work; this keeps the copy of
-     the flag and takes the rows off the tabs. */
-  if (kind === "rehearsal") return coordRehearsal(ss, a, b);
   return { done: true, ok: false, result: "This copy of the spreadsheet does not know that kind of change." };
 }
 
@@ -5319,7 +5298,7 @@ function drainFromWorker() {
       trips.forEach(function (t) {
         var id = String(t.id);
         /* From v1.99.0: a run's end, for the missed-tap check below. */
-        if (String(t.event || "").toLowerCase() === "end" && !/rehearsal/i.test(String(t.status || "")) && !tseen[id]) {
+        if (String(t.event || "").toLowerCase() === "end" && !tseen[id]) {
           tends.push({ sunday: t.sunday, route: String(t.route || ""), trip: String(t.trip || "") });
         }
         /* Laid over the row as it stands, for the same reason as bookings:
@@ -5704,9 +5683,8 @@ function fillCoverFromRuns(ss, trips) {
 
     var st = String(t.status || "");
     var low = st.toLowerCase();
-    /* Rehearsal runs are not real and Undone ones were taken back. Neither is
-       evidence of anybody driving anywhere. */
-    if (low.indexOf("rehearsal") >= 0 || low.indexOf("undone") >= 0) return;
+    /* Undone ones were taken back: not evidence of anybody driving anywhere. */
+    if (low.indexOf("undone") >= 0) return;
     if (st.indexOf("Cover") < 0) return;
 
     var key = anyToKey(t.sunday);
@@ -5830,8 +5808,8 @@ function liveSync() {
    Google, not Cloudflare, so it can see the morning's message go missing
    when the server cannot: from 07:40 on a Sunday, if the last drain did not
    show this Sunday's message as sent (or the server has stopped answering),
-   the coordinators are emailed, once. Not when the message is switched off
-   or a rehearsal is running. Email only: a push would go through the server
+   the coordinators are emailed, once. Not when the message is switched
+   off. Email only: a push would go through the server
    that has failed. */
 var MORNING_WATCH_FROM = "07:40", MORNING_WATCH_TO = "09:30";
 
@@ -5850,7 +5828,7 @@ function morningWatch() {
   if (!w) return;   /* a server too old to say; nothing to judge by */
   var fresh = Date.now() - Number(w.seen || 0) < 15 * 60000;
   var m = w.m || {};
-  if (fresh && (m.key === key || m.off || m.rehearsal)) return;
+  if (fresh && (m.key === key || m.off)) return;
 
   var to = safetyTo();
   if (!to) return;
@@ -8218,7 +8196,7 @@ function bookedTimes(ss, key) {
   var out = {};
   bookingRows(ss).forEach(function (b) {
     if (b.sunday !== key || !b.scheduled || out[b.stopId]) return;
-    if (b.status === "cancelled" || b.status === "rehearsal") return;
+    if (b.status === "cancelled") return;
     out[b.stopId] = b.scheduled;
   });
   return out;
@@ -8227,14 +8205,8 @@ function bookedTimes(ss, key) {
 /* One Sunday's live bookings. The filtering is what used to sit inside the
    read loop above and is unchanged. */
 function readBookings(ss, key) {
-  var rehearsing = !!rehearsalOn();
   return bookingRows(ss).filter(function (b) {
-    if (b.sunday !== key) return false;
-    if (b.status === "cancelled") return false;
-    /* Seeded test bookings. Inert unless a rehearsal is actually running, so
-       a row left behind by a crash cannot quietly inflate a real Sunday. */
-    if (b.status === "rehearsal" && !rehearsing) return false;
-    return true;
+    return b.sunday === key && b.status !== "cancelled";
   });
 }
 
@@ -8285,258 +8257,8 @@ function countsPayload() {
 
 
 /* ==========================================================================
-   REHEARSAL
-
-   Sunday is the only time the tracking can be exercised, and it is the worst
-   possible time to find out something is wrong. A rehearsal opens the
-   tracking for a couple of hours so the whole thing can be walked through on
-   a Tuesday.
-
-   FROM v1.84.0 THE LIVE SERVER OWNS IT. The coordinator's app starts one,
-   starts it over and ends it, and the two menu items below ask the live
-   server to do the same. The live server draws the test seats, and they reach
-   the Bus Bookings tab on the drain like any booking. Each start is a new
-   round: a phone drops a run it made in a round that is over, and a tap from
-   such a round is not recorded. When one ends, by hand or by the clock, the
-   live server deletes its seats and its taps and tells this file on the
-   drain, and coordRehearsal takes its rows off Bus Bookings and Trip Events.
-
-   Until v1.84.0 the flag lived here, the seats were drawn here, and a phone
-   kept a finished test run on its screen for the rest of the day, so one
-   rehearsal a day per phone was the real limit. Its taps stayed on the Trip
-   Events tab afterwards.
-
-   What stays here is a COPY of the flag, kept by the drain, because the
-   tracking gate, the archive and the overbooking check in this file read it.
-
-   It deliberately does NOT make bookingsClosed() return true. That function
-   decides which Sunday a bare link is for and whether a real passenger may
-   still book, so forcing it would roll the booking page to next Sunday and
-   turn away anybody trying to book for this one. The gate below is separate
-   and touches only the tracking.
-
-   Everything a rehearsal writes is tagged Rehearsal and is invisible to the
-   real thing, in both directions: a real run never counts rehearsal rows, and
-   a rehearsal never counts real ones.
+   TAKING ROWS OFF A TAB
    ========================================================================== */
-
-/* Two hours, or the first booking cutoff or Sunday midnight after the start,
-   whichever comes first: the live server's rule (rehearsalEnds in
-   worker.js), so this copy runs out when the real one does. */
-var REHEARSAL_HOURS = 2;
-
-function rehearsalState() {
-  try {
-    var raw = PropertiesService.getScriptProperties().getProperty("rehearsal");
-    return raw ? JSON.parse(raw) : null;
-  } catch (err) { return null; }
-}
-
-/**
- * On, or null. The copy clears itself when it has run out; the live server
- * clears the real one, and its seats and taps, by the same clock.
- */
-function rehearsalOn() {
-  var st = rehearsalState();
-  if (!st || !st.at) return null;
-
-  var ends = rehearsalEnds(st.at);
-  if (Date.now() >= ends) { rehearsalClear(); return null; }
-  st.ends = ends;
-  return st;
-}
-
-/* Reckoned from when it STARTED. Until v1.84.1 the cutoff was reckoned from
-   now, and once it had passed there was none left that week, so one started
-   at half past eight on a Sunday ran on through the real morning. */
-function rehearsalEnds(at) {
-  var t = Number(at) || 0;
-  var ends = t + REHEARSAL_HOURS * 3600000;
-  var cut = rehearsalFirstAfter(t, function (sun) {
-    var c = new Date(sun);
-    if (BOOKING_CUTOFF_DAY !== 0) c.setDate(c.getDate() - (7 - BOOKING_CUTOFF_DAY));
-    c.setHours(BOOKING_CUTOFF_HOUR, BOOKING_CUTOFF_MIN || 0, 0, 0);
-    return c;
-  });
-  var midnight = rehearsalFirstAfter(t, function (sun) { return new Date(sun); });
-  if (cut && cut < ends) ends = cut;
-  if (midnight && midnight < ends) ends = midnight;
-  return ends;
-}
-
-/* The first moment after t that a rule gives for a Sunday: the Sunday of t
-   first, then the one after. */
-function rehearsalFirstAfter(t, rule) {
-  var d = sundayOf(new Date(t));
-  for (var i = 0; i < 2; i++) {
-    var m = rule(d);
-    if (m && m.getTime() > t) return m.getTime();
-    d = addWeeks(d, 1);
-  }
-  return 0;
-}
-
-/* A test row made on its own Sunday between the cutoff and the backstop. None
-   can be made there from v1.84.1; one from before may be a REAL run that an
-   older rehearsal tagged, so it is never cleared away. See inLiveMorning in
-   worker.js. */
-function rehearsalInLiveMorning(sunday, at) {
-  var key = anyToKey(sunday);
-  if (!key) return false;
-  var a = keyToDate(key);
-  if (BOOKING_CUTOFF_DAY !== 0) a.setDate(a.getDate() - (7 - BOOKING_CUTOFF_DAY));
-  a.setHours(BOOKING_CUTOFF_HOUR, BOOKING_CUTOFF_MIN || 0, 0, 0);
-  var b = keyToDate(key);
-  b.setHours(RUN_BACKSTOP_HOUR, RUN_BACKSTOP_MIN || 0, 0, 0);
-  var t = rehearsalWhen(at);
-  return t >= a.getTime() && t < b.getTime();
-}
-
-/* What a page is told, in the live server's shape. The round is the moment
-   it started, and a phone that made a run in one round drops it once the
-   round is over. */
-function rehearsalInfo() {
-  var st = rehearsalOn();
-  return st ? { round: Number(st.at) || 0, ends: Number(st.ends) || 0, shape: String(st.shape || "") }
-            : false;
-}
-
-/* The gate the tracking uses. Never bookingsClosed() on its own again. */
-function trackingOpen(key) {
-  return rehearsalOn() ? true : bookingsClosed(key);
-}
-
-/* Only the flag. Deliberately does not touch the sheet. */
-function rehearsalClear() {
-  try { PropertiesService.getScriptProperties().deleteProperty("rehearsal"); }
-  catch (err) {}
-}
-
-/* ---- the rows a rehearsal leaves on the tabs ----------------------------
-
-   Every row a rehearsal put on a tab before `cut`. On Trip Events, a row of
-   one of the runs named in `trips`, or one whose Status says Rehearsal. On
-   Bus Bookings, one whose Status is Rehearsal. A run is named by its trip as
-   well as found by its Status because a tap taken back is marked Undone and
-   loses the word.
-
-   Only rows made before the cut, with a second's margin under it, because
-   one drain can write a new round's first seats and taps and then apply the
-   start of that round. Deleting by Status alone would take those as well.
-   The Logged and Received columns hold the live server's own times, the same
-   clock the cut comes from. */
-function rehearsalOffTabs(ss, trips, cut) {
-  var edge = (Number(cut) || Date.now()) - 1000;
-  var want = {}, keep = {};
-  (trips || []).forEach(function (t) { if (t) want[String(t)] = true; });
-  var isTest = function (r, c) {
-    return String(at1(r, c.status) || "").toLowerCase().indexOf("rehearsal") !== -1;
-  };
-  var taps = rehearsalDropRows(ss, TRIP_SHEET, function (r, c) {
-    var trip = String(at1(r, c.trip) || "").trim();
-    if (trip && keep[trip]) return false;
-    if (trip && want[trip]) return true;
-    return isTest(r, c) && !rehearsalInLiveMorning(at1(r, c.sunday), at1(r, c.happened)) &&
-           rehearsalWhen(at1(r, c.logged)) < edge;
-  }, function (vals, c) {
-    /* Kept whole: a run with a test row inside a real morning, and a REAL
-       run, one whose start was not a test. A page from before v1.79.0 could
-       store the End of a real run as a test, and a real run is never taken
-       for one of its rows. */
-    vals.forEach(function (r) {
-      var trip = String(at1(r, c.trip) || "").trim();
-      if (!trip) return;
-      if (isTest(r, c) && rehearsalInLiveMorning(at1(r, c.sunday), at1(r, c.happened))) keep[trip] = true;
-      if (String(at1(r, c.event) || "").trim().toLowerCase() === "start" && !isTest(r, c)) keep[trip] = true;
-    });
-  });
-  var seats = rehearsalDropRows(ss, BOOKINGS_SHEET, function (r, c) {
-    return String(at1(r, c.status) || "").trim().toLowerCase() === "rehearsal" &&
-           rehearsalWhen(at1(r, c.received)) < edge;
-  });
-  return { taps: taps, seats: seats };
-}
-
-/* A cell's moment in ms. A blank reads as 0, so a test row with no time on
-   it is always taken. */
-function rehearsalWhen(v) {
-  if (v && typeof v.getTime === "function") return v.getTime();
-  var n = Number(v);
-  return isFinite(n) ? n : 0;
-}
-
-/* Bottom up, and a block of neighbouring rows in one call rather than one
-   call a row. Returns how many went. `first`, if given, sees every row
-   before any is judged.
-
-   ONLY EVER CALLED FROM INSIDE THE DRAIN'S TURN (see tabsTurn). A drain
-   keeps the row numbers it has read, and a row deleted under it by another
-   run of this script would put its next write on somebody else's row. */
-function rehearsalDropRows(ss, tabName, hit, first) {
-  var sh = ss.getSheetByName(tabName);
-  if (!sh || sh.getLastRow() < 2) return 0;
-  var c = colsSoft(sh, tabName);
-  if (!c.status) return 0;          /* no Status column: nothing to identify */
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
-  if (first) first(vals, c);
-  var gone = 0, i = vals.length - 1;
-  while (i >= 0) {
-    if (!hit(vals[i], c)) { i--; continue; }
-    var top = i;
-    while (top - 1 >= 0 && hit(vals[top - 1], c)) top--;
-    sh.deleteRows(top + 2, i - top + 1);
-    gone += i - top + 1;
-    i = top - 1;
-  }
-  return gone;
-}
-
-/* A rehearsal started, started over or ended: on the coordinator's app, from
-   the menu below, or by the clock on the live server. Keeps this file's copy
-   of the flag, and takes the rehearsal's rows off the tabs.
-
-   The copy is only ever moved forward. The drain can bring an end made by
-   the clock after the menu has already started the next round, and that end
-   is not allowed to clear the newer one. */
-function coordRehearsal(ss, a, b) {
-  var op = String(b.op || "");
-  if (op !== "start" && op !== "over" && op !== "end") {
-    return { done: true, ok: false, result: "Start, start over or end." };
-  }
-  var round = Number(b.round) || 0;
-  var made = Number(a && a.made) || Date.now();
-  var key = anyToKey(b.sunday) || runSunday();
-  rehearsalMirror(b, made);
-
-  var gone = rehearsalOffTabs(ss, b.trips || [], op === "end" ? made : (round || made));
-  memoDrop("bookings");
-  memoDrop("trips");
-  dropCountsCache(key);
-  dropTripCache(key, "North");
-  dropTripCache(key, "South");
-
-  var n = function (k, one) { return k + " " + one + (k === 1 ? "" : "s"); };
-  return { done: true, ok: true,
-           result: gone.taps || gone.seats
-             ? "Taken off the tabs: " + n(gone.taps, "tap") + " and " + n(gone.seats, "test seat") + "."
-             : "On the tabs." };
-}
-
-/* This file's copy of the flag, moved forward only. */
-function rehearsalMirror(b, made) {
-  var op = String((b && b.op) || "");
-  var round = Number(b && b.round) || 0;
-  var mine = rehearsalState();
-  var held = mine ? Number(mine.at) || 0 : 0;
-  if (op === "end") {
-    if (!held || held <= (Number(made) || Date.now())) rehearsalClear();
-  } else if ((op === "start" || op === "over") && round && round >= held) {
-    try {
-      PropertiesService.getScriptProperties().setProperty("rehearsal",
-        JSON.stringify({ at: round, key: anyToKey(b.sunday) || runSunday(), shape: String(b.shape || "") }));
-    } catch (err) {}
-  }
-}
 
 /* Taking rows off a tab, in the drain's turn. A drain keeps the row numbers
    it has read, so a row deleted under it from another run of this script
@@ -8559,120 +8281,52 @@ function tabsTurn(fn) {
   return out;
 }
 
-/* Which kind of morning to rehearse.
+/* Bottom up, and a block of neighbouring rows in one call rather than one
+   call a row. Returns how many went. `first`, if given, sees every row
+   before any is judged.
 
-   A typed word rather than buttons, because Apps Script offers three buttons
-   and there are four answers. Matched on the first letter, so "Full", "f" and
-   "full bus" all land in the same place, and a blank answer is an ordinary
-   morning, which is what somebody who just wants to see the app work is
-   asking for. */
-function rehearsalAskShape(ui) {
-  var r = ui.prompt("How busy a morning?",
-    "Type one word:\n\n" +
-    "    quiet     a few people\n" +
-    "    normal    an ordinary morning\n" +
-    "    full      nearly every seat taken\n" +
-    "    over      more booked than the bus holds\n\n" +
-    "Leave it blank for an ordinary morning.",
-    ui.ButtonSet.OK_CANCEL);
-  if (r.getSelectedButton() !== ui.Button.OK) return null;
-  var w = String(r.getResponseText() || "").trim().toLowerCase();
-  if (!w) return "normal";
-  var c = w.charAt(0);
-  if (c === "q") return "quiet";
-  if (c === "f") return "full";
-  if (c === "o") return "over";
-  return "normal";
-}
-
-/* ---- the two menu items -------------------------------------------------
-
-   Each asks the live server, which does the work and answers with what it
-   did. What it did is then applied here at once rather than on the next
-   drain, so the tabs are clear by the time the box is closed, and it is noted
-   as applied so the drain does not do it a second time. The same controls
-   are on the coordinator's app, on the Rehearsal screen. */
-
-/* The live server's refusal, or why there was no answer, as a sentence. */
-function rehearsalRefused(out) {
-  var e = String((out && out.error) || "");
-  if (e === "unknown action") {
-    return "The live server is older than this spreadsheet. Deploy worker.js " +
-           "w2.20.1 or later on Cloudflare, then try again.";
+   ONLY EVER CALLED FROM INSIDE THE DRAIN'S TURN (see tabsTurn). A drain
+   keeps the row numbers it has read, and a row deleted under it by another
+   run of this script would put its next write on somebody else's row. */
+function dropTabRows(ss, tabName, hit, first) {
+  var sh = ss.getSheetByName(tabName);
+  if (!sh || sh.getLastRow() < 2) return 0;
+  var c = colsSoft(sh, tabName);
+  if (!c.status) return 0;          /* no Status column: nothing to identify */
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+  if (first) first(vals, c);
+  var gone = 0, i = vals.length - 1;
+  while (i >= 0) {
+    if (!hit(vals[i], c)) { i--; continue; }
+    var top = i;
+    while (top - 1 >= 0 && hit(vals[top - 1], c)) top--;
+    sh.deleteRows(top + 2, i - top + 1);
+    gone += i - top + 1;
+    i = top - 1;
   }
-  if (e === "no live server address") return "This spreadsheet has no live server address (WORKER_URL).";
-  if (!e || /^bad reply/.test(e)) return "The live server did not answer.";
-  return e;
+  return gone;
 }
 
-/* The live server's answer, applied here. The copy of the flag at once; the
-   tabs through a drain, which brings this very change and applies it in the
-   drain's own turn. Returns the words for the box. */
-function rehearsalHere(out) {
-  /* The live server's clock for when it ended, never this one: a round the
-     coordinator's app started a moment later must not look older than it. */
-  rehearsalMirror(out.body || {}, Number(out.made) || Date.now());
-  try { drainNow(); } catch (err) {}
-  return coordAppliedFind(String(out.id || ""))
-    ? "The Bus Bookings and Trip Events tabs are up to date."
-    : "The Bus Bookings and Trip Events tabs catch up within a minute.";
-}
-
-/* Rehearse this Sunday. With one running, it starts over: new seats, and
-   every phone drops the run it made in the last round. */
-function startRehearsal() {
-  var ui = SpreadsheetApp.getUi();
-  var shape = rehearsalAskShape(ui);
-  if (!shape) return;
-
-  var out = workerCall("rehearsal", { do: "start", shape: shape });
-  if (!out || !out.ok) {
-    ui.alert("Not started", rehearsalRefused(out) + "\n\nNothing was changed.", ui.ButtonSet.OK);
-    return;
-  }
-  var here = rehearsalHere(out);
-  ui.alert(out.body && out.body.op === "over" ? "Rehearsal started over" : "Rehearsal running",
-    out.words + "\n\n" + (out.summary || []).join("\n") + "\n\n" + here + "\n\n" +
-    "Open the driver app, go to Stops and bookings, and Start trip. A second " +
-    "phone on the booking link shows the passenger side.\n\n" +
-    "Rehearse this Sunday again starts it over. Stop rehearsing ends it and " +
-    "clears it, on the phones and on the tabs.",
-    ui.ButtonSet.OK);
-}
-
-/* Stop rehearsing. Also clears what an earlier one left, with none running. */
-function stopRehearsal() {
-  var ui = SpreadsheetApp.getUi();
-  var out = workerCall("rehearsal", { do: "end" });
-  if (!out || !out.ok) {
-    var reh = rehearsalOn();
-    ui.alert("Not ended", rehearsalRefused(out) + "\n\nNothing was changed." +
-      (reh ? " It ends by itself at " +
-             Utilities.formatDate(new Date(reh.ends), Session.getScriptTimeZone(), "HH:mm") + "." : ""),
-      ui.ButtonSet.OK);
-    return;
-  }
-  var here = rehearsalHere(out);
-  var none = String(out.words || "").indexOf("No rehearsal") === 0;
-  ui.alert(none ? "No rehearsal running" : "Rehearsal ended",
-    out.words + "\n\n" + here +
-    (none ? "" : "\n\nEach phone drops the test run the next time it hears from the live server."),
-    ui.ButtonSet.OK);
+/* REHEARSAL WAS TAKEN OUT IN v1.129.0 (Asim, 29 Oct 2026). Any seat or tap
+   one left on the tabs, and this file's copy of its flag, go on the nightly
+   pass. Nothing writes a Rehearsal row any more, so this finds nothing after
+   the first night. */
+function dropRehearsalRows(ss) {
+  try { PropertiesService.getScriptProperties().deleteProperty("rehearsal"); } catch (err) {}
+  var isTest = function (r, c) {
+    return String(at1(r, c.status) || "").toLowerCase().indexOf("rehearsal") !== -1;
+  };
+  return { taps: dropTabRows(ss, TRIP_SHEET, isTest), seats: dropTabRows(ss, BOOKINGS_SHEET, isTest) };
 }
 
 /* CLEARING A SUNDAY THAT HAS NOT BEEN DRIVEN YET.
 
    There was no way to do this, and on 23 September at three in the morning
-   there needed to be. A rehearsal had run while the live server still believed
-   it was an ordinary night (the flag never reached it, which is fixed), so
-   every tap went in as a REAL run on the real Sunday. The only way out was a
-   SQL console at three in the morning, which is not a tool. It is the absence
-   of one.
+   there needed to be: test taps had gone in as a REAL run on the real
+   Sunday. The only way out was a SQL console at three in the morning, which
+   is not a tool. It is the absence of one.
 
-   IT SHOWS BEFORE IT ASKS, and the count on its own is not the useful fact.
-   What matters is how many of those rows are NOT tagged Rehearsal, because
-   those are the ones being read as a genuine morning: by Who is tapping, by
-   the weekly summary, and by anybody looking at the tab in November.
+   IT SHOWS BEFORE IT ASKS: how many rows the Sunday has on the tab.
 
    IT WILL NOT TOUCH A SUNDAY THAT HAS BEEN AND GONE, here and on the live
    server both. A morning that has been driven is the record of people who
@@ -8692,7 +8346,7 @@ function clearTestRun() {
   var asked = ui.prompt("Clear a Sunday's test run",
     "Which Sunday? Leave it blank for the coming one, " + today + ".\n\n" +
     "This removes the taps (starts, stops, ends) from BOTH the live server " +
-    "and the Trip Events tab, along with any seats a rehearsal drew. The rota " +
+    "and the Trip Events tab. The rota " +
     "and real bookings are not touched.\n\n" +
     "A Sunday that has already been driven cannot be cleared.\n\n" +
     "yyyy-mm-dd:", ui.ButtonSet.OK_CANCEL);
@@ -8712,29 +8366,22 @@ function clearTestRun() {
     return;
   }
 
-  /* What is on the tab, and how much of it is pretending to be real. */
+  /* What is on the tab. */
   var sh = ss.getSheetByName(TRIP_SHEET);
-  var rows = [], untagged = 0;
+  var rows = [];
   if (sh && sh.getLastRow() > 1) {
     var tc = colsSoft(sh, TRIP_SHEET);
     var vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
     for (var i = 0; i < vals.length; i++) {
       if (anyToKey(at1(vals[i], tc.sunday)) !== key) continue;
       rows.push(i + 2);
-      if (String(at1(vals[i], tc.status) || "").toLowerCase().indexOf("rehearsal") === -1) {
-        untagged++;
-      }
     }
   }
 
   var when = Utilities.formatDate(keyToDate(key), Session.getScriptTimeZone(), "EEEE d MMMM");
   var ok = ui.alert("Clear " + when + "?",
-    rows.length + " row" + (rows.length === 1 ? "" : "s") + " on the Trip Events tab" +
-    (untagged ? ", and " + untagged + " of them are NOT tagged Rehearsal. Those are " +
-                "being read as a real morning"
-              : rows.length ? ", all tagged Rehearsal" : "") + ".\n\n" +
-    "The live server's copy goes as well, along with any seats a rehearsal " +
-    "drew for that Sunday.\n\nThis cannot be undone. Clear it?",
+    rows.length + " row" + (rows.length === 1 ? "" : "s") + " on the Trip Events tab.\n\n" +
+    "The live server's copy goes as well.\n\nThis cannot be undone. Clear it?",
     ui.ButtonSet.YES_NO);
   if (ok !== ui.Button.YES) return;
 
@@ -8745,7 +8392,7 @@ function clearTestRun() {
     var o = null;
     try { o = workerCall("cleartrips", { sunday: key }); } catch (err) { o = null; }
     if (!o || !o.ok) return { out: o, cleared: 0 };
-    var n = rehearsalDropRows(ss, TRIP_SHEET, function (r, c) { return anyToKey(at1(r, c.sunday)) === key; });
+    var n = dropTabRows(ss, TRIP_SHEET, function (r, c) { return anyToKey(at1(r, c.sunday)) === key; });
     return { out: o, cleared: n };
   });
   if (!done) {
@@ -8771,8 +8418,7 @@ function clearTestRun() {
 
   ui.alert("Cleared",
     when + " is clear.\n\n" +
-    "Live server: " + out.trips + " tap" + (out.trips === 1 ? "" : "s") +
-    (out.seats ? " and " + out.seats + " rehearsal seat" + (out.seats === 1 ? "" : "s") : "") + ".\n" +
+    "Live server: " + out.trips + " tap" + (out.trips === 1 ? "" : "s") + ".\n" +
     "Trip Events tab: " + done.cleared + " row" + (done.cleared === 1 ? "" : "s") + ".\n\n" +
     "Close and reopen the apps to see it.", ui.ButtonSet.OK);
 }
@@ -8915,10 +8561,7 @@ function stopMomentOn(key, hhmm) {
 }
 
 function tripCacheKey(key, route) {
-  /* Rehearsal state is cached apart from the real thing. Sharing one key
-     would hand a real driver the rehearsal's progress for ten seconds after
-     it was switched off. */
-  return "trip_" + key + "_" + route + (rehearsalOn() ? "_r" : "");
+  return "trip_" + key + "_" + route;
 }
 
 function dropTripCache(key, route) {
@@ -8943,7 +8586,7 @@ function dropTripCache(key, route) {
    carries the same stamp; and anything built before the last write is neither
    served nor stored. */
 function tripStampKey(key, route) {
-  return "tripw_" + key + "_" + route + (rehearsalOn() ? "_r" : "");
+  return "tripw_" + key + "_" + route;
 }
 
 function stampTripWrite(key, route) {
@@ -8963,7 +8606,6 @@ function tripWriteStamp(key, route) {
  * same sheet read as one. Cleared whenever a tap is written.
  */
 function tripState(ss, key, route) {
-  var rehearsing = !!rehearsalOn();
   var cache = CacheService.getScriptCache();
 
   /* Taken before a single row is read, so it is honestly the age of what is
@@ -9011,9 +8653,6 @@ function tripState(ss, key, route) {
       if (String(at1(r, c.route) || "").trim() !== route) return;
       var status = String(at1(r, c.status) || "").trim().toLowerCase();
       if (status === "undone") return;
-      /* Both ways round: a real run never counts rehearsal rows, and a
-         rehearsal never counts real ones. */
-      if ((status === "rehearsal") !== rehearsing) return;
 
       var ev  = String(at1(r, c.event) || "").trim().toLowerCase();
       var hap = at1(r, c.happened);
@@ -9134,7 +8773,7 @@ function tripPayload(ref, want, askedStop, pid) {
   var ss  = SpreadsheetApp.getActiveSpreadsheet();
   var key = runSunday();
 
-  if (!trackingOpen(key)) {
+  if (!bookingsClosed(key)) {
     return { ok: true, live: false, why: "open", date: key, cutoff: cutoffWords() };
   }
 
@@ -9151,61 +8790,6 @@ function tripPayload(ref, want, askedStop, pid) {
   var stops = readBusStops(ss);
   var stopById = {};
   stops.forEach(function (s) { stopById[s.id] = s; });
-
-  /* Rehearsing. The live view is only ever shown to a phone with a booking,
-     which meant the person running the rehearsal saw nothing at all unless
-     they first made a real booking and then remembered to cancel it. So a
-     phone with no booking of its own is lent a seeded one and can walk the
-     passenger side straight from the link. The banner says what it is.
-
-     WHICH seed matters, and taking the first one was wrong. The seeds are
-     built by walking the stops, the stops are listed North first, so the
-     first seed is always a North one. A rehearsal therefore always watched
-     North: the South bus could run the whole morning and this page would
-     never move, which is exactly what happened on the 13th and looked like a
-     South fault when nothing about South was broken.
-
-     So: the route asked for, if the page asked for one. Failing that, a
-     route with a bus actually out, because that is the one worth watching.
-     Failing that, the first, as before. */
-  /* An explicit route asked for by the page wins, even when this phone holds
-     a booking of its own.
-
-     It did not, and that is why switching the tester's page to South showed
-     nothing at all: the block below only ran when the phone had NO booking,
-     so a phone that had booked a seat during testing — which is the first
-     thing anybody does — was pinned to its own stop's route for good, and the
-     North/South switch above it did nothing whatsoever. A control that cannot
-     work should not be on screen; the cheaper fix of the two is to make it
-     work.
-
-     Rehearsal only, and only when the page actually sends r. A real passenger
-     never sets it, so their own booking still decides what they watch. */
-  var askedRoute = String(want || "").trim();
-  if (rehearsalOn() && (askedRoute || !mine)) {
-    var seeds = rows.filter(function (b) {
-      return b.stopId && String(b.device || "").indexOf("rehearsal-") === 0;
-    });
-    var wantRoute = askedRoute;
-    if (wantRoute) {
-      /* Asked for by name, so let the seed replace whatever this phone had. */
-      mine = null;
-      seeds.forEach(function (b) {
-        var s = stopById[b.stopId];
-        if (!mine && s && s.route === wantRoute) mine = b;
-      });
-    }
-    if (!mine) {
-      seeds.forEach(function (b) {
-        if (mine) return;
-        var s = stopById[b.stopId];
-        if (!s) return;
-        var t = tripState(ss, key, s.route);
-        if (t.started && !t.ended) mine = b;
-      });
-    }
-    if (!mine && seeds.length) mine = seeds[0];
-  }
 
   /* No booking on this phone, but the passenger has said which kerb they are
      standing at. Watch that stop.
@@ -9245,11 +8829,6 @@ function tripPayload(ref, want, askedStop, pid) {
     /* So the page knows this is a stop somebody chose rather than one they
        booked, and can say so rather than implying a seat is held. */
     watching: watching,
-    rehearsal: rehearsalInfo(),
-    /* Only during a rehearsal, and only so the tester can switch to the bus
-       he is actually driving. A real passenger watches their own stop and is
-       never offered somebody else's route. */
-    routes: rehearsalOn() ? routeNames(stops) : [],
     stop: myStop.stop, stopId: myStop.id, scheduled: myStop.time,
     started: !!state.started, ended: !!state.ended,
     /* When it set off. The page had the flag and not the time, so the most
@@ -9365,8 +8944,7 @@ function tripDriverPayload(route) {
   var state = tripState(ss, key, String(route || "").trim() || "North");
   return {
     ok: true, date: key, route: route, now: Date.now(),
-    closed: trackingOpen(key), cutoff: cutoffWords(),
-    rehearsal: rehearsalInfo(),
+    closed: bookingsClosed(key), cutoff: cutoffWords(),
     trip: state.trip, driver: state.driver, reg: state.reg,
     started: state.started || 0, ended: state.ended || 0,
     lastAt: state.lastAt || 0, lastStop: state.lastStop,
@@ -9416,17 +8994,6 @@ function handleTrip(payload) {
 }
 
 function handleTripLocked(payload) {
-  /* The live server's rule (handleTrip in worker.js): a tap says which round
-     it was made in, 0 for a real run, and one from a round that is over is
-     taken and not written. A page that says nothing is judged by whether a
-     rehearsal is on as it arrives. */
-  var reh = rehearsalOn();
-  var claimed = payload.rehearsal;
-  var rehearsing;
-  if (claimed === undefined || claimed === null) rehearsing = !!reh;
-  else if (!Number(claimed)) rehearsing = false;
-  else if (reh && Number(reh.at) === Number(claimed)) rehearsing = true;
-  else return reply({ ok: true, written: 0, dropped: (payload.events || []).length, rehearsalOver: true });
   var ss    = SpreadsheetApp.getActiveSpreadsheet();
   var sh    = ensureTripEvents(ss);
   var key   = anyToKey(payload.sunday) || runSunday();
@@ -9505,7 +9072,7 @@ function handleTripLocked(payload) {
      which is why the first stop of every run had nothing to project from. */
   var depart = departStopFor(ss, route);
   /* The times passengers were given at the stops they booked. */
-  var promised = rehearsing ? {} : bookedTimes(ss, key);
+  var promised = bookedTimes(ss, key);
 
   var rows = [], pending = {}, undoneNow = 0;
   events.forEach(function (ev) {
@@ -9551,9 +9118,8 @@ function handleTripLocked(payload) {
 
     /* A run started with no check on record is marked here rather than refused
        there. Status carries it, and the value still fails every filter that
-       matters: it is not Undone and it is not Rehearsal. */
-    var status = rehearsing ? "Rehearsal"
-               : (kind === "start" && Number(ev.unchecked) === 2) ? "Unchecked (offline)"
+       matters: it is not Undone. */
+    var status = (kind === "start" && Number(ev.unchecked) === 2) ? "Unchecked (offline)"
                : (kind === "start" && ev.unchecked) ? "Unchecked"
                : "Logged";
 
@@ -9677,7 +9243,7 @@ function tappingReport() {
 
   vals.forEach(function (r) {
     var status = String(at1(r, c.status) || "").trim().toLowerCase();
-    if (status === "undone" || status === "rehearsal") return;
+    if (status === "undone") return;
     var key = anyToKey(at1(r, c.sunday)); if (!key) return;
     var id  = key + "|" + String(at1(r, c.route) || "").trim();
     if (!runs[id]) {
@@ -9928,8 +9494,7 @@ function checksToday() {
    run begins, the whole of the tracking jumped a week: the driver's board
    showed no run in progress, every passenger was told bookings were still open
    and shown nothing, and any tap he made was filed against the following
-   Sunday. The rehearsal never caught it because a rehearsal forces that gate
-   open and hides the roll.
+   Sunday.
 
    The client has always used this definition. It was only the server that
    disagreed. */
@@ -10269,10 +9834,6 @@ function busPayload(key, ref, pid) {
     ok: true,
     date: key,
     closed: bookingsClosed(key),
-    /* Separate from closed on purpose. A rehearsal must not tell the page
-       that bookings have shut, or a church member booking on a Tuesday would
-       be turned away by a test. It only tells the page to start watching. */
-    rehearsal: rehearsalInfo(),
     rolled: rolled,
     cutoff: cutoffWords(),
     stops: publicStops(readBusStops(ss).filter(function (s) { return !s.arrival; })),
@@ -11664,21 +11225,6 @@ function overbookingAlert(force) {
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  /* Not during a rehearsal, unless it was asked for by hand.
-
-     A rehearsal's test seats reach the same tab against the same Sunday,
-     so a route genuinely at 13 of 14 reads as 16, and left to itself this
-     would send you chasing two passengers who do not exist. archiveRun
-     refuses during one for the same reason.
-
-     But a rehearsal is now the ONLY way to produce a full bus on demand, and
-     an alert nobody can see before it matters is an alert nobody trusts. So
-     the menu item passes force, and the email it produces is stamped in the
-     subject and in its first line. The guard that matters is that it can
-     never be mistaken for a real one, not that it can never be sent. */
-  var rehearsing = false;
-  try { rehearsing = !!rehearsalOn(); } catch (err) {}
-  if (rehearsing && !force) return { ran: false, why: "rehearsing", sent: 0 };
 
   var now = new Date();
   var sunday = sundayOf(now);
@@ -11766,10 +11312,6 @@ function overbookingAlert(force) {
   fleet.sort(function (a, b) { return b.seats - a.seats; });
 
   var lines = [], plain = [];
-  if (rehearsing) {
-    lines.push("<b>REHEARSAL. Test bookings.</b>", "&nbsp;");
-    plain.push("REHEARSAL. Test bookings.", "");
-  }
   lines.push("<b>More people are booked than the bus holds</b> for " + esc(lead) + ".",
              "&nbsp;");
   plain.push("More people are booked than the bus holds for " + lead + ".", "");
@@ -11853,21 +11395,20 @@ function overbookingAlert(force) {
      The phones first: their id is what was worked out, so if the email then
      throws and the next tick comes round again, the live server has already
      had this one and refuses it rather than buzzing everybody twice. A test
-     from the menu or a rehearsal gets an id of its own every time. */
+     from the menu gets an id of its own every time. */
   tellCoordinatorPhones({
-    id: "over|" + key + "|" + (force || rehearsing ? Date.now() + "|" : "") +
+    id: "over|" + key + "|" + (force ? Date.now() + "|" : "") +
         tell.map(function (t) { return t.route + ":" + t.booked; }).join(","),
     kind: "overbooked",
-    title: (rehearsing ? "REHEARSAL: " : "") +
-           tell.map(function (t) { return t.route + " overbooked, " + t.booked + " of " + t.seats; }).join("; "),
+    title: tell.map(function (t) { return t.route + " overbooked, " + t.booked + " of " + t.seats; }).join("; "),
     body: "For " + when + "." });
   if (!COORDINATOR_EMAIL) {
-    if (!rehearsing) overbookRemember(props, sent, stamps);
-    return { ran: true, sent: 0, over: tell, rehearsal: rehearsing, phones: true };
+    overbookRemember(props, sent, stamps);
+    return { ran: true, sent: 0, over: tell, phones: true };
   }
   sendMail({
     to: COORDINATOR_EMAIL,
-    subject: (rehearsing ? "REHEARSAL \u2014 " : "") + "Minibus: " +
+    subject: "Minibus: " +
              tell.map(function (t) {
                return t.route + " overbooked, " + t.booked + " of " + t.seats;
              }).join("; ") + ", " + when,
@@ -11877,11 +11418,8 @@ function overbookingAlert(force) {
                         "Open the rota", ROTA_SHEET)
   });
 
-  /* A rehearsal's numbers are not remembered. Writing them down would let a
-     test morning silence the real alert for the same Sunday afterwards, which
-     is the one way this feature could do actual harm. */
-  if (!rehearsing) overbookRemember(props, sent, stamps);
-  return { ran: true, sent: 1, over: tell, rehearsal: rehearsing };
+  overbookRemember(props, sent, stamps);
+  return { ran: true, sent: 1, over: tell };
 }
 
 /* Writes the sent-once stamps back, pruned. Separated only so the two exits
@@ -13825,9 +13363,6 @@ function healthReport() {
     }
   } catch (err) { /* the Drivers tab has its own check above */ }
 
-  /* Not an error, but the single most useful thing to be told, because a
-     rehearsal left running is the one state that makes everything else on
-     this screen mean something different. */
   try {
     var skips = JSON.parse(PropertiesService.getScriptProperties()
                   .getProperty("dropdownsSkipped") || "[]");
@@ -13844,15 +13379,6 @@ function healthReport() {
                "Nothing is broken by it.");
     }
   } catch (err) {}
-
-  var reh = rehearsalOn();
-  if (reh) {
-    bad.push("A REHEARSAL is running, until " +
-             Utilities.formatDate(new Date(reh.ends), Session.getScriptTimeZone(), "HH:mm") +
-             ". The tracking is open for it, and its test seats are on the Bus " +
-             "Bookings tab. End it on the Rehearsal screen of the coordinator's " +
-             "app, or with Stop rehearsing on the Minibus menu.");
-  }
 
   /* The passenger side. */
   var stops = readBusStops(ss);
@@ -14061,14 +13587,6 @@ function bookingsThisSunday() {
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
 
-  /* Both rehearsal items are always here.
-
-     They used to be one item that changed according to whether a rehearsal
-     was running, which does not work: a menu is built once when the
-     spreadsheet is opened and never rebuilt. Start a rehearsal and the menu
-     still said "Rehearse this Sunday", so there was no way to stop one
-     without closing and reopening the whole sheet. Two plain items that are
-     always present cannot get out of step with anything. */
   var menu = ui.createMenu("Minibus")
 
     /* The two you actually want most weeks. */
@@ -14113,8 +13631,6 @@ function onOpen() {
       .addItem("Unlock the sheet (asks first)", "unlockSheet"));
 
   menu.addSeparator()
-      .addItem("Rehearse this Sunday", "startRehearsal")
-      .addItem("Stop rehearsing", "stopRehearsal")
       .addItem("Clear a Sunday's test run (asks first)", "clearTestRun");
 
   menu.addToUi();
@@ -15549,14 +15065,14 @@ function pdfTrips(ss) {
              status: pdfStr(t["Status"]).toLowerCase(), reg: pdfStr(t["Reg"]).toUpperCase(),
              endedBy: pdfStr(t["Ended by"]) };
   }).filter(function (t) {
-    return t.sunday && t.status.indexOf("undone") === -1 && t.status.indexOf("rehearsal") === -1;
+    return t.sunday && t.status.indexOf("undone") === -1;
   });
 }
 function pdfBookings(ss) {
   return pdfTab(ss, BOOKINGS_SHEET).map(function (b) {
     return { sunday: anyToKey(b["Sunday"]), route: pdfStr(b["Route"]), stop: pdfStr(b["Stop"]),
              seats: Number(b["Seats"]) || 0, status: pdfStr(b["Status"]).toLowerCase() };
-  }).filter(function (b) { return b.sunday && b.status !== "cancelled" && b.status !== "rehearsal"; });
+  }).filter(function (b) { return b.sunday && b.status !== "cancelled"; });
 }
 /* Each route's run on each Sunday: who, which bus, when it left and ended,
    and every stop marked. */

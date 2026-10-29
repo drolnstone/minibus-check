@@ -227,20 +227,6 @@ export default async function (root) {
     a.eq(net.calls.length, 0);
   });
 
-  s.test("a rehearsal wakes nobody, here as everywhere", async (a) => {
-    const { db, env, key } = await fresh({ at: WHEN.sundayMorning });
-    await seedBookings(db, key, [{ route: "North", stopId: "N03" }]);
-    await sub(db, "N03");
-    net.reset();
-    await atTime(WHEN.sundayMorning, async () => {
-      /* Started a minute ago on the fixed clock. A rehearsal stamped with the
-         real time would already have expired by the time the sweep looked. */
-      await W.cachePut(env, "rehearsal", { at: Date.now() - 60000, key: key }).run();
-      await W.wakeMorning(env);
-    });
-    a.eq(net.calls.length, 0, "a guarantee with one exception in it is not a guarantee");
-  });
-
   /* ---- asking people to book -------------------------------------------- */
 
   const THREE = ["sundayAfternoon", "wednesdayEvening", "saturdayEvening"];

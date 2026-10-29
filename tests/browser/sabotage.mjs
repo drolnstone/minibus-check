@@ -1,6 +1,6 @@
 /* PROOF BY SABOTAGE.
 
-   Each fix in v1.74.9 and v1.74.10, and the rehearsal rounds of v1.79.0 and v1.79.1, is taken back out, one at a time, in a throwaway copy,
+   Each fix in v1.74.9 and v1.74.10, and the queue fix of v1.79.1, is taken back out, one at a time, in a throwaway copy,
    and the tests for it are run against that copy. A fix whose removal no test
    notices is a fix nothing is guarding, and this says so. Every sabotage must
    match its text exactly once, or it stops: a sabotage that silently changes
@@ -54,26 +54,8 @@ const S = [
      "    if(false){\n      $(\"footbar\").classList.add(\"is-gone\");"] ] },
   { id: "S9 PIN before a check", tests: "T9", swaps: [
     ["the one path round the gate. */\n  if(pinGateNeeded()){", "the one path round the gate. */\n  if(false){"] ] },
-  /* v1.79.0: a rehearsal is a round. */
-  /* The run let go once its round is over. The board's answer and the clock
-     both come here, so from v1.79.1 taking out either path alone leaves the
-     other to do it within five seconds: the sabotage is the rule itself. */
-  { id: "S16 run dropped with its round", tests: "T16", swaps: [
-    ["  if(trip.id && mine && mine!==round){\n    drop = true;", "  if(false){\n    drop = true;"] ] },
-  { id: "S16b taps carry the round", tests: "T16b", swaps: [
-    ["  if(ev.rehearsal === undefined) ev.rehearsal = Number(trip.rehearsal)||0;\n", ""] ] },
-  { id: "S16c ended real run put aside", tests: "T16c", swaps: [
-    ["  } else if(trip.id && !mine && round && trip.ended && !ownWaiting){\n    drop = true;\n  }\n", "  }\n"] ] },
   { id: "S17 queue taken off as it is now", tests: "T17", swaps: [
     ["    rest=tripLoadQ().filter(function(e){ return !sentKeys[tripQKey(e)]; });\n", ""] ] },
-  { id: "S18 a round past its end is none", tests: "T18", swaps: [
-    ["  trip.rehearsal = tripRoundNow();\n  tripSkipAsked={};", "  trip.rehearsal = Number(tripRehearsal)||0;\n  tripSkipAsked={};"] ] },
-  { id: "S18b the clock checks the round", tests: "T18b", swaps: [
-    ["    /* The round by the clock first, which needs no signal. */\n    tripRoundTick();\n", ""] ] },
-  { id: "S18c the board's word from a finished round goes", tests: "T18b", swaps: [
-    ["    if(r && r!==round){ delete tripSeen[k]; seenGone=true; }\n", ""] ] },
-  { id: "S16d no test run taken back at the end", tests: "T16d", swaps: [
-    ["    if(Number(tripRehearsal) && !tripRoundNow()) return;\n", ""] ] },
   /* v1.88.0, the passenger page: "Add to your phone" before the alerts
      question on a first visit. file and runner name where the sabotage goes
      and which checks run; the driver app and driver-app.mjs otherwise. */

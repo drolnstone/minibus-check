@@ -655,92 +655,6 @@ if (want("C18")) {
   await p.ctx.close();
 }
 
-/* C19 — a rehearsal, started, started over and ended from the coordinator's
-   app, as often as he likes. The live server here runs on the real clock, so
-   on a Sunday between the cutoff and noon the check is the refusal instead. */
-if (want("C19")) {
-  const flag = () => db._rows("SELECT v FROM settings WHERE k='rehearsal'").map((r) => JSON.parse(r.v))[0] || null;
-  const seeds = () => db._rows("SELECT device FROM bookings WHERE status='Rehearsal'").map((r) => r.device);
-  await me.pg.evaluate(() => { location.hash = "home"; refresh(); });
-  await me.wait(900);
-  const menu = await me.text("#homeBody .menu");
-  const row = await me.pg.$('#homeBody [data-go="rehearsal"]');
-  if (row) { await row.click(); await me.wait(400); }
-  const none = row ? await me.text("#rehearsalBody") : "";
-  if (row) await me.shot("C19a-none-running");
-  const blocked = row ? await W.liveMorning(env) : "";
-  if (!row) {
-    check("C19", "Start a rehearsal: four mornings to choose from, the button says which, and it runs with test seats on both routes",
-          false, "no Rehearsal on the first screen: menu '" + menu + "'");
-  } else if (blocked) {
-    const off = await me.pg.$eval('[data-do="rehstart"]', (b) => b.disabled).catch(() => false);
-    check("C19", "on a Sunday morning the Rehearsal screen says why none can start, and Start is off",
-          /Rehearsal/.test(menu) && none.indexOf(blocked) !== -1 && off, "menu '" + menu + "', screen '" + none.slice(0, 120) + "'");
-  } else {
-    await me.pg.click('[data-do="rehstart"]');
-    await me.wait(300);
-    const shapes = await me.pg.$$eval("#sheetBody [data-pick]", (b) => b.map((x) => x.getAttribute("data-pick")));
-    await me.pg.click('#sheetBody [data-pick="full"]');
-    await me.wait(150);
-    const label = await me.text("#sheetGo");
-    await me.shot("C19b-choose");
-    await me.go();
-    await me.settle();
-    const first = flag(), firstSeeds = seeds();
-    const running = await me.text("#rehearsalBody");
-    await me.shot("C19c-running");
-    const ends = W.rehearsalEnds(first ? first.at : 0);
-    const endsWords = W.londonHHMM(new Date(ends));
-    check("C19", "Start a rehearsal: four mornings to choose from, the button says which, and it runs with test seats on both routes",
-          /Rehearsal/.test(menu) && /None running/.test(none) && shapes.join() === "quiet,normal,full,over" &&
-          label === "Start: a nearly full bus" && first && first.shape === "full" && firstSeeds.length > 0 &&
-          running.indexOf("Until " + endsWords) !== -1 && /North/.test(running) && /South/.test(running) &&
-          /No test run yet/.test(running),
-          "menu '" + menu + "', shapes " + shapes + ", label '" + label + "', flag " + JSON.stringify(first) +
-          ", seats " + firstSeeds.length + ", screen '" + running.slice(0, 200) + "'");
-
-    await me.pg.evaluate(() => { location.hash = "home"; });
-    await me.wait(500);
-    const home = await me.text("#homeBody");
-    await me.shot("C19d-home");
-    check("C19a", "while it runs, the first screen says so first, with its end time",
-          home.indexOf("A rehearsal is running until " + endsWords + ".") === 0,
-          "home '" + home.slice(0, 120) + "'");
-
-    await me.pg.click('#homeBody [data-go="rehearsal"]');
-    await me.wait(400);
-    await new Promise((r) => setTimeout(r, 1100));        /* a new round is a new moment */
-    await me.pg.click('[data-do="rehover"]');
-    await me.wait(300);
-    await me.pg.click('#sheetBody [data-pick="quiet"]');
-    await me.wait(150);
-    const label2 = await me.text("#sheetGo");
-    await me.go();
-    await me.settle();
-    const second = flag(), secondSeeds = seeds();
-    check("C19b", "Start over is a new round with new seats, and none of the last round's are left",
-          label2 === "Start over: a quiet morning" && second && first && second.at > first.at && second.shape === "quiet" &&
-          secondSeeds.length > 0 && !secondSeeds.some((d) => firstSeeds.indexOf(d) !== -1),
-          "label '" + label2 + "', rounds " + (first && first.at) + " then " + (second && second.at) +
-          ", seats " + firstSeeds.length + " then " + secondSeeds.length);
-
-    await me.pg.click('[data-do="rehend"]');
-    await me.wait(300);
-    const endLine = await me.text("#sheetBody .line");
-    await me.go();
-    await me.settle();
-    const after = await me.text("#rehearsalBody");
-    await me.shot("C19e-ended");
-    const acts = db._rows("SELECT words FROM coord_actions WHERE kind='rehearsal' ORDER BY seq").map((r) => r.words);
-    check("C19c", "End it clears the live server, and the screen and What has been done say so; the sheet asks without a lesson",
-          endLine === "" && !flag() && seeds().length === 0 &&
-          /None running/.test(after) && acts.length === 3 && acts[2] === "Rehearsal ended." &&
-          /^Rehearsal started over: a quiet morning/.test(acts[1]),
-          "line '" + endLine + "', flag " + JSON.stringify(flag()) + ", seats " + seeds().length +
-          ", screen '" + after.slice(0, 80) + "', actions " + JSON.stringify(acts));
-  }
-}
-
 /* C20 — the other way: from here to the driver app's vehicle check, no second PIN */
 if (want("C20")) {
   const p = await page(env);
@@ -1245,7 +1159,7 @@ if (want("C37")) {
   await p.signIn(PIN);
   try {
     const seen = [];
-    for (const h of ["rota", "requests", "bookings/" + NEXT, "defects", "buses", "runs/" + LAST, "look", "activity", "rehearsal",
+    for (const h of ["rota", "requests", "bookings/" + NEXT, "defects", "buses", "runs/" + LAST, "look", "activity",
                      "sunday/" + NEXT, "bus/YS70%20PWE"]) {
       await p.pg.evaluate((x) => { location.hash = x; }, h);
       await p.wait(700);

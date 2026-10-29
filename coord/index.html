@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.132.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.133.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -676,7 +676,6 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
   <section class="screen" id="s-report"><div id="reportBody"></div></section>
   <section class="screen" id="s-pdf"><div id="pdfBody"></div></section>
   <section class="screen" id="s-activity"><div id="activityBody"></div></section>
-  <section class="screen" id="s-rehearsal"><div id="rehearsalBody"></div></section>
   <section class="screen" id="s-alerts"><div id="alertsBody"></div></section>
 </main>
 
@@ -716,7 +715,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.132.0";
+var PAGE_VERSION = "v1.133.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1088,7 +1087,7 @@ function say(id, t, bad){
 
 var TITLES = { home:"Coordinator", rota:"Rota", sunday:"Rota", requests:"Rota requests", bookings:"Bookings",
                defects:"Defects", buses:"Buses", bus:"Bus", drivers:"Drivers", stops:"Bus stops", runs:"Run record", look:"Have a look", report:"Have a look", pdf:"PDF reports",
-               activity:"What has been done", rehearsal:"Rehearsal", alerts:"Alerts", sign:"Coordinator" };
+               activity:"What has been done", alerts:"Alerts", sign:"Coordinator" };
 
 /* Each screen is a step in the phone's own history, so its back gesture
    works. The bar's back arrow never leaves the app: at the first step it
@@ -1175,7 +1174,6 @@ function paint(name, arg){
   if(name === "report") return paintReport(arg || "bookings");
   if(name === "pdf") return paintPdf();
   if(name === "activity") return paintActivity();
-  if(name === "rehearsal") return paintRehearsal();
   if(name === "alerts") return paintAlerts();
 }
 
@@ -1295,9 +1293,6 @@ function addMin(t, n){
 
 function needs(){
   var out = [];
-  /* First, because while one runs every phone shows the test and not the
-     real thing. */
-  if(D && D.rehearsal) out.push({ tone:"warn", text:"A rehearsal is running until " + hhmm(D.rehearsal.ends) + ".", go:"rehearsal" });
   var chk = (D && D.checks) || {};
   Object.keys(chk).forEach(function(reg){
     if(chk[reg] && chk[reg].state === "stopped") {
@@ -1392,9 +1387,6 @@ function paintHome(){
        /* A live server from before w2.35.0, or a sheet before v1.99.0, sends no stops. */
        (D && D.stopsReg ? item("stops", "Bus stops", D.stopsReg.stops.filter(function(x){ return x.active && x.type === "Pickup"; }).length + " in use", "") : "") +
        item("runs", "Run record", "") +
-       /* A live server from before w2.20.0 cannot run one from here. */
-       (D && ("rehearsal" in D) ? item("rehearsal", "Rehearsal", D.rehearsal ? "until " + hhmm(D.rehearsal.ends) : "",
-                                      D.rehearsal ? "warn" : "") : "") +
        /* A live server from before w2.37.0 cannot make one. */
        (D && D.pdf ? item("pdf", "PDF reports", "") : "") +
        item("look", "Have a look", "") +
@@ -1842,7 +1834,7 @@ function paintBookings(key){
              (k.phone ? '<a href="tel:'+esc(k.phone)+'">'+esc(phoneWords(k.phone))+'</a>' : '<span>no number</span>') +
              (k.coord ? '<span class="tag info">'+esc(bookedBy(k.note))+'</span>' : '') +
              (moved ? '<small class="moved">Booked when '+esc(s.id)+' was '+esc(k.stop)+'</small>' : '') + '</span>' +
-             (b.mayAct && !k.rehearsal ? '<button class="mini warn" type="button" data-do="cancel" data-id="'+k.id+'">Cancel</button>' : '') + '</div>';
+             (b.mayAct ? '<button class="mini warn" type="button" data-do="cancel" data-id="'+k.id+'">Cancel</button>' : '') + '</div>';
       });
       h += '</div>';
     });
@@ -3506,80 +3498,6 @@ function endRun(route){
     } });
 }
 
-/* ---- a rehearsal ------------------------------------------------------------------
-
-   From w2.20.0 the live server runs it, and this is where it is started,
-   started over and ended. Each start is a new round: the phones drop a run
-   made in a round that is over, with any of its taps still waiting, and a
-   tap from such a round is not recorded. Ending one, here, from the sheet's
-   menu or by the clock, takes its seats and taps off the live server and the
-   sheet's tabs. */
-
-/* The live server's four, in its words. The share is of the seats on the bus
-   the rota gave each route. */
-var REH_SHAPES = [["quiet", "A quiet morning", "20 to 40% full"],
-                  ["normal", "An ordinary morning", "50 to 80% full"],
-                  ["full", "A nearly full bus", "93 to 100% full"],
-                  ["over", "More booked than seats", "110 to 135% full"]];
-
-function rehRunWords(r){
-  if(!r.started) return "No test run yet.";
-  var who2 = r.driver ? r.driver + ", " : "";
-  if(r.ended) return "Test run: " + who2 + "left Church " + hhmm(r.started) + ", back " + hhmm(r.ended) + ".";
-  return "Test run: " + who2 + "left Church " + hhmm(r.started) + ", " +
-         r.marked + (r.marked === 1 ? " stop" : " stops") + " marked.";
-}
-
-function paintRehearsal(){
-  var h = '';
-  if(!("rehearsal" in D)){
-    $("rehearsalBody").innerHTML = h + '<div class="card"><p class="tiny" style="margin:0">The live server is ' +
-      esc(lastSeen.server || "an older copy") + '. A rehearsal runs from here from w2.20.1.</p></div>';
-    return;
-  }
-  var reh = D.rehearsal, det = D.rehearsalDetail;
-  if(!reh){
-    if(D.rehearsalBlocked) h += '<div class="need stop"><p>'+esc(D.rehearsalBlocked)+'</p></div>';
-    h += '<div class="card"><p class="tiny" style="margin:0">None running.</p></div>';
-    h += '<button class="btn btn-main btn-wide" type="button" data-do="rehstart" style="margin-top:12px"' +
-         (D.rehearsalBlocked ? ' disabled' : '') + '>Start a rehearsal</button>';
-    $("rehearsalBody").innerHTML = h;
-    return;
-  }
-  h += '<div class="card"><div class="bk-head"><b>Running</b><span class="tag warn">Until '+esc(hhmm(reh.ends))+'</span></div>' +
-       '<p class="tiny">'+esc(det && det.words ? det.words.charAt(0).toUpperCase() + det.words.slice(1) : "A test morning") +
-       (det && det.sunday ? ', for ' + esc(longDay(det.sunday)) : '') + '. Started ' + esc(hhmm(reh.round)) + '.</p></div>';
-  ((det && det.routes) || []).forEach(function(r){
-    h += '<div class="card"><div class="bk-head"><b>'+esc(r.route)+'</b>' +
-         (r.seats ? '<span class="seats'+(r.booked > r.seats ? ' over' : '')+'">'+r.booked+'/'+r.seats+'</span>' : '') + '</div>' +
-         '<p class="tiny">'+esc(seatWords(r.booked) + " booked at " + r.stops + (r.stops === 1 ? " stop" : " stops") +
-                              (r.seats ? ", on a " + r.seats + "-seat bus." : "."))+'</p>' +
-         '<p class="tiny">'+esc(rehRunWords(r))+'</p></div>';
-  });
-  h += '<div class="req-acts"><button class="btn btn-ghost" type="button" data-do="rehover">Start over</button>' +
-       '<button class="btn btn-stop" type="button" data-do="rehend">End it</button></div>';
-  $("rehearsalBody").innerHTML = h;
-}
-
-function rehearsalStart(again){
-  var list = '<ul class="pick">' + REH_SHAPES.map(function(x){
-    return '<li><button type="button" data-pick="'+x[0]+'"><b>'+esc(x[1])+'</b><small>'+esc(x[2])+'</small></button></li>';
-  }).join("") + '</ul>';
-  openSheet({ eyebrow: "Rehearsal", title: again ? "Start it over?" : "Start a rehearsal?",
-    body: list, go: again ? "Start over" : "Start",
-    onPick: function(k){
-      var w = ""; REH_SHAPES.forEach(function(x){ if(x[0] === k) w = x[1].toLowerCase(); });
-      return (again ? "Start over: " : "Start: ") + w;
-    },
-    onGo: function(k){ if(k) act({ kind:"rehearsal", op: again ? "over" : "start", shape:k }); } });
-}
-
-function rehearsalEnd(){
-  openSheet({ eyebrow: "Rehearsal", title: "End the rehearsal?",
-    go: "End it", stop: true,
-    onGo: function(){ act({ kind:"rehearsal", op:"end" }); } });
-}
-
 /* ---- the sheet ----------------------------------------------------------------------- */
 
 /* One sheet for every change: what is about to happen, stated on the button
@@ -3818,9 +3736,6 @@ document.addEventListener("click", function(e){
   else if(d === "pdfshare") pdfShare();
   else if(d === "sharelink") shareLink();
   else if(d === "copylink") copyLink();
-  else if(d === "rehstart") rehearsalStart(false);
-  else if(d === "rehover") rehearsalStart(true);
-  else if(d === "rehend") rehearsalEnd();
   else if(d === "alerttest") bellOn(true);
   else if(d === "alertson") bellTap();
 });
