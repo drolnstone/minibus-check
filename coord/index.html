@@ -7,8 +7,8 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- BUILD v1.137.0 · THE COORDINATOR'S APP.
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<!-- BUILD v1.138.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -56,7 +56,12 @@
   --scrim:rgba(22,25,31,.48);
   color-scheme:light;
   --r:10px;--tap:52px;
-  --safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  /* The top safe area and 40px more: a phone added to the Home Screen before
+     v1.138.0 still draws the page under the clock, and iOS 26 frosts that
+     strip and about 40px below it. New installs keep the status bar apart,
+     with an inset of nothing, so this adds nothing for them. */
+  --safe-t:calc(env(safe-area-inset-top,0px) + min(env(safe-area-inset-top,0px), 40px));
   --safe-l:env(safe-area-inset-left,0px);--safe-r:env(safe-area-inset-right,0px);
 }
 html[data-theme="dark"]{
@@ -596,9 +601,16 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
       try{ localStorage.setItem(KEY, String(v)); }catch(e){}
       return;
     }
+    /* Added again since v1.138.0, the status bar sits apart and the page is
+       shorter than the screen: an inset kept from the old install is not this one's. */
+    if(screen.height - window.innerHeight > 20){
+      root.style.removeProperty("--safe-t");
+      try{ localStorage.removeItem(KEY); }catch(e){}
+      return;
+    }
     var kept = 0;
     try{ kept = parseFloat(localStorage.getItem(KEY)) || 0; }catch(e){}
-    if(kept > 0) root.style.setProperty("--safe-t", kept + "px");
+    if(kept > 0) root.style.setProperty("--safe-t", (kept + Math.min(kept, 40)) + "px");
   }
   window.coordSafeTop = fix;
   window.addEventListener("pageshow", fix);
@@ -726,7 +738,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.137.0";
+var PAGE_VERSION = "v1.138.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
