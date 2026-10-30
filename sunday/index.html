@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.137.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.138.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -150,7 +150,11 @@
 
   color-scheme:light;
   --r:10px;--tap:56px;
-  --safe-t:env(safe-area-inset-top,0px);--safe-b:env(safe-area-inset-bottom,0px);
+  /* The top safe area and 40px more: a phone added to the Home Screen before
+     v1.138.0 still draws the page under the clock, and iOS 26 frosts that
+     strip and about 40px below it. New installs keep the status bar apart,
+     with an inset of nothing, so this adds nothing for them. */
+  --safe-t:calc(env(safe-area-inset-top,0px) + min(env(safe-area-inset-top,0px), 40px));--safe-b:env(safe-area-inset-bottom,0px);
   --safe-l:env(safe-area-inset-left,0px);--safe-r:env(safe-area-inset-right,0px);
 }
 /* touch-action:manipulation kills double tap to zoom, which was firing
@@ -747,7 +751,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.137.0";
+var PAGE_VERSION = "v1.138.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.

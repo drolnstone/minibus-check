@@ -35,7 +35,7 @@
 <link rel="icon" type="image/png" sizes="180x180"
       href="https://drolnstone.github.io/minibus-check/icon-driver-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- Loaded without blocking first paint. As a plain stylesheet link this
@@ -154,7 +154,11 @@
   color-scheme:light;
   --r:10px;--tap:56px;
   --safe-b:env(safe-area-inset-bottom,0px);
-  --safe-t:env(safe-area-inset-top,0px);
+  /* The top safe area and 40px more: a phone added to the Home Screen before
+     v1.138.0 still draws the page under the clock, and iOS 26 frosts that
+     strip and about 40px below it. New installs keep the status bar apart,
+     with an inset of nothing, so this adds nothing for them. */
+  --safe-t:calc(env(safe-area-inset-top,0px) + min(env(safe-area-inset-top,0px), 40px));
   --safe-l:env(safe-area-inset-left,0px);
   --safe-r:env(safe-area-inset-right,0px);
 }
@@ -1775,7 +1779,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.137.0";
+var APP_VERSION = "v1.138.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
