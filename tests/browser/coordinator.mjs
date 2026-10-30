@@ -890,8 +890,8 @@ if (want("C27")) {
     return { pad, errs };
   };
   const back = await run(true, 47), browserTab = await run(false, 47), never = await run(true, 0);
-  check("C27", "on the Home Screen with the inset gone, the bar is pushed down by the one last measured and 40px for the frost; in a browser tab, or with none kept, it is not",
-        back.pad === "87px" && browserTab.pad === "0px" && never.pad === "0px" && ![...back.errs, ...browserTab.errs, ...never.errs].length,
+  check("C27", "on the Home Screen with the inset gone, the bar is pushed down by the one last measured and 40px for the frost and 16px for the soft edge; in a browser tab, or with none kept, it is not",
+        back.pad === "103px" && browserTab.pad === "0px" && never.pad === "0px" && ![...back.errs, ...browserTab.errs, ...never.errs].length,
         "home screen " + back.pad + ", tab " + browserTab.pad + ", none kept " + never.pad);
 }
 
