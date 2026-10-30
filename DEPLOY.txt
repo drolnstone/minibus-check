@@ -1,17 +1,16 @@
 MINIBUS
 =======
-  pages v1.138.0 · server w2.74.0 · sheet v1.130.0
+  pages v1.139.0 · server w2.74.0 · sheet v1.130.0
 
-YOU ARE ON   app v1.137.0 · server w2.74.0 · sheet v1.130.0
-GOING TO     app v1.138.0 · server w2.74.0 · sheet v1.130.0
+YOU ARE ON   app v1.138.0 · server w2.74.0 · sheet v1.130.0
+GOING TO     app v1.139.0 · server w2.74.0 · sheet v1.130.0
 
-All three apps: no fog across the top. The status bar sits apart from the
-page. A Home Screen icon added before v1.138.0 keeps its bar 40px lower, clear
-of the fog; removing it and adding it again gives the plain status bar.
-Pages only.
+All three apps, added to an iPhone's Home Screen: the top keeps 16px more,
+so the first words sit below iOS's soft top edge. Android and browser tabs
+unchanged. Pages only.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: app v1.138.0.
-B. Coordinator, driver and passenger apps: the bar's words are sharp, no fog over them.
+A. Coordinator app, App info: app v1.139.0.
+B. Coordinator, driver and passenger apps on the iPhone: the top words sit clear of the soft edge.

@@ -158,9 +158,15 @@
      v1.138.0 still draws the page under the clock, and iOS 26 frosts that
      strip and about 40px below it. New installs keep the status bar apart,
      with an inset of nothing, so this adds nothing for them. */
-  --safe-t:calc(env(safe-area-inset-top,0px) + min(env(safe-area-inset-top,0px), 40px));
+  --safe-t:calc(env(safe-area-inset-top,0px) + min(env(safe-area-inset-top,0px), 40px) + var(--edge,0px));
   --safe-l:env(safe-area-inset-left,0px);
   --safe-r:env(safe-area-inset-right,0px);
+}
+/* iOS 26 softens the top edge of a Home Screen app, whatever the status bar.
+   On an iPhone added to the Home Screen the top keeps 16px more, so the first
+   words sit below it. Android and browser tabs add nothing. */
+@supports (-webkit-touch-callout:none){
+  @media all and (display-mode:standalone){ :root{--edge:16px} }
 }
 /* touch-action:manipulation kills double tap to zoom. A checklist is dozens
    of taps in a row, some hurried, some through a glove, and two that land
@@ -1779,7 +1785,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.138.0";
+var APP_VERSION = "v1.139.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
