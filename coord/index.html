@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.140.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.141.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -139,6 +139,9 @@ input,textarea,select{font:inherit;color:inherit}
   background:none;color:inherit;font-size:18px;line-height:1;cursor:pointer}
 body.strip-on .wrap{padding-bottom:calc(var(--strip-h, 0px) + 48px + var(--safe-b))}
 body.strip-on .totop{bottom:calc(var(--strip-h, 0px) + 28px + var(--safe-b))}
+/* The emergency calls card: the name and number on a line of their own,
+   however short the name (v1.141.0, Asim). */
+.ec-who{display:block}
 .bar-btn{flex:none;min-height:36px;padding:0 12px;border:1.5px solid rgba(255,255,255,.35);border-radius:8px;
   color:var(--dash-ink);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:14px;
   letter-spacing:.08em;text-transform:uppercase}
@@ -747,7 +750,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.140.0";
+var PAGE_VERSION = "v1.141.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1166,13 +1169,13 @@ $("toTop").addEventListener("click", function(){
   catch(e){ window.scrollTo(0, 0); }
   this.classList.remove("is-on");
 });
-/* Home in one tap, from v1.140.0. The first screen is step 0 of this visit,
-   so going back that many steps leaves the phone's back gesture where it
-   would be had he tapped Back all the way. */
+/* Home in one tap, from v1.140.0. From v1.141.0 the step is replaced, not
+   walked back through history: an iPhone's Home Screen app could leave a
+   history jump undone, and the tap did nothing. */
 function home(){
-  var n = (history.state && history.state.n) || 0;
-  if(n > 0) history.go(-n);
-  else { history.replaceState({ n: 0 }, "", "#home"); route(); }
+  seq = 0;
+  history.replaceState({ n: 0 }, "", "#home");
+  route();
 }
 function back(){
   if(history.state && history.state.n > 0) history.back();
@@ -1468,11 +1471,11 @@ function contactHtml(){
   var u = c.usual || {}, o = c.chosen;
   if(o){
     var till = o.until ? "until midnight" : "until changed back";
-    return '<div class="need"><p>Emergency calls go to <b>'+esc(o.name)+'</b> · '+esc(phoneWords(o.phone))+', '+till +
-           (o.by ? '. Set by '+esc(o.by)+'.' : '.')+'</p><button class="mini" type="button" data-do="contact">Change</button></div>';
+    return '<div class="need"><p>Emergency calls go to <span class="ec-who"><b>'+esc(o.name)+'</b> · '+esc(phoneWords(o.phone))+', '+till +
+           (o.by ? '. Set by '+esc(o.by)+'.' : '.')+'</span></p><button class="mini" type="button" data-do="contact">Change</button></div>';
   }
-  return '<div class="card" style="margin-top:10px"><div class="def-foot"><p class="tiny" style="margin:0">Emergency calls go to ' +
-         (u.name ? '<b>'+esc(u.name)+'</b>' + (u.phone ? ' · '+esc(phoneWords(u.phone)) : '') : 'nobody yet') + '.</p>' +
+  return '<div class="card" style="margin-top:10px"><div class="def-foot"><p class="tiny" style="margin:0">Emergency calls go to <span class="ec-who">' +
+         (u.name ? '<b>'+esc(u.name)+'</b>' + (u.phone ? ' · '+esc(phoneWords(u.phone)) : '') : 'nobody yet') + '.</span></p>' +
          '<button class="mini" type="button" data-do="contact">Change</button></div></div>';
 }
 function pickContact(){
