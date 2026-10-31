@@ -534,7 +534,8 @@ if (want("C11")) {
         "activity '" + body.slice(0, 200).replace(/\n/g, " | ") + "', home '" + home.slice(0, 120).replace(/\n/g, " | ") + "'");
 }
 
-/* C12 — left alone, it locks; keying the PIN goes back to where he was */
+/* C12 — left alone, it locks; keying the PIN opens the first screen (v1.140.0;
+   it went back to the screen left open before) */
 if (want("C12")) {
   await me.pg.evaluate(() => { location.hash = "defects"; });
   await me.wait(300);
@@ -545,10 +546,10 @@ if (want("C12")) {
   const pinGone = await me.pg.evaluate(() => pin === "");
   await me.shot("C12-locked");
   await me.signIn(PIN);
-  const back = await me.on("defects");
-  check("C12", "left alone it forgets the PIN, and keying it again goes back to the same screen",
+  const back = await me.on("home");
+  check("C12", "left alone it forgets the PIN, and keying it again opens the first screen",
         locked && /Locked after 15 minutes/.test(said) && pinGone && back,
-        "locked " + locked + ", said '" + said + "', pin gone " + pinGone + ", back " + back);
+        "locked " + locked + ", said '" + said + "', pin gone " + pinGone + ", home " + back);
 }
 
 /* C13 — a bus stopped at the walkaround this morning is on the first screen, and can be authorised */
@@ -1970,6 +1971,41 @@ if (want("C57")) {
   } catch (e) { stopped("C57", e); }
   await p.ctx.close();
   await W.cachePut(env, "coord_shelf", held).run();
+}
+
+/* C58 — Home at the top right on every screen but the first, one tap home
+   however deep; and every sign-in opens on the first screen, never the one
+   left open (v1.140.0, Asim, 31 Oct 2026). */
+if (want("C58")) {
+  const p = await page(env, { hash: "#bookings" });
+  try {
+    await p.signIn(PIN);
+    const on = () => p.pg.evaluate(() => ({ screen: (document.querySelector(".screen.is-on") || {}).id,
+      home: !document.getElementById("barHome").hidden, hash: location.hash }));
+    const first = await on();
+    await p.pg.evaluate(() => go("buses"));
+    await p.wait(400);
+    const bus = await p.pg.evaluate(() => (D.register.buses || D.buses || [])[0]);
+    await p.pg.evaluate((b) => go("bus/" + encodeURIComponent((b && (b.reg || b.name)) || "x")), bus);
+    await p.wait(400);
+    const deep = await on();
+    await p.shot("C58a-home-button");
+    await p.pg.click("#barHome");
+    await p.wait(600);
+    const back = await on();
+    const n = await p.pg.evaluate(() => history.state && history.state.n);
+    await p.pg.evaluate(() => go("bookings"));
+    await p.wait(400);
+    await p.pg.evaluate(() => lock("Locked after 10 minutes. Key your PIN."));
+    await p.wait(300);
+    await p.signIn(PIN);
+    const again = await on();
+    const ok = first.screen === "s-home" && !first.home && deep.home && deep.screen !== "s-home" &&
+               back.screen === "s-home" && !back.home && n === 0 && again.screen === "s-home" && again.hash === "#home";
+    check("C58", "Home shows off the first screen and goes home in one tap; a sign-in opens on the first screen",
+          ok && !p.errs.length, JSON.stringify({ first, deep, back, n, again, errs: p.errs }).slice(0, 900));
+  } catch (e) { stopped("C58", e); }
+  await p.ctx.close();
 }
 
 await done();
