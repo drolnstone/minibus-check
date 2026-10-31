@@ -1,16 +1,18 @@
 MINIBUS
 =======
-  pages v1.139.0 · server w2.74.0 · sheet v1.130.0
+  pages v1.140.0 · server w2.74.0 · sheet v1.130.0
 
-YOU ARE ON   app v1.138.0 · server w2.74.0 · sheet v1.130.0
-GOING TO     app v1.139.0 · server w2.74.0 · sheet v1.130.0
+YOU ARE ON   app v1.139.0 · server w2.74.0 · sheet v1.130.0
+GOING TO     app v1.140.0 · server w2.74.0 · sheet v1.130.0
 
-All three apps, added to an iPhone's Home Screen: the top keeps 16px more,
-so the first words sit below iOS's soft top edge. Android and browser tabs
-unchanged. Pages only.
+Coordinator app: a Home button (house) at the top right of every screen but
+the first; one tap goes back to the first screen. Every sign-in, after the
+app is closed or locked, opens on the first screen. Driver and passenger apps
+unchanged apart from the version. Pages only.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: app v1.139.0.
-B. Coordinator, driver and passenger apps on the iPhone: the top words sit clear of the soft edge.
+A. Coordinator app, App info: app v1.140.0.
+B. Coordinator app: open Buses, then a bus; tap the house at the top right. The first screen shows.
+C. Coordinator app: open Bookings, close the app and open it again; key the PIN. The first screen shows.

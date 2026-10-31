@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.139.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.140.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -110,10 +110,12 @@ input,textarea,select{font:inherit;color:inherit}
   letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
 .bar-id span{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:500;font-size:12px;
   letter-spacing:.1em;text-transform:uppercase;color:var(--dash-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bar-bell{flex:none;width:40px;height:40px;border-radius:8px;border:1.5px solid rgba(255,255,255,.35);
+/* Home, from v1.140.0 (Asim): top right on every screen but the first, one
+   tap back to it however deep. Shaped like the bell, which shows only there. */
+.bar-bell,.bar-home{flex:none;width:40px;height:40px;border-radius:8px;border:1.5px solid rgba(255,255,255,.35);
   color:var(--dash-ink);display:flex;align-items:center;justify-content:center;background:transparent}
-.bar-bell[hidden]{display:none}
-.bar-bell svg{width:20px;height:20px;display:block}
+.bar-bell[hidden],.bar-home[hidden]{display:none}
+.bar-bell svg,.bar-home svg{width:20px;height:20px;display:block}
 .bar-bell.on svg{fill:currentColor}
 .bar-bell:disabled{opacity:.5}
 /* The unread count on the bell, from v1.96.6, as the Ushers app has it. */
@@ -636,6 +638,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
     </button>
     <div class="bar-id"><b id="barTitle">Coordinator</b><span id="barSub">RCCG Dominion Assembly Liverpool</span></div>
     <button class="bar-btn" id="barLock" type="button" hidden>Lock</button>
+    <button class="bar-home" id="barHome" type="button" hidden aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9v12h5v-6h4v6h5V9"/></svg></button>
     <!-- Coordinator alerts on this phone, from v1.84.0. Hollow until they are on,
          and a tap turns them on; then filled, and from v1.96.6 a tap opens
          Alerts, where the test is. The red number is what is unread. Far
@@ -744,7 +747,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.139.0";
+var PAGE_VERSION = "v1.140.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1073,7 +1076,9 @@ function openAs(n, p, how){
     D = out; touched = Date.now();
     alertsSeen(out.alerts);
     bellLook();
-    if(!location.hash || location.hash === "#sign") history.replaceState({ n: 0 }, "", "#home");
+    /* Every sign-in opens on the first screen, from v1.140.0 (Asim): never
+       the screen left open before the app was closed or locked. */
+    seq = 0; history.replaceState({ n: 0 }, "", "#home");
     route();
   }, function(err){
     busy = false; $("signGo").disabled = false;
@@ -1101,8 +1106,7 @@ function lock(words){
   $("signPin").value = ""; BOOK = { sunday:"", data:null }; RUNS = { sunday:"", data:null }; REP = { name:"", data:null };
   closeSheet();
   say("signSay", words || "", !!words);
-  /* The address is left alone, so keying the PIN again goes back to where
-     he was. */
+  /* Keying the PIN again opens the first screen (openAs). */
   route();
 }
 
@@ -1162,6 +1166,14 @@ $("toTop").addEventListener("click", function(){
   catch(e){ window.scrollTo(0, 0); }
   this.classList.remove("is-on");
 });
+/* Home in one tap, from v1.140.0. The first screen is step 0 of this visit,
+   so going back that many steps leaves the phone's back gesture where it
+   would be had he tapped Back all the way. */
+function home(){
+  var n = (history.state && history.state.n) || 0;
+  if(n > 0) history.go(-n);
+  else { history.replaceState({ n: 0 }, "", "#home"); route(); }
+}
 function back(){
   if(history.state && history.state.n > 0) history.back();
   else { history.replaceState({ n: 0 }, "", "#home"); route(); }
@@ -1182,6 +1194,7 @@ function route(){
   $("barSub").textContent = (name === "sign" || !who) ? "RCCG Dominion Assembly Liverpool" : who;
   $("barBack").hidden = (name === "home" || name === "sign");
   $("barLock").hidden = (name !== "home");
+  $("barHome").hidden = (name === "home" || name === "sign");
   bellPaint(name);
   paint(name, arg);
   barHeight();
@@ -3773,6 +3786,7 @@ document.addEventListener("click", function(e){
 });
 
 $("barBack").addEventListener("click", back);
+$("barHome").addEventListener("click", home);
 $("barLock").addEventListener("click", function(){ lock(""); });
 $("sheet").addEventListener("click", function(e){ if(e.target === $("sheet") && !busy) closeSheet(); });
 $("signGo").addEventListener("click", signIn);
@@ -4228,7 +4242,7 @@ if(!LIVE){
   banner("There is no live server set in config.js, and this page needs one.");
 }
 themeApply();
-history.replaceState({ n: 0 }, "", location.hash || "#home");
+history.replaceState({ n: 0 }, "", "#home");
 if(LIVE && navigator.onLine === false) outage("off");
 var HAND = handTake();
 /* A PIN left for the driver app and never taken, because that page did not
