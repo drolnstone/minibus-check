@@ -1,18 +1,18 @@
 MINIBUS
 =======
-  pages v1.140.0 · server w2.74.0 · sheet v1.130.0
+  pages v1.141.0 · server w2.74.0 · sheet v1.130.0
 
-YOU ARE ON   app v1.139.0 · server w2.74.0 · sheet v1.130.0
-GOING TO     app v1.140.0 · server w2.74.0 · sheet v1.130.0
+YOU ARE ON   app v1.140.0 · server w2.74.0 · sheet v1.130.0
+GOING TO     app v1.141.0 · server w2.74.0 · sheet v1.130.0
 
-Coordinator app: a Home button (house) at the top right of every screen but
-the first; one tap goes back to the first screen. Every sign-in, after the
-app is closed or locked, opens on the first screen. Driver and passenger apps
-unchanged apart from the version. Pages only.
+Coordinator app: the Home button goes home on an iPhone too (v1.140.0 could
+leave the tap doing nothing). First screen: in the Emergency calls card the name and
+number sit on a line of their own under "Emergency calls go to", whatever
+the name's length. Pages only.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: app v1.140.0.
-B. Coordinator app: open Buses, then a bus; tap the house at the top right. The first screen shows.
-C. Coordinator app: open Bookings, close the app and open it again; key the PIN. The first screen shows.
+A. Coordinator app, App info: app v1.141.0.
+B. Coordinator app: Buses, then a bus, then the house at the top right. The first screen shows.
+C. Coordinator app, first screen: "Emergency calls go to" on one line, the name and number on the next.
