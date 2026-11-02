@@ -4,6 +4,13 @@
    spreadsheet with answers built from the live export, and hands back a phone
    to drive. Every stop, time, bus and registration is the real one; the
    people are not. */
+/* London time, whatever zone this machine is on, as tests/run-tests.mjs does.
+   The stand-in servers here, the Worker the coordinator checks run in this
+   process, and the browser all read it. GitHub's workflow sets TZ itself; a
+   machine on UTC that did not printed every time an hour early in October,
+   and T7, T10, T10b, T31, T32, T37 and T45 failed on a correct app. */
+process.env.TZ = "Europe/London";
+
 /* playwright-core and a Chromium: PLAYWRIGHT_CORE may name the module file,
    CHROMIUM the browser binary. */
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE || "playwright-core");
@@ -58,7 +65,8 @@ const srv = createServer((req, res) => {
 });
 const PORT = Number(process.env.MINIBUS_PORT || 8113);
 await new Promise(r => srv.listen(PORT, r));
-export const browser = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
+export const browser = await chromium.launch(Object.assign({ env: Object.assign({}, process.env, { TZ: "Europe/London" }) },
+  process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {}));
 export async function done() { await browser.close(); srv.close(); }
 
 /* The Rota tab as the server sends it: one row per Sunday, both routes. */
@@ -111,8 +119,9 @@ export async function phone(opts = {}) {
 
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
-    /* Unset leaves this machine's own zone and language, as before. */
-    timezoneId: opts.timezoneId, locale: opts.locale,
+    /* A phone in London unless a check says otherwise; unset locale leaves
+       this machine's own language, as before. */
+    timezoneId: opts.timezoneId || "Europe/London", locale: opts.locale,
     permissions: opts.permissions || [],
     userAgent: opts.ua || undefined,
     hasTouch: true, isMobile: true
