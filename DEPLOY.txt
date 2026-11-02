@@ -1,30 +1,22 @@
 MINIBUS
 =======
-  pages v1.142.0 · server w2.75.0 · sheet v1.130.0
+  pages v1.143.0 · server w2.75.0 · sheet v1.130.0
 
-YOU ARE ON   app v1.141.0 · server w2.74.0 · sheet v1.130.0
-GOING TO     app v1.142.0 · server w2.75.0 · sheet v1.130.0
+YOU ARE ON   app v1.142.0 · server w2.75.0 · sheet v1.130.0
+GOING TO     app v1.143.0 · server w2.75.0 · sheet v1.130.0
 
-Driver app and Worker: "Are you at Church?". Five minutes after a run is
-due at Church (the later of the Arrival time and the estimate), and again
-ten minutes later, the driver of a run still open is sent
-"🔴 North: Church 11:00", body "Did you pick up at (stop)?" while a booked
-stop is unanswered, else "Are you at Church?". Not sent while the driving
-phone is still on the app. Opening the app goes to Stops and bookings: the
-pickup pop-up turns red and asks about each booked stop still unanswered
-(the answer is noted "Marked at Church.", tells no passenger, and the
-passenger page shows "Picked up" without a time), then a red "Are you at
-Church?". Yes ends the run once the fence has seen the bus back inside,
-else "Not at Church."; No puts it away for 5 minutes.
-Pickup pop-up: a driver back in the app standing at the next booked
-stop's pin (400 m or more from the last marked stop) gets the pop-up there,
-even if the app never saw the bus move (he drove there in Maps).
-Parked mileage: the 14:00 push title starts with 🔴, and on Sundays from
-14:00 the hub card shows a red "Parked mileage not received" until keyed.
+Driver app only. The sent check is final: a swipe back from it goes
+home, never into the check. Opened from it with Start your run, Stops and
+bookings' Back returns to it only before Start trip; from Start trip on,
+Back and Done go home with the check cleared (the PIN kept while the run
+is live). "It has not finished, reopen it" (after a Church fence end) now
+asks "Reopen the run?" with Keep it ended / Reopen, like Undo. On a Sunday the parked mileage box shows on the
+home screen as soon as the driver's run ends, faded and shut until 12:00
+("· from 12:00"), then opens for typing. Its checks and the 14:00 red
+line are unchanged.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: app v1.142.0, server w2.75.0.
-B. Sunday after the run: the Alerts list shows "North: Are you at Church?" only for a run not ended by 11:05.
-C. Driver app hub, Sunday after 14:00 with no parked mileage keyed: the red "Parked mileage not received" line.
+A. Coordinator app, App info: app v1.143.0, server w2.75.0.
+B. Sunday, driver after his run: Done on Stops and bookings opens the home screen, not the sent check; the parked mileage box is faded until 12:00, then open.

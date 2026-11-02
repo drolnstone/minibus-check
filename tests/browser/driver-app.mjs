@@ -65,9 +65,15 @@ if (want("T2")) {
   await me.jump(4); await me.emit(CHURCH); await me.wait(1500);
   const ended = /Trip finished/.test(await me.text("#stopsBody"));
   const offered = (await buttons(me)).includes("It has not finished, reopen it");
-  let reopened = false, undoPosted = false;
+  let reopened = false, undoPosted = false, asked = false, kept = false;
   if (offered) {
+    /* v1.143.0: it asks first, and Keep it ended keeps it. */
     await me.click("It has not finished, reopen it", "#s-stops"); await me.wait(200);
+    asked = /Reopen the run\?/.test(await me.text("#undoModal"));
+    await me.click("Keep it ended", "#undoModal", true); await me.wait(300);
+    kept = /Trip finished/.test(await me.text("#stopsBody")) && !me.posted.some(p => p.action === "trip" && (p.trip.events || []).some(e => e.event === "undo"));
+    await me.click("It has not finished, reopen it", "#s-stops"); await me.wait(200);
+    await me.click("Reopen", "#undoModal", true); await me.wait(200);
     const toast = await me.toast();
     /* two polls while the board still carries the old end */
     await me.wait(11000);
@@ -76,7 +82,7 @@ if (want("T2")) {
     undoPosted = me.posted.some(p => p.action === "trip" && (p.trip.events || []).some(e => e.event === "undo" && e.undoes === "end"));
   }
   check("T2", "after an automatic end, «It has not finished, reopen it» appears and reopens the run",
-        ended && offered && reopened && undoPosted, "ended " + ended + ", offered " + offered + ", reopened " + reopened + ", undo sent " + undoPosted);
+        ended && offered && asked && kept && reopened && undoPosted, "ended " + ended + ", offered " + offered + ", asked " + asked + ", kept " + kept + ", reopened " + reopened + ", undo sent " + undoPosted);
   await me.ctx.close();
 }
 
@@ -96,6 +102,7 @@ if (want("T2b")) {
   let reopened = false;
   if (offered) {
     await me.click("It has not finished, reopen it", "#s-stops"); await me.wait(200);
+    await me.click("Reopen", "#undoModal", true); await me.wait(200);
     const toast = await me.toast();
     await me.wait(800);
     reopened = /Run reopened/.test(toast) && (await footGone(me));
@@ -130,6 +137,7 @@ if (want("T2c")) {
   let reopened = false;
   if (offered) {
     await me.click("It has not finished, reopen it", "#s-stops"); await me.wait(200);
+    await me.click("Reopen", "#undoModal", true); await me.wait(200);
     const toast = await me.toast();
     await me.wait(800);
     reopened = /Run reopened/.test(toast) && (await footGone(me));
@@ -1314,6 +1322,72 @@ if (want("T46")) {
   check("T46", "back from Maps standing at the next stop, never seen moving: the pop-up comes up there and Picked up goes",
         !atLast && up.up && /Grace Road/.test(up.text) && !!sent.at && !me.errs.length,
         JSON.stringify({ atLast, up, sent, errs: me.errs }));
+  await me.ctx.close();
+}
+
+/* T47 — v1.143.0 (Asim, 2 Nov 2026). The sent check is a final arrival: a
+   swipe back from it goes home, never into the check, also after a look at
+   Stops and bookings. From Start trip on, Back on Stops goes home, never to
+   the sent check, with the PIN kept while the run is live. */
+if (want("T47")) {
+  const sent = async () => {
+    const me = await phone({ clock: "2026-09-27T09:50:00+01:00", world: { checks: okCheck() } });
+    await me.load(); await me.close(["howDone"]);
+    await me.signIn();
+    await me.fullCheck({ bus: "NH56 FWP" });
+    await me.close();
+    return me;
+  };
+  const a = await sent();
+  const at1 = await a.where();
+  await a.pg.goBack(); await a.wait(600);
+  const back1 = await a.where();
+  await a.ctx.close();
+
+  const b = await sent();
+  await b.click("Start your run", "#footbar"); await b.wait(1300); await b.close();
+  const at2 = await b.where();
+  await b.clickId("stopsBack"); await b.wait(400);
+  const back2 = await b.where();
+  await b.pg.goBack(); await b.wait(600);
+  const back3 = await b.where();
+  await b.ctx.close();
+
+  const c = await sent();
+  await c.click("Start your run", "#footbar"); await c.wait(1300); await c.close();
+  await c.jump(11);
+  await c.click("Start trip · NH56 FWP", "#s-stops"); await c.wait(1500); await c.close();
+  await c.clickId("stopsBack"); await c.wait(500);
+  const back4 = await c.where();
+  const pin = await c.pg.evaluate(() => !pinGateNeeded());
+  await c.click("Stops and bookings", "#s-hub"); await c.wait(1200); await c.close();
+  await c.pg.evaluate(() => tripAutoEnd()); await c.wait(500);
+  await c.clickId("stopsBack"); await c.wait(400);
+  const back5 = await c.where();
+  check("T47", "the sent check is final: back from it goes home; from Start trip, Back on Stops goes home with the PIN kept",
+        at1 === "s-sent" && back1 === "s-hub" && at2 === "s-stops" && back2 === "s-sent" && back3 === "s-hub" &&
+        back4 === "s-hub" && pin && back5 === "s-hub" && !c.errs.length,
+        JSON.stringify({ at1, back1, at2, back2, back3, back4, pin, back5, errs: c.errs }));
+  await c.ctx.close();
+}
+
+/* T48 — v1.143.0. Started from the sent check and ended at Church, Done on
+   Stops goes straight home, the check cleared. */
+if (want("T48")) {
+  const me = await phone({ clock: "2026-09-27T09:50:00+01:00", world: { checks: okCheck() } });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn();
+  await me.fullCheck({ bus: "NH56 FWP" });
+  await me.close();
+  await me.click("Start your run", "#footbar"); await me.wait(1300); await me.close();
+  await me.jump(11);
+  await me.click("Start trip · NH56 FWP", "#s-stops"); await me.wait(1500); await me.close();
+  await me.pg.evaluate(() => tripAutoEnd()); await me.wait(800);
+  await me.click("Done", "#footbar"); await me.wait(500);
+  const where = await me.where();
+  const cleared = await me.pg.evaluate(() => st.veh === null);
+  check("T48", "after the run ends, Done on Stops goes home, not to the sent check",
+        where === "s-hub" && cleared && !me.errs.length, JSON.stringify({ where, cleared, errs: me.errs }));
   await me.ctx.close();
 }
 
