@@ -65,9 +65,15 @@ if (want("T2")) {
   await me.jump(4); await me.emit(CHURCH); await me.wait(1500);
   const ended = /Trip finished/.test(await me.text("#stopsBody"));
   const offered = (await buttons(me)).includes("It has not finished, reopen it");
-  let reopened = false, undoPosted = false;
+  let reopened = false, undoPosted = false, asked = false, kept = false;
   if (offered) {
+    /* v1.143.0: it asks first, and Keep it ended keeps it. */
     await me.click("It has not finished, reopen it", "#s-stops"); await me.wait(200);
+    asked = /Reopen the run\?/.test(await me.text("#undoModal"));
+    await me.click("Keep it ended", "#undoModal", true); await me.wait(300);
+    kept = /Trip finished/.test(await me.text("#stopsBody")) && !me.posted.some(p => p.action === "trip" && (p.trip.events || []).some(e => e.event === "undo"));
+    await me.click("It has not finished, reopen it", "#s-stops"); await me.wait(200);
+    await me.click("Reopen", "#undoModal", true); await me.wait(200);
     const toast = await me.toast();
     /* two polls while the board still carries the old end */
     await me.wait(11000);
@@ -76,7 +82,7 @@ if (want("T2")) {
     undoPosted = me.posted.some(p => p.action === "trip" && (p.trip.events || []).some(e => e.event === "undo" && e.undoes === "end"));
   }
   check("T2", "after an automatic end, «It has not finished, reopen it» appears and reopens the run",
-        ended && offered && reopened && undoPosted, "ended " + ended + ", offered " + offered + ", reopened " + reopened + ", undo sent " + undoPosted);
+        ended && offered && asked && kept && reopened && undoPosted, "ended " + ended + ", offered " + offered + ", asked " + asked + ", kept " + kept + ", reopened " + reopened + ", undo sent " + undoPosted);
   await me.ctx.close();
 }
 
@@ -96,6 +102,7 @@ if (want("T2b")) {
   let reopened = false;
   if (offered) {
     await me.click("It has not finished, reopen it", "#s-stops"); await me.wait(200);
+    await me.click("Reopen", "#undoModal", true); await me.wait(200);
     const toast = await me.toast();
     await me.wait(800);
     reopened = /Run reopened/.test(toast) && (await footGone(me));
@@ -130,6 +137,7 @@ if (want("T2c")) {
   let reopened = false;
   if (offered) {
     await me.click("It has not finished, reopen it", "#s-stops"); await me.wait(200);
+    await me.click("Reopen", "#undoModal", true); await me.wait(200);
     const toast = await me.toast();
     await me.wait(800);
     reopened = /Run reopened/.test(toast) && (await footGone(me));

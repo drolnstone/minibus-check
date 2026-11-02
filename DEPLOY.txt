@@ -9,7 +9,8 @@ Driver app only. The sent check is final: a swipe back from it goes
 home, never into the check. Opened from it with Start your run, Stops and
 bookings' Back returns to it only before Start trip; from Start trip on,
 Back and Done go home with the check cleared (the PIN kept while the run
-is live). On a Sunday the parked mileage box shows on the
+is live). "It has not finished, reopen it" (after a Church fence end) now
+asks "Reopen the run?" with Keep it ended / Reopen, like Undo. On a Sunday the parked mileage box shows on the
 home screen as soon as the driver's run ends, faded and shut until 12:00
 ("· from 12:00"), then opens for typing. Its checks and the 14:00 red
 line are unchanged.

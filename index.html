@@ -7121,6 +7121,25 @@ function tripUndoAsk(stop){
   tripPaintMoving();
 }
 
+/* Reopening a run the fence ended asks first, in Undo's pop-up (v1.143.0,
+   Asim, 2 Nov 2026). */
+function tripAutoUndoAsk(){
+  if(!tripMayReopen(trip.route)){ tripPaint(); return; }
+  undoAskId="reopen";
+  $("undoBody").innerHTML=
+    '<p class="eyebrow">'+esc(trip.route)+' · ended '+tripClock(trip.ended)+'</p>'+
+    '<h2 id="undoTitle">Reopen the run?</h2>'+
+    '<div class="pick-btns" style="margin-top:14px">'+
+      '<button class="btn btn-ghost" type="button" id="undoKeep">Keep it ended</button>'+
+      '<button class="btn btn-stop" type="button" id="undoYes">Reopen</button>'+
+    '</div>';
+  $("undoKeep").addEventListener("click", tripUndoClose);
+  $("undoYes").addEventListener("click", function(){ tripUndoClose(); tripAutoUndo(); });
+  var box=$("undoModal");
+  box.classList.add("is-on");
+  box.setAttribute("aria-hidden","false");
+}
+
 function tripUndoClose(){
   undoAskId="";
   var box=$("undoModal");
@@ -8629,7 +8648,7 @@ function rotaPaintStops(){
       try{ $("driver").focus(); }catch(e){}
     }
   }
-  if($("tripAutoUndo")) $("tripAutoUndo").addEventListener("click",tripAutoUndo);
+  if($("tripAutoUndo")) $("tripAutoUndo").addEventListener("click",tripAutoUndoAsk);
   if($("tripCover")) $("tripCover").addEventListener("click",function(){
     /* His name on the record is the whole point of this, so the PIN gate
        comes before the claim rather than after it. */
