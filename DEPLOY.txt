@@ -1,22 +1,24 @@
 MINIBUS
 =======
-  pages v1.143.0 · server w2.75.0 · sheet v1.130.0
+  pages v1.144.0 · server w2.76.0 · sheet v1.130.0
 
-YOU ARE ON   app v1.142.0 · server w2.75.0 · sheet v1.130.0
-GOING TO     app v1.143.0 · server w2.75.0 · sheet v1.130.0
+YOU ARE ON   app v1.143.0 · server w2.75.0 · sheet v1.130.0
+GOING TO     app v1.144.0 · server w2.76.0 · sheet v1.130.0
 
-Driver app only. The sent check is final: a swipe back from it goes
-home, never into the check. Opened from it with Start your run, Stops and
-bookings' Back returns to it only before Start trip; from Start trip on,
-Back and Done go home with the check cleared (the PIN kept while the run
-is live). "It has not finished, reopen it" (after a Church fence end) now
-asks "Reopen the run?" with Keep it ended / Reopen, like Undo. On a Sunday the parked mileage box shows on the
-home screen as soon as the driver's run ends, faded and shut until 12:00
-("· from 12:00"), then opens for typing. Its checks and the 14:00 red
-line are unchanged.
+Hand over. Coordinator app, Rota, today's Sunday: each route whose run
+has started shows a Run row (driver · on the road, or · parked mileage to
+key) with Hand over. Pick the driver taking it; the man holding it and the
+other route's driver while his run is still going are greyed. The run
+moves to him at once: he carries on from the next stop on his own phone
+under his own name, or keys the parked mileage if the run is over. The
+old driver's phone lets the run go ("Run handed to ...") and its taps are
+refused. The Rota cover becomes the new driver, the Rota gets a note
+"North run handed to ... at HH:MM by ... (was ...)", the same line goes on
+the run's start row in Trip Events, and each tap stays under the name of
+whoever made it. Both drivers and the other coordinators get "Change by".
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: app v1.143.0, server w2.75.0.
-B. Sunday, driver after his run: Done on Stops and bookings opens the home screen, not the sent check; the parked mileage box is faded until 12:00, then open.
+A. Coordinator app, App info: app v1.144.0, server w2.76.0.
+B. Next Sunday, only if a swap is needed: Rota, today, Run row, Hand over.

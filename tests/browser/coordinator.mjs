@@ -2008,6 +2008,54 @@ if (want("C58")) {
   await p.ctx.close();
 }
 
+/* C59 — Hand over (v1.144.0, Asim, 2 Nov 2026): today's run on the Sunday
+   screen, a Run row with Hand over, the man holding it greyed, and the act
+   sent as a cover change carrying the route. The server half is suite 81. */
+if (want("C59")) {
+  const p = await page(env);
+  try {
+    await p.signIn(PIN);
+    /* The Sunday screen's first Sunday stands in for today, whatever day the
+       check runs on. */
+    const key = await p.pg.evaluate(() => { const r = rows().filter((x) => x.date >= D.today)[0]; D.today = r.date; return r.date; });
+    const holder = await p.pg.evaluate(() => activeDrivers()[0].name);
+    await p.pg.evaluate((h) => {
+      D.runs = { North: { trip: "t-hand", driver: h, reg: "X", started: Date.now() - 600000, ended: 0 } };
+      window.__sent = [];
+      api = function(op, extra){ window.__sent.push({ op: op, extra: extra });
+        return Promise.resolve({ ok: true, action: { words: "Done." } }); };
+    }, holder);
+    await p.pg.evaluate((k) => { location.hash = "sunday/" + k; }, key);
+    await p.wait(600);
+    const row = await p.pg.evaluate(() => {
+      const b = document.querySelector('#sundayBody [data-do="handover"][data-route="North"]');
+      return b ? b.closest(".row").textContent : "";
+    });
+    if (!row) throw new Error("no Run row: " + (await p.pg.evaluate(() => location.hash + " " + document.querySelector("#sundayBody").textContent.slice(0, 300))));
+    await p.pg.evaluate(() => document.querySelector('#sundayBody [data-do="handover"][data-route="North"]').click());
+    await p.wait(300);
+    const greyed = await p.pg.evaluate((h) => {
+      const b = Array.prototype.find.call(document.querySelectorAll("#sheetBody [data-pick]"), (x) => x.getAttribute("data-pick") === h);
+      return !!(b && b.disabled);
+    }, holder);
+    const taker = await p.pg.evaluate(() => {
+      const b = Array.prototype.find.call(document.querySelectorAll("#sheetBody [data-pick]"), (x) => !x.disabled);
+      b.click(); return b.getAttribute("data-pick");
+    });
+    const go = await p.pg.textContent("#sheetGo");
+    await p.shot("C59-hand-over");
+    await p.pg.evaluate(() => document.getElementById("sheetGo").click());
+    await p.wait(300);
+    const sent = await p.pg.evaluate(() => window.__sent.filter((x) => x.op === "act").map((x) => x.extra.act));
+    const a = sent[0] || {};
+    const ok = row.indexOf(holder) !== -1 && /on the road/.test(row) && greyed && go === "Hand North to " + taker &&
+               a.kind === "rota" && a.handover === "North" && a.set && a.set.northCover === taker && a.sunday === key;
+    check("C59", "Hand over: today's run on the Sunday screen goes to the driver picked, as a cover change with the route",
+          ok && !p.errs.length, JSON.stringify({ row, greyed, go, sent, errs: p.errs }).slice(0, 900));
+  } catch (e) { stopped("C59", e); }
+  await p.ctx.close();
+}
+
 await done();
 cleanup(ROOT);
 const bad = results.filter((r) => !r.ok);

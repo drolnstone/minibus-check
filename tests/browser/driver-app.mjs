@@ -1391,6 +1391,43 @@ if (want("T48")) {
   await me.ctx.close();
 }
 
+/* T49 — HAND OVER (v1.144.0, Asim, 2 Nov 2026). A coordinator hands the run
+   to another driver: the phone that was driving lets it go and says to whom. */
+if (want("T49")) {
+  const me = await phone({ clock: "2026-09-27T09:50:00+01:00", world: { checks: okCheck() } });
+  await startRun(me);
+  const before = await me.pg.evaluate(() => trip.id);
+  const t = me.world.trips.North;
+  t.driver = "Bro Somebody"; t.handed = { from: "x", to: "Bro Somebody", at: Date.now() };
+  await me.pg.evaluate(() => rotaCountsFetch()); await me.wait(1500);
+  const after = await me.pg.evaluate(() => ({ id: trip.id, toast: document.getElementById("toast").textContent }));
+  check("T49", "a run handed to another driver is let go on this phone, with whose it is now",
+        !!before && after.id === "" && after.toast === "Run handed to Bro Somebody." && !me.errs.length,
+        JSON.stringify({ before, after, errs: me.errs }));
+  await me.ctx.close();
+}
+
+/* T50 — and the driver it was handed to picks it up on its route, wherever
+   the rota has him, with the stops already marked. */
+if (want("T50")) {
+  const me = await phone({ clock: "2026-09-27T10:20:00+01:00", world: { checks: okCheck() } });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn();
+  const name = await me.pg.evaluate(() => st.driver);
+  me.world.trips.North = { trip: "t-handed", route: "North", reg: "NH56 FWP", driver: name,
+    started: Date.parse("2026-09-27T09:52:00+01:00"), ended: 0,
+    served: { N01: { at: Date.parse("2026-09-27T10:04:00+01:00"), event: "pickup" } },
+    lastStop: "", lastAt: 0, offset: null, handed: { from: "Bro Somebody", to: name, at: Date.now() } };
+  me.world.myRun = "North";
+  await me.pg.evaluate(() => rotaCountsFetch()); await me.wait(1200);
+  await me.toStops(); await me.close(); await me.wait(1500);
+  const got = await me.pg.evaluate(() => ({ route: rotaMyRoute(), id: trip.id, served: Object.keys(trip.served || {}) }));
+  check("T50", "the driver a run is handed to picks it up on its route, its marked stops kept",
+        got.route === "North" && got.id === "t-handed" && got.served.join() === "N01" && !me.errs.length,
+        JSON.stringify({ got, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

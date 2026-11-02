@@ -1796,7 +1796,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.143.0";
+var APP_VERSION = "v1.144.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -5678,10 +5678,13 @@ function myPhone(){
 }
 /* The run is on another phone now: its taps waiting here are dropped, and
    the run with them. */
-function tripLetGo(runId){
+function tripLetGo(runId, words){
   tripSaveQ(tripLoadQ().filter(function(e){ return (e.trip||"")!==runId; }));
-  if(trip.id===runId){ tripClearRun(); toast("Run moved to another phone."); }
+  if(trip.id===runId){ tripClearRun(); toast(words || "Run moved to another phone."); }
 }
+/* HANDED OVER (v1.144.0, Asim, 2 Nov 2026): a coordinator gave the run to
+   another driver, so this phone lets it go. */
+function tripHandedWords(to){ return "Run handed to " + (to || "another driver") + "."; }
 function tripLoadQ(){ try{ return JSON.parse(store.get(TQKEY)||"[]"); }catch(e){ return []; } }
 function tripSaveQ(a){ store.set(TQKEY, JSON.stringify(a)); }
 
@@ -5802,8 +5805,8 @@ function tripFlush(){
   }).then(function(r){ return r.text(); }).then(function(t){
     var out=JSON.parse(t);
     tripBusy=false;
-    if(out && out.error==="other phone"){
-      tripLetGo(runId);
+    if(out && (out.error==="other phone" || out.error==="handed over")){
+      tripLetGo(runId, out.error==="handed over" ? tripHandedWords(out.run && out.run.driver) : "");
       tripPaint();
       tripPaintWait();
       return;
@@ -7249,6 +7252,8 @@ function boardFixPart(route){
 }
 
 var rotaCountsAgain=null;
+/* The route of his open run, as the last board said (v1.144.0). */
+var boardMyRun={ route:"", day:"", who:"" };
 /* Also learned here, because a driver can spend a whole morning on the stops
    screen without the rota ever being fetched. */
 function rotaCountsFetch(route,cb){
@@ -7274,6 +7279,7 @@ function rotaCountsFetch(route,cb){
       if(!out||out.ok!==true) throw new Error("board unavailable");
       scriptSeen(out);
       seatsSeen(out);
+      if(who) boardMyRun={ route: String(out.myRun||""), day: new Date().toDateString(), who: who };
 
       var before=tripSig();
       /* A part of the answer may be missing now: the server fences each one
@@ -7417,6 +7423,11 @@ function tripMerge(route, tp){
      still talking: never taken, and let go if this phone held it. */
   if(srvId && tp.phone && tp.phone.here===false){
     tripLetGo(srvId);
+    return;
+  }
+  /* Handed to another driver (v1.144.0). */
+  if(srvId && trip.id===srvId && tp.handed && tp.driver && !sameName(tp.driver, st.driver||"")){
+    tripLetGo(srvId, tripHandedWords(tp.driver));
     return;
   }
 
@@ -7962,6 +7973,10 @@ function sameName(a,b){
 function rotaMyRoute(){
   var me=(st.driver||"").trim();
   if(!me) return null;
+  /* His open run first, wherever the rota has him (v1.144.0): a run handed
+     to him can be on the other route. */
+  if(boardMyRun.route && boardMyRun.day===new Date().toDateString() && sameName(boardMyRun.who, me))
+    return boardMyRun.route;
   var d=rotaBaseSunday(0), row=rotaRowFor(rotaKey(d));
   var nPrimary=(row&&row.primary)||rotaSeedPrimary(d);
   var nActual=(row&&row.actual)||nPrimary;
