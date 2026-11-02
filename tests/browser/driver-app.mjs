@@ -1317,6 +1317,72 @@ if (want("T46")) {
   await me.ctx.close();
 }
 
+/* T47 — v1.143.0 (Asim, 2 Nov 2026). The sent check is a final arrival: a
+   swipe back from it goes home, never into the check, also after a look at
+   Stops and bookings. From Start trip on, Back on Stops goes home, never to
+   the sent check, with the PIN kept while the run is live. */
+if (want("T47")) {
+  const sent = async () => {
+    const me = await phone({ clock: "2026-09-27T09:50:00+01:00", world: { checks: okCheck() } });
+    await me.load(); await me.close(["howDone"]);
+    await me.signIn();
+    await me.fullCheck({ bus: "NH56 FWP" });
+    await me.close();
+    return me;
+  };
+  const a = await sent();
+  const at1 = await a.where();
+  await a.pg.goBack(); await a.wait(600);
+  const back1 = await a.where();
+  await a.ctx.close();
+
+  const b = await sent();
+  await b.click("Start your run", "#footbar"); await b.wait(1300); await b.close();
+  const at2 = await b.where();
+  await b.clickId("stopsBack"); await b.wait(400);
+  const back2 = await b.where();
+  await b.pg.goBack(); await b.wait(600);
+  const back3 = await b.where();
+  await b.ctx.close();
+
+  const c = await sent();
+  await c.click("Start your run", "#footbar"); await c.wait(1300); await c.close();
+  await c.jump(11);
+  await c.click("Start trip · NH56 FWP", "#s-stops"); await c.wait(1500); await c.close();
+  await c.clickId("stopsBack"); await c.wait(500);
+  const back4 = await c.where();
+  const pin = await c.pg.evaluate(() => !pinGateNeeded());
+  await c.click("Stops and bookings", "#s-hub"); await c.wait(1200); await c.close();
+  await c.pg.evaluate(() => tripAutoEnd()); await c.wait(500);
+  await c.clickId("stopsBack"); await c.wait(400);
+  const back5 = await c.where();
+  check("T47", "the sent check is final: back from it goes home; from Start trip, Back on Stops goes home with the PIN kept",
+        at1 === "s-sent" && back1 === "s-hub" && at2 === "s-stops" && back2 === "s-sent" && back3 === "s-hub" &&
+        back4 === "s-hub" && pin && back5 === "s-hub" && !c.errs.length,
+        JSON.stringify({ at1, back1, at2, back2, back3, back4, pin, back5, errs: c.errs }));
+  await c.ctx.close();
+}
+
+/* T48 — v1.143.0. Started from the sent check and ended at Church, Done on
+   Stops goes straight home, the check cleared. */
+if (want("T48")) {
+  const me = await phone({ clock: "2026-09-27T09:50:00+01:00", world: { checks: okCheck() } });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn();
+  await me.fullCheck({ bus: "NH56 FWP" });
+  await me.close();
+  await me.click("Start your run", "#footbar"); await me.wait(1300); await me.close();
+  await me.jump(11);
+  await me.click("Start trip · NH56 FWP", "#s-stops"); await me.wait(1500); await me.close();
+  await me.pg.evaluate(() => tripAutoEnd()); await me.wait(800);
+  await me.click("Done", "#footbar"); await me.wait(500);
+  const where = await me.where();
+  const cleared = await me.pg.evaluate(() => st.veh === null);
+  check("T48", "after the run ends, Done on Stops goes home, not to the sent check",
+        where === "s-hub" && cleared && !me.errs.length, JSON.stringify({ where, cleared, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

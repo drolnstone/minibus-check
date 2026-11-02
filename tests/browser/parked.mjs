@@ -13,8 +13,8 @@ function check(id, name, ok, detail) {
 }
 const REG = "YS70 PWE";
 
-async function hub(forWho, answer) {
-  const me = await phone({ clock: "2026-09-27T14:40:00+01:00", timezoneId: "Europe/London" });
+async function hub(forWho, answer, clock) {
+  const me = await phone({ clock: clock || "2026-09-27T14:40:00+01:00", timezoneId: "Europe/London" });
   const got = [];
   const open = [{ reg: REG, checkId: "c1", day: "2026-09-27", miles: 31544, driver: forWho, parked: null }];
   await me.pg.route("**://*.workers.dev/**", async (route) => {
@@ -163,6 +163,32 @@ async function hub(forWho, answer) {
   check("P13", "a correction keyed while the first was sending is sent after it, and shown",
         me.got.length === 2 && me.got[1].parked.miles === 31560 && /31,560/.test(t) && !/31,650/.test(t),
         JSON.stringify(me.got.map((g) => g.parked.miles)) + " | " + t);
+  await me.ctx.close();
+}
+
+/* P14-P16, v1.143.0 (Asim, 2 Nov 2026): after the morning run the box is on
+   the hub, faded and shut until 12:00, then open without a reload. */
+{
+  const me = await hub(SAMPLE, null, "2026-09-27T11:59:20+01:00");
+  const card = await me.text("#hubParked");
+  const shut = await me.pg.evaluate(() => {
+    const i = document.getElementById("parkMiles0"), c = i && i.closest(".dw");
+    return !!i && i.disabled && c.classList.contains("park-shut") && Number(getComputedStyle(c).opacity) < 1;
+  });
+  check("P14", "before 12:00 the box is shown faded and shut", shut && /from 12:00/.test(card), "card: " + card);
+  await me.shot("parked-4-shut", { scrollTo: "#hubParked" });
+  await me.pg.evaluate(() => { const b = document.querySelector("[data-park-save]"); if (b) b.click(); });
+  await me.wait(400);
+  check("P15", "nothing is sent before 12:00", me.got.length === 0, JSON.stringify(me.got));
+  await me.wait(75000);
+  const open = await me.pg.evaluate(() => { const i = document.getElementById("parkMiles0"); return !!i && !i.disabled; });
+  if (open) {
+    await me.pg.fill("#parkMiles0", "31560");
+    await me.click("Save", "#hubParked");
+    await me.wait(800);
+  }
+  check("P16", "from 12:00 it opens by itself and takes the reading", open && me.got.length === 1 && me.got[0].parked.miles === 31560,
+        open + " " + JSON.stringify(me.got));
   await me.ctx.close();
 }
 

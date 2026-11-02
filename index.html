@@ -841,6 +841,9 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .park-row input{flex:1 1 auto;min-width:0}
 .park-row .btn{flex:0 0 auto;width:auto;padding-left:18px;padding-right:18px}
 .park-say{margin-top:6px}
+/* Shut until noon (v1.143.0): seen, faded, not typed into. */
+.park-shut{opacity:.5}
+.park-shut input,.park-shut .btn{pointer-events:none}
 .park-due{margin:6px 0 8px;padding:11px 12px;border-radius:8px;
   background:var(--stop);color:var(--stop-on);font-weight:700;text-align:center}
 /* The confirm-it-is-you panel, in the trip strip and in the request form. */
@@ -1793,7 +1796,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.142.0";
+var APP_VERSION = "v1.143.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -3374,14 +3377,17 @@ window.addEventListener("popstate", function(){
 });
 
 /** Clears the finished check and returns to the first screen. */
-function goHome(){
+function goHome(keepPin){
   st.veh=null; st.res={}; st.stage=0; st.miles=""; st.mileOk=false; st.sign=""; st.mode="pre"; st.modeSet=false;
   st.fuel=null; st.jobs=[];
   /* The PIN goes with the check it belonged to. It used to survive all the
      way back to the home screen still filled in, so the next person to pick
-     up the phone was already past the gate. */
-  st.pin=""; st.pinOk=false; st.pinState="";
-  if($("pin")) $("pin").value="";
+     up the phone was already past the gate. Kept only for a run still
+     live, whose stop taps are his (v1.143.0). */
+  if(keepPin !== true){
+    st.pin=""; st.pinOk=false; st.pinState="";
+    if($("pin")) $("pin").value="";
+  }
   geo={status:"off"};
   stages=[]; ALL=[]; TOTAL=0; lastRec=null;
   paintBanner();
@@ -6485,17 +6491,29 @@ function parkHtml(){
            '<button type="button" class="dw-off" data-park-change="'+pid+'">Change</button></div>';
       return;
     }
-    h += '<div class="dw"><p class="dw-eyebrow">'+eyebrow+'</p>'+
+    /* Faded and shut until PARK_OPENS (v1.143.0, Asim, 2 Nov 2026): seen as
+       soon as the morning run ends, so he knows it is coming, but nothing
+       can be keyed into it before the afternoon. */
+    var shut = parkLocked();
+    h += '<div class="dw'+(shut ? ' park-shut' : '')+'"><p class="dw-eyebrow">'+eyebrow+'</p>'+
          (parkOverdue() ? '<p class="park-due">Parked mileage not received</p>' : '')+
-         '<label class="dw-sub" for="parkMiles'+i+'"><b>Mileage after the afternoon run</b>'+(walk ? ' · '+walk : '')+'</label>'+
+         '<label class="dw-sub" for="parkMiles'+i+'"><b>Mileage after the afternoon run</b>'+
+           (shut ? ' · from '+PARK_OPENS : '')+(walk ? ' · '+walk : '')+'</label>'+
          '<div class="park-row"><input id="parkMiles'+i+'" type="number" inputmode="numeric" class="mono" '+
-           'placeholder="e.g. '+esc(String((Number(o.miles)||57363) + 12))+'" autocomplete="off">'+
-         '<button class="btn btn-main" type="button" data-park-save="'+pid+'">Save</button></div>'+sayHtml+'</div>';
+           'placeholder="e.g. '+esc(String((Number(o.miles)||57363) + 12))+'" autocomplete="off"'+(shut ? ' disabled' : '')+'>'+
+         '<button class="btn btn-main" type="button" data-park-save="'+pid+'"'+(shut ? ' disabled' : '')+'>Save</button></div>'+sayHtml+'</div>';
   });
   return h;
 }
 /* From the 2pm reminder on a Sunday, the red box (v1.142.0, Asim, 2 Nov
    2026: drivers still pass it by). It goes once the mileage is keyed. */
+/* The parked box opens for typing at noon on a Sunday, the hour the live
+   server already uses for a bus checked but never run in the app. */
+var PARK_OPENS = "12:00";
+function parkLocked(){
+  var d = new Date(tripNow());
+  return d.getDay() === 0 && d.getHours() < 12;
+}
 function parkOverdue(){
   var d = new Date(tripNow());
   return d.getDay() === 0 && d.getHours() >= 14;
@@ -6526,7 +6544,7 @@ function parkOpenOf(id){
 function parkSend(id, inp){
   var o = parkOpenOf(id);
   /* A send in flight does not stop a correction: it is kept, and goes next. */
-  if(!o || !inp || !st.driver || !sameName(o.driver, st.driver)){ parkPaint(); return; }
+  if(!o || !inp || !st.driver || !sameName(o.driver, st.driver) || parkLocked()){ parkPaint(); return; }
   var raw = String(inp.value || "").replace(/[,\s]/g, "");
   /* Off the box, or the repaint that follows would wait for him to leave it. */
   try{ inp.blur(); }catch(e){}
@@ -6640,14 +6658,18 @@ function parkWanted(){
   var d = new Date();
   return d.getDay() === 0 && d.getHours() >= 10;
 }
+var parkShutWas = null;
 function parkStart(){
   parkStop();
+  parkShutWas = parkLocked();
   if(new Date().getDay() !== 0 && (PARKOPEN || []).length){ PARKOPEN = []; parkSave(); }
   parkFlush();
   parkPaint();
   if(st.screen !== "hub" || document.hidden || !parkWanted() || !LIVE) return;
   var ask = function(){
     if(st.screen !== "hub" || document.hidden){ parkStop(); return; }
+    /* Opens at noon without waiting for the live server's answer. */
+    if(parkShutWas !== parkLocked()){ parkShutWas = parkLocked(); parkPaint(); }
     if(Date.now() - parkAskedAt < 50000) return;
     parkAskedAt = Date.now();
     fetchLastMiles();
@@ -8031,6 +8053,15 @@ function stopsClose(){
   churchFor=null; churchSync();
   tripUndoClose();
   stopsAutoNext="";
+  /* Home once the run is over (v1.143.0, Asim, 2 Nov 2026). Opened from the
+     sent check with Start your run, Back and Done used to land him on that
+     check again, with Start your run gone and only a second Done to press.
+     goHome is that Done: the check cleared, and the hub, which carries the
+     parked mileage. Before Start trip, Back still goes to the check. */
+  /* And from Start trip on, never back to the check at all (Asim, 2 Nov
+     2026): the summary is behind him once the bus is out. With the run still
+     live his PIN stays, so his stop taps are not asked for it again. */
+  if(stopsFrom==="sent" && trip.started){ stopsFrom="hub"; goHome(!trip.ended); return; }
   show(stopsFrom||"driver");
 }
 
