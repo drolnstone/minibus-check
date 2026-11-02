@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.75.0";
+const SCRIPT_VERSION = "w2.76.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1810,6 +1810,11 @@ async function tripState(env, key, route) {
       state.offset = (r.off_min === null || r.off_min === undefined) ? null : Number(r.off_min);
     }
   }
+  /* Handed over (w2.76.0): the run is the new driver's from then on. */
+  if (state.trip) {
+    const h = await handoverOf(env, state.trip);
+    if (h) { state.driver = h.to; state.handed = h; }
+  }
   return state;
 }
 
@@ -2414,7 +2419,8 @@ async function tripDriverPayload(env, route) {
     lastAt: state.lastAt || 0, lastStop: state.lastStop,
     lastStopId: state.lastStopId || "",
     offset: state.offset, served: state.served,
-    departWords: d ? d.time : ""
+    departWords: d ? d.time : "",
+    handed: state.handed ? { from: state.handed.from, to: state.handed.to, at: state.handed.at } : null
   };
 }
 
@@ -2448,6 +2454,38 @@ async function ensureRunPhones(env) {
     "  phone TEXT NOT NULL," +
     "  seen  INTEGER NOT NULL)").run();
   runPhonesReady = true;
+}
+
+/* HAND OVER, from w2.76.0 (Asim, 2 Nov 2026). A coordinator hands a route's
+   run to another driver from the coordinator app: mid-run, he carries on from
+   the next stop under his own name; after the run, the parked mileage is his
+   to key. The latest row for a trip names who holds it now. Trip Events keeps
+   each tap under the name of whoever made it, and the start row's note says
+   when the run changed hands. */
+let handoversReady = false;
+async function ensureHandovers(env) {
+  if (handoversReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS handovers (" +
+    "  id    INTEGER PRIMARY KEY AUTOINCREMENT," +
+    "  trip  TEXT NOT NULL," +
+    "  sunday TEXT NOT NULL," +
+    "  route TEXT NOT NULL," +
+    "  from_driver TEXT NOT NULL," +
+    "  to_driver TEXT NOT NULL," +
+    "  by_name TEXT NOT NULL," +
+    "  at    INTEGER NOT NULL)").run();
+  handoversReady = true;
+}
+async function handoverOf(env, trip) {
+  if (!trip) return null;
+  try {
+    await ensureHandovers(env);
+    const h = await env.DB.prepare(
+      "SELECT from_driver, to_driver, by_name, at FROM handovers WHERE trip=? ORDER BY at DESC, id DESC LIMIT 1")
+      .bind(String(trip)).first();
+    return h ? { from: String(h.from_driver), to: String(h.to_driver), by: String(h.by_name), at: Number(h.at) } : null;
+  } catch (e) { return null; }
 }
 
 /* Whether this phone may act for the run, and the run's record brought up to
@@ -2625,6 +2663,18 @@ async function boardPayload(env, route, phone, driver, fix, ctx) {
       t.phone = { here: await runPhoneTake(env, t.trip, ph, Date.now()) };
     }
   } catch (e) { /* the board as before */ }
+
+  /* HIS OPEN RUN, on whichever route (w2.76.0): a run handed to him need not
+     be on the route the rota puts him on, so his phone is told which. */
+  try {
+    const me = String(driver || "").trim();
+    if (me) {
+      for (const rt of routeNames(stops)) {
+        const t = rt === r && out.trip ? out.trip : await tripState(env, key, rt);
+        if (t && t.trip && t.started && !t.ended && sameName(t.driver, me)) { out.myRun = rt; break; }
+      }
+    }
+  } catch (e) {}
 
   /* WHERE THE BUS IS, from w2.72.0: only from the phone driving the run. The route is
      asked for after the answer has gone, so the poll is never slowed; its
@@ -2967,6 +3017,12 @@ async function handleTrip(env, payload) {
     } catch (e) {}
   }
 
+  /* HANDED OVER (w2.76.0): only the driver it was handed to acts for it. */
+  const handed = await handoverOf(env, trip);
+  if (handed && who && !sameName(handed.to, who)) {
+    return json({ ok: false, error: "handed over", run: { driver: handed.to, route: route } });
+  }
+
   /* ONE PHONE PER RUN (w2.59.0). Taps from a phone other than the one that
      holds the run are refused while that phone is still talking. */
   const phone = phoneOf(payload.phone);
@@ -3017,7 +3073,7 @@ async function handleTrip(env, payload) {
 
     const ownStart = events.some(
       (e) => String(e.event || "").trim().toLowerCase() === "start");
-    const owner = String((startRow && startRow.driver) || (ownStart ? who : "")).trim();
+    const owner = String((handed && handed.to) || (startRow && startRow.driver) || (ownStart ? who : "")).trim();
 
     if (owner && who && !sameName(owner, who)) {
       return json({ ok: false, error: "not your run", run: { driver: owner, route: route } });
@@ -10432,9 +10488,21 @@ async function coordLoad(env, me) {
     try {
       const t = await tripState(env, today, rt);
       out.runs[rt] = { trip: t.trip, driver: t.driver, reg: t.reg,
-                       started: t.started, ended: t.ended, lastStop: t.lastStop };
+                       started: t.started, ended: t.ended, lastStop: t.lastStop,
+                       handed: t.handed || null };
     } catch (e) {}
   }
+  /* From w2.76.0: an ended run whose parked mileage is still to key can be
+     handed over too. */
+  try {
+    const open = await parkedOpen(env);
+    for (const rt of Object.keys(out.runs)) {
+      const r = out.runs[rt];
+      if (!r.started || !r.ended) continue;
+      const o = open.filter((x) => x.reg === String(r.reg || "").toUpperCase())[0];
+      r.parkedOwed = !!(o && !o.parked);
+    }
+  } catch (e) {}
 
   /* Seats for the Sunday being driven and, once bookings have rolled over,
      the one they are open for. */
@@ -10975,12 +11043,25 @@ async function actRota(env, me, act) {
     }
     if (noteEdit.now && flat.indexOf(noteEdit.now) !== -1) return { ok: false, error: "That note is there already." };
   }
-  const next = rotaApplySet(cur, { set: set, note: note, noteEdit: noteEdit });
+  /* HAND OVER (w2.76.0): the route's cover becomes the driver taking the run,
+     and the run goes with it. */
+  let hand = null;
+  if (act.handover) {
+    hand = await handoverPlan(env, me, key, cur, act, set);
+    if (hand.error) return { ok: false, error: hand.error };
+  }
+  const next = rotaApplySet(cur, { set: set, note: hand ? hand.note : note, noteEdit: noteEdit });
 
-  /* One man, one bus, one morning. */
+  /* One man, one bus, one morning. A run handed to the man whose own run
+     that morning is over is the exception. */
   const nDrv = next.northCover || next.north, sDrv = next.southCover || next.south;
-  if (nDrv && sDrv && sameName(nDrv, sDrv)) {
+  if (nDrv && sDrv && sameName(nDrv, sDrv) && !(hand && hand.otherDone)) {
     return { ok: false, error: nDrv + " cannot drive both routes that morning." };
+  }
+  if (hand) {
+    return { ok: true, sunday: key, body: { sunday: key, set: set, note: hand.note, handover: hand.route },
+             tell: [hand.from, hand.to], words: hand.words, stmts: hand.stmts,
+             after: () => reapplyRawRota(env, [key]) };
   }
   const nBus = busResolve(key, "North", next.northBus, buses), sBus = busResolve(key, "South", next.southBus, buses);
   if (("northBus" in set || "southBus" in set) && nBus && sBus && nBus === sBus) {
@@ -10998,6 +11079,56 @@ async function actRota(env, me, act) {
   return { ok: true, sunday: key, body: body, tell: tell,
            words: rotaWords(key, cur, set, note, noteEdit),
            after: () => reapplyRawRota(env, [key]) };
+}
+
+/* What a hand over needs, checked before anything is written: today's run on
+   the route, started, and still open or with its parked mileage still to key;
+   an active driver who is not holding it already and is not out on the other
+   route. Answers the statements that move the run, or an error. */
+async function handoverPlan(env, me, key, cur, act, set) {
+  const route = String(act.handover || "").trim();
+  if (route !== "North" && route !== "South") return { error: "Pick North or South." };
+  const field = route === "South" ? "southCover" : "northCover";
+  const to = String(set[field] || "").trim();
+  const others = Object.keys(set).filter((f) => f !== field);
+  if (!to || others.length) return { error: "Choose who takes the run." };
+  if (key !== runSunday() || key !== londonKey(new Date()) || londonParts(new Date()).dow !== 0) {
+    return { error: "Only today's run can be handed over." };
+  }
+  const t = await tripState(env, key, route);
+  if (!t || !t.trip || !t.started) return { error: "The " + route + " run has not started." };
+  const from = String(t.driver || "").trim();
+  if (sameName(from, to)) return { error: to + " has the " + route + " run already." };
+  if (t.ended) {
+    const open = (await parkedOpen(env)).filter((o) => o.reg === String(t.reg || "").toUpperCase())[0];
+    if (!open || open.parked) return { error: "The " + route + " run is over and its parked mileage is in." };
+  }
+  const ot = route === "North" ? "South" : "North";
+  const o = await tripState(env, key, ot);
+  const oDrv = (o && o.started) ? String(o.driver || "")
+             : String((ot === "South" ? (cur.southCover || cur.south) : (cur.northCover || cur.north)) || "");
+  let otherDone = false;
+  if (oDrv && sameName(oDrv, to)) {
+    if (!(o && o.started && o.ended)) return { error: to + " is driving " + ot + " this morning." };
+    otherDone = true;
+  }
+  await ensureHandovers(env);
+  await ensureRunPhones(env);
+  const now = Date.now(), hhmm = londonHHMM(new Date(now));
+  const line = route + " run handed to " + to + " at " + hhmm + " by " + me.name + " (was " + (from || "nobody") + ").";
+  const stmts = [
+    env.DB.prepare("INSERT INTO handovers (trip, sunday, route, from_driver, to_driver, by_name, at) VALUES (?,?,?,?,?,?,?)")
+      .bind(t.trip, key, route, from, to, me.name, now),
+    /* The new driver's phone takes the run at once. */
+    env.DB.prepare("DELETE FROM run_phones WHERE trip=?").bind(t.trip)
+  ];
+  if (await ensureFixCol(env)) {
+    stmts.push(env.DB.prepare(
+      "UPDATE trip_events SET fix_note=CASE WHEN fix_note='' THEN ? ELSE fix_note || ' ' || ? END, synced=0 " +
+      "WHERE trip=? AND event='start' AND status<>'Undone'").bind(line, line, t.trip));
+  }
+  return { route, from, to, otherDone, stmts, note: line,
+           words: route + ": run handed to " + to + " (was " + (from || "nobody") + ")." };
 }
 
 async function actDecide(env, me, act) {

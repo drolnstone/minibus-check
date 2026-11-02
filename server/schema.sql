@@ -405,6 +405,20 @@ CREATE TABLE IF NOT EXISTS run_phones (
   seen  INTEGER NOT NULL             -- ms, when that phone was last heard from
 );
 
+-- HAND OVER, from w2.76.0: a run a coordinator handed to another driver. The
+-- latest row for a trip names who holds it now. Created by the Worker on
+-- first use.
+CREATE TABLE IF NOT EXISTS handovers (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  trip        TEXT NOT NULL,
+  sunday      TEXT NOT NULL,
+  route       TEXT NOT NULL,
+  from_driver TEXT NOT NULL,
+  to_driver   TEXT NOT NULL,
+  by_name     TEXT NOT NULL,
+  at          INTEGER NOT NULL       -- ms
+);
+
 -- A sign-in key per phone, from w2.64.0: a right PIN gets the driver app a
 -- key, sent with walkarounds, runs, rota requests and MOT runs. Only a
 -- fingerprint of it is kept. The Worker also creates this itself.

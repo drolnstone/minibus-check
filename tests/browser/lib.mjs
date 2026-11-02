@@ -230,6 +230,8 @@ export async function phone(opts = {}) {
           trip: "", route: r, reg: "", driver: "", started: 0, ended: 0, served: {},
           lastAt: 0, lastStop: "", offset: null }, t || {})
       };
+      /* The route of the asking driver's open run, from w2.76.0. */
+      if (world.myRun) body.myRun = world.myRun;
     }
     /* A phone that has never had the rota: the name list has not come. */
     else if (p.get("rota") && world.noRota) return route.abort();

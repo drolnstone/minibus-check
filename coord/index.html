@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.143.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.144.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -750,7 +750,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.143.0";
+var PAGE_VERSION = "v1.144.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1602,6 +1602,12 @@ function paintSunday(key){
     h += '<div class="row"><span class="k">Driver</span><span class="v'+(g.sched?'':' none')+'">'+esc(g.sched || 'Nobody')+'</span>' + btn(lo, "Change") + '</div>';
     h += '<div class="row"><span class="k">Cover</span><span class="v'+(g.cover?'':' none')+'">'+esc(g.cover || 'Nobody')+'</span>' + btn(lo + "Cover", g.cover ? "Change" : "Add") + '</div>';
     h += '<div class="row"><span class="k">Bus</span><span class="v">'+(g.bus ? '<span class="plate">'+esc(g.bus)+'</span>' : '<span class="none">Not known</span>')+'</span>' + btn("bus", "Change") + '</div>';
+    /* HAND OVER (v1.144.0, Asim, 2 Nov 2026): today's run, open or with its
+       parked mileage still to key, given to another driver. */
+    var run = key === D.today ? ((D.runs || {})[rt] || null) : null;
+    if(run && run.started && run.driver && (!run.ended || run.parkedOwed))
+      h += '<div class="row"><span class="k">Run</span><span class="v">'+esc(run.driver)+' · '+(run.ended ? 'parked mileage to key' : 'on the road')+'</span>' +
+           '<span class="acts"><button class="mini" type="button" data-do="handover" data-key="'+esc(key)+'" data-route="'+rt+'">Hand over</button></span></div>';
     /* The seats the Sunday card shows, and the way on to who holds them
        (Asim, 25 Oct 2026, from v1.131.0). Only where the card has them. */
     var sv = seats[rt];
@@ -1660,6 +1666,38 @@ function pickDriver(key, slot){
     },
     line: soon ? "The drivers are emailed." : "",
     onGo: function(name){ var set = {}; set[slot] = name === "-" ? "" : name; act({ kind:"rota", sunday:key, set:set }); }
+  });
+}
+
+/* Who could take a route's run: anybody active but the man holding it, and
+   not the other route's driver while his own run is not over. */
+function pickHandover(key, rt){
+  var run = (D.runs || {})[rt]; if(!run || !run.started) return;
+  var r = rowFor(key), l = r ? legs(r) : null, ot = rt === "North" ? "South" : "North";
+  var orun = (D.runs || {})[ot] || {};
+  var other = orun.started ? orun.driver : (l ? (l[ot].cover || l[ot].sched) : "");
+  var otherOut = other && !(orun.started && orun.ended) && !(r && isOff(r.status, ot));
+  var people = activeDrivers().map(function(d){
+    return { name:d.name, cur: same(d.name, run.driver), busy: !!otherOut && same(d.name, other) };
+  });
+  people.sort(function(a,b){
+    if(a.busy !== b.busy) return a.busy ? 1 : -1;
+    return a.name < b.name ? -1 : 1;
+  });
+  var list = '<ul class="pick">' + people.map(function(p){
+    var hint = p.cur ? "has the run" : p.busy ? "on " + ot + " this morning" : "";
+    return '<li><button type="button" data-pick="'+esc(p.name)+'"'+(p.cur || p.busy ? ' disabled' : '')+'><b>'+esc(p.name)+'</b><small>'+esc(hint)+'</small></button></li>';
+  }).join("") + '</ul>';
+  openSheet({
+    eyebrow: shortDay(key),
+    title: rt + " run",
+    body: list,
+    go: "Choose who takes it",
+    onPick: function(name){ return "Hand " + rt + " to " + name; },
+    onGo: function(name){
+      var set = {}; set[rt === "South" ? "southCover" : "northCover"] = name;
+      act({ kind:"rota", sunday:key, set:set, handover: rt });
+    }
   });
 }
 
@@ -3755,6 +3793,7 @@ document.addEventListener("click", function(e){
   else if(d === "status") setStatus(key, t.getAttribute("data-mode"));
   else if(d === "driver") pickDriver(key, t.getAttribute("data-slot"));
   else if(d === "bus") pickBus(key, t.getAttribute("data-route"));
+  else if(d === "handover") pickHandover(key, t.getAttribute("data-route"));
   else if(d === "note") addNote(key);
   else if(d === "noteedit") editNote(key, t.getAttribute("data-i"), false);
   else if(d === "noteoff") editNote(key, t.getAttribute("data-i"), true);
