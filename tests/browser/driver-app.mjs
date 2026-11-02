@@ -1276,16 +1276,17 @@ if (want("T45")) {
   await me.jump(64); await me.emit(AWAY); await me.wait(11500);
   const asked = await box("pickModal");
   await me.shot("T45-ask-stop");
-  await me.pg.evaluate(() => document.querySelector('#pickModal [data-pick="pickup"]').click());
+  /* ?. so a pop-up that never came up is a ✗ here, not a crash that hides every check after it. */
+  await me.pg.evaluate(() => document.querySelector('#pickModal [data-pick="pickup"]')?.click());
   await me.wait(2500);
   const sent = me.posted.map(p => p.trip && (p.trip.events || []).find(e => e.event === "pickup")).find(Boolean) || {};
   await me.wait(11000);
   const church = await box("churchModal");
   await me.shot("T45-ask-church");
-  await me.pg.evaluate(() => document.querySelector("[data-churchyes]").click()); await me.wait(400);
+  await me.pg.evaluate(() => document.querySelector("[data-churchyes]")?.click()); await me.wait(400);
   const refused = await me.toast();
   await me.emit(CHURCH); await me.wait(500);
-  await me.pg.evaluate(() => document.querySelector("[data-churchyes]").click()); await me.wait(1500);
+  await me.pg.evaluate(() => document.querySelector("[data-churchyes]")?.click()); await me.wait(1500);
   const end = me.posted.map(p => p.trip && (p.trip.events || []).find(e => e.event === "end")).find(Boolean) || {};
   const gone = await box("churchModal");
   check("T45", "past Church time the red pop-up asks about the unanswered stop, then Are you at Church?; Yes needs the fence, then ends the run",

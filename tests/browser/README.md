@@ -11,6 +11,11 @@ a driver would meet it.
     node tests/browser/driver-app.mjs           # all of them
     node tests/browser/driver-app.mjs T4,T7     # some
 
+They run on London time whatever zone the machine is on: `lib.mjs` sets it
+for itself, the stand-in servers and the browser (from 2 Nov 2026; before
+that a machine on UTC showed every time an hour early in October, and T7,
+T10, T10b, T31, T32, T37 and T45 failed on a correct app).
+
 `MINIBUS_ROOT` points at another release folder, `MINIBUS_PORT` moves the
 local server, `CHROMIUM` names a browser binary, `PLAYWRIGHT_CORE` names the
 module file if it is not on the path.
