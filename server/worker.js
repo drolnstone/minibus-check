@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.77.0";
+const SCRIPT_VERSION = "w2.78.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -2527,9 +2527,14 @@ async function ensureHandAsks(env) {
     "  done_at INTEGER NOT NULL DEFAULT 0)").run();
   handAsksReady = true;
 }
+/* An ask nobody has answered lapses after half an hour (w2.78.0, Asim):
+   read as lapsed from then on, so nothing needs to sweep it. */
+const HAND_ASK_LAPSE_MS = 30 * 60000;
 const askOf = (r) => r ? { id: String(r.id), sunday: String(r.sunday), route: String(r.route), trip: String(r.trip),
-  from: String(r.from_driver), to: String(r.to_driver), made: Number(r.made), status: String(r.status),
+  from: String(r.from_driver), to: String(r.to_driver), made: Number(r.made),
+  status: String(r.status) === "pending" && Date.now() - Number(r.made) >= HAND_ASK_LAPSE_MS ? "lapsed" : String(r.status),
   by: String(r.by_name || ""), at: Number(r.done_at) || 0 } : null;
+const askAnswered = (a) => a && a.status === "lapsed" ? "That hand over was not answered in time." : "That hand over has already been answered.";
 /* The latest ask on a run. */
 async function handAskOn(env, trip) {
   await ensureHandAsks(env);
@@ -10603,6 +10608,7 @@ async function coordLoad(env, me) {
       .bind(londonKey(new Date())).all();
     for (const r of (q.results || [])) {
       const a = askOf(r);
+      if (a.status !== "pending") continue;
       const t = await tripState(env, a.sunday, a.route);
       if (t && t.trip === a.trip && sameName(t.driver, a.from)) out.handAsks.push(a);
     }
@@ -11193,7 +11199,7 @@ async function actRota(env, me, act) {
     await ensureHandAsks(env);
     const ask = askOf(await env.DB.prepare("SELECT * FROM handasks WHERE id=?").bind(String(act.ask)).first());
     if (!ask || ask.status !== "pending" || ask.trip !== hand.trip) {
-      return { ok: false, error: "That hand over has already been answered." };
+      return { ok: false, error: askAnswered(ask) };
     }
     hand.stmts.push(env.DB.prepare("UPDATE handasks SET status='approved', by_name=?, done_at=? WHERE id=?")
       .bind(me.name, Date.now(), ask.id));
@@ -11287,7 +11293,7 @@ async function handoverPlan(env, me, key, cur, act, set) {
 async function actHandNo(env, me, act) {
   await ensureHandAsks(env);
   const ask = askOf(await env.DB.prepare("SELECT * FROM handasks WHERE id=?").bind(String(act.ask || "")).first());
-  if (!ask || ask.status !== "pending") return { ok: false, error: "That hand over has already been answered." };
+  if (!ask || ask.status !== "pending") return { ok: false, error: askAnswered(ask) };
   const words = ask.route + ": hand over to " + ask.to + " turned down.";
   return { ok: true, sunday: ask.sunday, local: "declined", body: { ask: ask.id, route: ask.route, from: ask.from, to: ask.to },
            words: words,

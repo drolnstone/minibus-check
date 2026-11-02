@@ -214,5 +214,20 @@ export default async function (root) {
     a.eq(said.body, "Hand over to Bro Adesina turned down.");
   });
 
+  s.test("an ask nobody answers lapses after half an hour", async (a) => {
+    const { env } = await fresh();
+    await morning(env);
+    const out = await atTime(T("10:10"), () => ask(env, "Bro Moses", "Bro Adesina"));
+    const load = await atTime(T("10:41"), async () => J(await post(env, { action: "coord", who: "Bro Asim", pin: PIN, op: "load" })));
+    a.eq((load.handAsks || []).length, 0, "still shown to coordinators after 30 minutes");
+    const late = await atTime(T("10:41"), async () => J(await post(env, { action: "coord", who: "Bro Asim", pin: PIN,
+      op: "act", act: { id: "hand-late-1", kind: "rota", sunday: KEY, handover: "North", ask: out.ask.id, set: { northCover: "Bro Adesina" } } })));
+    a.eq(late.error, "That hand over was not answered in time.");
+    const duty = await atTime(T("10:41"), async () => J(await post(env, { action: "duty", driver: "Bro Moses" })));
+    a.eq(duty.hand && duty.hand.ask && duty.hand.ask.status, "lapsed", "the driver's card does not say so");
+    const again = await atTime(T("10:42"), () => ask(env, "Bro Moses", "Bro Adesina"));
+    a.ok(again.ok, "could not ask again: " + JSON.stringify(again));
+  });
+
   return s;
 }
