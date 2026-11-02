@@ -1,4 +1,4 @@
-/* HAND OVER, 2 November 2026. pages v1.144.0 · server w2.76.0.
+/* HAND OVER, 2 November 2026. pages v1.144.0 · server w2.76.0; the new driver's push from w2.77.0.
 
    Asim: a driver may do the morning run, or part of it, and somebody else
    finish it or do the afternoon. A coordinator hands the route's run to the
@@ -93,13 +93,31 @@ export default async function (root) {
     a.ok(end.ok, "the new driver could not end it: " + JSON.stringify(end));
   });
 
-  s.test("both drivers are told, and nobody else", async (a) => {
-    const { env } = await fresh();
+  s.test("the old driver is told; the new one gets his own push with the next stop", async (a) => {
+    const { db, env } = await fresh();
     await morning(env);
     await atTime(T("10:10"), () => hand(env, "North", "Bro Adesina"));
     a.eq((await boxOf(env, "Bro Moses")).length, 1, "the old driver was not told");
-    a.eq((await boxOf(env, "Bro Adesina")).length, 1, "the new driver was not told");
+    a.eq((await boxOf(env, "Bro Adesina")).length, 0, "the new driver was sent Change by as well");
     a.eq((await boxOf(env, "Bro Tunde")).length, 0, "the South driver was told");
+    const last = db._one("SELECT last FROM push_subs WHERE endpoint=?", EP("Bro Adesina")).last;
+    a.ok(/^handed\|2026-10-18\|North\|t1/.test(last), "the new driver was not woken: " + last);
+    const said = await atTime(T("10:11"), () => W.pushWhat(env, EP("Bro Adesina")));
+    a.eq(said.title, "North run handed to you");
+    a.eq(said.body, "Next stop Grace Rd.");
+  });
+
+  s.test("after the run, his push is the parked mileage line", async (a) => {
+    const { db, env } = await fresh();
+    await morning(env);
+    await atTime(T("10:58"), () => tap(env, "Bro Moses", "p1", [{ event: "end", at: at("10:58") }]));
+    await db.prepare("INSERT INTO checks_in (check_id, reg, driver, received, body) VALUES ('c1',?,?,?,?)")
+      .bind(REG, "Bro Moses", at("08:00"), JSON.stringify({ miles: 57363 })).run().catch(() => {});
+    const r = await atTime(T("13:00"), () => hand(env, "North", "Bro Adesina"));
+    if (!r.ok) { a.eq(r.error, "", "refused"); return; }
+    const said = await atTime(T("13:01"), () => W.pushWhat(env, EP("Bro Adesina")));
+    a.eq(said.title, "North run handed to you");
+    a.eq(said.body, "Record the bus parked mileage when you return from the afternoon run.");
   });
 
   s.test("his phone is told which route his run is on", async (a) => {

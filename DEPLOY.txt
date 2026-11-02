@@ -1,24 +1,18 @@
 MINIBUS
 =======
-  pages v1.144.0 · server w2.76.0 · sheet v1.130.0
+  pages v1.144.0 · server w2.77.0 · sheet v1.130.0
 
-YOU ARE ON   app v1.143.0 · server w2.75.0 · sheet v1.130.0
-GOING TO     app v1.144.0 · server w2.76.0 · sheet v1.130.0
+YOU ARE ON   app v1.144.0 · server w2.76.0 · sheet v1.130.0
+GOING TO     app v1.144.0 · server w2.77.0 · sheet v1.130.0
 
-Hand over. Coordinator app, Rota, today's Sunday: each route whose run
-has started shows a Run row (driver · on the road, or · parked mileage to
-key) with Hand over. Pick the driver taking it; the man holding it and the
-other route's driver while his run is still going are greyed. The run
-moves to him at once: he carries on from the next stop on his own phone
-under his own name, or keys the parked mileage if the run is over. The
-old driver's phone lets the run go ("Run handed to ...") and its taps are
-refused. The Rota cover becomes the new driver, the Rota gets a note
-"North run handed to ... at HH:MM by ... (was ...)", the same line goes on
-the run's start row in Trip Events, and each tap stays under the name of
-whoever made it. Both drivers and the other coordinators get "Change by".
+Server only. A run handed over in the coordinator app now sends the
+driver taking it his own push, in place of "Change by": "North run
+handed to you" with "Next stop (name)." mid-run, or "Record the bus
+parked mileage when you return from the afternoon run." once the run is
+over. The driver handing it over still gets "Change by", and so do the
+other coordinators. The Alerts list shows the push.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: app v1.144.0, server w2.76.0.
-B. Next Sunday, only if a swap is needed: Rota, today, Run row, Hand over.
+A. Coordinator app, App info: server w2.77.0.

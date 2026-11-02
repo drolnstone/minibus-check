@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.76.0";
+const SCRIPT_VERSION = "w2.77.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -2013,6 +2013,25 @@ async function churchAskWords(env, key, route, driver, all) {
   return { ok: true, tag: "church", url: "./",
            title: ALERT_MARK + route + ": Church" + (arr && arr.time ? " " + arr.time : ""),
            body: left.length ? "Did you pick up at " + left[0].stop + "?" : "Are you at Church?" };
+}
+
+/* HANDED TO YOU, from w2.77.0 (Asim, 2 Nov 2026): the push to the driver a
+   coordinator handed a run to. Mid-run, the next stop not yet marked; after
+   the run, the parked mileage line. Nothing once the run is not his. */
+async function handedWords(env, key, route, driver, all) {
+  if (!route || !driver) return null;
+  const t = await tripState(env, key, route);
+  if (!t || !t.started || !t.handed || !sameName(t.driver, driver)) return null;
+  const title = route + " run handed to you";
+  if (t.ended) {
+    return { ok: true, tag: "handed", url: "./", title,
+             body: "Record the bus parked mileage when you return from the afternoon run." };
+  }
+  const next = pickupsAndArrivals(all)
+    .filter((s) => s.route === route && !s.arrival && !s.depart && !(t.served || {})[s.id])
+    .sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0))[0];
+  return { ok: true, tag: "handed", url: "./", title,
+           body: next ? "Next stop " + next.stop + "." : "Next stop Church." };
 }
 
 /* THE RUN HAS ENDED, told to its driver, from w2.65.0. Asim, 16 Oct 2026:
@@ -7181,6 +7200,12 @@ async function pushWhat(env, endpoint, opts) {
       const pk = await parkedWordsFor(env, sub.driver, woke);
       if (pk) return pk;
     } catch (e) { /* the ordinary answer, below */ }
+    if (woke === "handed") {
+      try {
+        const h = await handedWords(env, key, String(sub.last || "").split("|")[2] || "", sub.driver, all);
+        if (h) return h;
+      } catch (e) { /* the ordinary answer, below */ }
+    }
     if (woke === "church") {
       try {
         const ask = await churchAskWords(env, key, String(sub.last || "").split("|")[2] || "", sub.driver, all);
@@ -11060,8 +11085,18 @@ async function actRota(env, me, act) {
   }
   if (hand) {
     return { ok: true, sunday: key, body: { sunday: key, set: set, note: hand.note, handover: hand.route },
-             tell: [hand.from, hand.to], words: hand.words, stmts: hand.stmts,
-             after: () => reapplyRawRota(env, [key]) };
+             tell: [hand.from], words: hand.words, stmts: hand.stmts,
+             after: async () => {
+               await reapplyRawRota(env, [key]);
+               /* The new driver gets his own push, not "Change by". */
+               try {
+                 const r = await wake(env, await driverWakeSubs(env, hand.to),
+                                      "handed|" + key + "|" + hand.route + "|" + hand.trip);
+                 await trail(env, { once: "d|handed|" + key + "|" + hand.route + "|" + hand.trip + "|" + hand.to,
+                                    title: hand.route + " run handed to you",
+                                    body: "To " + hand.to + ": " + trailPhones(r) + ".", not: [hand.to] });
+               } catch (e) {}
+             } };
   }
   const nBus = busResolve(key, "North", next.northBus, buses), sBus = busResolve(key, "South", next.southBus, buses);
   if (("northBus" in set || "southBus" in set) && nBus && sBus && nBus === sBus) {
@@ -11127,7 +11162,7 @@ async function handoverPlan(env, me, key, cur, act, set) {
       "UPDATE trip_events SET fix_note=CASE WHEN fix_note='' THEN ? ELSE fix_note || ' ' || ? END, synced=0 " +
       "WHERE trip=? AND event='start' AND status<>'Undone'").bind(line, line, t.trip));
   }
-  return { route, from, to, otherDone, stmts, note: line,
+  return { route, from, to, otherDone, stmts, note: line, trip: t.trip,
            words: route + ": run handed to " + to + " (was " + (from || "nobody") + ")." };
 }
 
