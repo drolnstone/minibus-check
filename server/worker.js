@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.76.0";
+const SCRIPT_VERSION = "w2.77.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -2015,6 +2015,25 @@ async function churchAskWords(env, key, route, driver, all) {
            body: left.length ? "Did you pick up at " + left[0].stop + "?" : "Are you at Church?" };
 }
 
+/* HANDED TO YOU, from w2.77.0 (Asim, 2 Nov 2026): the push to the driver a
+   coordinator handed a run to. Mid-run, the next stop not yet marked; after
+   the run, the parked mileage line. Nothing once the run is not his. */
+async function handedWords(env, key, route, driver, all) {
+  if (!route || !driver) return null;
+  const t = await tripState(env, key, route);
+  if (!t || !t.started || !t.handed || !sameName(t.driver, driver)) return null;
+  const title = route + " run handed to you";
+  if (t.ended) {
+    return { ok: true, tag: "handed", url: "./", title,
+             body: "Record the bus parked mileage when you return from the afternoon run." };
+  }
+  const next = pickupsAndArrivals(all)
+    .filter((s) => s.route === route && !s.arrival && !s.depart && !(t.served || {})[s.id])
+    .sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0))[0];
+  return { ok: true, tag: "handed", url: "./#stops", title,
+           body: next ? "Next stop " + next.stop + "." : "Next stop Church." };
+}
+
 /* THE RUN HAS ENDED, told to its driver, from w2.65.0. Asim, 16 Oct 2026:
    "when trip is ended, which is now automatic, the driver can get trip
    ended notification, reminding him also in that same notification to
@@ -2486,6 +2505,84 @@ async function handoverOf(env, trip) {
       .bind(String(trip)).first();
     return h ? { from: String(h.from_driver), to: String(h.to_driver), by: String(h.by_name), at: Number(h.at) } : null;
   } catch (e) { return null; }
+}
+
+/* A DRIVER ASKS, from w2.77.0 (Asim, 2 Nov 2026): the driver holding a run
+   asks to hand it to a driver he names; any coordinator approves (the hand
+   over itself, as above) or turns it down. One ask per run stands at a time. */
+let handAsksReady = false;
+async function ensureHandAsks(env) {
+  if (handAsksReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS handasks (" +
+    "  id     TEXT PRIMARY KEY," +
+    "  sunday TEXT NOT NULL," +
+    "  route  TEXT NOT NULL," +
+    "  trip   TEXT NOT NULL," +
+    "  from_driver TEXT NOT NULL," +
+    "  to_driver   TEXT NOT NULL," +
+    "  made   INTEGER NOT NULL," +
+    "  status TEXT NOT NULL DEFAULT 'pending'," +
+    "  by_name TEXT NOT NULL DEFAULT ''," +
+    "  done_at INTEGER NOT NULL DEFAULT 0)").run();
+  handAsksReady = true;
+}
+const askOf = (r) => r ? { id: String(r.id), sunday: String(r.sunday), route: String(r.route), trip: String(r.trip),
+  from: String(r.from_driver), to: String(r.to_driver), made: Number(r.made), status: String(r.status),
+  by: String(r.by_name || ""), at: Number(r.done_at) || 0 } : null;
+/* The latest ask on a run. */
+async function handAskOn(env, trip) {
+  await ensureHandAsks(env);
+  return askOf(await env.DB.prepare(
+    "SELECT * FROM handasks WHERE trip=? ORDER BY made DESC LIMIT 1").bind(String(trip)).first());
+}
+
+/* The run a driver holds today that may still be handed over: open, or over
+   with its parked mileage still to key. */
+async function handableRun(env, key, who, all) {
+  if (!who || key !== londonKey(new Date()) || londonParts(new Date()).dow !== 0) return null;
+  for (const rt of routeNames(pickupsAndArrivals(all))) {
+    const t = await tripState(env, key, rt);
+    if (!t || !t.trip || !t.started || !sameName(t.driver, who)) continue;
+    if (t.ended) {
+      const o = (await parkedOpen(env)).filter((x) => x.reg === String(t.reg || "").toUpperCase())[0];
+      if (!o || o.parked) continue;
+    }
+    return { route: rt, trip: t.trip, ended: t.ended || 0 };
+  }
+  return null;
+}
+
+async function handleHandAsk(env, body) {
+  const who = String((body && body.driver) || "").trim();
+  const sure = await driverSureOf(env, who, body && body.key, false);
+  if (!sure) return { ok: false, error: "pin" };
+  const key = runSunday();
+  const all = await getStops(env);
+  const run = await handableRun(env, key, who, all);
+  if (!run || run.route !== String((body && body.route) || "")) return { ok: false, error: "Nothing to hand over." };
+  const d = await env.DB.prepare("SELECT name FROM drivers WHERE active=1 AND lower(name)=lower(?)")
+    .bind(String((body && body.to) || "").trim()).first();
+  if (!d) return { ok: false, error: "Pick a driver from the list." };
+  const to = String(d.name);
+  const cur = await currentRota(env, key);
+  if (!cur) return { ok: false, error: "Nothing to hand over." };
+  const set = { [run.route === "South" ? "southCover" : "northCover"]: to };
+  const plan = await handoverPlan(env, { name: who }, key, cur, { handover: run.route }, set);
+  if (plan.error) return { ok: false, error: plan.error };
+  await ensureHandAsks(env);
+  const id = "h" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  await env.DB.batch([
+    env.DB.prepare("UPDATE handasks SET status='replaced', done_at=? WHERE trip=? AND status='pending'").bind(Date.now(), run.trip),
+    env.DB.prepare("INSERT INTO handasks (id, sunday, route, trip, from_driver, to_driver, made) VALUES (?,?,?,?,?,?,?)")
+      .bind(id, key, run.route, run.trip, who, to, Date.now())
+  ]);
+  try {
+    await handleCoordAlert(env, { alert: { id: "handask|" + id, kind: "handask", urgent: true,
+      title: run.route + ": hand over asked",
+      body: who + " asks to hand the " + run.route + " run to " + to + "." } });
+  } catch (e) {}
+  return { ok: true, ask: await handAskOn(env, run.trip) };
 }
 
 /* Whether this phone may act for the run, and the run's record brought up to
@@ -6204,11 +6301,17 @@ async function handleDuty(env, body) {
   let rotaRow = null;
   try { rotaRow = await getRotaRow(env, key); } catch (e) {}
   const me = who.toLowerCase();
+  /* A run he may hand over (w2.77.0), with his latest ask on it. */
+  let hand = null;
+  try {
+    const run = await handableRun(env, key, who, all);
+    if (run) hand = { route: run.route, ask: await handAskOn(env, run.trip) };
+  } catch (e) {}
   const route = routeNames(stops).find((rt) => rotaDriverFor(rotaRow, rt).toLowerCase() === me) || "";
-  if (!route) return json({ ok: true, sunday: key, route: "" });
-  if (routeCancelled(rotaRow, route)) return json({ ok: true, sunday: key, route, off: true });
+  if (!route) return json({ ok: true, sunday: key, route: "", hand });
+  if (routeCancelled(rotaRow, route)) return json({ ok: true, sunday: key, route, off: true, hand });
   const ck = await checkTimesFor(env, all, route, who);
-  const out = { ok: true, sunday: key, route,
+  const out = { ok: true, sunday: key, route, hand,
                 depart: ck ? ck.depart : "", check: ck ? ck.check : "", state: "" };
   const p = londonParts(new Date());
   if (key === londonKey(new Date()) && p.hh * 60 + p.mi >= 7 * 60 + 31) {
@@ -7181,6 +7284,22 @@ async function pushWhat(env, endpoint, opts) {
       const pk = await parkedWordsFor(env, sub.driver, woke);
       if (pk) return pk;
     } catch (e) { /* the ordinary answer, below */ }
+    if (woke === "handno") {
+      try {
+        const ask = askOf(await (async () => { await ensureHandAsks(env);
+          return env.DB.prepare("SELECT * FROM handasks WHERE id=?").bind(String(sub.last || "").split("|")[3] || "").first(); })());
+        if (ask && ask.status === "declined" && sameName(ask.from, sub.driver)) {
+          return { ok: true, tag: "handno", url: "./", title: ask.route + ": hand over turned down",
+                   body: "Hand over to " + ask.to + " turned down." };
+        }
+      } catch (e) { /* the ordinary answer, below */ }
+    }
+    if (woke === "handed") {
+      try {
+        const h = await handedWords(env, key, String(sub.last || "").split("|")[2] || "", sub.driver, all);
+        if (h) return h;
+      } catch (e) { /* the ordinary answer, below */ }
+    }
     if (woke === "church") {
       try {
         const ask = await churchAskWords(env, key, String(sub.last || "").split("|")[2] || "", sub.driver, all);
@@ -9070,7 +9189,7 @@ async function reapplyDrivers(env) {
    be woken. A booking, a stop time put right on the record and a job to
    arrange do not change a run, so they are not sent. The emergency calls
    choice has its own (contactTell). */
-const CHANGE_TOLD = ["driver", "pin", "rota", "bus", "stop", "decide", "defect", "vlog", "vfix", "motrun"];
+const CHANGE_TOLD = ["driver", "pin", "rota", "bus", "stop", "decide", "defect", "vlog", "vfix", "motrun", "handno"];
 
 async function changeDriverNames(env, kind, r) {
   let names = [];
@@ -10476,6 +10595,18 @@ async function coordLoad(env, me) {
   } catch (e) { out.lastMiles = {}; }
   /* From w2.65.0: each bus's parked reading since its last walkaround. */
   try { out.parked = await parkedLatest(env); } catch (e) { out.parked = null; }
+  /* From w2.77.0: drivers' hand overs waiting for a coordinator. */
+  out.handAsks = [];
+  try {
+    await ensureHandAsks(env);
+    const q = await env.DB.prepare("SELECT * FROM handasks WHERE status='pending' AND sunday=? ORDER BY made")
+      .bind(londonKey(new Date())).all();
+    for (const r of (q.results || [])) {
+      const a = askOf(r);
+      const t = await tripState(env, a.sunday, a.route);
+      if (t && t.trip === a.trip && sameName(t.driver, a.from)) out.handAsks.push(a);
+    }
+  } catch (e) {}
 
   /* Today's walkarounds and runs, for the two things that cannot wait: a bus
      the check stopped, and a run left open. */
@@ -11058,10 +11189,30 @@ async function actRota(env, me, act) {
   if (nDrv && sDrv && sameName(nDrv, sDrv) && !(hand && hand.otherDone)) {
     return { ok: false, error: nDrv + " cannot drive both routes that morning." };
   }
+  if (hand && act.ask) {
+    await ensureHandAsks(env);
+    const ask = askOf(await env.DB.prepare("SELECT * FROM handasks WHERE id=?").bind(String(act.ask)).first());
+    if (!ask || ask.status !== "pending" || ask.trip !== hand.trip) {
+      return { ok: false, error: "That hand over has already been answered." };
+    }
+    hand.stmts.push(env.DB.prepare("UPDATE handasks SET status='approved', by_name=?, done_at=? WHERE id=?")
+      .bind(me.name, Date.now(), ask.id));
+    hand.words = hand.words.replace(/\.$/, ", asked by " + ask.from + ".");
+  }
   if (hand) {
     return { ok: true, sunday: key, body: { sunday: key, set: set, note: hand.note, handover: hand.route },
-             tell: [hand.from, hand.to], words: hand.words, stmts: hand.stmts,
-             after: () => reapplyRawRota(env, [key]) };
+             tell: [hand.from], words: hand.words, stmts: hand.stmts,
+             after: async () => {
+               await reapplyRawRota(env, [key]);
+               /* The new driver gets his own push, not "Change by". */
+               try {
+                 const r = await wake(env, await driverWakeSubs(env, hand.to),
+                                      "handed|" + key + "|" + hand.route + "|" + hand.trip);
+                 await trail(env, { once: "d|handed|" + key + "|" + hand.route + "|" + hand.trip + "|" + hand.to,
+                                    title: hand.route + " run handed to you",
+                                    body: "To " + hand.to + ": " + trailPhones(r) + ".", not: [hand.to] });
+               } catch (e) {}
+             } };
   }
   const nBus = busResolve(key, "North", next.northBus, buses), sBus = busResolve(key, "South", next.southBus, buses);
   if (("northBus" in set || "southBus" in set) && nBus && sBus && nBus === sBus) {
@@ -11127,8 +11278,28 @@ async function handoverPlan(env, me, key, cur, act, set) {
       "UPDATE trip_events SET fix_note=CASE WHEN fix_note='' THEN ? ELSE fix_note || ' ' || ? END, synced=0 " +
       "WHERE trip=? AND event='start' AND status<>'Undone'").bind(line, line, t.trip));
   }
-  return { route, from, to, otherDone, stmts, note: line,
+  return { route, from, to, otherDone, stmts, note: line, trip: t.trip,
            words: route + ": run handed to " + to + " (was " + (from || "nobody") + ")." };
+}
+
+/* A driver's hand over turned down (w2.77.0). Kept on this server: the
+   sheet has nothing to file. The driver is told on his phone. */
+async function actHandNo(env, me, act) {
+  await ensureHandAsks(env);
+  const ask = askOf(await env.DB.prepare("SELECT * FROM handasks WHERE id=?").bind(String(act.ask || "")).first());
+  if (!ask || ask.status !== "pending") return { ok: false, error: "That hand over has already been answered." };
+  const words = ask.route + ": hand over to " + ask.to + " turned down.";
+  return { ok: true, sunday: ask.sunday, local: "declined", body: { ask: ask.id, route: ask.route, from: ask.from, to: ask.to },
+           words: words,
+           stmts: [env.DB.prepare("UPDATE handasks SET status='declined', by_name=?, done_at=? WHERE id=? AND status='pending'")
+             .bind(me.name, Date.now(), ask.id)],
+           after: async () => {
+             try {
+               const r = await wake(env, await driverWakeSubs(env, ask.from), "handno|" + ask.sunday + "|" + ask.route + "|" + ask.id);
+               await trail(env, { once: "d|handno|" + ask.id, title: words,
+                                  body: "To " + ask.from + ": " + trailPhones(r) + ".", not: [ask.from] });
+             } catch (e) {}
+           } };
 }
 
 async function actDecide(env, me, act) {
@@ -11432,6 +11603,7 @@ async function coordAct(env, me, act) {
   else if (kind === "pin") r = await actPinReset(env, me, act);
   else if (kind === "contact") r = await actContact(env, me, act);
   else if (kind === "message") r = await actMessage(env, me, act, id);
+  else if (kind === "handno") r = await actHandNo(env, me, act);
   else return { ok: false, error: "unknown kind" };
   if (!r || !r.ok) return r || { ok: false, error: "refused" };
 
@@ -11653,6 +11825,7 @@ export default {
         }
         /* A parked reading, from w2.65.0. A run's rule: his name on it means
            his PIN was keyed. */
+        if (action === "handask") return json(await handleHandAsk(env, body));
         if (action === "parked") {
           const pk = body.parked || {};
           /* No old phone sends this, so a post without the key is not let

@@ -419,6 +419,22 @@ CREATE TABLE IF NOT EXISTS handovers (
   at          INTEGER NOT NULL       -- ms
 );
 
+-- A DRIVER ASKS to hand his run over, from w2.77.0: pending until a
+-- coordinator approves (a hand over, above) or turns it down. Created by the
+-- Worker on first use.
+CREATE TABLE IF NOT EXISTS handasks (
+  id          TEXT PRIMARY KEY,
+  sunday      TEXT NOT NULL,
+  route       TEXT NOT NULL,
+  trip        TEXT NOT NULL,
+  from_driver TEXT NOT NULL,
+  to_driver   TEXT NOT NULL,
+  made        INTEGER NOT NULL,      -- ms
+  status      TEXT NOT NULL DEFAULT 'pending',   -- pending, approved, declined, replaced
+  by_name     TEXT NOT NULL DEFAULT '',
+  done_at     INTEGER NOT NULL DEFAULT 0
+);
+
 -- A sign-in key per phone, from w2.64.0: a right PIN gets the driver app a
 -- key, sent with walkarounds, runs, rota requests and MOT runs. Only a
 -- fingerprint of it is kept. The Worker also creates this itself.

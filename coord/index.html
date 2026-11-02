@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.144.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.145.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -750,7 +750,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.144.0";
+var PAGE_VERSION = "v1.145.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1393,6 +1393,11 @@ function needs(){
       }
     });
   });
+  /* A driver's hand over waiting (v1.145.0, Asim, 2 Nov 2026). */
+  ((D && D.handAsks) || []).forEach(function(q){
+    out.push({ tone:"stop", text: q.from + " asks to hand the " + q.route + " run to " + q.to + ".",
+               btn:"Answer", data:'data-do="handask" data-ask="'+esc(q.id)+'"' });
+  });
   /* Faults, not reports: three walkarounds finding one tyre are one tyre. */
   var crit = defectGroups((D && D.defects) || []).filter(function(g){ return g.crit && g.kind !== "Advisory"; }).length;
   if(crit) out.push({ tone:"stop", text: crit === 1 ? "A critical defect is open." : crit + " critical defects are open.", go:"defects" });
@@ -1697,6 +1702,27 @@ function pickHandover(key, rt){
     onGo: function(name){
       var set = {}; set[rt === "South" ? "southCover" : "northCover"] = name;
       act({ kind:"rota", sunday:key, set:set, handover: rt });
+    }
+  });
+}
+
+/* Approve hands the run over as Hand over does; Turn down tells the driver. */
+function answerHandAsk(id){
+  var q = ((D && D.handAsks) || []).filter(function(x){ return x.id === id; })[0];
+  if(!q) return;
+  var list = '<ul class="pick">' +
+    '<li><button type="button" data-pick="yes"><b>Approve</b><small>'+esc(q.to)+' takes the '+esc(q.route)+' run</small></button></li>' +
+    '<li><button type="button" data-pick="no"><b>Turn down</b><small>'+esc(q.from)+' keeps it</small></button></li></ul>';
+  openSheet({
+    eyebrow: q.route + " run",
+    title: q.from + " to " + q.to,
+    body: list,
+    go: "Choose",
+    onPick: function(v){ return v === "yes" ? "Hand " + q.route + " to " + q.to : "Turn it down"; },
+    onGo: function(v){
+      if(v === "no"){ act({ kind:"handno", ask:q.id }); return; }
+      var set = {}; set[q.route === "South" ? "southCover" : "northCover"] = q.to;
+      act({ kind:"rota", sunday:q.sunday, set:set, handover:q.route, ask:q.id });
     }
   });
 }
@@ -3789,6 +3815,7 @@ document.addEventListener("click", function(e){
   if(d === "authorise") authorise(t.getAttribute("data-reg"));
   else if(d === "motrun") motRun(t.getAttribute("data-reg"));
   else if(d === "endrun") endRun(t.getAttribute("data-route"));
+  else if(d === "handask") answerHandAsk(t.getAttribute("data-ask"));
   else if(d === "more"){ ROTA_SHOW += 12; paintRota(); }
   else if(d === "status") setStatus(key, t.getAttribute("data-mode"));
   else if(d === "driver") pickDriver(key, t.getAttribute("data-slot"));
