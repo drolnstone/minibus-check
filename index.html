@@ -6995,7 +6995,7 @@ function tripTooSoon(stop){
 function tripTap(stop,kind){
   if(!trip.started || trip.ended) return;
   if(tripStopShut(stop)){ tripPaint(); return; }
-  if(!trip.served[stop.id] && pickNext && stop.id===pickNext.id && !pickLeft(true)){
+  if(!trip.served[stop.id] && pickNext && stop.id===pickNext.id && !pickLeft(true) && !pickMovedOn(stop)){
     toast("The bus has not left "+(trip.lastStop || "Church")+" yet.", true);
     return;
   }
@@ -9240,6 +9240,7 @@ function pickLeft(tapped){
    puts the bus within PICK_FAR_M of the stop's pin. */
 var PICK_FAR_M = 1000;
 function pickDueWhy(s){
+  if(pickMovedOn(s)) return "near";
   if(!pickLeft()) return "";
   if(pickHere(s)) return "near";
   var at = pickEta(s);
@@ -9248,6 +9249,35 @@ function pickDueWhy(s){
   return (m === null || m <= PICK_FAR_M) ? "eta" : "";
 }
 function pickDue(s){ return !!pickDueWhy(s); }
+
+/* STOPPED AT THE NEXT STOP, SO IT LEFT THE LAST ONE, from v1.142.0 (Asim,
+   2 Nov 2026: a driver went to a new stop in Maps, came back to the app
+   standing at it, and pickLeft held the pop-up because the app had never
+   seen the bus move). Stopped at this stop's pin, and that pin is at least
+   PICK_MOVED_ON_M from the last place the run was marked: the last marked
+   stop's pin, or Church before any. No pin to compare: pickLeft decides. */
+var PICK_MOVED_ON_M = 400;
+function pickMovedOn(s){
+  if(!s || !pickHere(s)) return false;
+  var last = null, at = 0;
+  Object.keys(trip.served || {}).forEach(function(k){
+    var t = Number(trip.served[k] && trip.served[k].at) || 0;
+    if(t >= at){ at = t; last = k; }
+  });
+  var from = null;
+  if(last){
+    (rotaStops||[]).forEach(function(x){ if(x.id === last) from = x; });
+    var la = Number(from && from.lat), ln = Number(from && from.lng);
+    if(!from || from.lat === "" || from.lat == null || from.lng === "" || from.lng == null ||
+       !isFinite(la) || !isFinite(ln)) return false;
+    from = { lat:la, lng:ln };
+  } else {
+    from = churchPoint();
+  }
+  if(!from) return false;
+  var m = geoTo(Number(s.lat), Number(s.lng), from);
+  return m !== null && m >= PICK_MOVED_ON_M;
+}
 /* Metres from the bus to the stop's pin, on a recent fix sure to within
    PICK_FAR_M. null with no such fix or no pin: the estimate decides alone. */
 function pickFar(s){

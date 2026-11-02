@@ -1288,6 +1288,35 @@ if (want("T45")) {
   await me.ctx.close();
 }
 
+/* T46 — v1.142.0 (Asim, 2 Nov 2026). A driver who went to the next stop in
+   Maps comes back to the app standing at it: the app never saw the bus
+   move, but it is at the next stop's pin, far from the last, so the pop-up
+   comes up and Picked up goes through. */
+if (want("T46")) {
+  const world = { checks: okCheck(), counts: { North: { N01: 2, N02: 1 }, South: {} } };
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world });
+  await startRun(me);
+  await me.jump(11); await me.wait(300);
+  await tap(me, "pickup", "N01"); await me.wait(1500);
+  const N01 = { lat: 53.449234, lng: -2.936301, acc: 8, speed: 0 };
+  await me.emit(N01); await me.wait(4000); await me.emit(N01); await me.wait(11000);
+  const atLast = await me.pg.evaluate(() => document.getElementById("pickModal").classList.contains("is-on"));
+  await me.jump(8);
+  for (let i = 0; i < 5; i++) { await me.emit(AWAY); await me.wait(1000); }
+  await me.wait(10000);
+  const up = await me.pg.evaluate(() => {
+    const m = document.getElementById("pickModal");
+    return { up: m.classList.contains("is-on"), text: (document.getElementById("pickTitle") || {}).textContent || "" };
+  });
+  if (up.up) await me.pg.evaluate(() => document.querySelector('#pickModal [data-pick="pickup"]').click());
+  await me.wait(2000);
+  const sent = me.posted.map(p => p.trip && (p.trip.events || []).find(e => e.event === "pickup" && e.stopId === "N02")).find(Boolean) || {};
+  check("T46", "back from Maps standing at the next stop, never seen moving: the pop-up comes up there and Picked up goes",
+        !atLast && up.up && /Grace Road/.test(up.text) && !!sent.at && !me.errs.length,
+        JSON.stringify({ atLast, up, sent, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

@@ -16,6 +16,9 @@ pickup pop-up turns red and asks about each booked stop still unanswered
 passenger page shows "Picked up" without a time), then a red "Are you at
 Church?". Yes ends the run once the fence has seen the bus back inside,
 else "Not at Church."; No puts it away for 5 minutes.
+Pickup pop-up: a driver back in the app standing at the next booked
+stop's pin (400 m or more from the last marked stop) gets the pop-up there,
+even if the app never saw the bus move (he drove there in Maps).
 Parked mileage: the 14:00 push title starts with 🔴, and on Sundays from
 14:00 the hub card shows a red "Parked mileage not received" until keyed.
 
