@@ -206,7 +206,7 @@ export default async function (root) {
     const ctx = vm.createContext(Object.assign({
       Date, Math, Number, String, isFinite,
       PICK_CLOSE_MIN: 1, PICK_FAR_M: 1000, rotaStopEtas: {}, pickFix: null, pickEtaWait: null,
-      pickLeft: () => true, pickHere: () => false, tripNow: () => Date.now(),
+      pickLeft: () => true, pickHere: () => false, pickMovedOn: () => false, tripNow: () => Date.now(),
       geoTo: (lat, lng, b) => Math.hypot((lat - b.lat) * 111000, (lng - b.lng) * 66000)
     }, over || {}));
     vm.runInContext(["pickEta", "pickDueWhy", "pickFar", "pickEtaHold", "pickEtaHeard"].map(grab).join("\n"), ctx);

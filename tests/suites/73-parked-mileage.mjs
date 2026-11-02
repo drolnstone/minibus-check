@@ -330,7 +330,7 @@ export default async function (root) {
       await atTime("2026-10-18T14:00:00+01:00", () => W.wakeParkAsk(env));
       a.eq(lastOf(db), "parkask|" + KEY + "|" + REG, "not reminded at two");
       const said = await atTime("2026-10-18T14:00:00+01:00", () => W.pushWhat(env, "https://push.example/trevor"));
-      a.eq(said.title, "Parked mileage not received");
+      a.eq(said.title, "\uD83D\uDD34 Parked mileage not received");
       a.eq(said.body, REG + ".");
       await db.prepare("UPDATE push_subs SET last=''").run();
       await atTime("2026-10-18T14:05:00+01:00", () => W.wakeParkAsk(env));

@@ -1248,6 +1248,75 @@ if (want("T40")) {
   await me.ctx.close();
 }
 
+/* T45 — v1.142.0 (Asim, 2 Nov 2026). Five minutes past Church time with the
+   last booked stop unanswered, the pickup pop-up turns red and asks "Did you
+   pick up at (stop)?" wherever the bus is; the answer goes as late. Then a
+   red "Are you at Church?": Yes is refused until the fence has seen the bus
+   back inside, then ends the run. */
+if (want("T45")) {
+  const world = { checks: okCheck(), counts: { North: { N01: 2 }, South: {} } };
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world });
+  await startRun(me);
+  await me.jump(2); await me.emit(AWAY); await me.wait(500);
+  const box = (id) => me.pg.evaluate((id) => {
+    const m = document.getElementById(id);
+    const h = m.querySelector("h2");
+    return { up: m.classList.contains("is-on"), red: m.classList.contains("is-alert"),
+             text: h ? h.textContent.trim() : "" };
+  }, id);
+  const before = await box("pickModal");
+  await me.jump(64); await me.emit(AWAY); await me.wait(11500);
+  const asked = await box("pickModal");
+  await me.shot("T45-ask-stop");
+  await me.pg.evaluate(() => document.querySelector('#pickModal [data-pick="pickup"]').click());
+  await me.wait(2500);
+  const sent = me.posted.map(p => p.trip && (p.trip.events || []).find(e => e.event === "pickup")).find(Boolean) || {};
+  await me.wait(11000);
+  const church = await box("churchModal");
+  await me.shot("T45-ask-church");
+  await me.pg.evaluate(() => document.querySelector("[data-churchyes]").click()); await me.wait(400);
+  const refused = await me.toast();
+  await me.emit(CHURCH); await me.wait(500);
+  await me.pg.evaluate(() => document.querySelector("[data-churchyes]").click()); await me.wait(1500);
+  const end = me.posted.map(p => p.trip && (p.trip.events || []).find(e => e.event === "end")).find(Boolean) || {};
+  const gone = await box("churchModal");
+  check("T45", "past Church time the red pop-up asks about the unanswered stop, then Are you at Church?; Yes needs the fence, then ends the run",
+        !before.up && asked.up && asked.red && /^Did you pick up at .+\?$/.test(asked.text) &&
+        sent.late === 1 && church.up && church.red && church.text === "Are you at Church?" &&
+        /Not at Church/.test(refused) && !!end.at && !gone.up && !me.errs.length,
+        JSON.stringify({ before, asked, sent, church, refused, end, gone, errs: me.errs }));
+  await me.ctx.close();
+}
+
+/* T46 — v1.142.0 (Asim, 2 Nov 2026). A driver who went to the next stop in
+   Maps comes back to the app standing at it: the app never saw the bus
+   move, but it is at the next stop's pin, far from the last, so the pop-up
+   comes up and Picked up goes through. */
+if (want("T46")) {
+  const world = { checks: okCheck(), counts: { North: { N01: 2, N02: 1 }, South: {} } };
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world });
+  await startRun(me);
+  await me.jump(11); await me.wait(300);
+  await tap(me, "pickup", "N01"); await me.wait(1500);
+  const N01 = { lat: 53.449234, lng: -2.936301, acc: 8, speed: 0 };
+  await me.emit(N01); await me.wait(4000); await me.emit(N01); await me.wait(11000);
+  const atLast = await me.pg.evaluate(() => document.getElementById("pickModal").classList.contains("is-on"));
+  await me.jump(8);
+  for (let i = 0; i < 5; i++) { await me.emit(AWAY); await me.wait(1000); }
+  await me.wait(10000);
+  const up = await me.pg.evaluate(() => {
+    const m = document.getElementById("pickModal");
+    return { up: m.classList.contains("is-on"), text: (document.getElementById("pickTitle") || {}).textContent || "" };
+  });
+  if (up.up) await me.pg.evaluate(() => document.querySelector('#pickModal [data-pick="pickup"]').click());
+  await me.wait(2000);
+  const sent = me.posted.map(p => p.trip && (p.trip.events || []).find(e => e.event === "pickup" && e.stopId === "N02")).find(Boolean) || {};
+  check("T46", "back from Maps standing at the next stop, never seen moving: the pop-up comes up there and Picked up goes",
+        !atLast && up.up && /Grace Road/.test(up.text) && !!sent.at && !me.errs.length,
+        JSON.stringify({ atLast, up, sent, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

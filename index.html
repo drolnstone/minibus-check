@@ -841,6 +841,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .park-row input{flex:1 1 auto;min-width:0}
 .park-row .btn{flex:0 0 auto;width:auto;padding-left:18px;padding-right:18px}
 .park-say{margin-top:6px}
+.park-due{margin:6px 0 8px;padding:11px 12px;border-radius:8px;
+  background:var(--stop);color:var(--stop-on);font-weight:700;text-align:center}
 /* The confirm-it-is-you panel, in the trip strip and in the request form. */
 .pingate{margin-top:11px;padding-top:11px;border-top:1px solid var(--hair)}
 .pingate .pinbox{width:120px;margin-top:6px}
@@ -1043,6 +1045,12 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
 .church-modal h2{margin:0 0 16px}
 .church-keep{margin:0 0 10px;font-weight:700}
 .church-modal .btn{width:100%}
+/* The Church ask (v1.142.0, Asim): the red box with bold white text. */
+.pick-modal.is-alert .pick-sheet{background:var(--stop);color:var(--stop-on)}
+.pick-modal.is-alert h2,.pick-modal.is-alert .eyebrow,.pick-modal.is-alert .pick-n,
+.pick-modal.is-alert .pick-n b,.pick-modal.is-alert .pick-call small{color:var(--stop-on);font-weight:700}
+.pick-modal.is-alert .btn-ghost{background:transparent;color:var(--stop-on);border-color:var(--stop-on)}
+.pick-modal.is-alert .btn-tap{background:var(--stop-on);color:var(--stop);border-color:var(--stop-on)}
 .rota-modal-actions .btn{flex:1}
 @media (min-width:641px){.rota-modal{align-items:center}.rota-sheet{border-radius:14px;max-height:80vh}}
 
@@ -1785,7 +1793,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.141.0";
+var APP_VERSION = "v1.142.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -6478,12 +6486,19 @@ function parkHtml(){
       return;
     }
     h += '<div class="dw"><p class="dw-eyebrow">'+eyebrow+'</p>'+
+         (parkOverdue() ? '<p class="park-due">Parked mileage not received</p>' : '')+
          '<label class="dw-sub" for="parkMiles'+i+'"><b>Mileage after the afternoon run</b>'+(walk ? ' · '+walk : '')+'</label>'+
          '<div class="park-row"><input id="parkMiles'+i+'" type="number" inputmode="numeric" class="mono" '+
            'placeholder="e.g. '+esc(String((Number(o.miles)||57363) + 12))+'" autocomplete="off">'+
          '<button class="btn btn-main" type="button" data-park-save="'+pid+'">Save</button></div>'+sayHtml+'</div>';
   });
   return h;
+}
+/* From the 2pm reminder on a Sunday, the red box (v1.142.0, Asim, 2 Nov
+   2026: drivers still pass it by). It goes once the mileage is keyed. */
+function parkOverdue(){
+  var d = new Date(tripNow());
+  return d.getDay() === 0 && d.getHours() >= 14;
 }
 function parkPaint(){
   var box = $("hubParked");
@@ -6980,7 +6995,7 @@ function tripTooSoon(stop){
 function tripTap(stop,kind){
   if(!trip.started || trip.ended) return;
   if(tripStopShut(stop)){ tripPaint(); return; }
-  if(!trip.served[stop.id] && pickNext && stop.id===pickNext.id && !pickLeft(true)){
+  if(!trip.served[stop.id] && pickNext && stop.id===pickNext.id && !pickLeft(true) && !pickMovedOn(stop)){
     toast("The bus has not left "+(trip.lastStop || "Church")+" yet.", true);
     return;
   }
@@ -7045,7 +7060,9 @@ function tripTap(stop,kind){
   trip.served[stop.id]={ at:at, event:kind };
   trip.lastAt=at; trip.lastStop=stop.stop;
   tripSaveState();
-  tripQueue({ event:kind, stopId:stop.id, at:at });
+  /* Answered from the Church ask (v1.142.0): noted, and nobody is told. */
+  var late = !had && pickWhy === "church" && stop.id === pickStopId;
+  tripQueue(late ? { event:kind, stopId:stop.id, at:at, late:1 } : { event:kind, stopId:stop.id, at:at });
   pickEtaHold(stop.id, kind);
   tripPaint();
 }
@@ -9223,6 +9240,7 @@ function pickLeft(tapped){
    puts the bus within PICK_FAR_M of the stop's pin. */
 var PICK_FAR_M = 1000;
 function pickDueWhy(s){
+  if(pickMovedOn(s)) return "near";
   if(!pickLeft()) return "";
   if(pickHere(s)) return "near";
   var at = pickEta(s);
@@ -9231,6 +9249,35 @@ function pickDueWhy(s){
   return (m === null || m <= PICK_FAR_M) ? "eta" : "";
 }
 function pickDue(s){ return !!pickDueWhy(s); }
+
+/* STOPPED AT THE NEXT STOP, SO IT LEFT THE LAST ONE, from v1.142.0 (Asim,
+   2 Nov 2026: a driver went to a new stop in Maps, came back to the app
+   standing at it, and pickLeft held the pop-up because the app had never
+   seen the bus move). Stopped at this stop's pin, and that pin is at least
+   PICK_MOVED_ON_M from the last place the run was marked: the last marked
+   stop's pin, or Church before any. No pin to compare: pickLeft decides. */
+var PICK_MOVED_ON_M = 400;
+function pickMovedOn(s){
+  if(!s || !pickHere(s)) return false;
+  var last = null, at = 0;
+  Object.keys(trip.served || {}).forEach(function(k){
+    var t = Number(trip.served[k] && trip.served[k].at) || 0;
+    if(t >= at){ at = t; last = k; }
+  });
+  var from = null;
+  if(last){
+    (rotaStops||[]).forEach(function(x){ if(x.id === last) from = x; });
+    var la = Number(from && from.lat), ln = Number(from && from.lng);
+    if(!from || from.lat === "" || from.lat == null || from.lng === "" || from.lng == null ||
+       !isFinite(la) || !isFinite(ln)) return false;
+    from = { lat:la, lng:ln };
+  } else {
+    from = churchPoint();
+  }
+  if(!from) return false;
+  var m = geoTo(Number(s.lat), Number(s.lng), from);
+  return m !== null && m >= PICK_MOVED_ON_M;
+}
 /* Metres from the bus to the stop's pin, on a recent fix sure to within
    PICK_FAR_M. null with no such fix or no pin: the estimate decides alone. */
 function pickFar(s){
@@ -9279,6 +9326,13 @@ function pickClose(){
 function pickSync(){
   var s = rotaStopsOpen ? pickNext : null;
   if(!s){ pickStopId = ""; pickWhy = ""; pickClose(); return; }
+  /* Past Church time, the next booked stop is asked about at once, wherever
+     the bus is (v1.142.0, Asim, 2 Nov 2026). */
+  if(churchAskDue()){
+    if(pickStopId !== s.id || pickWhy !== "church"){ pickStopId = s.id; pickWhy = "church"; }
+    pickPaint(s);
+    return;
+  }
   /* Once up for a stop it stays up for it. Only an answer, or the stop no
      longer being next, takes it down; and from v1.130.0 one the estimate put
      up goes back down when a fresh estimate puts the stop more than a minute
@@ -9305,13 +9359,15 @@ function pickPaint(s){
   var fresh = pickPeople && pickPeople.trip === trip.id;
   var list = (fresh && pickPeople.people && pickPeople.people[s.id]) || [];
   var calls = list.filter(function(p){ return p && p.phone; });
-  var sig = s.id + "|" + n + "|" + calls.map(function(p){ return p.phone + ":" + p.seats; }).join(",");
+  var ask = pickWhy === "church";
+  var sig = (ask ? "church|" : "") + s.id + "|" + n + "|" + calls.map(function(p){ return p.phone + ":" + p.seats; }).join(",");
   if(!fresh || Date.now() - pickPeople.at > 60000) pickFetch();
   var box = $("pickModal");
   if(sig !== pickDrawn){
     pickDrawn = sig;
+    box.classList.toggle("is-alert", ask);
     var h = '<p class="eyebrow">'+esc(s.time)+'</p>'+
-            '<h2 id="pickTitle">'+esc(s.stop)+'</h2>'+
+            '<h2 id="pickTitle">'+(ask ? 'Did you pick up at '+esc(s.stop)+'?' : esc(s.stop))+'</h2>'+
             '<p class="pick-n"><b>'+n+(n===1?' person':' people')+'</b> booked</p>'+
             '<p class="pick-moving" id="pickMoving">Not while the bus is moving.</p>'+
             '<div class="pick-btns">';
@@ -9391,6 +9447,7 @@ var churchDrawn = "";
 function churchClose(){
   var box = $("churchModal");
   churchDrawn = "";
+  if(box) box.classList.remove("is-alert");
   if(!box || !box.classList.contains("is-on")) return;
   box.classList.remove("is-on");
   box.setAttribute("aria-hidden","true");
@@ -9407,7 +9464,72 @@ function churchAwayNow(){
   return false;
 }
 
+/* ---- the Church ask, from v1.142.0 (Asim, 2 Nov 2026) -----------------
+   On 1 Nov one driver went to WhatsApp after his last pickup and the other
+   left his last booked stop unmarked, so neither run ended at Church. Five
+   minutes after the run is due at Church (the later of the Arrival time and
+   its estimate), on the phone driving it: the pickup pop-up asks about each
+   booked stop still unanswered, then "Are you at Church?". Yes ends the run
+   only once the fence has seen the bus back inside; No puts it away for five
+   minutes. The server wakes the driver at the same time (wakeChurchAsk). */
+var CHURCH_ASK_MS = 5*60000;
+var CHURCH_ASK_NO_MS = 5*60000;
+var churchAskNo = 0;          /* when No put it away */
+var churchAskOpened = 0;      /* when it last opened Stops and bookings */
+
+function churchArrival(){
+  var r = null;
+  (rotaStops||[]).forEach(function(x){ if(!r && x.arrival && x.route === trip.route) r = x; });
+  return r;
+}
+function churchAskDue(){
+  if(!trip.started || trip.ended || !tripMayTap(trip.route)) return false;
+  var s = churchArrival();
+  var p = String((s && s.time) || "").split(":");
+  if(p.length < 2) return false;
+  var d = new Date(tripNow());
+  d.setHours(Number(p[0])||0, Number(p[1])||0, 0, 0);
+  var due = d.getTime();
+  var eta = rotaStopEtas ? Number(rotaStopEtas[s.id]) || 0 : 0;
+  if(eta > due) due = eta;
+  return tripNow() >= due + CHURCH_ASK_MS;
+}
+function churchAskPaint(){
+  var box = $("churchModal");
+  if(churchDrawn !== "ask"){
+    churchDrawn = "ask";
+    $("churchBody").innerHTML = '<h2 id="churchTitle">Are you at Church?</h2>'+
+      '<div class="pick-btns">'+
+        '<button class="btn btn-tap" type="button" data-churchyes="1">Yes</button>'+
+        '<button class="btn btn-ghost" type="button" data-churchno="1">No</button>'+
+      '</div>';
+  }
+  box.classList.add("is-alert");
+  if(!box.classList.contains("is-on")){
+    box.classList.add("is-on");
+    box.setAttribute("aria-hidden","false");
+  }
+}
+function churchAskYes(){
+  if(!(tripAwayEver && tripHomeSince)){ toast("Not at Church.", true); return; }
+  tripAutoEnd();
+  churchClose();
+}
+/* Opened again past Church time: straight to Stops and bookings. */
+function churchAskOpen(){
+  if(rotaStopsOpen || !st.driver || st.screen === "driver") return;
+  if(tripNow() - churchAskOpened < CHURCH_ASK_NO_MS || !churchAskDue()) return;
+  churchAskOpened = tripNow();
+  rotaOpenStops();
+}
+
 function churchSync(){
+  if(rotaStopsOpen && !pickNext && churchAskDue() && !undoAskId &&
+     tripNow() - churchAskNo >= CHURCH_ASK_NO_MS){
+    churchAskPaint();
+    return;
+  }
+  if(churchDrawn === "ask") churchClose();
   var s = (rotaStopsOpen && trip.started && !trip.ended) ? churchFor : null;
   var at = s && rotaStopEtas ? Number(rotaStopEtas[s.id]) || 0 : 0;
   if(!s || !at || churchAwayNow()){ churchClose(); return; }
@@ -9432,7 +9554,10 @@ function churchSync(){
 (function(){
   var box = $("churchModal");
   if(box) box.addEventListener("click", function(e){
-    if(!(e.target && e.target.closest && e.target.closest("[data-churchcancel]"))) return;
+    var t = e.target && e.target.closest ? e.target : null;
+    if(t && t.closest("[data-churchyes]")){ churchAskYes(); return; }
+    if(t && t.closest("[data-churchno]")){ churchAskNo = tripNow(); churchClose(); return; }
+    if(!(t && t.closest("[data-churchcancel]"))) return;
     churchAway = { key: churchKey, at: tripNow() };
     churchClose();
   });
@@ -9442,10 +9567,15 @@ function churchSync(){
 document.addEventListener("visibilitychange", function(){
   if(document.hidden) return;
   churchAway = null;
+  churchAskNo = 0;
+  safely(churchAskOpen);
   if(rotaStopsOpen) safely(churchSync);
 });
 
-setInterval(function(){ if(rotaStopsOpen) churchSync(); }, 10000);
+setInterval(function(){
+  if(!document.hidden) safely(churchAskOpen);
+  if(rotaStopsOpen) churchSync();
+}, 10000);
 
 function tripActionHtml(nextStop, showCounts){
   var waiting=nextStop?(rotaStopCounts[nextStop.id]||0):0;
