@@ -2056,6 +2056,34 @@ if (want("C59")) {
   await p.ctx.close();
 }
 
+/* C60 — a driver's hand over waiting: on the first screen, answered with
+   Approve as a hand over carrying the ask (v1.145.0). */
+if (want("C60")) {
+  const p = await page(env);
+  try {
+    await p.signIn(PIN);
+    await p.pg.evaluate(() => {
+      D.handAsks = [{ id: "h1", sunday: D.today, route: "North", trip: "t", from: "Bro Moses", to: "Bro Adesina", status: "pending" }];
+      window.__sent = [];
+      api = function(op, extra){ window.__sent.push({ op: op, extra: extra });
+        return Promise.resolve({ ok: true, action: { words: "Done." } }); };
+      paintHome();
+    });
+    const notice = await p.pg.evaluate(() => { const b = document.querySelector('[data-do="handask"]'); return b ? b.closest(".need").textContent : ""; });
+    await p.pg.evaluate(() => document.querySelector('[data-do="handask"]').click()); await p.wait(300);
+    await p.pg.evaluate(() => document.querySelector('#sheetBody [data-pick="yes"]').click());
+    const go = await p.pg.textContent("#sheetGo");
+    await p.shot("C60-hand-over-asked");
+    await p.pg.evaluate(() => document.getElementById("sheetGo").click()); await p.wait(300);
+    const a = (await p.pg.evaluate(() => window.__sent.filter((x) => x.op === "act").map((x) => x.extra.act)))[0] || {};
+    const ok = /Bro Moses asks to hand the North run to Bro Adesina\./.test(notice) && go === "Hand North to Bro Adesina" &&
+               a.kind === "rota" && a.handover === "North" && a.ask === "h1" && a.set && a.set.northCover === "Bro Adesina";
+    check("C60", "a driver's hand over shows on the first screen; Approve hands the run over",
+          ok && !p.errs.length, JSON.stringify({ notice, go, a, errs: p.errs }).slice(0, 900));
+  } catch (e) { stopped("C60", e); }
+  await p.ctx.close();
+}
+
 await done();
 cleanup(ROOT);
 const bad = results.filter((r) => !r.ok);

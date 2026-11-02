@@ -1,7 +1,7 @@
 /* Offline shell for the minibus check.
    BUMP THIS after editing index.html or config.js, or phones keep the old copy. */
 const CACHE_PREFIX = "minibus-check-";
-const CACHE = CACHE_PREFIX + "v1.144.0";
+const CACHE = CACHE_PREFIX + "v1.145.0";
 
 /* config.js is precached deliberately. Without it, a phone that had never
    fetched it successfully would fall through to the index.html fallback and
@@ -319,7 +319,11 @@ self.addEventListener("push", (e) => {
    page already open in a tab gets that tab, focused, not a second one. */
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
-  const want = (e.notification.data && e.notification.data.url) || "./";
+  const full = (e.notification.data && e.notification.data.url) || "./";
+  /* A screen to open, from v1.145.0: "./#stops" opens Stops and bookings. */
+  const cut = full.indexOf("#");
+  const hash = cut === -1 ? "" : full.slice(cut);
+  const want = cut === -1 ? full : (full.slice(0, cut) || "./");
   e.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     /* A coordinator's alert opens the coordinator's app. Bringing whatever
@@ -329,8 +333,11 @@ self.addEventListener("notificationclick", (e) => {
     const elsewhere = want !== "./";
     for (const c of all) {
       if (c.url.indexOf(self.registration.scope) !== 0 || !("focus" in c)) continue;
-      if (!elsewhere || c.url.indexOf(place) === 0) return c.focus();
+      if (!elsewhere || c.url.indexOf(place) === 0) {
+        if (hash) { try { c.postMessage({ go: hash.slice(1) }); } catch (err) {} }
+        return c.focus();
+      }
     }
-    if (self.clients.openWindow) return self.clients.openWindow(place);
+    if (self.clients.openWindow) return self.clients.openWindow(place + hash);
   })());
 });

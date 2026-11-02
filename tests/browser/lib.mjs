@@ -209,6 +209,9 @@ export async function phone(opts = {}) {
     /* The hub's duty card and a check's start, from v1.117.0. */
     else if (post.action === "duty") body = world.duty ? world.duty(post) : { ok: true, route: "" };
     else if (post.action === "checkgo") body = { ok: true };
+    /* A driver asking to hand his run over, from v1.145.0. */
+    else if (post.action === "handask") { (world.handasks = world.handasks || []).push(post);
+      body = { ok: true, ask: { id: "h1", route: post.route, to: post.to, from: post.driver, status: "pending" } }; }
     else if (p.get("vapid")) body = { ok: true, key: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" };
     else if (p.get("last")) {
       body = {

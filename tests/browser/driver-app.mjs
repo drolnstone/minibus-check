@@ -1429,6 +1429,29 @@ if (want("T50")) {
   await me.ctx.close();
 }
 
+/* T51 — HAND OVER ASKED (v1.145.0, Asim, 2 Nov 2026). The driver holding
+   today's run asks from the duty card: picks a name, confirms, and the card
+   reads waiting. */
+if (want("T51")) {
+  const me = await phone({ clock: "2026-09-27T10:20:00+01:00", world: { checks: okCheck(),
+    duty: () => ({ ok: true, sunday: "2026-09-27", route: "", hand: { route: "North", ask: null } }) } });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn(); await me.wait(1500);
+  const btn = await me.pg.evaluate(() => !!document.getElementById("handBtn"));
+  await me.pg.evaluate(() => document.getElementById("handBtn").click()); await me.wait(300);
+  const to = await me.pg.evaluate(() => { const b = document.querySelector("#undoBody [data-handto]"); b.click(); return b.getAttribute("data-handto"); });
+  await me.wait(300);
+  const ask = await me.pg.evaluate(() => document.getElementById("undoTitle").textContent);
+  await me.pg.evaluate(() => document.getElementById("undoYes").click()); await me.wait(1500);
+  const sent = (me.world.handasks || [])[0] || {};
+  const card = await me.pg.evaluate(() => document.getElementById("hubDuty").textContent);
+  check("T51", "the driver asks to hand his run over from the duty card; it reads waiting",
+        btn && ask === "Ask to hand North to " + to + "?" && sent.to === to && sent.route === "North" &&
+        card.indexOf("Hand over to " + to) !== -1 && card.indexOf("Waiting for a coordinator") !== -1 && !me.errs.length,
+        JSON.stringify({ btn, ask, sent, card, errs: me.errs }).slice(0, 600));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

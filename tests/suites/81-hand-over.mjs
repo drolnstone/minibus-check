@@ -162,5 +162,57 @@ export default async function (root) {
     a.eq(again.error, "The North run is over and its parked mileage is in.");
   });
 
+  /* ---- a driver asks, a coordinator answers (w2.77.0) ---- */
+  const keyFor = async (env, who) => (await J(await post(env, { action: "pin", pin: { driver: who, pin: PIN } }))).key;
+  const ask = async (env, who, to, route) => J(await post(env, { action: "handask", driver: who,
+    key: await keyFor(env, who), route: route || "North", to }));
+
+  s.test("the driver asks; coordinators see it; one approval hands the run over", async (a) => {
+    const { db, env } = await fresh();
+    await morning(env);
+    const out = await atTime(T("10:10"), () => ask(env, "Bro Moses", "Bro Adesina"));
+    a.ok(out.ok, JSON.stringify(out));
+    a.eq(out.ask.status, "pending");
+    const load = await atTime(T("10:11"), async () => J(await post(env, { action: "coord", who: "Bro Asim", pin: PIN, op: "load" })));
+    a.eq((load.handAsks || []).length, 1, "the coordinator app does not show it");
+    const id = load.handAsks[0].id;
+    a.eq((await atTime(T("10:11"), () => W.tripState(env, KEY, "North"))).driver, "Bro Moses", "handed over before approval");
+    const ok = await atTime(T("10:12"), async () => J(await post(env, { action: "coord", who: "Bro Asim", pin: PIN,
+      op: "act", act: { id: "hand-ask-1", kind: "rota", sunday: KEY, handover: "North", ask: id, set: { northCover: "Bro Adesina" } } })));
+    a.ok(ok.ok, JSON.stringify(ok));
+    a.eq(ok.action.words, "North: run handed to Bro Adesina (was Bro Moses), asked by Bro Moses.");
+    a.eq((await atTime(T("10:13"), () => W.tripState(env, KEY, "North"))).driver, "Bro Adesina");
+    a.eq(db._one("SELECT status FROM handasks WHERE id=?", id).status, "approved");
+    const again = await atTime(T("10:13"), async () => J(await post(env, { action: "coord", who: "Bro Asim", pin: PIN,
+      op: "act", act: { id: "hand-ask-2", kind: "rota", sunday: KEY, handover: "North", ask: id, set: { northCover: "Bro Tunde" } } })));
+    a.not(again.ok, "answered twice");
+  });
+
+  s.test("only the driver holding the run can ask, and only for a driver who may take it", async (a) => {
+    const { env } = await fresh();
+    await morning(env);
+    let r = await atTime(T("10:10"), () => ask(env, "Bro Adesina", "Bro Tunde"));
+    a.eq(r.error, "Nothing to hand over.");
+    r = await atTime(T("10:10"), () => ask(env, "Bro Moses", "Bro Tunde"));
+    a.eq(r.error, "Bro Tunde is driving South this morning.");
+    r = await atTime(T("10:10"), () => post(env, { action: "handask", driver: "Bro Moses", key: "nope", route: "North", to: "Bro Adesina" }).then(J));
+    a.eq(r.error, "pin");
+  });
+
+  s.test("turned down: nothing moves, and the driver is told", async (a) => {
+    const { db, env } = await fresh();
+    await morning(env);
+    const out = await atTime(T("10:10"), () => ask(env, "Bro Moses", "Bro Adesina"));
+    const no = await atTime(T("10:11"), async () => J(await post(env, { action: "coord", who: "Bro Asim", pin: PIN,
+      op: "act", act: { id: "hand-no-1", kind: "handno", ask: out.ask.id } })));
+    a.ok(no.ok, JSON.stringify(no));
+    a.eq((await atTime(T("10:12"), () => W.tripState(env, KEY, "North"))).driver, "Bro Moses");
+    const last = db._one("SELECT last FROM push_subs WHERE endpoint=?", EP("Bro Moses")).last;
+    a.ok(/^handno\|/.test(last), "the driver was not woken: " + last);
+    const said = await atTime(T("10:12"), () => W.pushWhat(env, EP("Bro Moses")));
+    a.eq(said.title, "North: hand over turned down");
+    a.eq(said.body, "Hand over to Bro Adesina turned down.");
+  });
+
   return s;
 }
