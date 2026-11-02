@@ -1,18 +1,27 @@
 MINIBUS
 =======
-  pages v1.141.0 · server w2.74.0 · sheet v1.130.0
+  pages v1.142.0 · server w2.75.0 · sheet v1.130.0
 
-YOU ARE ON   app v1.140.0 · server w2.74.0 · sheet v1.130.0
-GOING TO     app v1.141.0 · server w2.74.0 · sheet v1.130.0
+YOU ARE ON   app v1.141.0 · server w2.74.0 · sheet v1.130.0
+GOING TO     app v1.142.0 · server w2.75.0 · sheet v1.130.0
 
-Coordinator app: the Home button goes home on an iPhone too (v1.140.0 could
-leave the tap doing nothing). First screen: in the Emergency calls card the name and
-number sit on a line of their own under "Emergency calls go to", whatever
-the name's length. Pages only.
+Driver app and Worker: "Are you at Church?". Five minutes after a run is
+due at Church (the later of the Arrival time and the estimate), and again
+ten minutes later, the driver of a run still open is sent
+"🔴 North: Church 11:00", body "Did you pick up at (stop)?" while a booked
+stop is unanswered, else "Are you at Church?". Not sent while the driving
+phone is still on the app. Opening the app goes to Stops and bookings: the
+pickup pop-up turns red and asks about each booked stop still unanswered
+(the answer is noted "Marked at Church.", tells no passenger, and the
+passenger page shows "Picked up" without a time), then a red "Are you at
+Church?". Yes ends the run once the fence has seen the bus back inside,
+else "Not at Church."; No puts it away for 5 minutes.
+Parked mileage: the 14:00 push title starts with 🔴, and on Sundays from
+14:00 the hub card shows a red "Parked mileage not received" until keyed.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: app v1.141.0.
-B. Coordinator app: Buses, then a bus, then the house at the top right. The first screen shows.
-C. Coordinator app, first screen: "Emergency calls go to" on one line, the name and number on the next.
+A. Coordinator app, App info: app v1.142.0, server w2.75.0.
+B. Sunday after the run: the Alerts list shows "North: Are you at Church?" only for a run not ended by 11:05.
+C. Driver app hub, Sunday after 14:00 with no parked mileage keyed: the red "Parked mileage not received" line.

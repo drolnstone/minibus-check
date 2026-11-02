@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.74.0";
+const SCRIPT_VERSION = "w2.75.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1788,7 +1788,8 @@ async function tripState(env, key, route) {
       continue;
     }
 
-    if (r.stop_id) state.served[r.stop_id] = { at, event: ev };
+    if (r.stop_id) state.served[r.stop_id] = { at, event: ev,
+      late: String(r.fix_note || "").indexOf(CHURCH_LATE_NOTE) !== -1 };
 
     /* The freshest stop event is what the offset comes from. Not an average:
        traffic is local, and smoothing would lag at the moment it matters. */
@@ -1922,6 +1923,91 @@ async function runEndedToday(env, key, driver, stops) {
   return { ok: true, tag: "ended", url: "./", title: "Trip ended",
            body: lastRoute + " ended at " + londonHHMM(new Date(Number(last.ended))) + "." +
                  (owed ? " Record the bus parked mileage when you return from the afternoon run." : "") };
+}
+
+/* ARE YOU AT CHURCH, from w2.75.0 (Asim, 2 Nov 2026). On 1 Nov one driver
+   went to WhatsApp after his last pickup and never came back to the app, and
+   the other left his last booked stop unmarked; neither run ended at Church.
+
+   Five minutes after the run is due at Church (the later of the Arrival time
+   and the estimate), and again ten minutes after that, the driver of a run
+   still open is woken, unless the driving phone is still talking: then the
+   app is on screen and its own fence and ask see to it. Opening it brings up
+   the ask (index.html, churchAskDue). Each once per run; skipped when more
+   than ten minutes late, so a Worker that was down does not wake him later. */
+const CHURCH_ASK_AFTER_MIN = [5, 15];
+const CHURCH_ASK_QUIET_MS = 2 * 60000;
+const CHURCH_LATE_NOTE = "Marked at Church.";
+const ALERT_MARK = "🔴 ";
+
+/* When the run is due at Church, in ms, or 0. */
+async function churchDueMs(env, key, route, all, state) {
+  const arr = pickupsAndArrivals(all).find((s) => s.route === route && s.arrival);
+  const m = arr && arr.time ? londonMoment(key, arr.time) : null;
+  if (!m) return 0;
+  let due = m.getTime();
+  try {
+    const eta = await stopEtaMs(env, key, route, all, state, arr.id,
+                                await bookedStopIds(env, key, route), await etaSettings(env));
+    if (eta && eta > due) due = eta;
+  } catch (e) {}
+  return due;
+}
+
+/* The booked stops on the route not yet answered, in run order. */
+async function churchUnanswered(env, key, route, all, state) {
+  const booked = await bookedStopIds(env, key, route);
+  return stopsOnRoute(all, route).filter((s) =>
+    !s.arrival && !s.depart && booked.has(String(s.id)) && !state.served[s.id]);
+}
+
+async function wakeChurchAsk(env) {
+  const now = Date.now();
+  if (londonParts(new Date(now)).dow !== 0) return 0;
+  const key = runSunday();
+  const all = await getStops(env);
+  let n = 0;
+  for (const route of routeNames(pickupsAndArrivals(all))) {
+    let t = null;
+    try { t = await tripState(env, key, route); } catch (e) { continue; }
+    if (!t || !t.trip || !t.started || t.ended || !t.driver) continue;
+    const due = await churchDueMs(env, key, route, all, t);
+    if (!due) continue;
+    let ask = -1;
+    CHURCH_ASK_AFTER_MIN.forEach((mins, i) => {
+      const at = due + mins * 60000;
+      if (now >= at && now - at < 10 * 60000) ask = i;
+    });
+    if (ask < 0) continue;
+    try {
+      await ensureRunPhones(env);
+      const row = await env.DB.prepare("SELECT seen FROM run_phones WHERE trip=?").bind(t.trip).first();
+      if (row && now - Number(row.seen) < CHURCH_ASK_QUIET_MS) continue;
+    } catch (e) {}
+    const once = await env.DB.prepare("INSERT OR IGNORE INTO settings (k, v) VALUES (?, ?)")
+      .bind("churchask:" + key + ":" + route + ":" + t.trip + ":" + ask, JSON.stringify({ at: now })).run();
+    if (once && once.meta && typeof once.meta.changes === "number" && once.meta.changes === 0) continue;
+    const r = await wake(env, await driverWakeSubs(env, t.driver),
+                         "church|" + key + "|" + route + "|" + t.trip + "|" + ask);
+    n += r;
+    await trail(env, { once: "d|church|" + key + "|" + route + "|" + t.trip + "|" + ask,
+                       title: route + ": Are you at Church?",
+                       body: "To " + t.driver + ": " + trailPhones(r) + ".", not: [t.driver] });
+  }
+  return n;
+}
+
+/* What the driver's phone reads for that wake, from the record: null once
+   the run has ended or is not his. */
+async function churchAskWords(env, key, route, driver, all) {
+  if (!route || !driver) return null;
+  const t = await tripState(env, key, route);
+  if (!t || !t.started || t.ended || !sameName(t.driver, driver)) return null;
+  const arr = pickupsAndArrivals(all).find((s) => s.route === route && s.arrival);
+  const left = await churchUnanswered(env, key, route, all, t);
+  return { ok: true, tag: "church", url: "./",
+           title: ALERT_MARK + route + ": Church" + (arr && arr.time ? " " + arr.time : ""),
+           body: left.length ? "Did you pick up at " + left[0].stop + "?" : "Are you at Church?" };
 }
 
 /* THE RUN HAS ENDED, told to its driver, from w2.65.0. Asim, 16 Oct 2026:
@@ -2220,7 +2306,8 @@ async function tripPayload(env, ref, want, askedStop, pid) {
   const servedHere = state.served[myStop.id];
   if (servedHere) {
     out.mine = "served";
-    out.servedAt = londonHHMM(new Date(servedHere.at));
+    /* No time for a stop answered at Church (w2.75.0): that was not when. */
+    out.servedAt = servedHere.late ? "" : londonHHMM(new Date(servedHere.at));
     /* "Nobody there" and "picked up" are different facts. Collapsing them
        told a family thirty seconds up the road they were on a bus they were
        not on. */
@@ -3136,6 +3223,19 @@ async function handleTrip(env, payload) {
      of the morning. The name is the whole point of the column: for an
      ordinary end it is the driver's own and says nothing new, and for a run
      closed by a coordinator it is the only place the record says so. */
+  /* ANSWERED AT CHURCH, from w2.75.0 (Asim, 2 Nov 2026): a stop marked from
+     the Church ask after the run. Noted on the record, and nobody is told. */
+  const lateTaps = events.filter((e) => e.late && isStopTap(e.event) && String(e.stopId || "").trim());
+  if (lateTaps.length && (await ensureFixCol(env))) {
+    for (const e of lateTaps) {
+      try {
+        await env.DB.prepare(
+          "UPDATE trip_events SET fix_note=CASE WHEN fix_note='' THEN ?1 ELSE fix_note || ' ' || ?1 END, synced=0 " +
+          "WHERE trip=?2 AND event=?3 AND stop_id=?4 AND status<>'Undone' AND instr(fix_note, ?1)=0")
+          .bind(CHURCH_LATE_NOTE, trip, String(e.event).trim().toLowerCase(), String(e.stopId).trim()).run();
+      } catch (err) {}
+    }
+  }
   if (endsHere && events.some((e) => String(e.event || "").trim().toLowerCase() === "end")) {
     const by = String(payload.endedBy || who || "").trim();
     if (by) {
@@ -3170,7 +3270,7 @@ async function handleTrip(env, payload) {
       const stopId = String(ev.stopId || "").trim();
       if (kind === "start") {
         await wakeDeparture(env, key, route, stops, null);
-      } else if (isStopTap(kind) && liveTap[stopId + "|" + kind]) {
+      } else if (isStopTap(kind) && liveTap[stopId + "|" + kind] && !ev.late) {
         /* Only a tap still on the record (w2.57.0): one taken back in the
            same send, by a phone that was out of signal, tells nobody. */
         await wakeAfterTap(env, key, route, all, stops, stopId, marked, kind);
@@ -4479,7 +4579,7 @@ async function parkedWordsFor(env, driver, kind) {
   if (!owed.length) return null;
   /* Only that it has not come in (Asim, 18 Oct 2026). Trip ended carries
      the reminder itself. */
-  return { ok: true, tag: "parkask", url: "./", title: "Parked mileage not received",
+  return { ok: true, tag: "parkask", url: "./", title: ALERT_MARK + "Parked mileage not received",
            body: andList(owed) + "." };
 }
 
@@ -4958,6 +5058,7 @@ async function sweeps(env) {
   try { await wakeDrivers(env); } catch (e) {}
   try { await closeFinishedRuns(env); } catch (e) {}
   try { await wakeRunEnded(env); } catch (e) {}
+  try { await wakeChurchAsk(env); } catch (e) {}
   try { await wakeParkAsk(env); } catch (e) {}
   try { await wakeNotLeft(env); } catch (e) {}
   try { await wakeMorning(env); } catch (e) {}
@@ -6639,6 +6740,7 @@ function sentTitle(tag, driver, where) {
     if (k === "chkl") return rt + ": Vehicle check not started";
     if (k === "ended") return rt + ": Trip ended";
     if (k === "parkask") return rt + ": Parked mileage not received";
+    if (k === "church") return rt + ": Are you at Church?";
     if (k === "parkok") return rt + ": Parked mileage received";
     return "Driver alert";
   }
@@ -7023,6 +7125,12 @@ async function pushWhat(env, endpoint, opts) {
       const pk = await parkedWordsFor(env, sub.driver, woke);
       if (pk) return pk;
     } catch (e) { /* the ordinary answer, below */ }
+    if (woke === "church") {
+      try {
+        const ask = await churchAskWords(env, key, String(sub.last || "").split("|")[2] || "", sub.driver, all);
+        if (ask) return ask;
+      } catch (e) { /* the ordinary answer, below */ }
+    }
     if (woke === "ended") {
       try {
         const ended = await runEndedToday(env, key, sub.driver, pickupsAndArrivals(all));

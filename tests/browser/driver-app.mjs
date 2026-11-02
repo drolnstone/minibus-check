@@ -1248,6 +1248,46 @@ if (want("T40")) {
   await me.ctx.close();
 }
 
+/* T45 — v1.142.0 (Asim, 2 Nov 2026). Five minutes past Church time with the
+   last booked stop unanswered, the pickup pop-up turns red and asks "Did you
+   pick up at (stop)?" wherever the bus is; the answer goes as late. Then a
+   red "Are you at Church?": Yes is refused until the fence has seen the bus
+   back inside, then ends the run. */
+if (want("T45")) {
+  const world = { checks: okCheck(), counts: { North: { N01: 2 }, South: {} } };
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world });
+  await startRun(me);
+  await me.jump(2); await me.emit(AWAY); await me.wait(500);
+  const box = (id) => me.pg.evaluate((id) => {
+    const m = document.getElementById(id);
+    const h = m.querySelector("h2");
+    return { up: m.classList.contains("is-on"), red: m.classList.contains("is-alert"),
+             text: h ? h.textContent.trim() : "" };
+  }, id);
+  const before = await box("pickModal");
+  await me.jump(64); await me.emit(AWAY); await me.wait(11500);
+  const asked = await box("pickModal");
+  await me.shot("T45-ask-stop");
+  await me.pg.evaluate(() => document.querySelector('#pickModal [data-pick="pickup"]').click());
+  await me.wait(2500);
+  const sent = me.posted.map(p => p.trip && (p.trip.events || []).find(e => e.event === "pickup")).find(Boolean) || {};
+  await me.wait(11000);
+  const church = await box("churchModal");
+  await me.shot("T45-ask-church");
+  await me.pg.evaluate(() => document.querySelector("[data-churchyes]").click()); await me.wait(400);
+  const refused = await me.toast();
+  await me.emit(CHURCH); await me.wait(500);
+  await me.pg.evaluate(() => document.querySelector("[data-churchyes]").click()); await me.wait(1500);
+  const end = me.posted.map(p => p.trip && (p.trip.events || []).find(e => e.event === "end")).find(Boolean) || {};
+  const gone = await box("churchModal");
+  check("T45", "past Church time the red pop-up asks about the unanswered stop, then Are you at Church?; Yes needs the fence, then ends the run",
+        !before.up && asked.up && asked.red && /^Did you pick up at .+\?$/.test(asked.text) &&
+        sent.late === 1 && church.up && church.red && church.text === "Are you at Church?" &&
+        /Not at Church/.test(refused) && !!end.at && !gone.up && !me.errs.length,
+        JSON.stringify({ before, asked, sent, church, refused, end, gone, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");
