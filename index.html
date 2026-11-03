@@ -1796,7 +1796,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.145.0";
+var APP_VERSION = "v1.147.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -6422,8 +6422,19 @@ function dayShort(key){
 }
 /* HAND OVER, asked from the duty card (v1.145.0, Asim, 2 Nov 2026): the
    driver holding a run names who takes it; a coordinator approves. */
+/* An ask made with no signal is kept on the phone and sent when signal
+   comes back (v1.146.0, Asim). */
+var HANDQ_KEY = "hand.ask.q.v1";
+function handQ(){
+  try{ var q = JSON.parse(store.get(HANDQ_KEY) || "null");
+       return (q && sameName(q.driver, st.driver) && q.day === rotaKey(new Date())) ? q : null; }catch(e){ return null; }
+}
 function handHtml(){
-  var d = dutyHeld(), h = d && d.hand;
+  var d = dutyHeld(), h = d && d.hand, q = handQ();
+  if(q && (!h || h.route === q.route)){
+    return '<div class="dw"><p class="dw-eyebrow">Today · '+esc(q.route)+' run</p>'+
+      '<p class="dw-big">Hand over to '+esc(q.to)+'</p><p class="dw-sub"><b>Not sent yet: no signal</b></p></div>';
+  }
   if(!h || !h.route || d.sunday !== rotaKey(new Date())) return "";
   var a = h.ask, wait = a && a.status === "pending", no = a && a.status === "declined";
   return '<div class="dw'+(no ? ' dw-warn' : '')+'"><p class="dw-eyebrow">Today · '+esc(h.route)+' run</p>'+
@@ -6462,7 +6473,17 @@ function handConfirm(route, to){
 }
 function handSend(route, to){
   var me = st.driver;
-  if(!LIVE || !navigator.onLine){ toast("No signal. Nothing was sent.", true); return; }
+  store.set(HANDQ_KEY, JSON.stringify({ driver: me, route: route, to: to, day: rotaKey(new Date()) }));
+  dutyPaint();
+  handFlush(true);
+}
+var handBusy = false;
+function handFlush(fresh){
+  var q = handQ();
+  if(!q || handBusy || !LIVE || !navigator.onLine) return;
+  var me = q.driver, route = q.route, to = q.to;
+  var drop = function(){ store.set(HANDQ_KEY, "null"); handBusy = false; dutyPaint(); };
+  handBusy = true;
   keyEnsure(me, function(key){
     callFetch(LIVE_ENDPOINT, { method:"POST", redirect:"follow",
       headers:{ "Content-Type":"text/plain;charset=utf-8" },
@@ -6473,15 +6494,18 @@ function handSend(route, to){
         if(out && out.ok && out.ask){
           var d = dutyHeld();
           if(d && d.hand){ d.hand.ask = out.ask; store.set(DUTY_KEY, JSON.stringify(d)); }
-          dutyPaint(); toast("Sent to the coordinators.");
+          drop(); toast("Sent to the coordinators.");
           return;
         }
+        handBusy = false;
         if(out && out.error === "pin"){ driverKeyDrop(me); pinTakeBack(""); toast("Key your PIN first.", true); return; }
-        toast((out && out.error) || "Not sent.", true);
+        drop(); toast((out && out.error) || "Not sent.", true);
       })
-      .catch(function(){ toast("Not sent.", true); });
+      /* No answer: kept, and sent when signal comes back. */
+      .catch(function(){ handBusy = false; dutyPaint(); });
   });
 }
+window.addEventListener("online", function(){ handFlush(); });
 function dutyPaint(){
   var box = $("hubDuty");
   if(box) box.innerHTML = (st.screen === "hub") ? dutyHtml() + handHtml() : "";
@@ -6489,6 +6513,7 @@ function dutyPaint(){
   if(b) b.onclick = handPick;
 }
 function dutyFetch(){
+  try{ handFlush(); }catch(e){}
   if(!LIVE || !st.driver || !navigator.onLine || dutyBusy){ dutyPaint(); return; }
   dutyBusy = true;
   var me = st.driver;

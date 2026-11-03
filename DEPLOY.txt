@@ -1,31 +1,27 @@
 MINIBUS
 =======
-  pages v1.145.0 · server w2.77.0 · sheet v1.130.0
+  pages v1.147.0 · server w2.79.0 · sheet v1.130.0
 
-YOU ARE ON   app v1.144.0 · server w2.76.0 · sheet v1.130.0
-GOING TO     app v1.145.0 · server w2.77.0 · sheet v1.130.0
+YOU ARE ON   app v1.145.0 · server w2.77.0 · sheet v1.130.0
+GOING TO     app v1.147.0 · server w2.79.0 · sheet v1.130.0
 
-Hand over, both ways.
+Hand over asks, and a breakdown bus.
 
-1. The driver asks. Driver app home, on a Sunday, for the driver holding
-   today's run (open, or over with the parked mileage still to key): a
-   card with Hand over. He picks a name (coordinators included), confirms
-   "Ask to hand North to ...?", and the card reads "Hand over to ...
-   Waiting for a coordinator". Every coordinator gets an urgent alert, and
-   the coordinator app's first screen shows "... asks to hand the North run
-   to ...", Answer. Any coordinator answers, the first answer stands:
-   Approve hands the run over exactly as Hand over on the Rota does; Turn
-   down leaves it with him, and he gets "North: hand over turned down".
-
-2. The coordinator alone. Rota, today, Run row, Hand over, as in v1.144.0.
-
-The driver taking a run gets his own push, "North run handed to you", with
-"Next stop (name)." mid-run (a tap opens Stops and bookings), or "Record
-the bus parked mileage when you return from the afternoon run." once the
-run is over (a tap opens the home screen). He no longer gets "Change by";
-the driver handing over and the other coordinators still do.
+1. No signal. A driver's Hand over ask made with no signal is kept on his
+   phone ("Hand over to ... Not sent yet: no signal") and sent by itself
+   when signal comes back.
+2. No answer. An ask stays until a coordinator answers it. While nobody
+   has, every coordinator is reminded at 5, 10 and 15 minutes ("Reminder:
+   North: hand over asked"), on their phones and in Alerts.
+3. Breakdown. Coordinator app, Sunday screen, Run, Hand over: pick the
+   driver (the one holding it keeps it: Change the bus), then the bus:
+   Same bus, one of our buses (nothing more), or Hired (reg and seats).
+   No walkaround. The run's reg and seats follow it; the run record and
+   the Rota note say "Bus AB12 CDE (hired, 14 seats) (was YS70 PWE)".
+   Approving a driver's ask mid-run has the same bus step.
+   Parked mileage stays with the bus the run started in.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: app v1.145.0, server w2.77.0.
+A. Coordinator app, App info: app v1.147.0, server w2.79.0.

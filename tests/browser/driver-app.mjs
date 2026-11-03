@@ -1452,6 +1452,29 @@ if (want("T51")) {
   await me.ctx.close();
 }
 
+/* T52 — an ask made with no signal is kept and sent when signal returns
+   (v1.146.0). */
+if (want("T52")) {
+  const me = await phone({ clock: "2026-09-27T10:20:00+01:00", world: { checks: okCheck(),
+    duty: () => ({ ok: true, sunday: "2026-09-27", route: "", hand: { route: "North", ask: null } }) } });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn(); await me.wait(1500);
+  await me.ctx.setOffline(true);
+  await me.pg.evaluate(() => document.getElementById("handBtn").click()); await me.wait(300);
+  const to = await me.pg.evaluate(() => { const b = document.querySelector("#undoBody [data-handto]"); b.click(); return b.getAttribute("data-handto"); });
+  await me.wait(300);
+  await me.pg.evaluate(() => document.getElementById("undoYes").click()); await me.wait(800);
+  const off = await me.pg.evaluate(() => document.getElementById("hubDuty").textContent);
+  const sentOff = (me.world.handasks || []).length;
+  await me.ctx.setOffline(false); await me.wait(2500);
+  const sent = (me.world.handasks || [])[0] || {};
+  const on = await me.pg.evaluate(() => document.getElementById("hubDuty").textContent);
+  check("T52", "a hand over asked with no signal is kept, then sent when signal returns",
+        /Not sent yet/.test(off) && sentOff === 0 && sent.to === to && /Waiting for a coordinator/.test(on) && !me.errs.length,
+        JSON.stringify({ off, sentOff, sent, on, errs: me.errs }).slice(0, 600));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

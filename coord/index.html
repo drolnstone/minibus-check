@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.145.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.147.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -750,7 +750,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.145.0";
+var PAGE_VERSION = "v1.147.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1606,10 +1606,13 @@ function paintSunday(key){
     h += '<div class="card route-card"><h3>'+rt+(off ? ' · called off' : '')+'</h3>';
     h += '<div class="row"><span class="k">Driver</span><span class="v'+(g.sched?'':' none')+'">'+esc(g.sched || 'Nobody')+'</span>' + btn(lo, "Change") + '</div>';
     h += '<div class="row"><span class="k">Cover</span><span class="v'+(g.cover?'':' none')+'">'+esc(g.cover || 'Nobody')+'</span>' + btn(lo + "Cover", g.cover ? "Change" : "Add") + '</div>';
-    h += '<div class="row"><span class="k">Bus</span><span class="v">'+(g.bus ? '<span class="plate">'+esc(g.bus)+'</span>' : '<span class="none">Not known</span>')+'</span>' + btn("bus", "Change") + '</div>';
     /* HAND OVER (v1.144.0, Asim, 2 Nov 2026): today's run, open or with its
        parked mileage still to key, given to another driver. */
     var run = key === D.today ? ((D.runs || {})[rt] || null) : null;
+    /* A replacement bus on today's run (v1.147.0) is the bus shown. */
+    var swapped = run && run.started && run.reg && run.reg0 && run.reg !== run.reg0;
+    var bus = swapped ? run.reg : g.bus;
+    h += '<div class="row"><span class="k">Bus</span><span class="v">'+(bus ? '<span class="plate">'+esc(bus)+'</span>'+(swapped ? ' <small>'+(run.hired ? 'hired' : 'replacement')+'</small>' : '') : '<span class="none">Not known</span>')+'</span>' + (swapped ? '' : btn("bus", "Change")) + '</div>';
     if(run && run.started && run.driver && (!run.ended || run.parkedOwed))
       h += '<div class="row"><span class="k">Run</span><span class="v">'+esc(run.driver)+' · '+(run.ended ? 'parked mileage to key' : 'on the road')+'</span>' +
            '<span class="acts"><button class="mini" type="button" data-do="handover" data-key="'+esc(key)+'" data-route="'+rt+'">Hand over</button></span></div>';
@@ -1689,19 +1692,73 @@ function pickHandover(key, rt){
     if(a.busy !== b.busy) return a.busy ? 1 : -1;
     return a.name < b.name ? -1 : 1;
   });
+  /* The man holding it can be picked while the run is on the road: that
+     changes the bus only (v1.147.0). */
   var list = '<ul class="pick">' + people.map(function(p){
     var hint = p.cur ? "has the run" : p.busy ? "on " + ot + " this morning" : "";
-    return '<li><button type="button" data-pick="'+esc(p.name)+'"'+(p.cur || p.busy ? ' disabled' : '')+'><b>'+esc(p.name)+'</b><small>'+esc(hint)+'</small></button></li>';
+    var off = p.busy || (p.cur && run.ended);
+    return '<li><button type="button" data-pick="'+esc(p.name)+'"'+(off ? ' disabled' : '')+'><b>'+esc(p.name)+'</b><small>'+esc(hint)+'</small></button></li>';
   }).join("") + '</ul>';
   openSheet({
     eyebrow: shortDay(key),
     title: rt + " run",
     body: list,
     go: "Choose who takes it",
-    onPick: function(name){ return "Hand " + rt + " to " + name; },
+    onPick: function(name){ return same(name, run.driver) ? "Change the bus" : run.ended ? "Hand " + rt + " to " + name : "Next: bus"; },
     onGo: function(name){
-      var set = {}; set[rt === "South" ? "southCover" : "northCover"] = name;
-      act({ kind:"rota", sunday:key, set:set, handover: rt });
+      if(run.ended){ handoverGo(key, rt, name, null, null); return; }
+      pickRunBus(key, rt, name, null);
+    }
+  });
+}
+
+function handoverGo(key, rt, name, bus, ask){
+  var set = {}; set[rt === "South" ? "southCover" : "northCover"] = name;
+  var a = { kind:"rota", sunday:key, set:set, handover: rt };
+  if(bus) a.bus = bus;
+  if(ask) a.ask = ask;
+  act(a);
+}
+
+/* BREAKDOWN (v1.147.0, Asim, 3 Nov 2026): the bus the run carries on in.
+   The same bus, another of ours (nothing more asked), or a hired one (reg
+   and seats). No walkaround. */
+function pickRunBus(key, rt, name, ask){
+  var run = (D.runs || {})[rt] || {}, ot = rt === "North" ? "South" : "North";
+  var orun = (D.runs || {})[ot] || {};
+  var keeps = same(name, run.driver);
+  var flat = function(x){ return String(x || "").toUpperCase().replace(/\s+/g, ""); };
+  var buses = ((D && D.buses) || []).filter(function(b){ return b.active; });
+  var list = '<ul class="pick">' +
+    (keeps ? '' : '<li><button type="button" data-pick="="><b>Same bus</b><small>'+esc(run.reg || "")+'</small></button></li>') +
+    buses.map(function(b){
+      var on = flat(b.reg) === flat(run.reg), there = orun.started && !orun.ended && flat(b.reg) === flat(orun.reg);
+      var hint = on ? "on " + rt + " now" : there ? "on the " + ot + " run" : seatWords(b.seats);
+      return '<li><button type="button" data-pick="'+esc(b.reg)+'"'+(on || there ? ' disabled' : '')+'><b>'+esc(b.reg)+'</b><small>'+esc(hint)+'</small></button></li>';
+    }).join("") +
+    '<li><button type="button" data-pick="+"><b>Hired</b><small>reg and seats</small></button></li></ul>' +
+    '<div id="hireF" style="display:none"><div class="two">' +
+      '<div class="field"><label for="hireReg">Reg</label><input id="hireReg" maxlength="10" autocomplete="off" autocapitalize="characters" placeholder="e.g. AB12 CDE"></div>' +
+      '<div class="field"><label for="hireSeats">Seats for passengers</label><input id="hireSeats" type="number" inputmode="numeric" min="1" max="99" placeholder="e.g. 16"></div>' +
+    '</div></div>';
+  openSheet({
+    eyebrow: rt + " run",
+    title: keeps ? "Bus" : name + ": bus",
+    body: list,
+    go: "Choose the bus",
+    onPick: function(v){
+      $("hireF").style.display = v === "+" ? "" : "none";
+      if(v === "+") setTimeout(function(){ try{ $("hireReg").focus(); }catch(e){} }, 50);
+      var b = v === "=" ? "" : v === "+" ? "the hired bus" : v;
+      return keeps ? "Put " + b + " on " + rt : "Hand " + rt + " to " + name;
+    },
+    onGo: function(v){
+      if(v === "=") return handoverGo(key, rt, name, null, ask);
+      if(v !== "+") return handoverGo(key, rt, name, { reg: v }, ask);
+      var reg = String(($("hireReg") || {}).value || "").trim(), n = String(($("hireSeats") || {}).value || "").trim();
+      if(!reg){ $("hireReg").value = ""; sheetSay("Type the reg.", true); return; }
+      if(!/^[1-9]\d?$/.test(n)){ $("hireSeats").value = ""; sheetSay("Type the seats.", true); return; }
+      handoverGo(key, rt, name, { hired: true, reg: reg, seats: Number(n) }, ask);
     }
   });
 }
@@ -1718,11 +1775,13 @@ function answerHandAsk(id){
     title: q.from + " to " + q.to,
     body: list,
     go: "Choose",
-    onPick: function(v){ return v === "yes" ? "Hand " + q.route + " to " + q.to : "Turn it down"; },
+    onPick: function(v){ var run = (D.runs || {})[q.route] || {};
+      return v === "no" ? "Turn it down" : run.started && !run.ended ? "Next: bus" : "Hand " + q.route + " to " + q.to; },
     onGo: function(v){
       if(v === "no"){ act({ kind:"handno", ask:q.id }); return; }
-      var set = {}; set[q.route === "South" ? "southCover" : "northCover"] = q.to;
-      act({ kind:"rota", sunday:q.sunday, set:set, handover:q.route, ask:q.id });
+      var run = (D.runs || {})[q.route] || {};
+      if(run.started && !run.ended && q.sunday === D.today) return pickRunBus(q.sunday, q.route, q.to, q.id);
+      handoverGo(q.sunday, q.route, q.to, null, q.id);
     }
   });
 }

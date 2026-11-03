@@ -416,7 +416,10 @@ CREATE TABLE IF NOT EXISTS handovers (
   from_driver TEXT NOT NULL,
   to_driver   TEXT NOT NULL,
   by_name     TEXT NOT NULL,
-  at          INTEGER NOT NULL       -- ms
+  at          INTEGER NOT NULL,      -- ms
+  reg         TEXT NOT NULL DEFAULT '',   -- replacement bus, w2.79.0
+  seats       INTEGER NOT NULL DEFAULT 0,
+  hired       INTEGER NOT NULL DEFAULT 0
 );
 
 -- A DRIVER ASKS to hand his run over, from w2.77.0: pending until a
