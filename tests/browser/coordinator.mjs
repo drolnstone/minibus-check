@@ -2038,18 +2038,23 @@ if (want("C59")) {
       const b = Array.prototype.find.call(document.querySelectorAll("#sheetBody [data-pick]"), (x) => x.getAttribute("data-pick") === h);
       return !!(b && b.disabled);
     }, holder);
-    const taker = await p.pg.evaluate(() => {
-      const b = Array.prototype.find.call(document.querySelectorAll("#sheetBody [data-pick]"), (x) => !x.disabled);
+    const taker = await p.pg.evaluate((h) => {
+      const b = Array.prototype.find.call(document.querySelectorAll("#sheetBody [data-pick]"), (x) => !x.disabled && x.getAttribute("data-pick") !== h);
       b.click(); return b.getAttribute("data-pick");
-    });
+    }, holder);
+    const next = await p.pg.textContent("#sheetGo");
+    await p.pg.evaluate(() => document.getElementById("sheetGo").click());
+    await p.wait(300);
+    /* The bus step (v1.147.0): the same bus. */
+    await p.pg.evaluate(() => document.querySelector('#sheetBody [data-pick="="]').click());
     const go = await p.pg.textContent("#sheetGo");
     await p.shot("C59-hand-over");
     await p.pg.evaluate(() => document.getElementById("sheetGo").click());
     await p.wait(300);
     const sent = await p.pg.evaluate(() => window.__sent.filter((x) => x.op === "act").map((x) => x.extra.act));
     const a = sent[0] || {};
-    const ok = row.indexOf(holder) !== -1 && /on the road/.test(row) && greyed && go === "Hand North to " + taker &&
-               a.kind === "rota" && a.handover === "North" && a.set && a.set.northCover === taker && a.sunday === key;
+    const ok = row.indexOf(holder) !== -1 && /on the road/.test(row) && !greyed && next === "Next: bus" && go === "Hand North to " + taker &&
+               a.kind === "rota" && a.handover === "North" && a.set && a.set.northCover === taker && a.sunday === key && !a.bus;
     check("C59", "Hand over: today's run on the Sunday screen goes to the driver picked, as a cover change with the route",
           ok && !p.errs.length, JSON.stringify({ row, greyed, go, sent, errs: p.errs }).slice(0, 900));
   } catch (e) { stopped("C59", e); }
@@ -2081,6 +2086,51 @@ if (want("C60")) {
     check("C60", "a driver's hand over shows on the first screen; Approve hands the run over",
           ok && !p.errs.length, JSON.stringify({ notice, go, a, errs: p.errs }).slice(0, 900));
   } catch (e) { stopped("C60", e); }
+  await p.ctx.close();
+}
+
+/* C61 — breakdown (v1.147.0, Asim, 3 Nov 2026): the driver keeps the run,
+   the bus is hired: reg and seats, sent with the hand over. */
+if (want("C61")) {
+  const p = await page(env);
+  try {
+    await p.signIn(PIN);
+    const key = await p.pg.evaluate(() => { const r = rows().filter((x) => x.date >= D.today)[0]; D.today = r.date; return r.date; });
+    const holder = await p.pg.evaluate(() => activeDrivers()[0].name);
+    await p.pg.evaluate((h) => {
+      D.runs = { North: { trip: "t-hand", driver: h, reg: "X", started: Date.now() - 600000, ended: 0 } };
+      window.__sent = [];
+      api = function(op, extra){ window.__sent.push({ op: op, extra: extra });
+        return Promise.resolve({ ok: true, action: { words: "Done." } }); };
+    }, holder);
+    await p.pg.evaluate((k) => { location.hash = "sunday/" + k; }, key);
+    await p.wait(600);
+    await p.pg.evaluate(() => document.querySelector('#sundayBody [data-do="handover"][data-route="North"]').click());
+    await p.wait(300);
+    await p.pg.evaluate((h) => Array.prototype.find.call(document.querySelectorAll("#sheetBody [data-pick]"), (x) => x.getAttribute("data-pick") === h).click(), holder);
+    const next = await p.pg.textContent("#sheetGo");
+    await p.pg.evaluate(() => document.getElementById("sheetGo").click());
+    await p.wait(300);
+    const noSame = await p.pg.evaluate(() => !document.querySelector('#sheetBody [data-pick="="]'));
+    await p.pg.evaluate(() => document.querySelector('#sheetBody [data-pick="+"]').click());
+    const shown = await p.pg.evaluate(() => document.getElementById("hireF").style.display !== "none");
+    const samples = await p.pg.evaluate(() => [document.getElementById("hireReg").placeholder, document.getElementById("hireSeats").placeholder]);
+    await p.pg.evaluate(() => document.getElementById("sheetGo").click());
+    const refused = await p.pg.textContent("#sheetSay");
+    await p.pg.fill("#hireReg", "AB12 CDE");
+    await p.pg.fill("#hireSeats", "14");
+    const go = await p.pg.textContent("#sheetGo");
+    await p.shot("C61-hired-bus");
+    await p.pg.evaluate(() => document.getElementById("sheetGo").click());
+    await p.wait(300);
+    const a = (await p.pg.evaluate(() => window.__sent.filter((x) => x.op === "act").map((x) => x.extra.act)))[0] || {};
+    const ok = next === "Change the bus" && noSame && shown && samples[0] === "e.g. AB12 CDE" && samples[1] === "e.g. 16" &&
+               /Type the reg\./.test(refused) && go === "Put the hired bus on North" &&
+               a.handover === "North" && a.set && a.set.northCover === holder &&
+               a.bus && a.bus.hired === true && a.bus.reg === "AB12 CDE" && a.bus.seats === 14;
+    check("C61", "breakdown: a hired bus, reg and seats, sent with the hand over",
+          ok && !p.errs.length, JSON.stringify({ next, noSame, shown, samples, refused, go, a, errs: p.errs }).slice(0, 900));
+  } catch (e) { stopped("C61", e); }
   await p.ctx.close();
 }
 

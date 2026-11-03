@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.78.0";
+const SCRIPT_VERSION = "w2.79.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1561,6 +1561,9 @@ async function busFor(env, key, route, buses, rotaRow) {
   const want = String(route || "").toUpperCase().charAt(0) === "S" ? "South" : "North";
   const known = {};
   for (const b of buses) known[b.reg.toUpperCase()] = b;
+  /* A replacement bus put on the run (w2.79.0) is the route's bus that day. */
+  const swap = env && env.DB && key ? await busSwapOn(env, key, want) : null;
+  if (swap) return { reg: swap.reg, from: swap.hired ? "hired" : "replacement", seats: swap.seats };
 
   const over = String((rotaRow && (want === "South" ? rotaRow.south_bus : rotaRow.north_bus)) || "").trim();
   if (over) {
@@ -1767,6 +1770,7 @@ async function tripState(env, key, route) {
 
     if (ev === "start") {
       state.started = at;
+      state.reg0 = r.reg || state.reg0 || "";
       /* A departure row gives the run an offset before a single stop has been
          marked. Guarded on the offset actually being a number: a route with
          no Depart row writes nothing there, and nothing must not read as
@@ -1814,7 +1818,12 @@ async function tripState(env, key, route) {
   if (state.trip) {
     const h = await handoverOf(env, state.trip);
     if (h) { state.driver = h.to; state.handed = h; }
+    /* A replacement bus (w2.79.0): the run's reg from then on. reg0 stays the
+       bus the run started with, which is the one its parked mileage is for. */
+    const b = await busSwapOf(env, state.trip);
+    if (b) { state.reg = b.reg; state.hired = b.hired; state.busSeats = b.seats; }
   }
+  if (!state.reg0) state.reg0 = state.reg;
   return state;
 }
 
@@ -1922,7 +1931,7 @@ async function runEndedToday(env, key, driver, stops) {
   if (!last) return null;
   let owed = false;
   try {
-    owed = (await parkedOpen(env)).some((o) => o.reg === String(last.reg || "").trim().toUpperCase() &&
+    owed = (await parkedOpen(env)).some((o) => o.reg === String(last.reg0 || last.reg || "").trim().toUpperCase() &&
                                                !o.parked && sameName(o.driver, driver));
   } catch (e) {}
   return { ok: true, tag: "ended", url: "./", title: "Trip ended",
@@ -2030,8 +2039,9 @@ async function handedWords(env, key, route, driver, all) {
   const next = pickupsAndArrivals(all)
     .filter((s) => s.route === route && !s.arrival && !s.depart && !(t.served || {})[s.id])
     .sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0))[0];
+  const bus = t.reg && t.reg !== t.reg0 ? "Bus " + t.reg + ". " : "";
   return { ok: true, tag: "handed", url: "./#stops", title,
-           body: next ? "Next stop " + next.stop + "." : "Next stop Church." };
+           body: bus + (next ? "Next stop " + next.stop + "." : "Next stop Church.") };
 }
 
 /* THE RUN HAS ENDED, told to its driver, from w2.65.0. Asim, 16 Oct 2026:
@@ -2494,7 +2504,32 @@ async function ensureHandovers(env) {
     "  to_driver TEXT NOT NULL," +
     "  by_name TEXT NOT NULL," +
     "  at    INTEGER NOT NULL)").run();
+  /* w2.79.0: the replacement bus, when the hand over carried one. */
+  for (const c of ["reg TEXT NOT NULL DEFAULT ''", "seats INTEGER NOT NULL DEFAULT 0", "hired INTEGER NOT NULL DEFAULT 0"]) {
+    try { await env.DB.prepare("ALTER TABLE handovers ADD COLUMN " + c).run(); } catch (e) {}
+  }
   handoversReady = true;
+}
+/* The latest replacement bus on a run, or null. */
+async function busSwapOf(env, trip) {
+  if (!trip) return null;
+  try {
+    await ensureHandovers(env);
+    const b = await env.DB.prepare(
+      "SELECT reg, seats, hired FROM handovers WHERE trip=? AND reg<>'' ORDER BY at DESC, id DESC LIMIT 1")
+      .bind(String(trip)).first();
+    return b ? { reg: String(b.reg), seats: Number(b.seats) || 0, hired: !!Number(b.hired) } : null;
+  } catch (e) { return null; }
+}
+/* Today's replacement bus on a route, for its seats. */
+async function busSwapOn(env, key, route) {
+  try {
+    await ensureHandovers(env);
+    const b = await env.DB.prepare(
+      "SELECT reg, seats, hired FROM handovers WHERE sunday=? AND route=? AND reg<>'' ORDER BY at DESC, id DESC LIMIT 1")
+      .bind(String(key), String(route)).first();
+    return b ? { reg: String(b.reg), seats: Number(b.seats) || 0, hired: !!Number(b.hired) } : null;
+  } catch (e) { return null; }
 }
 async function handoverOf(env, trip) {
   if (!trip) return null;
@@ -2572,7 +2607,7 @@ async function handableRun(env, key, who, all) {
     const t = await tripState(env, key, rt);
     if (!t || !t.trip || !t.started || !sameName(t.driver, who)) continue;
     if (t.ended) {
-      const o = (await parkedOpen(env)).filter((x) => x.reg === String(t.reg || "").toUpperCase())[0];
+      const o = (await parkedOpen(env)).filter((x) => x.reg === String(t.reg0 || t.reg || "").toUpperCase())[0];
       if (!o || o.parked) continue;
     }
     return { route: rt, trip: t.trip, ended: t.ended || 0 };
@@ -4543,8 +4578,8 @@ async function runsByBus(env, day) {
   for (const route of routes) {
     let t = null;
     try { t = await tripState(env, day, route); } catch (e) { continue; }
-    if (!t || !t.trip || !t.started || !t.reg) continue;
-    out[String(t.reg).trim().toUpperCase()] = { driver: String(t.driver || ""), ended: Number(t.ended) || 0, route };
+    if (!t || !t.trip || !t.started || !(t.reg0 || t.reg)) continue;
+    out[String(t.reg0 || t.reg).trim().toUpperCase()] = { driver: String(t.driver || ""), ended: Number(t.ended) || 0, route };
   }
   return out;
 }
@@ -10647,7 +10682,7 @@ async function coordLoad(env, me) {
   for (const rt of out.routes) {
     try {
       const t = await tripState(env, today, rt);
-      out.runs[rt] = { trip: t.trip, driver: t.driver, reg: t.reg,
+      out.runs[rt] = { trip: t.trip, driver: t.driver, reg: t.reg, reg0: t.reg0 || t.reg, hired: !!t.hired,
                        started: t.started, ended: t.ended, lastStop: t.lastStop,
                        handed: t.handed || null };
     } catch (e) {}
@@ -10659,7 +10694,7 @@ async function coordLoad(env, me) {
     for (const rt of Object.keys(out.runs)) {
       const r = out.runs[rt];
       if (!r.started || !r.ended) continue;
-      const o = open.filter((x) => x.reg === String(r.reg || "").toUpperCase())[0];
+      const o = open.filter((x) => x.reg === String(r.reg0 || r.reg || "").toUpperCase())[0];
       r.parkedOwed = !!(o && !o.parked);
     }
   } catch (e) {}
@@ -11233,6 +11268,7 @@ async function actRota(env, me, act) {
              tell: [hand.from], words: hand.words, stmts: hand.stmts,
              after: async () => {
                await reapplyRawRota(env, [key]);
+               if (hand.same) return;
                /* The new driver gets his own push, not "Change by". */
                try {
                  const r = await wake(env, await driverWakeSubs(env, hand.to),
@@ -11278,9 +11314,17 @@ async function handoverPlan(env, me, key, cur, act, set) {
   const t = await tripState(env, key, route);
   if (!t || !t.trip || !t.started) return { error: "The " + route + " run has not started." };
   const from = String(t.driver || "").trim();
-  if (sameName(from, to)) return { error: to + " has the " + route + " run already." };
+  /* A REPLACEMENT BUS (w2.79.0, Asim, 3 Nov 2026): one of ours, nothing more
+     asked; a hired one, its reg and seats. No walkaround. */
+  let bus = null;
+  if (act.bus && typeof act.bus === "object") {
+    bus = await busPick(env, key, route, t, act.bus);
+    if (bus.error) return { error: bus.error };
+  }
+  if (sameName(from, to) && !bus) return { error: to + " has the " + route + " run already." };
+  if (bus && t.ended) return { error: "The " + route + " run is over." };
   if (t.ended) {
-    const open = (await parkedOpen(env)).filter((o) => o.reg === String(t.reg || "").toUpperCase())[0];
+    const open = (await parkedOpen(env)).filter((o) => o.reg === String(t.reg0 || t.reg || "").toUpperCase())[0];
     if (!open || open.parked) return { error: "The " + route + " run is over and its parked mileage is in." };
   }
   const ot = route === "North" ? "South" : "North";
@@ -11288,17 +11332,21 @@ async function handoverPlan(env, me, key, cur, act, set) {
   const oDrv = (o && o.started) ? String(o.driver || "")
              : String((ot === "South" ? (cur.southCover || cur.south) : (cur.northCover || cur.north)) || "");
   let otherDone = false;
-  if (oDrv && sameName(oDrv, to)) {
+  if (oDrv && sameName(oDrv, to) && !sameName(from, to)) {
     if (!(o && o.started && o.ended)) return { error: to + " is driving " + ot + " this morning." };
     otherDone = true;
   }
   await ensureHandovers(env);
   await ensureRunPhones(env);
   const now = Date.now(), hhmm = londonHHMM(new Date(now));
-  const line = route + " run handed to " + to + " at " + hhmm + " by " + me.name + " (was " + (from || "nobody") + ").";
+  const same = sameName(from, to);
+  const busLine = bus ? "Bus " + bus.reg + (bus.hired ? " (hired, " + bus.seats + " seats)" : "") + " (was " + (t.reg || "not known") + ")." : "";
+  const line = same
+    ? route + " bus changed at " + hhmm + " by " + me.name + ". " + busLine
+    : route + " run handed to " + to + " at " + hhmm + " by " + me.name + " (was " + (from || "nobody") + ")." + (bus ? " " + busLine : "");
   const stmts = [
-    env.DB.prepare("INSERT INTO handovers (trip, sunday, route, from_driver, to_driver, by_name, at) VALUES (?,?,?,?,?,?,?)")
-      .bind(t.trip, key, route, from, to, me.name, now),
+    env.DB.prepare("INSERT INTO handovers (trip, sunday, route, from_driver, to_driver, by_name, at, reg, seats, hired) VALUES (?,?,?,?,?,?,?,?,?,?)")
+      .bind(t.trip, key, route, from, to, me.name, now, bus ? bus.reg : "", bus ? bus.seats : 0, bus && bus.hired ? 1 : 0),
     /* The new driver's phone takes the run at once. */
     env.DB.prepare("DELETE FROM run_phones WHERE trip=?").bind(t.trip)
   ];
@@ -11307,8 +11355,33 @@ async function handoverPlan(env, me, key, cur, act, set) {
       "UPDATE trip_events SET fix_note=CASE WHEN fix_note='' THEN ? ELSE fix_note || ' ' || ? END, synced=0 " +
       "WHERE trip=? AND event='start' AND status<>'Undone'").bind(line, line, t.trip));
   }
-  return { route, from, to, otherDone, stmts, note: line, trip: t.trip,
-           words: route + ": run handed to " + to + " (was " + (from || "nobody") + ")." };
+  const busWords = bus ? "bus " + bus.reg + (bus.hired ? " (hired, " + bus.seats + " seats)" : "") : "";
+  return { route, from, to, otherDone, stmts, note: line, trip: t.trip, same, bus,
+           words: same ? route + ": " + busWords + "."
+                       : route + ": run handed to " + to + " (was " + (from || "nobody") + ")" + (bus ? ", " + busWords : "") + "." };
+}
+
+/* The replacement bus a hand over names: { reg } for one of ours, or
+   { hired: true, reg, seats }. Answers { reg, seats, hired } or an error. */
+async function busPick(env, key, route, t, b) {
+  const reg = String(b.reg || "").toUpperCase().replace(/\s+/g, " ").trim();
+  if (!reg) return { error: "Type the reg." };
+  if (!/^[A-Z0-9 ]{2,10}$/.test(reg)) return { error: "Type the reg, e.g. AB12 CDE." };
+  if (reg.replace(/ /g, "") === String(t.reg || "").toUpperCase().replace(/\s+/g, "")) {
+    return { error: reg + " is on the " + route + " run already." };
+  }
+  const buses = await getBuses(env);
+  const ours = buses.filter((x) => x.active && String(x.reg).toUpperCase().replace(/\s+/g, "") === reg.replace(/ /g, ""))[0];
+  if (!b.hired && !ours) return { error: reg + " is not an active bus on the Buses tab." };
+  const ot = route === "North" ? "South" : "North";
+  const o = await tripState(env, key, ot);
+  if (o && o.started && !o.ended && String(o.reg || "").toUpperCase().replace(/\s+/g, "") === reg.replace(/ /g, "")) {
+    return { error: reg + " is on the " + ot + " run." };
+  }
+  if (ours) return { reg: ours.reg, seats: Number(ours.seats) || 0, hired: false };
+  const n = Number(String(b.seats == null ? "" : b.seats).trim());
+  if (!(n >= 1 && n <= 99 && Math.floor(n) === n)) return { error: "Type the seats." };
+  return { reg, seats: n, hired: true };
 }
 
 /* A driver's hand over turned down (w2.77.0). Kept on this server: the
