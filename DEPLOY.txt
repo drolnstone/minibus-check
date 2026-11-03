@@ -10,10 +10,9 @@ Hand over asks, two fixes.
 1. No signal. A driver's Hand over ask made with no signal is kept on his
    phone ("Hand over to ... Not sent yet: no signal") and sent by itself
    when signal comes back.
-2. No answer. An ask nobody answers lapses after 30 minutes: it leaves the
-   coordinator app's first screen, Approve or Turn down then says "That
-   hand over was not answered in time.", and the driver's card reads
-   "Hand over to ... Not answered" with Hand over to ask again.
+2. No answer. An ask stays until a coordinator answers it. While nobody
+   has, every coordinator is reminded at 5, 10 and 15 minutes ("Reminder:
+   North: hand over asked"), on their phones and in Alerts.
 
 Merging is the whole deploy.
 

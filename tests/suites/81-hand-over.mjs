@@ -214,19 +214,25 @@ export default async function (root) {
     a.eq(said.body, "Hand over to Bro Adesina turned down.");
   });
 
-  s.test("an ask nobody answers lapses after half an hour", async (a) => {
+  s.test("an ask nobody answers stays, and coordinators are reminded at 5, 10 and 15 minutes", async (a) => {
     const { env } = await fresh();
     await morning(env);
     const out = await atTime(T("10:10"), () => ask(env, "Bro Moses", "Bro Adesina"));
+    const sent = async (hhmm) => atTime(T(hhmm), () => W.wakeHandAsks(env));
+    a.eq(await sent("10:13"), 0, "reminded before 5 minutes");
+    a.eq(await sent("10:15"), 1);
+    const log = async () => ((await atTime(T("10:16"), async () => J(await post(env, { action: "coord", who: "Bro Asim", pin: PIN, op: "alerts" })))).alerts.list || [])
+      .filter((x) => /^Reminder: North: hand over asked/.test(x.title || "")).length;
+    a.eq(await log(), 1, "the reminder is not on the Alerts list");
+    await sent("10:16");
+    a.eq(await log(), 1, "the same reminder sent twice");
+    await sent("10:20"); await sent("10:25"); await sent("10:40");
+    a.eq(await log(), 3, "not three reminders");
     const load = await atTime(T("10:41"), async () => J(await post(env, { action: "coord", who: "Bro Asim", pin: PIN, op: "load" })));
-    a.eq((load.handAsks || []).length, 0, "still shown to coordinators after 30 minutes");
-    const late = await atTime(T("10:41"), async () => J(await post(env, { action: "coord", who: "Bro Asim", pin: PIN,
+    a.eq((load.handAsks || []).length, 1, "the ask left the coordinator app");
+    const ok = await atTime(T("10:41"), async () => J(await post(env, { action: "coord", who: "Bro Asim", pin: PIN,
       op: "act", act: { id: "hand-late-1", kind: "rota", sunday: KEY, handover: "North", ask: out.ask.id, set: { northCover: "Bro Adesina" } } })));
-    a.eq(late.error, "That hand over was not answered in time.");
-    const duty = await atTime(T("10:41"), async () => J(await post(env, { action: "duty", driver: "Bro Moses" })));
-    a.eq(duty.hand && duty.hand.ask && duty.hand.ask.status, "lapsed", "the driver's card does not say so");
-    const again = await atTime(T("10:42"), () => ask(env, "Bro Moses", "Bro Adesina"));
-    a.ok(again.ok, "could not ask again: " + JSON.stringify(again));
+    a.ok(ok.ok, "a late answer was refused: " + JSON.stringify(ok));
   });
 
   return s;

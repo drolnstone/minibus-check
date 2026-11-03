@@ -2527,14 +2527,36 @@ async function ensureHandAsks(env) {
     "  done_at INTEGER NOT NULL DEFAULT 0)").run();
   handAsksReady = true;
 }
-/* An ask nobody has answered lapses after half an hour (w2.78.0, Asim):
-   read as lapsed from then on, so nothing needs to sweep it. */
-const HAND_ASK_LAPSE_MS = 30 * 60000;
 const askOf = (r) => r ? { id: String(r.id), sunday: String(r.sunday), route: String(r.route), trip: String(r.trip),
-  from: String(r.from_driver), to: String(r.to_driver), made: Number(r.made),
-  status: String(r.status) === "pending" && Date.now() - Number(r.made) >= HAND_ASK_LAPSE_MS ? "lapsed" : String(r.status),
+  from: String(r.from_driver), to: String(r.to_driver), made: Number(r.made), status: String(r.status),
   by: String(r.by_name || ""), at: Number(r.done_at) || 0 } : null;
-const askAnswered = (a) => a && a.status === "lapsed" ? "That hand over was not answered in time." : "That hand over has already been answered.";
+const askAnswered = () => "That hand over has already been answered.";
+
+/* NOT ANSWERED, from w2.78.0 (Asim, 3 Nov 2026): an ask stays until a
+   coordinator answers it, and the coordinators are reminded at 5, 10 and 15
+   minutes. Each reminder once, by its alert id. */
+const HAND_ASK_REMIND_MIN = [5, 10, 15];
+async function wakeHandAsks(env) {
+  const now = Date.now();
+  if (londonParts(new Date(now)).dow !== 0) return 0;
+  await ensureHandAsks(env);
+  const q = await env.DB.prepare("SELECT * FROM handasks WHERE status='pending' AND sunday=?")
+    .bind(londonKey(new Date(now))).all();
+  let n = 0;
+  for (const r of (q.results || [])) {
+    const a = askOf(r);
+    const t = await tripState(env, a.sunday, a.route);
+    if (!t || t.trip !== a.trip || !sameName(t.driver, a.from)) continue;
+    let due = -1;
+    HAND_ASK_REMIND_MIN.forEach((m, i) => { if (now - a.made >= m * 60000) due = i; });
+    if (due < 0) continue;
+    await handleCoordAlert(env, { alert: { id: "handask|" + a.id + "|r" + due, kind: "handask", urgent: true,
+      title: "Reminder: " + a.route + ": hand over asked",
+      body: a.from + " asks to hand the " + a.route + " run to " + a.to + "." } });
+    n++;
+  }
+  return n;
+}
 /* The latest ask on a run. */
 async function handAskOn(env, trip) {
   await ensureHandAsks(env);
@@ -5217,6 +5239,7 @@ async function sweeps(env) {
   try { await closeFinishedRuns(env); } catch (e) {}
   try { await wakeRunEnded(env); } catch (e) {}
   try { await wakeChurchAsk(env); } catch (e) {}
+  try { await wakeHandAsks(env); } catch (e) {}
   try { await wakeParkAsk(env); } catch (e) {}
   try { await wakeNotLeft(env); } catch (e) {}
   try { await wakeMorning(env); } catch (e) {}

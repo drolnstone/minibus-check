@@ -6436,11 +6436,10 @@ function handHtml(){
       '<p class="dw-big">Hand over to '+esc(q.to)+'</p><p class="dw-sub"><b>Not sent yet: no signal</b></p></div>';
   }
   if(!h || !h.route || d.sunday !== rotaKey(new Date())) return "";
-  var a = h.ask, wait = a && a.status === "pending", no = a && a.status === "declined", lapsed = a && a.status === "lapsed";
-  return '<div class="dw'+(no || lapsed ? ' dw-warn' : '')+'"><p class="dw-eyebrow">Today · '+esc(h.route)+' run</p>'+
+  var a = h.ask, wait = a && a.status === "pending", no = a && a.status === "declined";
+  return '<div class="dw'+(no ? ' dw-warn' : '')+'"><p class="dw-eyebrow">Today · '+esc(h.route)+' run</p>'+
     (wait ? '<p class="dw-big">Hand over to '+esc(a.to)+'</p><p class="dw-sub">Waiting for a coordinator</p>'
-          : no ? '<p class="dw-big">Hand over to '+esc(a.to)+'</p><p class="dw-sub"><b>Turned down</b></p>'
-          : lapsed ? '<p class="dw-big">Hand over to '+esc(a.to)+'</p><p class="dw-sub"><b>Not answered</b></p>' : '')+
+          : no ? '<p class="dw-big">Hand over to '+esc(a.to)+'</p><p class="dw-sub"><b>Turned down</b></p>' : '')+
     (wait ? '' : '<button class="btn btn-ghost btn-wide" type="button" id="handBtn" style="margin-top:10px">Hand over</button>')+
     '</div>';
 }
