@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.132.0";
+var SCRIPT_VERSION = "v1.133.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -13338,9 +13338,11 @@ function healthReport() {
       .filter(function (d) { return d.active && !d.pin; })
       .map(function (d) { return d.name; });
     if (noPin.length) {
+      /* From v1.133.0: a name with no PIN cannot sign in to the driver app
+         (Asim, 4 Nov 2026), so the line says that, not that they go unasked. */
       bad.push("No phone number, so no default PIN, for: " + noPin.join(", ") +
-               ". Unless they have set their own PIN, they are not asked to " +
-               "confirm their name. Put their phone number in the Phone " +
+               ". Unless they have set their own PIN, they cannot sign in to " +
+               "the driver app. Put their phone number in the Phone " +
                "column on the Drivers tab.");
     } else {
       good.push("Every active driver has a phone number, so a default PIN.");
