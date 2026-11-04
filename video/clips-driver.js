@@ -7,7 +7,7 @@
    server/worker.js.
 
    The example driver is on North in NH56 FWP. North leaves church at 10:05
-   and its first pick-up is Scarisbrick Drive at 10:15; shots-driver.mjs stops
+   and its first pick-up is Ashdown Drive at 10:15; shots-driver.mjs stops
    if the timetable no longer says so. */
 (function () {
   const A = DOODLE, D = A.D;
@@ -195,7 +195,7 @@
       rd("M140 420 L400 470"); rd("M140 640 L400 600"); rd("M210 330 L250 840"); rd("M340 330 L320 840");
       a.draw(a.rc.path("M270 560 q-34 -40 -34 -64 a34 34 0 0 1 68 0 q0 24 -34 64 z", a.O({ fill: a.RED, fillStyle: "solid", stroke: a.RED })), 0.7);
       a.draw(a.rc.circle(270, 496, 18, a.O({ fill: "#ffffff", fillStyle: "solid", stroke: "#ffffff" })), 0.2, { pen: false });
-      a.label("Scarisbrick Drive", 270, 600, { size: 22, color: a.INK });
+      a.label("Ashdown Drive", 270, 600, { size: 22, color: a.INK });
       a.hold(2.4);
     });
 

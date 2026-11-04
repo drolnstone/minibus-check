@@ -28,6 +28,8 @@ fi
 
 # The church's clock, whatever this machine's is.
 export TZ=Europe/London
+# Made-up stop names and postcodes (same times and ids as the real timetable), so no real address is shown.
+export MINIBUS_REAL="${MINIBUS_REAL:-$HERE/fake-stops.json}"
 
 # rough.js and the two typefaces, once, from npm.
 if [ ! -f "$B/rough.js" ] || [ ! -f "$B/fonts/barlow-latin-700-normal.woff2" ]; then

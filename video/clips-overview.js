@@ -122,7 +122,7 @@
       a.draw(D.phone(70, 300, 400, 610), 0.8);
       a.label("7:30", 270, 400, { size: 64, font: "Barlow", color: a.INK, weight: 300 });
       a.label("Sunday", 270, 438, { size: 20, font: "Barlow", color: a.SOFT });
-      a.note(90, 480, 360, "Your bus today at 10:36", "Fountains Road by Stanley Close.", P);
+      a.note(90, 480, 360, "Your bus today at 10:36", "Meadow Road by Willow Close.", P);
       a.note(90, 620, 360, "You are driving today", "North. Vehicle check 09:45. Depart 10:05.", DR);
       a.hold(2.4);
     });
@@ -172,7 +172,7 @@
       a.draw(D.phone(70, 300, 400, 610), 0.8);
       a.label("10:30", 270, 400, { size: 64, font: "Barlow", color: a.INK, weight: 300 });
       a.label("Sunday", 270, 438, { size: 20, font: "Barlow", color: a.SOFT });
-      a.note(90, 480, 360, "Be at your stop in about 6 min", "Fountains Road by Stanley Close.", P);
+      a.note(90, 480, 360, "Be at your stop in about 6 min", "Meadow Road by Willow Close.", P);
       a.hold(2.4);
     });
 
