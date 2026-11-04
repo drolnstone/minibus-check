@@ -3,8 +3,7 @@
    The real sunday/ page in Chromium at phone width, served by
    tests/browser/lib.mjs, with a stand-in for the live server that takes a
    real booking: the phone number, the seats, the cancel. The stops are the
-   real ones, from tests/browser/real.json unless MINIBUS_REAL names a fresh
-   export. Each picture also records where the things the animation circles
+   made-up ones in video/fake-stops.json (build.sh sets MINIBUS_REAL). Each picture also records where the things the animation circles
    are (marks.json).
 
      SHOTS=video/build/shots node video/shots.mjs [scene,...]
@@ -23,10 +22,10 @@ mkdirSync(OUT, { recursive: true });
 
 /* What clips.js was written for. Change both together. */
 const EXPECT = {
-  N00: ["Church, Chester Road", "10:05"],
-  N02: ["Grace Road bus stop, Walton Vale", "10:23"],
-  N03: ["Little Kings & Queens Nursery, Litherland Road", "10:30"],
-  N04: ["Fountains Road by Stanley Close", "10:36"]
+  N00: ["Church, Elmfield Road", "10:05"],
+  N02: ["Rowan Road bus stop, Maple Vale", "10:23"],
+  N03: ["Little Acorns Nursery, Brookfield Road", "10:30"],
+  N04: ["Meadow Road by Willow Close", "10:36"]
 };
 const off = Object.keys(EXPECT).filter((id) => {
   const s = REAL.stops.find((x) => x.id === id);
@@ -229,7 +228,7 @@ scene("p-book", async () => {
 
 /* ---- 3. Sunday morning --------------------------------------------------
    North leaves church at 10:05 on time; the estimate for N04 is 10:34, and
-   after Grace Road (N02) is marked at 10:24, a minute behind, it is 10:35. */
+   after Rowan Road (N02) is marked at 10:24, a minute behind, it is 10:35. */
 const MINEW = { mine: { stopId: "N04", seats: 2 }, counts: Object.assign({}, COUNTS, { N04: COUNTS.N04 + 2 }) };
 const trip = (o) => Object.assign({ live: true, date: KEY, now: Date.now(), route: "North", watching: false,
   stop: MINE.stop, stopId: "N04", scheduled: MINE.time, started: false, ended: false,

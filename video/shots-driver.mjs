@@ -19,8 +19,8 @@ mkdirSync(OUT, { recursive: true });
 
 /* What clips-driver.js was written for. Change both together. */
 const EXPECT = {
-  N00: ["Church, Chester Road", "10:05"],
-  N01: ["Scarisbrick Drive", "10:15"]
+  N00: ["Church, Elmfield Road", "10:05"],
+  N01: ["Ashdown Drive", "10:15"]
 };
 const off = Object.keys(EXPECT).filter((id) => {
   const s = REAL.stops.find((x) => x.id === id);

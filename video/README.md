@@ -25,11 +25,20 @@ And for drivers:
    church pop-up, the run ending by itself back at church, the Trip ended and
    2pm reminders, and the parked mileage on the hub.
 
+And for showing someone new:
+
+5. **Sunday Bus overview** (about 2:50): the job, the three apps, the server
+   and the Google Sheet, one Sunday from booking through the run to Church,
+   and what it achieves. `video/build.sh overview`. It reuses the passenger
+   and driver photographs; the coordinator app is drawn. `clips-overview.js`.
+
 Captions only, no voice. Portrait, 1080 x 1920, each under 6 MB, so they send
 on WhatsApp as they are.
 
-**Nothing from the spreadsheet is needed or kept here.** The stops come from
-`tests/browser/real.json`, which is already in the repository; the other
+**Nothing from the spreadsheet is needed or kept here.** The stops are made up:
+`video/fake-stops.json` is the timetable of `tests/browser/real.json` (same
+routes, ids and times) with invented stop names and ZZ postcodes, so no real
+address appears on screen; the other
 passengers' seat counts are invented, and the phone number typed in is
 07700 900123, from the range Ofcom keeps for examples. The photographs, the
 fetched fonts and the videos go in `video/build/`, which git ignores. The
@@ -86,7 +95,7 @@ driver video (`video/build.sh preview-driver` for its stills only). If only capt
   it cannot catch a behaviour that changed, so read the table below against
   what changed.
 - **When the timetable changes,** `shots.mjs` stops and says which stop
-  differs from the example (North, Fountains Road by Stanley Close, 10:36,
+  differs from the example (North, Meadow Road by Willow Close, 10:36,
   leaving church at 10:05). Change `EXPECT` and the trips there, and the
   stop names and times in the notifications in `clips.js`.
 

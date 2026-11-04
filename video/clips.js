@@ -10,8 +10,8 @@
    The notifications (a.note) are the live server's own words. check_words.py
    holds both to sunday/index.html and server/worker.js.
 
-   The example passenger is booked for 2 on North at Fountains Road by
-   Stanley Close, timetabled 10:36; North leaves church at 10:05. Those names
+   The example passenger is booked for 2 on North at Meadow Road by
+   Willow Close, timetabled 10:36; North leaves church at 10:05. Those names
    and times are written into the notifications below, and shots.mjs stops
    if the timetable no longer says them. */
 (function () {
@@ -224,7 +224,7 @@
       const n2 = a.note(30, 284 + n1.h + 30, 480, "Last chance to book for Sunday", "Bookings close at 09:30 tomorrow.");
       a.wait(1.2);
       a.write(["Already booked? On Saturday", "evening you get this instead:"], CX, 330 + n1.h + n2.h + 60, { size: 28 });
-      a.note(30, 400 + n1.h + n2.h + 50, 480, "You are booked for Sunday", "Fountains Road by Stanley Close, 10:36. 2 seats.");
+      a.note(30, 400 + n1.h + n2.h + 50, 480, "You are booked for Sunday", "Meadow Road by Willow Close, 10:36. 2 seats.");
       a.hold(6);
     });
 
@@ -242,7 +242,7 @@
       when("Sunday, between 7:30 and 8:30");
       a.write(["With alerts on, your phone", "tells you your pick-up time."], CX, CY + 44, { size: 34 });
       lock("7:45", "Sunday 27 September");
-      a.note(90, 480, 360, "Your bus today at 10:36", "Fountains Road by Stanley Close. Be at your stop a few minutes early.");
+      a.note(90, 480, 360, "Your bus today at 10:36", "Meadow Road by Willow Close. Be at your stop a few minutes early.");
       a.hold(4);
     });
 
@@ -260,7 +260,7 @@
       when("10:05  The bus leaves church");
       a.write(["Your phone tells you when", "to expect it at your stop."], CX, CY + 44, { size: 34 });
       lock("10:05", "Sunday 27 September");
-      a.note(90, 480, 360, "Be at your stop in about 29 min", "Fountains Road by Stanley Close. Around 10:34. It has left church.");
+      a.note(90, 480, 360, "Be at your stop in about 29 min", "Meadow Road by Willow Close. Around 10:34. It has left church.");
       a.hold(4);
     });
 
@@ -277,7 +277,7 @@
       when("Bus 5 minutes late leaving?");
       a.write(["You are told that too."], CX, CY + 44, { size: 34 });
       lock("10:10", "Sunday 27 September");
-      a.note(90, 480, 360, "No word yet that your bus has left church", "It was due to leave at 10:05. Yours is timetabled 10:36 at Fountains Road by Stanley Close.");
+      a.note(90, 480, 360, "No word yet that your bus has left church", "It was due to leave at 10:05. Yours is timetabled 10:36 at Meadow Road by Willow Close.");
       a.hold(4);
     });
 
@@ -287,7 +287,7 @@
       a.write(["As it picks people up before", "you, you may get a new time.", "You always hear when it leaves", "the last pick-up before yours."], CX, CY + 44, { size: 32 });
       A.draw(D.phone(70, 330, 400, 580), 0.8);
       A.label("10:24", 270, 420, { size: 60, font: "Barlow", color: A.INK, weight: 300 });
-      a.note(90, 470, 360, "Be at your stop in about 11 min", "Fountains Road by Stanley Close. Around 10:35. It has just left Grace Road bus stop, Walton Vale.");
+      a.note(90, 470, 360, "Be at your stop in about 11 min", "Meadow Road by Willow Close. Around 10:35. It has just left Rowan Road bus stop, Maple Vale.");
       a.hold(4.5);
     });
 
@@ -321,7 +321,7 @@
       when("If a bus is called off");
       a.write(["You are told within minutes,", "whatever day it is."], CX, CY + 44, { size: 34 });
       lock("6:20", "Friday 25 September");
-      a.note(90, 480, 360, "No bus to Fountains Road by Stanley Close on Sunday", "The North bus is not running this Sunday.");
+      a.note(90, 480, 360, "No bus to Meadow Road by Willow Close on Sunday", "The North bus is not running this Sunday.");
       a.hold(3.6);
     });
 

@@ -36,7 +36,8 @@ svg { display: block; }
     const want = (new URLSearchParams(location.search).get("clips") || "1,2,3,driver").split(",");
     return add("engine.js")
       .then(() => want.some((c) => /^[123]$/.test(c)) ? add("clips.js") : null)
-      .then(() => want.indexOf("driver") !== -1 ? add("clips-driver.js") : null);
+      .then(() => want.indexOf("driver") !== -1 ? add("clips-driver.js") : null)
+      .then(() => want.indexOf("overview") !== -1 ? add("clips-overview.js") : null);
   }).then(() => { window.READY = true; }, (e) => { window.FAILED = String(e && e.message || e); });
   window.addEventListener("error", (e) => { window.FAILED = String(e.message); });
 </script>
