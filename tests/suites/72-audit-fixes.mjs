@@ -176,6 +176,34 @@ export default async function (root) {
     });
   });
 
+  /* Audit, 4 Nov 2026 (w2.80.0): sixty wrong PINs a day per name, all
+     callers together, under the hour's ceiling every hour. */
+  s.test("a day's ceiling holds guessing spread under the hour's", async (a) => {
+    const { env } = await fresh();
+    const t0 = new Date(SUN).getTime();
+    await atTime(new Date(t0).toISOString(), async () => {
+      a.eq((await signIn(env, TREVOR, "198.51.100.4")).valid, true);
+    });
+    let ip = 1;
+    for (let h = 0; h < 3; h++) {
+      await atTime(new Date(t0 + h * 61 * 60000).toISOString(), async () => {
+        for (let j = 0; j < 24; j++) {
+          if (j % 3 === 0) ip++;
+          await signIn(env, "0000", "203.0.113." + ip);
+        }
+      });
+    }
+    await atTime(new Date(t0 + 4 * 61 * 60000).toISOString(), async () => {
+      const fresh1 = await signIn(env, TREVOR, "192.0.2.77");
+      a.eq(fresh1.locked, true, "a new phone got through: " + JSON.stringify(fresh1));
+      a.ok(fresh1.minutes > 60, "locked for the day, not the hour");
+      const own = await signIn(env, TREVOR, "198.51.100.4");
+      a.eq(own.valid, true, "his own phone was locked out");
+      const r = await W.actPinReset(env, {}, { name: "Bro Trevor" });
+      await env.DB.batch(r.stmts);
+    });
+  });
+
   s.test("a coordinator's reset ends every phone's key", async (a) => {
     await atTime(SUN, async () => {
       const { env } = await fresh();

@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.147.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.148.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -750,7 +750,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.147.0";
+var PAGE_VERSION = "v1.148.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -931,7 +931,7 @@ function api(op, extra, ms){
 
 function authWords(out){
   if(!out || out.ok) return "";
-  if(out.locked) return "Too many wrong tries. Locked for " + (out.minutes || 5) + " minutes.";
+  if(out.locked) return "Too many wrong tries. Locked for " + (function(m){ m=Number(m)||5; return m>90 ? Math.ceil(m/60)+" hours" : m+" minutes"; })(out.minutes) + ".";
   if(out.error === "bad pin") return "That PIN is not right." +
     (out.left > 0 ? " " + out.left + (out.left === 1 ? " try" : " tries") + " left." : "");
   if(out.error === "not authorised") return "Only a coordinator can open this.";
@@ -2452,7 +2452,7 @@ function myPin(){
                                                : "The live server did not take that.", true);
         return;
       }
-      if(out.locked){ sheetSay("Too many wrong tries. Locked for " + (out.minutes || 5) + " minutes.", true); return; }
+      if(out.locked){ sheetSay("Too many wrong tries. Locked for " + (function(m){ m=Number(m)||5; return m>90 ? Math.ceil(m/60)+" hours" : m+" minutes"; })(out.minutes) + ".", true); return; }
       if(out.valid !== true){
         sheetSay("That PIN is not right." + (out.left > 0
           ? " " + out.left + (out.left === 1 ? " more try" : " more tries") + " before it pauses." : ""), true);

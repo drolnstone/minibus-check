@@ -1,27 +1,28 @@
 MINIBUS
 =======
-  pages v1.147.0 · server w2.79.0 · sheet v1.130.0
+  pages v1.148.0 · server w2.80.0 · sheet v1.131.0
 
-YOU ARE ON   app v1.145.0 · server w2.77.0 · sheet v1.130.0
-GOING TO     app v1.147.0 · server w2.79.0 · sheet v1.130.0
+YOU ARE ON   app v1.147.0 · server w2.79.0 · sheet v1.130.0
+GOING TO     app v1.148.0 · server w2.80.0 · sheet v1.131.0
 
-Hand over asks, and a breakdown bus.
+Audit, 4 Nov: the low-risk points (7 to 13).
 
-1. No signal. A driver's Hand over ask made with no signal is kept on his
-   phone ("Hand over to ... Not sent yet: no signal") and sent by itself
-   when signal comes back.
-2. No answer. An ask stays until a coordinator answers it. While nobody
-   has, every coordinator is reminded at 5, 10 and 15 minutes ("Reminder:
-   North: hand over asked"), on their phones and in Alerts.
-3. Breakdown. Coordinator app, Sunday screen, Run, Hand over: pick the
-   driver (the one holding it keeps it: Change the bus), then the bus:
-   Same bus, one of our buses (nothing more), or Hired (reg and seats).
-   No walkaround. The run's reg and seats follow it; the run record and
-   the Rota note say "Bus AB12 CDE (hired, 14 seats) (was YS70 PWE)".
-   Approving a driver's ask mid-run has the same bus step.
-   Parked mileage stays with the bus the run started in.
+7.  A driver's "check started" needs his PIN key, so nobody else can
+    silence his "Time for the vehicle check" nudge.
+8.  Wrong PINs: 60 a day per name for everybody together, as well as
+    30 an hour. A phone that has keyed the right PIN goes on past both.
+    A lock over 90 minutes reads in hours.
+9.  The driver app's duty card needs his PIN key. Refused, the phone
+    keeps the card it had.
+10. A fault on the live server answers "server fault"; the real text is
+    in Cloudflare Observability (minibus-api).
+11. Driver app PIN box: "PIN accepted." (was "Thank you."); with no
+    signal "No signal. PIN not checked."
+12. Passenger page with no Call button: "Ring (name) on (number)." (was
+    "Please ring").
+13. Sheet pop-up "Could not reach the live server": the reason alone.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: app v1.147.0, server w2.79.0.
+A. Coordinator app, App info: app v1.148.0, server w2.80.0.

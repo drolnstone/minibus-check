@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.79.0";
+const SCRIPT_VERSION = "w2.80.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -6314,6 +6314,9 @@ async function handleCheckGo(env, body) {
   const who = String(c.driver || "").trim().slice(0, 80);
   const reg = String(c.reg || "").trim().slice(0, 20);
   if (!who && !reg) return json({ ok: false, error: "nothing named" });
+  /* His key, from w2.80.0 (audit, 4 Nov): without it anybody could mark his
+     check started and so silence the "check due" and "late" nudges. */
+  if (!(await driverSureOf(env, who, body && body.key, false))) return json({ ok: false, error: "pin" });
   await markCheckStarted(env, who, reg);
   return json({ ok: true });
 }
@@ -6358,6 +6361,9 @@ async function checkNudgeFor(env, key, route, all, who, reg) {
 async function handleDuty(env, body) {
   const who = String((body && body.driver) || "").trim();
   if (!who) return json({ ok: false, error: "no driver" });
+  /* His key, from w2.80.0 (audit, 4 Nov). Refused, the phone keeps the card
+     it last had. */
+  if (!(await driverSureOf(env, who, body && body.key, false))) return json({ ok: false, error: "pin" });
   const key = runSunday();
   const all = await getStops(env);
   const stops = pickupsAndArrivals(all);
@@ -7818,6 +7824,14 @@ function pinTriesKey(name) {
    at once. */
 const PIN_NAME_CEILING = 30;
 const PIN_NAME_WINDOW_MS = 3600 * 1000;
+/* AND A DAY'S CEILING, from w2.80.0 (audit, 4 Nov). Thirty an hour, hour
+   after hour, still covered all ten thousand four-digit PINs in about two
+   weeks. Sixty wrong PINs a day per name for everybody together makes that
+   months, and a coordinator's Reset PIN starts it again. A phone that has
+   keyed the right PIN goes on past it, as it does past the hour's. */
+const PIN_NAME_DAY_CEILING = 60;
+const PIN_NAME_DAY_MS = 24 * 3600 * 1000;
+function pinFloodDayKey(name) { return pinFloodKey(name) + "|day"; }
 const PIN_CALLER_HOUR = 9;
 /* A PHONE THAT HAS KEYED THE RIGHT PIN IS NOT HELD BY THE CEILING, from
    w2.66.0 (wrap up audit, 16 Oct). Thirty wrong PINs from four or more
@@ -7842,8 +7856,9 @@ function pinCallerKey(env, name) {
 /* Every count kept for a name, for a reset to clear. */
 function pinTriesClearStmt(env, name) {
   const k = pinTriesKey(name);
-  return env.DB.prepare("DELETE FROM settings WHERE k=? OR k LIKE ? OR k=? OR k LIKE ?")
-    .bind(k, k + "|%", pinFloodKey(name), "pinknown:" + String(name || "").trim().toLowerCase() + "|%");
+  return env.DB.prepare("DELETE FROM settings WHERE k=? OR k LIKE ? OR k=? OR k=? OR k LIKE ?")
+    .bind(k, k + "|%", pinFloodKey(name), pinFloodDayKey(name),
+          "pinknown:" + String(name || "").trim().toLowerCase() + "|%");
 }
 
 /* The request's caller, as a short salted fingerprint. */
@@ -7882,6 +7897,13 @@ async function pinGate(env, name, check) {
   if (fn >= PIN_NAME_CEILING && !knownHere) {
     return { locked: true, minutes: Math.max(1, Math.ceil((PIN_NAME_WINDOW_MS - (now - Number(flood.at))) / 60000)) };
   }
+  const dkey = pinFloodDayKey(name);
+  const dflood = await cacheGet(env, dkey);
+  let dn = 0;
+  if (dflood && now - (Number(dflood.at) || 0) < PIN_NAME_DAY_MS) dn = Number(dflood.n) || 0;
+  if (dn >= PIN_NAME_DAY_CEILING && !knownHere) {
+    return { locked: true, minutes: Math.max(1, Math.ceil((PIN_NAME_DAY_MS - (now - Number(dflood.at))) / 60000)) };
+  }
   if (await check()) {
     if (kkey && !(known && now - (Number(known.at) || 0) < 86400000)) {
       try { await cachePut(env, kkey, { at: now }).run(); } catch (e) {}
@@ -7892,6 +7914,7 @@ async function pinGate(env, name, check) {
   try { await cachePut(env, tkey, { n: tries + 1, at: now }).run(); } catch (e) {}
   if (hkey) { try { await cachePut(env, hkey, { n: hn + 1, at: hn ? Number(hour.at) : now }).run(); } catch (e) {} }
   try { await cachePut(env, fkey, { n: fn + 1, at: fn ? Number(flood.at) : now }).run(); } catch (e) {}
+  try { await cachePut(env, dkey, { n: dn + 1, at: dn ? Number(dflood.at) : now }).run(); } catch (e) {}
   return { ok: false, left: Math.max(0, PIN_MAX_TRIES - tries - 1) };
 }
 
@@ -11999,7 +12022,11 @@ export default {
       /* The real text goes back, as Apps Script's did — it is the only way a
          fault gets diagnosed on Monday. Both pages already refuse to put
          developer's English on a screen; machineSpeak catches it there. */
-      return json({ ok: false, error: String((err && err.message) || err) });
+      /* From w2.80.0 (audit, 4 Nov) the real text goes to the Worker's own
+         log, which Observability shows, and the caller is told only that it
+         failed: the text could show a stranger how this server works. */
+      try { console.error("minibus api fault:", (err && err.stack) || String(err)); } catch (e) {}
+      return json({ ok: false, error: "server fault" });
     }
   },
 

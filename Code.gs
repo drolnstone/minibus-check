@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.130.0";
+var SCRIPT_VERSION = "v1.131.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -6166,9 +6166,7 @@ function liveSendNow() {
   var out = pushToWorker();
   if (!out || out.ok !== true) {
     ui.alert("Could not reach the live server",
-      String((out && out.error) || "no answer") +
-      "\n\nNothing is broken by this: the apps fall back to what they already " +
-      "hold, and this will try again by itself within the hour.",
+      String((out && out.error) || "no answer"),
       ui.ButtonSet.OK);
     return;
   }
