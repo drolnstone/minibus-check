@@ -73,7 +73,7 @@ export default async function (root) {
 
   s.test("a check started on the phone stops both", async (a) => {
     const { env } = await fresh();
-    await atTime(at("09:20"), () => post(env, { action: "checkgo", checkgo: { driver: "Bro Adrian", reg: "YS70 PWE" } }));
+    await atTime(at("09:20"), async () => post(env, { action: "checkgo", key: await W.keyFor(env, "Bro Adrian"), checkgo: { driver: "Bro Adrian", reg: "YS70 PWE" } }));
     a.eq(await nudge(env, "09:33"), "");
     a.eq(await nudge(env, "09:45"), "");
     a.eq((await reads(env, "09:45")).title, "You are driving today");
@@ -81,7 +81,7 @@ export default async function (root) {
 
   s.test("a check started on the same bus by somebody else stops both", async (a) => {
     const { env } = await fresh();
-    await atTime(at("09:20"), () => post(env, { action: "checkgo", checkgo: { driver: "Bro Trevor", reg: "YS70 PWE" } }));
+    await atTime(at("09:20"), async () => post(env, { action: "checkgo", key: await W.keyFor(env, "Bro Trevor"), checkgo: { driver: "Bro Trevor", reg: "YS70 PWE" } }));
     a.eq(await nudge(env, "09:45"), "");
   });
 
@@ -100,8 +100,8 @@ export default async function (root) {
 
   s.test("yesterday's start does not count today", async (a) => {
     const { env } = await fresh();
-    await atTime("2026-10-17T19:00:00+01:00", () =>
-      post(env, { action: "checkgo", checkgo: { driver: "Bro Adrian", reg: "YS70 PWE" } }));
+    await atTime("2026-10-17T19:00:00+01:00", async () =>
+      post(env, { action: "checkgo", key: await W.keyFor(env, "Bro Adrian"), checkgo: { driver: "Bro Adrian", reg: "YS70 PWE" } }));
     a.eq(await nudge(env, "09:33"), "chk");
   });
 
@@ -115,17 +115,29 @@ export default async function (root) {
   s.test("the duty card: the coming Sunday, then where the check stands", async (a) => {
     const { env } = await fresh();
     const wed = await atTime("2026-10-14T12:00:00+01:00", async () =>
-      J(await post(env, { action: "duty", driver: "bro adrian" })));
+      J(await post(env, { action: "duty", driver: "bro adrian", key: await W.keyFor(env, "bro adrian") })));
     a.eq(wed.route, "North"); a.eq(wed.check, "09:32"); a.eq(wed.depart, "09:52"); a.eq(wed.state, "");
-    const due = await atTime(at("09:35"), async () => J(await post(env, { action: "duty", driver: "Bro Adrian" })));
+    const due = await atTime(at("09:35"), async () => J(await post(env, { action: "duty", driver: "Bro Adrian", key: await W.keyFor(env, "Bro Adrian") })));
     a.eq(due.state, "due");
-    const late = await atTime(at("09:43"), async () => J(await post(env, { action: "duty", driver: "Bro Adrian" })));
+    const late = await atTime(at("09:43"), async () => J(await post(env, { action: "duty", driver: "Bro Adrian", key: await W.keyFor(env, "Bro Adrian") })));
     a.eq(late.state, "late");
-    await atTime(at("09:44"), () => post(env, { action: "checkgo", checkgo: { driver: "Bro Adrian" } }));
-    const going = await atTime(at("09:45"), async () => J(await post(env, { action: "duty", driver: "Bro Adrian" })));
+    await atTime(at("09:44"), async () => post(env, { action: "checkgo", key: await W.keyFor(env, "Bro Adrian"), checkgo: { driver: "Bro Adrian" } }));
+    const going = await atTime(at("09:45"), async () => J(await post(env, { action: "duty", driver: "Bro Adrian", key: await W.keyFor(env, "Bro Adrian") })));
     a.eq(going.state, "going");
-    const none = await atTime(at("09:45"), async () => J(await post(env, { action: "duty", driver: "Bro Keith" })));
-    a.eq(none.route, "", "Bro Keith is not on the rota");
+    const none = await atTime(at("09:45"), async () => J(await post(env, { action: "duty", driver: "Bro Arthur", key: await W.keyFor(env, "Bro Arthur") })));
+    a.eq(none.route, "", "Bro Arthur is not on the rota");
+  });
+
+  /* Audit, 4 Nov: neither answers or listens without his key. */
+  s.test("check started and the duty card need his key", async (a) => {
+    const { env } = await fresh();
+    const go = await atTime(at("09:20"), async () => J(await post(env, { action: "checkgo", checkgo: { driver: "Bro Adrian", reg: "YS70 PWE" } })));
+    a.eq(go.error, "pin");
+    const wrong = await atTime(at("09:20"), async () => J(await post(env, { action: "checkgo", key: await W.keyFor(env, "Bro Trevor"), checkgo: { driver: "Bro Adrian" } })));
+    a.eq(wrong.error, "pin", "another driver's key");
+    a.eq(await nudge(env, "09:33"), "chk", "the nudge still goes");
+    const duty = await atTime(at("09:35"), async () => J(await post(env, { action: "duty", driver: "Bro Adrian" })));
+    a.eq(duty.error, "pin"); a.eq(duty.route, undefined);
   });
 
   s.test("the coordinators' trail names the check pushes", async (a) => {

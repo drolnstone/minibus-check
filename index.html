@@ -1765,7 +1765,8 @@ var SHORTHAND = {
   "not sent":    "It did not go through.",
   "not saved":   "It was not saved.",
   "no answer":   "The record did not answer.",
-  "bad token":   "This copy of the app is not recognised."
+  "bad token":   "This copy of the app is not recognised.",
+  "server fault": "Something went wrong at the record's end."
 };
 
 /* Whatever was thrown, in words he can act on. Messages this app or the
@@ -1796,7 +1797,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.147.0";
+var APP_VERSION = "v1.148.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -5572,7 +5573,7 @@ function authSend(){
          recognise, such as a live server that has not been updated yet, sends
          him to the spreadsheet rather than telling him his PIN is wrong. */
       var e = out && out.error;
-      tell("authSay", (out && out.locked) ? "Too many wrong tries. Locked for "+(out.minutes||10)+" minutes."
+      tell("authSay", (out && out.locked) ? "Too many wrong tries. Locked for "+(function(m){ m=Number(m)||5; return m>90 ? Math.ceil(m/60)+" hours" : m+" minutes"; })(out.minutes||10)+"."
         : e === "bad pin" ? "That PIN is not right." +
             (out.left > 0 ? " " + out.left + (out.left===1 ? " more try." : " more tries.") : "")
         : e === "not authorised" ? "That name cannot authorise a bus."
@@ -6519,7 +6520,7 @@ function dutyFetch(){
   var me = st.driver;
   callFetch(LIVE_ENDPOINT, { method:"POST", redirect:"follow",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
-    body: JSON.stringify({ token: CFG.token||"", action:"duty", driver: me }) }, POLL_TIMEOUT)
+    body: JSON.stringify({ token: CFG.token||"", action:"duty", driver: me, key: driverKey(me) }) }, POLL_TIMEOUT)
     .then(function(r){ return r.text(); })
     .then(function(t){
       dutyBusy = false;
@@ -6784,7 +6785,7 @@ function checkGoSend(){
   checkGoSent = true;
   callFetch(LIVE_ENDPOINT, { method:"POST", redirect:"follow",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
-    body: JSON.stringify({ token: CFG.token||"", action:"checkgo",
+    body: JSON.stringify({ token: CFG.token||"", action:"checkgo", key: driverKey(st.driver),
                            checkgo:{ driver: st.driver, reg: (st.veh && st.veh.reg) || "" } }) })
     .then(function(r){ if(!r.ok) throw new Error("http "+r.status); })
     .catch(function(){ checkGoSent = false; });
@@ -10661,7 +10662,7 @@ function pinGateSync(){
   var boxes=document.querySelectorAll(".js-pingate");
   if(!boxes.length) return;
   var words = st.pinOk
-    ? (st.pinState==="offline" ? "Taken on trust: no signal to check against." : "Thank you.")
+    ? (st.pinState==="offline" ? "No signal. PIN not checked." : "PIN accepted.")
     : (String(st.pin||"").length>=4 ? "That PIN is not right." : "");
   Array.prototype.forEach.call(document.querySelectorAll(".js-pin-say"),function(say){
     tell(say, words, !st.pinOk);
@@ -10683,7 +10684,7 @@ function pinGateSync(){
   if(st.pinOk){
     Array.prototype.forEach.call(boxes,function(g){ g.classList.add("is-ok"); });
     /* Answered, so the sheet has nothing left to ask and goes. After a beat,
-       because "Thank you." written and wiped in the same frame is a flicker
+       because "PIN accepted." written and wiped in the same frame is a flicker
        rather than an answer, and a driver who saw nothing will key it again.
        Only the sheet: the box inside the request form stays where it is,
        because that form has not finished with him. */
@@ -10866,7 +10867,7 @@ function pinApply(out, tried, answered){
   }
   if(out.locked){
     st.pinOk=false; st.pinState="";
-    pinSay("Too many wrong tries. Locked for "+(out.minutes||10)+" minutes.", true);
+    pinSay("Too many wrong tries. Locked for "+(function(m){ m=Number(m)||5; return m>90 ? Math.ceil(m/60)+" hours" : m+" minutes"; })(out.minutes||10)+".", true);
     paintFoot(); return;
   }
   st.pinOk = (out.valid === true);
@@ -10938,7 +10939,7 @@ function pinPost(action, body, then, wrong){
                                                  : "The live server did not take that.", true);
         return;
       }
-      if(out.locked){ pinSaySet("Too many wrong tries. Locked for "+(out.minutes||5)+" minutes.", true); return; }
+      if(out.locked){ pinSaySet("Too many wrong tries. Locked for "+(function(m){ m=Number(m)||5; return m>90 ? Math.ceil(m/60)+" hours" : m+" minutes"; })(out.minutes)+".", true); return; }
       if(out.valid !== true){
         pinSaySet("That PIN is not right." + (out.left > 0
           ? " " + out.left + (out.left === 1 ? " more try" : " more tries") + " before it pauses." : ""), true);
