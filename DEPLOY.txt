@@ -1,28 +1,15 @@
 MINIBUS
 =======
-  pages v1.150.0 · server w2.82.0 · sheet v1.132.0
+  pages v1.150.0 · server w2.82.0 · sheet v1.133.0
 
-YOU ARE ON   app v1.149.0 · server w2.81.0 · sheet v1.132.0
-GOING TO     app v1.150.0 · server w2.82.0 · sheet v1.132.0
+YOU ARE ON   app v1.150.0 · server w2.82.0 · sheet v1.132.0
+GOING TO     app v1.150.0 · server w2.82.0 · sheet v1.133.0
 
-Audit, 4 Nov: the high points (1 to 3).
-
-1. Alerts under a name. A phone signs up for a driver's reminders only
-   with his PIN key (driver app), and for coordinator alerts only with the
-   coordinator's PIN (coordinator app). Phones already signed up stay as
-   they are. A passenger's phone carries no driver's name.
-2. A live run. The board poll takes a run over (after 5 quiet minutes)
-   only from a phone with the driver's PIN key; the phone that holds the
-   run carries on as before.
-3. Coordinators' PIN. A coordinator still on the default PIN (last four
-   of the phone number) keys it once more, sees "Set your own PIN.", and
-   the Change PIN sheet opens with it filled in; the new PIN signs him
-   straight in. The same default is refused for Authorise, End it and an
-   email's action link ("That PIN is still the default."). Drivers keep
-   their default.
+Is everything working?: the line for active drivers with no phone number
+now says they cannot sign in to the driver app (since v1.149.0 they
+cannot), not that they are not asked for a PIN.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app: key your PIN. On the default, Change PIN opens; set
-   your own. Then App info: app v1.150.0, server w2.82.0.
+A. Is everything working?: sheet v1.133.0.
