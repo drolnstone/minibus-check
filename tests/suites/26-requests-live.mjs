@@ -30,8 +30,8 @@ export default async function (root) {
     const db = makeDB(join(root, "server", "schema.sql"));
     const env = makeEnv(db);
     await seedSunday(db, KEY);
-    /* A name with no PIN needs no key (w2.64.0). */
-    await db.prepare("INSERT OR REPLACE INTO drivers (name, role, route, ord, active, pin_hash) VALUES ('Bro Trevor','Driver','North',1,1,'')").run();
+    /* His key (from w2.81.0 a name with no PIN writes nothing). */
+    await db.prepare("INSERT OR REPLACE INTO drivers (name, role, route, ord, active, pin_hash) VALUES ('Bro Trevor','Driver','North',1,1,'x')").run();
     return { db, env };
   }
   const setting = (db, k, v) =>
@@ -49,7 +49,7 @@ export default async function (root) {
       net.reset();
       const waits = [];
       const out = await J(await post(env, { waitUntil: (p) => waits.push(p) },
-                                     { action: "rotaRequest", request: ask() }));
+                                     { action: "rotaRequest", key: await mod.keyFor(env, "Bro Trevor"), request: ask() }));
       a.ok(out.ok, "the live server refused a good request: " + JSON.stringify(out));
       a.eq(waits.length, 1, "the sheet was not asked to collect it");
       await Promise.all(waits);

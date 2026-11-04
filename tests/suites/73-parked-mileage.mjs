@@ -133,8 +133,8 @@ export default async function (root) {
     await atTime(SUN_1500, async () => {
       a.eq((await J(await park(env, "", { key: "" }))).error, "pin", "taken without his PIN");
       const other = await J(await park(env, "", { key: "", parked: { driver: "Sis Ama" } }));
-      a.eq(other.error, "not yours", "taken from somebody who did not drive the bus that morning");
-      a.eq(other.driver, "Bro Trevor");
+      /* From w2.81.0 a name with no PIN is refused before it gets that far. */
+      a.eq(other.error, "pin", "taken from somebody with no PIN");
       a.eq((await J(await park(env, key, { parked: { miles: 57300 } }))).error, "lower");
       a.eq((await J(await park(env, key, { parked: { miles: 57363 + 1501 } }))).error, "jump");
       a.eq((await J(await park(env, key, { parked: { miles: "lots" } }))).error, "number");

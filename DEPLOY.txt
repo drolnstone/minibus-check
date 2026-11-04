@@ -1,28 +1,29 @@
 MINIBUS
 =======
-  pages v1.148.0 · server w2.80.0 · sheet v1.131.0
+  pages v1.149.0 · server w2.81.0 · sheet v1.132.0
 
-YOU ARE ON   app v1.147.0 · server w2.79.0 · sheet v1.130.0
-GOING TO     app v1.148.0 · server w2.80.0 · sheet v1.131.0
+YOU ARE ON   app v1.148.0 · server w2.80.0 · sheet v1.131.0
+GOING TO     app v1.149.0 · server w2.81.0 · sheet v1.132.0
 
-Audit, 4 Nov: the low-risk points (7 to 13).
+Audit, 4 Nov: the medium points (4 to 6).
 
-7.  A driver's "check started" needs his PIN key, so nobody else can
-    silence his "Time for the vehicle check" nudge.
-8.  Wrong PINs: 60 a day per name for everybody together, as well as
-    30 an hour. A phone that has keyed the right PIN goes on past both.
-    A lock over 90 minutes reads in hours.
-9.  The driver app's duty card needs his PIN key. Refused, the phone
-    keeps the card it had.
-10. A fault on the live server answers "server fault"; the real text is
-    in Cloudflare Observability (minibus-api).
-11. Driver app PIN box: "PIN accepted." (was "Thank you."); with no
-    signal "No signal. PIN not checked."
-12. Passenger page with no Call button: "Ring (name) on (number)." (was
-    "Please ring").
-13. Sheet pop-up "Could not reach the live server": the reason alone.
+4. A vehicle check sent without the driver's PIN key still stops the bus
+   (a real critical defect must), and the BUS STOPPED alert and email now
+   say "Not confirmed by PIN." so a false one is authorised at once.
+5. Bookings: one connection has 60 booking changes an hour; past that it
+   is refused ("Too many tries. Wait N minutes.") and coordinators get
+   "Bookings refused" once a day. A seat cancelled on the passenger page
+   sends "Seat cancelled" to the number's other signed-in phones. No seat
+   cap (Asim, 4 Nov).
+6. Typing numbers on the passenger page: 40 tries per connection per 15
+   minutes, whatever the page handle.
+7. A name with no PIN (no phone number on the Drivers tab, no PIN of its
+   own) cannot sign in to the driver app: "No PIN for (name)." in red, and
+   nothing that writes under it opens (check, run, stop taps, requests,
+   parked mileage). The rota and the stops stay open (Asim, 4 Nov).
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: app v1.148.0, server w2.80.0.
+A. Coordinator app, App info: app v1.149.0, server w2.81.0.
+B. Health report: no driver listed with NO PIN.

@@ -108,6 +108,22 @@ export default async function (root) {
     a.ok(bothSay(got[0], "Bro Adrian"), "it does not say who found it");
   });
 
+  /* Audit, 4 Nov 2026: a stop sent without his PIN key still stops the bus,
+     and says it is not confirmed. */
+  s.test("a stop not confirmed by PIN says so in the email", (a) => {
+    const L = sheet();
+    call(L, "notifyCheck", Object.assign({}, CHECK, { level: "stop", pinState: "unconfirmed" }),
+         "Stopped", "Nearside mirror cracked");
+    const got = toCoord(L);
+    a.has(got[0].subject, "BUS STOPPED");
+    a.has(got[0].subject, "not confirmed by PIN");
+    a.ok(bothSay(got[0], "Not confirmed by PIN."), "the body does not say it");
+    const ph = call(L, "checkPhoneAlert", Object.assign({}, CHECK, { level: "stop", pinState: "unconfirmed", defects: [] }), "Stopped", "");
+    a.has(ph.body, "Not confirmed by PIN.");
+    const ok = call(L, "checkPhoneAlert", Object.assign({}, CHECK, { level: "stop", pinState: "ok", defects: [] }), "Stopped", "");
+    a.ok(ok.body.indexOf("Not confirmed") === -1, "a confirmed stop says it is not");
+  });
+
   s.test("and a driveable defect is told apart from a stopped bus", (a) => {
     /* Same email, different urgency. Reading one as the other is either a
        panic or a bus quietly left on the road. */

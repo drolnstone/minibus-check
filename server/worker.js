@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.80.0";
+const SCRIPT_VERSION = "w2.81.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -219,6 +219,7 @@ const RUN_DONE_MARGIN_MIN = 30;
 const RUN_DONE_QUIET_MIN = 30;
 const IDENTIFY_MAX_TRIES = 25;
 const IDENTIFY_WINDOW_MINUTES = 15;
+const IDENTIFY_CALLER_MAX = 40;
 
 /* ==========================================================================
    LONDON TIME
@@ -2932,6 +2933,14 @@ async function handleBooking(env, b) {
   const seats = Math.max(0, Math.min(12, Number(b.seats) || 0));
   const stopId = String(b.stopId || "").trim();
 
+  /* ONE CONNECTION'S BOOKINGS, from w2.81.0 (audit, 4 Nov). A booking needs
+     no password, so a script could fill the list with made-up numbers. One
+     connection has BOOK_CALLER_HOUR writes an hour, which a church's wifi
+     after the service never reaches; past that it is refused and the
+     coordinators are told once a day. */
+  const flood = await bookingFlood(env);
+  if (flood) return json({ ok: false, error: flood });
+
   /* Closed, and exactly one thing is still allowed: withdrawing. A seat
      cannot be taken, moved or resized once the driver is reading the list at
      the kerb. But somebody who is no longer coming is worth hearing at any
@@ -2992,6 +3001,10 @@ async function handleBooking(env, b) {
       await env.DB.prepare(
         "UPDATE bookings SET status='Cancelled', note=?, received=?, synced=0 WHERE id=?"
       ).bind(note, Date.now(), existing.row).run();
+      /* The number's other phones are told (w2.81.0, audit): anybody who
+         knows a number can take its seat off, and this is how its owner
+         hears of it. */
+      try { await tellSeatGone(env, existing, key, ref); } catch (e) {}
     }
     const after = await liveBookings(env, key);
     return json({ ok: true, cancelled: true, late, mine: null, counts: bookingCounts(after) });
@@ -3024,6 +3037,56 @@ async function handleBooking(env, b) {
                 counts: bookingCounts(after) });
 }
 
+const BOOK_CALLER_HOUR = 60;
+async function bookingFlood(env) {
+  const caller = String((env && env.CALLER) || "");
+  if (!caller) return "";
+  const k = "bookcall:" + caller, now = Date.now();
+  const had = await cacheGet(env, k);
+  let n = 0, since = now;
+  if (had && now - (Number(had.at) || 0) < 3600000) { n = Number(had.n) || 0; since = Number(had.at); }
+  if (n >= BOOK_CALLER_HOUR) {
+    const day = londonKey(new Date());
+    try {
+      if (!(await cacheGet(env, "bookflood:" + day))) {
+        await cachePut(env, "bookflood:" + day, { at: now }).run();
+        await handleCoordAlert(env, { alert: { id: "bookflood|" + day, kind: "bookings", urgent: true,
+          title: "Bookings refused",
+          body: BOOK_CALLER_HOUR + " bookings in an hour from one connection." } });
+      }
+    } catch (e) {}
+    return "Too many tries. Wait " + Math.max(1, Math.ceil((3600000 - (now - since)) / 60000)) + " minutes.";
+  }
+  try { await cachePut(env, k, { n: n + 1, at: since }).run(); } catch (e) {}
+  return "";
+}
+
+/* "Seat cancelled" into each phone signed in with the booking's number,
+   but the one that cancelled it. */
+async function tellSeatGone(env, b, key, ref) {
+  const pid = String((b && b.pid) || "");
+  if (!pid) return 0;
+  const subs = (await subsWhere(env, "role='passenger' AND pid=?", [pid]))
+    .filter((x) => !ref || String(x.ref || "") !== ref);
+  if (!subs.length) return 0;
+  const msg = coordAlertOf({ id: "gone-" + (b.row || "") + "-" + Date.now(), kind: "message",
+                             title: "Seat cancelled",
+                             body: shortDay(key) + ": " + String(b.stop || "") + "." });
+  if (!msg) return 0;
+  const keys = await vapidKeys(env);
+  const m = Object.assign({}, msg, { url: "./" });
+  let phones = 0;
+  for (const sub of subs) {
+    const box = ((await cacheGet(env, coordBoxKey(sub.endpoint))) || [])
+      .filter((x) => x && Date.now() - (Number(x.at) || 0) < COORD_ALERT_MAX_AGE_MS);
+    box.push(m);
+    while (box.length > COORD_BOX_MAX) box.shift();
+    await cachePut(env, coordBoxKey(sub.endpoint), box).run();
+    if (await pushOne(env, sub, keys)) phones++;
+  }
+  return phones;
+}
+
 /* The passenger gives their number once, on whichever device is in their
    hand, and this answers with everything the booking page loads plus the
    fingerprint to use from then on. Deliberately the SAME SHAPE as ?bus=1, so
@@ -3050,6 +3113,21 @@ async function handleIdentify(env, body) {
     }
     await env.DB.prepare("INSERT INTO settings (k,v) VALUES (?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v")
       .bind(k, JSON.stringify({ n: tries + 1, t: since })).run();
+  }
+
+  /* And per connection, from w2.81.0 (audit, 4 Nov): the handle above is
+     whatever the asker says, so one connection trying number after number
+     only had to change it. Wider than the handle's, for a church's wifi. */
+  const caller = String((env && env.CALLER) || "");
+  if (caller) {
+    const k = "idcall:" + caller, now = Date.now();
+    const had = await cacheGet(env, k);
+    let n = 0, since = now;
+    if (had && now - (Number(had.at) || 0) < IDENTIFY_WINDOW_MINUTES * 60000) { n = Number(had.n) || 0; since = Number(had.at); }
+    if (n >= IDENTIFY_CALLER_MAX) {
+      return json({ ok: false, error: "Too many tries. Wait " + IDENTIFY_WINDOW_MINUTES + " minutes." });
+    }
+    try { await cachePut(env, k, { n: n + 1, at: since }).run(); } catch (e) {}
   }
 
   const pid = await passengerId(env, phone);
@@ -8007,7 +8085,8 @@ async function driverSureOf(env, name, key, keyless) {
   if (key && (await keyNameOf(env, key)) === pinKey(row.name)) return "key";
   if (Number(row.active) === 0) return "";
   const own = await ownPinOf(env, row.name);
-  if (!pinWantedOf(row, own)) return "open";
+  /* A name with no PIN writes nothing, from w2.81.0 (Asim, 4 Nov 2026). */
+  if (!pinWantedOf(row, own)) return "";
   if (keyless && (await keylessStill(env))) return "old";
   return "";
 }
@@ -8063,7 +8142,8 @@ async function handlePin(env, body) {
      shrug. */
   if (!row) return json({ ok: false, error: "unknown driver" });
   const own = await ownPinOf(env, row.name);
-  if (!pinWantedOf(row, own)) return json({ ok: true, valid: true, noPin: true });
+  /* No PIN, no sign-in, from w2.81.0 (Asim, 4 Nov 2026). */
+  if (!pinWantedOf(row, own)) return json({ ok: true, valid: false, noPin: true });
 
   const gate = await pinTry(env, row, own, pin);
   if (gate.locked) return json({ ok: true, valid: false, locked: true, minutes: gate.minutes || PIN_LOCK_MINUTES });

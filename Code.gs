@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.131.0";
+var SCRIPT_VERSION = "v1.132.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -14237,7 +14237,7 @@ function checkPhoneAlert(c, outcome, defectText) {
   var a = stopped
     ? { kind: "stopped", urgent: true, title: "BUS STOPPED: " + c.reg,
         body: "Critical defect" + by + (names(c.defects || []) ? ": " + names(c.defects || []) : "") +
-              "." }
+              "." + (String(c.pinState || "") === "unconfirmed" ? " Not confirmed by PIN." : "") }
     : authorised
     ? { kind: "authorised", title: "Authorised to run: " + c.reg,
         body: "By " + (c.authorisedBy || "a coordinator") + ". The defect stays open." }
@@ -14271,7 +14271,11 @@ function notifyCheck(c, outcome, defectText) {
      than always claiming a defect. A clean bus that wants fuel is not a
      defect report and should not read like one, and a tyre to watch is not a
      fault. */
-  var subject = stopped    ? "BUS STOPPED: " + c.reg + ", " + c.date
+  /* A stop sent without the driver's key still stops the bus, because a
+     real critical defect must; the coordinators are told it is not
+     confirmed, so a false one is let out at once (audit, 4 Nov 2026). */
+  var unsure = stopped && String(c.pinState || "") === "unconfirmed";
+  var subject = stopped    ? "BUS STOPPED: " + c.reg + ", " + c.date + (unsure ? ", not confirmed by PIN" : "")
               : authorised ? "Authorised to run: " + c.reg + ", " + c.date
               : advOnly    ? "Advisory: " + c.reg + ", " + c.date
               : clean      ? "To arrange: " + c.reg + ", " + c.date
@@ -14284,7 +14288,8 @@ function notifyCheck(c, outcome, defectText) {
 
   var lines = [
     stopped
-      ? "<b>A driver has stopped this vehicle after a safety critical defect.</b>"
+      ? "<b>A driver has stopped this vehicle after a safety critical defect.</b>" +
+        (unsure ? " <b>Not confirmed by PIN.</b>" : "")
       : authorised
       ? "<b>Authorised to run by " + esc(c.authorisedBy || "a coordinator") +
         ".</b> The defect stays open."
@@ -14337,7 +14342,8 @@ function notifyCheck(c, outcome, defectText) {
   }
 
   var plain = [
-    stopped    ? "A driver has stopped this vehicle after a safety critical defect."
+    stopped    ? "A driver has stopped this vehicle after a safety critical defect." +
+                 (unsure ? " Not confirmed by PIN." : "")
     : authorised ? "Authorised to run by " + (c.authorisedBy || "a coordinator") +
                    ". The defect stays open."
     : advOnly    ? "No defects. The driver has noted something to watch."
