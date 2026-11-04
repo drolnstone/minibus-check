@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.149.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.150.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -750,7 +750,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.149.0";
+var PAGE_VERSION = "v1.150.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -916,6 +916,13 @@ function api(op, extra, ms){
   return post(body, ms).then(function(out){
     if(out){ lastSeen.server = out.server || lastSeen.server; lastSeen.sheet = out.sheet || lastSeen.sheet; }
     rolesSeen(out);
+    /* On the default PIN (w2.82.0, audit): his own is set first. */
+    if(out && out.error === "default pin"){
+      var keyed = pin;
+      lock("Set your own PIN.");
+      setTimeout(function(){ myPin(keyed); }, 0);
+      throw new Error("locked");
+    }
     var t = authWords(out);
     if(t){ lock(t); throw new Error("locked"); }
     banner("");
@@ -937,6 +944,7 @@ function authWords(out){
   if(out.error === "not authorised") return "Only a coordinator can open this.";
   if(out.error === "unknown driver") return "That name is not on the Drivers tab.";
   if(out.error === "no pin") return "You have no PIN.";
+  if(out.error === "default pin") return "Set your own PIN.";
   if(out.error === "no driver") return "Choose your name.";
   return "";
 }
@@ -2420,7 +2428,7 @@ function editDriver(name){
    is the driver app's Change PIN, here so a coordinator need not leave this
    app for it. The boxes hand on as each fills and the last one sends; a
    refusal empties the boxes that were wrong and puts the cursor back. */
-function myPin(){
+function myPin(keyed){
   var box = function(id, lab){
     return '<div class="field"><label for="' + id + '">' + lab + '</label>' +
            '<input id="' + id + '" type="password" inputmode="numeric" maxlength="4" autocomplete="off" ' +
@@ -2434,6 +2442,8 @@ function myPin(){
   /* Not wiped on every key: the red line after a refusal stays until the
      box it is about is keyed again. */
   $("sheetBody").oninput = null;
+  /* Asked at sign-in, on the default PIN: the one just keyed is the current. */
+  if(keyed){ $("myPinOld").value = keyed; try{ $("myPinNew").focus(); }catch(e){} }
   var retry = function(list){
     list.forEach(function(id){ $(id).value = ""; });
     try{ $(list[0]).focus(); }catch(e){}
@@ -2468,6 +2478,7 @@ function myPin(){
       pin = nw;
       closeSheet();
       toast("PIN changed.");
+      if(keyed && !D) openAs(who, nw, "");
     }, function(){ busy = false; sheetBusy(false); sheetSay("No connection.", true); });
   };
   ids.forEach(function(id){
@@ -4143,7 +4154,7 @@ function bellOn(test){
     var j = sub.toJSON();
     endpoint = j.endpoint;
     /* Every time, so the phone is under the name signed in now. */
-    return post({ action: "subscribe", endpoint: j.endpoint, keys: j.keys, role: "driver", driver: who, route: "",
+    return post({ action: "subscribe", endpoint: j.endpoint, keys: j.keys, role: "driver", driver: who, pin: pin, route: "",
                   app: pushAppOf(j.endpoint), sure: homeApp() === "coord" });
   }).then(function(out){
     if(!out || !out.ok) throw new Error("not taken");

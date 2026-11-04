@@ -56,7 +56,44 @@ export async function loadWorker(root) {
   writeFileSync(out, src + banner);
 
   const mod = await import(pathToFileURL(out).href);
+  /* COORDINATORS ON THEIR OWN PIN (w2.82.0, audit 4 Nov 2026). The live
+     server refuses a coordinator still on the default PIN, and most suites
+     were written when the default opened everything. So before each request
+     every coordinator still on the default is given an own PIN of the SAME
+     four digits, which keeps each suite's PINs as they are. A suite that is
+     about the default itself sets env.__keepDefaults. Test harness only. */
+  if (mod.default && typeof mod.default.fetch === "function" && !mod.default.__wrapped) {
+    const orig = mod.default.fetch.bind(mod.default);
+    mod.default.fetch = async (request, env, ctx) => {
+      if (env && env.DB && !env.__keepDefaults) { try { await ownPinsFromDefaults(mod, env); } catch (e) {} }
+      return orig(request, env, ctx);
+    };
+    mod.default.__wrapped = true;
+  }
   return { mod, names, src, path: srcPath };
+}
+
+export async function ownPinsFromDefaults(mod, env) {
+  const rules = await mod.authRules(env);
+  const roles = (rules && rules.roles) || [];
+  if (!roles.length) return;
+  const q = await env.DB.prepare("SELECT name, role, pin_hash FROM drivers WHERE pin_hash <> '' AND active = 1").all();
+  for (const d of (q.results || [])) {
+    if (roles.indexOf(String(d.role || "").trim().toLowerCase()) === -1) continue;
+    if (mod.hasOwnPin(await mod.ownPinOf(env, d.name))) continue;
+    let pin = "";
+    for (let i = 0; i < 10000 && !pin; i++) {
+      const p = String(i).padStart(4, "0");
+      if ((await mod.pinHashOf(env, d.name, p)) === d.pin_hash) pin = p;
+    }
+    if (!pin) continue;
+    const salt = "00112233445566778899aabbccddeeff";
+    const hash = await mod.ownPinHash(env, pin, salt, mod.PIN_ITERATIONS);
+    await env.DB.prepare(
+      "INSERT INTO driver_pins (name, pin_salt, pin_hash, pin_iter, set_at, kept) VALUES (?,?,?,?,?,0) " +
+      "ON CONFLICT(name) DO UPDATE SET pin_salt=excluded.pin_salt, pin_hash=excluded.pin_hash, pin_iter=excluded.pin_iter")
+      .bind(mod.pinKey(d.name), salt, hash, mod.PIN_ITERATIONS, Date.now()).run();
+  }
 }
 
 export function cleanup(root) {

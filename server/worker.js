@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.81.0";
+const SCRIPT_VERSION = "w2.82.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -642,6 +642,8 @@ async function handleLinkDo(env, body) {
     return json({ ok: false, error: "bad pin", left: Math.max(0, PIN_MAX_TRIES - tries - 1) });
   }
   try { await env.DB.prepare("DELETE FROM settings WHERE k=?").bind(tkey).run(); } catch (e) {}
+  /* A coordinator's own PIN, never the default (w2.82.0, audit). */
+  if (!hasOwnPin(own[pinKey(driver.name)])) return json({ ok: false, error: "default pin" });
 
   if (row.kind === "authorise") {
     if (choice !== "run") return json({ ok: false, error: "choice" });
@@ -2651,11 +2653,17 @@ async function handleHandAsk(env, body) {
 /* Whether this phone may act for the run, and the run's record brought up to
    date: taken when nobody holds it, kept fresh when this phone does, taken
    over when the holder has gone quiet. Answers true or false. */
-async function runPhoneTake(env, trip, phone, now) {
+async function runPhoneTake(env, trip, phone, now, mayTake) {
+  /* mayTake false (w2.82.0, audit): the board, asked without the driver's
+     key, keeps the run fresh for the phone that holds it and never takes it.
+     A stranger naming the driver could otherwise take the run in a dead
+     spot, have his taps refused and feed the estimates. */
+  const take = mayTake !== false;
   await ensureRunPhones(env);
   const row = await env.DB.prepare(
     "SELECT phone, seen FROM run_phones WHERE trip=?").bind(trip).first();
   if (!row) {
+    if (!take) return false;
     await env.DB.prepare(
       "INSERT OR IGNORE INTO run_phones (trip, phone, seen) VALUES (?,?,?)").bind(trip, phone, now).run();
     const won = await env.DB.prepare("SELECT phone FROM run_phones WHERE trip=?").bind(trip).first();
@@ -2669,6 +2677,7 @@ async function runPhoneTake(env, trip, phone, now) {
     return true;
   }
   if (now - Number(row.seen) < RUN_PHONE_QUIET_MS) return false;
+  if (!take) return false;
   /* Taken over. Only if nobody else took it in the meantime. */
   const res = await env.DB.prepare(
     "UPDATE run_phones SET phone=?, seen=? WHERE trip=? AND phone=? AND seen=?")
@@ -2774,7 +2783,7 @@ async function checksToday(env) {
    thing the phone can safely tell from a fact. An empty object would be
    indistinguishable from "nobody booked anywhere" and would wipe good
    numbers off a driver's screen. */
-async function boardPayload(env, route, phone, driver, fix, ctx) {
+async function boardPayload(env, route, phone, driver, fix, ctx, keyIn) {
   const r = String(route || "").trim() || "North";
   const out = { ok: true };
   const key = runSunday();
@@ -2820,7 +2829,8 @@ async function boardPayload(env, route, phone, driver, fix, ctx) {
     const t = out.trip, ph = phoneOf(phone);
     if (ph && t && t.trip && t.started && !t.ended &&
         String(driver || "").trim() && sameName(t.driver, driver)) {
-      t.phone = { here: await runPhoneTake(env, t.trip, ph, Date.now()) };
+      const keyed = !!keyIn && (await driverSureOf(env, driver, keyIn, false)) === "key";
+      t.phone = { here: await runPhoneTake(env, t.trip, ph, Date.now(), keyed) };
     }
   } catch (e) { /* the board as before */ }
 
@@ -7838,6 +7848,21 @@ async function handleSubscribe(env, body) {
     return json({ ok: false, error: "no endpoint" });
   }
   const role = String((body && body.role) || "passenger") === "driver" ? "driver" : "passenger";
+  /* WHOSE ALERTS, from w2.82.0 (audit, 4 Nov 2026). A phone signed up under
+     a driver's name gets his reminders, and a coordinator's gets the
+     coordinator alerts, so it takes that person's PIN: the driver app sends
+     its key, the coordinator app the PIN it is signed in with. A passenger's
+     phone names nobody. */
+  if (role === "driver") {
+    const who = String((body && body.driver) || "").trim();
+    let sure = (await driverSureOf(env, who, body && body.key, false)) === "key";
+    if (!sure && body && body.pin) {
+      const a = await coordAuth(env, { who: who, pin: body.pin });
+      sure = !a.error;
+    }
+    if (!sure) return json({ ok: false, error: "pin" });
+  }
+  if (role === "passenger" && body) { body.driver = ""; body.route = ""; }
   const k = (body && body.keys) || {};
   await env.DB.prepare(
     "INSERT INTO push_subs (endpoint,p256dh,auth,role,ref,pid,driver,route,made) " +
@@ -8475,6 +8500,8 @@ async function handleAuthorise(env, body) {
   const gate = await pinTry(env, row, own, pin);
   if (gate.locked) return json({ ok: false, locked: true, minutes: gate.minutes || PIN_LOCK_MINUTES });
   if (!gate.ok) return json({ ok: false, error: "bad pin", left: gate.left });
+  /* A coordinator's own PIN, never the default (w2.82.0, audit). */
+  if (!hasOwnPin(own)) return json({ ok: false, error: "default pin" });
   const now  = Date.now();
 
   /* Named by the check it lifts, so a later walkaround is never mistaken for
@@ -8544,6 +8571,8 @@ async function handleEndRun(env, body) {
   const gate = await pinTry(env, row, own, pin);
   if (gate.locked) return json({ ok: false, locked: true, minutes: gate.minutes || PIN_LOCK_MINUTES });
   if (!gate.ok) return json({ ok: false, error: "bad pin", left: gate.left });
+  /* A coordinator's own PIN, never the default (w2.82.0, audit). */
+  if (!hasOwnPin(own)) return json({ ok: false, error: "default pin" });
   const now  = Date.now();
 
   /* Filed through handleTrip so there is one writer for trip_events and one
@@ -9920,6 +9949,11 @@ async function coordAuth(env, body) {
   const gate = await pinTry(env, row, own, pin);
   if (gate.locked) return { error: { ok: false, locked: true, minutes: gate.minutes || PIN_LOCK_MINUTES } };
   if (!gate.ok) return { error: { ok: false, error: "bad pin", left: gate.left } };
+  /* A COORDINATOR'S OWN PIN, from w2.82.0 (audit, 4 Nov 2026). The number
+     people ring is on every passenger page, and a default PIN is its last
+     four digits, so a coordinator on the default sets his own before
+     anything opens. Only after a right PIN, so it gives nothing away. */
+  if (!hasOwnPin(own)) return { error: { ok: false, error: "default pin" } };
   return { me: { name: row.name, role: row.role || "" } };
 }
 
@@ -11928,7 +11962,8 @@ export default {
         if (p.get("last")) return json(await cachedLast(env));
         if (p.get("bus")) return json(await busPayload(env, "", p.get("ref"), p.get("pid")));
         if (p.get("board")) return json(await boardPayload(env, p.get("route"), p.get("phone"), p.get("driver"),
-          p.get("lat") ? { lat: p.get("lat"), lng: p.get("lng"), acc: p.get("acc"), age: p.get("fixAge") } : null, ctx));
+          p.get("lat") ? { lat: p.get("lat"), lng: p.get("lng"), acc: p.get("acc"), age: p.get("fixAge") } : null, ctx,
+          p.get("key") || ""));
         if (p.get("trip")) {
           return p.get("route")
             ? json(await tripDriverPayload(env, p.get("route")))

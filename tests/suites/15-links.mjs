@@ -17,7 +17,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Suite } from "../lib/t.mjs";
 import { makeDB } from "../lib/d1.mjs";
-import { loadWorker, env as makeEnv, installGlobals } from "../lib/worker.mjs";
+import { loadWorker, ownPinsFromDefaults, env as makeEnv, installGlobals } from "../lib/worker.mjs";
 import { seedSunday } from "../lib/seed.mjs";
 import { atTime } from "../lib/clock.mjs";
 
@@ -49,6 +49,7 @@ export default async function (root) {
     await W.cachePut(env, "auth_rules",
       { roles: ["coordinator", "minister in charge"], sameHandBothWays: true }).run();
     if (rules) await W.cachePut(env, "link_rules", rules).run();
+    await ownPinsFromDefaults(W, env);
     return { db, env, key };
   }
 
@@ -229,6 +230,7 @@ export default async function (root) {
        than letting somebody guess four digits at a door that cannot open. */
     const { db, env } = await fresh();
     await db.prepare("UPDATE drivers SET pin_hash = '' WHERE role <> 'Driver'").run();
+    await db.prepare("DELETE FROM driver_pins").run();
     await stopTheBus(env);
     const { token } = await busLink(env);
     const out = await body(await W.handleLinkDo(env, { token, pin: "1234", choice: "run" }));

@@ -432,6 +432,9 @@ function send(choice){
     if (out && out.error === "no pin") {
       say("No coordinator has a PIN yet.", true); return;
     }
+    if (out && out.error === "default pin") {
+      say("That PIN is still the default.", true); return;
+    }
     if (out && out.error === "not authorised") {
       say("Only a coordinator can make this decision.", true); return;
     }
