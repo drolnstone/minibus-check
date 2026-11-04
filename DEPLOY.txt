@@ -1,9 +1,9 @@
 MINIBUS
 =======
-  pages v1.148.0 · server w2.81.0 · sheet v1.132.0
+  pages v1.149.0 · server w2.81.0 · sheet v1.132.0
 
 YOU ARE ON   app v1.148.0 · server w2.80.0 · sheet v1.131.0
-GOING TO     app v1.148.0 · server w2.81.0 · sheet v1.132.0
+GOING TO     app v1.149.0 · server w2.81.0 · sheet v1.132.0
 
 Audit, 4 Nov: the medium points (4 to 6).
 
@@ -17,8 +17,13 @@ Audit, 4 Nov: the medium points (4 to 6).
    cap (Asim, 4 Nov).
 6. Typing numbers on the passenger page: 40 tries per connection per 15
    minutes, whatever the page handle.
+7. A name with no PIN (no phone number on the Drivers tab, no PIN of its
+   own) cannot sign in to the driver app: "No PIN for (name)." in red, and
+   nothing that writes under it opens (check, run, stop taps, requests,
+   parked mileage). The rota and the stops stay open (Asim, 4 Nov).
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: app v1.148.0, server w2.81.0.
+A. Coordinator app, App info: app v1.149.0, server w2.81.0.
+B. Health report: no driver listed with NO PIN.

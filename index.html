@@ -1797,7 +1797,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.148.0";
+var APP_VERSION = "v1.149.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -9318,6 +9318,7 @@ function pinGateAutoFocus(){
    box further down that had never asked him for anything. The button is off
    rather than disabled, so the tap is the prompt, and this is the answer. */
 function pinGateFocus(){
+  if(noPinName()){ toast(noPinWords(), true); return; }
   toast("Enter your four digit PIN.", true);
   if(rotaStopsOpen){ pinModalOpen(pinWhy); return; }
   /* Anywhere else — the request form — the box is inline where it always
@@ -10623,7 +10624,16 @@ function pinPaintHint(){
    pinState is the honest record of what happened: "" nothing, "ok" checked
    and right, "offline" no signal to check with and let through on purpose.
    Only the last two are an answer. */
-function pinGateNeeded(){ return pinNeeded() && !(st.pinOk && st.pinState); }
+function pinGateNeeded(){ return noPinName() || (pinNeeded() && !(st.pinOk && st.pinState)); }
+
+/* A NAME WITH NO PIN, from v1.149.0 (Asim, 4 Nov 2026: "Exactly do so").
+   No phone number on the Drivers tab and no PIN of his own: nothing that
+   writes under that name opens, on this phone or on the live server. The
+   rota and the stops stay open, as they are to anybody. */
+function noPinName(){
+  return !!(CFG.requirePin && String(st.driver||"").trim() && REGISTER_FROM_SHEET && !hasPin(st.driver));
+}
+function noPinWords(){ return "No PIN for "+String(st.driver||"").trim()+"."; }
 
 /* The markup. Same field wherever it is drawn, so there is never a second
    implementation to drift from this one. */
@@ -10699,6 +10709,7 @@ function pinGateSync(){
 }
 
 function checkPin(){
+  if(noPinName()){ st.pinOk = false; st.pinState=""; pinSay(noPinWords(), true); paintFoot(); return; }
   if(!pinNeeded()){ st.pinOk = true; st.pinState=""; paintFoot(); return; }
   if(String(st.pin).length < 4){ st.pinOk = false; st.pinState=""; pinSay(""); paintFoot(); return; }
 
@@ -10870,6 +10881,11 @@ function pinApply(out, tried, answered){
     pinSay("Too many wrong tries. Locked for "+(function(m){ m=Number(m)||5; return m>90 ? Math.ceil(m/60)+" hours" : m+" minutes"; })(out.minutes||10)+".", true);
     paintFoot(); return;
   }
+  if(out.noPin && out.valid !== true){
+    st.pinOk=false; st.pinState="";
+    pinSay(noPinWords(), true);
+    paintFoot(); return;
+  }
   st.pinOk = (out.valid === true);
   st.pinState = st.pinOk ? "ok" : "";
   answered(st.pinOk);
@@ -11034,7 +11050,8 @@ function pinLetThrough(){
 function showPinField(){
   var need = pinNeeded();   /* same test as the gate, so they cannot diverge */
   $("pinField").style.display = need ? "" : "none";
-  if(!need){ st.pin=""; st.pinOk=false; st.pinState=""; pinMsg=""; $("pin").value=""; }
+  if(!need){ st.pin=""; st.pinOk=false; st.pinState=""; pinMsg=""; $("pin").value="";
+             if(noPinName()){ pinMsg=noPinWords(); pinMsgBad=true; } }
   /* A PIN that has just BECOME required.
 
      pinNeeded() is false while the register is still loading, because nobody

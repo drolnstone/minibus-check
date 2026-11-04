@@ -39,9 +39,9 @@ export default async function (root) {
     await db.prepare("DELETE FROM drivers").run();
     await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,?,1,?)")
       .bind("Bro Arthur", "Coordinator", "North", 1, await W.pinHashOf(env, "Bro Arthur", PIN)).run();
-    /* Names with no PIN need no key for an MOT run (w2.64.0). */
+    /* Each with a PIN and his key (from w2.81.0 a name with no PIN writes nothing). */
     for (const n of ["Bro Ben", "Bro Carl"]) await db.prepare(
-      "INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,'Driver','North',2,1,'')").bind(n).run();
+      "INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,'Driver','North',2,1,'x')").bind(n).run();
     await W.cachePut(env, "auth_rules", { roles: ["coordinator"], sameHandBothWays: true }).run();
     await W.cachePut(env, "bus_extra", {
       "YS70 PWE": { dates: dates || {}, oddRoute: "North", notes: "" },
@@ -53,7 +53,7 @@ export default async function (root) {
   const coord = async (env, body) => J(await post(env, Object.assign({ action: "coord", who: "Bro Arthur", pin: PIN }, body)));
   let n = 0;
   const act = (env, a) => coord(env, { op: "act", act: Object.assign({ id: "papers-act-" + (++n) }, a) });
-  const motrun = async (env, step, who) => J(await post(env, { action: "motrun", motrun: { reg: "YS70 PWE", step, who } }));
+  const motrun = async (env, step, who) => J(await post(env, { action: "motrun", key: await W.keyFor(env, who), motrun: { reg: "YS70 PWE", step, who } }));
 
   s.test("the rule: insurance first, good to the end of its day, service only warns", (a) => {
     a.eq(W.papersStop({ mot: "2026-10-01" }, "2026-10-01"), null);

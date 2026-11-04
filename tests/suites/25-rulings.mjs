@@ -173,11 +173,12 @@ export default async function (root) {
       const ctx = { waitUntil: (p) => waits.push(p) };
       const post = (body) => mod.default.fetch(new Request("https://worker.test/", {
         method: "POST", body: JSON.stringify(Object.assign({ token: "minibusapp" }, body)) }), env, ctx);
-      /* A name with no PIN needs no key (w2.64.0). */
-      await db.prepare("INSERT OR REPLACE INTO drivers (name, role, route, ord, active, pin_hash) VALUES ('Bro Adrian','Driver','North',1,1,'')").run();
-      await post({ action: "trip", trip: { trip: "t1", route: "North", driver: "Bro Adrian", sunday: KEY,
+      /* His key (from w2.81.0 a name with no PIN writes nothing). */
+      await db.prepare("INSERT OR REPLACE INTO drivers (name, role, route, ord, active, pin_hash) VALUES ('Bro Adrian','Driver','North',1,1,'x')").run();
+      const key = await mod.keyFor(env, "Bro Adrian");
+      await post({ action: "trip", key, trip: { trip: "t1", route: "North", driver: "Bro Adrian", sunday: KEY,
         events: [{ event: "start", at: Date.now() - 60000 }] } });
-      await post({ action: "check", check: { id: "chk1", reg: "YS70 PWE", level: "ok", driver: "Bro Adrian" } });
+      await post({ action: "check", key, check: { id: "chk1", reg: "YS70 PWE", level: "ok", driver: "Bro Adrian" } });
       a.eq(waits.length, 2);
       await Promise.all(waits);
     });

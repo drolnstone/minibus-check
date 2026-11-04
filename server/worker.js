@@ -8085,7 +8085,8 @@ async function driverSureOf(env, name, key, keyless) {
   if (key && (await keyNameOf(env, key)) === pinKey(row.name)) return "key";
   if (Number(row.active) === 0) return "";
   const own = await ownPinOf(env, row.name);
-  if (!pinWantedOf(row, own)) return "open";
+  /* A name with no PIN writes nothing, from w2.81.0 (Asim, 4 Nov 2026). */
+  if (!pinWantedOf(row, own)) return "";
   if (keyless && (await keylessStill(env))) return "old";
   return "";
 }
@@ -8141,7 +8142,8 @@ async function handlePin(env, body) {
      shrug. */
   if (!row) return json({ ok: false, error: "unknown driver" });
   const own = await ownPinOf(env, row.name);
-  if (!pinWantedOf(row, own)) return json({ ok: true, valid: true, noPin: true });
+  /* No PIN, no sign-in, from w2.81.0 (Asim, 4 Nov 2026). */
+  if (!pinWantedOf(row, own)) return json({ ok: true, valid: false, noPin: true });
 
   const gate = await pinTry(env, row, own, pin);
   if (gate.locked) return json({ ok: true, valid: false, locked: true, minutes: gate.minutes || PIN_LOCK_MINUTES });

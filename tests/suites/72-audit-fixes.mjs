@@ -86,8 +86,9 @@ export default async function (root) {
       a.ok((await J(await trip(env, out.key))).ok, "the run was refused with the key");
       a.eq(db._rows("SELECT * FROM driver_keys").length, 1);
       a.eq(JSON.stringify(db._rows("SELECT * FROM driver_keys")).indexOf(out.key), -1, "the key is stored plain");
-      a.ok((await J(await post(env, { action: "trip", trip: { trip: "t2", route: "South", driver: "Sis Ama",
-        sunday: KEY, events: [{ event: "start", at: Date.now() }] } }))).ok, "a name with no PIN needs no key");
+      /* From w2.81.0 (Asim, 4 Nov 2026) a name with no PIN writes nothing. */
+      a.eq((await J(await post(env, { action: "trip", key: "", trip: { trip: "t2", route: "South", driver: "Sis Ama",
+        sunday: KEY, events: [{ event: "start", at: Date.now() }] } }))).error, "pin", "a name with no PIN ran");
     });
   });
 
@@ -119,14 +120,16 @@ export default async function (root) {
     });
   });
 
-  s.test("a name with no PIN can run, but cannot lift a stop, and an inactive one cannot run", async (a) => {
+  s.test("a name with no PIN cannot sign in, run or lift a stop, nor can an inactive one run", async (a) => {
     await atTime(SUN, async () => {
       const { db, env } = await fresh();
       await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES ('Bro Gone','Driver','North',2,0,'')").run();
       const run = (who, id) => post(env, { action: "trip", key: "", trip: { trip: id, route: "South", driver: who,
         sunday: KEY, events: [{ event: "start", at: Date.now() }] } });
       a.eq((await J(await run("Bro Gone", "t8"))).error, "pin", "an inactive name ran");
-      a.ok((await J(await run("Sis Ama", "t9"))).ok, "a name with no PIN could not run");
+      a.eq((await J(await run("Sis Ama", "t9"))).error, "pin", "a name with no PIN ran");
+      const ama = await J(await post(env, { action: "pin", pin: { driver: "Sis Ama", pin: "1234" } }));
+      a.eq(ama.valid, false, "a name with no PIN signed in"); a.eq(ama.noPin, true); a.eq(ama.key, undefined);
       const key = (await signIn(env, TREVOR)).key;
       await check(env, "c1", "stop", key);
       const out = await J(await post(env, { action: "check", key: "", check: { id: "c2", reg: REG, level: "ok", driver: "Sis Ama" } }));
