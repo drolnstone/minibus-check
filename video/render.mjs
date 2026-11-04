@@ -20,7 +20,7 @@ const FPS = 25;
 const mode = process.argv[2] || "preview";
 const which = (process.argv[3] || "1,2,3,driver").split(",").filter(Boolean);
 const NAMES = { 1: "Sunday-Bus-1-Put-it-on-your-phone", 2: "Sunday-Bus-2-Book-your-seat", 3: "Sunday-Bus-3-Sunday-morning",
-                driver: "Driver-from-your-name-to-the-parked-mileage" };
+                driver: "Driver-from-your-name-to-the-parked-mileage", overview: "Sunday-Bus-overview" };
 
 /* The marks shots.mjs recorded, as a script the stage can load from disk. */
 writeFileSync(join(BUILD, "marks.js"), "window.MARKS = " + readFileSync(join(BUILD, "shots", "marks.json"), "utf8") + ";\n");
@@ -65,7 +65,7 @@ for (const id of which) {
   const out = join(BUILD, "out"); mkdirSync(out, { recursive: true });
   const file = join(out, NAMES[id] + ".mp4");
   const ff = spawn(ffmpeg, ["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(FPS), "-c:v", "mjpeg", "-i", "-",
-    "-c:v", "libx264", "-preset", "slow", "-crf", id === "driver" ? "27" : "24", "-tune", "animation", "-pix_fmt", "yuv420p",
+    "-c:v", "libx264", "-preset", "slow", "-crf", id === "driver" || id === "overview" ? "27" : "24", "-tune", "animation", "-pix_fmt", "yuv420p",
     "-r", String(FPS), "-movflags", "+faststart", file], { stdio: ["pipe", "inherit", "inherit"] });
   const frames = Math.ceil(len * FPS);
   const started = Date.now();

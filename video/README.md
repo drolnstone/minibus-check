@@ -25,6 +25,13 @@ And for drivers:
    church pop-up, the run ending by itself back at church, the Trip ended and
    2pm reminders, and the parked mileage on the hub.
 
+And for showing someone new:
+
+5. **Sunday Bus overview** (about 2:50): the job, the three apps, the server
+   and the Google Sheet, one Sunday from booking through the run to Church,
+   and what it achieves. `video/build.sh overview`. It reuses the passenger
+   and driver photographs; the coordinator app is drawn. `clips-overview.js`.
+
 Captions only, no voice. Portrait, 1080 x 1920, each under 6 MB, so they send
 on WhatsApp as they are.
 

@@ -5,6 +5,7 @@
 #   video/build.sh preview         the same but stills only: a couple of minutes, to look before the long part
 #   video/build.sh 3               only the third video (or 1,3)
 #   video/build.sh driver          only the driver video (preview-driver for its stills only)
+#   video/build.sh overview        only the overview, for showing someone new (preview-overview for its stills only)
 #   NOSHOTS=1 video/build.sh ...   keep last time's photographs (only captions or timing changed)
 #
 # Leaves video/build/out/*.mp4 and video/build/preview/. See README.md.
@@ -13,7 +14,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 B="$HERE/build"
 WHAT="${1:-1,2,3,driver}"
 CLIPS="$WHAT"
-case "$WHAT" in preview) CLIPS=1,2,3,driver ;; preview-driver) CLIPS=driver ;; esac
+case "$WHAT" in preview) CLIPS=1,2,3,driver ;; preview-driver) CLIPS=driver ;; preview-overview) CLIPS=overview ;; esac
 mkdir -p "$B/shots" "$B/fonts"
 
 if [ -z "${PLAYWRIGHT_CORE:-}" ]; then
@@ -54,7 +55,7 @@ python3 "$HERE/check_words.py"
 if [ -z "${NOSHOTS:-}" ]; then
   [ "$CLIPS" != "1,2,3,driver" ] || rm -f "$B/shots/marks.json"
   [ "$CLIPS" = driver ] || SHOTS="$B/shots" MINIBUS_PORT="${MINIBUS_PORT:-8133}" node "$HERE/shots.mjs"
-  case ",$CLIPS," in *,driver,*) SHOTS="$B/shots" MINIBUS_PORT="${MINIBUS_PORT:-8133}" node "$HERE/shots-driver.mjs" ;; esac
+  case ",$CLIPS," in *,driver,*|*,overview,*) SHOTS="$B/shots" MINIBUS_PORT="${MINIBUS_PORT:-8133}" node "$HERE/shots-driver.mjs" ;; esac
 fi
 node "$HERE/render.mjs" preview "$CLIPS"
 case "$WHAT" in preview*) ;; *) node "$HERE/render.mjs" video "$CLIPS" ;; esac
