@@ -39,7 +39,7 @@ export default async function (root) {
   const tap = async (env, phone, events) => J(await W.handleTrip(env, { trip: "t1", route: "North", driver: ME,
     reg: "YS70 PWE", sunday: KEY, phone: phone, events: events }));
   const signIn = async (env, phone) => J(await W.handlePin(env, { driver: ME, pin: PIN, phone: phone }));
-  const board = async (env, phone) => (await W.boardPayload(env, "North", phone, ME)).trip;
+  const board = async (env, phone, key) => (await W.boardPayload(env, "North", phone, ME, null, null, key || "")).trip;
 
   s.test("the phone that started the run drives it; another phone is refused", async (a) => {
     const { env } = await fresh();
@@ -68,8 +68,11 @@ export default async function (root) {
       a.eq((await signIn(env, "phoneB")).elsewhere, true, "four minutes is not quiet");
     });
     await atTime(at("10:09"), async () => {
-      a.eq((await signIn(env, "phoneB")).valid, true, "six minutes is");
-      const t = await board(env, "phoneB");
+      /* From w2.82.0 (audit): the board without his key never takes it. */
+      a.eq((await board(env, "stranger")).phone.here, false, "a stranger naming him took the run");
+      const inB = await signIn(env, "phoneB");
+      a.eq(inB.valid, true, "six minutes is");
+      const t = await board(env, "phoneB", inB.key);
       a.eq(t.phone.here, true, "taken over");
       a.ok(t.served && t.served.N01, "N01 still marked");
       a.ok((await tap(env, "phoneB", [{ event: "picked", stopId: "N02", at: Date.now() }])).ok);

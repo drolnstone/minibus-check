@@ -80,7 +80,7 @@ export default async function (root) {
     await passenger(db, "N03");
     await post(env, { action: "subscribe", endpoint: "https://push.test/adrian",
                       keys: { p256dh: "p", auth: "a" }, role: "driver", driver: "Bro Adrian",
-                      route: "", app: "driver" });
+                      route: "", app: "driver", key: await W.keyFor(env, "Bro Adrian") });
     await atTime(SUN, () => W.wakeDrivers(env));
     await atTime(SUN, () => W.wakeMorning(env));
     await atTime("2026-10-11T07:40:00+01:00", () => W.wakeDrivers(env));

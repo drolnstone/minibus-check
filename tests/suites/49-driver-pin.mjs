@@ -43,6 +43,8 @@ export default async function (root) {
         .bind(name, role, "North", pin ? await W.pinHashOf(env, name, pin) : "").run();
     }
     await W.cachePut(env, "auth_rules", { roles: ["coordinator"], sameHandBothWays: true }).run();
+    /* This suite is about the default PIN itself. */
+    env.__keepDefaults = true;
     return { db, env };
   }
   const post = (env, body) => W.default.fetch(new Request("https://worker.test/", {
@@ -138,6 +140,7 @@ export default async function (root) {
   s.test("reset: back on the default, asked again, the lockout gone", async (a) => {
     await atTime(THU, async () => {
       const { db, env } = await fresh();
+      env.__keepDefaults = false;   /* the coordinator resetting has his own PIN */
       await change(env, "Bro Trevor", TREVOR, "2580");
       for (let i = 0; i < 3; i++) await signIn(env, "Bro Trevor", "0000");
       a.eq((await signIn(env, "Bro Trevor", "2580")).locked, true, "three wrong did not lock it");
@@ -158,6 +161,7 @@ export default async function (root) {
   s.test("the register counts his own PIN, phone number or not", async (a) => {
     await atTime(THU, async () => {
       const { env } = await fresh();
+      env.__keepDefaults = false;   /* the coordinator looking has his own PIN */
       await W.cachePut(env, "coord_shelf", { builtAt: Date.now(), readAt: Date.now(), requests: [], defects: [],
         drivers: [{ name: "Sis Ama", role: "Driver", active: true, order: 1, route: "North", email: "", phone: "", hasPin: false }],
         driverRoles: ["Driver", "Coordinator"] }).run();
@@ -208,6 +212,24 @@ export default async function (root) {
     const lines = hg.slice(1).map((r) => [r[col("Who")], r[col("What changed")], r[col("To")], r[col("Why")]].join("|"));
     a.eq(lines.join(" / "),
       "Bro Trevor|PIN changed|Own PIN| / Sis Ama|Default PIN kept|Default PIN| / Bro Arthur|PIN reset|Default PIN|Bro Trevor");
+  });
+
+  /* Audit, 4 Nov 2026 (w2.82.0): a coordinator on the default PIN sets his
+     own before the coordinator app, an email link or Authorise opens. */
+  s.test("a coordinator on the default PIN sets his own first", async (a) => {
+    await atTime(THU, async () => {
+      const { env } = await fresh();
+      const load = () => post(env, { action: "coord", who: "Bro Arthur", pin: ARTHUR, op: "load" }).then(J);
+      a.eq((await load()).error, "default pin");
+      const wrong = await J(await post(env, { action: "coord", who: "Bro Arthur", pin: "0000", op: "load" }));
+      a.eq(wrong.error, "bad pin", "a wrong PIN was told it was the default");
+      const ch = await J(await post(env, { action: "pinchange", pin: { driver: "Bro Arthur", pin: ARTHUR, newPin: "4826" } }));
+      a.eq(ch.changed, true, JSON.stringify(ch));
+      const ok = await J(await post(env, { action: "coord", who: "Bro Arthur", pin: "4826", op: "load" }));
+      a.eq(ok.ok, true, JSON.stringify(ok).slice(0, 200));
+      const drv = await signIn(env, "Bro Trevor", TREVOR);
+      a.eq(drv.valid, true, "a driver on the default was refused");
+    });
   });
 
   return s;

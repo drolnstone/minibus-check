@@ -28,7 +28,7 @@ export default async function (root) {
     G.reset();
     const db = makeDB(join(root, "server", "schema.sql"));
     const env = makeEnv(db);
-    for (const d of [["Bro Arthur", "Coordinator"], ["Pst Kenneth", "Minister in Charge"], ["Bro Trevor", "Driver"]]) {
+    for (const d of [["Bro Arthur", "Coordinator"], ["Pst Kenneth", "Minister in Charge"], ["Bro Trevor", "Driver"], ["Bro Adrian", "Driver"]]) {
       await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,1,1,?)")
         .bind(d[0], d[1], "North", await W.pinHashOf(env, d[0], "1234")).run();
     }
@@ -36,8 +36,8 @@ export default async function (root) {
       { roles: ["Coordinator", "Minister in Charge"], sameHandBothWays: true }).run();
     return { db, env };
   }
-  const sub = (env, endpoint, driver, app) => post(env, { action: "subscribe", endpoint,
-    keys: { p256dh: "p", auth: "a" }, role: "driver", driver, route: "", app });
+  const sub = async (env, endpoint, driver, app) => post(env, { action: "subscribe", endpoint,
+    keys: { p256dh: "p", auth: "a" }, role: "driver", driver, route: "", app, key: await W.keyFor(env, driver) });
   const appOf = (db, ep) => (db._rows("SELECT app FROM push_subs WHERE endpoint = '" + ep + "'")[0] || {}).app;
   const pushedTo = () => G.calls.map((c) => c.url).filter((u) => u.indexOf("https://push.test/") === 0).sort();
   const alert = { id: "a1", kind: "stopped", urgent: true, title: "BUS STOPPED: YS70 PWE", body: "Critical defect.", reg: "YS70 PWE" };
@@ -75,6 +75,28 @@ export default async function (root) {
       .bind(EP("old"), "p", "a", "driver", "Bro Arthur", Date.now()).run();
     await J(await post(env, { action: "coordAlert", alert }));
     a.eq(JSON.stringify(pushedTo()), JSON.stringify([EP("old")]));
+  });
+
+  /* Audit, 4 Nov 2026 (w2.82.0): signing up under a name takes that person's
+     PIN, the driver app's key or the coordinator app's PIN. */
+  s.test("a phone signs up under a name only with that person's key or PIN", async (a) => {
+    await atTime("2026-09-27T09:00:00+01:00", async () => {
+      const { db, env } = await fresh();
+      const bare = await J(await post(env, { action: "subscribe", endpoint: EP("x1"), keys: { p256dh: "p", auth: "a" },
+        role: "driver", driver: "Bro Arthur", route: "", app: "coord", sure: true }));
+      a.eq(bare.error, "pin", "a stranger took the coordinator's alerts");
+      const wrongKey = await J(await post(env, { action: "subscribe", endpoint: EP("x2"), keys: { p256dh: "p", auth: "a" },
+        role: "driver", driver: "Bro Arthur", route: "", app: "coord", key: await W.keyFor(env, "Bro Trevor") }));
+      a.eq(wrongKey.error, "pin", "another driver's key was taken");
+      const byPin = await J(await post(env, { action: "subscribe", endpoint: EP("x3"), keys: { p256dh: "p", auth: "a" },
+        role: "driver", driver: "Bro Arthur", route: "", app: "coord", pin: "1234" }));
+      a.eq(byPin.ok, true, "the coordinator app's PIN was refused: " + JSON.stringify(byPin));
+      await post(env, { action: "subscribe", endpoint: EP("x4"), keys: { p256dh: "p", auth: "a" },
+        role: "passenger", driver: "Bro Arthur", route: "North" });
+      a.eq((db._rows("SELECT driver FROM push_subs WHERE endpoint = '" + EP("x4") + "'")[0] || {}).driver, "",
+           "a passenger's phone carried a driver's name");
+      a.eq(db._rows("SELECT * FROM push_subs WHERE endpoint IN ('" + EP("x1") + "','" + EP("x2") + "')").length, 0);
+    });
   });
 
   s.test("a driver's own reminder skips the coordinator app's endpoint", async (a) => {

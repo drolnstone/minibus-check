@@ -24,7 +24,7 @@
 import { join } from "node:path";
 import { Suite } from "../lib/t.mjs";
 import { makeDB } from "../lib/d1.mjs";
-import { loadWorker, env as makeEnv, installGlobals } from "../lib/worker.mjs";
+import { loadWorker, ownPinsFromDefaults, env as makeEnv, installGlobals } from "../lib/worker.mjs";
 import { seedSunday } from "../lib/seed.mjs";
 
 const EXEC = "https://script.google.com/macros/s/AKfy/exec";
@@ -55,6 +55,7 @@ export default async function (root) {
     await W.cachePut(env, "auth_rules",
       { roles: ["coordinator"], sameHandBothWays: true }).run();
     await W.cachePut(env, "sheet_url", { url: EXEC }).run();
+    await ownPinsFromDefaults(W, env);
     return { db, env, key };
   }
 

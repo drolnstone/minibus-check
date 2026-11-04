@@ -29,7 +29,7 @@ export default async function (root) {
     G.reset();
     const db = makeDB(join(root, "server", "schema.sql"));
     const env = makeEnv(db);
-    for (const d of [["Bro Arthur", "Coordinator"], ["Bro Trevor", "Driver"]]) {
+    for (const d of [["Bro Arthur", "Coordinator"], ["Bro Trevor", "Driver"], ["Bro Adrian", "Driver"]]) {
       await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,1,1,?)")
         .bind(d[0], d[1], "North", await W.pinHashOf(env, d[0], "1234")).run();
     }
@@ -71,7 +71,7 @@ export default async function (root) {
       const { db, env } = await fresh();
       await seedSunday(db, W.runSunday(), {});
       await post(env, { action: "subscribe", endpoint: EP("drv"), keys: { p256dh: "p", auth: "a" },
-                        role: "driver", driver: "Bro Adrian", route: "", app: "driver" });
+                        role: "driver", driver: "Bro Adrian", route: "", app: "driver", key: await W.keyFor(env, "Bro Adrian") });
       await W.wakeDrivers(env);
       const lines = sent(await J(await coord(env, "Bro Arthur", "load")));
       const mine = lines.find((m) => m.body === "To Bro Adrian.");

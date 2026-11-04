@@ -21,7 +21,7 @@
 import { join } from "node:path";
 import { Suite } from "../lib/t.mjs";
 import { makeDB } from "../lib/d1.mjs";
-import { loadWorker, env as makeEnv } from "../lib/worker.mjs";
+import { loadWorker, ownPinsFromDefaults, env as makeEnv } from "../lib/worker.mjs";
 
 const REG = "YS70 PWE";
 const OTHER = "NH56 FWP";
@@ -52,6 +52,7 @@ export default async function (root) {
 
     await W.cachePut(env, "auth_rules", Object.assign(
       { roles: ["coordinator", "minister in charge"], sameHandBothWays: true }, rules || {})).run();
+    await ownPinsFromDefaults(mod, env);
     return { db, env };
   }
 

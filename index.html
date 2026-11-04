@@ -1797,7 +1797,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.149.0";
+var APP_VERSION = "v1.150.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2867,7 +2867,7 @@ function pushTurnOn(){
           return callFetch(LIVE_ENDPOINT, {
             method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
             body: JSON.stringify({ action:"subscribe", endpoint:j.endpoint, keys:j.keys,
-                                   role:"driver", driver: me,
+                                   role:"driver", driver: me, key: driverKey(me),
                                    app: home === "coord" ? "" : "driver", sure: home === "driver",
                                    route: myRouteToday() || "North" })
           });
@@ -5580,6 +5580,7 @@ function authSend(){
         : e === "same hand" ? "The person who did the check cannot authorise it."
         : e === "no check" ? "No stopped check on record for that bus yet."
         : e === "no pin" ? "No PIN for that name: no phone number on the Drivers tab."
+        : e === "default pin" ? "That PIN is still the default."
         : "Could not authorise it here.", true);
     })
     .catch(function(){
@@ -7364,6 +7365,7 @@ function rotaCountsFetch(route,cb){
   var who=(st.driver||"").trim();
   callFetch(LIVE_ENDPOINT+"?board=1&route="+encodeURIComponent(route)+
             (who ? "&phone="+encodeURIComponent(myPhone())+"&driver="+encodeURIComponent(who) : "")+
+            (who && driverKey(who) ? "&key="+encodeURIComponent(driverKey(who)) : "")+
             (who ? boardFixPart(route) : ""),
             {method:"GET",redirect:"follow"}, POLL_TIMEOUT)
     .then(function(r){return r.text();})
