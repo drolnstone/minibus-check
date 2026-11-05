@@ -339,7 +339,11 @@ export default function (root) {
     const m3 = JSON.parse(read("coord/manifest.webmanifest"));
     a.ne(m3.short_name, m1.short_name, "the coordinator's app would share the driver app's name");
     a.ne(m3.short_name, m2.short_name);
-    a.eq(m3.scope, "./", "its scope must be its own folder");
+    /* From v1.151.0 (Asim, 5 Nov) the coordinator's app reaches the whole
+       site, as the driver app always has, so its Driver app and Vehicle
+       check open as an app page, not in a Safari pop-over with an X. */
+    a.eq(m3.scope, "../", "its scope must take in the driver app");
+    a.eq(m3.start_url, "./index.html", "it must still open on its own page");
   });
 
   /* From v1.77.1 the coordinator's app has a tile of its own, the logo on
