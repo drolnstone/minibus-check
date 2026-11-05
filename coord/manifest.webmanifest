@@ -3,7 +3,7 @@
   "short_name": "Coordinator",
   "description": "The coordinator's changes to the rota, rota requests, bookings, defects and the run record.",
   "start_url": "./index.html",
-  "scope": "./",
+  "scope": "../",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#F4F5F6",
