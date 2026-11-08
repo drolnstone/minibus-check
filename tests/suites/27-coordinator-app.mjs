@@ -354,6 +354,66 @@ export default async function (root) {
     });
   });
 
+  /* Edit, from w2.83.0 (Asim, 8 Nov 2026): the same row, any booking. */
+  s.test("a passenger's booking edited in the coordinator app changes in place", async (a) => {
+    await atTime(THU, async () => {
+      const { db, env } = await fresh();
+      const pid = await W.passengerId(env, "07700900111");
+      const r = await db.prepare("INSERT INTO bookings (sunday, route, stop_id, stop, seats, device, pid, phone, status, received, synced) " +
+                                 "VALUES (?,?,?,?,?,?,?,?,?,?,1)").bind(KEY, "South", "S03", "Old name", 3, "dev", pid, "07700900111", "Booked", Date.now()).run();
+      const id = r.meta.last_row_id;
+      const out = await act(env, { kind: "booking", op: "edit", bookingId: id, stopId: "S03", seats: 1 });
+      a.ok(out.ok, JSON.stringify(out));
+      const rows = await W.liveBookings(env, KEY);
+      a.eq(rows.length, 1, "edit made a second booking");
+      a.eq(rows[0].row, id);
+      a.eq(rows[0].seats, 1);
+      const row = db._one("SELECT status, synced, note, device FROM bookings WHERE id=?", id);
+      a.eq(row.status, "Booked");
+      a.eq(row.synced, 0, "the edit would never reach the sheet");
+      a.eq(row.device, "dev", "the passenger's phone would lose its booking");
+      a.has(row.note, "Changed by");
+      a.has(out.action.words, "3 seats");
+      a.has(out.action.words, "1 seat");
+      a.hasnt(out.action.words, "07700900111");
+      const page = await W.busPayload(env, KEY, "", pid);
+      a.ok(page.mine && page.mine.seats === 1, "got " + JSON.stringify(page.mine));
+      const same = await act(env, { kind: "booking", op: "edit", bookingId: id, stopId: "S03", seats: 1 });
+      a.not(same.ok);
+      a.has(same.error, "Nothing changed");
+    });
+  });
+
+  s.test("a coordinator's booking edited keeps who booked it", async (a) => {
+    await atTime(THU, async () => {
+      const { db, env } = await fresh();
+      const made = await act(env, { kind: "booking", op: "add", sunday: KEY, stopId: "S03", seats: 3, phone: "07700900456" });
+      const id = made.bookingId;
+      const out = await act(env, { kind: "booking", op: "edit", bookingId: id, stopId: "S04", seats: 2 });
+      a.ok(out.ok, JSON.stringify(out));
+      const row = db._one("SELECT seats, stop_id, note, device FROM bookings WHERE id=?", id);
+      a.eq(Number(row.seats), 2);
+      a.eq(row.stop_id, "S04");
+      a.has(row.note, "Booked by");
+      a.ok(String(row.device).indexOf("coord-") === 0);
+      a.eq((await W.liveBookings(env, KEY)).length, 1);
+    });
+  });
+
+  s.test("no booking is edited once the bus has been to its stop", async (a) => {
+    await atTime("2026-10-04T10:30:00+01:00", async () => {
+      const { db, env } = await fresh();
+      const r = await db.prepare("INSERT INTO bookings (sunday, route, stop_id, stop, seats, device, pid, phone, status, received, synced) " +
+                                 "VALUES (?,?,?,?,?,?,?,?,?,?,1)").bind(KEY, "South", "S03", "S03 stop", 2, "dev", "pid", "07700900111", "Booked", Date.now()).run();
+      await W.handleTrip(env, { trip: "t1", route: "South", driver: "Bro Trevor", reg: "NH56 FWP", sunday: KEY,
+                                events: [{ event: "start", at: Date.now() - 900000 },
+                                         { event: "picked", stopId: "S03", at: Date.now() - 300000 }] });
+      const out = await act(env, { kind: "booking", op: "edit", bookingId: r.meta.last_row_id, stopId: "S03", seats: 1 });
+      a.not(out.ok);
+      a.has(out.error, "already been");
+    });
+  });
+
   s.test("no seat is booked at a stop the bus has already been to", async (a) => {
     await atTime("2026-10-04T10:30:00+01:00", async () => {
       const { env } = await fresh();

@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.82.0";
+const SCRIPT_VERSION = "w2.83.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -11613,6 +11613,69 @@ async function actBooking(env, me, act, actionId) {
              body: { op: "cancel", bookingId: bid, sunday: row.sunday, stopId: row.stop_id, seats: Number(row.seats) || 0 },
              words: shortDay(row.sunday) + ". Cancelled " + seatWord(Number(row.seats) || 0) +
                     " at " + row.stop + tail + "." };
+  }
+
+  /* EDIT, from w2.83.0 (Asim, 8 Nov 2026): seats and stop changed on the
+     same row, any booking, the passenger's own included, the way the
+     passenger would change it themselves. No cancel and rebook, so the list
+     never shows a cancelled seat and a new one for the same person. Like
+     add and cancel it tells nobody; the passenger's page shows the new seats
+     and stop when it next opens. A coordinator's own note stays (it names
+     who booked it); a passenger's row is noted with who changed it. */
+  if (op === "edit") {
+    const bid = Number(act.bookingId);
+    const row = bid > 0 ? await env.DB.prepare("SELECT * FROM bookings WHERE id=?").bind(bid).first() : null;
+    if (!row) return { ok: false, error: "That booking is not on the live server." };
+    if (String(row.status || "").toLowerCase() === "cancelled") return { ok: false, error: "That booking is cancelled." };
+    const key = String(row.sunday);
+    if (key < runSunday()) return { ok: false, error: "That Sunday has been and gone." };
+    if (!busDateAllowed(key)) return { ok: false, error: "Only this Sunday and next can be booked." };
+    const stop = stops.find((s) => s.id === String(act.stopId || "").trim() && !s.arrival) || null;
+    if (!stop) return { ok: false, error: "Choose a stop." };
+    const seats = Math.floor(Number(act.seats));
+    if (!(seats >= 1 && seats <= 12)) return { ok: false, error: "Between 1 and 12 seats." };
+    const wasSeats = Number(row.seats) || 0, wasId = String(row.stop_id || "");
+    if (seats === wasSeats && stop.id === wasId) return { ok: false, error: "Nothing changed." };
+    const rotaRow = await getRotaRow(env, key);
+    if (routeCancelled(rotaRow, stop.route)) {
+      return { ok: false, error: "The " + stop.route + " bus is not running that Sunday." };
+    }
+    if (key === runSunday()) {
+      const trips = {};
+      const tripOf = async (route) => {
+        if (!(route in trips)) { try { trips[route] = await tripState(env, key, route); } catch (e) { trips[route] = null; } }
+        return trips[route];
+      };
+      const tNew = await tripOf(stop.route);
+      if (tNew && tNew.ended) return { ok: false, error: "The " + stop.route + " run is over." };
+      if (tNew && tNew.served && tNew.served[stop.id]) return { ok: false, error: "The bus has already been to " + stop.stop + "." };
+      const tOld = row.route ? await tripOf(String(row.route)) : null;
+      if (tOld && tOld.served && tOld.served[wasId]) return { ok: false, error: "The bus has already been to " + row.stop + "." };
+    }
+    const coordMade = String(row.device || "").indexOf("coord-") === 0;
+    const note = coordMade ? String(row.note || "")
+      : "Changed by " + me.name + " in the coordinator's app at " + londonHHMM(new Date()) + ".";
+    const tail = row.phone ? ", number ending " + String(row.phone).slice(-3) : "";
+    const stmts = [env.DB.prepare(
+      "UPDATE bookings SET route=?, stop_id=?, stop=?, seats=?, note=?, received=?, synced=0 WHERE id=?")
+      .bind(stop.route, stop.id, stop.stop, seats, note, Date.now(), bid)];
+    return { ok: true, sunday: key, stmts: stmts,
+             body: { op: "edit", bookingId: bid, sunday: key, stopId: stop.id, seats: seats,
+                     wasStopId: wasId, wasSeats: wasSeats },
+             words: shortDay(key) + ". Changed " + seatWord(wasSeats) + " at " + row.stop + " to " +
+                    seatWord(seats) + (stop.id !== wasId ? " at " + stop.stop : "") + tail + ".",
+             after: async () => {
+               await stampBooked(env, bid, stop.time, stop.id !== wasId);
+               return 0;
+             },
+             reply: { bookingId: bid,
+                      seatsNow: await (async () => {
+                        try {
+                          const rows = (await liveBookings(env, key)).map((b) =>
+                            Number(b.row) === bid ? Object.assign({}, b, { stopId: stop.id, seats: seats, route: stop.route }) : b);
+                          return await seatsFor(env, key, stop.route, stops, await getBuses(env), rotaRow, rows);
+                        } catch (e) { return null; }
+                      })() } };
   }
 
   if (op === "add") {

@@ -1,23 +1,21 @@
 MINIBUS
 =======
-  pages v1.151.0 · server w2.82.0 · sheet v1.133.0
+  pages v1.152.0 · server w2.83.0 · sheet v1.133.0
 
-YOU ARE ON   app v1.150.0 · server w2.82.0 · sheet v1.133.0
-GOING TO     app v1.151.0 · server w2.82.0 · sheet v1.133.0
+YOU ARE ON   app v1.151.0 · server w2.82.0 · sheet v1.133.0
+GOING TO     app v1.152.0 · server w2.83.0 · sheet v1.133.0
 
-Coordinator app: Driver app and Vehicle check open the driver app inside
-the Coordinator app, as a normal app page, the way the driver app's
-Coordinator button already opens the coordinator app. No Safari pop-over
-with X, address bar, share and reload.
+Coordinator app, Bookings: Edit beside Cancel on every booking, the
+passengers' own included, while the bus has not been to the stop. Edit
+opens the stop and seats as they stand; Save changes the same booking (no
+cancel and new booking). The number stays. Like Book and Cancel in the
+coordinator app it alerts nobody; the passenger's page shows the new seats
+and stop when it next opens. Same limits as booking: this Sunday and next,
+a run not over, a stop not yet reached.
 
-Merging is the whole deploy.
-
-AFTER MERGING (iPhone, once)
-1. Delete the Coordinator icon from the Home Screen.
-2. In Safari open drolnstone.github.io/minibus-check/coord/ and Add to
-   Home Screen again. Sign in and turn on alerts again.
-   (iPhones read an icon's settings only when it is added.)
+Merging is the whole deploy. Nothing to do on the phone.
 
 CHECKS
-A. Coordinator app, App info: v1.151.0.
-B. Coordinator app, Driver app: opens with no X or address bar at the top.
+A. Coordinator app, App info: v1.152.0 · w2.83.0.
+B. Bookings, Sun 15 Nov: Edit on a booking, + or −, Save. The same row
+   shows the new seats; no Cancelled line.

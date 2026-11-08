@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.151.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.152.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -419,6 +419,7 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .bk .moved{flex-basis:100%;color:var(--warn);font-weight:600;font-size:13px;line-height:1.3}
 .bk a{color:var(--info-deep);font-weight:600;text-decoration:none;white-space:nowrap}
 .bk .mini{min-height:34px;padding:0 9px;font-size:13px}
+.bk-acts{display:flex;gap:6px;flex:none}
 .bs-more{display:block;width:100%;min-height:42px;margin-top:2px;padding:0;border-top:1px solid var(--hair);
   text-align:left;font-size:14px;font-weight:600;color:var(--muted)}
 .bs-more:active{color:var(--ink)}
@@ -750,7 +751,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.151.0";
+var PAGE_VERSION = "v1.152.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -2014,7 +2015,7 @@ function paintBookings(key){
              (k.phone ? '<a href="tel:'+esc(k.phone)+'">'+esc(phoneWords(k.phone))+'</a>' : '<span>no number</span>') +
              (k.coord ? '<span class="tag info">'+esc(bookedBy(k.note))+'</span>' : '') +
              (moved ? '<small class="moved">Booked when '+esc(s.id)+' was '+esc(k.stop)+'</small>' : '') + '</span>' +
-             (b.mayAct ? '<button class="mini warn" type="button" data-do="cancel" data-id="'+k.id+'">Cancel</button>' : '') + '</div>';
+             (b.mayAct ? bkActs(k, !s.passed && !rt.ended && !rt.off) : '') + '</div>';
       });
       h += '</div>';
     });
@@ -2030,7 +2031,7 @@ function paintBookings(key){
            (k.phone ? '<a href="tel:'+esc(k.phone)+'">'+esc(phoneWords(k.phone))+'</a>' : '<span>no number</span>') +
            (k.coord ? '<span class="tag info">'+esc(bookedBy(k.note))+'</span>' : '') +
            '<small class="moved">'+esc((k.stopId ? k.stopId + " " : "") + k.stop)+'</small></span>' +
-           (b.mayAct ? '<button class="mini warn" type="button" data-do="cancel" data-id="'+k.id+'">Cancel</button>' : '') + '</div>';
+           (b.mayAct ? bkActs(k, !bookShut(b)) : '') + '</div>';
     });
     h += '</div>';
   }
@@ -2041,6 +2042,14 @@ function paintBookings(key){
     }).join("") + '</ul></details>';
   }
   $("bookingsBody").innerHTML = h;
+}
+
+/* Edit beside Cancel on every booking, the passenger's own included
+   (Asim, 8 Nov 2026), while the bus has not been to its stop. */
+function bkActs(k, editable){
+  return '<span class="bk-acts">' +
+         (editable ? '<button class="mini" type="button" data-do="bkedit" data-id="'+k.id+'">Edit</button>' : '') +
+         '<button class="mini warn" type="button" data-do="cancel" data-id="'+k.id+'">Cancel</button></span>';
 }
 
 function bookingById(id){
@@ -2058,6 +2067,43 @@ function cancelBooking(id){
   openSheet({ eyebrow: shortDay(BOOK.sunday), title: "Cancel " + seatWords(k.seats) + " at " + (k.stopId ? k.stopId + " " : "") + k.stop + "?",
               line: k.phone ? phoneWords(k.phone) : "", go: "Cancel the booking", stop: true, keep: "Keep it",
               onGo: function(){ act({ kind:"booking", op:"cancel", bookingId:id }); } });
+}
+
+/* EDIT A BOOKING, from v1.152.0: the same stop and seats a passenger
+   chooses, filled in as they stand. Saved on the same row, so nobody sees a
+   cancel and a new booking. The number stays: it is whose seat it is. */
+function editBooking(id){
+  var k = bookingById(id), b = BOOK.data; if(!k || !b) return;
+  var cur = k.stopId || "";
+  if(!cur) b.routes.forEach(function(r){ r.stops.forEach(function(s){ s.bookings.forEach(function(x){ if(x.id === id) cur = s.id; }); }); });
+  var opts = b.routes.filter(function(r){ return !r.off && !r.ended; }).map(function(r){
+    return '<optgroup label="'+esc(r.route)+'">' + r.stops.filter(function(s){ return !s.passed; }).map(function(s){
+      return '<option value="'+esc(s.id)+'"'+(s.id === cur ? ' selected' : '')+'>'+esc(s.id+"  "+s.time+"  "+s.stop)+'</option>';
+    }).join("") + '</optgroup>';
+  }).join("");
+  if(!opts){ toast(bookShut(b) || "Both runs are over.", true); return; }
+  var n = Math.max(1, Math.min(12, Number(k.seats) || 1)), n0 = n;
+  openSheet({ eyebrow: shortDay(BOOK.sunday), title: "Edit booking",
+    line: k.phone ? phoneWords(k.phone) : "",
+    body: '<div class="field"><label for="bkStop">Stop</label><select id="bkStop">'+opts+'</select></div>' +
+          '<div class="field"><label>Seats</label><div class="stepper"><button type="button" id="bkLess" aria-label="One fewer">−</button>' +
+          '<output id="bkN">'+n+'</output><button type="button" id="bkMore" aria-label="One more">+</button></div></div>',
+    go: "Save",
+    onGo: function(){
+      act({ kind:"booking", op:"edit", bookingId:id, stopId:$("bkStop").value, seats:n }, function(out){
+        var f = out.seatsNow;
+        if(f && f.seats && f.booked > f.seats) setTimeout(function(){ toast(f.route + " is over by " + (f.booked - f.seats) + ".", true); }, 3800);
+      });
+    } });
+  var go = $("sheetGo");
+  var sync = function(){
+    $("bkN").textContent = n;
+    go.disabled = n === n0 && $("bkStop").value === cur;
+  };
+  $("bkStop").onchange = sync;
+  $("bkLess").onclick = function(){ if(n > 1){ n--; sync(); } };
+  $("bkMore").onclick = function(){ if(n < 12){ n++; sync(); } };
+  sync();
 }
 
 /* Why nothing can be booked that Sunday, or "" while a route still takes
@@ -3897,6 +3943,7 @@ document.addEventListener("click", function(e){
   else if(d === "approve") approve(t.getAttribute("data-id"));
   else if(d === "deny") deny(t.getAttribute("data-id"));
   else if(d === "cancel") cancelBooking(Number(t.getAttribute("data-id")));
+  else if(d === "bkedit") editBooking(Number(t.getAttribute("data-id")));
   else if(d === "empties"){ var er = t.getAttribute("data-route"); BOOK_ALL[er] = !BOOK_ALL[er]; paintBookings(BOOK.sunday); }
   else if(d === "book") bookFor(key);
   else if(d === "defect") updateDefect(key);
