@@ -400,6 +400,32 @@ export default async function (root) {
     });
   });
 
+  s.test("the number's phones are told of a coordinator's edit and cancel, with no stop code", async (a) => {
+    await atTime(THU, async () => {
+      const { db, env } = await fresh();
+      const PH = "07700900111";
+      const pid = await W.passengerId(env, PH);
+      await db.prepare("INSERT INTO push_subs (endpoint, p256dh, auth, role, ref, pid, made) VALUES (?,?,?,?,?,?,?)")
+        .bind("https://push.test/p", "p", "a", "passenger", "dev", pid, Date.now()).run();
+      const r = await db.prepare("INSERT INTO bookings (sunday, route, stop_id, stop, seats, device, pid, phone, status, received, synced) " +
+                                 "VALUES (?,?,?,?,?,?,?,?,?,?,1)").bind(KEY, "South", "S03", "Sedley St", 3, "dev", pid, PH, "Booked", Date.now()).run();
+      const id = r.meta.last_row_id;
+      const out = await act(env, { kind: "booking", op: "edit", bookingId: id, stopId: "S03", seats: 1 });
+      a.ok(out.ok, JSON.stringify(out));
+      let box = (await W.cacheGet(env, W.coordBoxKey("https://push.test/p"))) || [];
+      a.eq(box.length, 1, "the passenger's phone was not told of the edit");
+      a.eq(box[0].title, "Booking changed");
+      a.has(box[0].body, "3 seats at Sedley St, now 1 seat.");
+      a.hasnt(box[0].body, "S03");
+      const c = await act(env, { kind: "booking", op: "cancel", bookingId: id });
+      a.ok(c.ok, JSON.stringify(c));
+      box = (await W.cacheGet(env, W.coordBoxKey("https://push.test/p"))) || [];
+      a.eq(box.length, 2, "the passenger's phone was not told of the cancel");
+      a.eq(box[1].title, "Seat cancelled");
+      a.hasnt(box[1].body, "S03");
+    });
+  });
+
   s.test("no booking is edited once the bus has been to its stop", async (a) => {
     await atTime("2026-10-04T10:30:00+01:00", async () => {
       const { db, env } = await fresh();

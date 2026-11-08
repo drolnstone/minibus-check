@@ -3074,14 +3074,20 @@ async function bookingFlood(env) {
 /* "Seat cancelled" into each phone signed in with the booking's number,
    but the one that cancelled it. */
 async function tellSeatGone(env, b, key, ref) {
-  const pid = String((b && b.pid) || "");
+  return tellBookingPhones(env, b && b.pid, "gone-" + ((b && b.row) || ""), "Seat cancelled",
+                           shortDay(key) + ": " + String((b && b.stop) || "") + ".", ref);
+}
+
+/* One alert into each phone signed in with a booking's number, but the one
+   (ref) that made the change. From w2.83.0 a coordinator's Edit and Cancel
+   use it too (Asim, 8 Nov 2026): the passenger did not make that change. */
+async function tellBookingPhones(env, pidIn, tag, title, body, ref) {
+  const pid = String(pidIn || "");
   if (!pid) return 0;
   const subs = (await subsWhere(env, "role='passenger' AND pid=?", [pid]))
     .filter((x) => !ref || String(x.ref || "") !== ref);
   if (!subs.length) return 0;
-  const msg = coordAlertOf({ id: "gone-" + (b.row || "") + "-" + Date.now(), kind: "message",
-                             title: "Seat cancelled",
-                             body: shortDay(key) + ": " + String(b.stop || "") + "." });
+  const msg = coordAlertOf({ id: tag + "-" + Date.now(), kind: "message", title: title, body: body });
   if (!msg) return 0;
   const keys = await vapidKeys(env);
   const m = Object.assign({}, msg, { url: "./" });
@@ -11611,6 +11617,10 @@ async function actBooking(env, me, act, actionId) {
                "UPDATE bookings SET status='Cancelled', note=?, received=?, synced=0 WHERE id=?")
                .bind(note, Date.now(), bid)],
              body: { op: "cancel", bookingId: bid, sunday: row.sunday, stopId: row.stop_id, seats: Number(row.seats) || 0 },
+             after: async () => {
+               try { await tellSeatGone(env, { pid: row.pid, row: bid, stop: row.stop }, String(row.sunday), ""); } catch (e) {}
+               return 0;
+             },
              words: shortDay(row.sunday) + ". Cancelled " + seatWord(Number(row.seats) || 0) +
                     " at " + row.stop + tail + "." };
   }
@@ -11618,9 +11628,9 @@ async function actBooking(env, me, act, actionId) {
   /* EDIT, from w2.83.0 (Asim, 8 Nov 2026): seats and stop changed on the
      same row, any booking, the passenger's own included, the way the
      passenger would change it themselves. No cancel and rebook, so the list
-     never shows a cancelled seat and a new one for the same person. Like
-     add and cancel it tells nobody; the passenger's page shows the new seats
-     and stop when it next opens. A coordinator's own note stays (it names
+     never shows a cancelled seat and a new one for the same person. Each
+     phone signed in with the number gets "Booking changed" with the old and
+     new seats and stop. A coordinator's own note stays (it names
      who booked it); a passenger's row is noted with who changed it. */
   if (op === "edit") {
     const bid = Number(act.bookingId);
@@ -11666,6 +11676,13 @@ async function actBooking(env, me, act, actionId) {
                     seatWord(seats) + (stop.id !== wasId ? " at " + stop.stop : "") + tail + ".",
              after: async () => {
                await stampBooked(env, bid, stop.time, stop.id !== wasId);
+               /* "Booking changed. Sun 15 Nov: 3 seats at Fountains Road by
+                  Stanley Close, now 1 seat." No stop codes for passengers. */
+               try {
+                 await tellBookingPhones(env, row.pid, "changed-" + bid, "Booking changed",
+                   shortDay(key) + ": " + seatWord(wasSeats) + " at " + row.stop + ", now " + seatWord(seats) +
+                   (stop.id !== wasId ? " at " + stop.stop : "") + ".", "");
+               } catch (e) {}
                return 0;
              },
              reply: { bookingId: bid,

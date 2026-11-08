@@ -8,14 +8,18 @@ GOING TO     app v1.152.0 · server w2.83.0 · sheet v1.133.0
 Coordinator app, Bookings: Edit beside Cancel on every booking, the
 passengers' own included, while the bus has not been to the stop. Edit
 opens the stop and seats as they stand; Save changes the same booking (no
-cancel and new booking). The number stays. Like Book and Cancel in the
-coordinator app it alerts nobody; the passenger's page shows the new seats
-and stop when it next opens. Same limits as booking: this Sunday and next,
-a run not over, a stop not yet reached.
+cancel and new booking). The number stays. Same limits as booking: this
+Sunday and next, a run not over, a stop not yet reached.
+
+Alerts: each phone signed in with the booking's number gets
+"Booking changed. Sun 15 Nov: 3 seats at Fountains Road by Stanley Close,
+now 1 seat." on Edit, and "Seat cancelled" on a coordinator's Cancel. No
+stop codes. A number with no phone signed in gets nothing.
 
 Merging is the whole deploy. Nothing to do on the phone.
 
 CHECKS
 A. Coordinator app, App info: v1.152.0 · w2.83.0.
 B. Bookings, Sun 15 Nov: Edit on a booking, + or −, Save. The same row
-   shows the new seats; no Cancelled line.
+   shows the new seats; no Cancelled line. A phone signed in with that
+   number gets "Booking changed".
