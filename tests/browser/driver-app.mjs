@@ -1475,6 +1475,43 @@ if (want("T52")) {
   await me.ctx.close();
 }
 
+/* T53 — COVER (v1.153.0, Asim, 8 Nov 2026). A Cover request names the
+   driver covering him and may be Morning only; with nobody named it is not sent. */
+if (want("T53")) {
+  const me = await phone({ clock: "2026-09-26T19:00:00+01:00" });
+  const sent = [];
+  me.pg.on("request", (r) => {
+    if (r.method() !== "POST") return;
+    try { const b = JSON.parse(r.postData() || "{}"); if (b.action === "rotaRequest") sent.push(b.request); }
+    catch (e) {}
+  });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn(); await me.close();
+  const key = "2026-10-04";
+  await me.pg.evaluate((k) => rotaOpenRequest(k), key);
+  await me.wait(400);
+  await me.pg.selectOption("#rotaReqType", "Request cover");
+  await me.wait(100);
+  const shown = await me.pg.evaluate(() => document.getElementById("rotaCoverField").style.display !== "none" &&
+                                           document.getElementById("rotaSwapField").style.display === "none");
+  const names = await me.pg.$$eval("#rotaCoverBy option", (o) => o.map((x) => x.value).filter(Boolean));
+  await me.setInput("rotaReqReason", "Car broke down");
+  await me.clickId("rotaSubmitRequest");
+  await me.wait(400);
+  const refused = await me.pg.evaluate(() => document.getElementById("toast").textContent);
+  const before = sent.length;
+  await me.pg.selectOption("#rotaCoverBy", names[0] || "");
+  await me.pg.evaluate(() => { document.getElementById("rotaCoverMorning").checked = true; });
+  await me.clickId("rotaSubmitRequest");
+  await me.wait(1500);
+  const rq = sent[0] || {};
+  check("T53", "a Cover request names who covers, Morning only ticked; with nobody named it is not sent",
+        shown && names.length > 0 && names.indexOf("Bro Sample") === -1 && /Choose who covers\./.test(refused) && before === 0 &&
+        rq.type === "Request cover" && rq.coverBy === names[0] && rq.morning === true && !me.errs.length,
+        JSON.stringify({ shown, names, refused, before, rq, errs: me.errs }).slice(0, 600));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

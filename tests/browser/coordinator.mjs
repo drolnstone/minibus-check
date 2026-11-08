@@ -50,6 +50,7 @@ const northOf = (k) => turn(k, NP, NA), southOf = (k) => turn(k, SP, SA);
    and the sync leaves it on the live server (w2.25.0 has no pairing of its
    own to fall back on). */
 const ODD_ROUTE = { "NH56 FWP": "North", "YS70 PWE": "South" };
+let COVER_BY = "";
 const PAIRED = REAL.buses.map((b) => ({ reg: b.reg, active: true, oddRoute: ODD_ROUTE[b.reg] || "" }));
 const busesOf = (k) => W.busRule(k, PAIRED);
 const CAL = W.londonKey(new Date());
@@ -124,6 +125,10 @@ async function world() {
   }
   await W.cachePut(env, "cache_rota", { builtAt: Date.now(), from: W.keyAddWeeks(TODAY, -12), to: W.keyAddWeeks(TODAY, 104),
     payload: { ok: true, rows, openDefects, drivers: REAL.drivers.map((d) => ({ name: d.name, role: d.role, hasPin: true })) } }).run();
+  /* rq-real-1 names who covers, morning only (v1.153.0): kept on the live server. */
+  COVER_BY = REAL.drivers.map((d) => d.name).find((n) => n !== northOf(NEXT) && n !== southOf(NEXT) && n !== "Bro Asim");
+  await W.handleRotaRequest(env, { id: "rq-real-1", date: NEXT, driver: northOf(NEXT), type: "Request cover",
+                                   reason: "Away at my sister's wedding in Leeds", coverBy: COVER_BY, morning: true });
   await W.cachePut(env, "coord_shelf", { builtAt: Date.now(), readAt: Date.now(),
     requests: [{ id: "rq-real-1", sunday: NEXT, driver: northOf(NEXT), type: "Request cover",
                  reason: "Away at my sister's wedding in Leeds", swapWith: "", theirSunday: "", bothAgreed: "",
@@ -367,6 +372,12 @@ if (want("C6")) {
   await me.pg.click('#requestsBody [data-do="approve"]');
   await me.wait(300);
   await me.shot("C6b-who-covers");
+  const preset = await me.text("#sheetBody [data-pick].on");
+  const presetGo = await me.text("#sheetGo");
+  check("C6c", "a Cover request names who covers, morning only, and Approve comes with him chosen (v1.153.0)",
+        card.indexOf("Covered by " + COVER_BY + " · Morning only") !== -1 && preset.indexOf(COVER_BY) === 0 &&
+        presetGo === "Approve, " + COVER_BY + " covers",
+        "card '" + card.slice(0, 120) + "', chosen '" + preset + "', go '" + presetGo + "'");
   const pickable = await me.pg.$$eval('#sheetBody [data-pick]:not([disabled])', (els) => els.map((e) => e.getAttribute("data-pick")));
   const who = pickable.find((n) => n !== "-") || "";
   await me.pg.click('#sheetBody [data-pick="' + who + '"]');

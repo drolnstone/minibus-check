@@ -1,23 +1,26 @@
 MINIBUS
 =======
-  pages v1.152.0 · server w2.84.0 · sheet v1.133.0
+  pages v1.153.0 · server w2.85.0 · sheet v1.134.0
 
-YOU ARE ON   app v1.152.0 · server w2.83.0 · sheet v1.133.0
-GOING TO     app v1.152.0 · server w2.84.0 · sheet v1.133.0
+YOU ARE ON   app v1.152.0 · server w2.84.0 · sheet v1.133.0
+GOING TO     app v1.153.0 · server w2.85.0 · sheet v1.134.0
 
-Server only. Coordinators hear about booking changes:
-1. A coordinator's Book, Edit or Cancel goes to the other coordinators as
-   "Change by (name)", e.g. "Sun 15 Nov. Changed 3 seats at Fountains Road
-   by Stanley Close to 1 seat, number ending 748." (email if no phone).
-2. Every booking alert to passengers goes on the Alerts list, e.g.
-   "Booking changed by Bro Asim: Sun 15 Nov: ... To 1 passenger phone."
-3. A coordinator's Edit or Cancel reaches the passenger as "Booking changed
-   by (name)" / "Seat cancelled by (name)". A passenger's own cancel, to
-   their other phones, stays "Seat cancelled".
+Driver app Cover request (Asim, 8 Nov 2026):
+1. Driver app, Rota, Request change: new type "Request cover". Covered by
+   (any active driver but him, nobody out on the other route that morning)
+   and a Morning only tick. No Sunday is traded; the morning itself works.
+2. Coordinator app, the request card reads "Covered by (name) · Morning
+   only"; Approve comes with that driver chosen (another can be picked).
+   The coordinator email lists "Covered by: (name) (morning only)".
+3. Morning only: once the run is over, with its parked mileage still to
+   key, the run is handed back to the rostered driver by itself (as Rota
+   Hand over does, in the approver's name). He gets "North run handed to
+   you" and keys the parked mileage. Without the tick it stays with the
+   cover.
 
 Merging is the whole deploy. Nothing to do on the phone.
 
 CHECKS
-A. Coordinator app, App info: v1.152.0 · w2.84.0.
-B. Edit a booking: the other coordinators get "Change by (name)"; Alerts
-   shows "Booking changed by (name)" with the phone count.
+A. Coordinator app, App info: v1.153.0 · w2.85.0 · v1.134.0.
+B. Driver app, Rota, Request change: "Request cover" shows Covered by
+   and Morning only.

@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.133.0";
+var SCRIPT_VERSION = "v1.134.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -14458,6 +14458,7 @@ function notifyRotaRequest(rq, sunday) {
   }
   if (rq.swapWith) lines.push("<b>Swap with:</b> " + esc(rq.swapWith));
   if (rq.swapDate) lines.push("<b>Taking their Sunday:</b> " + esc(rq.swapDate));
+  if (rq.coverBy) lines.push("<b>Covered by:</b> " + esc(rq.coverBy) + (rq.morning ? " (morning only)" : ""));
   if (rq.swapWith) lines.push(rq.agreed
     ? "Both have agreed."
     : "<b>Not marked as agreed.</b> Check with both before approving.");
@@ -14508,6 +14509,7 @@ function notifyRotaRequest(rq, sunday) {
                "Reason:  " + (rq.reason || "")];
   if (rq.swapWith) prows.push("Swap with: " + rq.swapWith);
   if (rq.swapDate) prows.push("Taking their Sunday: " + rq.swapDate);
+  if (rq.coverBy) prows.push("Covered by: " + rq.coverBy + (rq.morning ? " (morning only)" : ""));
   prows.push("", "The rota has not changed.", "", tabUrl(REQUESTS_SHEET));
   var dp = decidePlain(link, LINK_RULES.ttlMinutes);
   if (dp) prows.push(dp);
