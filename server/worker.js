@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.83.0";
+const SCRIPT_VERSION = "w2.84.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -3073,8 +3073,9 @@ async function bookingFlood(env) {
 
 /* "Seat cancelled" into each phone signed in with the booking's number,
    but the one that cancelled it. */
-async function tellSeatGone(env, b, key, ref) {
-  return tellBookingPhones(env, b && b.pid, "gone-" + ((b && b.row) || ""), "Seat cancelled",
+async function tellSeatGone(env, b, key, ref, by) {
+  return tellBookingPhones(env, b && b.pid, "gone-" + ((b && b.row) || ""),
+                           "Seat cancelled" + (by ? " by " + by : ""),
                            shortDay(key) + ": " + String((b && b.stop) || "") + ".", ref);
 }
 
@@ -3100,6 +3101,8 @@ async function tellBookingPhones(env, pidIn, tag, title, body, ref) {
     await cachePut(env, coordBoxKey(sub.endpoint), box).run();
     if (await pushOne(env, sub, keys)) phones++;
   }
+  /* On the coordinators' Alerts list, from w2.84.0 (Asim, 8 Nov 2026). */
+  try { await sentNote(env, { g: "book|" + msg.id, title: title + ": " + body, phones: phones }); } catch (e) {}
   return phones;
 }
 
@@ -9390,7 +9393,9 @@ async function reapplyDrivers(env) {
    be woken. A booking, a stop time put right on the record and a job to
    arrange do not change a run, so they are not sent. The emergency calls
    choice has its own (contactTell). */
-const CHANGE_TOLD = ["driver", "pin", "rota", "bus", "stop", "decide", "defect", "vlog", "vfix", "motrun", "handno"];
+/* "booking" from w2.84.0 (Asim, 8 Nov 2026): a coordinator's Book, Edit and
+   Cancel reach the other coordinators too. */
+const CHANGE_TOLD = ["driver", "pin", "rota", "bus", "stop", "decide", "defect", "vlog", "vfix", "motrun", "handno", "booking"];
 
 async function changeDriverNames(env, kind, r) {
   let names = [];
@@ -11618,7 +11623,7 @@ async function actBooking(env, me, act, actionId) {
                .bind(note, Date.now(), bid)],
              body: { op: "cancel", bookingId: bid, sunday: row.sunday, stopId: row.stop_id, seats: Number(row.seats) || 0 },
              after: async () => {
-               try { await tellSeatGone(env, { pid: row.pid, row: bid, stop: row.stop }, String(row.sunday), ""); } catch (e) {}
+               try { await tellSeatGone(env, { pid: row.pid, row: bid, stop: row.stop }, String(row.sunday), "", me.name); } catch (e) {}
                return 0;
              },
              words: shortDay(row.sunday) + ". Cancelled " + seatWord(Number(row.seats) || 0) +
@@ -11679,7 +11684,7 @@ async function actBooking(env, me, act, actionId) {
                /* "Booking changed. Sun 15 Nov: 3 seats at Fountains Road by
                   Stanley Close, now 1 seat." No stop codes for passengers. */
                try {
-                 await tellBookingPhones(env, row.pid, "changed-" + bid, "Booking changed",
+                 await tellBookingPhones(env, row.pid, "changed-" + bid, "Booking changed by " + me.name,
                    shortDay(key) + ": " + seatWord(wasSeats) + " at " + row.stop + ", now " + seatWord(seats) +
                    (stop.id !== wasId ? " at " + stop.stop : "") + ".", "");
                } catch (e) {}

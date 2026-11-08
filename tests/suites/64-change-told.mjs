@@ -74,6 +74,27 @@ export default async function (root) {
     });
   });
 
+  /* w2.84.0 (Asim, 8 Nov 2026): bookings are told too, and to no driver. */
+  s.test("a booking a coordinator makes, edits or cancels is told to the other coordinators", async (a) => {
+    await atTime(SAT, async () => {
+      const { env } = await fresh();
+      const made = await act(env, { kind: "booking", op: "add", sunday: KEY, stopId: "N04", seats: 3, phone: "07700 900748" }, "Bro Calvin");
+      a.ok(made.ok, JSON.stringify(made));
+      const ed = await act(env, { kind: "booking", op: "edit", bookingId: made.bookingId, stopId: "N04", seats: 1 }, "Bro Calvin");
+      a.ok(ed.ok, JSON.stringify(ed));
+      const gone = await act(env, { kind: "booking", op: "cancel", bookingId: made.bookingId }, "Bro Calvin");
+      a.ok(gone.ok, JSON.stringify(gone));
+      const box = await boxOf(env, "Bro Asim");
+      a.eq(box.length, 3, "Bro Asim was not told of all three: " + JSON.stringify(box));
+      a.eq(box[0].title, "Change by Bro Calvin");
+      a.has(box[1].body, "Changed 3 seats at Fountains Rd to 1 seat, number ending 748.");
+      a.has(box[2].body, "Cancelled 1 seat at Fountains Rd");
+      a.hasnt(JSON.stringify(box), "07700900748");
+      a.eq((await boxOf(env, "Bro Calvin")).length, 0, "the one who made it was told");
+      a.eq((await boxOf(env, "Bro Moses")).length, 0, "a driver was told of a booking");
+    });
+  });
+
   s.test("a coordinator with alerts off on every phone is emailed it", async (a) => {
     await atTime(SAT, async () => {
       const { db, env } = await fresh();

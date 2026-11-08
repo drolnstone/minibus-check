@@ -1,25 +1,23 @@
 MINIBUS
 =======
-  pages v1.152.0 · server w2.83.0 · sheet v1.133.0
+  pages v1.152.0 · server w2.84.0 · sheet v1.133.0
 
-YOU ARE ON   app v1.151.0 · server w2.82.0 · sheet v1.133.0
-GOING TO     app v1.152.0 · server w2.83.0 · sheet v1.133.0
+YOU ARE ON   app v1.152.0 · server w2.83.0 · sheet v1.133.0
+GOING TO     app v1.152.0 · server w2.84.0 · sheet v1.133.0
 
-Coordinator app, Bookings: Edit beside Cancel on every booking, the
-passengers' own included, while the bus has not been to the stop. Edit
-opens the stop and seats as they stand; Save changes the same booking (no
-cancel and new booking). The number stays. Same limits as booking: this
-Sunday and next, a run not over, a stop not yet reached.
-
-Alerts: each phone signed in with the booking's number gets
-"Booking changed. Sun 15 Nov: 3 seats at Fountains Road by Stanley Close,
-now 1 seat." on Edit, and "Seat cancelled" on a coordinator's Cancel. No
-stop codes. A number with no phone signed in gets nothing.
+Server only. Coordinators hear about booking changes:
+1. A coordinator's Book, Edit or Cancel goes to the other coordinators as
+   "Change by (name)", e.g. "Sun 15 Nov. Changed 3 seats at Fountains Road
+   by Stanley Close to 1 seat, number ending 748." (email if no phone).
+2. Every booking alert to passengers goes on the Alerts list, e.g.
+   "Booking changed by Bro Asim: Sun 15 Nov: ... To 1 passenger phone."
+3. A coordinator's Edit or Cancel reaches the passenger as "Booking changed
+   by (name)" / "Seat cancelled by (name)". A passenger's own cancel, to
+   their other phones, stays "Seat cancelled".
 
 Merging is the whole deploy. Nothing to do on the phone.
 
 CHECKS
-A. Coordinator app, App info: v1.152.0 · w2.83.0.
-B. Bookings, Sun 15 Nov: Edit on a booking, + or −, Save. The same row
-   shows the new seats; no Cancelled line. A phone signed in with that
-   number gets "Booking changed".
+A. Coordinator app, App info: v1.152.0 · w2.84.0.
+B. Edit a booking: the other coordinators get "Change by (name)"; Alerts
+   shows "Booking changed by (name)" with the phone count.
