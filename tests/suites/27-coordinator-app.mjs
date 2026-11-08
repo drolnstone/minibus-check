@@ -324,8 +324,10 @@ export default async function (root) {
       const d = await J(await W.handleDrain(env, { limit: 300 }));
       a.eq(d.bookings.length, 1, "the booking is not on its way to the sheet");
       a.has(d.bookings[0].note, "Bro Arthur");
-      a.eq(d.coord.length, 1, "the action is not on its way to the sheet");
-      a.eq(d.coord[0].body.bookingId, d.bookings[0].id);
+      /* From w2.84.0 the other coordinators are emailed it too (a "mail" row). */
+      const acts = d.coord.filter((c) => c.kind === "booking");
+      a.eq(acts.length, 1, "the action is not on its way to the sheet");
+      a.eq(acts[0].body.bookingId, d.bookings[0].id);
     });
   });
 
@@ -414,15 +416,20 @@ export default async function (root) {
       a.ok(out.ok, JSON.stringify(out));
       let box = (await W.cacheGet(env, W.coordBoxKey("https://push.test/p"))) || [];
       a.eq(box.length, 1, "the passenger's phone was not told of the edit");
-      a.eq(box[0].title, "Booking changed");
+      a.eq(box[0].title, "Booking changed by Bro Arthur");
       a.has(box[0].body, "3 seats at Sedley St, now 1 seat.");
       a.hasnt(box[0].body, "S03");
       const c = await act(env, { kind: "booking", op: "cancel", bookingId: id });
       a.ok(c.ok, JSON.stringify(c));
       box = (await W.cacheGet(env, W.coordBoxKey("https://push.test/p"))) || [];
       a.eq(box.length, 2, "the passenger's phone was not told of the cancel");
-      a.eq(box[1].title, "Seat cancelled");
+      a.eq(box[1].title, "Seat cancelled by Bro Arthur");
       a.hasnt(box[1].body, "S03");
+      const sent = await W.sentList(env);
+      a.ok(sent.some((m) => /^Booking changed by Bro Arthur: /.test(m.title) && /1 passenger phone/.test(m.body)),
+           "the edit's alert is not on the Alerts list: " + JSON.stringify(sent));
+      a.ok(sent.some((m) => /^Seat cancelled by Bro Arthur: /.test(m.title)), "the cancel's alert is not on the Alerts list");
+      a.ok(!sent.some((m) => /0770/.test(m.title + m.body)), "a phone number went on the Alerts list");
     });
   });
 
@@ -571,7 +578,8 @@ export default async function (root) {
       const two = await coord(env, { op: "act", act: body });
       a.ok(one.ok && two.ok && two.duplicate);
       a.eq(db._one("SELECT COUNT(*) AS n FROM bookings").n, 1);
-      a.eq(db._one("SELECT COUNT(*) AS n FROM coord_actions").n, 1);
+      a.eq(db._one("SELECT COUNT(*) AS n FROM coord_actions WHERE kind<>'mail'").n, 1);
+      a.ok(db._one("SELECT COUNT(*) AS n FROM coord_actions WHERE kind='mail'").n <= 1, "the other coordinators were told twice");
     });
   });
 
