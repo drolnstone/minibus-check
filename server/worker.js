@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.85.0";
+const SCRIPT_VERSION = "w2.86.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -7445,6 +7445,10 @@ async function pushWhat(env, endpoint, opts) {
   const test = await cacheGet(env, tkey);
   if (test) {
     await env.DB.prepare("DELETE FROM settings WHERE k=?").bind(tkey).run();
+    /* PROOF THE PHONE WOKE, from w2.86.0 (Asim, 8 Nov 2026: an Android
+       passenger was told "Sent" and saw nothing). Only the phone's own
+       service worker asks this, so the page can say whether it did. */
+    try { await cachePut(env, "testwoke:" + String(endpoint || ""), { at: Date.now() }).run(); } catch (e) {}
     if (Date.now() - (Number(test.at) || 0) < 5 * 60000) {
       return { ok: true, tag: "test", url: "./",
                title: "Alerts are working",
@@ -8777,6 +8781,20 @@ async function handleUnsubscribe(env, body) {
    matches the one being sent, so a second test would report success and send
    nothing, and it writes that tag over the dedup state a real Sunday depends
    on. Neither is touched here. */
+/* DID THE TEST WAKE THE PHONE? from w2.86.0. Asked by the page after "Sent",
+   a few times, so it can say "This phone received it." or that it did not. */
+async function handleTestSeen(env, body) {
+  const endpoint = String((body && body.endpoint) || "").trim();
+  if (!endpoint) return json({ ok: false, error: "no endpoint" });
+  const k = "testwoke:" + endpoint;
+  const w = await cacheGet(env, k);
+  if (w && Date.now() - (Number(w.at) || 0) < 5 * 60000) {
+    try { await env.DB.prepare("DELETE FROM settings WHERE k=?").bind(k).run(); } catch (e) {}
+    return json({ ok: true, woke: true });
+  }
+  return json({ ok: true, woke: false });
+}
+
 async function handleTestPush(env, body) {
   const endpoint = String((body && body.endpoint) || "").trim();
   if (!endpoint || endpoint.indexOf("https://") !== 0) {
@@ -8799,6 +8817,7 @@ async function handleTestPush(env, body) {
   /* What the woken phone will be told. Written before the push goes, because
      a fast push service can have the phone asking before this returns. */
   await cachePut(env, tkey, { at: Date.now() }).run();
+  try { await env.DB.prepare("DELETE FROM settings WHERE k=?").bind("testwoke:" + endpoint).run(); } catch (e) {}
 
   const drop = () => env.DB.prepare("DELETE FROM settings WHERE k=?").bind(tkey).run();
 
@@ -12182,6 +12201,7 @@ export default {
            already subscribed, and the caller had to know that endpoint to ask.
            There is nothing here a token would protect. */
         if (action === "testpush")    return await handleTestPush(env, body);
+        if (action === "testseen")    return await handleTestSeen(env, body);
 
         if (String(body.token || "") !== tokenOf(env)) return json({ ok: false, error: "bad token" });
         if (SHEET_ONLY_ACTIONS.indexOf(action) !== -1 && !sheetTokenOk(env, body)) {

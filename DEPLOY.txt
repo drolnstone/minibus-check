@@ -1,26 +1,19 @@
 MINIBUS
 =======
-  pages v1.153.0 · server w2.85.0 · sheet v1.134.0
+  pages v1.154.0 · server w2.86.0 · sheet v1.134.0
 
-YOU ARE ON   app v1.152.0 · server w2.84.0 · sheet v1.133.0
-GOING TO     app v1.153.0 · server w2.85.0 · sheet v1.134.0
+YOU ARE ON   app v1.153.0 · server w2.85.0 · sheet v1.134.0
+GOING TO     app v1.154.0 · server w2.86.0 · sheet v1.134.0
 
-Driver app Cover request (Asim, 8 Nov 2026):
-1. Driver app, Rota, Request change: new type "Request cover". Covered by
-   (any active driver but him, nobody out on the other route that morning)
-   and a Morning only tick. No Sunday is traded; the morning itself works.
-2. Coordinator app, the request card reads "Covered by (name) · Morning
-   only"; Approve comes with that driver chosen (another can be picked).
-   The coordinator email lists "Covered by: (name) (morning only)".
-3. Morning only: once the run is over, with its parked mileage still to
-   key, the run is handed back to the rostered driver by itself (as Rota
-   Hand over does, in the approver's name). He gets "North run handed to
-   you" and keys the parked mileage. Without the tick it stays with the
-   cover.
+Alert check says whether the phone received it (Asim, 8 Nov 2026):
+1. Passenger, driver and coordinator apps: the alert check (bell) now says
+   "Sent.", then "This phone received it." once the phone wakes for it, or
+   in red "This phone did not receive it in 30 seconds."
+2. Received with nothing on screen means the phone's own notification
+   settings for its browser are hiding it.
 
 Merging is the whole deploy. Nothing to do on the phone.
 
 CHECKS
-A. Coordinator app, App info: v1.153.0 · w2.85.0 · v1.134.0.
-B. Driver app, Rota, Request change: "Request cover" shows Covered by
-   and Morning only.
+A. Coordinator app, App info: v1.154.0 · w2.86.0 · v1.134.0.
+B. Tap the alert check: "Sent.", then "This phone received it."
