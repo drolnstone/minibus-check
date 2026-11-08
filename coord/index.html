@@ -2010,7 +2010,7 @@ function paintBookings(key){
     if(!booked.length && !every) h += '<p class="bk-none">Nobody booked.</p>';
     (every ? rt.stops : booked).forEach(function(s){
       h += '<div class="bs'+(s.seats ? '' : ' nobody')+(s.passed ? ' passed' : '')+'"><div class="bs-h"><span class="tm">'+esc(s.time)+'</span>' +
-           '<span class="nm">'+sid(s.id)+esc(s.stop)+(s.passed ? ' <span class="tag">Passed</span>' : '')+'</span><span class="ct">'+(s.seats || '–')+'</span></div>';
+           '<span class="nm">'+sid(s.id)+esc(s.stop)+(s.passed ? ' <span class="tag">'+esc(s.mark || 'Picked up')+'</span>' : '')+'</span><span class="ct">'+(s.seats || '–')+'</span></div>';
       s.bookings.forEach(function(k){
         /* Taken when this number was another place. The seat is still good,
            by number; the passenger booked the old place, and their own page

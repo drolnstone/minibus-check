@@ -5819,7 +5819,8 @@ const DRIVER_SUB_MATCH = "role = 'driver' AND lower(trim(driver)) = lower(trim(?
      both     one endpoint shared by the two (same browser)
      ''       signed up before w2.43.0, not known
 
-   A driver's own reminders skip 'coord'. A coordinator alert goes to the
+   A driver's own reminders take 'coord' only when nothing else is there
+   (from w2.86.0; skipped it before). A coordinator alert goes to the
    coordinator app's endpoints when that person has one, and to the rest
    only when they have none.
 
@@ -5832,7 +5833,6 @@ const DRIVER_SUB_MATCH = "role = 'driver' AND lower(trim(driver)) = lower(trim(?
    coordinator alerts coord, then both, then the rest; a driver's alerts
    driver (or not known), then both, then coord. And an app that knows it is
    its own install (sure) says so outright, mending a mark left wrong. */
-const DRIVER_WAKE_MATCH = DRIVER_SUB_MATCH + " AND app <> 'coord'";
 const APP_RANK_COORD = { coord: 0, both: 1 };
 const APP_RANK_DRIVER = { driver: 0, "": 0, both: 1, coord: 2 };
 function oneAppEach(subs, rank) {
@@ -5845,12 +5845,20 @@ function oneAppEach(subs, rank) {
   }
   return subs.filter((sub) => r(sub) === best[key(sub)]);
 }
-/* A driver's own phones for an alert meant for the driver app, one kind.
-   The coordinator app's own only with coordToo, where they were woken
-   before (a change, an emergency number), and only when nothing else is. */
-async function driverWakeSubs(env, name, coordToo) {
+/* A driver's own phones for an alert meant for the driver app, one kind:
+   the driver app's, else a shared one, else the coordinator app's.
+
+   The coordinator app's own as the last resort for every driver alert, from
+   w2.86.0 (Asim, 8 Nov 2026: a coordinator whose phone has only the
+   coordinator app, and opens the Driver app inside it). That Driver app
+   signs up on the coordinator app's endpoint, so it reads 'coord', and up to
+   w2.85.0 only a change or an emergency number reached it: the Sunday
+   reminders, "Are you at Church?", "Trip ended", the parked mileage ask and
+   "North run handed to you" all skipped it. oneAppEach still keeps a person
+   with the driver app as well to the driver app alone. */
+async function driverWakeSubs(env, name) {
   if (!(await ensurePushApp(env))) return subsWhere(env, DRIVER_SUB_MATCH, [name]);
-  const subs = await subsWhere(env, coordToo ? DRIVER_SUB_MATCH : DRIVER_WAKE_MATCH, [name]);
+  const subs = await subsWhere(env, DRIVER_SUB_MATCH, [name]);
   return oneAppEach(subs, APP_RANK_DRIVER);
 }
 const PUSH_APPS = ["driver", "coord", "both"];
@@ -7856,11 +7864,10 @@ async function alertRoll(env) {
     const names = (reg.results || []).map((r) => String(r.name || "")).filter(Boolean);
     out.onRegister = names.length;
 
-    const appKnown = await ensurePushApp(env);
     const off = [];
     for (const name of names) {
       const hit = await env.DB.prepare(
-        "SELECT 1 AS n FROM push_subs WHERE " + (appKnown ? DRIVER_WAKE_MATCH : DRIVER_SUB_MATCH) +
+        "SELECT 1 AS n FROM push_subs WHERE " + DRIVER_SUB_MATCH +
         " LIMIT 1").bind(name).first();
       if (hit) out.driversOn++;
       else off.push(name);
@@ -9515,7 +9522,7 @@ async function changeTell(env, me, kind, id, r) {
     const me0 = String(me.name || "").trim().toLowerCase();
     for (const n of await changeDriverNames(env, kind, r)) {
       if (n.toLowerCase() === me0) continue;
-      for (const sub of await driverWakeSubs(env, n, true)) await into(sub, one);
+      for (const sub of await driverWakeSubs(env, n)) await into(sub, one);
     }
     if (heard.length) await sentNote(env, { g: "change|" + msg.id, title: msg.title + ": " + r.words, who: heard });
   } catch (e) { /* the change stands; the alert is a courtesy on top */ }
@@ -10644,7 +10651,7 @@ async function contactTellDrivers(env, me, msg, d, heard) {
   const keys = await vapidKeys(env);
   let sent = 0;
   for (const n of names) {
-    for (const sub of await driverWakeSubs(env, n, true)) {
+    for (const sub of await driverWakeSubs(env, n)) {
       const box = ((await cacheGet(env, coordBoxKey(sub.endpoint))) || [])
         .filter((m) => m && Date.now() - (Number(m.at) || 0) < COORD_ALERT_MAX_AGE_MS);
       box.push(one);
@@ -10994,6 +11001,10 @@ async function coordBookings(env, me, sundayIn) {
       const here = rows.filter((b) => b.stop_id === s.id && String(b.status || "").toLowerCase() !== "cancelled");
       return { id: s.id, time: s.time, stop: s.stop,
                passed: !!(run && run.served && run.served[s.id]),
+               /* What the driver tapped there, in the driver app's own
+                  words (Asim, 8 Nov 2026: not "Passed"). */
+               mark: !(run && run.served && run.served[s.id]) ? ""
+                 : TAP_EMPTY.indexOf(String(run.served[s.id].event || "").toLowerCase()) !== -1 ? "Nobody here" : "Picked up",
                seats: here.reduce((n, b) => n + (Number(b.seats) || 0), 0),
                bookings: here.map(one) };
     });
