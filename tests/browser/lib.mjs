@@ -206,6 +206,7 @@ export async function phone(opts = {}) {
     else if (post.action === "photo") body = world.photoFails ? { ok: false } : { ok: true };
     else if (post.check || post.action === "check") body = world.checkFails ? { ok: false } : { ok: true, id: "chk-" + posted.length };
     else if (post.action === "subscribe" || post.action === "testpush") body = { ok: true };
+    else if (post.action === "testseen") body = { ok: true, woke: !world.testNotSeen };
     /* The hub's duty card and a check's start, from v1.117.0. */
     else if (post.action === "duty") body = world.duty ? world.duty(post) : { ok: true, route: "" };
     else if (post.action === "checkgo") body = { ok: true };

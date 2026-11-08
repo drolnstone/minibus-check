@@ -1634,6 +1634,27 @@ function paintAlerts(){
 
    The server answers with what the push service said, so a refusal arrives as
    words on this screen. */
+var testEp = "";
+/* DID IT ARRIVE? from v1.154.0 (Asim, 8 Nov 2026: an Android passenger was
+   told "Sent" and saw nothing). The phone's own service worker tells the
+   server when the test wakes it, so this asks, every 3 s for 30 s, and says
+   which it was. Received and nothing on screen means the phone's own
+   notification settings for this browser. */
+function pushSeen(endpoint){
+  var tries = 0;
+  function ask(){
+    tries++;
+    callFetch(ENDPOINT, {
+      method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify({ action:"testseen", endpoint: endpoint })
+    }).then(function(r){ return r.json(); }).then(function(out){
+      if(out && out.woke){ toast("This phone received it."); return; }
+      if(tries >= 10){ toast("This phone did not receive it in 30 seconds.", true); return; }
+      setTimeout(ask, 3000);
+    }).catch(function(){ if(tries < 10) setTimeout(ask, 3000); });
+  }
+  setTimeout(ask, 3000);
+}
 function pushTest(){
   if(pushBusy) return;
   pushBusy = true;
@@ -1642,13 +1663,14 @@ function pushTest(){
     return reg.pushManager.getSubscription();
   }).then(function(sub){
     if(!sub) throw new Error("no subscription");
+    testEp = sub.endpoint;
     return callFetch(ENDPOINT, {
       method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
       body: JSON.stringify({ action:"testpush", endpoint: sub.endpoint })
     });
   }).then(function(r){ return r.json(); }).then(function(out){
     pushBusy = false;
-    if(out && out.ok){ toast("Sent. Give it a few seconds."); return; }
+    if(out && out.ok){ toast("Sent."); pushSeen(testEp); return; }
     /* The server's own words. It is the only thing here that can tell a phone
        the push service has disowned from a key that is wrong, and the two look
        identical from this page otherwise. */
