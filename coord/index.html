@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.153.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.154.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -751,7 +751,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.153.0";
+var PAGE_VERSION = "v1.154.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -4212,16 +4212,37 @@ function bellOn(test){
     if(!out || !out.ok) throw new Error("not taken");
     if(was) return post({ action: "testpush", endpoint: endpoint });
     return out;
-  }).then(function(){
+  }).then(function(out){
     BELL.on = true; BELL.busy = false; bellPaint();
     if(current().name === "alerts") paintAlerts();
-    toast(was ? "A test alert is on its way to this phone." : "Coordinator alerts are on for this phone.");
+    if(was && !(out && out.ok)){ toast((out && out.error) ? "Not sent: " + out.error : "Not sent.", true); return; }
+    toast(was ? "Sent." : "Coordinator alerts are on for this phone.");
+    if(was) pushSeen(endpoint);
   }, function(err){
     BELL.busy = false; bellPaint();
     toast(String(err && err.message) === "not granted" ? "Not turned on." : "Could not turn alerts on. " + pushWhy(err), true);
   });
 }
 $("barBell").addEventListener("click", bellTap);
+
+/* DID IT ARRIVE? from v1.154.0 (Asim, 8 Nov 2026: an Android passenger was
+   told "Sent" and saw nothing). The phone's own service worker tells the
+   server when the test wakes it, so this asks, every 3 s for 30 s, and says
+   which it was. Received and nothing on screen means the phone's own
+   notification settings for this browser. */
+function pushSeen(endpoint){
+  var tries = 0;
+  function ask(){
+    tries++;
+    post({ action:"testseen", endpoint: endpoint }).then(function(o){ return { json: function(){ return o; } }; }).then(function(r){ return r.json(); }).then(function(out){
+      if(out && out.woke){ toast("This phone received it."); return; }
+      if(tries >= 10){ toast("This phone did not receive it in 30 seconds.", true); return; }
+      setTimeout(ask, 3000);
+    }).catch(function(){ if(tries < 10) setTimeout(ask, 3000); });
+  }
+  setTimeout(ask, 3000);
+}
+
 
 /* ---- asked, from v1.96.6 --------------------------------------------------
    After the Ushers app's "nobody left unalerted". From v1.96.7 it is asked
