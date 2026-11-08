@@ -1,26 +1,23 @@
 MINIBUS
 =======
-  pages v1.153.0 · server w2.85.0 · sheet v1.134.0
+  pages v1.155.0 · server w2.87.0 · sheet v1.134.0
 
-YOU ARE ON   app v1.152.0 · server w2.84.0 · sheet v1.133.0
-GOING TO     app v1.153.0 · server w2.85.0 · sheet v1.134.0
+YOU ARE ON   app v1.154.0 · server w2.86.0 · sheet v1.134.0
+GOING TO     app v1.155.0 · server w2.87.0 · sheet v1.134.0
 
-Driver app Cover request (Asim, 8 Nov 2026):
-1. Driver app, Rota, Request change: new type "Request cover". Covered by
-   (any active driver but him, nobody out on the other route that morning)
-   and a Morning only tick. No Sunday is traded; the morning itself works.
-2. Coordinator app, the request card reads "Covered by (name) · Morning
-   only"; Approve comes with that driver chosen (another can be picked).
-   The coordinator email lists "Covered by: (name) (morning only)".
-3. Morning only: once the run is over, with its parked mileage still to
-   key, the run is handed back to the rostered driver by itself (as Rota
-   Hand over does, in the approver's name). He gets "North run handed to
-   you" and keys the parked mileage. Without the tick it stays with the
-   cover.
+Bookings words and driver alerts (Asim, 8 Nov 2026):
+1. Coordinator app, Bookings: a stop the driver has marked shows
+   "Picked up" or "Nobody here" (what he tapped), not "Passed".
+2. A coordinator whose phone has only the coordinator app (the Driver app
+   opened inside it) now gets every driver alert there: Sunday reminders,
+   "Are you at Church?", "Trip ended", the parked mileage ask, "North run
+   handed to you", drivers' messages. With the driver app as well, they
+   still come once, to the driver app. The health report stops counting
+   such a phone as a driver with alerts off.
 
 Merging is the whole deploy. Nothing to do on the phone.
 
 CHECKS
-A. Coordinator app, App info: v1.153.0 · w2.85.0 · v1.134.0.
-B. Driver app, Rota, Request change: "Request cover" shows Covered by
-   and Morning only.
+A. Coordinator app, App info: v1.155.0 · w2.87.0 · v1.134.0.
+B. Coordinator app, Bookings, next Sunday during a run: a marked stop
+   reads Picked up or Nobody here.

@@ -114,7 +114,7 @@ export default async function (root) {
     });
   });
 
-  /* From w2.86.0 (Asim, 8 Nov 2026): a phone with only the coordinator app,
+  /* From w2.87.0 (Asim, 8 Nov 2026): a phone with only the coordinator app,
      whose Driver app runs inside it on the same endpoint, gets the driver's
      own reminders there; one with the driver app too still gets them there
      alone (the test above). */

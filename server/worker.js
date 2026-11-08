@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.85.0";
+const SCRIPT_VERSION = "w2.87.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5820,7 +5820,7 @@ const DRIVER_SUB_MATCH = "role = 'driver' AND lower(trim(driver)) = lower(trim(?
      ''       signed up before w2.43.0, not known
 
    A driver's own reminders take 'coord' only when nothing else is there
-   (from w2.86.0; skipped it before). A coordinator alert goes to the
+   (from w2.87.0; skipped it before). A coordinator alert goes to the
    coordinator app's endpoints when that person has one, and to the rest
    only when they have none.
 
@@ -5849,10 +5849,10 @@ function oneAppEach(subs, rank) {
    the driver app's, else a shared one, else the coordinator app's.
 
    The coordinator app's own as the last resort for every driver alert, from
-   w2.86.0 (Asim, 8 Nov 2026: a coordinator whose phone has only the
+   w2.87.0 (Asim, 8 Nov 2026: a coordinator whose phone has only the
    coordinator app, and opens the Driver app inside it). That Driver app
    signs up on the coordinator app's endpoint, so it reads 'coord', and up to
-   w2.85.0 only a change or an emergency number reached it: the Sunday
+   w2.86.0 only a change or an emergency number reached it: the Sunday
    reminders, "Are you at Church?", "Trip ended", the parked mileage ask and
    "North run handed to you" all skipped it. oneAppEach still keeps a person
    with the driver app as well to the driver app alone. */

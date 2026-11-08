@@ -141,7 +141,7 @@ export default async function (root) {
 
   /* ---- the Run record ----------------------------------------------------- */
 
-  /* From w2.86.0 (Asim, 8 Nov 2026): coordinator Bookings says what was
+  /* From w2.87.0 (Asim, 8 Nov 2026): coordinator Bookings says what was
      tapped at a stop, in the driver's words, not "Passed". */
   s.test("coordinator Bookings says Picked up or Nobody here at a marked stop", async (a) => {
     await atTime(ON_THE_ROAD, async () => {
