@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.152.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.153.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -751,7 +751,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.152.0";
+var PAGE_VERSION = "v1.153.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1896,6 +1896,8 @@ function reqCard(q, here){
   if(!here) h += '<p>'+esc(longDay(q.sunday))+'</p>';
   if(swap && q.swapWith) h += '<p>With '+esc(q.swapWith)+(q.theirSunday ? ', who has '+esc(shortDay(q.theirSunday)) : '')+
                               (q.bothAgreed ? ' · both agreed' : '')+'</p>';
+  /* COVER (v1.153.0): who he has lined up, and morning only. */
+  if(!swap && q.coverBy) h += '<p>Covered by '+esc(q.coverBy)+(q.morning ? ' · Morning only' : '')+'</p>';
   if(q.reason) h += '<p class="why">“'+esc(q.reason)+'”</p>';
   if(q.received && !here) h += '<p class="tiny">Asked '+esc(when(q.received))+'</p>';
   h += '<div class="req-acts"><button class="btn btn-ghost" type="button" data-do="deny" data-id="'+esc(q.id)+'">Turn down</button>' +
@@ -1947,8 +1949,11 @@ function approve(id){
       var hint = p.busy ? "on " + p.busy + " that morning" : p.last ? "last drove " + shortDay(p.last).slice(4) : "";
       return '<li><button type="button" data-pick="'+esc(p.name)+'"'+(p.busy ? ' disabled' : '')+'><b>'+esc(p.name)+'</b><small>'+esc(hint)+'</small></button></li>';
     }).join("") + '</ul>';
+  /* The driver he named comes chosen (v1.153.0). */
+  var named = q.coverBy && c.some(function(p){ return p.name === q.coverBy && !p.busy; }) ? q.coverBy : "-";
+  if(named !== "-") list = list.replace(' class="on"', '').replace('data-pick="'+esc(named)+'"', 'data-pick="'+esc(named)+'" class="on"');
   openSheet({ eyebrow: q.driver + ", " + shortDay(q.sunday), title: "Who covers it?", body: list,
-              picked: "-", go: "Approve, nobody covering yet",
+              picked: named, go: named === "-" ? "Approve, nobody covering yet" : "Approve, " + named + " covers",
               onPick: function(n){ return n === "-" ? "Approve, nobody covering yet" : "Approve, " + n + " covers"; },
               onGo: function(n){ act({ kind:"decide", requestId:id, choice:"Approved", cover: n === "-" ? "" : n }); } });
 }

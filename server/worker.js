@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.84.0";
+const SCRIPT_VERSION = "w2.85.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -2595,6 +2595,59 @@ async function wakeHandAsks(env) {
   }
   return n;
 }
+/* MORNING ONLY, from w2.85.0 (Asim, 8 Nov 2026): a cover the rostered driver
+   asked for the morning only, approved with the driver he named. Once the run
+   is over, with its parked mileage still to key, the run is handed back to
+   him, as a coordinator's Hand over would, in the name of whoever approved
+   it. Once per request, by its action id. */
+async function wakeMorningCover(env) {
+  const now = new Date();
+  if (londonParts(now).dow !== 0) return 0;
+  const key = londonKey(now);
+  if (key !== runSunday()) return 0;
+  const asks = (await coverAsks(env, key)).filter((c) => c.sunday === key && c.morning);
+  if (!asks.length) return 0;
+  const cur = await currentRota(env, key);
+  if (!cur) return 0;
+  const view = await coordRequestsView(env, { noCandidates: true });
+  let n = 0;
+  for (const c of asks) {
+    const v = view.find((r) => r.id === c.id);
+    if (!v || v.status !== "Approved") continue;
+    const route = sameName(cur.north, c.driver) ? "North" : sameName(cur.south, c.driver) ? "South" : "";
+    if (!route) continue;
+    const t = await tripState(env, key, route);
+    if (!t || !t.trip || !t.started || !t.ended || sameName(t.driver, c.driver)) continue;
+    const reg = String(t.reg0 || t.reg || "").toUpperCase();
+    const open = (await parkedOpen(env)).filter((o) => o.reg === reg)[0];
+    if (!open || open.parked) continue;
+    const by = v.decidedBy || (await deciderOf(env, c.id)) || "Morning only";
+    const r = await coordAct(env, { name: by }, {
+      id: ("mo-" + c.id).slice(0, 64), kind: "rota", sunday: key,
+      set: { [route === "South" ? "southCover" : "northCover"]: c.driver }, handover: route });
+    if (r && r.ok && !r.duplicate) n++;
+  }
+  return n;
+}
+/* Who approved a request: the coordinator app's answer, else an email link's. */
+async function deciderOf(env, id) {
+  const esc = String(id).replace(/[\\%_]/g, (ch) => "\\" + ch);
+  try {
+    const a = await env.DB.prepare(
+      "SELECT by_name FROM coord_actions WHERE kind='decide' AND body LIKE ? ESCAPE '\\' ORDER BY made DESC LIMIT 1")
+      .bind('%"requestId":"' + esc + '"%').first();
+    if (a && a.by_name) return String(a.by_name);
+  } catch (e) {}
+  try {
+    await ensureLinks(env);
+    const l = await env.DB.prepare(
+      "SELECT used_by FROM links WHERE kind='rota' AND used=1 AND subject LIKE ? ESCAPE '\\' ORDER BY used_at DESC LIMIT 1")
+      .bind('%"id":"' + esc + '"%').first();
+    if (l && l.used_by) return String(l.used_by);
+  } catch (e) {}
+  return "";
+}
+
 /* The latest ask on a run. */
 async function handAskOn(env, trip) {
   await ensureHandAsks(env);
@@ -3647,6 +3700,16 @@ async function handleRotaRequest(env, rq) {
     swapDate: anyToKey(r.swapDate) || "",
     agreed: !!r.agreed
   };
+  /* COVER, from w2.85.0 (Asim, 8 Nov 2026): who covers him, and whether for
+     the morning only. Any active driver but him. */
+  if (clean.type === "Request cover" && String(r.coverBy || "").trim()) {
+    const d = await env.DB.prepare("SELECT name FROM drivers WHERE active=1 AND lower(name)=lower(?)")
+      .bind(String(r.coverBy || "").trim()).first();
+    if (!d) return json({ ok: false, error: "Choose who covers." });
+    if (sameName(String(d.name), driver)) return json({ ok: false, error: "Choose who covers." });
+    clean.coverBy = String(d.name);
+    clean.morning = !!r.morning;
+  }
 
   await ensureRequests(env);
   const res = await env.DB.prepare(
@@ -5372,6 +5435,7 @@ async function sweeps(env) {
   try { await wakeRunEnded(env); } catch (e) {}
   try { await wakeChurchAsk(env); } catch (e) {}
   try { await wakeHandAsks(env); } catch (e) {}
+  try { await wakeMorningCover(env); } catch (e) {}
   try { await wakeParkAsk(env); } catch (e) {}
   try { await wakeNotLeft(env); } catch (e) {}
   try { await wakeMorning(env); } catch (e) {}
@@ -10274,6 +10338,21 @@ async function coordActivity(env, n) {
 
 /* Rota requests: what the sheet sent, what this server took and the sheet
    has not filed, and any decision still on its way. */
+/* Cover requests from that Sunday on, with who covers and morning only. */
+async function coverAsks(env, from) {
+  await ensureRequests(env);
+  const q = await env.DB.prepare(
+    "SELECT body FROM requests WHERE type='Request cover' AND sunday>=?").bind(String(from)).all();
+  const out = [];
+  for (const r of (q.results || [])) {
+    let b = null;
+    try { b = JSON.parse(r.body); } catch (e) { continue; }
+    if (b && b.id && b.coverBy) out.push({ id: String(b.id), sunday: String(b.date), driver: String(b.driver),
+                                           coverBy: String(b.coverBy), morning: !!b.morning });
+  }
+  return out;
+}
+
 async function coordRequestsView(env, opts) {
   const shelf = await cacheGet(env, "coord_shelf");
   const today = runSunday();
@@ -10295,7 +10374,15 @@ async function coordRequestsView(env, opts) {
                     reason: b.reason || "", swapWith: b.swapWith || "",
                     theirSunday: b.swapDate || "", bothAgreed: b.agreed ? "YES" : "",
                     status: "Pending", received: Number(r.received) || 0, onSheet: false };
+      if (b.coverBy) { one.coverBy = b.coverBy; one.morning = !!b.morning; }
       list.push(one); have[one.id] = one;
+    }
+  } catch (e) {}
+  /* Who covers, and morning only (w2.85.0): kept here, not on the sheet. */
+  try {
+    for (const c of await coverAsks(env, today)) {
+      const one = have[c.id];
+      if (one && !one.coverBy) { one.coverBy = c.coverBy; one.morning = c.morning; }
     }
   } catch (e) {}
 
@@ -11586,7 +11673,8 @@ async function actDecide(env, me, act) {
   const words = choice === "Rejected"
     ? "Turned down " + rq.driver + "'s request for " + day + "."
     : swap ? "Approved " + rq.driver + "'s swap for " + day + "."
-    : "Approved " + rq.driver + "'s request for " + day + (cover ? ", " + cover + " covering." : ", nobody covering yet.");
+    : "Approved " + rq.driver + "'s request for " + day +
+      (cover ? ", " + cover + " covering" + (rq.morning ? " the morning." : ".") : ", nobody covering yet.");
 
   /* The email link for this request is spent, so a second answer cannot be
      given from an inbox. Marked as carried, because this action carries it. */

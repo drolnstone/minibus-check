@@ -1797,7 +1797,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.152.0";
+var APP_VERSION = "v1.153.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -9856,7 +9856,16 @@ function rotaOpenRequest(key){
   $("rotaModalBody").innerHTML='<p class="lede">'+esc(d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))+' · '+standing+'</p>'+
     '<div class="field"><label for="rotaReqType">Request type</label><select id="rotaReqType">'+
       '<option>Holiday / planned leave</option><option>Unavailable</option>'+
-      '<option>Request a swap</option><option>Other</option></select></div>'+
+      '<option>Request cover</option><option>Request a swap</option><option>Other</option></select></div>'+
+    /* COVER, from v1.153.0 (Asim, 8 Nov 2026): one way, no Sunday traded,
+       any active driver, the morning itself included. Morning only gives
+       the parked mileage back to him once the run is over. */
+    '<div id="rotaCoverField" style="display:none">'+
+      '<div class="field"><label for="rotaCoverBy">Covered by</label>'+
+        '<select id="rotaCoverBy"><option value="">Choose a driver</option></select></div>'+
+      '<label class="confirm" style="margin-bottom:14px"><input type="checkbox" id="rotaCoverMorning">'+
+        '<span>Morning only</span></label>'+
+    '</div>'+
     '<div id="rotaSwapField" style="display:none">'+
       '<div class="field"><label for="rotaSwapWith">Swap with</label>'+
         '<select id="rotaSwapWith"><option value="">Choose a driver</option></select></div>'+
@@ -9880,6 +9889,14 @@ function rotaOpenRequest(key){
   REGISTER.forEach(function(x){
     if(sameName(x.name,me)) return;              // you cannot swap with yourself
     var o=document.createElement("option"); o.value=x.name; o.textContent=x.name; sw.appendChild(o);
+  });
+  /* Anybody on the Drivers tab but him, and nobody already out on the
+     other route that morning. */
+  var cb=$("rotaCoverBy");
+  REGISTER.forEach(function(x){
+    if(sameName(x.name,me)) return;
+    if(sameName(x.name,nActual)||sameName(x.name,sActual)) return;
+    var o=document.createElement("option"); o.value=x.name; o.textContent=x.name; cb.appendChild(o);
   });
 
   /* Their actual upcoming Sundays, not a free date box. A driver cannot pick
@@ -9946,7 +9963,10 @@ function rotaOpenRequest(key){
       'Say you are unavailable and the coordinator will arrange cover.';
   }
 
-  $("rotaReqType").addEventListener("change",function(){$("rotaSwapField").style.display=this.value==="Request a swap"?"":"none";});
+  $("rotaReqType").addEventListener("change",function(){
+    $("rotaSwapField").style.display=this.value==="Request a swap"?"":"none";
+    $("rotaCoverField").style.display=this.value==="Request cover"?"":"none";
+  });
   $("rotaCancel2").addEventListener("click",rotaClose); $("rotaSubmitRequest").addEventListener("click",rotaSubmitRequest);
   $("rotaModal").classList.add("is-on"); $("rotaModal").setAttribute("aria-hidden","false");
 }
@@ -9959,6 +9979,8 @@ function rotaSubmitRequest(){
   var swap=$("rotaSwapWith")?$("rotaSwapWith").value:"";
   var swapDate=$("rotaSwapDate")?$("rotaSwapDate").value:"";
   var agreed=$("rotaSwapAgreed")?$("rotaSwapAgreed").checked:false;
+  var coverBy=(type==="Request cover"&&$("rotaCoverBy"))?$("rotaCoverBy").value:"";
+  var morning=!!(type==="Request cover"&&$("rotaCoverMorning")&&$("rotaCoverMorning").checked);
   var btn=$("rotaSubmitRequest");
 
   if(!st.driver.trim()){ toast("Choose your name on the first screen before asking for a change.", true); return; }
@@ -9970,6 +9992,7 @@ function rotaSubmitRequest(){
     if(!swapDate){ toast("Choose which of their Sundays you are taking.", true); return; }
     if(!agreed){ toast("Tick the box to confirm the two of you have already agreed.", true); return; }
   }
+  if(type==="Request cover"&&!coverBy){ toast("Choose who covers.", true); return; }
   if(reason.length<3){ toast("Give the coordinator a short reason.", true); return; }
   if(!LIVE){ toast("Not submitted. The shared rota is not connected yet.", true); return; }
   if(!navigator.onLine){ toast("Not submitted. No connection.", true); return; }
@@ -9978,7 +10001,8 @@ function rotaSubmitRequest(){
     id:rotaReqId || ("rq"+Date.now()+"-"+Math.random().toString(36).slice(2,7)),
     date:rotaEditDate, driver:st.driver.trim(),
     type:type, reason:reason, swapWith:swap,
-    swapDate:swapDate, agreed:agreed
+    swapDate:swapDate, agreed:agreed,
+    coverBy:coverBy, morning:morning
   }};
 
   btn.disabled=true; btn.textContent="Sending\u2026";
