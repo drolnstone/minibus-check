@@ -477,6 +477,11 @@ export async function phone(opts = {}) {
   me.fullCheck = async (o = {}) => {
     await me.click("Vehicle check", "#s-hub");
     await me.pickBus(o.bus || "NH56 FWP");
+    /* A bus already checked today asks "Check again?" (v1.156.0): a full
+       check means yes. */
+    await pg.evaluate(() => { const m = document.getElementById("undoModal"), y = document.getElementById("undoYes");
+      if (m && m.classList.contains("is-on") && y) y.click(); });
+    await pg.waitForTimeout(300);
     await me.onward();
     await me.close(["busAskStay"]);
     await me.setInput("miles", String(o.miles || 48262));

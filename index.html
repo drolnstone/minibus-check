@@ -608,6 +608,8 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:4px;margin-top:5px}
 .chip.soon{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
 .chip.over{background:var(--stop-bg);color:var(--stop);border:1px solid var(--stop-line)}
+/* Checked today (v1.156.0): the green of "Vehicle check done". */
+.chip.done{background:var(--pass-bg);color:var(--pass);border:1px solid var(--pass-line)}
 .verdict .auth-btn{margin-top:10px;background:var(--card)}
 .verdict .auth-note{margin-top:10px;font-size:14px;font-weight:600}
 .callbtn{display:flex;align-items:center;justify-content:center;min-height:52px;margin-top:12px;
@@ -1797,7 +1799,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.155.0";
+var APP_VERSION = "v1.156.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -3798,16 +3800,54 @@ function renderVehicles(){
        gives a bus to a ROUTE, never to a man. Which is why it now comes off
        the record and sits on both buses rather than only on his. */
     var yours = busChipFor(v.reg);
+    var done = checkedToday(v.reg);
+    var doneChip = done ? '<span class="chip '+(done.stopped?"over":"done")+'">'+esc(checkedLine(done))+'</span>' : "";
     b.innerHTML='<span class="veh-plate">'+esc(v.reg)+'</span>'+
       '<span class="veh-txt"><b>'+esc(v.name)+'</b><span>'+esc(v.detail||"")+'</span>'+
-      yours+chip+'</span><span class="veh-tick" aria-hidden="true">\u2713</span>';
+      yours+doneChip+chip+'</span><span class="veh-tick" aria-hidden="true">\u2713</span>';
     b.addEventListener("click",function(){
-      st.veh=v; st.res={}; st.miles=""; st.mileOk=false; st.stage=0;
-      buildFor(v); renderVehicles(); paintDash(); paintFoot();
+      var pick=function(){
+        st.veh=v; st.res={}; st.miles=""; st.mileOk=false; st.stage=0;
+        buildFor(v); renderVehicles(); paintDash(); paintFoot();
+      };
+      var had=checkedToday(v.reg);
+      if(had && !(st.veh && st.veh.id===v.id)) recheckAsk(v.reg, had, pick);
+      else pick();
     });
     box.appendChild(b);
   });
   box.classList.toggle("has-pick", !!st.veh);
+}
+
+/* ONE CHECK, NOT TWO (v1.156.0, Asim, 8 Nov 2026). On 8 Nov Bro Tunde sent
+   the South bus's check at 09:58 and did all 37 items again at 10:02: he
+   was off the rota by then, so no duty card told him it had gone in, and
+   the bus list said nothing either. Now the bus says it was checked, and
+   choosing it again asks first. A second check still goes through: a check
+   after a fix is a real one. */
+function checkedToday(reg){
+  var v=checkVerdict(reg);
+  if(!v || !v.at || (v.state!=="ok" && v.state!=="stopped" && v.state!=="authorised")) return null;
+  /* This phone's own record carries no name: it is the signed-in driver's. */
+  return { at:Number(v.at), driver: v.driver || (st.driver||"").trim(), stopped: v.state==="stopped" };
+}
+function checkedLine(c){
+  return "Checked "+tripClock(c.at)+(c.driver ? " \u00b7 "+c.driver : "");
+}
+function recheckAsk(reg, c, go){
+  undoAskId="recheck";
+  $("undoBody").innerHTML=
+    '<h2 id="undoTitle">'+esc(reg)+' was checked at '+esc(tripClock(c.at))+
+      (c.driver ? ' by '+esc(c.driver) : '')+'. Check again?</h2>'+
+    '<div class="pick-btns" style="margin-top:14px">'+
+      '<button class="btn btn-ghost" type="button" id="undoKeep">Cancel</button>'+
+      '<button class="btn btn-main" type="button" id="undoYes">Check again</button>'+
+    '</div>';
+  $("undoKeep").addEventListener("click", tripUndoClose);
+  $("undoYes").addEventListener("click", function(){ tripUndoClose(); go(); });
+  var box=$("undoModal");
+  box.classList.add("is-on");
+  box.setAttribute("aria-hidden","false");
 }
 
 /* ---------------- prep ---------------- */
@@ -6439,6 +6479,24 @@ function dutyHtml(){
   return '<div class="dw '+cls+'"><p class="dw-eyebrow">'+eyebrow+'</p>'+
          '<p class="dw-big">'+big+'</p>'+(sub ? '<p class="dw-sub">'+sub+'</p>' : '')+'</div>';
 }
+/* The check he sent today, for a driver with no duty card today: a cover
+   whose run went to somebody else still sees his check went in (v1.156.0). */
+function myCheckHtml(){
+  var me=(st.driver||"").trim();
+  if(!me) return "";
+  var best=null;
+  var loc=checkStanding("");
+  if(loc.state==="ok" || loc.state==="authorised") best={ reg:loc.reg, at:Number(loc.at)||0 };
+  if(tripChecksFresh()) Object.keys(tripChecks||{}).forEach(function(reg){
+    var r=tripChecks[reg];
+    if(r && sameName(r.driver||"", me) && r.state!=="stopped" && (!best || Number(r.at) > best.at))
+      best={ reg:reg, at:Number(r.at)||0 };
+  });
+  if(!best || !best.reg) return "";
+  return '<div class="dw dw-go"><p class="dw-eyebrow">Today \u00b7 '+esc(best.reg)+'</p>'+
+         '<p class="dw-big">Vehicle check done \u2713</p>'+
+         (best.at > 1 ? '<p class="dw-sub">Sent '+esc(tripClock(best.at))+'</p>' : '')+'</div>';
+}
 function dayShort(key){
   var d = rotaDateFromKey(key);
   return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d.getDay()]+" "+
@@ -6532,7 +6590,7 @@ function handFlush(fresh){
 window.addEventListener("online", function(){ handFlush(); });
 function dutyPaint(){
   var box = $("hubDuty");
-  if(box) box.innerHTML = (st.screen === "hub") ? dutyHtml() + handHtml() : "";
+  if(box) box.innerHTML = (st.screen === "hub") ? (dutyHtml() || myCheckHtml()) + handHtml() : "";
   var b = $("handBtn");
   if(b) b.onclick = handPick;
 }
@@ -10376,6 +10434,9 @@ $("toCheck").addEventListener("click",function(){
     return;
   }
   renderVehicles(); show("vehicle");
+  /* Today's checks fresh from the board, so a check sent on another phone
+     shows on its bus. */
+  try{ rotaCountsFetch(function(){ if(st.screen==="vehicle") renderVehicles(); }); }catch(e){}
 });
 $("stopsBack").addEventListener("click",stopsClose);
 

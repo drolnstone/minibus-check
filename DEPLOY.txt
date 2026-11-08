@@ -1,23 +1,21 @@
 MINIBUS
 =======
-  pages v1.155.0 · server w2.87.0 · sheet v1.134.0
+  pages v1.156.0 · server w2.87.0 · sheet v1.134.0
 
-YOU ARE ON   app v1.154.0 · server w2.86.0 · sheet v1.134.0
-GOING TO     app v1.155.0 · server w2.87.0 · sheet v1.134.0
+YOU ARE ON   app v1.155.0 · server w2.87.0 · sheet v1.134.0
+GOING TO     app v1.156.0 · server w2.87.0 · sheet v1.134.0
 
-Bookings words and driver alerts (Asim, 8 Nov 2026):
-1. Coordinator app, Bookings: a stop the driver has marked shows
-   "Picked up" or "Nobody here" (what he tapped), not "Passed".
-2. A coordinator whose phone has only the coordinator app (the Driver app
-   opened inside it) now gets every driver alert there: Sunday reminders,
-   "Are you at Church?", "Trip ended", the parked mileage ask, "North run
-   handed to you", drivers' messages. With the driver app as well, they
-   still come once, to the driver app. The health report stops counting
-   such a phone as a driver with alerts off.
+One check, not two (Asim, 8 Nov 2026):
+1. Driver app, Vehicle check: a bus checked today shows
+   "Checked 09:58 · Bro Tunde" on its button. Choosing it asks
+   "YS70 PWE was checked at 09:58 by Bro Tunde. Check again?"
+   (Cancel or Check again). A second check still goes through.
+2. Driver app, home: a driver with no duty card today who sent a check
+   sees "Today · YS70 PWE", "Vehicle check done ✓", "Sent 09:58".
 
 Merging is the whole deploy. Nothing to do on the phone.
 
 CHECKS
-A. Coordinator app, App info: v1.155.0 · w2.87.0 · v1.134.0.
-B. Coordinator app, Bookings, next Sunday during a run: a marked stop
-   reads Picked up or Nobody here.
+A. Coordinator app, App info: v1.156.0 · w2.87.0 · v1.134.0.
+B. Driver app next Sunday, after a check: Vehicle check shows the bus as
+   Checked, and tapping it asks Check again?
