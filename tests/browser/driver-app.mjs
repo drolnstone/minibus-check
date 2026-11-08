@@ -1512,6 +1512,49 @@ if (want("T53")) {
   await me.ctx.close();
 }
 
+/* T54 — ONE CHECK, NOT TWO (v1.156.0, Asim, 8 Nov 2026). A bus checked today
+   says so on the bus list, choosing it asks "Check again?" (Cancel keeps it
+   unchosen, Check again chooses it), and a driver with no duty card who sent
+   a check today sees "Vehicle check done" on home. */
+if (want("T54")) {
+  const other = "Bro Other";
+  const me = await phone({ clock: "2026-09-27T10:05:00+01:00", world: {
+    checks: { "YS70 PWE": { state: "ok", at: T("09:58"), driver: other, id: "c9" } },
+    duty: () => ({ ok: true, sunday: "2026-09-27", route: "" }) } });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn(); await me.close(); await me.wait(800);
+  const homeBefore = await me.pg.evaluate(() => document.getElementById("hubDuty").textContent);
+  await me.click("Vehicle check", "#s-hub"); await me.wait(1500);
+  const chips = await me.pg.evaluate(() => Object.fromEntries([...document.querySelectorAll("#vehList .veh")].map(b =>
+    [b.querySelector(".veh-plate").textContent, (b.querySelector(".chip.done") || {}).textContent || ""])));
+  const tapBus = (reg) => me.pg.evaluate((r) => [...document.querySelectorAll("#vehList .veh")]
+    .find(b => b.querySelector(".veh-plate").textContent === r).click(), reg);
+  await tapBus("YS70 PWE"); await me.wait(300);
+  const ask = await me.pg.evaluate(() => document.getElementById("undoTitle").textContent);
+  await me.pg.evaluate(() => document.getElementById("undoKeep").click()); await me.wait(200);
+  const afterCancel = await me.pg.evaluate(() => st.veh ? st.veh.reg : "");
+  await tapBus("YS70 PWE"); await me.wait(300);
+  await me.pg.evaluate(() => document.getElementById("undoYes").click()); await me.wait(300);
+  const afterYes = await me.pg.evaluate(() => st.veh ? st.veh.reg : "");
+  await tapBus("NH56 FWP"); await me.wait(300);
+  const plain = await me.pg.evaluate(() => (st.veh ? st.veh.reg : "") + "|" +
+    document.getElementById("undoModal").classList.contains("is-on"));
+  /* His own check, as the board has it: home says it went in. */
+  const home = await me.pg.evaluate((who) => {
+    tripChecks = { "YS70 PWE": { state: "ok", at: Date.parse("2026-09-27T09:58:00+01:00"), driver: who, id: "c9" } };
+    tripChecksDay = new Date().toDateString();
+    show("hub"); dutyPaint();
+    return document.getElementById("hubDuty").textContent;
+  }, SAMPLE);
+  check("T54", "a bus checked today says so, choosing it asks Check again?, and home shows the check sent",
+        homeBefore === "" && chips["YS70 PWE"] === "Checked 09:58 · " + other && chips["NH56 FWP"] === "" &&
+        ask === "YS70 PWE was checked at 09:58 by " + other + ". Check again?" &&
+        afterCancel === "" && afterYes === "YS70 PWE" && plain === "NH56 FWP|false" &&
+        /Today · YS70 PWE/.test(home) && /Vehicle check done ✓/.test(home) && /Sent 09:58/.test(home) && !me.errs.length,
+        JSON.stringify({ homeBefore, chips, ask, afterCancel, afterYes, plain, home, errs: me.errs }).slice(0, 700));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");
