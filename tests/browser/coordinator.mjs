@@ -433,6 +433,33 @@ if (want("C7")) {
         toastAfterAct && !toastOverSheet, "after the change " + toastAfterAct + ", with the sheet up " + toastOverSheet);
 }
 
+/* C7e — Edit beside Cancel; seats changed on the same row (v1.152.0) */
+if (want("C7e")) {
+  await me.pg.evaluate((k) => { location.hash = "bookings/" + k; }, NEXT);
+  await me.wait(700);
+  const before = db._rows("SELECT id, seats, stop_id FROM bookings WHERE sunday=? AND status<>'Cancelled' ORDER BY id", NEXT);
+  const edits = await me.pg.$$eval('#bookingsBody [data-do="bkedit"]', (b) => b.length);
+  const cancels = await me.pg.$$eval('#bookingsBody .bk [data-do="cancel"]', (b) => b.length);
+  const id = Number(await me.pg.$eval('#bookingsBody [data-do="bkedit"]', (b) => b.getAttribute("data-id")));
+  const was = db._one("SELECT seats, stop_id FROM bookings WHERE id=?", id);
+  await me.pg.click('#bookingsBody [data-do="bkedit"][data-id="' + id + '"]');
+  await me.wait(300);
+  const shut = await me.pg.$eval("#sheetGo", (b) => b.disabled);
+  const pre = await me.pg.evaluate(() => ({ stop: document.getElementById("bkStop").value, n: document.getElementById("bkN").textContent }));
+  await me.pg.click("#bkMore");
+  const open = await me.pg.$eval("#sheetGo", (b) => !b.disabled);
+  await me.wait(300);
+  await me.shot("C7e-edit");
+  await me.go();
+  await me.wait(600);
+  const now = db._one("SELECT seats, stop_id, status FROM bookings WHERE id=?", id);
+  const after = db._rows("SELECT id FROM bookings WHERE sunday=? AND status<>'Cancelled'", NEXT);
+  check("C7e", "Edit beside every Cancel opens the booking as it stands and saves it on the same row",
+        edits > 0 && edits === cancels && shut && pre.stop === was.stop_id && Number(pre.n) === was.seats && open &&
+        now.seats === was.seats + 1 && now.status === "Booked" && after.length === before.length,
+        JSON.stringify({ edits, cancels, shut, pre, was, now, before: before.length, after: after.length }));
+}
+
 /* C8 — a defect closed with what was done */
 if (want("C8")) {
   await me.pg.evaluate(() => { location.hash = "defects"; });
