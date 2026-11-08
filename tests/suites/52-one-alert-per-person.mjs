@@ -114,6 +114,23 @@ export default async function (root) {
     });
   });
 
+  /* From w2.87.0 (Asim, 8 Nov 2026): a phone with only the coordinator app,
+     whose Driver app runs inside it on the same endpoint, gets the driver's
+     own reminders there; one with the driver app too still gets them there
+     alone (the test above). */
+  s.test("a driver with only the coordinator app gets a driver's own reminder there", async (a) => {
+    await atTime("2026-09-27T09:52:00+01:00", async () => {
+      const { db, env } = await fresh();
+      await seedSunday(db, W.runSunday(), {});
+      await sub(env, EP("crd"), "Bro Adrian", "coord");
+      await J(await post(env, { action: "pushapp", endpoint: EP("crd"), app: "coord", sure: true }));
+      a.eq(appOf(db, EP("crd")), "coord");
+      G.reset();
+      await W.wakeDrivers(env);
+      a.eq(JSON.stringify(pushedTo()), JSON.stringify([EP("crd")]), "the coordinator app's endpoint was skipped");
+    });
+  });
+
   /* From w2.62.0 (Asim, 14 Oct: "Sent: Booking reminders" from both apps).
      The driver app's Coordinator button had marked the driver app's own
      endpoint 'both', and the coordinator app installed apart read 'both'

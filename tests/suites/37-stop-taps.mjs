@@ -141,6 +141,23 @@ export default async function (root) {
 
   /* ---- the Run record ----------------------------------------------------- */
 
+  /* From w2.87.0 (Asim, 8 Nov 2026): coordinator Bookings says what was
+     tapped at a stop, in the driver's words, not "Passed". */
+  s.test("coordinator Bookings says Picked up or Nobody here at a marked stop", async (a) => {
+    await atTime(ON_THE_ROAD, async () => {
+      const { db, env } = await fresh();
+      await seat(db, "N02"); await seat(db, "N03"); await seat(db, "N04");
+      await setOff(db, env);
+      await trip(env, [{ event: PICKED, stopId: "N02", at: Date.now() - 60000 },
+                       { event: EMPTY, stopId: "N03", at: Date.now() }]);
+      const out = await W.coordBookings(env, { name: "Bro Arthur" }, KEY);
+      const at = (id) => out.routes.find((r) => r.route === "North").stops.find((x) => x.id === id);
+      a.eq(at("N02").mark, "Picked up");
+      a.eq(at("N03").mark, "Nobody here");
+      a.eq(at("N04").mark, "", "a stop not yet reached was marked");
+    });
+  });
+
   s.test("the Run record shows the driver's taps, and which were Nobody there", async (a) => {
     await atTime(AFTER, async () => {
       const { env } = await fresh();
