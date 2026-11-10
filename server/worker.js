@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.87.0";
+const SCRIPT_VERSION = "w2.88.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -201,7 +201,7 @@ const tokenOf = (env) => (env && env.TOKEN) || TOKEN_FALLBACK;
 const sheetTokenOf = (env) => String((env && env.SHEET_TOKEN) || "");
 const SHEET_ONLY_ACTIONS = ["ping", "mint", "outcome", "cleartrips", "sync",
                             "coordAlert", "drain", "drained", "sheetbookings", "sentMail",
-                            "trail", "sheettrips", "keyok", "sheetparked"];
+                            "trail", "sheettrips", "keyok", "sheetparked", "unalerted"];
 function sheetTokenOk(env, body) {
   const want = sheetTokenOf(env);
   return !want || String((body && body.sheetToken) || "") === want;
@@ -7395,6 +7395,25 @@ async function coordUnalerted(env, not) {
   return out;
 }
 
+/* EVERY ACTIVE DRIVER WITH ALERTS ON NO PHONE, by name, from w2.88.0
+   (Asim, 10 Nov 2026, after the Ushers app's "chase the ones who have not").
+   Coordinators are on the Drivers tab too, so they are counted the same
+   way. The same question the waking asks (DRIVER_SUB_MATCH). For the health
+   report and the sheet's weekly email. */
+async function driversUnalerted(env) {
+  const { results } = await env.DB.prepare(
+    "SELECT name FROM drivers WHERE active = 1 ORDER BY ord, name").all();
+  const out = [];
+  for (const r of results || []) {
+    const name = String(r.name || "").trim();
+    if (!name) continue;
+    const hit = await env.DB.prepare(
+      "SELECT 1 AS n FROM push_subs WHERE " + DRIVER_SUB_MATCH + " LIMIT 1").bind(name).first();
+    if (!hit) out.push(name);
+  }
+  return out;
+}
+
 /* On the clock: whatever the quiet hours held, once they are over. Taken off
    the list before it is sent, so two ticks cannot both send it. */
 async function releaseCoordAlerts(env) {
@@ -11345,6 +11364,11 @@ async function liveHealthLines(env) {
     else if (m > 360) bad.push("The live server's rota is " + Math.round(m / 60) + " hours old.");
     else good.push("The live server's rota is " + (m < 1 ? "under a minute" : m + " minute" + (m === 1 ? "" : "s")) + " old.");
   } catch (e) {}
+  try {
+    const none = await driversUnalerted(env);
+    if (none.length) bad.push("Alerts on no phone: " + none.join(", ") + ".");
+    else good.push("Every active driver has alerts on a phone.");
+  } catch (e) {}
   return { bad: bad, good: good };
 }
 
@@ -12313,6 +12337,8 @@ export default {
         /* A batch the spreadsheet sent, for the coordinators' trail. */
         if (action === "trail") return await handleTrail(env, body);
         if (action === "drain") return await handleDrain(env, body);
+        /* Who has alerts on no phone, for the sheet's weekly email. */
+        if (action === "unalerted") return json({ ok: true, names: await driversUnalerted(env) });
         if (action === "drained") return await handleDrained(env, body);
         /* A booking edited by hand on the Bus Bookings tab. Token checked. */
         if (action === "sheetbookings") return await handleSheetBookings(env, body);
