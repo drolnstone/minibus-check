@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.134.0";
+var SCRIPT_VERSION = "v1.135.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -5205,6 +5205,11 @@ function drainFromWorker() {
             .setProperty("liveError", String((got && got.error) || "drain failed")); } catch (e) {}
     return { bookings: 0, trips: 0 };
   }
+  /* For watchServer, from v1.135.0: when the live server last answered, and
+     how long before that its clock had last run. */
+  try { PropertiesService.getScriptProperties()
+          .setProperty("workerSeen", JSON.stringify({ at: Date.now(),
+            clockAgo: got.clockAgoSec == null ? null : Number(got.clockAgoSec) })); } catch (e) {}
   /* For morningWatch, from v1.119.0. */
   if (got.morning) {
     try { PropertiesService.getScriptProperties()
@@ -5797,6 +5802,92 @@ function liveSync() {
   try { overbookAfter(back); } catch (err) {}
   try { safetyFlush(); } catch (err) {}
   try { morningWatch(); } catch (err) {}
+  try { watchServer(); } catch (err) {}
+  try { alertsNudge(); } catch (err) {}
+}
+
+/* DRIVERS WITH ALERTS ON NO PHONE, emailed once a week, from v1.135.0
+   (Asim, 10 Nov 2026, after the Ushers app's weekly nudge to those who have
+   not added it). Mondays from 18:00, once that day, to each active driver on
+   the live server's list who has an Email on the Drivers tab. The health
+   report names them all, email or not. */
+var ALERTS_NUDGE_DAY = "Mon", ALERTS_NUDGE_FROM = "18:00";
+
+function alertsNudge(nowMs) {
+  if (!WORKER_URL) return null;
+  var now = new Date(nowMs || Date.now()), tz = "Europe/London";
+  if (Utilities.formatDate(now, tz, "EEE d MMM").indexOf(ALERTS_NUDGE_DAY) !== 0) return null;
+  if (Utilities.formatDate(now, tz, "HH:mm") < ALERTS_NUDGE_FROM) return null;
+  var key = Utilities.formatDate(now, tz, "yyyy-MM-dd");
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty("alertsNudgeDay") === key) return null;
+  var got = workerCall("unalerted", {});
+  if (!got || got.ok !== true) return null;
+  props.setProperty("alertsNudgeDay", key);
+  var want = {};
+  (got.names || []).forEach(function (n) { want[String(n || "").trim().toLowerCase()] = true; });
+  var sent = [];
+  readDrivers(SpreadsheetApp.getActiveSpreadsheet()).forEach(function (d) {
+    if (!d || !d.active || !d.email || !want[String(d.name || "").trim().toLowerCase()]) return;
+    try {
+      sendMail({ to: d.email, subject: "Minibus: alerts are off",
+                 body: "Alerts are on no phone of yours in the Driver app.\n" +
+                       "Driver app: " + LINK_RULES.pagesUrl });
+      sent.push(d.name);
+    } catch (err) {}
+  });
+  return sent;
+}
+
+/* THE SERVER WATCHED ALL WEEK, from v1.135.0 (Asim, 10 Nov 2026).
+
+   morningWatch above looks only at Sunday morning. Ushers took it on
+   17 Oct and made it all week; this brings that back. Every reminder and
+   alert is sent by the live server's clock, so when the server stops
+   answering, or its clock stops, nothing goes out and nothing says so.
+   Judged on every five-minute sync from what the last drain brought back,
+   so it costs no extra call. One email when it stops, one when it is back,
+   to the sheet's owner (OWNER_EMAIL, else the account the sheet runs as).
+   Email only: a push would go through the server that has failed. */
+var WATCH_STALE_MIN = 15;
+
+function watchServer(nowMs) {
+  if (!WORKER_URL) return null;
+  var now = nowMs || Date.now(), tz = "Europe/London";
+  var props = PropertiesService.getScriptProperties();
+  var w = null;
+  try { w = JSON.parse(props.getProperty("workerSeen") || "null"); } catch (e) {}
+  var since = Number(props.getProperty("watchFrom") || 0);
+  if (!since) { props.setProperty("watchFrom", String(now)); since = now; }
+  var stale = WATCH_STALE_MIN * 60000;
+  var when = function (ms) {
+    return Utilities.formatDate(new Date(ms), tz, "HH:mm") + ", " +
+           Utilities.formatDate(new Date(ms), tz, "EEE d MMM");
+  };
+  var fault = "";
+  if (!w || !w.at) {
+    if (now - since > stale) fault = "The live server has not answered since " + when(since) + ".";
+  } else if (now - Number(w.at) > stale) {
+    fault = "The live server has not answered since " + when(Number(w.at)) + ".";
+  } else if (w.clockAgo == null) {
+    fault = "The live server's clock has never run.";
+  } else if (Number(w.clockAgo) * 1000 > stale) {
+    fault = "The live server's clock last ran at " +
+            when(Number(w.at) - Number(w.clockAgo) * 1000) + ".";
+  }
+  var was = props.getProperty("watchFault") || "";
+  var to = "";
+  try { to = ownerEmail() || Session.getEffectiveUser().getEmail(); } catch (e) {}
+  if (fault && !was) {
+    props.setProperty("watchFault", fault);
+    if (to) sendMail({ to: to, subject: "Minibus: the server has stopped",
+                       body: fault + "\nReminders and alerts are not going out." });
+  } else if (!fault && was) {
+    props.deleteProperty("watchFault");
+    if (to) sendMail({ to: to, subject: "Minibus: the server is running again",
+                       body: "The server's clock is running." });
+  }
+  return fault;
 }
 
 /* THE 07:30 MESSAGE, WATCHED FROM HERE, from v1.119.0 (Asim, 14 Oct 2026).

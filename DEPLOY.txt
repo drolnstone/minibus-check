@@ -1,21 +1,25 @@
 MINIBUS
 =======
-  pages v1.156.0 · server w2.87.0 · sheet v1.134.0
+  pages v1.156.0 · server w2.88.0 · sheet v1.135.0
 
-YOU ARE ON   app v1.155.0 · server w2.87.0 · sheet v1.134.0
-GOING TO     app v1.156.0 · server w2.87.0 · sheet v1.134.0
+YOU ARE ON   app v1.156.0 · server w2.87.0 · sheet v1.134.0
+GOING TO     app v1.156.0 · server w2.88.0 · sheet v1.135.0
 
-One check, not two (Asim, 8 Nov 2026):
-1. Driver app, Vehicle check: a bus checked today shows
-   "Checked 09:58 · Bro Tunde" on its button. Choosing it asks
-   "YS70 PWE was checked at 09:58 by Bro Tunde. Check again?"
-   (Cancel or Check again). A second check still goes through.
-2. Driver app, home: a driver with no duty card today who sent a check
-   sees "Today · YS70 PWE", "Vehicle check done ✓", "Sent 09:58".
+The server watched all week, as in Ushers (Asim, 10 Nov 2026):
+1. The sheet judges the live server on every five-minute sync, all week.
+   If the server has not answered for 15 minutes, or its clock has not
+   run for 15 minutes, the owner gets one email "Minibus: the server has
+   stopped", and one "Minibus: the server is running again" when it is
+   back. The Sunday 07:40 "07:30 message not sent" email stays.
+2. The health report lists "Alerts on no phone:" with every active driver
+   (coordinators included) who has alerts on no phone.
+3. Mondays from 18:00, each of those drivers with an Email on the Drivers
+   tab gets "Minibus: alerts are off".
 
 Merging is the whole deploy. Nothing to do on the phone.
 
 CHECKS
-A. Coordinator app, App info: v1.156.0 · w2.87.0 · v1.134.0.
-B. Driver app next Sunday, after a check: Vehicle check shows the bus as
-   Checked, and tapping it asks Check again?
+A. Coordinator app, App info: v1.156.0 · w2.88.0 · v1.135.0.
+B. Health report: "Every active driver has alerts on a phone." under
+   Live server: fine, or "Alerts on no phone: (names)." under needs
+   attention.
