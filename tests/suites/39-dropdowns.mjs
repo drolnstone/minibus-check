@@ -49,7 +49,7 @@ export default function (root) {
       ["Buses", "Active", ["YES", "NO"]],
       ["Buses", "Route in odd months", ["North", "South"]],
       ["Bus Bookings", "Status", ["Booked", "Cancelled"]],
-      ["Vehicle Log", "What", ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Other"]],
+      ["Vehicle Log", "What", ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Fuel", "Other"]],
       ["Vehicle Log", "Status", ["Booked", "Done", "Estimated", "Correction", "Withdrawn"]],
       ["Vehicle Log", "Registration", ["YS70 PWE", "NH56 FWP"]]
     ];

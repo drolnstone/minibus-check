@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.136.0";
+var SCRIPT_VERSION = "v1.137.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1143,12 +1143,12 @@ var VLOG_HEADERS = [
   "Recorded", "Log ID", "Registration", "What", "Status", "Date done", "Booked for",
   "Was due", "Days early (-) or late (+)", "Next due", "How the next date was worked out",
   "Certificate or policy date", "Mileage", "Garage", "Cost (£)", "Defects put right",
-  "Notes", "Corrects", "Recorded by", "Source"
+  "Notes", "Corrects", "Recorded by", "Source", "Fuel level"
 ];
 var HISTORY_HEADERS = ["When", "Who", "Where", "Registration", "What changed", "From", "To", "Why", "Ref"];
 
 /* What can be recorded, and which of them move a date on the Buses tab. */
-var VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Other"];
+var VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Fuel", "Other"];
 var VLOG_ITEM = { "MOT": "mot", "Service": "service", "Insurance": "insurance", "Parking permit": "permit" };
 var RENEW_KEYS = ["mot", "service", "insurance", "permit"];
 /* The two that stop a bus once past, as the live server's PAPERS_STOP. */
@@ -1358,6 +1358,8 @@ function vlogAppend(ss, e) {
   put(vc.corrects, safeText(e.corrects || ""));
   put(vc.by, safeText(e.by || ""));
   put(vc.source, safeText(e.source || ""));
+  /* From v1.137.0: what the tank read once fuel was bought ("Full", "1/2 tank"). */
+  put(vc.fuel, safeText(e.fuel || ""));
   sh.getRange(sh.getLastRow() + 1, 1, 1, w).setValues([row]);
 }
 
@@ -1382,7 +1384,8 @@ function vlogRows(ss) {
       how: str(r, vc.how), given: anyToKey(at1(r, vc.given)), miles: num(r, vc.miles),
       garage: str(r, vc.garage), cost: num(r, vc.cost), defects: str(r, vc.defects),
       notes: str(r, vc.notes), corrects: str(r, vc.corrects), by: str(r, vc.by),
-      source: str(r, vc.source), recorded: isDateLike(rec) ? rec.getTime() : 0
+      source: str(r, vc.source), recorded: isDateLike(rec) ? rec.getTime() : 0,
+      fuel: vc.fuel && !isDateLike(at1(r, vc.fuel)) ? str(r, vc.fuel) : ""
     });
   });
   return out;
@@ -1765,7 +1768,7 @@ function coordVlog(ss, a, b, by) {
   vlogAppend(ss, { recorded: Number(a.made) || Date.now(), id: b.logId, reg: reg, what: b.what, status: b.status,
                    done: b.done, bookedFor: b.bookedFor, was: b.was, early: b.early, next: b.next, how: b.how,
                    given: b.given, miles: b.miles, garage: b.garage, cost: b.cost, defectNames: b.defectNames,
-                   notes: b.notes, by: by, source: where });
+                   notes: b.notes, by: by, source: where, fuel: b.fuel });
   var item = VLOG_ITEM[b.what];
   var moves = b.status === "Done" && item && rnParts(b.next) && vlogIsLatest(ss, reg, item, b.logId);
   var older = b.status === "Done" && item && rnParts(b.next) && !moves;
@@ -1807,7 +1810,7 @@ function coordVfix(ss, a, b, by) {
     early: b.withdraw ? "" : b.early, next: b.withdraw ? "" : b.next, how: b.withdraw ? "" : b.how,
     given: b.withdraw ? "" : b.given, miles: b.withdraw ? "" : b.miles, garage: b.withdraw ? "" : b.garage,
     cost: b.withdraw ? "" : b.cost, defectNames: [], notes: b.why || b.notes || "",
-    corrects: orig.id, by: by, source: where
+    corrects: orig.id, by: by, source: where, fuel: b.withdraw ? "" : (b.fuel || "")
   };
   vlogAppend(ss, fixed);
   historyAdd(ss, [{ who: by, where: where, reg: orig.reg,
@@ -1975,7 +1978,7 @@ function vlogShelf(ss) {
       id: x.id, what: x.what, status: x.status, done: x.done, bookedFor: x.bookedFor, was: x.was,
       early: x.early, next: x.next, how: x.how, given: x.given, miles: x.miles, garage: x.garage,
       cost: x.cost, defects: x.defects, notes: x.notes, corrects: x.corrects, by: x.by,
-      source: x.source, recorded: x.recorded, correctedBy: correctedBy[x.id] || ""
+      source: x.source, recorded: x.recorded, correctedBy: correctedBy[x.id] || "", fuel: x.fuel || ""
     });
   });
   Object.keys(by).forEach(function (reg) {
@@ -3036,8 +3039,9 @@ function pinWords(c) {
       and Kind on Defects. Without this bump the first hour after a deploy
       would skip the column check, colsHard would refuse the missing heading,
       and every walkaround sent in that hour would bounce.
-   4: Parked mileage and Since parked on Checks (v1.122.0). */
-var STRUCT_VERSION = "4";
+   4: Parked mileage and Since parked on Checks (v1.122.0).
+   5: Fuel level on the Vehicle Log (v1.137.0). */
+var STRUCT_VERSION = "5";
 
 function structKey(tag) { return "struct_" + STRUCT_VERSION + "_" + tag; }
 
@@ -14796,7 +14800,7 @@ FIELDS[VLOG_SHEET] = {
   done: "Date done", bookedFor: "Booked for", was: "Was due", early: "Days early (-) or late (+)",
   next: "Next due", how: "How the next date was worked out", given: "Certificate or policy date",
   miles: "Mileage", garage: "Garage", cost: "Cost (\u00A3)", defects: "Defects put right",
-  notes: "Notes", corrects: "Corrects", by: "Recorded by", source: "Source"
+  notes: "Notes", corrects: "Corrects", by: "Recorded by", source: "Source", fuel: "Fuel level"
 };
 FIELDS[HISTORY_SHEET] = {
   when: "When", who: "Who", where: "Where", reg: "Registration", what: "What changed",

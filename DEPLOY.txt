@@ -1,20 +1,29 @@
 MINIBUS
 =======
-  pages v1.157.0 · server w2.89.0 · sheet v1.136.0
+  pages v1.158.0 · server w2.90.0 · sheet v1.137.0
 
-YOU ARE ON   app v1.156.0 · server w2.88.0 · sheet v1.135.0
-GOING TO     app v1.157.0 · server w2.89.0 · sheet v1.136.0
+YOU ARE ON   app v1.157.0 · server w2.89.0 · sheet v1.136.0
+GOING TO     app v1.158.0 · server w2.90.0 · sheet v1.137.0
 
-Fuel in the coordinator app (Asim, 13 Nov 2026):
-1. First screen, the Sunday card: under each route line with a bus, that
-   bus's last fuel reading as the driver tapped it (the same eight
-   segments and colours, E to F), or "Fuel not recorded".
-2. Buses, each card and each bus page: "Fuel" with the reading (1/4 tank),
-   the same bar, and the day, time and driver of that walkaround.
-The reading arrives with the sheet's five-minute sync after a check.
+Fuel bought (Asim, 13 Nov 2026):
+1. Coordinator app, a bus, Record something: a new "Fuel" choice. With
+   Done, a Fuel level bar appears with Full already picked; tap another
+   segment if the tank was not filled. Cost, Garage and Notes as usual.
+2. The Sunday card and Buses show whichever is newer: the last walkaround's
+   reading or the last Fuel entry. A Fuel entry reads "Bought (day time),
+   (name)".
+3. A walkaround with Needs fuel puts a flashing "(bus) needs fuel." with
+   Fuel bought at the top of the coordinator first screen (and Fuel bought
+   in place of Done on the bus's jobs). Fuel bought opens Record something
+   with Fuel and Full chosen, Filling station and Cost, litres in Notes;
+   recording it closes Needs fuel and the beacon goes.
+4. Driver app: Needs fuel is ticked for the driver at 3/8 too (amber), as
+   well as 1/4 and below, unless the driver has already chosen.
+5. The Vehicle Log tab gets a "Fuel level" column at the end, and Fuel in
+   the What list. The sheet adds both by itself.
 
 Merging is the whole deploy. Nothing to do on the phone.
 
 CHECKS
-A. Coordinator app, App info: v1.157.0 · w2.89.0 · v1.136.0.
-B. First screen: a fuel bar under each route line on the Sunday card.
+A. Coordinator app, App info: v1.158.0 · w2.90.0 · v1.137.0.
+B. Record something shows Fuel.

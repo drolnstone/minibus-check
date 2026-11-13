@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.89.0";
+const SCRIPT_VERSION = "w2.90.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -9051,7 +9051,9 @@ function rnNextDue(item, done, was, given) {
    for the sheet to write onto the Vehicle Log, the Buses tab and History.
    Until the sheet names it as applied, getBuses and coordVehiclesView lay it
    over the sheet's copy, so every phone has the new date at once. */
-const VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Other"];
+const VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Fuel", "Other"];
+/* From w2.90.0: a Fuel entry carries what the tank read after, as the driver app words it. */
+const FUEL_WORDS = ["1/8 tank", "1/4 tank", "3/8 tank", "1/2 tank", "5/8 tank", "3/4 tank", "7/8 tank", "Full"];
 const VLOG_ITEM = { "MOT": "mot", "Service": "service", "Insurance": "insurance", "Parking permit": "permit" };
 
 function rnUk(k) {
@@ -9107,7 +9109,7 @@ async function coordVehiclesView(env) {
     given: b.given || "", miles: b.miles == null ? null : b.miles, garage: b.garage || "",
     cost: b.cost == null ? null : b.cost, defects: (b.defectNames || []).join("; "),
     notes: b.notes || b.why || "", corrects: b.corrects || "", by: a.by, source: "Coordinator's app",
-    recorded: a.made, correctedBy: "", waiting: true });
+    recorded: a.made, correctedBy: "", waiting: true, fuel: b.fuel || "" });
   for (const a of await coordPending(env, ["vlog", "vfix", "job"])) {
     const b = a.body || {};
     if (a.kind === "job") {
@@ -9198,6 +9200,8 @@ async function actVlog(env, me, act, id) {
   const miles = vlogNum(act.miles, 2000000, true), cost = vlogNum(act.cost, 1000000, false);
   if (miles === undefined) return { ok: false, error: "The mileage is not a number of miles." };
   if (cost === undefined) return { ok: false, error: "The cost is not an amount in pounds." };
+  const fuel = what === "Fuel" && !booking ? String(act.fuel || "") : "";
+  if (what === "Fuel" && !booking && FUEL_WORDS.indexOf(fuel) === -1) return { ok: false, error: "Tap the fuel level." };
   const defects = [], defectNames = [];
   if (!booking && Array.isArray(act.defects) && act.defects.length) {
     const open = await coordDefectsView(env);
@@ -9222,9 +9226,9 @@ async function actVlog(env, me, act, id) {
     logId: "L-" + id, reg: reg, what: what, status: booking ? "Booked" : "Done", moves: moves,
     done: done, bookedFor: bookedFor, was: was, early: was && done ? rnDays(was, done) : null,
     next: nd.next, how: nd.how, given: given, miles: miles, garage: vlogText(act.garage, 80), cost: cost,
-    defects: defects, defectNames: defectNames, notes: vlogText(act.notes, 500)
+    defects: defects, defectNames: defectNames, notes: vlogText(act.notes, 500), fuel: fuel
   };
-  const words = reg + ": " + what + (booking ? " booked for " + rnUk(bookedFor) : " done " + rnUk(done)) +
+  const words = reg + ": " + what + (booking ? " booked for " + rnUk(bookedFor) : (fuel ? " bought " : " done ") + rnUk(done)) + (fuel ? ", " + fuel : "") +
                 (nd.next ? ". Next due " + rnUk(nd.next) + (moves ? "" : ", but a later entry stands, so the bus keeps its date") : "") +
                 (defectNames.length ? ". Put right: " + defectNames.join(", ") : "") + ".";
   return { ok: true, sunday: "", body: body, words: words };
@@ -9266,7 +9270,8 @@ async function actVfix(env, me, act, id) {
              early: was && done ? rnDays(was, done) : null, next: nd.next, how: nd.how, given: given,
              miles: miles, cost: cost,
              garage: act.garage === undefined ? orig.garage : vlogText(act.garage, 80),
-             notes: act.notes === undefined ? orig.notes : vlogText(act.notes, 500) };
+             notes: act.notes === undefined ? orig.notes : vlogText(act.notes, 500),
+             fuel: what === "Fuel" && !booking ? (FUEL_WORDS.indexOf(String(act.fuel || "")) !== -1 ? String(act.fuel) : (orig.fuel || "")) : "" };
   }
   /* The bus's dates once this is written: the latest standing entry for each
      renewal it touches, or the date it had before the entry if none is left. */
