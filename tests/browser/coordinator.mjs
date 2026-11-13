@@ -125,6 +125,11 @@ async function world() {
   }
   await W.cachePut(env, "cache_rota", { builtAt: Date.now(), from: W.keyAddWeeks(TODAY, -12), to: W.keyAddWeeks(TODAY, 104),
     payload: { ok: true, rows, openDefects, drivers: REAL.drivers.map((d) => ({ name: d.name, role: d.role, hasPin: true })) } }).run();
+  /* The last walkaround per bus, with its fuel (v1.157.0). One bus has no fuel reading. */
+  const fuelBus = REAL.buses[0].reg;
+  await W.cachePut(env, "cache_last", { builtAt: Date.now(), payload: { ok: true, last: Object.fromEntries(REAL.buses.map((b) =>
+    [b.reg, Object.assign({ miles: 40000, date: "08/11/2026", time: "09:20", driver: "Bro Asim" },
+      b.reg === fuelBus ? { fuel: { fuel: "1/4 tank", date: "08/11/2026", time: "09:20", driver: "Bro Asim" } } : {})])) } }).run();
   /* rq-real-1 names who covers, morning only (v1.153.0): kept on the live server. */
   COVER_BY = REAL.drivers.map((d) => d.name).find((n) => n !== northOf(NEXT) && n !== southOf(NEXT) && n !== "Bro Asim");
   await W.handleRotaRequest(env, { id: "rq-real-1", date: NEXT, driver: northOf(NEXT), type: "Request cover",
@@ -969,10 +974,21 @@ if (want("C29")) {
   const p = await page(env);
   await p.signIn(PIN);
   const menu = await p.text("#homeBody .menu");
+  /* Under each route line on the Sunday card, that bus's fuel (v1.157.0). */
+  const legs = await p.pg.$$eval("#homeBody .sun .leg", (e) => e.map((x) => !!x.querySelector(".plate") === !!x.querySelector(".fuelbar,.leg-fuel")));
+  await p.shot("C29e-home-fuel");
+  check("C29e", "First screen: every route line with a bus has its fuel underneath", legs.length > 0 && legs.every(Boolean),
+        JSON.stringify(legs));
   await p.pg.click('#homeBody [data-go="buses"]');
   await p.wait(300);
   const list = await p.text("#busesBody");
   await p.shot("C29a-buses");
+  /* Fuel (v1.157.0): the last reading on each card, in the driver app's colours. */
+  const fuelLit = await p.pg.$$eval("#busesBody .fuelbar i.lit", (e) => e.map((x) => getComputedStyle(x).backgroundColor));
+  const fuelOk = /Fuel 1\/4 tank/.test(list) && /Fuel Not recorded/.test(list) &&
+                 fuelLit.join("|") === "rgb(117, 32, 26)|rgb(117, 62, 26)" && /Sun 8 Nov 09:20, Bro Asim/.test(list);
+  check("C29f", "Buses: each bus shows its last fuel reading as the driver tapped it, or Not recorded", fuelOk,
+        "list '" + list.slice(0, 300) + "', lit " + JSON.stringify(fuelLit));
   await p.pg.click('#busesBody [data-go="bus/YS70%20PWE"]');
   await p.wait(300);
   const before = await p.text("#busBody .card");
