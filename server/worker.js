@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.88.0";
+const SCRIPT_VERSION = "w2.89.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -10934,7 +10934,9 @@ async function coordLoad(env, me) {
     const c = await cacheGet(env, "cache_last");
     const last = (c && c.payload && c.payload.last) || {};
     out.lastMiles = {};
-    for (const reg of Object.keys(last)) out.lastMiles[reg] = { miles: last[reg].miles, date: last[reg].date || "" };
+    /* From w2.89.0 with the latest fuel reading, as the sheet sends it. */
+    for (const reg of Object.keys(last)) out.lastMiles[reg] = { miles: last[reg].miles, date: last[reg].date || "",
+                                                                fuel: last[reg].fuel || null };
   } catch (e) { out.lastMiles = {}; }
   /* From w2.65.0: each bus's parked reading since its last walkaround. */
   try { out.parked = await parkedLatest(env); } catch (e) { out.parked = null; }

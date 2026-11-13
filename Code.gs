@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.135.0";
+var SCRIPT_VERSION = "v1.136.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -3185,10 +3185,22 @@ function lastMileagePayload() {
   var lastRow  = sh.getLastRow();
   var firstRow = Math.max(2, lastRow - MILEAGE_SCAN_ROWS + 1);
   var rows = sh.getRange(firstRow, 1, lastRow - firstRow + 1, sh.getLastColumn()).getValues();
-  var last = {};
+  var last = {}, fuelAt = {};
 
   rows.forEach(function (r) {
     var reg = String(at1(r, c.reg) || "").trim();
+    /* From v1.136.0: the latest fuel reading per bus, for the coordinator
+       app's Buses screen. Its own latest, as an old row may have none. A
+       Date here is an old reading Sheets mangled; it says nothing. */
+    var fv = c.fuel ? at1(r, c.fuel) : "";
+    var fuel = isDateLike(fv) ? "" : String(fv || "").trim();
+    if (reg && fuel) {
+      var fw = checkMoment(at1(r, c.received), at1(r, c.date), at1(r, c.time));
+      if (!fuelAt[reg] || fw >= fuelAt[reg]._t) {
+        fuelAt[reg] = { fuel: fuel, date: dayWords(at1(r, c.date)), time: timeWords(at1(r, c.time)),
+                        driver: String(at1(r, c.driver) || ""), _t: fw };
+      }
+    }
     var miles = Number(at1(r, c.mileage));
     if (!reg || !miles) return;
     /* See checkMoment: Received is used when it is present and not in the
@@ -3207,7 +3219,10 @@ function lastMileagePayload() {
     }
   });
 
-  Object.keys(last).forEach(function (k) { delete last[k]._t; });
+  Object.keys(last).forEach(function (k) {
+    delete last[k]._t;
+    if (fuelAt[k]) { delete fuelAt[k]._t; last[k].fuel = fuelAt[k]; }
+  });
   return { ok: true, last: last };
 }
 

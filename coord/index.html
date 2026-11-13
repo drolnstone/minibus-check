@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.156.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.157.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -473,6 +473,14 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .due small{grid-column:1/-1;font-size:13px;color:var(--muted)}
 .due .late{color:var(--stop);font-weight:600}
 .due .soon{color:var(--warn);font-weight:600}
+/* Fuel (v1.157.0): the driver app's gauge, small, in the same colours. */
+.fuelbar{grid-column:1/-1;display:grid;grid-template-columns:repeat(8,1fr);gap:3px;margin:5px 0 3px}
+.fuelbar i{display:block;height:20px;border:1px solid var(--hair);border-radius:4px;font-style:normal;
+  font-size:11px;font-weight:600;line-height:18px;text-align:center;color:var(--muted)}
+.fuelbar i.lit{border-color:transparent;color:#fff}
+.fuelbar i.edge{box-shadow:inset 0 0 0 2px rgba(0,0,0,.28)}
+.leg .fuelbar{grid-column:2/-1;margin:2px 0}
+.leg-fuel{grid-column:2/-1;font-size:13px;color:var(--muted)}
 .vlog{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);padding:10px 12px;margin-bottom:8px}
 .vlog-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .vlog-head b{flex:1;font-weight:600;font-size:16px}
@@ -751,7 +759,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.156.0";
+var PAGE_VERSION = "v1.157.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1336,7 +1344,10 @@ function sunCard(key, now, cue){
          '<span class="leg-end">' +
            (s && !off && s.seats ? '<span class="seats'+(s.booked > s.seats ? ' over' : '')+'">'+s.booked+'/'+s.seats+'</span>' : '') +
            (g.bus && !off ? '<span class="plate">'+esc(g.bus)+'</span>' : '') +
-         '</span></div>';
+         '</span>' +
+         /* From v1.157.0: the bus's last fuel reading, under its line. */
+         (g.bus && !off ? (fuelOf(g.bus) ? fuelBar(fuelOf(g.bus)) : '<small class="leg-fuel">Fuel not recorded</small>') : '') +
+         '</div>';
   });
   return h + '</button>';
 }
@@ -2786,6 +2797,39 @@ function milesOf(reg){
   for(var k in v) if(Object.prototype.hasOwnProperty.call(v, k) && same(k, reg)) return v[k];
   return null;
 }
+/* ---- fuel, from v1.157.0 --------------------------------------------------
+   The last fuel reading a walkaround gave, drawn as the driver tapped it:
+   eight segments, E to F, each in the driver app's own colour. Keep these
+   three lists in step with FUEL_LABELS, FUEL_COLOURS and FUEL_WORDS in
+   index.html. */
+var FUEL_LABELS = ["E","\u00BC","","\u00BD","","\u00BE","","F"];
+var FUEL_COLOURS = ["#75201a","#753e1a","#755d1a","#6e751a",
+                    "#50751a","#31751a","#1a7521","#1a7540"];
+var FUEL_WORDS = ["1/8 tank","1/4 tank","3/8 tank","1/2 tank",
+                  "5/8 tank","3/4 tank","7/8 tank","Full"];
+function fuelOf(reg){ var m = milesOf(reg); return m && m.fuel && m.fuel.fuel ? m.fuel : null; }
+function fuelBar(f){
+  var n = f ? FUEL_WORDS.indexOf(f.fuel) + 1 : 0;
+  if(!n) return "";
+  var bar = '<span class="fuelbar" aria-label="Fuel ' + esc(f.fuel) + '">';
+  for(var i = 1; i <= 8; i++){
+    bar += i <= n ? '<i class="lit' + (i === n ? ' edge' : '') + '" style="background:' + FUEL_COLOURS[i-1] + '">' + FUEL_LABELS[i-1] + '</i>'
+                  : '<i>' + FUEL_LABELS[i-1] + '</i>';
+  }
+  return bar + '</span>';
+}
+function fuelRow(reg){
+  var f = fuelOf(reg);
+  if(!f) return '<span class="due"><b>Fuel</b><span class="when">Not recorded</span></span>';
+  var n = FUEL_WORDS.indexOf(f.fuel) + 1;
+  var tone = n && n <= 2 ? "late" : n === 3 ? "soon" : "";
+  var bar = fuelBar(f);
+  var dm = /^(\d\d)\/(\d\d)\/(\d{4})$/.exec(f.date || "");
+  var day = dm ? shortDay(dm[3] + "-" + dm[2] + "-" + dm[1]) : (f.date || "");
+  var when = [day ? day + (f.time ? " " + f.time : "") : "", f.driver].filter(Boolean).join(", ");
+  return '<span class="due"><b>Fuel</b><span class="when ' + tone + '">' + esc(f.fuel) + '</span>' + bar +
+         (when ? '<small>' + esc(when) + '</small>' : '') + '</span>';
+}
 /* The latest standing entry that set one renewal's date. */
 function latestDone(reg, item){
   var best = null;
@@ -2877,7 +2921,7 @@ function paintBuses(){
          (b.waiting ? '<span class="tag info">To the sheet</span>' : '') +
          (jn ? '<span class="tag warn">' + esc(jn === 1 ? "1 job" : jn + " jobs") + '</span>' : '') +
          (dn ? '<span class="tag warn">' + esc(dn === 1 ? "1 defect" : dn + " defects") + '</span>' : '') +
-         '<span class="go">›</span></span>' + dueRows(b) + '</button>';
+         '<span class="go">›</span></span>' + fuelRow(b.reg) + dueRows(b) + '</button>';
   });
   $("busesBody").innerHTML = h;
 }
@@ -2915,7 +2959,7 @@ function paintBus(reg){
   var b = busByReg(reg);
   if(!b){ $("busBody").innerHTML = '<h1>' + esc(reg || "Bus") + '</h1><div class="card"><p class="tiny" style="margin:0">That bus is not on the live server’s list.</p></div>'; return; }
   var h = '<h1><span class="plate plate-big">' + esc(b.reg) + '</span></h1>';
-  h += '<div class="card">' + dueRows(b) + '</div>';
+  h += '<div class="card">' + fuelRow(b.reg) + dueRows(b) + '</div>';
   /* From v1.124.0: the last walkaround's mileage and the parked reading
      after it. */
   if(D && D.parked){
