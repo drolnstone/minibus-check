@@ -4641,8 +4641,9 @@ function sumHTML(rec){
 }
 function renderReview(){
   /* Pre-tick Needs fuel on a low tank, but only while the driver has not
-     answered yet. Once they have, their answer stands. */
-  if(st.fuel!==null && st.fuel<=2 && !st.jobs.length) st.jobs.push("fuel");
+     answered yet. Once they have, their answer stands. From v1.158.0 at
+     3/8 too, where the gauge turns amber (Asim, 13 Nov 2026). */
+  if(st.fuel!==null && st.fuel<=3 && !st.jobs.length) st.jobs.push("fuel");
   $("verdict").innerHTML = verdictHTML(level(), defectList(), advisoryList(), null, true);
   $("sumBox").innerHTML = sumHTML();
   paintJobs();

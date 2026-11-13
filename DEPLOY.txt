@@ -12,7 +12,14 @@ Fuel bought (Asim, 13 Nov 2026):
 2. The Sunday card and Buses show whichever is newer: the last walkaround's
    reading or the last Fuel entry. A Fuel entry reads "Bought (day time),
    (name)".
-3. The Vehicle Log tab gets a "Fuel level" column at the end, and Fuel in
+3. A walkaround with Needs fuel puts a flashing "(bus) needs fuel." with
+   Fuel bought at the top of the coordinator first screen (and Fuel bought
+   in place of Done on the bus's jobs). Fuel bought opens Record something
+   with Fuel and Full chosen, Filling station and Cost, litres in Notes;
+   recording it closes Needs fuel and the beacon goes.
+4. Driver app: Needs fuel is ticked for the driver at 3/8 too (amber), as
+   well as 1/4 and below, unless the driver has already chosen.
+5. The Vehicle Log tab gets a "Fuel level" column at the end, and Fuel in
    the What list. The sheet adds both by itself.
 
 Merging is the whole deploy. Nothing to do on the phone.

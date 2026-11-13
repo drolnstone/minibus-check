@@ -315,6 +315,12 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .need p{margin:0;flex:1;font-size:15px;font-weight:500;line-height:1.3}
 .need .mini{background:var(--card)}
 .need .go{font-size:22px;line-height:1;opacity:.7}
+/* Needs fuel (v1.158.0): a flashing beacon. */
+.need.beacon{animation:beacon 1.2s ease-in-out infinite}
+.need .dot{width:12px;height:12px;border-radius:50%;background:var(--stop);flex:none;animation:dot 1.2s ease-in-out infinite}
+@keyframes beacon{50%{box-shadow:0 0 0 4px var(--stop-line)}}
+@keyframes dot{50%{opacity:.15}}
+@media (prefers-reduced-motion:reduce){.need.beacon,.need .dot{animation:none}}
 .menu{list-style:none;margin:12px 0 0;padding:0;border:1px solid var(--hair);border-radius:var(--r);
   background:var(--card);overflow:hidden}
 .menu button{display:flex;align-items:center;gap:10px;width:100%;min-height:46px;padding:0 12px 0 14px;
@@ -1417,6 +1423,15 @@ function needs(){
       }
     });
   });
+  /* Needs fuel from the last walkaround (v1.158.0, Asim, 13 Nov 2026): a
+     beacon, and Fuel bought opens Record something with Fuel chosen. */
+  var jv = (D && D.vehicles && D.vehicles.jobs) || {};
+  Object.keys(jv).forEach(function(reg){
+    if(jv[reg] && (jv[reg].jobs || []).indexOf("Needs fuel") !== -1) {
+      out.unshift({ tone:"stop", beacon:true, text: reg + " needs fuel.", btn:"Fuel bought",
+                    data:'data-do="fuelbuy" data-reg="'+esc(reg)+'"' });
+    }
+  });
   /* A driver's hand over waiting (v1.145.0, Asim, 2 Nov 2026). */
   ((D && D.handAsks) || []).forEach(function(q){
     out.push({ tone:"stop", text: q.from + " asks to hand the " + q.route + " run to " + q.to + ".",
@@ -1434,7 +1449,7 @@ function paintHome(){
   var h = '<div class="home-top" id="homeTop">';
   needs().forEach(function(n){
     if(n.go) h += '<button class="need '+n.tone+'" type="button" data-go="'+esc(n.go)+'"><p>'+esc(n.text)+'</p><span class="go">\u203A</span></button>';
-    else h += '<div class="need '+n.tone+'"><p>'+esc(n.text)+'</p><button class="mini" type="button" '+n.data+'>'+esc(n.btn)+'</button></div>';
+    else h += '<div class="need '+n.tone+(n.beacon?' beacon':'')+'">'+(n.beacon?'<span class="dot" aria-hidden="true"></span>':'')+'<p>'+esc(n.text)+'</p><button class="mini" type="button" '+n.data+'>'+esc(n.btn)+'</button></div>';
   });
   if(D.rota && D.rota.error){
     h += '<div class="need stop"><p>The rota has not reached the live server.</p></div>';
@@ -2692,7 +2707,7 @@ var VLOG_SAMPLE = {
   "Parking permit": "e.g. Renewed for another year",
   "Repair": "e.g. Wing mirror replaced",
   "Tyres": "e.g. Both front tyres replaced",
-  "Fuel": "e.g. Shell, Church Road",
+  "Fuel": "e.g. 60 litres",
   "Other": "e.g. Fire extinguisher replaced"
 };
 var VLOG_ITEM = { "MOT": "mot", "Service": "service", "Insurance": "insurance", "Parking permit": "permit" };
@@ -3019,7 +3034,8 @@ function paintBus(reg){
          esc([j.date ? shortDay(j.date) : "", j.driver].filter(Boolean).join(", ")) + '.</p>' +
          j.jobs.map(function(x){
            return '<div class="row"><span class="v">' + esc(x) + '</span><span class="acts">' +
-                  '<button class="mini" type="button" data-do="job" data-reg="' + esc(b.reg) + '" data-job="' + esc(x) + '">Done</button></span></div>';
+                  (x === "Needs fuel" ? '<button class="mini" type="button" data-do="fuelbuy" data-reg="' + esc(b.reg) + '">Fuel bought</button>'
+                   : '<button class="mini" type="button" data-do="job" data-reg="' + esc(b.reg) + '" data-job="' + esc(x) + '">Done</button>') + '</span></div>';
          }).join("") + '</div>';
   }
   var dn = defectGroups(defectsOf(b.reg)).length;
@@ -3182,7 +3198,7 @@ function recordFor(reg, from){
           '<div class="two"><div class="field"><label for="vlMiles">Mileage</label><input id="vlMiles" inputmode="numeric" autocomplete="off"' +
             ' placeholder="' + esc(m && m.miles ? "Last read " + Number(m.miles).toLocaleString("en-GB") : "e.g. 57363") + '"></div>' +
           '<div id="vlCosts" style="display:contents"></div></div>' +
-          '<div class="field"><label for="vlGarage">Garage</label><input id="vlGarage" maxlength="80" autocomplete="off" placeholder="e.g. High Street Garage" value="' + esc(from && from.garage || "") + '"></div>' +
+          '<div class="field"><label for="vlGarage" id="vlGarageL">Garage</label><input id="vlGarage" maxlength="80" autocomplete="off" placeholder="e.g. High Street Garage" value="' + esc(from && from.garage || "") + '"></div>' +
           (defs.length ? '<div id="vlDefs"><p class="tiny" style="margin:0 0 2px">Defects put right</p>' + defs.map(function(g, i){
             var n = g.reports.length;
             return '<label class="check"><input type="checkbox" data-defg="' + i + '"><span>' + esc(g.item) +
@@ -3246,6 +3262,10 @@ function recordShow(b){
   $("vlGivens").hidden = !done;
   var defs = $("vlDefs"); if(defs) defs.hidden = !done;
   $("vlFuelF").hidden = !done || ws.indexOf("Fuel") === -1;
+  /* Fuel alone: where it was bought, and the litres in Notes. */
+  var fuelOnly = ws.length === 1 && ws[0] === "Fuel";
+  $("vlGarageL").textContent = fuelOnly ? "Filling station" : "Garage";
+  $("vlGarage").placeholder = fuelOnly ? "e.g. Shell, Church Road" : "e.g. High Street Garage";
   if(!$("vlFuelF").hidden) vlFuelPaint();
   $("vlNotes").placeholder = done ? (VLOG_SAMPLE[ws[0]] || "e.g. Fire extinguisher replaced") : "e.g. Booked for 9am, drop the bus off at 8:45";
   var p = $("vlNext");
@@ -3298,6 +3318,11 @@ function recordSend(b){
     if(done && w !== home) one.defects = [];
     list.push(one);
   }
+  /* Fuel bought closes the walkaround's Needs fuel (v1.158.0). */
+  var jf = jobsOf(b.reg);
+  if(done && ws.indexOf("Fuel") !== -1 && jf && (jf.jobs || []).indexOf("Needs fuel") !== -1) {
+    list.push({ kind: "job", reg: b.reg, job: "Needs fuel", checkId: jf.checkId, note: "Fuel bought" });
+  }
   if(list.length === 1){ act(list[0]); return; }
   actMany(list);
 }
@@ -3324,14 +3349,14 @@ function actMany(list){
       return;
     }
     var body = {}; for(var k in list[i]) body[k] = list[i][k];
-    body.id = base + "-" + VLOG_WHAT.indexOf(list[i].what);
+    body.id = base + "-" + (list[i].kind === "job" ? "job" : VLOG_WHAT.indexOf(list[i].what));
     api("act", { act: body }).then(function(out){
-      if(!out || !out.ok){ stop(list[i].what + ": " + (plain(out && out.error) || "The live server did not take that.")); return; }
+      if(!out || !out.ok){ stop((list[i].what || list[i].job) + ": " + (plain(out && out.error) || "The live server did not take that.")); return; }
       words.push((out.action && out.action.words) || "");
       i++;
       next();
     }, function(err){
-      stop(list[i].what + ": " + (plain(err) || "The live server did not answer."));
+      stop((list[i].what || list[i].job) + ": " + (plain(err) || "The live server did not answer."));
     });
   };
   next();
@@ -4055,6 +4080,7 @@ document.addEventListener("click", function(e){
   else if(d === "addstop") editStop("");
   else if(d === "addbus") editBus("");
   else if(d === "vlog") recordFor(t.getAttribute("data-reg"));
+  else if(d === "fuelbuy") recordFor(t.getAttribute("data-reg"), { what: "Fuel" });
   else if(d === "vlogdone") recordFor(t.getAttribute("data-reg"), entryById(t.getAttribute("data-reg"), t.getAttribute("data-id")));
   else if(d === "vfix") correctEntry(t.getAttribute("data-reg"), t.getAttribute("data-id"));
   else if(d === "job") jobDone(t.getAttribute("data-reg"), t.getAttribute("data-job"));

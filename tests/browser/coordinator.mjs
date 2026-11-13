@@ -151,7 +151,9 @@ async function world() {
         { id: "S-YS70PWE-service", what: "Service", status: "Estimated", done: W.rnAddMonths(DAY(-30), -12), was: "",
           next: DAY(-30), how: "estimated: a year back from the due date on the Buses tab", by: "", source: "Started from the Buses tab",
           recorded: Date.now() - 86400000, correctedBy: "" }] },
-      jobs: { "YS70 PWE": { checkId: "chk-a", date: LAST, driver: southOf(LAST), jobs: ["Screenwash", "Tyre pressures"] } }
+      jobs: { "YS70 PWE": { checkId: "chk-a", date: LAST, driver: southOf(LAST), jobs: ["Screenwash", "Tyre pressures"] },
+              /* Needs fuel (v1.158.0): the beacon and Fuel bought, C29h. */
+              "NH56 FWP": { checkId: "chk-f", date: LAST, driver: northOf(LAST), jobs: ["Needs fuel"] } }
     },
     /* From v1.98.0: the Bus Stops tab, every row, in its order. */
     stops: REAL.stops.map((s) => ({ id: s.id, route: s.route, time: s.time, stop: s.stop, postcode: s.postcode || "",
@@ -1011,7 +1013,7 @@ if (want("C29")) {
   const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth);
   await p.shot("C29c-bus-after");
   check("C29", "Buses shows each bus's dates; an MOT recorded is worked out before Save, kept, and shown at once",
-        /Buses/.test(menu) && /2 jobs to arrange/.test(menu) && /YS70 PWE/.test(list) && /overdue/.test(list) &&
+        /Buses/.test(menu) && /3 jobs to arrange/.test(menu) && /YS70 PWE/.test(list) && /overdue/.test(list) &&
         before.indexOf(uk(DAY(10))) !== -1 && preview.indexOf("Next due " + uk(expect.next)) !== -1 && !/kept its date/.test(preview) &&
         after.indexOf(uk(expect.next)) !== -1 && body.miles === 45180 && body.garage === "Walton Garage" &&
         (body.defects || []).length === 1 && wide <= 390 && !p.errs.length,
@@ -1050,6 +1052,40 @@ if (want("C29g")) {
         /Fuel 1\/2 tank/.test(busCard) && /Bought/.test(busCard) && legs.length > 0 && legs.every((n) => n === 4) && !p.errs.length,
         "shown " + shown + ", half " + half + ", acts " + JSON.stringify(acts).slice(0, 200) + ", card '" + busCard.slice(0, 160) +
         "', legs " + JSON.stringify(legs) + ", errors " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
+/* C29h — Needs fuel (v1.158.0): a flashing beacon on the first screen; Fuel
+   bought opens Record something with Fuel and Full chosen, asks Filling
+   station, and closes the job with the entry. */
+if (want("C29h")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  const beacon = await p.pg.evaluate(() => { const n = document.querySelector("#homeBody .need.beacon"); return n ? n.textContent + "|" + getComputedStyle(n).animationName : ""; });
+  await p.shot("C29h-beacon");
+  await p.pg.click('#homeBody [data-do="fuelbuy"][data-reg="NH56 FWP"]');
+  await p.wait(300);
+  const chosen = await p.text("#vlWhat .on");
+  const lit = await p.pg.$$eval("#vlFuel button.lit", (e) => e.length);
+  const station = await p.text("#vlGarageL");
+  await p.pg.fill("#vlGarage", "Shell, Church Road");
+  await p.pg.fill("#vlCost", "92.40");
+  await p.shot("C29h-fuel-bought");
+  await p.go();
+  await p.settle();
+  await p.wait(500);
+  const acts = db._rows("SELECT kind, body FROM coord_actions WHERE kind IN ('vlog','job')").map((r) => [r.kind, JSON.parse(r.body)])
+               .filter((x) => x[1].reg === "NH56 FWP");
+  const fuel = acts.find((x) => x[0] === "vlog" && x[1].what === "Fuel"), job = acts.find((x) => x[0] === "job");
+  await p.pg.evaluate(() => { location.hash = "home"; });
+  await p.wait(400);
+  const left = await p.pg.$$eval("#homeBody .need.beacon", (e) => e.length);
+  check("C29h", "Needs fuel: a beacon; Fuel bought records Fuel, Full, at a filling station, and the beacon goes",
+        /NH56 FWP needs fuel\./.test(beacon) && /beacon/.test(beacon) && chosen === "Fuel" && lit === 8 && station === "Filling station" &&
+        fuel && fuel[1].fuel === "Full" && fuel[1].garage === "Shell, Church Road" && fuel[1].cost === 92.4 &&
+        job && job[1].job === "Needs fuel" && left === 0 && !p.errs.length,
+        "beacon '" + beacon + "', chosen '" + chosen + "', lit " + lit + ", station '" + station + "', acts " +
+        JSON.stringify(acts).slice(0, 300) + ", left " + left + ", errors " + JSON.stringify(p.errs));
   await p.ctx.close();
 }
 
@@ -1097,7 +1133,7 @@ if (want("C31")) {
   await p.settle();
   await p.wait(400);
   const left = await p.pg.$$eval('#busBody [data-do="job"]', (els) => els.map((e) => e.getAttribute("data-job")));
-  const acts = db._rows("SELECT body FROM coord_actions WHERE kind='job'");
+  const acts = db._rows("SELECT body FROM coord_actions WHERE kind='job'").filter((r) => JSON.parse(r.body).reg === "YS70 PWE");
   await p.shot("C31-job-done");
   check("C31", "a job the walkaround asked for is marked done and leaves the list",
         title === "Screenwash" && JSON.stringify(left) === JSON.stringify(["Tyre pressures"]) && acts.length === 1 && !p.errs.length,
