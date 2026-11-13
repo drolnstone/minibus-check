@@ -11,6 +11,7 @@ The other jobs a walkaround asks for, on the first screen (Asim, 13 Nov 2026):
 2. "(bus) needs a wash." and "(bus) inside needs a clean." in amber with
    Done.
 3. Needs fuel keeps its flashing beacon and Fuel bought.
+4. Fuel bars show on the first screen only, not on Rota.
 
 Merging is the whole deploy. Pages only. Nothing to do on the phone.
 

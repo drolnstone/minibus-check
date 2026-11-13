@@ -1110,6 +1110,12 @@ if (want("C29i")) {
   await p.wait(400);
   const sent = db._rows("SELECT body FROM coord_actions WHERE kind='job'").map((r) => JSON.parse(r.body)).filter((b) => b.job === "Tyres need air");
   const left = await p.pg.$$eval("#homeBody .need", (e) => e.filter((x) => /tyres need air/.test(x.textContent)).length);
+  /* Rota shows no fuel (v1.159.0, Asim): it is for the first screen. */
+  await p.pg.evaluate(() => { location.hash = "rota"; });
+  await p.wait(400);
+  const rotaFuel = await p.pg.$$eval(".sun .fuelbar, .sun .leg-fuel", (e) => e.filter((x) => x.offsetParent).length);
+  const rotaCards = await p.pg.$$eval(".sun", (e) => e.filter((x) => x.offsetParent).length);
+  check("C29j", "Rota: the Sunday cards carry no fuel", rotaCards > 0 && rotaFuel === 0, "cards " + rotaCards + ", fuel " + rotaFuel);
   check("C29i", "Tyres need air in red and a wash in amber on the first screen; tyres Done asks the pressure or where",
         /stop/.test(tyres) && !/stop/.test(wash) && wash && /PRESSURE OR WHERE|Pressure or where/i.test(label) &&
         /pressure or where/.test(refused) && before === 0 && sent.length === 1 && sent[0].note === "65 psi all round" && left === 0 && !p.errs.length,

@@ -1355,8 +1355,9 @@ function sunCard(key, now, cue){
            (s && !off && s.seats ? '<span class="seats'+(s.booked > s.seats ? ' over' : '')+'">'+s.booked+'/'+s.seats+'</span>' : '') +
            (g.bus && !off ? '<span class="plate">'+esc(g.bus)+'</span>' : '') +
          '</span>' +
-         /* From v1.157.0: the bus's last fuel reading, under its line. */
-         (g.bus && !off ? (fuelOf(g.bus) ? fuelBar(fuelOf(g.bus)) : '<small class="leg-fuel">Fuel not recorded</small>') : '') +
+         /* From v1.157.0: the bus's last fuel reading, under its line. On the
+            first screen only (cue), not on Rota (Asim, 13 Nov 2026). */
+         (cue && g.bus && !off ? (fuelOf(g.bus) ? fuelBar(fuelOf(g.bus)) : '<small class="leg-fuel">Fuel not recorded</small>') : '') +
          '</div>';
   });
   return h + '</button>';
