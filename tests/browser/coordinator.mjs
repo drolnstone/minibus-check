@@ -153,7 +153,7 @@ async function world() {
           recorded: Date.now() - 86400000, correctedBy: "" }] },
       jobs: { "YS70 PWE": { checkId: "chk-a", date: LAST, driver: southOf(LAST), jobs: ["Screenwash", "Tyre pressures"] },
               /* Needs fuel (v1.158.0): the beacon and Fuel bought, C29h. */
-              "NH56 FWP": { checkId: "chk-f", date: LAST, driver: northOf(LAST), jobs: ["Needs fuel"] } }
+              "NH56 FWP": { checkId: "chk-f", date: LAST, driver: northOf(LAST), jobs: ["Needs fuel", "Tyres need air", "Needs a wash"] } }
     },
     /* From v1.98.0: the Bus Stops tab, every row, in its order. */
     stops: REAL.stops.map((s) => ({ id: s.id, route: s.route, time: s.time, stop: s.stop, postcode: s.postcode || "",
@@ -1013,7 +1013,7 @@ if (want("C29")) {
   const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth);
   await p.shot("C29c-bus-after");
   check("C29", "Buses shows each bus's dates; an MOT recorded is worked out before Save, kept, and shown at once",
-        /Buses/.test(menu) && /3 jobs to arrange/.test(menu) && /YS70 PWE/.test(list) && /overdue/.test(list) &&
+        /Buses/.test(menu) && /5 jobs to arrange/.test(menu) && /YS70 PWE/.test(list) && /overdue/.test(list) &&
         before.indexOf(uk(DAY(10))) !== -1 && preview.indexOf("Next due " + uk(expect.next)) !== -1 && !/kept its date/.test(preview) &&
         after.indexOf(uk(expect.next)) !== -1 && body.miles === 45180 && body.garage === "Walton Garage" &&
         (body.defects || []).length === 1 && wide <= 390 && !p.errs.length,
@@ -1086,6 +1086,41 @@ if (want("C29h")) {
         job && job[1].job === "Needs fuel" && left === 0 && !p.errs.length,
         "beacon '" + beacon + "', chosen '" + chosen + "', lit " + lit + ", station '" + station + "', acts " +
         JSON.stringify(acts).slice(0, 300) + ", left " + left + ", errors " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
+/* C29i — the other jobs (v1.159.0): tyres in red, a wash in amber, each with
+   Done on the first screen; tyres Done needs the pressure or where. */
+if (want("C29i")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  const lines = await p.pg.$$eval("#homeBody .need", (e) => e.map((x) => x.className + "|" + x.textContent));
+  const tyres = lines.find((x) => /NH56 FWP tyres need air\./.test(x)) || "", wash = lines.find((x) => /NH56 FWP needs a wash\./.test(x)) || "";
+  await p.shot("C29i-jobs-home");
+  await p.pg.click('#homeBody [data-do="job"][data-job="Tyres need air"]');
+  await p.wait(250);
+  const label = await p.text('label[for="jobNote"]');
+  await p.pg.click("#sheetGo");
+  await p.wait(250);
+  const refused = await p.text("#sheetSay").catch(() => "");
+  const before = db._rows("SELECT body FROM coord_actions WHERE kind='job'").filter((r) => JSON.parse(r.body).job === "Tyres need air").length;
+  await p.pg.fill("#jobNote", "65 psi all round");
+  await p.go();
+  await p.settle();
+  await p.wait(400);
+  const sent = db._rows("SELECT body FROM coord_actions WHERE kind='job'").map((r) => JSON.parse(r.body)).filter((b) => b.job === "Tyres need air");
+  const left = await p.pg.$$eval("#homeBody .need", (e) => e.filter((x) => /tyres need air/.test(x.textContent)).length);
+  /* Rota shows no fuel (v1.159.0, Asim): it is for the first screen. */
+  await p.pg.evaluate(() => { location.hash = "rota"; });
+  await p.wait(400);
+  const rotaFuel = await p.pg.$$eval(".sun .fuelbar, .sun .leg-fuel", (e) => e.filter((x) => x.offsetParent).length);
+  const rotaCards = await p.pg.$$eval(".sun", (e) => e.filter((x) => x.offsetParent).length);
+  check("C29j", "Rota: the Sunday cards carry no fuel", rotaCards > 0 && rotaFuel === 0, "cards " + rotaCards + ", fuel " + rotaFuel);
+  check("C29i", "Tyres need air in red and a wash in amber on the first screen; tyres Done asks the pressure or where",
+        /stop/.test(tyres) && !/stop/.test(wash) && wash && /PRESSURE OR WHERE|Pressure or where/i.test(label) &&
+        /pressure or where/.test(refused) && before === 0 && sent.length === 1 && sent[0].note === "65 psi all round" && left === 0 && !p.errs.length,
+        "tyres '" + tyres + "', wash '" + wash + "', label '" + label + "', refused '" + refused + "', sent " + JSON.stringify(sent) +
+        ", left " + left + ", errors " + JSON.stringify(p.errs));
   await p.ctx.close();
 }
 

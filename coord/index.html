@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.158.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.159.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -769,7 +769,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.158.0";
+var PAGE_VERSION = "v1.159.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1355,8 +1355,9 @@ function sunCard(key, now, cue){
            (s && !off && s.seats ? '<span class="seats'+(s.booked > s.seats ? ' over' : '')+'">'+s.booked+'/'+s.seats+'</span>' : '') +
            (g.bus && !off ? '<span class="plate">'+esc(g.bus)+'</span>' : '') +
          '</span>' +
-         /* From v1.157.0: the bus's last fuel reading, under its line. */
-         (g.bus && !off ? (fuelOf(g.bus) ? fuelBar(fuelOf(g.bus)) : '<small class="leg-fuel">Fuel not recorded</small>') : '') +
+         /* From v1.157.0: the bus's last fuel reading, under its line. On the
+            first screen only (cue), not on Rota (Asim, 13 Nov 2026). */
+         (cue && g.bus && !off ? (fuelOf(g.bus) ? fuelBar(fuelOf(g.bus)) : '<small class="leg-fuel">Fuel not recorded</small>') : '') +
          '</div>';
   });
   return h + '</button>';
@@ -1431,6 +1432,19 @@ function needs(){
       out.unshift({ tone:"stop", beacon:true, text: reg + " needs fuel.", btn:"Fuel bought",
                     data:'data-do="fuelbuy" data-reg="'+esc(reg)+'"' });
     }
+  });
+  /* The other jobs a walkaround asks for (v1.159.0, Asim, 13 Nov 2026):
+     tyres in red, a wash or a clean in amber, each with Done. */
+  var JOB_NEEDS = [["Tyres need air", "stop", " tyres need air."],
+                   ["Needs a wash", "warn", " needs a wash."],
+                   ["Inside needs a clean", "warn", " inside needs a clean."]];
+  JOB_NEEDS.forEach(function(k){
+    Object.keys(jv).forEach(function(reg){
+      if(jv[reg] && (jv[reg].jobs || []).indexOf(k[0]) !== -1) {
+        out.push({ tone:k[1], text: reg + k[2], btn:"Done",
+                   data:'data-do="job" data-reg="'+esc(reg)+'" data-job="'+esc(k[0])+'"' });
+      }
+    });
   });
   /* A driver's hand over waiting (v1.145.0, Asim, 2 Nov 2026). */
   ((D && D.handAsks) || []).forEach(function(q){
@@ -3433,14 +3447,19 @@ var JOB_SAMPLE = {
   "Needs a wash": "e.g. Washed after the service",
   "Inside needs a clean": "e.g. Cleaned inside after the service",
   "Needs fuel": "e.g. Topped up after the service",
-  "Tyres need air": "e.g. Tyres pumped up after the service"
+  "Tyres need air": "e.g. 65 psi all round, Shell, Church Road"
 };
 function jobDone(reg, job){
   var j = jobsOf(reg); if(!j) return;
   openSheet({ eyebrow: reg, title: job, line: "Asked for at the walkaround " + (j.date ? shortDay(j.date) : "") + ". Mark it done?",
-    body: '<div class="field"><label for="jobNote">Note</label><input id="jobNote" maxlength="200" autocomplete="off" placeholder="' + esc(JOB_SAMPLE[job] || "e.g. Booked in after the service") + '"></div>',
+    body: '<div class="field"><label for="jobNote">' + (job === "Tyres need air" ? "Pressure or where" : "Note") + '</label><input id="jobNote" maxlength="200" autocomplete="off" placeholder="' + esc(JOB_SAMPLE[job] || "e.g. Booked in after the service") + '"></div>',
     go: "Done",
-    onGo: function(){ act({ kind: "job", reg: reg, job: job, checkId: j.checkId, note: $("jobNote").value || "" }); } });
+    onGo: function(){
+      var note = ($("jobNote").value || "").trim();
+      /* Tyres are a safety item (v1.159.0): the pressure or where, always. */
+      if(job === "Tyres need air" && !note){ sheetSay("Say the pressure or where.", true); return; }
+      act({ kind: "job", reg: reg, job: job, checkId: j.checkId, note: note });
+    } });
 }
 
 /* ---- the run record -------------------------------------------------------------- */
