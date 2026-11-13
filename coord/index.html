@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.157.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.158.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -480,6 +480,10 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .fuelbar i.lit{border-color:transparent;color:#fff}
 .fuelbar i.edge{box-shadow:inset 0 0 0 2px rgba(0,0,0,.28)}
 .leg .fuelbar{grid-column:2/-1;margin:2px 0}
+.fuelpick button{min-height:44px;border:1.5px solid var(--hair);border-radius:6px;background:var(--card);
+  font-size:13px;font-weight:600;color:var(--muted);padding:0}
+.fuelpick button.lit{border-color:transparent;color:#fff}
+.fuelpick button.edge{box-shadow:inset 0 0 0 2px rgba(0,0,0,.28)}
 .leg-fuel{grid-column:2/-1;font-size:13px;color:var(--muted)}
 .vlog{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);padding:10px 12px;margin-bottom:8px}
 .vlog-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
@@ -759,7 +763,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.157.0";
+var PAGE_VERSION = "v1.158.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -2679,7 +2683,7 @@ var RENEWALS = {
   permit:    { label: "Parking permit", column: "Permit due" }
 };
 var RENEW_KEYS = ["mot", "service", "insurance", "permit"];
-var VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Other"];
+var VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Fuel", "Other"];
 /* The faded sample in Notes, matched to what it was. */
 var VLOG_SAMPLE = {
   "MOT": "e.g. Passed, one advisory on the rear brakes",
@@ -2688,6 +2692,7 @@ var VLOG_SAMPLE = {
   "Parking permit": "e.g. Renewed for another year",
   "Repair": "e.g. Wing mirror replaced",
   "Tyres": "e.g. Both front tyres replaced",
+  "Fuel": "e.g. Shell, Church Road",
   "Other": "e.g. Fire extinguisher replaced"
 };
 var VLOG_ITEM = { "MOT": "mot", "Service": "service", "Insurance": "insurance", "Parking permit": "permit" };
@@ -2807,7 +2812,32 @@ var FUEL_COLOURS = ["#75201a","#753e1a","#755d1a","#6e751a",
                     "#50751a","#31751a","#1a7521","#1a7540"];
 var FUEL_WORDS = ["1/8 tank","1/4 tank","3/8 tank","1/2 tank",
                   "5/8 tank","3/4 tank","7/8 tank","Full"];
-function fuelOf(reg){ var m = milesOf(reg); return m && m.fuel && m.fuel.fuel ? m.fuel : null; }
+/* The newer of the last walkaround's reading and the last Fuel entry on the
+   Vehicle Log (v1.158.0), so fuel bought in the week shows. */
+function fuelOf(reg){
+  var m = milesOf(reg), w = m && m.fuel && m.fuel.fuel ? m.fuel : null, wt = 0;
+  if(w){
+    var dm = /^(\d\d)\/(\d\d)\/(\d{4})$/.exec(w.date || ""), tm = /^(\d\d?):(\d\d)/.exec(w.time || "");
+    if(dm) wt = new Date(+dm[3], +dm[2] - 1, +dm[1], tm ? +tm[1] : 0, tm ? +tm[2] : 0).getTime();
+  }
+  var best = null, bt = 0;
+  logOf(reg).forEach(function(x){
+    if(x.what !== "Fuel" || !x.fuel || !x.done || x.correctedBy || x.status === "Withdrawn" || x.status === "Booked") return;
+    var p = /^(\d{4})-(\d\d)-(\d\d)$/.exec(x.done); if(!p) return;
+    var r = Number(x.recorded) || 0, rd = new Date(r);
+    var sameDay = r && rd.getFullYear() === +p[1] && rd.getMonth() === +p[2] - 1 && rd.getDate() === +p[3];
+    var t = sameDay ? r : new Date(+p[1], +p[2] - 1, +p[3], 23, 59).getTime();
+    if(t > bt){ bt = t; best = x; }
+  });
+  if(best && bt > wt){
+    var d = best.done.split("-"), rt = new Date(Number(best.recorded) || 0);
+    var sameD = bt === Number(best.recorded);
+    return { fuel: best.fuel, date: d[2] + "/" + d[1] + "/" + d[0],
+             time: sameD ? ("0" + rt.getHours()).slice(-2) + ":" + ("0" + rt.getMinutes()).slice(-2) : "",
+             driver: best.by || "", bought: true };
+  }
+  return w;
+}
 function fuelBar(f){
   var n = f ? FUEL_WORDS.indexOf(f.fuel) + 1 : 0;
   if(!n) return "";
@@ -2826,7 +2856,7 @@ function fuelRow(reg){
   var bar = fuelBar(f);
   var dm = /^(\d\d)\/(\d\d)\/(\d{4})$/.exec(f.date || "");
   var day = dm ? shortDay(dm[3] + "-" + dm[2] + "-" + dm[1]) : (f.date || "");
-  var when = [day ? day + (f.time ? " " + f.time : "") : "", f.driver].filter(Boolean).join(", ");
+  var when = [(f.bought ? "Bought " : "") + (day ? day + (f.time ? " " + f.time : "") : ""), f.driver].filter(Boolean).join(", ");
   return '<span class="due"><b>Fuel</b><span class="when ' + tone + '">' + esc(f.fuel) + '</span>' + bar +
          (when ? '<small>' + esc(when) + '</small>' : '') + '</span>';
 }
@@ -2942,6 +2972,7 @@ function entryHTML(reg, x){
   if(x.cost !== null && x.cost !== undefined && x.cost !== "") facts.push("£" + Number(x.cost).toFixed(2));
   if(facts.length) lines.push(facts.join(" · "));
   if(x.defects) lines.push("Put right: " + x.defects);
+  if(x.fuel) lines.push("Fuel level " + x.fuel);
   var h = '<div class="vlog' + (gone ? ' gone' : '') + '"><div class="vlog-head"><b>' + esc(x.what) + '</b>' + tag +
           (x.correctedBy ? '<span class="tag">Corrected</span>' : '') + '</div>' +
           lines.map(function(l){ return '<p>' + esc(l) + '</p>'; }).join("") +
@@ -3132,7 +3163,7 @@ function vlBoxes(b){
 function recordFor(reg, from){
   var b = busByReg(reg); if(!b) return;
   var today = calToday();
-  VL = { reg: b.reg, what: from && from.what ? [from.what] : [], status: "Done", typed: {} };
+  VL = { reg: b.reg, what: from && from.what ? [from.what] : [], status: "Done", typed: {}, fuel: 8 };
   var m = milesOf(b.reg);
   /* One tick per fault, from v1.90.0, closing every report of it. */
   var defs = defectGroups(defectsOf(b.reg));
@@ -3145,6 +3176,7 @@ function recordFor(reg, from){
           (from ? '' : '<button type="button" data-s="Booked">Booked ahead</button>') + '</div>' +
           '<div class="field" id="vlDoneF"><label for="vlDay">Day it was done</label><input type="date" id="vlDay" value="' + esc(startDay) + '" max="' + esc(today) + '"></div>' +
           '<div class="field" id="vlBookF" hidden><label for="vlFor">Booked for</label><input type="date" id="vlFor" min="' + esc(today) + '"></div>' +
+          '<div class="field" id="vlFuelF" hidden><label>Fuel level</label><div class="fuelbar fuelpick" id="vlFuel"></div></div>' +
           '<div id="vlGivens"></div>' +
           '<p class="preview" id="vlNext" style="white-space:pre-line" hidden></p>' +
           '<div class="two"><div class="field"><label for="vlMiles">Mileage</label><input id="vlMiles" inputmode="numeric" autocomplete="off"' +
@@ -3187,6 +3219,22 @@ function recordFor(reg, from){
   recordShow(b);
 }
 
+/* Fuel bought (v1.158.0): what the tank reads now, Full unless tapped. */
+function vlFuelPaint(){
+  var el = $("vlFuel"); if(!el) return;
+  el.innerHTML = "";
+  for(var i = 1; i <= 8; i++){
+    (function(n){
+      var x = document.createElement("button");
+      x.type = "button"; x.textContent = FUEL_LABELS[n-1];
+      x.setAttribute("aria-label", FUEL_WORDS[n-1]);
+      if(n <= VL.fuel){ x.className = "lit" + (n === VL.fuel ? " edge" : ""); x.style.background = FUEL_COLOURS[n-1]; }
+      x.onclick = function(){ VL.fuel = n; vlFuelPaint(); };
+      el.appendChild(x);
+    })(i);
+  }
+}
+
 /* What the form says as it is filled: the date the bus will have, for each
    dated item chosen. */
 function recordShow(b){
@@ -3197,6 +3245,8 @@ function recordShow(b){
   $("vlBookF").hidden = done;
   $("vlGivens").hidden = !done;
   var defs = $("vlDefs"); if(defs) defs.hidden = !done;
+  $("vlFuelF").hidden = !done || ws.indexOf("Fuel") === -1;
+  if(!$("vlFuelF").hidden) vlFuelPaint();
   $("vlNotes").placeholder = done ? (VLOG_SAMPLE[ws[0]] || "e.g. Fire extinguisher replaced") : "e.g. Booked for 9am, drop the bus off at 8:45";
   var p = $("vlNext");
   var items = ws.filter(function(w){ return VLOG_ITEM[w]; });
@@ -3241,6 +3291,7 @@ function recordSend(b){
     if(cost !== cost){ sheetSay((ws.length > 1 ? w + ": the cost" : "The cost") + " is not an amount in pounds.", true); return; }
     var one = {}; for(var k in a) one[k] = a[k];
     one.what = w; one.cost = cost;
+    if(done && w === "Fuel") one.fuel = FUEL_WORDS[VL.fuel - 1];
     if(done && item) one.given = ($(vlGivenId(item)) || {}).value || "";
     /* A defect put right goes on one entry: the repair, if there is one. */
     var home = ws.indexOf("Repair") !== -1 ? "Repair" : ws[0];

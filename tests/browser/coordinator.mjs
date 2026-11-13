@@ -1020,6 +1020,39 @@ if (want("C29")) {
   await p.ctx.close();
 }
 
+/* C29g — Fuel bought (v1.158.0): Record something, Fuel, Full unless tapped;
+   the Sunday card and Buses show it in place of the older walkaround reading. */
+if (want("C29g")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  const reg = REAL.buses[0].reg;
+  await p.pg.evaluate((r) => { location.hash = "bus/" + encodeURIComponent(r); }, reg);
+  await p.wait(400);
+  await p.pg.click('#busBody [data-do="vlog"]');
+  await p.wait(250);
+  await p.tapText("Fuel", "#vlWhat");
+  const shown = await p.pg.$$eval("#vlFuel button.lit", (e) => e.length);
+  await p.pg.click('#vlFuel button[aria-label="1/2 tank"]');
+  const half = await p.pg.$$eval("#vlFuel button.lit", (e) => e.length);
+  await p.shot("C29g-record-fuel");
+  await p.go();
+  await p.settle();
+  await p.wait(400);
+  const acts = db._rows("SELECT body FROM coord_actions WHERE kind='vlog'").map((r) => JSON.parse(r.body)).filter((b) => b.what === "Fuel");
+  const busCard = await p.text("#busBody .card");
+  await p.pg.evaluate(() => { location.hash = "home"; });
+  await p.wait(400);
+  const legs = await p.pg.$$eval("#homeBody .sun .leg", (e, r) => e.filter((x) => x.querySelector(".plate") && x.querySelector(".plate").textContent === r)
+                                                        .map((x) => x.querySelectorAll(".fuelbar i.lit").length), reg);
+  await p.shot("C29g-home-after");
+  check("C29g", "Fuel bought: Full unless tapped; 1/2 tank recorded shows on the bus and under its Sunday line",
+        shown === 8 && half === 4 && acts.length === 1 && acts[0].fuel === "1/2 tank" &&
+        /Fuel 1\/2 tank/.test(busCard) && /Bought/.test(busCard) && legs.length > 0 && legs.every((n) => n === 4) && !p.errs.length,
+        "shown " + shown + ", half " + half + ", acts " + JSON.stringify(acts).slice(0, 200) + ", card '" + busCard.slice(0, 160) +
+        "', legs " + JSON.stringify(legs) + ", errors " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
 /* C30 — an entry put right: a correction, with the date worked out again */
 if (want("C30")) {
   const p = await page(env);
