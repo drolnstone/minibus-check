@@ -1,19 +1,31 @@
 MINIBUS
 =======
-  pages v1.159.0 · server w2.90.0 · sheet v1.137.0
+  pages v1.160.0 · server w2.91.0 · sheet v1.138.0
 
-YOU ARE ON   app v1.158.0 · server w2.90.0 · sheet v1.137.0
-GOING TO     app v1.159.0 · server w2.90.0 · sheet v1.137.0
+YOU ARE ON   app v1.159.0 · server w2.90.0 · sheet v1.137.0
+GOING TO     app v1.160.0 · server w2.91.0 · sheet v1.138.0
 
-The other jobs a walkaround asks for, on the first screen (Asim, 13 Nov 2026):
-1. "(bus) tyres need air." in red with Done. Done asks "Pressure or where"
-   and will not go without it.
-2. "(bus) needs a wash." and "(bus) inside needs a clean." in amber with
-   Done.
-3. Needs fuel keeps its flashing beacon and Fuel bought.
-4. Fuel bars show on the first screen only, not on Rota.
+1. Open jobs reminded (Asim, 14 Nov 2026): Wednesdays and Fridays from
+   18:00, if any bus still has Needs fuel, Tyres need air, Needs a wash or
+   Inside needs a clean open from its last walkaround, the coordinators get
+   "Still to arrange" listing each bus and its jobs. Same road as other
+   coordinator alerts. Nothing open, nothing sent.
 
-Merging is the whole deploy. Pages only. Nothing to do on the phone.
+2. Parked fuel (Asim, 14 Nov 2026):
+   - Driver app, the parked box: "Fuel showing" with the walkaround's eight
+     segments under the mileage. Save asks for both.
+   - Coordinator app: the Sunday card and Buses show the newest reading:
+     parked fuel ("Parked ..."), else that morning's walkaround, and Fuel
+     bought when that is newer.
+   - Any bus whose newest reading is 3/8 or less gets the flashing "needs
+     fuel." with Fuel bought, as well as one whose walkaround asked for it.
+   - Walkaround summary: at 3/8 or less Needs fuel is ticked and locked
+     on; Nothing needed cannot clear it (Asim chose "Lock it").
+   - The Checks tab gets a "Parked fuel" column at the end; the sheet adds
+     it by itself.
+
+Merging is the whole deploy. Nothing to do on the phone.
 
 CHECKS
-A. Coordinator app, App info: v1.159.0 · w2.90.0 · v1.137.0.
+A. Coordinator app, App info: v1.160.0 · w2.91.0 · v1.138.0.
+B. Driver app after the morning run: the parked box shows Fuel showing.

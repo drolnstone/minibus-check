@@ -1555,6 +1555,24 @@ if (want("T54")) {
   await me.ctx.close();
 }
 
+/* T55 — NEEDS FUEL LOCKED ON at 3/8 or less (v1.160.0, Asim, 14 Nov 2026):
+   ticked by itself, cannot be unticked, and Nothing needed cannot clear it. */
+if (want("T55")) {
+  const me = await phone({ clock: "2026-09-27T09:20:00+01:00" });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn();
+  await me.fullCheck({ fuel: 3, jobs: ["Needs fuel", "Nothing needed"], stopAtReview: true });
+  const chips = await me.pg.evaluate(() => [...document.querySelectorAll("#jobChips button")].map(b => b.textContent.trim() + ":" + (b.className === "on" ? "on" : "off") + ":" + (b.disabled ? "locked" : "open")));
+  await me.onward(); await me.wait(1500);
+  const chk = me.posted.find(p => p.action === "check");
+  const jobs = chk && chk.check.jobs;
+  check("T55", "3/8: Needs fuel ticked, locked on, and Nothing needed cannot clear it",
+        chips.includes("Needs fuel:on:locked") && chips.includes("Nothing needed:off:locked") &&
+        Array.isArray(jobs) && jobs.indexOf("Needs fuel") !== -1 && !me.errs.length,
+        JSON.stringify({ chips, jobs, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

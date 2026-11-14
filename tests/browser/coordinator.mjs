@@ -1124,6 +1124,27 @@ if (want("C29i")) {
   await p.ctx.close();
 }
 
+/* C29k — parked fuel (v1.160.0): newer than the walkaround, it is the one
+   shown; at 3/8 or less the bus needs fuel. */
+if (want("C29k")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  const out = await p.pg.evaluate(() => {
+    const regs = (D.buses || []).map((b) => b.reg), r = regs[regs.length - 1];
+    const now = Date.now(), d = new Date(now);
+    const key = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+    D.parked = D.parked || {};
+    D.parked[r] = { miles: 40100, fuel: "3/8 tank", driver: "Bro Test", at: now + 60000, date: key, time: "16:05" };
+    paintHome();
+    const f = fuelOf(r);
+    const beacon = Array.prototype.some.call(document.querySelectorAll("#homeBody .need.beacon"), (n) => n.textContent.indexOf(r + " needs fuel.") !== -1);
+    return { r, fuel: f && f.fuel, parked: !!(f && f.parked), beacon };
+  });
+  check("C29k", "Parked fuel is shown when newer than the walkaround; 3/8 makes the bus need fuel",
+        out.fuel === "3/8 tank" && out.parked && out.beacon && !p.errs.length, JSON.stringify(out) + " " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
 /* C30 — an entry put right: a correction, with the date worked out again */
 if (want("C30")) {
   const p = await page(env);
