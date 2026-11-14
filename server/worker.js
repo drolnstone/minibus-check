@@ -9113,7 +9113,8 @@ async function coordVehiclesView(env) {
     given: b.given || "", miles: b.miles == null ? null : b.miles, garage: b.garage || "",
     cost: b.cost == null ? null : b.cost, defects: (b.defectNames || []).join("; "),
     notes: b.notes || b.why || "", corrects: b.corrects || "", by: a.by, source: "Coordinator's app",
-    recorded: a.made, correctedBy: "", waiting: true, fuel: b.fuel || "" });
+    recorded: a.made, correctedBy: "", waiting: true, fuel: b.fuel || "",
+    boughtBy: b.boughtBy || "", paidBy: b.paidBy || "", litres: b.litres == null ? null : b.litres });
   for (const a of await coordPending(env, ["vlog", "vfix", "job"])) {
     const b = a.body || {};
     if (a.kind === "job") {
@@ -9230,7 +9231,9 @@ async function actVlog(env, me, act, id) {
     logId: "L-" + id, reg: reg, what: what, status: booking ? "Booked" : "Done", moves: moves,
     done: done, bookedFor: bookedFor, was: was, early: was && done ? rnDays(was, done) : null,
     next: nd.next, how: nd.how, given: given, miles: miles, garage: vlogText(act.garage, 80), cost: cost,
-    defects: defects, defectNames: defectNames, notes: vlogText(act.notes, 500), fuel: fuel
+    defects: defects, defectNames: defectNames, notes: vlogText(act.notes, 500), fuel: fuel,
+    boughtBy: fuel ? vlogText(act.boughtBy, 60) : "", paidBy: fuel && (act.paidBy === "Church" || act.paidBy === "Gift") ? act.paidBy : "",
+    litres: fuel && typeof act.litres === "number" ? act.litres : null
   };
   const words = reg + ": " + what + (booking ? " booked for " + rnUk(bookedFor) : (fuel ? " bought " : " done ") + rnUk(done)) + (fuel ? ", " + fuel : "") +
                 (nd.next ? ". Next due " + rnUk(nd.next) + (moves ? "" : ", but a later entry stands, so the bus keeps its date") : "") +
