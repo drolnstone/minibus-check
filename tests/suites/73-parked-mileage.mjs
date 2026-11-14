@@ -127,6 +127,22 @@ export default async function (root) {
     });
   });
 
+  /* Parked fuel, w2.91.0 (Asim, 14 Nov 2026). */
+  s.test("the fuel gauge goes with it, kept, given back and drained; anything else is kept as nothing", async (a) => {
+    const { db, env } = await fresh();
+    const key = await atTime(SUN_0800, async () => { await walk(env, "c1", 57363); return keyOf(env); });
+    await atTime(SUN_1500, async () => {
+      const out = await J(await park(env, key, { parked: { fuel: "3/8 tank" } }));
+      a.eq(out.parked && out.parked.fuel, "3/8 tank");
+      a.eq(db._one("SELECT fuel FROM parked WHERE check_id='c1'").fuel, "3/8 tank");
+      a.eq((await W.parkedLatest(env))[REG].fuel, "3/8 tank");
+      const open = (await W.parkedOpen(env)).filter((o) => o.checkId === "c1")[0];
+      a.eq(open && open.parked && open.parked.fuel, "3/8 tank");
+      await J(await park(env, key, { parked: { miles: 57412, fuel: "a lot" } }));
+      a.eq(db._one("SELECT fuel FROM parked WHERE check_id='c1'").fuel, "");
+    });
+  });
+
   s.test("refused without the key, from anybody else, lower than the walkaround, far too high, not a number, or closed", async (a) => {
     const { env } = await fresh();
     const key = await atTime(SUN_0800, async () => { await walk(env, "c1", 57363); return keyOf(env); });

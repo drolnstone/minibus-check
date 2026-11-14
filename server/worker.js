@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.90.0";
+const SCRIPT_VERSION = "w2.91.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -4715,8 +4715,11 @@ async function ensureParked(env) {
     "  made      INTEGER NOT NULL," +
     "  got       INTEGER NOT NULL DEFAULT 0," +
     "  confirmed INTEGER NOT NULL DEFAULT 0," +
-    "  synced    INTEGER NOT NULL DEFAULT 0)").run();
+    "  synced    INTEGER NOT NULL DEFAULT 0," +
+    "  fuel      TEXT NOT NULL DEFAULT '')").run();
   await env.DB.prepare("CREATE INDEX IF NOT EXISTS parked_sync ON parked(synced)").run();
+  /* From w2.91.0: the fuel gauge as the bus was put away ("1/2 tank"). */
+  try { await env.DB.prepare("ALTER TABLE parked ADD COLUMN fuel TEXT NOT NULL DEFAULT ''").run(); } catch (e) {}
   parkedReady = true;
 }
 
@@ -4775,10 +4778,10 @@ async function parkedOpen(env, now) {
     let miles = 0;
     try { miles = Math.round(Number(JSON.parse(r.body).miles)) || 0; } catch (e) {}
     const p = await env.DB.prepare(
-      "SELECT miles, driver, made FROM parked WHERE check_id=?").bind(String(r.check_id)).first();
+      "SELECT miles, fuel, driver, made FROM parked WHERE check_id=?").bind(String(r.check_id)).first();
     out.push({ reg, checkId: String(r.check_id), day, miles, ended: run ? run.ended : 0,
                driver: run && run.driver ? run.driver : String(r.driver || ""),
-               parked: p ? { miles: Number(p.miles), driver: String(p.driver || ""), at: Number(p.made) } : null });
+               parked: p ? { miles: Number(p.miles), fuel: String(p.fuel || ""), driver: String(p.driver || ""), at: Number(p.made) } : null });
   }
   return out;
 }
@@ -4790,14 +4793,14 @@ async function parkedLatest(env) {
   await ensureChecksIn(env);
   await ensureParked(env);
   const q = await env.DB.prepare(
-    "SELECT p.check_id, p.reg, p.miles, p.driver, p.made, c.received FROM parked p " +
+    "SELECT p.check_id, p.reg, p.miles, p.fuel, p.driver, p.made, c.received FROM parked p " +
     "JOIN checks_in c ON c.check_id = p.check_id " +
     "WHERE NOT EXISTS (SELECT 1 FROM checks_in n WHERE upper(n.reg) = upper(p.reg) AND n.received > c.received)").all();
   const out = {};
   for (const r of (q.results || [])) {
     const reg = String(r.reg || "").trim().toUpperCase();
     const when = new Date(Number(r.made));
-    out[reg] = { miles: Number(r.miles), driver: String(r.driver || ""), checkId: String(r.check_id),
+    out[reg] = { miles: Number(r.miles), fuel: String(r.fuel || ""), driver: String(r.driver || ""), checkId: String(r.check_id),
                  at: Number(r.made), date: londonKey(when), time: londonHHMM(when) };
   }
   return out;
@@ -4811,6 +4814,7 @@ async function handleParked(env, p, sure) {
   const raw = String((p && p.miles) === undefined || p.miles === null ? "" : p.miles).replace(/[,\s]/g, "");
   if (!/^\d{1,7}$/.test(raw)) return { ok: false, error: "number" };
   const miles = Number(raw);
+  const fuel = FUEL_WORDS.indexOf(String((p && p.fuel) || "")) !== -1 ? String(p.fuel) : "";
   const now = Date.now();
   const told = Math.round(Number(p && p.made) || 0);
   const made = told > 0 && told <= now && now - told <= PARKED_LATE_MS ? told : now;
@@ -4825,22 +4829,22 @@ async function handleParked(env, p, sure) {
      arriving later from a phone that had no signal, does not replace it:
      either way the phone is given the reading kept, and drops its copy. */
   const kept = async () => env.DB.prepare(
-    "SELECT miles, driver, made, got FROM parked WHERE check_id=?").bind(checkId).first();
+    "SELECT miles, fuel, driver, made, got FROM parked WHERE check_id=?").bind(checkId).first();
   const was = await kept();
-  const said = (r) => ({ reg, checkId, miles: Number(r.miles), driver: String(r.driver || ""),
+  const said = (r) => ({ reg, checkId, miles: Number(r.miles), fuel: String(r.fuel || ""), driver: String(r.driver || ""),
                          at: Number(r.made), got: Number(r.got) });
   if (was && (Number(was.made) > made || (Number(was.miles) === miles && Number(was.made) === made))) {
     return { ok: true, again: true, parked: said(was) };
   }
   await env.DB.prepare(
-    "INSERT INTO parked (check_id, reg, miles, driver, made, got, confirmed, synced) VALUES (?,?,?,?,?,?,?,0) " +
-    "ON CONFLICT(check_id) DO UPDATE SET miles=excluded.miles, driver=excluded.driver, " +
+    "INSERT INTO parked (check_id, reg, miles, fuel, driver, made, got, confirmed, synced) VALUES (?,?,?,?,?,?,?,?,0) " +
+    "ON CONFLICT(check_id) DO UPDATE SET miles=excluded.miles, fuel=excluded.fuel, driver=excluded.driver, " +
     "made=excluded.made, got=excluded.got, confirmed=excluded.confirmed, synced=0 " +
     "WHERE excluded.made >= parked.made")
-    .bind(checkId, reg, miles, who, made, now, sure === "key" ? 1 : 0).run();
+    .bind(checkId, reg, miles, fuel, who, made, now, sure === "key" ? 1 : 0).run();
   const is = await kept();
   if (is && (Number(is.made) !== made || Number(is.miles) !== miles)) return { ok: true, again: true, parked: said(is) };
-  return { ok: true, parked: { reg, checkId, miles, driver: who, at: made, got: now } };
+  return { ok: true, parked: { reg, checkId, miles, fuel, driver: who, at: made, got: now } };
 }
 
 /* A PARKED READING CORRECTED ON THE SHEET, from w2.66.0 (wrap up audit).
@@ -5019,7 +5023,7 @@ async function handleDrain(env, body) {
       "(SELECT id FROM parked WHERE synced<1 ORDER BY id LIMIT 50)").bind(claim).run();
     const q = await env.DB.prepare("SELECT * FROM parked WHERE synced=? ORDER BY id").bind(claim).all();
     for (const r of (q.results || [])) {
-      parked.push({ id: r.id, checkId: r.check_id, reg: r.reg, miles: Number(r.miles),
+      parked.push({ id: r.id, checkId: r.check_id, reg: r.reg, miles: Number(r.miles), fuel: String(r.fuel || ""),
                     driver: r.driver || "", at: Number(r.made), confirmed: !!r.confirmed });
     }
   } catch (e) {}

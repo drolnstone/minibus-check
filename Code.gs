@@ -499,7 +499,7 @@ var CHECK_HEADERS = [
   "Items checked", "Defect count", "Defects", "Renewals due", "Signed",
   "Not applicable", "Check type", "Where checked", "Accuracy (yd)",
   "Distance from base (yd)", "Location note", "Fuel", "To arrange", "PIN check",
-  "Advisory count", "Advisories", "Authorised by", "Authorised on"
+  "Advisory count", "Advisories", "Authorised by", "Authorised on", "Parked fuel"
 ];
 /* Kind separates what a thing IS from what has been DONE about it. An
    advisory that has been looked at and left alone is Advisory/Open, which is
@@ -3040,8 +3040,9 @@ function pinWords(c) {
       would skip the column check, colsHard would refuse the missing heading,
       and every walkaround sent in that hour would bounce.
    4: Parked mileage and Since parked on Checks (v1.122.0).
-   5: Fuel level on the Vehicle Log (v1.137.0). */
-var STRUCT_VERSION = "5";
+   5: Fuel level on the Vehicle Log (v1.137.0).
+   6: Parked fuel on Checks (v1.138.0). */
+var STRUCT_VERSION = "6";
 
 function structKey(tag) { return "struct_" + STRUCT_VERSION + "_" + tag; }
 
@@ -5417,6 +5418,10 @@ function drainFromWorker() {
             psh.getRange(prow, pcc.parkedAt).setNumberFormat("@").setValue(
               Utilities.formatDate(new Date(Number(pk.at) || Date.now()), Session.getScriptTimeZone(), "HH:mm"));
           } catch (e) {}
+        }
+        /* Parked fuel, from v1.138.0 (Asim, 14 Nov 2026). Words, never a date. */
+        if (pcc.parkedFuel && pk.fuel) {
+          try { psh.getRange(prow, pcc.parkedFuel).setNumberFormat("@").setValue(String(pk.fuel)); } catch (e) {}
         }
         pretty("Parked mileage, the walkaround after", function () { parkedLate(psh, pcc, prow, pk.miles); });
         doneP.push(pk.id);
@@ -14811,7 +14816,7 @@ FIELDS[CHECKS_SHEET] = {
   away: "Distance from base (yd)", locNote: "Location note", fuel: "Fuel",
   arrange: "To arrange", pinCheck: "PIN check",
   advisoryCount: "Advisory count", advisories: "Advisories",
-  authBy: "Authorised by", authOn: "Authorised on"
+  authBy: "Authorised by", authOn: "Authorised on", parkedFuel: "Parked fuel"
 };
 /* Rota Requests had no entry here: it has always been read through
    requestCols, which is its own hard map. Added so colsSoft works on this tab

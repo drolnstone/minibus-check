@@ -1799,7 +1799,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.159.0";
+var APP_VERSION = "v1.160.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -4147,15 +4147,20 @@ var JOBS = [
    list is not an answer: it is a driver who scrolled past. */
 function jobsAnswered(){ return st.jobs.length>0; }
 
+function fuelLow(){ return st.fuel!==null && st.fuel<=3; }
 function paintJobs(){
   var box=$("jobChips"); if(!box) return;
+  var low=fuelLow();
   box.innerHTML="";
   JOBS.forEach(function(j){
     var b=document.createElement("button");
     b.type="button";
     b.textContent=j.label;
     if(st.jobs.indexOf(j.id)!==-1) b.className="on";
+    /* 3/8 or less: Needs fuel stays on, and Nothing needed cannot clear it. */
+    if(low && (j.id==="fuel" || j.clears)) b.disabled=true;
     b.addEventListener("click",function(){
+      if(b.disabled) return;
       var i=st.jobs.indexOf(j.id);
       if(i!==-1){ st.jobs.splice(i,1); }
       else if(j.clears){ st.jobs=[j.id]; }          /* nothing needed stands alone */
@@ -4643,7 +4648,10 @@ function renderReview(){
   /* Pre-tick Needs fuel on a low tank, but only while the driver has not
      answered yet. Once they have, their answer stands. From v1.158.0 at
      3/8 too, where the gauge turns amber (Asim, 13 Nov 2026). */
-  if(st.fuel!==null && st.fuel<=3 && !st.jobs.length) st.jobs.push("fuel");
+  /* From v1.160.0 locked on (Asim, 14 Nov 2026): the gauge has said it. */
+  if(fuelLow() && st.jobs.indexOf("fuel")===-1){
+    st.jobs=st.jobs.filter(function(x){ return x!=="none"; }); st.jobs.push("fuel");
+  }
   $("verdict").innerHTML = verdictHTML(level(), defectList(), advisoryList(), null, true);
   $("sumBox").innerHTML = sumHTML();
   paintJobs();
@@ -6637,6 +6645,19 @@ function dutyStart(){
    until one is keyed, then the reading, with Change. Nothing on any other
    day. */
 var parkTimer = null, parkBusy = false, parkEdit = {}, parkSaid = {}, parkAskedAt = 0;
+/* Parked fuel (v1.160.0, Asim, 14 Nov 2026): the gauge as the bus is put
+   away, beside the parked mileage. Eighths by Check ID, and what was typed
+   in the mileage box, so a repaint keeps both. */
+var parkFuel = {}, parkTyped = {};
+function parkFuelBtns(id, shut){
+  var n = parkFuel[id] || 0, h = "";
+  for(var i = 1; i <= 8; i++){
+    h += '<button type="button" data-pf="'+i+'" aria-label="'+i+' eighths"'+(shut ? ' disabled' : '')+
+         (i <= n ? ' class="lit'+(i === n ? ' edge' : '')+'" style="background:'+FUEL_COLOURS[i-1]+'"' : '')+'>'+
+         FUEL_LABELS[i-1]+'</button>';
+  }
+  return h;
+}
 function parkHtml(){
   var h = "", n = 0;
   (PARKOPEN || []).forEach(function(o){
@@ -6655,7 +6676,7 @@ function parkHtml(){
     if(q && !parkEdit[o.checkId]){
       h += '<div class="dw"><p class="dw-eyebrow">'+eyebrow+'</p>'+
            '<p class="dw-big">'+Number(q.miles).toLocaleString("en-GB")+'</p>'+
-           '<p class="dw-sub">Keyed at '+ukTime(new Date(Number(q.made) || 0))+'. '+walk+'</p>'+
+           '<p class="dw-sub">'+(q.fuel ? 'Fuel '+esc(q.fuel)+'. ' : '')+'Keyed at '+ukTime(new Date(Number(q.made) || 0))+'. '+walk+'</p>'+
            (sayHtml || (q.wait ? '<p class="dw-sub park-say is-bad">'+PARK_PIN+'</p>'
                                : '<p class="dw-sub park-say">'+PARK_HELD+'</p>'))+
            '<button type="button" class="dw-off" data-park-change="'+pid+'">Change</button></div>';
@@ -6665,7 +6686,7 @@ function parkHtml(){
       var at = new Date(Number(o.parked.at) || 0);
       h += '<div class="dw dw-go"><p class="dw-eyebrow">'+eyebrow+'</p>'+
            '<p class="dw-big">'+Number(o.parked.miles).toLocaleString("en-GB")+' ✓</p>'+
-           '<p class="dw-sub">Keyed'+(o.parked.driver ? ' by '+esc(o.parked.driver) : '')+
+           '<p class="dw-sub">'+(o.parked.fuel ? 'Fuel '+esc(o.parked.fuel)+'. ' : '')+'Keyed'+(o.parked.driver ? ' by '+esc(o.parked.driver) : '')+
              (o.parked.at ? ' at '+ukTime(at) : '')+'. '+walk+'</p>'+sayHtml+
            '<button type="button" class="dw-off" data-park-change="'+pid+'">Change</button></div>';
       return;
@@ -6679,8 +6700,11 @@ function parkHtml(){
          '<label class="dw-sub" for="parkMiles'+i+'"><b>Mileage after the afternoon run</b>'+
            (shut ? ' · from '+PARK_OPENS : '')+(walk ? ' · '+walk : '')+'</label>'+
          '<div class="park-row"><input id="parkMiles'+i+'" type="number" inputmode="numeric" class="mono" '+
-           'placeholder="e.g. '+esc(String((Number(o.miles)||57363) + 12))+'" autocomplete="off"'+(shut ? ' disabled' : '')+'>'+
-         '<button class="btn btn-main" type="button" data-park-save="'+pid+'"'+(shut ? ' disabled' : '')+'>Save</button></div>'+sayHtml+'</div>';
+           'placeholder="e.g. '+esc(String((Number(o.miles)||57363) + 12))+'" autocomplete="off"'+(shut ? ' disabled' : '')+
+           ' data-park-typed="'+pid+'" value="'+esc(parkTyped[o.checkId] || "")+'">'+
+         '<button class="btn btn-main" type="button" data-park-save="'+pid+'"'+(shut ? ' disabled' : '')+'>Save</button></div>'+
+         '<p class="dw-sub" style="margin-top:8px"><b>Fuel showing</b></p>'+
+         '<div class="fuel" data-park-fuel="'+pid+'">'+parkFuelBtns(o.checkId, shut)+'</div>'+sayHtml+'</div>';
   });
   return h;
 }
@@ -6709,10 +6733,28 @@ function parkPaint(){
       parkSend(b.getAttribute("data-park-save"), b.parentNode && b.parentNode.querySelector("input"));
     };
   });
+  Array.prototype.forEach.call(box.querySelectorAll("[data-park-typed]"), function(el){
+    el.oninput = function(){ parkTyped[el.getAttribute("data-park-typed")] = el.value; };
+  });
+  /* A fuel tap redraws only the gauge: the mileage box keeps its focus. */
+  Array.prototype.forEach.call(box.querySelectorAll("[data-park-fuel]"), function(bar){
+    var id = bar.getAttribute("data-park-fuel");
+    bar.onclick = function(e){
+      var b = e.target && e.target.closest ? e.target.closest("[data-pf]") : null;
+      if(!b || b.disabled) return;
+      var n = Number(b.getAttribute("data-pf"));
+      parkFuel[id] = parkFuel[id] === n ? 0 : n;
+      bar.innerHTML = parkFuelBtns(id, false);
+    };
+  });
   Array.prototype.forEach.call(box.querySelectorAll("[data-park-change]"), function(b){
     b.onclick = function(){
       var o = parkOpenOf(b.getAttribute("data-park-change"));
-      if(o){ parkEdit[o.checkId] = true; delete parkSaid[o.checkId]; }
+      if(o){
+        parkEdit[o.checkId] = true; delete parkSaid[o.checkId];
+        var was = (PARKQ[o.checkId] && PARKQ[o.checkId].fuel) || (o.parked && o.parked.fuel) || "";
+        if(was) parkFuel[o.checkId] = FUEL_WORDS.indexOf(was) + 1;
+      }
       parkPaint();
     };
   });
@@ -6733,6 +6775,8 @@ function parkSend(id, inp){
   if(o.miles && miles < Number(o.miles)){
     say("That is lower than the walkaround's " + Number(o.miles).toLocaleString("en-GB") + ".", true); return;
   }
+  var fuel = fuelText(parkFuel[o.checkId] || 0);
+  if(!fuel){ say("Tap the fuel gauge reading.", true); return; }
   if(!st.driver){ show("driver"); return; }
   if(!driverKey(st.driver) && pinGateNeeded()){
     toast("Enter your four digit PIN.", true);
@@ -6741,7 +6785,8 @@ function parkSend(id, inp){
     return;
   }
   if(!LIVE){ say("No live server. Not saved.", true); return; }
-  PARKQ[o.checkId] = { reg:o.reg, checkId:o.checkId, miles:miles, driver:(st.driver||"").trim(), made:Date.now() };
+  PARKQ[o.checkId] = { reg:o.reg, checkId:o.checkId, miles:miles, fuel:fuel, driver:(st.driver||"").trim(), made:Date.now() };
+  delete parkTyped[o.checkId]; delete parkFuel[o.checkId];
   delete parkEdit[o.checkId];
   delete parkSaid[o.checkId];
   parkSave();
@@ -6781,13 +6826,13 @@ function parkFlush(){
     callFetch(LIVE_ENDPOINT, { method:"POST", redirect:"follow",
       headers:{ "Content-Type":"text/plain;charset=utf-8" },
       body: JSON.stringify({ token: CFG.token||"", action:"parked", key: key,
-        parked:{ reg:q.reg, checkId:id, miles:q.miles, driver:q.driver, made:q.made } }) }, POLL_TIMEOUT)
+        parked:{ reg:q.reg, checkId:id, miles:q.miles, fuel:q.fuel || "", driver:q.driver, made:q.made } }) }, POLL_TIMEOUT)
       .then(function(r){ return r.text(); })
       .then(function(t){
         parkIdle();
         var out = JSON.parse(t);
         if(out && out.ok && out.parked){
-          if(o) o.parked = { miles:out.parked.miles, driver:out.parked.driver, at:out.parked.at };
+          if(o) o.parked = { miles:out.parked.miles, fuel:out.parked.fuel || "", driver:out.parked.driver, at:out.parked.at };
           var R = String(q.reg).toUpperCase(), when = new Date(Number(out.parked.at) || Date.now());
           PARKED[R] = { miles:out.parked.miles, driver:out.parked.driver, checkId:id, at:out.parked.at,
                         date: rotaKey(when), time: ukTime(when) };

@@ -142,7 +142,8 @@ CREATE TABLE IF NOT EXISTS parked (
   made      INTEGER NOT NULL,        -- ms, when it was keyed on the phone
   got       INTEGER NOT NULL DEFAULT 0,   -- ms, when it reached here
   confirmed INTEGER NOT NULL DEFAULT 0,   -- 1 when his key came with it
-  synced    INTEGER NOT NULL DEFAULT 0
+  synced    INTEGER NOT NULL DEFAULT 0,
+  fuel      TEXT NOT NULL DEFAULT ''     -- the gauge as parked, w2.91.0
 );
 CREATE INDEX IF NOT EXISTS parked_sync ON parked(synced);
 
