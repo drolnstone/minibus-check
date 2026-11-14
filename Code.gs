@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.138.0";
+var SCRIPT_VERSION = "v1.139.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1143,7 +1143,7 @@ var VLOG_HEADERS = [
   "Recorded", "Log ID", "Registration", "What", "Status", "Date done", "Booked for",
   "Was due", "Days early (-) or late (+)", "Next due", "How the next date was worked out",
   "Certificate or policy date", "Mileage", "Garage", "Cost (£)", "Defects put right",
-  "Notes", "Corrects", "Recorded by", "Source", "Fuel level"
+  "Notes", "Corrects", "Recorded by", "Source", "Fuel level", "Bought by", "Paid by", "Litres"
 ];
 var HISTORY_HEADERS = ["When", "Who", "Where", "Registration", "What changed", "From", "To", "Why", "Ref"];
 
@@ -1360,6 +1360,10 @@ function vlogAppend(ss, e) {
   put(vc.source, safeText(e.source || ""));
   /* From v1.137.0: what the tank read once fuel was bought ("Full", "1/2 tank"). */
   put(vc.fuel, safeText(e.fuel || ""));
+  /* From v1.139.0: who bought the fuel, Church or Gift, and the litres. */
+  put(vc.boughtBy, safeText(e.boughtBy || ""));
+  put(vc.paidBy, safeText(e.paidBy || ""));
+  put(vc.litres, num(e.litres));
   sh.getRange(sh.getLastRow() + 1, 1, 1, w).setValues([row]);
 }
 
@@ -1385,7 +1389,9 @@ function vlogRows(ss) {
       garage: str(r, vc.garage), cost: num(r, vc.cost), defects: str(r, vc.defects),
       notes: str(r, vc.notes), corrects: str(r, vc.corrects), by: str(r, vc.by),
       source: str(r, vc.source), recorded: isDateLike(rec) ? rec.getTime() : 0,
-      fuel: vc.fuel && !isDateLike(at1(r, vc.fuel)) ? str(r, vc.fuel) : ""
+      fuel: vc.fuel && !isDateLike(at1(r, vc.fuel)) ? str(r, vc.fuel) : "",
+      boughtBy: vc.boughtBy ? str(r, vc.boughtBy) : "", paidBy: vc.paidBy ? str(r, vc.paidBy) : "",
+      litres: vc.litres ? num(r, vc.litres) : null
     });
   });
   return out;
@@ -1768,7 +1774,8 @@ function coordVlog(ss, a, b, by) {
   vlogAppend(ss, { recorded: Number(a.made) || Date.now(), id: b.logId, reg: reg, what: b.what, status: b.status,
                    done: b.done, bookedFor: b.bookedFor, was: b.was, early: b.early, next: b.next, how: b.how,
                    given: b.given, miles: b.miles, garage: b.garage, cost: b.cost, defectNames: b.defectNames,
-                   notes: b.notes, by: by, source: where, fuel: b.fuel });
+                   notes: b.notes, by: by, source: where, fuel: b.fuel,
+                   boughtBy: b.boughtBy, paidBy: b.paidBy, litres: b.litres });
   var item = VLOG_ITEM[b.what];
   var moves = b.status === "Done" && item && rnParts(b.next) && vlogIsLatest(ss, reg, item, b.logId);
   var older = b.status === "Done" && item && rnParts(b.next) && !moves;
@@ -1810,7 +1817,9 @@ function coordVfix(ss, a, b, by) {
     early: b.withdraw ? "" : b.early, next: b.withdraw ? "" : b.next, how: b.withdraw ? "" : b.how,
     given: b.withdraw ? "" : b.given, miles: b.withdraw ? "" : b.miles, garage: b.withdraw ? "" : b.garage,
     cost: b.withdraw ? "" : b.cost, defectNames: [], notes: b.why || b.notes || "",
-    corrects: orig.id, by: by, source: where, fuel: b.withdraw ? "" : (b.fuel || "")
+    corrects: orig.id, by: by, source: where, fuel: b.withdraw ? "" : (b.fuel || ""),
+    boughtBy: b.withdraw ? "" : (b.boughtBy || ""), paidBy: b.withdraw ? "" : (b.paidBy || ""),
+    litres: b.withdraw ? "" : b.litres
   };
   vlogAppend(ss, fixed);
   historyAdd(ss, [{ who: by, where: where, reg: orig.reg,
@@ -1978,7 +1987,8 @@ function vlogShelf(ss) {
       id: x.id, what: x.what, status: x.status, done: x.done, bookedFor: x.bookedFor, was: x.was,
       early: x.early, next: x.next, how: x.how, given: x.given, miles: x.miles, garage: x.garage,
       cost: x.cost, defects: x.defects, notes: x.notes, corrects: x.corrects, by: x.by,
-      source: x.source, recorded: x.recorded, correctedBy: correctedBy[x.id] || "", fuel: x.fuel || ""
+      source: x.source, recorded: x.recorded, correctedBy: correctedBy[x.id] || "", fuel: x.fuel || "",
+      boughtBy: x.boughtBy || "", paidBy: x.paidBy || "", litres: x.litres
     });
   });
   Object.keys(by).forEach(function (reg) {
@@ -3041,8 +3051,9 @@ function pinWords(c) {
       and every walkaround sent in that hour would bounce.
    4: Parked mileage and Since parked on Checks (v1.122.0).
    5: Fuel level on the Vehicle Log (v1.137.0).
-   6: Parked fuel on Checks (v1.138.0). */
-var STRUCT_VERSION = "6";
+   6: Parked fuel on Checks (v1.138.0).
+   7: Bought by, Paid by and Litres on the Vehicle Log (v1.139.0). */
+var STRUCT_VERSION = "7";
 
 function structKey(tag) { return "struct_" + STRUCT_VERSION + "_" + tag; }
 
@@ -14835,7 +14846,8 @@ FIELDS[VLOG_SHEET] = {
   done: "Date done", bookedFor: "Booked for", was: "Was due", early: "Days early (-) or late (+)",
   next: "Next due", how: "How the next date was worked out", given: "Certificate or policy date",
   miles: "Mileage", garage: "Garage", cost: "Cost (\u00A3)", defects: "Defects put right",
-  notes: "Notes", corrects: "Corrects", by: "Recorded by", source: "Source", fuel: "Fuel level"
+  notes: "Notes", corrects: "Corrects", by: "Recorded by", source: "Source", fuel: "Fuel level",
+  boughtBy: "Bought by", paidBy: "Paid by", litres: "Litres"
 };
 FIELDS[HISTORY_SHEET] = {
   when: "When", who: "Who", where: "Where", reg: "Registration", what: "What changed",

@@ -1055,6 +1055,46 @@ if (want("C29g")) {
   await p.ctx.close();
 }
 
+/* C29i — Who bought fuel (v1.162.0, Asim, 14 Nov 2026): Bought by, the
+   signed-in coordinator unless changed, Someone else opens a Name box; Paid
+   by Church or Gift; Litres. The entry reads "Bought by X · Gift · 14 litres". */
+if (want("C29i")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  const reg = REAL.buses[1].reg;
+  await p.pg.evaluate((r) => { location.hash = "bus/" + encodeURIComponent(r); }, reg);
+  await p.wait(400);
+  await p.pg.click('#busBody [data-do="vlog"]');
+  await p.wait(250);
+  await p.tapText("Fuel", "#vlWhat");
+  const first = await p.pg.$eval("#vlBuyer", (e) => e.value);
+  const nameHid = await p.pg.$eval("#vlOtherF", (e) => e.hidden);
+  const paid0 = await p.pg.$eval('input[name="vlPaid"]:checked', (e) => e.value);
+  const samples = await p.pg.$$eval("#vlOther, #vlLitres", (e) => e.map((x) => x.placeholder).join("|"));
+  await p.pg.selectOption("#vlBuyer", "");
+  await p.wait(100);
+  const nameShown = await p.pg.$eval("#vlOtherF", (e) => !e.hidden);
+  await p.go();
+  const refused = await p.text("#sheetSay");
+  await p.pg.fill("#vlOther", "Bro Solomon");
+  await p.pg.check('input[name="vlPaid"][value="Gift"]');
+  await p.pg.fill("#vlLitres", "14");
+  await p.pg.fill("#vlCost", "20");
+  await p.shot("C29i-bought-by");
+  await p.go();
+  await p.settle();
+  await p.wait(500);
+  const acts = db._rows("SELECT body FROM coord_actions WHERE kind='vlog'").map((r) => JSON.parse(r.body)).filter((b) => b.what === "Fuel" && b.reg === reg);
+  const card = await p.text("#busBody .vlog");
+  check("C29i", "Fuel: Bought by (signed-in coordinator first, Someone else asks a name), Paid by Church or Gift, Litres, shown on the entry",
+        first === "Bro Arthur" && nameHid && paid0 === "Church" && samples === "e.g. Bro Solomon|e.g. 62" && nameShown &&
+        /Say who bought it/.test(refused) && acts.length === 1 && acts[0].boughtBy === "Bro Solomon" && acts[0].paidBy === "Gift" &&
+        acts[0].litres === 14 && /Bought by Bro Solomon · Gift · 14 litres/.test(card) && !p.errs.length,
+        "first " + first + ", paid " + paid0 + ", samples " + samples + ", refused '" + refused + "', acts " + JSON.stringify(acts).slice(0, 300) +
+        ", card '" + card.slice(0, 200) + "', errors " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
 /* C29h — Needs fuel (v1.158.0): a flashing beacon on the first screen; Fuel
    bought opens Record something with Fuel and Full chosen, asks Filling
    station, and closes the job with the entry. */
