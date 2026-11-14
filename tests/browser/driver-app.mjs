@@ -1573,6 +1573,28 @@ if (want("T55")) {
   await me.ctx.close();
 }
 
+/* T56 — due dates from 60 days, as the coordinator app (v1.161.0, Asim,
+   14 Nov 2026): a parking permit 48 days off shows; 61 days off does not. */
+if (want("T56")) {
+  const me = await phone({ clock: "2026-11-14T09:40:00+00:00", world: { dates: {
+    "NH56 FWP": { mot: "2027-04-28", service: "2027-06-30", insurance: "2027-07-08", permit: "2027-01-01" },
+    "YS70 PWE": { mot: "2027-05-20", service: "2027-06-25", insurance: "2027-06-26", permit: "2027-01-14" } } } });
+  await me.load(); await me.close(["howDone"]); await me.signIn();
+  await me.click("Vehicle check", "#s-hub"); await me.wait(800);
+  const chips = await me.pg.evaluate(() => Object.fromEntries([...document.querySelectorAll("#vehList .veh")].map(b =>
+    [b.querySelector(".veh-plate").textContent, (b.querySelector(".chip.over, .chip.soon") || {}).textContent || ""])));
+  const box = await me.pg.evaluate(() => {
+    const d = document.createElement("div");
+    d.innerHTML = dueHTML(VEHICLES.find(v => v.reg === "NH56 FWP"));
+    return d.textContent;
+  });
+  check("T56", "a parking permit due in 48 days shows on the bus card and Before you start; 61 days does not",
+        chips["NH56 FWP"] === "Parking permit due soon" && chips["YS70 PWE"] === "" &&
+        /Coming up/.test(box) && /Due in 48 days · 01\/01\/2027/.test(box) && !me.errs.length,
+        JSON.stringify({ chips, box, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

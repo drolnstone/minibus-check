@@ -1,31 +1,18 @@
 MINIBUS
 =======
-  pages v1.160.0 · server w2.91.0 · sheet v1.138.0
+  pages v1.161.0 · server w2.91.0 · sheet v1.138.0
 
-YOU ARE ON   app v1.159.0 · server w2.90.0 · sheet v1.137.0
-GOING TO     app v1.160.0 · server w2.91.0 · sheet v1.138.0
+YOU ARE ON   app v1.160.0 · server w2.91.0 · sheet v1.138.0
+GOING TO     app v1.161.0 · server w2.91.0 · sheet v1.138.0
 
-1. Open jobs reminded (Asim, 14 Nov 2026): Wednesdays and Fridays from
-   18:00, if any bus still has Needs fuel, Tyres need air, Needs a wash or
-   Inside needs a clean open from its last walkaround, the coordinators get
-   "Still to arrange" listing each bus and its jobs. Same road as other
-   coordinator alerts. Nothing open, nothing sent.
-
-2. Parked fuel (Asim, 14 Nov 2026):
-   - Driver app, the parked box: "Fuel showing" with the walkaround's eight
-     segments under the mileage. Save asks for both.
-   - Coordinator app: the Sunday card and Buses show the newest reading:
-     parked fuel ("Parked ..."), else that morning's walkaround, and Fuel
-     bought when that is newer.
-   - Any bus whose newest reading is 3/8 or less gets the flashing "needs
-     fuel." with Fuel bought, as well as one whose walkaround asked for it.
-   - Walkaround summary: at 3/8 or less Needs fuel is ticked and locked
-     on; Nothing needed cannot clear it (Asim chose "Lock it").
-   - The Checks tab gets a "Parked fuel" column at the end; the sheet adds
-     it by itself.
+1. Due dates in the driver app (Asim, 14 Nov 2026): MOT, service,
+   insurance and parking permit now show from 60 days before, the same as
+   the coordinator app (was 30). On the bus button ("Parking permit due
+   soon") and in Before you start ("Coming up"). Drivers still get no push
+   or email about them.
 
 Merging is the whole deploy. Nothing to do on the phone.
 
 CHECKS
-A. Coordinator app, App info: v1.160.0 · w2.91.0 · v1.138.0.
-B. Driver app after the morning run: the parked box shows Fuel showing.
+A. Coordinator app, App info: v1.161.0 · w2.91.0 · v1.138.0.
+B. Driver app, Vehicle check: the bus with its permit due 1 Jan says "Parking permit due soon".
