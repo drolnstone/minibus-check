@@ -1799,7 +1799,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.160.0";
+var APP_VERSION = "v1.161.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2532,7 +2532,8 @@ function paintMilesHint(){
 /* ---------------- renewal dates ---------------- */
 var DUE_LABELS = { mot:"MOT", service:"Service", insurance:"Insurance", permit:"Parking permit" };
 var DUE_ORDER  = ["mot","service","insurance","permit"];
-var WARN_DAYS  = 30;
+/* 60 days, as the coordinator app (v1.161.0, Asim, 14 Nov 2026). */
+var WARN_DAYS  = 60;
 
 function daysUntil(iso){
   if(!iso) return null;
