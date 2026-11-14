@@ -1,19 +1,19 @@
 MINIBUS
 =======
-  pages v1.159.0 · server w2.90.0 · sheet v1.137.0
+  pages v1.159.0 · server w2.90.0 · sheet v1.138.0
 
-YOU ARE ON   app v1.158.0 · server w2.90.0 · sheet v1.137.0
-GOING TO     app v1.159.0 · server w2.90.0 · sheet v1.137.0
+YOU ARE ON   app v1.159.0 · server w2.90.0 · sheet v1.137.0
+GOING TO     app v1.159.0 · server w2.90.0 · sheet v1.138.0
 
-The other jobs a walkaround asks for, on the first screen (Asim, 13 Nov 2026):
-1. "(bus) tyres need air." in red with Done. Done asks "Pressure or where"
-   and will not go without it.
-2. "(bus) needs a wash." and "(bus) inside needs a clean." in amber with
-   Done.
-3. Needs fuel keeps its flashing beacon and Fuel bought.
-4. Fuel bars show on the first screen only, not on Rota.
+Open jobs reminded (Asim, 14 Nov 2026):
+Wednesdays and Fridays from 18:00, if any bus still has Needs fuel, Tyres
+need air, Needs a wash or Inside needs a clean open from its last
+walkaround, the coordinators get "Still to arrange" listing each bus and
+its jobs, e.g. "NH56 FWP: Needs fuel, Tyres need air." Same road as other
+coordinator alerts: the coordinator app, else the driver app, else email,
+plus the coordinator email. Nothing open, nothing sent.
 
-Merging is the whole deploy. Pages only. Nothing to do on the phone.
+Merging is the whole deploy. Sheet only. Nothing to do on the phone.
 
 CHECKS
-A. Coordinator app, App info: v1.159.0 · w2.90.0 · v1.137.0.
+A. Coordinator app, App info: v1.159.0 · w2.90.0 · v1.138.0.

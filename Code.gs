@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.137.0";
+var SCRIPT_VERSION = "v1.138.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -5823,6 +5823,36 @@ function liveSync() {
   try { morningWatch(); } catch (err) {}
   try { watchServer(); } catch (err) {}
   try { alertsNudge(); } catch (err) {}
+  try { jobsReminder(); } catch (err) {}
+}
+
+/* JOBS STILL TO ARRANGE, from v1.138.0 (Asim, 14 Nov 2026). What the last
+   walkaround of each bus asked for (Needs fuel, Tyres need air, Needs a
+   wash, Inside needs a clean) and nobody has marked done, sent to the
+   coordinators Wednesdays and Fridays from 18:00, once that day, by the
+   same road as every other coordinator alert. Nothing open, nothing sent. */
+var JOBS_REMIND_DAYS = ["Wed", "Fri"], JOBS_REMIND_FROM = "18:00";
+var JOBS_REMIND_WHAT = ["Needs fuel", "Tyres need air", "Needs a wash", "Inside needs a clean"];
+
+function jobsReminderText(open) {
+  var lines = [];
+  Object.keys(open || {}).sort().forEach(function (reg) {
+    var jobs = ((open[reg] && open[reg].jobs) || []).filter(function (j) { return JOBS_REMIND_WHAT.indexOf(j) !== -1; });
+    if (jobs.length) lines.push(reg + ": " + jobs.join(", ") + ".");
+  });
+  return lines.join("\n");
+}
+
+function jobsReminder(nowMs) {
+  var now = new Date(nowMs || Date.now()), tz = "Europe/London";
+  if (JOBS_REMIND_DAYS.indexOf(Utilities.formatDate(now, tz, "EEE d MMM").slice(0, 3)) === -1) return null;
+  if (Utilities.formatDate(now, tz, "HH:mm") < JOBS_REMIND_FROM) return null;
+  var body = jobsReminderText(jobsOutstanding(SpreadsheetApp.getActiveSpreadsheet()));
+  if (!body) return null;
+  var a = { id: "jobs|" + Utilities.formatDate(now, tz, "yyyy-MM-dd"), kind: "arrange",
+            title: "Still to arrange", body: body };
+  safetyAlert(a);
+  return a;
 }
 
 /* DRIVERS WITH ALERTS ON NO PHONE, emailed once a week, from v1.135.0
