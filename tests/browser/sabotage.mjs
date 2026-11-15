@@ -22,14 +22,16 @@ const S = [
   { id: "S1 watch order", tests: "T1", swaps: [
     ["  tripFlush();\n  rotaCountsStart();\n", "  tripFlush();\n  if(trip.started && !trip.ended){ tripWatchStart(); wakeAsk(); }\n  rotaCountsStart();\n"],
     ["same rule at the other door. */\n  if(trip.started && !trip.ended){ tripWatchStart(); wakeAsk(); }\n}", "same rule at the other door. */\n}"] ] },
-  { id: "S2 reopen button", tests: "T2", swaps: [
-    ["    if(tripMayReopen(route)){", "    if(mayTap && onThis && tripAutoUndoOpen()){"] ] },
-  { id: "S2b reopen sticks", tests: "T2", swaps: [
-    ["  if(boardEnd && trip.reopened && boardEnd <= trip.reopened) boardEnd = 0;\n", ""] ] },
-  { id: "S2c reopen kept through a reload", tests: "T2b", swaps: [
+  { id: "S2 fence waits for every booked stop", tests: "T2", swaps: [
+    ["  if(next.end && tripAllMarked()) tripAutoEnd();", "  if(next.end) tripAutoEnd();"] ] },
+  { id: "S2c auto end kept through a reload", tests: "T2c", swaps: [
     ["    tripAutoEndedAt = trip.ended ? (Number(s.autoEnded)||0) : 0;\n", ""] ] },
-  { id: "S2d reopen for a covering driver", tests: "T2c", swaps: [
+  { id: "S2d own run for a covering driver", tests: "T2c", swaps: [
     ["  return tripMayTap(route) || tripIsMine(route);\n", "  return tripMayTap(route);\n"] ] },
+  { id: "S38 the live line", tests: "T32", swaps: [
+    ["    rows = ahead.concat(arr, marked);\n", ""] ] },
+  { id: "S39 clear of the stop just marked", tests: "T57", swaps: [
+    ['  if(!pickLeft() || !pickCleared(s)) return "";', '  if(!pickLeft()) return "";'] ] },
   { id: "S3 cover offer", tests: "T3", swaps: [
     ["      else h+=tripCoverHtml(route);\n", ""] ] },
   { id: "S3b cover not for rostered", tests: "T3b", swaps: [

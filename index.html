@@ -1048,7 +1048,7 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
 .undo-modal{z-index:135}
 .church-modal .pick-sheet{text-align:center}
 .church-modal h2{margin:0 0 16px}
-.church-keep{margin:0 0 10px;font-weight:700}
+.church-keep{margin:0 0 10px;font-weight:700;color:var(--stop)}
 .church-modal .btn{width:100%}
 /* The Church ask (v1.142.0, Asim): the red box with bold white text. */
 .pick-modal.is-alert .pick-sheet{background:var(--stop);color:var(--stop-on)}
@@ -1799,7 +1799,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.162.0";
+var APP_VERSION = "v1.163.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -5995,7 +5995,7 @@ function tripAutoArrive(p){
   var m = geoTo(p.coords.latitude, p.coords.longitude, c);
   if(m===null) return;
 
-  var mins = (typeof opt.minutes==="number" && opt.minutes>0) ? opt.minutes : 3;
+  var mins = (typeof opt.minutes==="number" && opt.minutes>0) ? opt.minutes : 1;
   var next = autoEndNext(
     { away: tripAwayEver, since: tripHomeSince },
     geoFenceVerdict(toYards(m), toYards(p.coords.accuracy||0), churchRadius()),
@@ -6008,7 +6008,22 @@ function tripAutoArrive(p){
   tripAwayEver  = next.away;
   tripHomeSince = next.since;
   if(tripAwayEver !== wasAway) tripSaveState();
-  if(next.end) tripAutoEnd();
+  /* Only once every booked stop is marked, from v1.163.0 (Asim, 15 Nov
+     2026), in place of the reopen button: the fence cannot end a run that
+     still has somebody waiting. */
+  if(next.end && tripAllMarked()) tripAutoEnd();
+}
+
+/* Every booked stop on this phone's run is marked. Without today's numbers
+   nobody is known to be booked, so the fence works as it always did. */
+function tripAllMarked(){
+  if(!trip.route || !rotaStopCountsFor || rotaStopCountsFor!==rotaKey(rotaBaseSunday(0))) return true;
+  var ok = true;
+  (rotaStops||[]).forEach(function(s){
+    if(s.route===trip.route && !s.arrival && (rotaStopCounts[s.id]||0) > 0 &&
+       !(trip.served && trip.served[s.id])) ok = false;
+  });
+  return ok;
 }
 
 /* ---- the two decisions, kept pure so they can be tested ---------------- */
@@ -6097,23 +6112,6 @@ function tripIsMine(route){
   return !!me && trip.route===route && !!trip.started &&
          sameName(me, trip.driver||"") &&
          new Date(trip.started).toDateString()===new Date().toDateString();
-}
-function tripAutoUndo(){
-  if(!tripMayReopen(trip.route)) return;
-  trip.ended=0;
-  /* Remembered, the way a taken-back stop is, so a board answer from before
-     the reopen reached the record cannot close it again. See tripMerge. */
-  trip.reopened=tripNow();
-  tripAutoEndedAt=0;
-  /* Straight back to needing a real arrival. He is at church now, so without
-     this the next fix would end it again inside a second. */
-  tripAwayEver=false; tripHomeSince=0;
-  tripSaveState();
-  tripQueue({ event:"undo", undoes:"end", stopId:"", at:tripNow() });
-  tripWatchStart();
-  wakeAsk();
-  toast("Run reopened.");
-  tripPaint();
 }
 
 function tripWatchStop(){
@@ -7346,24 +7344,6 @@ function tripUndoAsk(stop){
   tripPaintMoving();
 }
 
-/* Reopening a run the fence ended asks first, in Undo's pop-up (v1.143.0,
-   Asim, 2 Nov 2026). */
-function tripAutoUndoAsk(){
-  if(!tripMayReopen(trip.route)){ tripPaint(); return; }
-  undoAskId="reopen";
-  $("undoBody").innerHTML=
-    '<p class="eyebrow">'+esc(trip.route)+' · ended '+tripClock(trip.ended)+'</p>'+
-    '<h2 id="undoTitle">Reopen the run?</h2>'+
-    '<div class="pick-btns" style="margin-top:14px">'+
-      '<button class="btn btn-ghost" type="button" id="undoKeep">Keep it ended</button>'+
-      '<button class="btn btn-stop" type="button" id="undoYes">Reopen</button>'+
-    '</div>';
-  $("undoKeep").addEventListener("click", tripUndoClose);
-  $("undoYes").addEventListener("click", function(){ tripUndoClose(); tripAutoUndo(); });
-  var box=$("undoModal");
-  box.classList.add("is-on");
-  box.setAttribute("aria-hidden","false");
-}
 
 function tripUndoClose(){
   undoAskId="";
@@ -8592,7 +8572,6 @@ function rotaPaintStops(){
       if(view.served[s.id] && (rotaStopCounts[s.id]||0)>0) churchSig+=s.id+":"+view.served[s.id].event+",";
     });
   }
-  var pickRowBtns = !!(nextStop && !pickTimed(nextStop));
 
   /* THE STOPS HE CAN STILL TAP, from v1.128.0 (Asim, 18 Oct 2026: "Nobody
      goes back to pick you when you've been left behind"). Only the stretch
@@ -8652,7 +8631,22 @@ function rotaPaintStops(){
           '</div>';
   }
 
-  list.concat(arr).forEach(function(s,i){
+  /* THE LIVE LINE, from v1.163.0 (Asim, 15 Nov 2026). On the phone driving
+     the run, from Start trip: only booked stops, the next one first, then
+     Church, then the stops already marked. A stop nobody booked is not
+     shown; a seat booked at one still ahead brings it back. */
+  var rows = list.concat(arr);
+  if(onThis && mayTap && showCounts && view.started && !view.ended){
+    var ahead = [], marked = [];
+    list.forEach(function(s,i){
+      if(view.served[s.id]) marked.push(s);
+      else if((rotaStopCounts[s.id]||0) > 0 && i > lastIdx) ahead.push(s);
+    });
+    rows = ahead.concat(arr, marked);
+  }
+  rows.forEach(function(s){
+    var i = list.indexOf(s);
+    if(i < 0) i = list.length;
     /* How many are booked there. Shown, never acted on: the app does not
        tell anybody to skip a stop. Somebody who did not book still turns
        up, with a dead phone or no phone or because nobody told them, and
@@ -8677,7 +8671,7 @@ function rotaPaintStops(){
       else if(nextStop && s.id===nextStop.id){
         cls+=" trip-next";
         /* Tapped, it puts the pop-up up early: a bus ahead of its estimate. */
-        if(!pickRowBtns){ cls+=" pick-row"; dwAttr=' data-pickopen="'+esc(s.id)+'" role="button" tabindex="0"'; }
+        cls+=" pick-row"; dwAttr=' data-pickopen="'+esc(s.id)+'" role="button" tabindex="0"';
       }
     }
     html+='<div class="'+cls+'"'+dwAttr+'>'+
@@ -8714,47 +8708,19 @@ function rotaPaintStops(){
                 'aria-label="Undo '+esc(s.stop)+'">Undo</button>'
               : '')+
           '</div>'+
-          /* The other answer on a stop he has marked (v1.103.0, Asim). */
-          ((onThis&&mayTap&&done&&!s.arrival&&s.id===undoId&&!(n===0&&done.event!=="empty"))
-            ? '<div class="trip-row-btns">'+
-                (done.event==="empty"
-                  ? '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="pickup">Picked up</button>'
-                  : '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="empty">Nobody here</button>')+
-              '</div>'
-            : '')+
           /* Only on a stop he has gone PAST without marking. It used to
              appear on every booked stop including ones miles ahead, which a
              driver never needs and which put a pair of buttons on most rows.
              The big button covers the stop in front of him. */
           ((onThis&&mayTap&&!done&&!s.arrival&&
-            ((!showCounts&&liveAt(i))||(pickRowBtns&&s.id===nextStop.id))&&
+            !showCounts&&liveAt(i)&&
             !(askStop&&askStop.id===s.id))
             ? '<div class="trip-row-btns">'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="empty">Nobody here</button>'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="pickup">Picked up</button>'+
               '</div>'
             : '')+
-          /* A stop nobody booked, during a run. One button, and only the one
-             that means anything here.
-
-             The line above deliberately asks for no tap at an empty stop, and
-             as a default that is right — it is one less thing on the screen.
-             But it left him with no way to record a stop he DID serve, and
-             the comment a few lines up says exactly why that matters: someone
-             who did not book still turns up, with a dead phone or no phone or
-             because nobody told them.
-
-             "Nobody there" is not offered. At a kerb nobody booked it states
-             the default and records nothing worth having. The only fact here
-             is that somebody WAS waiting. */
-          ((onThis&&mayTap&&!done&&!s.arrival&&showCounts&&
-            !(rotaStopCounts[s.id]||0)&&!missedIds[s.id]&&liveAt(i)&&
-            view.started&&!view.ended)
-            ? '<div class="trip-row-btns">'+
-                '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="pickup">'+
-                'Someone was here</button>'+
-              '</div>'
-            : '');
+          '';
   });
 
   /* The one big target, pinned under the list where his thumb already is. */
@@ -8774,7 +8740,8 @@ function rotaPaintStops(){
       stopsAutoNext=nextStop.id;
       var nr=document.querySelector("#stopsBody .stop-row.trip-next");
       if(nr) setTimeout(function(){
-        try{ nr.scrollIntoView({block:"center",behavior:"smooth"}); }catch(e){ try{ nr.scrollIntoView(); }catch(e2){} }
+        /* From v1.163.0 it heads the list, so the top of the screen. */
+        try{ window.scrollTo({top:0,behavior:"smooth"}); }catch(e){ window.scrollTo(0,0); }
       },60);
     }
   } else stopsAutoNext="";
@@ -8886,7 +8853,6 @@ function rotaPaintStops(){
       try{ $("driver").focus(); }catch(e){}
     }
   }
-  if($("tripAutoUndo")) $("tripAutoUndo").addEventListener("click",tripAutoUndoAsk);
   if($("tripCover")) $("tripCover").addEventListener("click",function(){
     /* His name on the record is the whole point of this, so the PIN gate
        comes before the claim rather than after it. */
@@ -9067,9 +9033,10 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
        this is the branch for one that has, so with onThis here the button
        could never be drawn — while the notification that sent him here said
        "Open the app to undo if that is wrong". */
+    /* No way back from v1.163.0 (Asim, 15 Nov 2026): the fence waits for
+       every booked stop instead. */
     if(tripMayReopen(route)){
-      h+='<p class="trip-note trip-cover">Ended automatically, back at Church.</p>'+
-         '<button class="btn btn-ghost btn-wide" id="tripAutoUndo">It has not finished, reopen it</button>';
+      h+='<p class="trip-note trip-cover">Ended automatically, back at Church.</p>';
     }
     return tripStripEnd(h);
   }
@@ -9530,7 +9497,7 @@ function pickLeft(tapped){
 var PICK_FAR_M = 1000;
 function pickDueWhy(s){
   if(pickMovedOn(s)) return "near";
-  if(!pickLeft()) return "";
+  if(!pickLeft() || !pickCleared(s)) return "";
   if(pickHere(s)) return "near";
   var at = pickEta(s);
   if(!at || Math.round((at - tripNow())/60000) > PICK_CLOSE_MIN) return "";
@@ -9566,6 +9533,32 @@ function pickMovedOn(s){
   if(!from) return false;
   var m = geoTo(Number(s.lat), Number(s.lng), from);
   return m !== null && m >= PICK_MOVED_ON_M;
+}
+/* CLEAR OF THE STOP JUST MARKED, from v1.163.0 (Asim, 15 Nov 2026: Wilburn
+   Street came up while the bus was still at Bedford Road, half a kilometre
+   back). On a sure fix, with both pins: nearer the next stop than the one
+   just marked, and at least PICK_CLEAR_M from it (half the gap, for two
+   stops closer together than twice that). Nothing marked yet, no pin or no
+   sure fix: pickLeft decides alone. */
+var PICK_CLEAR_M = 150;
+function pickCleared(s){
+  var f = pickFix, last = "", at = 0, from = null;
+  Object.keys(trip.served || {}).forEach(function(k){
+    var t = Number(trip.served[k] && trip.served[k].at) || 0;
+    if(t >= at){ at = t; last = k; }
+  });
+  if(!last || !f || Date.now() - f.at > 15000 || f.acc > PICK_NEAR_M) return true;
+  (rotaStops||[]).forEach(function(x){ if(x.id === last) from = x; });
+  function pin(x){
+    var la = Number(x && x.lat), ln = Number(x && x.lng);
+    return (x && x.lat !== "" && x.lat != null && x.lng !== "" && x.lng != null &&
+            isFinite(la) && isFinite(ln)) ? { lat:la, lng:ln } : null;
+  }
+  var a = pin(from), b = pin(s);
+  if(!a || !b) return true;
+  var gap = geoTo(a.lat, a.lng, b), dLast = geoTo(f.lat, f.lng, a), dNext = geoTo(f.lat, f.lng, b);
+  if(gap === null || dLast === null || dNext === null) return true;
+  return dNext < dLast && dLast >= Math.min(PICK_CLEAR_M, gap / 2);
 }
 /* Metres from the bus to the stop's pin, on a recent fix sure to within
    PICK_FAR_M. null with no such fix or no pin: the estimate decides alone. */

@@ -82,10 +82,15 @@ export default function (root) {
     a.not(/\bonThis\b/.test(body(code, "tripMayReopen") || ""), "the reopen test depends on onThis, which is false once a run has ended");
   });
 
+  s.test("no reopen button; the fence waits for every booked stop (v1.163.0, Asim)", (a) => {
+    a.not(/id="tripAutoUndo"/.test(code), "the reopen button is still drawn");
+    a.not(/function tripAutoUndo\(/.test(code), "the reopen is still there");
+    a.has(body(code, "tripAutoArrive"), "tripAllMarked()", "the fence ends a run with booked stops unmarked");
+  });
+
   s.test("a stale board answer cannot close a run the driver has reopened", (a) => {
     const b = body(code, "tripMerge");
     a.has(b, "trip.reopened", "tripMerge takes any end the board reports, including the one he took back");
-    a.has(body(code, "tripAutoUndo"), "trip.reopened", "reopening does not record when it happened");
     a.has(body(code, "tripSaveState"), "reopened", "the reopen is not kept on the phone");
   });
 
@@ -98,7 +103,6 @@ export default function (root) {
     a.has(body(code, "tripSaveState"), "driver", "the run is kept with no name on it, so after a reload nothing says it was his");
     a.has(body(code, "tripMayReopen"), "tripIsMine(", "the reopen is offered only to the man the rota names");
     a.has(body(code, "tripHeaderHtml"), "tripMayReopen(", "the button is drawn by the rota's test, not its own");
-    a.has(body(code, "tripAutoUndo"), "tripMayReopen(", "the reopen itself does not ask whose run it is");
   });
 
   s.test("«I am covering this run» can be drawn before the bus goes", (a) => {

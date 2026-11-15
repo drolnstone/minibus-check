@@ -930,7 +930,7 @@ Two settings govern the run closing itself:
 
 ```js
 churchBase: { lat: 53.424169, lng: -2.936799, radius: 165 },  // yards
-autoEnd:    { enabled: true, minutes: 3 },
+autoEnd:    { enabled: true, minutes: 1 },
 ```
 
 One governs the coordinator's app:
@@ -1412,9 +1412,10 @@ them: Minibus → Rota and setup → **Refresh dropdowns from Drivers tab**.
 
 ### Ending itself
 
-Once the bus has been back inside the church geofence for three unbroken
-minutes, the run closes on its own, a notification says it has, and the app
-offers to reopen it for half an hour afterwards.
+Once every booked stop is marked and the bus has been back inside the
+Church geofence for one unbroken minute, the run closes on its own and a
+notification says it has. From v1.163.0 there is no reopen: a run with a
+booked stop still unmarked is never ended by the fence.
 
 It is not a prompt, on purpose. The whole reason End trip gets missed is that
 he has parked and walked inside, and a man who is not looking at his phone will
