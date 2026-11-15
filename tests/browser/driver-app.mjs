@@ -31,7 +31,14 @@ async function startRun(me, clock = "10:04") {
 async function tap(me, kind, id) {
   return me.pg.evaluate(([k, i]) => {
     const b = [...document.querySelectorAll('[data-triptap="' + i + '"][data-tripkind="' + k + '"]')].find(x => x.offsetParent);
-    if (b && !b.disabled) { b.click(); return true; } return false;
+    if (b && !b.disabled) { b.click(); return true; }
+    /* From v1.163.0 a live run has no row buttons: the pop-up marks a stop. */
+    const pick = () => { const box = document.getElementById("pickModal");
+      const p = box && box.classList.contains("is-on") && box.querySelector('[data-pick="' + k + '"]');
+      return p && !p.disabled ? p : null; };
+    if (!pick()) { const r = document.querySelector('[data-pickopen="' + i + '"]'); if (r) r.click(); }
+    const p = pick();
+    if (p) { p.click(); return true; } return false;
   }, [kind, id]);
 }
 async function moveFor(me, secs) { for (let i = 0; i < secs * 2; i++) { await me.emit(MOVING); await me.wait(500); } }
@@ -56,40 +63,33 @@ if (want("T1")) {
 /* No bar at the bottom: from v1.106.0 that is what a live run of his own looks like. */
 const footGone = (me) => me.pg.$eval("#footbar", b => getComputedStyle(b).display === "none").catch(() => false);
 
-/* T2 — a run the app ended by itself can be reopened, and the reopen reaches the record */
+/* T2 — v1.163.0 (Asim, 15 Nov 2026). No reopen button: the fence ends the
+   run only once every booked stop is marked, and then after 1 minute inside. */
 if (want("T2")) {
-  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck(), staleEndMs: 9000 } });
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck() } });
   await startRun(me);
   await me.jump(20); await me.emit(AWAY); await me.wait(500);
   await me.jump(30); await me.emit(CHURCH); await me.wait(500);
   await me.jump(4); await me.emit(CHURCH); await me.wait(1500);
-  const ended = /Trip finished/.test(await me.text("#stopsBody"));
-  const offered = (await buttons(me)).includes("It has not finished, reopen it");
-  let reopened = false, undoPosted = false, asked = false, kept = false;
-  if (offered) {
-    /* v1.143.0: it asks first, and Keep it ended keeps it. */
-    await me.click("It has not finished, reopen it", "#s-stops"); await me.wait(200);
-    asked = /Reopen the run\?/.test(await me.text("#undoModal"));
-    await me.click("Keep it ended", "#undoModal", true); await me.wait(300);
-    kept = /Trip finished/.test(await me.text("#stopsBody")) && !me.posted.some(p => p.action === "trip" && (p.trip.events || []).some(e => e.event === "undo"));
-    await me.click("It has not finished, reopen it", "#s-stops"); await me.wait(200);
-    await me.click("Reopen", "#undoModal", true); await me.wait(200);
-    const toast = await me.toast();
-    /* two polls while the board still carries the old end */
-    await me.wait(11000);
-    reopened = /Run reopened/.test(toast) && (await footGone(me)) &&
-               !/Trip finished/.test(await me.text("#stopsBody"));
-    undoPosted = me.posted.some(p => p.action === "trip" && (p.trip.events || []).some(e => e.event === "undo" && e.undoes === "end"));
-  }
-  check("T2", "after an automatic end, «It has not finished, reopen it» appears and reopens the run",
-        ended && offered && asked && kept && reopened && undoPosted, "ended " + ended + ", offered " + offered + ", asked " + asked + ", kept " + kept + ", reopened " + reopened + ", undo sent " + undoPosted);
+  const held = !/Trip finished/.test(await me.text("#stopsBody"));
   await me.ctx.close();
+  const you = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck(), counts: { North: {}, South: {} } } });
+  await startRun(you);
+  await you.jump(20); await you.emit(AWAY); await you.wait(500);
+  await you.jump(30); await you.emit(CHURCH); await you.wait(500);
+  const early = !/Trip finished/.test(await you.text("#stopsBody"));
+  await you.jump(1); await you.emit(CHURCH); await you.wait(1500);
+  const text = await you.text("#stopsBody");
+  const ended = /Trip finished/.test(text) && /Ended automatically, back at Church\./.test(text);
+  const noReopen = !(await buttons(you)).some(b => /reopen/i.test(b));
+  check("T2", "the fence waits for every booked stop, then ends the run after 1 minute inside, with no reopen button",
+        held && early && ended && noReopen, "held with stops unmarked " + held + ", not at once " + early + ", ended " + ended + ", no reopen " + noReopen);
+  await you.ctx.close();
 }
 
-/* T2b — the offer is still there when the app is opened fresh, which is what
-   the notification tells him to do. It was kept in memory only. */
+/* T2b — opened fresh after the automatic end: still finished, no reopen. */
 if (want("T2b")) {
-  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck() } });
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck(), counts: { North: {}, South: {} } } });
   await startRun(me);
   await me.jump(20); await me.emit(AWAY); await me.wait(500);
   await me.jump(30); await me.emit(CHURCH); await me.wait(500);
@@ -98,26 +98,18 @@ if (want("T2b")) {
   await me.jump(3);
   await me.load(); await me.close(["howDone"]);
   await me.toStops(); await me.close();
-  const offered = (await buttons(me)).includes("It has not finished, reopen it");
-  let reopened = false;
-  if (offered) {
-    await me.click("It has not finished, reopen it", "#s-stops"); await me.wait(200);
-    await me.click("Reopen", "#undoModal", true); await me.wait(200);
-    const toast = await me.toast();
-    await me.wait(800);
-    reopened = /Run reopened/.test(toast) && (await footGone(me));
-  }
-  check("T2b", "the reopen offer is still there when the app is opened fresh after the automatic end",
-        ended && offered && reopened, "ended " + ended + ", offered after reload " + offered + ", reopened " + reopened);
+  const still = /Trip finished/.test(await me.text("#stopsBody"));
+  const noReopen = !(await buttons(me)).some(b => /reopen/i.test(b));
+  check("T2b", "opened fresh after the automatic end, the run is still finished and there is no reopen button",
+        ended && still && noReopen, "ended " + ended + ", still finished " + still + ", no reopen " + noReopen);
   await me.ctx.close();
 }
 
-/* T2c — the same for a driver covering at short notice. His claim is not kept
-   through a reload, by design, and the rota does not name him, so once the
-   run had ended nothing on the phone said it was his. */
+/* T2c — a driver covering at short notice still sees his own finished run
+   after the app is opened fresh. */
 if (want("T2c")) {
   const rows = realRows(rs => { rs.find(r => r.date === KEY).primary = "Bro Adrian"; return rs; });
-  const me = await phone({ clock: "2026-09-27T09:52:00+01:00", world: { rows, checks: okCheck() } });
+  const me = await phone({ clock: "2026-09-27T09:52:00+01:00", world: { rows, checks: okCheck(), counts: { North: {}, South: {} } } });
   await me.load(); await me.close(["howDone"]);
   await me.signIn(); await me.toStops(); await me.close();
   await me.click("I am covering this run", "#s-stops"); await me.wait(300);
@@ -132,19 +124,9 @@ if (want("T2c")) {
   await me.load(); await me.close(["howDone"]);
   await me.toStops(); await me.close();
   const strip = await me.text("#stopsBody");
-  const own = /Trip finished/.test(strip) && !/Adrian has finished/.test(strip);
-  const offered = (await buttons(me)).includes("It has not finished, reopen it");
-  let reopened = false;
-  if (offered) {
-    await me.click("It has not finished, reopen it", "#s-stops"); await me.wait(200);
-    await me.click("Reopen", "#undoModal", true); await me.wait(200);
-    const toast = await me.toast();
-    await me.wait(800);
-    reopened = /Run reopened/.test(toast) && (await footGone(me));
-  }
-  check("T2c", "a driver covering at short notice gets the reopen offer too, when the app is opened fresh",
-        started && ended && own && offered && reopened,
-        "started " + started + ", ended " + ended + ", shown as his own " + own + ", offered " + offered + ", reopened " + reopened);
+  const own = /Trip finished/.test(strip) && !/Adrian has finished/.test(strip) && /Ended automatically/.test(strip);
+  check("T2c", "a driver covering at short notice sees his own finished run when the app is opened fresh",
+        started && ended && own, "started " + started + ", ended " + ended + ", shown as his own " + own);
   await me.ctx.close();
 }
 
@@ -210,22 +192,15 @@ if (want("T4")) {
       const ok = r.bar === 0 && r.hit && r.lineBottom <= r.ft + 0.5;
       if (!ok) { all = false; notes.push(vp.width + "x" + vp.height + "@" + y + " " + JSON.stringify(r)); }
     }
-    /* No estimate on the board: the next stop's own row carries the two. */
-    const row = await me.pg.evaluate(() => {
-      const nb = document.querySelector('[data-triptap="N01"][data-tripkind="empty"]');
-      const pu = document.querySelector('[data-triptap="N01"][data-tripkind="pickup"]');
-      if (!nb || !pu) return { found: false };
-      nb.scrollIntoView({ block: "center" });
-      const fb = document.getElementById("footbar");
-      const ft = getComputedStyle(fb).display === "none" ? window.innerHeight : fb.getBoundingClientRect().top;
-      const c = nb.getBoundingClientRect();
-      const hit = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
-      return { found: true, hit: hit === nb, bottom: Math.max(c.bottom, pu.getBoundingClientRect().bottom), ft };
-    });
-    if (!(row.found && row.hit && row.bottom <= row.ft + 0.5)) { all = false; notes.push(vp.width + " row " + JSON.stringify(row)); }
+    /* No estimate on the board: from v1.163.0 still no row buttons; the
+       next stop heads the list and a tap on it brings up the pop-up. */
+    const row = await me.pg.evaluate(() => ({
+      btns: document.querySelectorAll("#stopsBody [data-triptap]").length,
+      first: (document.querySelector("#stopsBody .stop-row") || {}).outerHTML || "" }));
+    if (!(row.btns === 0 && /data-pickopen="N01"/.test(row.first))) { all = false; notes.push(vp.width + " row " + JSON.stringify(row).slice(0, 200)); }
     await me.ctx.close();
   }
-  check("T4", "the line under the list sits clear of the bottom bar with no buttons in it, and a stop with no estimate has its own", all, notes.join("; "));
+  check("T4", "the line under the list sits clear of the bottom bar with no buttons in it, and a stop with no estimate has none either: it heads the list and opens the pop-up", all, notes.join("; "));
 }
 
 /* T5 — the bus sheet's heading */
@@ -296,7 +271,7 @@ if (want("T7")) {
 /* T8 — no End trip once the run is live (v1.106.0). On 11 October North was
    ended four minutes after Start, still in the churchyard. */
 if (want("T8")) {
-  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck() } });
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck(), counts: { North: { N01: 2 }, South: {} } } });
   await startRun(me);
   const gone1 = await footGone(me);
   await me.jump(11); await tap(me, "pickup", "N01"); await me.wait(3500);
@@ -355,10 +330,10 @@ if (want("T10")) {
              plan: !!r.querySelector(".stop-time-plan") };
   }));
   const grace = rows.find(r => /^Grace Road/.test(r.name)) || {};
-  const lither = rows.find(r => /Litherland Road/.test(r.name)) || {};
+  const lither = rows.find(r => /Fountains Road/.test(r.name)) || {};
   check("T10", "the estimate stands alone in bold and a timetabled time is plain",
         grace.time === "10:27" && grace.weight >= 700 && !grace.plan && lither.time && lither.weight < 600,
-        "Grace Rd " + JSON.stringify(grace) + ", Litherland Rd " + JSON.stringify(lither));
+        "Grace Rd " + JSON.stringify(grace) + ", Fountains Rd " + JSON.stringify(lither));
   const strip = await me.text("#s-stops .trip-note");
   check("T11", "the run is '5 minutes behind schedule'", /5 minutes behind schedule/.test(strip),
         "strip '" + strip + "'");
@@ -896,7 +871,10 @@ if (want("T37")) {
     const h = document.getElementById("churchTitle");
     return { up: m.classList.contains("is-on"), text: h ? h.textContent.trim() : "",
              buttons: m.querySelectorAll("button").length,
-             keep: (m.querySelector(".church-keep") || {}).textContent || "" };
+             keep: (m.querySelector(".church-keep") || {}).textContent || "",
+             red: (() => { const k = m.querySelector(".church-keep"); if (!k) return false;
+               const c = (getComputedStyle(k).color.match(/\d+/g) || []).map(Number);
+               return c[0] > 140 && c[1] < 80 && c[2] < 80; })() };
   });
   const again = async () => { await me.clickId("stopsBack"); await me.toStops(); await me.close(); await me.wait(1500); };
   const before = await pop();
@@ -920,9 +898,9 @@ if (want("T37")) {
   await me.jump(4); await me.emit(CHURCH); await me.wait(1500);
   const end = me.posted.map(p => p.trip && (p.trip.events || []).find(e => e.event === "end")).find(Boolean) || {};
   const gone = await pop();
-  check("T37", "after the last pickup the church pop-up says Do not close until Church and gives the time, then Due at Church; a tap leaves it up; Cancel puts it away for Undo and it is back a minute later; the end is the time back inside",
+  check("T37", "after the last pickup the church pop-up says Do not close until Church in red and gives the time, then Due at Church; a tap leaves it up; Cancel puts it away for Undo and it is back a minute later; the end is the time back inside",
         !before.up && up.up && up.text === "Church about 10:58" && up.buttons === 1 &&
-        up.keep === "Do not close until Church" &&
+        up.keep === "Do not close until Church" && up.red &&
         due.up && due.text === "Due at Church 10:58" && stays.up && !away.up && undo && returned.up &&
         !gone.up && Math.abs(Number(end.at) - back) < 60000 && !me.errs.length,
         JSON.stringify({ tapped, before, up, due, stays: stays.up, away: away.up, undo, returned: returned.up, gone: gone.up, endAt: end.at, back, errs: me.errs }));
@@ -1036,29 +1014,58 @@ if (want("T31")) {
   await me.ctx.close();
 }
 
-/* T32 — v1.103.0 (Asim). A stop marked Nobody here can be changed to
-   Picked up straight away (he went back for somebody), and the other way.
-   The first answer is taken back on the record, so the stop has one. */
+/* T32 — v1.163.0 (Asim, 15 Nov 2026). The live line: from Start trip only
+   booked stops, the next one first, then Church, then the stops marked, with
+   no Picked up or Nobody here on any row. Picked up is final: Undo only. A
+   seat booked at a stop still ahead brings that stop into the line. */
 if (want("T32")) {
-  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world: { checks: okCheck() } });
+  const world = { checks: okCheck() };
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world });
+  const ids = () => me.pg.$$eval("#stopsBody .stop-row", rs => rs.filter(r => r.offsetParent).map(r => {
+    const u = r.querySelector("[data-tripundo]"), p = r.getAttribute("data-pickopen");
+    return ((r.querySelector(".stop-name") || {}).textContent || "").split(/[ ,]/)[0] + (p ? "*" : "") + (u ? "+undo" : ""); }));
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn(); await me.toStops(); await me.close();
+  const before = (await ids()).length;
+  await me.jump(1);
+  await me.click("Start trip · NH56 FWP", "#s-stops"); await me.wait(1300); await me.close();
+  const start = (await ids()).join(",");
+  await me.jump(11); await me.wait(300);
+  const tapped = await tap(me, "pickup", "N01"); await me.wait(2500);
+  const after = (await ids()).join(",");
+  const rowBtns = await me.pg.$$eval("#stopsBody [data-triptap]", bs => bs.length);
+  me.world.counts.North.N05 = 1;
+  await me.wait(31000);
+  const added = (await ids()).join(",");
+  check("T32", "from Start trip only booked stops, next on top, marked at the foot with Undo and no Nobody here; a new seat ahead joins the line",
+        before === 10 && start === "Scarisbrick*,Grace,Fountains,Bedford,Pym,Church" &&
+        tapped && after === "Grace*,Fountains,Bedford,Pym,Church,Scarisbrick+undo" && rowBtns === 0 &&
+        added === "Grace*,Fountains,Westminster,Bedford,Pym,Church,Scarisbrick+undo" && !me.errs.length,
+        JSON.stringify({ before, start, tapped, after, rowBtns, added, errs: me.errs }));
+  await me.shot("T32-live-line");
+  await me.ctx.close();
+}
+
+/* T57 — v1.163.0 (Asim, 15 Nov 2026: Wilburn Street came up while he was
+   still at Bedford Road). The pop-up waits until the bus is nearer the next
+   stop than the one just marked, even with the estimate a minute away. */
+if (want("T57")) {
+  const world = { checks: okCheck(), counts: { North: { N06: 2, N08: 1 }, South: {} },
+                  etas: { North: { N08: T("10:15") }, South: {} } };
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00", world });
   await startRun(me);
   await me.jump(11); await me.wait(300);
-  await tap(me, "empty", "N01"); await me.wait(2000);
-  const sent = () => [].concat(...me.posted.filter(p => p.action === "trip").map(p => p.trip.events || []))
-    .filter(e => e.stopId === "N01").map(e => e.event + (e.undoes ? ":" + e.undoes : ""));
-  const first = sent().join(",");
-  await me.pg.click('.trip-row-btns [data-triptap="N01"][data-tripkind="pickup"]'); await me.wait(2500);
-  const row = await me.text("#stopsBody");
-  const after = sent();
-  const asked = await me.pg.evaluate(() => document.getElementById("undoModal").classList.contains("is-on"));
-  const back = await me.pg.$('.trip-row-btns [data-triptap="N01"][data-tripkind="empty"]');
-  /* One send carries both (v1.110.0), so passengers are told once. */
-  const both = me.posted.filter(p => p.action === "trip").map(p => (p.trip.events || []).map(e => e.event).join(","))
-    .filter(x => /undo/.test(x));
-  check("T32", "Nobody here changes to Picked up in one tap, the first answer taken back on the record, in one send",
-        first === "empty" && after.slice(-2).join(",") === "undo:empty,pickup" && /picked up 10:1/i.test(row) &&
-        !asked && !!back && both.length === 1 && both[0] === "undo,pickup" && !me.errs.length,
-        JSON.stringify({ first, after, asked, back: !!back, both, errs: me.errs }));
+  await tap(me, "pickup", "N06"); await me.wait(400);    /* "Too early for", then again */
+  const tapped = await tap(me, "pickup", "N06"); await me.wait(2500);
+  const on = () => me.pg.evaluate(() => document.getElementById("pickModal").classList.contains("is-on") &&
+    /Wilburn/.test(document.getElementById("pickModal").textContent));
+  const dbg = () => me.pg.evaluate(() => ({ id: pickStopId, why: pickWhy, fix: pickFix, served: Object.keys(trip.served||{}), next: pickNext && pickNext.id, t: document.getElementById("pickModal").textContent.slice(0,80) }));
+  for (let k = 0; k < 12; k++) { await me.emit({ lat: 53.446071, lng: -2.970485, acc: 8, speed: 11 }); await me.wait(500); }
+  const atBedford = await on(); const d1 = await dbg();
+  for (let k = 0; k < 6; k++) { await me.emit({ lat: 53.4428, lng: -2.9702, acc: 8, speed: 11 }); await me.wait(500); }
+  const nearer = await on();
+  check("T57", "the next stop's pop-up waits until the bus is nearer it than the stop just marked",
+        tapped && !atBedford && nearer && !me.errs.length, JSON.stringify({ tapped, atBedford, nearer, d1, errs: me.errs }));
   await me.ctx.close();
 }
 

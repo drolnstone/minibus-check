@@ -1,20 +1,26 @@
 MINIBUS
 =======
-  pages v1.162.0 · server w2.92.0 · sheet v1.139.0
+  pages v1.163.0 · server w2.92.0 · sheet v1.139.0
 
-YOU ARE ON   app v1.161.0 · server w2.91.0 · sheet v1.138.0
-GOING TO     app v1.162.0 · server w2.92.0 · sheet v1.139.0
+YOU ARE ON   app v1.162.0 · server w2.92.0 · sheet v1.139.0
+GOING TO     app v1.163.0 · server w2.92.0 · sheet v1.139.0
 
-1. Who bought fuel (Asim, 14 Nov 2026): Record something, Fuel, Done now
-   asks Bought by (coordinators and drivers, your own name already
-   chosen, or Someone else with a Name box), Paid by (Church or Gift) and
-   Litres. The entry on the bus reads "Bought by Bro Solomon · Gift · 14
-   litres". The Vehicle Log tab gets three new columns at the end: Bought
-   by, Paid by, Litres. Notes sample for fuel is now "e.g. BP Ultimate".
+1. Driver live screen (Asim, 15 Nov 2026). From Start trip, on the
+   driving phone: only booked stops, the next one at the top, then
+   Church, then the stops already marked with Undo on the last one. No
+   Picked up, Nobody here or Someone was here on any row: the pop-up is
+   the one place to mark a stop. A seat booked mid-run at a stop still
+   ahead brings it into the line.
+2. Pickup pop-up: a minute away by the live estimate, and only once the
+   bus is nearer the next stop than the one just marked. No estimate:
+   when the bus pulls up at the stop, or a tap on the top stop.
+3. Church pop-up: "Do not close until Church" is red.
+4. The Church fence ends the run after 1 minute inside, and only once
+   every booked stop is marked. "It has not finished, reopen it" is gone.
 
 Merging is the whole deploy. Nothing to do on the phone.
 
 CHECKS
-A. Coordinator app, App info: v1.162.0 · w2.92.0 · v1.139.0.
-B. Coordinator app, a bus, Record something, Fuel: Bought by shows your
-   name, Paid by shows Church ticked.
+A. Coordinator app, App info: v1.163.0 · w2.92.0 · v1.139.0.
+B. Driver app on 22 Nov: after Start trip, Stops shows booked stops only,
+   next stop on top.

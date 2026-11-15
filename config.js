@@ -141,7 +141,7 @@ window.CONFIG = {
      falls back to the End trip reminder.
 
      Set enabled false to turn it off and go back to the tap. */
-  autoEnd: { enabled: true, minutes: 3 },
+  autoEnd: { enabled: true, minutes: 1 },
 
   /* Drivers key in a four digit PIN before they can start a check.
 
