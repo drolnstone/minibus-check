@@ -945,6 +945,10 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
   color:var(--accent-ink);font-size:12px;font-weight:700;letter-spacing:.04em;
   text-decoration:none}
 .stop-go:active{transform:scale(.98)}
+/* The booked count with the map button at its right, under the name. */
+.stop-line{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:3px}
+.stop-line .stop-n{margin-top:0}
+.stop-line .stop-go{margin-top:0;margin-left:auto;flex:0 0 auto}
 .stop-arrival{color:var(--muted)}
 .stop-n{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-top:3px;
   text-transform:uppercase;letter-spacing:.05em}
@@ -1808,7 +1812,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.166.0";
+var APP_VERSION = "v1.167.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -6784,14 +6788,17 @@ function parkHtml(){
     var shut = parkLocked();
     h += '<div class="dw'+(shut ? ' park-shut' : '')+'"><p class="dw-eyebrow">'+eyebrow+'</p>'+
          (parkOverdue() ? '<p class="park-due">Parked mileage not received</p>' : '')+
-         '<label class="dw-sub" for="parkMiles'+i+'"><b>Mileage after the afternoon run</b>'+
+         /* Fuel first, then the mileage, then Save, from v1.167.0 (Asim,
+            15 Nov 2026): top to bottom, Save is the last thing reached. */
+         '<p class="dw-sub"><b>Fuel showing</b></p>'+
+         '<div class="fuel" data-park-fuel="'+pid+'">'+parkFuelBtns(o.checkId, shut)+'</div>'+
+         '<label class="dw-sub" style="display:block;margin-top:10px" for="parkMiles'+i+'"><b>Mileage after the afternoon run</b>'+
            (shut ? ' · from '+PARK_OPENS : '')+(walk ? ' · '+walk : '')+'</label>'+
          '<div class="park-row"><input id="parkMiles'+i+'" type="number" inputmode="numeric" class="mono" '+
            'placeholder="e.g. '+esc(String((Number(o.miles)||57363) + 12))+'" autocomplete="off"'+(shut ? ' disabled' : '')+
            ' data-park-typed="'+pid+'" value="'+esc(parkTyped[o.checkId] || "")+'">'+
          '<button class="btn btn-main" type="button" data-park-save="'+pid+'"'+(shut ? ' disabled' : '')+'>Save</button></div>'+
-         '<p class="dw-sub" style="margin-top:8px"><b>Fuel showing</b></p>'+
-         '<div class="fuel" data-park-fuel="'+pid+'">'+parkFuelBtns(o.checkId, shut)+'</div>'+sayHtml+'</div>';
+         sayHtml+'</div>';
   });
   return h;
 }
@@ -8776,16 +8783,19 @@ function rotaPaintStops(){
                  directions to. */
               /* A pin is as good a reason to offer the link as an address,
                  and better: it is the kerb rather than a building near it. */
-              (s.postcode
-                ? ((nextStop && s.id===nextStop.id && (s.where || mapHref(s)))
-                    ? '<a class="stop-go" href="'+esc(mapHref(s))+'" '+
-                      'target="_blank" rel="noopener" '+
-                      'aria-label="Open '+esc(s.stop)+' in maps">'+
-                      esc(s.postcode)+' \u2197</a>'
-                    : '<span class="stop-pc">'+esc(s.postcode)+'</span>')
-                : '')+
-              (n===null?'':'<span class="stop-n'+(n?' has':'')+'">'+
-                 (n? (n+(n===1?' person':' people')+' booked') : 'Nobody booked')+'</span>')+
+              /* The map button sits on the booked line, from v1.167.0
+                 (Asim, 15 Nov 2026): beside the name it crowded it. */
+              (function(){
+                var go = s.postcode && nextStop && s.id===nextStop.id && (s.where || mapHref(s));
+                var cnt = (n===null?'':'<span class="stop-n'+(n?' has':'')+'">'+
+                   (n? (n+(n===1?' person':' people')+' booked') : 'Nobody booked')+'</span>');
+                if(!go) return (s.postcode ? '<span class="stop-pc">'+esc(s.postcode)+'</span>' : '')+cnt;
+                return '<span class="stop-line">'+cnt+
+                  '<a class="stop-go" href="'+esc(mapHref(s))+'" '+
+                  'target="_blank" rel="noopener" '+
+                  'aria-label="Open '+esc(s.stop)+' in maps">'+
+                  esc(s.postcode)+' \u2197</a></span>';
+              })()+
               (done?'<span class="trip-at">'+
                  (done.event==="empty"?'Nobody here ':'Picked up ')+
                  tripClock(done.at)+'</span>':'')+
