@@ -1169,7 +1169,7 @@ if (want("C29i")) {
 }
 
 /* C29k — parked fuel (v1.160.0): newer than the walkaround, it is the one
-   shown. From v1.168.0 (Asim, 15 Nov 2026) 1/4 or less needs fuel, not 3/8,
+   shown. From v1.169.0 (Asim, 15 Nov 2026) 1/4 or less needs fuel, not 3/8,
    and a sixteenth shows as it was slid. */
 if (want("C29k")) {
   const p = await page(env);

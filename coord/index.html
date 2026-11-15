@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator app">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.168.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.169.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -479,7 +479,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .due small{grid-column:1/-1;font-size:13px;color:var(--muted)}
 .due .late{color:var(--stop);font-weight:600}
 .due .soon{color:var(--warn);font-weight:600}
-/* The fuel slider (v1.168.0): sixteen steps on one red-to-green bar. */
+/* The fuel slider (v1.169.0): sixteen steps on one red-to-green bar. */
 .fg{display:block;position:relative;margin-top:4px;user-select:none;-webkit-user-select:none;touch-action:pan-y;outline:none}
 .fg-read{display:block;font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:20px;line-height:26px;min-height:26px;text-align:center;color:var(--ink)}
 .fg-track{display:block;position:relative;height:30px;border-radius:15px;margin:4px 14px 0;overflow:visible}
@@ -786,7 +786,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.168.0";
+var PAGE_VERSION = "v1.169.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1445,7 +1445,7 @@ function needs(){
      beacon, and Fuel bought opens Record something with Fuel chosen. */
   var jv = (D && D.vehicles && D.vehicles.jobs) || {};
   /* From v1.160.0 also a bus whose latest reading (parked, walkaround or
-     bought) is 1/4 or less (3/8 until v1.168.0, Asim, 15 Nov 2026), as the
+     bought) is 1/4 or less (3/8 until v1.169.0, Asim, 15 Nov 2026), as the
      driver app ticks Needs fuel. */
   var lowFuel = {};
   ((D && D.buses) || []).forEach(function(b){
@@ -2859,7 +2859,7 @@ function milesOf(reg){
   for(var k in v) if(Object.prototype.hasOwnProperty.call(v, k) && same(k, reg)) return v[k];
   return null;
 }
-/* ---- the fuel slider, from v1.168.0 (Asim, 15 Nov 2026) ------------------
+/* ---- the fuel slider, from v1.169.0 (Asim, 15 Nov 2026) ------------------
    Sixteen steps, E to F, on one bar running red through amber to green. The
    knob snaps to each step, so it never rests between two. A reading saved in
    eighths keeps its words: "3/8 tank" is the sixth of the sixteen. Keep this

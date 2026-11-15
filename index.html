@@ -663,7 +663,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   font-weight:700;font-size:17px;letter-spacing:.05em;text-transform:uppercase}
 
 /* ---------- mileage confirm ---------- */
-/* The fuel slider (v1.168.0): sixteen steps on one red-to-green bar. */
+/* The fuel slider (v1.169.0): sixteen steps on one red-to-green bar. */
 .fg{display:block;position:relative;margin-top:4px;user-select:none;-webkit-user-select:none;touch-action:pan-y;outline:none}
 .fg-read{display:block;font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:20px;line-height:26px;min-height:26px;text-align:center;color:var(--ink)}
 .fg-track{display:block;position:relative;height:30px;border-radius:15px;margin:4px 14px 0;overflow:visible}
@@ -1825,7 +1825,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.168.0";
+var APP_VERSION = "v1.169.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -4105,7 +4105,7 @@ function openDefectsHTML(reg){
    A low tank is not a fault. It stops nothing and emails nobody. It just
    needs somebody to put diesel in. */
 
-/* ---- the fuel slider, from v1.168.0 (Asim, 15 Nov 2026) ------------------
+/* ---- the fuel slider, from v1.169.0 (Asim, 15 Nov 2026) ------------------
    Sixteen steps, E to F, on one bar running red through amber to green. The
    knob snaps to each step, so it never rests between two. A reading saved in
    eighths keeps its words: "3/8 tank" is the sixth of the sixteen. Keep this
@@ -4200,7 +4200,7 @@ function paintFuel(){
   paintFuelHint();
 }
 /* Only says something when there is something to say. Low is 1/4 or less,
-   where Needs fuel comes on (v1.168.0); 3/8 or less is getting low. */
+   where Needs fuel comes on (v1.169.0); 3/8 or less is getting low. */
 function paintFuelHint(){
   var hint=$("fuelHint"); if(!hint) return;
   if(st.fuel===null){ hint.textContent="Slide to what the gauge is reading."; hint.style.color=""; return; }
@@ -4244,7 +4244,7 @@ function paintJobs(){
     b.type="button";
     b.textContent=j.label;
     if(st.jobs.indexOf(j.id)!==-1) b.className="on";
-    /* 1/4 or less (v1.168.0; 3/8 before): Needs fuel stays on, and Nothing
+    /* 1/4 or less (v1.169.0; 3/8 before): Needs fuel stays on, and Nothing
        needed cannot clear it. */
     if(low && (j.id==="fuel" || j.clears)) b.disabled=true;
     b.addEventListener("click",function(){

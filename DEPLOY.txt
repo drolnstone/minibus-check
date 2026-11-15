@@ -1,9 +1,9 @@
 MINIBUS
 =======
-  pages v1.168.0 · server w2.93.0 · sheet v1.139.0
+  pages v1.169.0 · server w2.93.0 · sheet v1.139.0
 
-YOU ARE ON   app v1.167.0 · server w2.92.0 · sheet v1.139.0
-GOING TO     app v1.168.0 · server w2.93.0 · sheet v1.139.0
+YOU ARE ON   app v1.168.0 · server w2.92.0 · sheet v1.139.0
+GOING TO     app v1.169.0 · server w2.93.0 · sheet v1.139.0
 
 1. Fuel in 16 steps (Asim, 15 Nov 2026): one bar, red at E through amber
    to green at F, with a knob that slides and stops on each step. The
@@ -20,7 +20,7 @@ GOING TO     app v1.168.0 · server w2.93.0 · sheet v1.139.0
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: v1.168.0 · w2.93.0 · v1.139.0.
+A. Coordinator app, App info: v1.169.0 · w2.93.0 · v1.139.0.
 B. Driver app, vehicle check: Fuel showing is a bar; sliding it stops on
    each step and shows the reading above.
 C. Coordinator app: a bus at 3/8 no longer shows "needs fuel".

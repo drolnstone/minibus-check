@@ -1568,7 +1568,7 @@ if (want("T54")) {
   await me.ctx.close();
 }
 
-/* T55 — NEEDS FUEL LOCKED ON at 1/4 or less (v1.160.0 at 3/8; 1/4 from v1.168.0, Asim, 15 Nov 2026):
+/* T55 — NEEDS FUEL LOCKED ON at 1/4 or less (v1.160.0 at 3/8; 1/4 from v1.169.0, Asim, 15 Nov 2026):
    ticked by itself, cannot be unticked, and Nothing needed cannot clear it. */
 if (want("T55")) {
   const me = await phone({ clock: "2026-09-27T09:20:00+01:00" });
@@ -1586,7 +1586,7 @@ if (want("T55")) {
   await me.ctx.close();
 }
 
-/* T55b — 3/8 NO LONGER LOCKS Needs fuel (v1.168.0, Asim, 15 Nov 2026), and
+/* T55b — 3/8 NO LONGER LOCKS Needs fuel (v1.169.0, Asim, 15 Nov 2026), and
    the slider follows a finger step by step: 2/16 slid to 6/16 reads "3/8". */
 if (want("T55b")) {
   const me = await phone({ clock: "2026-09-27T09:20:00+01:00" });

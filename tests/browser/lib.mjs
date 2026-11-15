@@ -443,7 +443,7 @@ export async function phone(opts = {}) {
     await pg.evaluate(r => { const b = [...document.querySelectorAll("#vehList button")].find(x => (x.textContent || "").indexOf(r) > -1); if (b) b.click(); }, reg);
     await pg.waitForTimeout(500);
   };
-  /* The fuel slider, from v1.168.0: a tap on the bar at step n of 16, as a
+  /* The fuel slider, from v1.169.0: a tap on the bar at step n of 16, as a
      finger would, scrolled into view first. */
   me.slideFuel = async (sel, n) => {
     const tr = pg.locator(sel + " .fg-track").first();
