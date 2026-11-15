@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus app">
-<!-- BUILD v1.164.0 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.165.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -757,7 +757,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.164.0";
+var PAGE_VERSION = "v1.165.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -1545,12 +1545,14 @@ function isApple(){
 /* Drawn under the bus panel, in the frozen pane, and only for somebody who
    has actually booked a seat. A page open on a stranger's phone is not asked
    for anything. */
-/* The icon in the frozen pane. Same conditions the text line had: somebody
-   travelling this Sunday, with alerts already on. */
+/* The icon in the frozen pane, on every phone with alerts on, booked or not,
+   from v1.165.0 (Asim, 15 Nov 2026: a passenger could not check alerts
+   without a booking). Booking nudges already reach every such phone, and the
+   test only ever buzzes the phone that asks. */
 function paintAlertIcon(){
   var b = $("alertIcon");
   if(!b) return;
-  b.style.display = (pushOn && MINE_BOOKED && !ROLLED) ? "" : "none";
+  b.style.display = pushOn ? "" : "none";
 }
 
 function paintAlerts(){

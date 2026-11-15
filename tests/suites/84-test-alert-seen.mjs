@@ -53,5 +53,13 @@ export default async function (root) {
     a.ok(out.woke === false, JSON.stringify(out));
   });
 
+  s.test("passenger bell: shown whenever alerts are on, booked or not (v1.165.0)", async (a) => {
+    const { readFileSync } = await import("node:fs");
+    const page = readFileSync(join(root, "sunday", "index.html"), "utf8");
+    const fn = page.slice(page.indexOf("function paintAlertIcon"), page.indexOf("function paintAlerts("));
+    a.ok(/display = pushOn \? "" : "none"/.test(fn), "bell follows pushOn alone");
+    a.ok(!/MINE_BOOKED|ROLLED/.test(fn.replace(/\/\*[\s\S]*?\*\//g, "")), "no booking condition");
+  });
+
   return s;
 }
