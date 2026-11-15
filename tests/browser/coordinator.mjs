@@ -2353,6 +2353,25 @@ if (want("C61")) {
   await p.ctx.close();
 }
 
+/* C62 — Due dates on the first screen (v1.168.0, Asim, 15 Nov 2026): MOT,
+   service and insurance from 60 days, a parking permit from 30 days. */
+if (want("C62")) {
+  const p = await page(env);
+  try {
+    await p.signIn(PIN);
+    const r = await p.pg.evaluate(() => {
+      const t = calToday(), on = (n) => rnAddDays(t, n);
+      const card = (dates) => { D.buses = [{ reg: "AA11 AAA", active: true, dates: dates }];
+        const d = document.createElement("div"); d.innerHTML = renewalsHtml(); return d.textContent; };
+      return { mot48: card({ mot: on(48) }), permit30: card({ permit: on(30) }), permit31: card({ permit: on(31) }) };
+    });
+    const ok = /MOT/.test(r.mot48) && /Parking permit/.test(r.permit30) && !/Parking permit/.test(r.permit31) && /Nothing due/.test(r.permit31);
+    check("C62", "first screen Due dates: an MOT 48 days off and a parking permit 30 days off show; a permit 31 days off does not",
+          ok && !p.errs.length, JSON.stringify({ r, errs: p.errs }).slice(0, 900));
+  } catch (e) { stopped("C62", e); }
+  await p.ctx.close();
+}
+
 await done();
 cleanup(ROOT);
 const bad = results.filter((r) => !r.ok);
