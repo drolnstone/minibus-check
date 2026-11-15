@@ -1666,6 +1666,32 @@ if (want("T58")) {
   await me.ctx.close();
 }
 
+/* T59 — from v1.167.0 (Asim, 15 Nov 2026): on the road, the map button sits
+   on the booked line under the stop name, never beside the name. */
+if (want("T59")) {
+  const me = await phone({ clock: "2026-09-27T10:03:00+01:00",
+    world: { checks: okCheck(), etas: { North: { N02: T("10:27") } }, offset: { North: 5 } } });
+  await startRun(me);
+  await me.wait(5600);
+  const r = await me.pg.evaluate(() => {
+    const row = document.querySelector("#s-stops .stop-row.trip-next");
+    if (!row) return { row: false };
+    const go = row.querySelector(".stop-go"), line = go && go.closest(".stop-line"),
+          n = line && line.querySelector(".stop-n"), name = row.querySelector(".stop-name");
+    const name1 = name && name.firstChild && name.firstChild.nodeType === 3 ? name.firstChild.textContent : "";
+    const rg = document.createRange(); if (name && name.firstChild) rg.selectNode(name.firstChild);
+    const nb = name && name.firstChild ? rg.getBoundingClientRect() : { bottom: 0 };
+    const gb = go ? go.getBoundingClientRect() : { top: 0 }, cb = n ? n.getBoundingClientRect() : { top: 0, bottom: 0 };
+    return { row: true, go: !!go, inLine: !!line, n: n ? n.textContent : "", name1,
+             below: gb.top >= nb.bottom - 1, sameLine: gb.top < cb.bottom && gb.bottom > cb.top };
+  });
+  await me.pg.screenshot({ path: (process.env.SHOTS || "/tmp") + "/T59-map-on-booked-line.png" });
+  check("T59", "the map button sits on the booked line, under the stop name",
+        r.row && r.go && r.inLine && /booked/i.test(r.n) && r.below && r.sameLine && !me.errs.length,
+        JSON.stringify({ r, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

@@ -50,6 +50,16 @@ async function hub(forWho, answer, clock) {
   const card = await me.text("#hubParked");
   check("P1", "the morning's driver sees the box on the hub", /Bus parked/i.test(card) && /Walkaround 31,544 this morning/.test(card) &&
         !!(await me.pg.$("#parkMiles0")), "card: " + card);
+  /* From v1.167.0 (Asim, 15 Nov 2026): Fuel showing, then the mileage box,
+     then Save, top to bottom. */
+  const order = await me.pg.evaluate(() => {
+    const y = (el) => el ? Math.round(el.getBoundingClientRect().top) : -1;
+    const box = document.getElementById("hubParked");
+    return { fuel: y(box.querySelector("[data-park-fuel]")), miles: y(document.getElementById("parkMiles0")),
+             save: y(box.querySelector("[data-park-save]")) };
+  });
+  check("P1b", "Fuel showing comes first, then the mileage, then Save",
+        order.fuel >= 0 && order.fuel < order.miles && order.miles <= order.save, JSON.stringify(order));
   await me.shot("parked-1-box", { scrollTo: "#hubParked" });
   await me.pg.fill("#parkMiles0", "31530");
   await me.pg.evaluate(() => { const b = document.querySelector('[data-park-fuel] [data-pf="4"]'); if (b && !b.classList.contains("edge")) b.click(); });
