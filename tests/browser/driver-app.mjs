@@ -954,7 +954,9 @@ if (want("T29")) {
   await me.pg.evaluate(() => { try { tripPaint(); } catch (e) {} }); await me.wait(800);
   const y = await me.pg.evaluate(() => window.scrollY);
   check("T29", "the next booked stop is brought into view when the list opens and when it moves on, and a repaint leaves the scroll alone",
-        atOpen.inView && !away.inView && afterTap.inView && /Grace Road/.test(afterTap.name) && y === 0 && !me.errs.length,
+        /* From v1.163.0 the line holds booked stops only, short enough that
+           scrolling to the foot may leave the top stop in view. */
+        atOpen.inView && afterTap.inView && /Grace Road/.test(afterTap.name) && y === 0 && !me.errs.length,
         JSON.stringify({ atOpen, away, afterTap, y, errs: me.errs }));
   await me.ctx.close();
 }
@@ -1230,7 +1232,8 @@ if (want("T39")) {
   await tap(me, "pickup", "N02"); await me.wait(1500);
   const behind = !(await has('[data-tripundo="N01"]')) && !(await has('.trip-row-btns [data-triptap="N01"]'));
   const undo2 = await has('[data-tripundo="N02"]');
-  const someone = await has('[data-triptap="N03"][data-tripkind="pickup"]');
+  /* No Someone was here from v1.163.0 (Asim, 15 Nov 2026). */
+  const someone = !(await has('[data-triptap="N03"]'));
   const past = !(await has('[data-triptap="N05"]'));
   await me.pg.click('[data-tripundo="N02"]'); await me.wait(600);
   await me.pg.click("#undoYes"); await me.wait(1500);
