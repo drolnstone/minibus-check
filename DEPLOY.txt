@@ -1,23 +1,18 @@
 MINIBUS
 =======
-  pages v1.164.0 · server w2.92.0 · sheet v1.139.0
+  pages v1.165.0 · server w2.92.0 · sheet v1.139.0
 
-YOU ARE ON   app v1.163.0 · server w2.92.0 · sheet v1.139.0
-GOING TO     app v1.164.0 · server w2.92.0 · sheet v1.139.0
+YOU ARE ON   app v1.164.0 · server w2.92.0 · sheet v1.139.0
+GOING TO     app v1.165.0 · server w2.92.0 · sheet v1.139.0
 
-1. Driver app, Stops and bookings (Asim, 15 Nov 2026): no "The bus is
-   moving" line on a live run. A phone without today's bookings, which
-   still has stop buttons, says "Taps come back when you stop."
-2. No Done button on Stops and bookings at all. Back is the way out.
-3. Back to top comes up after half the scroll it needed before, in all
-   three apps (driver and coordinator 230, passenger 150).
-4. The apps are named "Driver app", "Coordinator app" and "Sunday Bus
-   app" on the Home Screen and on notifications (Asim chose, 15 Nov).
+1. Sunday Bus app (Asim, 15 Nov 2026): the bell that checks alerts shows
+   on every phone with alerts on, booked or not, signed in or not, and
+   also after today's run. It still buzzes only the phone that taps it,
+   and still says "This phone received it." or that it did not.
 
-Merging is the whole deploy. On a phone, the new name shows only after
-the icon is deleted and added again from Safari (then sign in and turn
-alerts on again). Icons left alone keep working under the old name.
+Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: v1.164.0 · w2.92.0 · v1.139.0.
-B. Driver app, Stops and bookings: Back at the top, no Done at the foot.
+A. Coordinator app, App info: v1.165.0 · w2.92.0 · v1.139.0.
+B. Sunday Bus app on a phone with alerts on and no seat booked: the bell
+   is at the top; tap it and it says "This phone received it."
