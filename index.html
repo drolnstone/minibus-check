@@ -2558,8 +2558,9 @@ function paintMilesHint(){
 /* ---------------- renewal dates ---------------- */
 var DUE_LABELS = { mot:"MOT", service:"Service", insurance:"Insurance", permit:"Parking permit" };
 var DUE_ORDER  = ["mot","service","insurance","permit"];
-/* 60 days, as the coordinator app (v1.161.0, Asim, 14 Nov 2026). */
-var WARN_DAYS  = 60;
+/* 60 days, as the coordinator app (v1.161.0, Asim, 14 Nov 2026); a parking
+   permit from 30 days (v1.168.0, Asim, 15 Nov 2026). */
+var WARN_DAYS  = { mot:60, service:60, insurance:60, permit:30 };
 
 function daysUntil(iso){
   if(!iso) return null;
@@ -2605,7 +2606,7 @@ function dueItems(v){
     var iso = dates[k];
     if(!iso) return;
     var n = daysUntil(iso);
-    if(n === null || n > WARN_DAYS) return;
+    if(n === null || n > WARN_DAYS[k]) return;
     out.push({
       key:k, label:DUE_LABELS[k], date:iso, days:n, booked: booked[k] || "",
       state: n < 0 ? "over" : "soon",

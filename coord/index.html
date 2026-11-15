@@ -3033,13 +3033,15 @@ function motBookingOn(reg, day){
 }
 
 /* Renewals on the first screen: every bus in use with something due in the
-   next 60 days or overdue. */
+   next 60 days or overdue; a parking permit from 30 days (v1.168.0, Asim,
+   15 Nov 2026: the council takes it 28 days ahead). The alerts are unchanged. */
+var SHOW_DAYS = { mot: 60, service: 60, insurance: 60, permit: 30 };
 function renewalsHtml(){
   var today = calToday(), h = "";
   busList().filter(function(b){ return b.active; }).forEach(function(b){
     var items = RENEW_KEYS.filter(function(item){
       var n = rnDays(today, (b.dates || {})[item] || "");
-      return n !== null && n <= 60;
+      return n !== null && n <= SHOW_DAYS[item];
     });
     if(!items.length) return;
     h += '<button type="button" class="card bus-card" data-go="bus/' + esc(encodeURIComponent(b.reg)) + '">' +
