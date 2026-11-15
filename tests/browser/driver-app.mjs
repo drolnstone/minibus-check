@@ -1608,6 +1608,64 @@ if (want("T56")) {
   await me.ctx.close();
 }
 
+/* T58 — v1.166.0 (Asim, 15 Nov 2026). A check that cannot go on says so in
+   the red box with bold white text, naming the item; OK goes to it. An
+   Advisory or Defect with all it needs moves on to the next item by itself:
+   Done on the keyboard, or the Defect's first photo coming in. */
+if (want("T58")) {
+  const me = await phone({ clock: "2026-09-27T09:40:00+01:00" });
+  await me.pg.setViewportSize({ width: 390, height: 760 });
+  await me.load(); await me.close(["howDone"]); await me.signIn();
+  await me.click("Vehicle check", "#s-hub"); await me.pickBus("NH56 FWP"); await me.onward(); await me.close(["busAskStay"]);
+  await me.setInput("miles", "48262"); await me.fuel(6); await me.onward();
+  await me.answerStage({}); await me.onward();
+  /* Stage two: Engine oil a Defect with words and no photo. */
+  await me.answerStage({ "Engine oil": { a: "Defect", note: "Engine oil needs top up" } });
+  await me.onward();
+  const box = () => me.pg.evaluate(() => {
+    const m = document.getElementById("checkModal"), sh = m.querySelector(".pick-sheet"), h = m.querySelector("h2");
+    return { on: m.classList.contains("is-on"), line: h ? h.textContent : "",
+             bg: getComputedStyle(sh).backgroundColor, fw: h ? getComputedStyle(h).fontWeight : "" };
+  });
+  const photo = await box();
+  await me.pg.screenshot({ path: (process.env.SHOTS || "/tmp") + "/T58-photo-needed.png" });
+  await me.pg.evaluate(() => document.querySelector("#checkModal [data-checkok]").click()); await me.wait(900);
+  const shut = !(await box()).on;
+  const atOil = await me.pg.evaluate(() => { const r = document.getElementById("item-oil").getBoundingClientRect(); return r.top > 0 && r.top < innerHeight; });
+  /* Unanswered first, in screen order. */
+  await me.pg.evaluate(() => { delete st.res.oil; renderStage(); paintFoot(); });
+  await me.onward();
+  const answer = (await box()).line;
+  await me.pg.evaluate(() => document.querySelector("#checkModal [data-checkok]").click()); await me.wait(400);
+  /* Defect, words, then the photo: the next item comes to the top. */
+  const items = await me.pg.evaluate(() => [...document.querySelectorAll("#itemList .item")].map(x => x.id));
+  const topOf = (id) => me.pg.evaluate(i => Math.round(document.getElementById(i).getBoundingClientRect().top), id);
+  await me.pg.click("#item-oil .def"); await me.wait(300);
+  await me.pg.keyboard.type("Low on the dipstick"); await me.wait(100);
+  const oilNext = items[items.indexOf("item-oil") + 1];
+  const input = await me.pg.$("#item-oil input[type=file]");
+  await me.pg.evaluate(() => document.activeElement.blur());
+  await me.wait(100);
+  await input.setInputFiles(new URL("../../icon-512.png", import.meta.url).pathname);
+  await me.wait(2200);
+  const afterPhoto = await topOf(oilNext);
+  /* Advisory, words, Done on the keyboard: the next item comes to the top. */
+  const adv = items[items.indexOf("item-oil") + 1], advNext = items[items.indexOf(adv) + 1];
+  await me.pg.click("#" + adv + " .adv"); await me.wait(300);
+  await me.pg.keyboard.type("A little low"); await me.pg.keyboard.press("Enter"); await me.wait(1400);
+  const afterDone = await topOf(advNext);
+  const advNote = await me.pg.evaluate(i => st.res[i.slice(5)].note, adv);
+  await me.pg.screenshot({ path: (process.env.SHOTS || "/tmp") + "/T58-advisory-moved-on.png" });
+  const dash = await me.pg.evaluate(() => Math.round(document.getElementById("dash").getBoundingClientRect().height));
+  const nearTop = (y) => y >= dash && y <= dash + 60;
+  check("T58", "a blocked check shows the red box naming the item, OK goes to it, and a complete Advisory or Defect moves on",
+        photo.on && photo.line === "Photo needed: Engine oil." && photo.bg === "rgb(168, 35, 27)" && +photo.fw >= 700 &&
+        shut && atOil && /^Answer needed: Engine oil\.$/.test(answer) &&
+        nearTop(afterPhoto) && nearTop(afterDone) && advNote === "A little low" && !me.errs.length,
+        JSON.stringify({ photo, shut, atOil, answer, afterPhoto, afterDone, dash, advNote, items, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");
