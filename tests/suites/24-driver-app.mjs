@@ -83,7 +83,7 @@ export default function (root) {
   });
 
   s.test("no reopen button; the fence waits for every booked stop (v1.163.0, Asim)", (a) => {
-    a.not(/reopen it/.test(code), "the reopen button is still drawn");
+    a.not(/id="tripAutoUndo"/.test(code), "the reopen button is still drawn");
     a.not(/function tripAutoUndo\(/.test(code), "the reopen is still there");
     a.has(body(code, "tripAutoArrive"), "tripAllMarked()", "the fence ends a run with booked stops unmarked");
   });
