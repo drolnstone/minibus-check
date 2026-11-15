@@ -1232,7 +1232,8 @@ if (want("T39")) {
   await tap(me, "pickup", "N02"); await me.wait(1500);
   const behind = !(await has('[data-tripundo="N01"]')) && !(await has('.trip-row-btns [data-triptap="N01"]'));
   const undo2 = await has('[data-tripundo="N02"]');
-  const someone = await has('[data-triptap="N03"][data-tripkind="pickup"]');
+  /* No Someone was here from v1.163.0 (Asim, 15 Nov 2026). */
+  const someone = !(await has('[data-triptap="N03"]'));
   const past = !(await has('[data-triptap="N05"]'));
   await me.pg.click('[data-tripundo="N02"]'); await me.wait(600);
   await me.pg.click("#undoYes"); await me.wait(1500);
