@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.92.0";
+const SCRIPT_VERSION = "w2.93.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -9056,8 +9056,10 @@ function rnNextDue(item, done, was, given) {
    Until the sheet names it as applied, getBuses and coordVehiclesView lay it
    over the sheet's copy, so every phone has the new date at once. */
 const VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Fuel", "Other"];
-/* From w2.90.0: a Fuel entry carries what the tank read after, as the driver app words it. */
-const FUEL_WORDS = ["1/8 tank", "1/4 tank", "3/8 tank", "1/2 tank", "5/8 tank", "3/4 tank", "7/8 tank", "Full"];
+/* From w2.90.0: a Fuel entry carries what the tank read after, as the driver app words it.
+   Sixteenths from w2.93.0; the eighths are among them. */
+const FUEL_WORDS = ["1/16 tank", "1/8 tank", "3/16 tank", "1/4 tank", "5/16 tank", "3/8 tank", "7/16 tank", "1/2 tank",
+                    "9/16 tank", "5/8 tank", "11/16 tank", "3/4 tank", "13/16 tank", "7/8 tank", "15/16 tank", "Full"];
 const VLOG_ITEM = { "MOT": "mot", "Service": "service", "Insurance": "insurance", "Parking permit": "permit" };
 
 function rnUk(k) {
@@ -9206,7 +9208,7 @@ async function actVlog(env, me, act, id) {
   if (miles === undefined) return { ok: false, error: "The mileage is not a number of miles." };
   if (cost === undefined) return { ok: false, error: "The cost is not an amount in pounds." };
   const fuel = what === "Fuel" && !booking ? String(act.fuel || "") : "";
-  if (what === "Fuel" && !booking && FUEL_WORDS.indexOf(fuel) === -1) return { ok: false, error: "Tap the fuel level." };
+  if (what === "Fuel" && !booking && FUEL_WORDS.indexOf(fuel) === -1) return { ok: false, error: "Slide to the fuel level." };
   const defects = [], defectNames = [];
   if (!booking && Array.isArray(act.defects) && act.defects.length) {
     const open = await coordDefectsView(env);

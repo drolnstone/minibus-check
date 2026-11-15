@@ -62,13 +62,13 @@ async function hub(forWho, answer, clock) {
         order.fuel >= 0 && order.fuel < order.miles && order.miles <= order.save, JSON.stringify(order));
   await me.shot("parked-1-box", { scrollTo: "#hubParked" });
   await me.pg.fill("#parkMiles0", "31530");
-  await me.pg.evaluate(() => { const b = document.querySelector('[data-park-fuel] [data-pf="4"]'); if (b && !b.classList.contains("edge")) b.click(); });
+  await me.slideFuel("[data-park-fuel]", 8);
   await me.click("Save", "#hubParked");
   await me.wait(600);
   const low = await me.text("#hubParked");
   check("P2", "a reading lower than the walkaround is refused on the phone", /lower than the walkaround/.test(low) && me.got.length === 0, low);
   await me.pg.fill("#parkMiles0", "31560");
-  await me.pg.evaluate(() => { const b = document.querySelector('[data-park-fuel] [data-pf="4"]'); if (b && !b.classList.contains("edge")) b.click(); });
+  await me.slideFuel("[data-park-fuel]", 8);
   await me.click("Save", "#hubParked");
   await me.wait(1200);
   const saved = await me.text("#hubParked");
@@ -91,7 +91,7 @@ async function hub(forWho, answer, clock) {
 {
   const me = await hub(SAMPLE, () => ({ ok: false, error: "not yours", driver: "Bro Other" }));
   await me.pg.fill("#parkMiles0", "31560");
-  await me.pg.evaluate(() => { const b = document.querySelector('[data-park-fuel] [data-pf="4"]'); if (b && !b.classList.contains("edge")) b.click(); });
+  await me.slideFuel("[data-park-fuel]", 8);
   await me.click("Save", "#hubParked");
   await me.wait(1200);
   const t = await me.text("#hubParked");
@@ -105,7 +105,7 @@ async function hub(forWho, answer, clock) {
   const me = await hub(SAMPLE);
   await me.ctx.setOffline(true);
   await me.pg.fill("#parkMiles0", "31561");
-  await me.pg.evaluate(() => { const b = document.querySelector('[data-park-fuel] [data-pf="4"]'); if (b && !b.classList.contains("edge")) b.click(); });
+  await me.slideFuel("[data-park-fuel]", 8);
   await me.click("Save", "#hubParked");
   await me.wait(800);
   const held = await me.text("#hubParked");
@@ -130,7 +130,7 @@ async function hub(forWho, answer, clock) {
   const me = await hub(SAMPLE);
   await me.ctx.setOffline(true);
   await me.pg.fill("#parkMiles0", "31562");
-  await me.pg.evaluate(() => { const b = document.querySelector('[data-park-fuel] [data-pf="4"]'); if (b && !b.classList.contains("edge")) b.click(); });
+  await me.slideFuel("[data-park-fuel]", 8);
   await me.click("Save", "#hubParked");
   await me.wait(500);
   me.hold = true;
@@ -154,7 +154,7 @@ async function hub(forWho, answer, clock) {
   const me = await hub(SAMPLE);
   await me.pg.focus("#parkMiles0");
   await me.pg.fill("#parkMiles0", "31560");
-  await me.pg.evaluate(() => { const b = document.querySelector('[data-park-fuel] [data-pf="4"]'); if (b && !b.classList.contains("edge")) b.click(); });
+  await me.slideFuel("[data-park-fuel]", 8);
   await me.pg.evaluate((reg) => parkSeen({ parkOpen: [
     { reg: "AB12 CDE", checkId: "c0", day: "2026-09-27", miles: 20000, driver: "Bro Other", parked: null },
     { reg: reg, checkId: "c1", day: "2026-09-27", miles: 31544, driver: "Bro Sample", parked: null }], parked: {} }), REG);
@@ -170,12 +170,12 @@ async function hub(forWho, answer, clock) {
   const me = await hub(SAMPLE);
   me.slow = 2500;
   await me.pg.fill("#parkMiles0", "31650");
-  await me.pg.evaluate(() => { const b = document.querySelector('[data-park-fuel] [data-pf="4"]'); if (b && !b.classList.contains("edge")) b.click(); });
+  await me.slideFuel("[data-park-fuel]", 8);
   await me.click("Save", "#hubParked");
   await me.wait(300);
   await me.click("Change", "#hubParked");
   await me.pg.fill("#parkMiles0", "31560");
-  await me.pg.evaluate(() => { const b = document.querySelector('[data-park-fuel] [data-pf="4"]'); if (b && !b.classList.contains("edge")) b.click(); });
+  await me.slideFuel("[data-park-fuel]", 8);
   await me.click("Save", "#hubParked");
   await me.wait(6500);
   const t = await me.text("#hubParked");
@@ -203,7 +203,7 @@ async function hub(forWho, answer, clock) {
   const open = await me.pg.evaluate(() => { const i = document.getElementById("parkMiles0"); return !!i && !i.disabled; });
   if (open) {
     await me.pg.fill("#parkMiles0", "31560");
-    await me.pg.evaluate(() => { const b = document.querySelector('[data-park-fuel] [data-pf="4"]'); if (b && !b.classList.contains("edge")) b.click(); });
+    await me.slideFuel("[data-park-fuel]", 8);
     await me.click("Save", "#hubParked");
     await me.wait(800);
   }

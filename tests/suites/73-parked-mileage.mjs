@@ -138,6 +138,9 @@ export default async function (root) {
       a.eq((await W.parkedLatest(env))[REG].fuel, "3/8 tank");
       const open = (await W.parkedOpen(env)).filter((o) => o.checkId === "c1")[0];
       a.eq(open && open.parked && open.parked.fuel, "3/8 tank");
+      /* Sixteenths from w2.93.0 (Asim, 15 Nov 2026). */
+      await J(await park(env, key, { parked: { fuel: "7/16 tank" } }));
+      a.eq(db._one("SELECT fuel FROM parked WHERE check_id='c1'").fuel, "7/16 tank");
       await J(await park(env, key, { parked: { miles: 57412, fuel: "a lot" } }));
       a.eq(db._one("SELECT fuel FROM parked WHERE check_id='c1'").fuel, "");
     });
