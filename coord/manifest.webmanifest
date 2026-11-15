@@ -1,6 +1,6 @@
 {
   "name": "RCCG Dominion Assembly Liverpool, Coordinator",
-  "short_name": "Coordinator",
+  "short_name": "Coordinator app",
   "description": "The coordinator's changes to the rota, rota requests, bookings, defects and the run record.",
   "start_url": "./index.html",
   "scope": "../",

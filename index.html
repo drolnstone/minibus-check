@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#1B222C">
 <!-- The name under the Home Screen tile on an iPhone. Without it Safari
      takes the title below and cuts it off. -->
-<meta name="apple-mobile-web-app-title" content="Driver">
+<meta name="apple-mobile-web-app-title" content="Driver app">
 <title>Driver · RCCG Dominion Assembly Liverpool</title>
 <link rel="manifest" href="manifest.webmanifest">
 <!-- The home screen tile, and — because the two tags below declare this page
@@ -1799,7 +1799,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.163.0";
+var APP_VERSION = "v1.164.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -3245,7 +3245,9 @@ function paintLinks(){
    once, in the page. */
 function appName(){
   var m=document.querySelector('meta[name="apple-mobile-web-app-title"]');
-  return (m && m.getAttribute("content")) || "Transport";
+  /* "Driver app" on the icon and alerts from v1.164.0 (Asim); the bar
+     still says Driver. */
+  return ((m && m.getAttribute("content")) || "Transport").replace(/ app$/,"");
 }
 function churchName(){
   var b=document.querySelector(".footer-brand span");
@@ -3744,12 +3746,10 @@ function btn(label,cls,fn,dis,why){
        (closeFinishedRuns in server/worker.js), or by a coordinator with End it
        in the coordinator app. Never by a thumb in the cab. So the bar goes,
        and the screen keeps Back at the top. */
-    if(trip.started && !trip.ended && tripMayTap(trip.route)){
-      $("footbar").classList.add("is-gone");
-      document.body.classList.add("no-foot");
-      return;
-    }
-    btn("Done","btn-main",stopsClose);
+    /* And no Done at all from v1.164.0 (Asim, 15 Nov 2026): it sat
+       against Back at the top. Back is the one way out. */
+    $("footbar").classList.add("is-gone");
+    document.body.classList.add("no-foot");
     return;
   }
   if(st.screen==="rota"){
@@ -9890,8 +9890,11 @@ function tripPaintMoving(){
   if(moving===tripMovingPainted) return;
   tripMovingPainted=moving;
   var note=$("tripMoving");
-  if(note) note.innerHTML = moving
-    ? '<b class="trip-stopme">The bus is moving.</b> Taps come back when you pull up.'
+  /* Only where the list still has stop buttons (no numbers for today),
+     from v1.164.0 (Asim, 15 Nov 2026): the live line has none, and the
+     pop-up says so itself. */
+  if(note) note.innerHTML = (moving && document.querySelector("#stopsBody [data-triptap]"))
+    ? '<b class="trip-stopme">The bus is moving.</b> Taps come back when you stop.'
     : '';
   var pm=$("pickMoving");
   if(pm) pm.classList.toggle("is-on", moving);
@@ -10495,7 +10498,7 @@ $("stopsBack").addEventListener("click",stopsClose);
        all a long way down by the end. 460 keeps it off the short ones. */
     var wants = st.screen!=="driver" &&
                 !(st.screen==="stops" && trip.started && !trip.ended);
-    b.classList.toggle("is-on", wants && window.scrollY>460);
+    b.classList.toggle("is-on", wants && window.scrollY>230);
   }
   window.addEventListener("scroll",sync,{passive:true});
   b.addEventListener("click",function(){
