@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.161.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.162.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -506,6 +506,8 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .check{display:flex;gap:10px;align-items:flex-start;padding:7px 0;font-size:15px;line-height:1.35}
 .check input{width:22px;height:22px;flex:none;margin:0}
 .check small{color:var(--muted);font-size:13px}
+.radios{display:flex;gap:28px}
+.radios .check{display:flex;gap:10px;text-transform:none;letter-spacing:0;font-weight:500;font-size:16px;color:var(--ink);align-items:center;margin:0}
 .preview{background:var(--info-bg);border:1px solid var(--info-line);border-radius:8px;padding:9px 11px;
   font-size:14px;line-height:1.4;margin:0 0 12px;color:var(--ink)}
 
@@ -769,7 +771,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.161.0";
+var PAGE_VERSION = "v1.162.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -2731,7 +2733,7 @@ var VLOG_SAMPLE = {
   "Parking permit": "e.g. Renewed for another year",
   "Repair": "e.g. Wing mirror replaced",
   "Tyres": "e.g. Both front tyres replaced",
-  "Fuel": "e.g. 60 litres",
+  "Fuel": "e.g. BP Ultimate",
   "Other": "e.g. Fire extinguisher replaced"
 };
 var VLOG_ITEM = { "MOT": "mot", "Service": "service", "Insurance": "insurance", "Parking permit": "permit" };
@@ -3021,6 +3023,7 @@ function entryHTML(reg, x){
   if(facts.length) lines.push(facts.join(" · "));
   if(x.defects) lines.push("Put right: " + x.defects);
   if(x.fuel) lines.push("Fuel level " + x.fuel);
+  if(x.boughtBy) lines.push(["Bought by " + x.boughtBy, x.paidBy, x.litres != null && x.litres !== "" ? x.litres + " litres" : ""].filter(Boolean).join(" · "));
   var h = '<div class="vlog' + (gone ? ' gone' : '') + '"><div class="vlog-head"><b>' + esc(x.what) + '</b>' + tag +
           (x.correctedBy ? '<span class="tag">Corrected</span>' : '') + '</div>' +
           lines.map(function(l){ return '<p>' + esc(l) + '</p>'; }).join("") +
@@ -3226,6 +3229,14 @@ function recordFor(reg, from){
           '<div class="field" id="vlDoneF"><label for="vlDay">Day it was done</label><input type="date" id="vlDay" value="' + esc(startDay) + '" max="' + esc(today) + '"></div>' +
           '<div class="field" id="vlBookF" hidden><label for="vlFor">Booked for</label><input type="date" id="vlFor" min="' + esc(today) + '"></div>' +
           '<div class="field" id="vlFuelF" hidden><label>Fuel level</label><div class="fuelbar fuelpick" id="vlFuel"></div></div>' +
+          '<div id="vlBuyF" hidden><div class="field"><label for="vlBuyer">Bought by</label><select id="vlBuyer">' +
+            buyerNames().map(function(n){ return '<option value="' + esc(n) + '"' + (same(n, who) ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join("") +
+            '<option value="">Someone else</option></select></div>' +
+          '<div class="field" id="vlOtherF" hidden><label for="vlOther">Name</label><input id="vlOther" maxlength="60" autocomplete="off" placeholder="e.g. Bro Solomon"></div>' +
+          '<div class="field"><label>Paid by</label><div class="radios" id="vlPaid">' +
+            '<label class="check"><input type="radio" name="vlPaid" value="Church" checked><span>Church</span></label>' +
+            '<label class="check"><input type="radio" name="vlPaid" value="Gift"><span>Gift</span></label></div></div>' +
+          '<div class="field"><label for="vlLitres">Litres</label><input id="vlLitres" inputmode="decimal" autocomplete="off" placeholder="e.g. 62"></div></div>' +
           '<div id="vlGivens"></div>' +
           '<p class="preview" id="vlNext" style="white-space:pre-line" hidden></p>' +
           '<div class="two"><div class="field"><label for="vlMiles">Mileage</label><input id="vlMiles" inputmode="numeric" autocomplete="off"' +
@@ -3261,11 +3272,22 @@ function recordFor(reg, from){
       recordShow(b);
     };
   });
+  $("vlBuyer").onchange = function(){ $("vlOtherF").hidden = !!$("vlBuyer").value; };
   ["vlDay", "vlFor"].forEach(function(id){
     var el = $(id); if(el){ el.onchange = function(){ recordShow(b); }; el.oninput = el.onchange; }
   });
   vlBoxes(b);
   recordShow(b);
+}
+
+/* Who bought fuel: coordinators, then active drivers, each once. */
+function buyerNames(){
+  var out = [];
+  var add = function(n){ if(n && !out.some(function(o){ return same(o, n); })) out.push(n); };
+  (REGLIVE || CFG.drivers || []).forEach(function(d){ if(d && isLead(d.role)) add(d.name); });
+  activeDrivers().forEach(function(d){ add(d.name); });
+  if(who) add(who);
+  return out;
 }
 
 /* Fuel bought (v1.158.0): what the tank reads now, Full unless tapped. */
@@ -3297,6 +3319,7 @@ function recordShow(b){
   $("vlFuelF").hidden = !done || ws.indexOf("Fuel") === -1;
   /* Fuel alone: where it was bought, and the litres in Notes. */
   var fuelOnly = ws.length === 1 && ws[0] === "Fuel";
+  $("vlBuyF").hidden = !done || !fuelOnly;
   $("vlGarageL").textContent = fuelOnly ? "Filling station" : "Garage";
   $("vlGarage").placeholder = fuelOnly ? "e.g. Shell, Church Road" : "e.g. High Street Garage";
   if(!$("vlFuelF").hidden) vlFuelPaint();
@@ -3345,6 +3368,14 @@ function recordSend(b){
     var one = {}; for(var k in a) one[k] = a[k];
     one.what = w; one.cost = cost;
     if(done && w === "Fuel") one.fuel = FUEL_WORDS[VL.fuel - 1];
+    if(done && w === "Fuel" && ws.length === 1){
+      one.boughtBy = $("vlBuyer").value || $("vlOther").value.trim();
+      if(!one.boughtBy){ sheetSay("Say who bought it.", true); return; }
+      one.paidBy = (document.querySelector('input[name="vlPaid"]:checked') || {}).value || "Church";
+      var lt = numIn($("vlLitres").value);
+      if(lt !== lt){ sheetSay("The litres are not a number.", true); return; }
+      one.litres = lt === "" ? null : lt;
+    }
     if(done && item) one.given = ($(vlGivenId(item)) || {}).value || "";
     /* A defect put right goes on one entry: the repair, if there is one. */
     var home = ws.indexOf("Repair") !== -1 ? "Repair" : ws[0];

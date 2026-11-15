@@ -71,7 +71,7 @@ export const TABS = {
                   "Booked for", "Was due", "Days early (-) or late (+)", "Next due",
                   "How the next date was worked out", "Certificate or policy date",
                   "Mileage", "Garage", "Cost (£)", "Defects put right", "Notes",
-                  "Corrects", "Recorded by", "Source", "Fuel level"],
+                  "Corrects", "Recorded by", "Source", "Fuel level", "Bought by", "Paid by", "Litres"],
 
   "History": ["When", "Who", "Where", "Registration", "What changed", "From", "To",
               "Why", "Ref"]

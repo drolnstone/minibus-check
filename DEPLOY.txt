@@ -1,18 +1,20 @@
 MINIBUS
 =======
-  pages v1.161.0 · server w2.91.0 · sheet v1.138.0
+  pages v1.162.0 · server w2.92.0 · sheet v1.139.0
 
-YOU ARE ON   app v1.160.0 · server w2.91.0 · sheet v1.138.0
-GOING TO     app v1.161.0 · server w2.91.0 · sheet v1.138.0
+YOU ARE ON   app v1.161.0 · server w2.91.0 · sheet v1.138.0
+GOING TO     app v1.162.0 · server w2.92.0 · sheet v1.139.0
 
-1. Due dates in the driver app (Asim, 14 Nov 2026): MOT, service,
-   insurance and parking permit now show from 60 days before, the same as
-   the coordinator app (was 30). On the bus button ("Parking permit due
-   soon") and in Before you start ("Coming up"). Drivers still get no push
-   or email about them.
+1. Who bought fuel (Asim, 14 Nov 2026): Record something, Fuel, Done now
+   asks Bought by (coordinators and drivers, your own name already
+   chosen, or Someone else with a Name box), Paid by (Church or Gift) and
+   Litres. The entry on the bus reads "Bought by Bro Solomon · Gift · 14
+   litres". The Vehicle Log tab gets three new columns at the end: Bought
+   by, Paid by, Litres. Notes sample for fuel is now "e.g. BP Ultimate".
 
 Merging is the whole deploy. Nothing to do on the phone.
 
 CHECKS
-A. Coordinator app, App info: v1.161.0 · w2.91.0 · v1.138.0.
-B. Driver app, Vehicle check: the bus with its permit due 1 Jan says "Parking permit due soon".
+A. Coordinator app, App info: v1.162.0 · w2.92.0 · v1.139.0.
+B. Coordinator app, a bus, Record something, Fuel: Bought by shows your
+   name, Paid by shows Church ticked.
