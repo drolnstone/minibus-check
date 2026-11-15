@@ -663,16 +663,29 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   font-weight:700;font-size:17px;letter-spacing:.05em;text-transform:uppercase}
 
 /* ---------- mileage confirm ---------- */
-.fuel{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin-top:4px}
-.fuel button{min-height:52px;border:1.5px solid var(--hair);border-radius:6px;background:var(--card);
-  padding:0;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:13px;
-  color:var(--muted);display:flex;align-items:flex-end;justify-content:center;
-  padding-bottom:5px;transition:background .12s,border-color .12s}
-/* The colour is set per segment in script. The grey here is only a fallback,
-   so a lit segment can never end up white on white. */
-.fuel button.lit{color:var(--muted-ink);border-color:transparent;background:var(--muted)}
-.fuel button.edge{box-shadow:inset 0 0 0 2px var(--inset)}
-.fuel button:active{transform:scale(.96)}
+/* The fuel slider (v1.169.0): sixteen steps on one red-to-green bar. */
+.fg{display:block;position:relative;margin-top:4px;user-select:none;-webkit-user-select:none;touch-action:pan-y;outline:none}
+.fg-read{display:block;font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:20px;line-height:26px;min-height:26px;text-align:center;color:var(--ink)}
+.fg-track{display:block;position:relative;height:30px;border-radius:15px;margin:4px 14px 0;overflow:visible}
+.fg-track::after{content:"";position:absolute;inset:0;border-radius:15px;pointer-events:none;
+  background:repeating-linear-gradient(to right,transparent 0,transparent calc(6.25% - 1.5px),rgba(255,255,255,.45) calc(6.25% - 1.5px),rgba(255,255,255,.45) 6.25%)}
+.fg-rest{position:absolute;top:0;bottom:0;right:0;border-radius:0 15px 15px 0;background:var(--card);opacity:.8;pointer-events:none}
+.fg-unset .fg-rest{border-radius:15px}
+.fg-knob{position:absolute;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:#fff;
+  border:2px solid var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.35);pointer-events:none;z-index:1}
+.fg-unset .fg-knob{display:none}
+.fg:focus-visible .fg-knob{outline:3px solid var(--ink);outline-offset:2px}
+.fg-marks{display:block;position:relative;height:18px;margin:6px 14px 0;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:14px;color:var(--muted)}
+.fg-marks span{position:absolute;top:0;transform:translateX(-50%)}
+.fg-marks span:nth-child(1){left:0}.fg-marks span:nth-child(2){left:25%}.fg-marks span:nth-child(3){left:50%}
+.fg-marks span:nth-child(4){left:75%}.fg-marks span:nth-child(5){left:100%}
+.fg[aria-disabled="true"]{opacity:.5;pointer-events:none}
+.fg-small{touch-action:auto;pointer-events:none}
+.fg-small .fg-track{height:12px;border-radius:6px;margin:0}
+.fg-small .fg-track::after{border-radius:6px}.fg-small .fg-rest{border-radius:0 6px 6px 0}.fg-small.fg-unset .fg-rest{border-radius:6px}
+.fg-small .fg-knob{width:16px;height:16px;margin:-8px 0 0 -8px;border-width:1.5px}
+.fg-small .fg-marks{height:13px;margin:3px 0 0;font-size:11px}
+.fg-small .fg-marks span:nth-child(1){transform:none}.fg-small .fg-marks span:nth-child(5){transform:translateX(-100%)}
 
 #sign{font-style:italic}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
@@ -1230,8 +1243,8 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
       </div>
       <div class="field" id="fuelCard" style="margin-top:16px">
         <label>Fuel showing</label>
-        <div class="fuel" id="fuelBar" role="group" aria-label="Fuel level in eighths"></div>
-        <div class="hint" id="fuelHint">Tap what the gauge is reading.</div>
+        <div id="fuelBar"></div>
+        <div class="hint" id="fuelHint">Slide to what the gauge is reading.</div>
       </div>
     </div>
     <div class="card" id="geoCard" style="display:none">
@@ -1812,7 +1825,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.168.0";
+var APP_VERSION = "v1.169.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -3640,7 +3653,7 @@ function btn(label,cls,fn,dis,why,line){
         !entered ? "Mileage needed." : (prob && !st.mileOk) ? "Check the mileage." : "Fuel reading needed.");
     if(!entered) c.textContent="Enter the mileage";
     else if(prob && !st.mileOk) c.textContent="Check the mileage";
-    else if(st.fuel===null) c.textContent="Tap the fuel gauge reading";
+    else if(st.fuel===null) c.textContent="Slide to the fuel gauge reading";
     return;
   }
   if(st.screen==="stage"){
@@ -4085,7 +4098,7 @@ function openDefectsHTML(reg){
 }
 
 /* ---------------- fuel ----------------
-   Eighths rather than miles remaining. Only the newer bus has a range
+   Steps of the gauge rather than miles remaining. Only the newer bus has a range
    readout, so miles would give data from one bus and blanks from the other,
    and range swings about with how it is driven. Eighths is one tap, it means
    the same thing on both buses, and it compares week to week.
@@ -4093,55 +4106,109 @@ function openDefectsHTML(reg){
    A low tank is not a fault. It stops nothing and emails nobody. It just
    needs somebody to put diesel in. */
 
-var FUEL_LABELS = ["E","\u00BC","","\u00BD","","\u00BE","","F"];
-
-/* Each segment carries its own colour, so the lit part of the bar always
-   runs red through amber to green rather than turning one flat colour. A
-   hue sweep rather than a straight blend, which would go olive in the
-   middle. Dark enough that the white markings stay readable on every step. */
-var FUEL_COLOURS = ["#75201a","#753e1a","#755d1a","#6e751a",
-                    "#50751a","#31751a","#1a7521","#1a7540"];
-
-/* How a person says it. Eighths are how the bar is built, but nobody reads a
-   gauge and thinks "four eighths", so nothing is written down that way.
-
-   The word "tank" is not decoration. Written on its own, "1/2" is read by
-   Google Sheets as the 2nd of January, "3/4" as the 4th of March, and so on
-   for every value except Full. The whole Fuel column would fill with dates
-   and the Sunday summary would print one. The trailing word makes each value
-   text, and reads better in the email besides. Do not take it back out. */
-var FUEL_WORDS = ["1/8 tank","1/4 tank","3/8 tank","1/2 tank",
-                  "5/8 tank","3/4 tank","7/8 tank","Full"];
-function fuelText(n){ return (n>=1 && n<=8) ? FUEL_WORDS[n-1] : ""; }
+/* ---- the fuel slider, from v1.169.0 (Asim, 15 Nov 2026) ------------------
+   Sixteen steps, E to F, on one bar running red through amber to green. The
+   knob snaps to each step, so it never rests between two. A reading saved in
+   eighths keeps its words: "3/8 tank" is the sixth of the sixteen. Keep this
+   block the same in index.html and coord/index.html. */
+var FUEL_STEPS = 16;
+var FUEL_WORDS = ["1/16 tank","1/8 tank","3/16 tank","1/4 tank",
+                  "5/16 tank","3/8 tank","7/16 tank","1/2 tank",
+                  "9/16 tank","5/8 tank","11/16 tank","3/4 tank",
+                  "13/16 tank","7/8 tank","15/16 tank","Full"];
+/* A hue sweep, red to green, dark enough for white on every step. */
+var FUEL_COLOURS = FUEL_WORDS.map(function(w, i){
+  return "hsl(" + Math.round(4 + i * 141 / 15) + ",64%,28%)";
+});
+function fuelText(n){ return (n >= 1 && n <= FUEL_STEPS) ? FUEL_WORDS[n-1] : ""; }
+function fuelStep(words){ return FUEL_WORDS.indexOf(String(words || "")) + 1; }
+/* What shows above the bar: "7/16", "1/2", "Full". */
+function fuelShort(n){ return fuelText(n).replace(/ tank$/, ""); }
+/* n 0 is nothing chosen yet: no knob, and nothing lit. */
+function fuelGaugeHtml(n, attrs, o){
+  o = o || {};
+  n = Number(n) || 0;
+  var pc = (n / FUEL_STEPS * 100) + "%";
+  var grad = "linear-gradient(to right," + FUEL_COLOURS.join(",") + ")";
+  var aria = o.small
+    ? ' role="img" aria-label="Fuel ' + fuelText(n) + '"'
+    : ' role="slider" tabindex="' + (o.disabled ? '-1' : '0') + '" aria-label="Fuel showing" aria-valuemin="1" aria-valuemax="' + FUEL_STEPS + '"' +
+      (n ? ' aria-valuenow="' + n + '" aria-valuetext="' + fuelText(n) + '"' : '') + (o.disabled ? ' aria-disabled="true"' : '');
+  return '<span class="fg' + (o.small ? ' fg-small' : '') + (n ? '' : ' fg-unset') + (o.cls ? ' ' + o.cls : '') + '"' + aria + (attrs ? ' ' + attrs : '') + '>' +
+         (o.small ? '' : '<span class="fg-read">' + (n ? fuelShort(n) : '') + '</span>') +
+         '<span class="fg-track" style="background:' + grad + '"><i class="fg-rest" style="left:' + pc + '"></i>' +
+           '<b class="fg-knob" style="left:' + pc + '"></b></span>' +
+         '<span class="fg-marks"><span>E</span><span>¼</span><span>½</span><span>¾</span><span>F</span></span></span>';
+}
+/* Moves the knob without redrawing, so a slide in progress keeps going. */
+function fuelGaugePaint(el, n){
+  var pc = (n / FUEL_STEPS * 100) + "%";
+  el.classList.toggle("fg-unset", !n);
+  el.querySelector(".fg-rest").style.left = pc;
+  el.querySelector(".fg-knob").style.left = pc;
+  var r = el.querySelector(".fg-read"); if(r) r.textContent = n ? fuelShort(n) : "";
+  if(n){ el.setAttribute("aria-valuenow", n); el.setAttribute("aria-valuetext", fuelText(n)); }
+}
+/* A tap sets the step under the finger; a slide follows it step by step. A
+   finger that moves up the page first is a scroll and sets nothing. */
+function fuelGaugeBind(el, get, set){
+  if(!el || el.getAttribute("aria-disabled") === "true") return;
+  var track = el.querySelector(".fg-track"), down = null;
+  var at = function(x){
+    var r = track.getBoundingClientRect();
+    var n = Math.round((x - r.left) / (r.width || 1) * FUEL_STEPS);
+    return n < 1 ? 1 : n > FUEL_STEPS ? FUEL_STEPS : n;
+  };
+  var pick = function(n){
+    if(n === get()) return;
+    fuelGaugePaint(el, n); set(n);
+    try{ if(navigator.vibrate) navigator.vibrate(5); }catch(e){}
+  };
+  el.addEventListener("pointerdown", function(e){
+    if(e.button > 0) return;
+    down = { id:e.pointerId, x:e.clientX, y:e.clientY, slide:false };
+  });
+  el.addEventListener("pointermove", function(e){
+    if(!down || e.pointerId !== down.id) return;
+    if(!down.slide){
+      if(Math.abs(e.clientX - down.x) < 6) return;
+      down.slide = true;
+      try{ el.setPointerCapture(e.pointerId); }catch(x){}
+    }
+    e.preventDefault();
+    pick(at(e.clientX));
+  });
+  el.addEventListener("pointerup", function(e){
+    if(!down || e.pointerId !== down.id) return;
+    down = null; pick(at(e.clientX));
+  });
+  el.addEventListener("pointercancel", function(){ down = null; });
+  el.addEventListener("keydown", function(e){
+    var n = get() || 0, k = e.key;
+    if(k === "ArrowRight" || k === "ArrowUp") n = Math.min(FUEL_STEPS, n + 1);
+    else if(k === "ArrowLeft" || k === "ArrowDown") n = Math.max(1, n - 1);
+    else if(k === "Home") n = 1; else if(k === "End") n = FUEL_STEPS;
+    else return;
+    e.preventDefault(); pick(n);
+  });
+}
 
 function paintFuel(){
   var bar=$("fuelBar"); if(!bar) return;
-  bar.innerHTML="";
-  for(var i=1;i<=8;i++){
-    (function(n){
-      var b=document.createElement("button");
-      b.type="button";
-      b.textContent=FUEL_LABELS[n-1];
-      b.setAttribute("aria-label",n+" eighths");
-      if(st.fuel!==null && n<=st.fuel){
-        b.className="lit"+(n===st.fuel?" edge":"");
-        b.style.background=FUEL_COLOURS[n-1];
-      }
-      b.addEventListener("click",function(){
-        st.fuel = (st.fuel===n) ? null : n;   /* tap the same one again to clear */
-        paintFuel(); paintFoot();
-      });
-      bar.appendChild(b);
-    })(i);
-  }
-  var hint=$("fuelHint");
-  if(st.fuel===null){ hint.textContent="Tap what the gauge is reading."; hint.style.color=""; return; }
-  /* No numbers here. The bar has already said it, and the eighths still go
-     on the record. Only say something when there is something to say. */
-  if(st.fuel<=2){
+  bar.innerHTML=fuelGaugeHtml(st.fuel||0);
+  fuelGaugeBind(bar.firstChild, function(){ return st.fuel||0; },
+                function(n){ st.fuel=n; paintFuelHint(); paintFoot(); });
+  paintFuelHint();
+}
+/* Only says something when there is something to say. Low is 1/4 or less,
+   where Needs fuel comes on (v1.169.0); 3/8 or less is getting low. */
+function paintFuelHint(){
+  var hint=$("fuelHint"); if(!hint) return;
+  if(st.fuel===null){ hint.textContent="Slide to what the gauge is reading."; hint.style.color=""; return; }
+  if(st.fuel<=4){
     hint.textContent="Low.";
     hint.style.color="var(--stop)";
-  } else if(st.fuel===3){
+  } else if(st.fuel<=6){
     hint.textContent="Getting low.";
     hint.style.color="var(--warn)";
   } else {
@@ -4168,7 +4235,7 @@ var JOBS = [
    list is not an answer: it is a driver who scrolled past. */
 function jobsAnswered(){ return st.jobs.length>0; }
 
-function fuelLow(){ return st.fuel!==null && st.fuel<=3; }
+function fuelLow(){ return st.fuel!==null && st.fuel<=4; }
 function paintJobs(){
   var box=$("jobChips"); if(!box) return;
   var low=fuelLow();
@@ -4178,7 +4245,8 @@ function paintJobs(){
     b.type="button";
     b.textContent=j.label;
     if(st.jobs.indexOf(j.id)!==-1) b.className="on";
-    /* 3/8 or less: Needs fuel stays on, and Nothing needed cannot clear it. */
+    /* 1/4 or less (v1.169.0; 3/8 before): Needs fuel stays on, and Nothing
+       needed cannot clear it. */
     if(low && (j.id==="fuel" || j.clears)) b.disabled=true;
     b.addEventListener("click",function(){
       if(b.disabled) return;
@@ -6742,13 +6810,7 @@ var parkTimer = null, parkBusy = false, parkEdit = {}, parkSaid = {}, parkAskedA
    in the mileage box, so a repaint keeps both. */
 var parkFuel = {}, parkTyped = {};
 function parkFuelBtns(id, shut){
-  var n = parkFuel[id] || 0, h = "";
-  for(var i = 1; i <= 8; i++){
-    h += '<button type="button" data-pf="'+i+'" aria-label="'+i+' eighths"'+(shut ? ' disabled' : '')+
-         (i <= n ? ' class="lit'+(i === n ? ' edge' : '')+'" style="background:'+FUEL_COLOURS[i-1]+'"' : '')+'>'+
-         FUEL_LABELS[i-1]+'</button>';
-  }
-  return h;
+  return fuelGaugeHtml(parkFuel[id] || 0, 'data-park-fuel="'+esc(String(id || ""))+'"', { disabled:shut });
 }
 function parkHtml(){
   var h = "", n = 0;
@@ -6792,7 +6854,7 @@ function parkHtml(){
          /* Fuel first, then the mileage, then Save, from v1.167.0 (Asim,
             15 Nov 2026): top to bottom, Save is the last thing reached. */
          '<p class="dw-sub"><b>Fuel showing</b></p>'+
-         '<div class="fuel" data-park-fuel="'+pid+'">'+parkFuelBtns(o.checkId, shut)+'</div>'+
+         parkFuelBtns(o.checkId, shut)+
          '<label class="dw-sub" style="display:block;margin-top:10px" for="parkMiles'+i+'"><b>Mileage after the afternoon run</b>'+
            (shut ? ' · from '+PARK_OPENS : '')+(walk ? ' · '+walk : '')+'</label>'+
          '<div class="park-row"><input id="parkMiles'+i+'" type="number" inputmode="numeric" class="mono" '+
@@ -6831,16 +6893,10 @@ function parkPaint(){
   Array.prototype.forEach.call(box.querySelectorAll("[data-park-typed]"), function(el){
     el.oninput = function(){ parkTyped[el.getAttribute("data-park-typed")] = el.value; };
   });
-  /* A fuel tap redraws only the gauge: the mileage box keeps its focus. */
+  /* The slider moves only its knob: the mileage box keeps its focus. */
   Array.prototype.forEach.call(box.querySelectorAll("[data-park-fuel]"), function(bar){
     var id = bar.getAttribute("data-park-fuel");
-    bar.onclick = function(e){
-      var b = e.target && e.target.closest ? e.target.closest("[data-pf]") : null;
-      if(!b || b.disabled) return;
-      var n = Number(b.getAttribute("data-pf"));
-      parkFuel[id] = parkFuel[id] === n ? 0 : n;
-      bar.innerHTML = parkFuelBtns(id, false);
-    };
+    fuelGaugeBind(bar, function(){ return parkFuel[id] || 0; }, function(n){ parkFuel[id] = n; });
   });
   Array.prototype.forEach.call(box.querySelectorAll("[data-park-change]"), function(b){
     b.onclick = function(){
@@ -6871,7 +6927,7 @@ function parkSend(id, inp){
     say("That is lower than the walkaround's " + Number(o.miles).toLocaleString("en-GB") + ".", true); return;
   }
   var fuel = fuelText(parkFuel[o.checkId] || 0);
-  if(!fuel){ say("Tap the fuel gauge reading.", true); return; }
+  if(!fuel){ say("Slide to the fuel gauge reading.", true); return; }
   if(!st.driver){ show("driver"); return; }
   if(!driverKey(st.driver) && pinGateNeeded()){
     toast("Enter your four digit PIN.", true);

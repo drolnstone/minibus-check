@@ -1,19 +1,26 @@
 MINIBUS
 =======
-  pages v1.168.0 · server w2.92.0 · sheet v1.139.0
+  pages v1.169.0 · server w2.93.0 · sheet v1.139.0
 
-YOU ARE ON   app v1.167.0 · server w2.92.0 · sheet v1.139.0
-GOING TO     app v1.168.0 · server w2.92.0 · sheet v1.139.0
+YOU ARE ON   app v1.168.0 · server w2.92.0 · sheet v1.139.0
+GOING TO     app v1.169.0 · server w2.93.0 · sheet v1.139.0
 
-1. A parking permit shows as due on the coordinator app's first screen
-   (Due dates) and in the driver app (bus card chip, Coming up) from 30
-   days before its date, not 60 (Asim, 15 Nov 2026). MOT, service and
-   insurance still show from 60 days. The alerts are unchanged (60, 30,
-   7 and 0 days, then weekly). The bus's own page still shows every date.
+1. Fuel in 16 steps (Asim, 15 Nov 2026): one bar, red at E through amber
+   to green at F, with a knob that slides and stops on each step. The
+   reading shows above it (7/16, 1/2, Full); E, 1/4, 1/2, 3/4 and F are
+   marked under it. The same bar in the driver app (vehicle check, Bus
+   parked) and the coordinator app (Record something, Fuel). Readings
+   already saved in eighths stay as they are.
+2. Where fuel is only shown (first screen, Buses, a bus), the same bar,
+   small, with the knob at the reading.
+3. Needs fuel (the beacon, and the driver app's locked tick) comes on at
+   1/4 or below, not 3/8. 3/8 is still amber "Getting low."
+4. The server takes sixteenths for parked fuel and fuel bought.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: v1.168.0 · w2.92.0 · v1.139.0.
-B. A parking permit 31 to 60 days off is not under Due dates; one 30 days
-   off or less is.
+A. Coordinator app, App info: v1.169.0 · w2.93.0 · v1.139.0.
+B. Driver app, vehicle check: Fuel showing is a bar; sliding it stops on
+   each step and shows the reading above.
+C. Coordinator app: a bus at 3/8 no longer shows "needs fuel".

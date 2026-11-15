@@ -443,10 +443,16 @@ export async function phone(opts = {}) {
     await pg.evaluate(r => { const b = [...document.querySelectorAll("#vehList button")].find(x => (x.textContent || "").indexOf(r) > -1); if (b) b.click(); }, reg);
     await pg.waitForTimeout(500);
   };
-  me.fuel = async (eighths) => {
-    await pg.evaluate(n => { const b = document.querySelectorAll("#fuelBar button")[n - 1]; if (b) b.click(); }, eighths);
-    await pg.waitForTimeout(300);
+  /* The fuel slider, from v1.169.0: a tap on the bar at step n of 16, as a
+     finger would, scrolled into view first. */
+  me.slideFuel = async (sel, n) => {
+    const tr = pg.locator(sel + " .fg-track").first();
+    await tr.scrollIntoViewIfNeeded();
+    const bb = await tr.boundingBox();
+    if (bb) await tr.click({ position: { x: Math.max(1, bb.width * n / 16 - 1), y: bb.height / 2 } });
+    await pg.waitForTimeout(200);
   };
+  me.fuel = async (sixteenths) => { await me.slideFuel("#fuelBar .fg", sixteenths); await pg.waitForTimeout(100); };
   /* Answer every item on the screen: answers maps item name prefix to
      "Fine" | "Advisory" | "Defect" | "Not on this bus", with an optional note. */
   me.answerStage = async (answers = {}, onlyListed = false) => {
@@ -485,7 +491,7 @@ export async function phone(opts = {}) {
     await me.onward();
     await me.close(["busAskStay"]);
     await me.setInput("miles", String(o.miles || 48262));
-    await me.fuel(o.fuel || 6);
+    await me.fuel(o.fuel || 12);
     await me.onward();
     await me.walkaround(o.answers || {});
     await pg.evaluate((jobs) => {

@@ -1081,7 +1081,7 @@ if (want("T33")) {
   const me = await phone({ clock: "2026-09-27T09:40:00+01:00" });
   await me.load(); await me.close(["howDone"]); await me.signIn();
   await me.click("Vehicle check", "#s-hub"); await me.pickBus("NH56 FWP"); await me.onward(); await me.close(["busAskStay"]);
-  await me.setInput("miles", "48262"); await me.fuel(6); await me.onward();
+  await me.setInput("miles", "48262"); await me.fuel(12); await me.onward();
   await me.answerStage({ "Keys and remote": { a: "Defect", note: "Remote is defected" } });
   const keysNoPic = await me.pg.evaluate(() => {
     const c = [...document.querySelectorAll("#itemList .item")].find(x => /Keys and remote/.test(x.textContent));
@@ -1149,7 +1149,7 @@ if (want("T35")) {
   const me = await phone({ clock: "2026-09-27T09:40:00+01:00", world: { coordinator: { name: "Bro Calvin", phone: "07399671575" } } });
   await me.load(); await me.close(["howDone"]); await me.signIn();
   await me.click("Vehicle check", "#s-hub"); await me.pickBus("NH56 FWP"); await me.onward(); await me.close(["busAskStay"]);
-  await me.setInput("miles", "48262"); await me.fuel(6); await me.onward();
+  await me.setInput("miles", "48262"); await me.fuel(12); await me.onward();
   let mid = null;
   for (let i = 0; i < 8 && (await me.where()) === "s-stage"; i++) {
     const has = await me.pg.evaluate(() => [...document.querySelectorAll("#itemList .item")].some(x => /^Tyres/.test((x.querySelector(".item-name, h3, b, strong") || x).textContent.trim())));
@@ -1196,7 +1196,7 @@ if (want("T36")) {
   const card = await me.text("#hubDuty");
   await me.click("Vehicle check", "#s-hub"); await me.pickBus("NH56 FWP"); await me.onward(); await me.close(["busAskStay"]);
   const driverMode = await me.pg.evaluate(() => getComputedStyle(document.getElementById("modeCard")).display);
-  await me.setInput("miles", "48262"); await me.fuel(6); await me.onward(); await me.wait(800);
+  await me.setInput("miles", "48262"); await me.fuel(12); await me.onward(); await me.wait(800);
   const go = me.posted.find(p => p.action === "checkgo");
   await me.ctx.close();
 
@@ -1568,21 +1568,52 @@ if (want("T54")) {
   await me.ctx.close();
 }
 
-/* T55 — NEEDS FUEL LOCKED ON at 3/8 or less (v1.160.0, Asim, 14 Nov 2026):
+/* T55 — NEEDS FUEL LOCKED ON at 1/4 or less (v1.160.0 at 3/8; 1/4 from v1.169.0, Asim, 15 Nov 2026):
    ticked by itself, cannot be unticked, and Nothing needed cannot clear it. */
 if (want("T55")) {
   const me = await phone({ clock: "2026-09-27T09:20:00+01:00" });
   await me.load(); await me.close(["howDone"]);
   await me.signIn();
-  await me.fullCheck({ fuel: 3, jobs: ["Needs fuel", "Nothing needed"], stopAtReview: true });
+  await me.fullCheck({ fuel: 4, jobs: ["Needs fuel", "Nothing needed"], stopAtReview: true });
   const chips = await me.pg.evaluate(() => [...document.querySelectorAll("#jobChips button")].map(b => b.textContent.trim() + ":" + (b.className === "on" ? "on" : "off") + ":" + (b.disabled ? "locked" : "open")));
   await me.onward(); await me.wait(1500);
   const chk = me.posted.find(p => p.action === "check");
   const jobs = chk && chk.check.jobs;
-  check("T55", "3/8: Needs fuel ticked, locked on, and Nothing needed cannot clear it",
+  check("T55", "1/4: Needs fuel ticked, locked on, and Nothing needed cannot clear it",
         chips.includes("Needs fuel:on:locked") && chips.includes("Nothing needed:off:locked") &&
         Array.isArray(jobs) && jobs.indexOf("Needs fuel") !== -1 && !me.errs.length,
         JSON.stringify({ chips, jobs, errs: me.errs }));
+  await me.ctx.close();
+}
+
+/* T55b — 3/8 NO LONGER LOCKS Needs fuel (v1.169.0, Asim, 15 Nov 2026), and
+   the slider follows a finger step by step: 2/16 slid to 6/16 reads "3/8". */
+if (want("T55b")) {
+  const me = await phone({ clock: "2026-09-27T09:20:00+01:00" });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn();
+  /* The fuel step slides with the mouse held down, from 2/16 to 6/16. */
+  let seen = [], read = "", hint = "", knob = "";
+  me.fuel = async () => {
+    const tr = me.pg.locator("#fuelBar .fg-track");
+    await tr.scrollIntoViewIfNeeded();
+    const bb = await tr.boundingBox();
+    const y = bb.y + bb.height / 2, x = (n) => bb.x + bb.width * n / 16;
+    await me.pg.mouse.move(x(2), y); await me.pg.mouse.down();
+    for (let s = 2.2; s <= 6.01; s += 0.4) { await me.pg.mouse.move(x(s), y); seen.push(await me.text("#fuelBar .fg-read")); }
+    await me.pg.mouse.up();
+    await me.wait(200);
+    read = await me.text("#fuelBar .fg-read"); hint = await me.text("#fuelHint");
+    knob = await me.pg.evaluate(() => document.querySelector("#fuelBar .fg-knob").style.left);
+    await me.shot("T55b-fuel-3-8");
+  };
+  await me.fullCheck({ jobs: ["Nothing needed"], stopAtReview: true });
+  const chips = await me.pg.evaluate(() => [...document.querySelectorAll("#jobChips button")].map(b => b.textContent.trim() + ":" + (b.className === "on" ? "on" : "off") + ":" + (b.disabled ? "locked" : "open")));
+  const steps = [...new Set(seen.filter(Boolean))].join(" ");
+  check("T55b", "a slide from 2/16 stops on every step on the way to 3/8; 3/8 is Getting low and does not lock Needs fuel",
+        read === "3/8" && knob === "37.5%" && steps === "3/16 1/4 5/16 3/8" && /Getting low/.test(hint) &&
+        chips.includes("Needs fuel:off:open") && chips.includes("Nothing needed:on:open") && !me.errs.length,
+        JSON.stringify({ read, knob, steps, hint, chips, errs: me.errs }));
   await me.ctx.close();
 }
 
@@ -1618,7 +1649,7 @@ if (want("T58")) {
   await me.pg.setViewportSize({ width: 390, height: 760 });
   await me.load(); await me.close(["howDone"]); await me.signIn();
   await me.click("Vehicle check", "#s-hub"); await me.pickBus("NH56 FWP"); await me.onward(); await me.close(["busAskStay"]);
-  await me.setInput("miles", "48262"); await me.fuel(6); await me.onward();
+  await me.setInput("miles", "48262"); await me.fuel(12); await me.onward();
   await me.answerStage({}); await me.onward();
   /* Stage two: Engine oil a Defect with words and no photo. */
   await me.answerStage({ "Engine oil": { a: "Defect", note: "Engine oil needs top up" } });

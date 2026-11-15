@@ -986,9 +986,9 @@ if (want("C29")) {
   const list = await p.text("#busesBody");
   await p.shot("C29a-buses");
   /* Fuel (v1.157.0): the last reading on each card, in the driver app's colours. */
-  const fuelLit = await p.pg.$$eval("#busesBody .fuelbar i.lit", (e) => e.map((x) => getComputedStyle(x).backgroundColor));
+  const fuelLit = await p.pg.$$eval("#busesBody .fuelbar .fg-knob", (e) => e.map((x) => x.style.left));
   const fuelOk = /Fuel 1\/4 tank/.test(list) && /Fuel Not recorded/.test(list) &&
-                 fuelLit.join("|") === "rgb(117, 32, 26)|rgb(117, 62, 26)" && /Sun 8 Nov 09:20, Bro Asim/.test(list);
+                 fuelLit.join("|") === "25%" && /Sun 8 Nov 09:20, Bro Asim/.test(list);
   check("C29f", "Buses: each bus shows its last fuel reading as the driver tapped it, or Not recorded", fuelOk,
         "list '" + list.slice(0, 300) + "', lit " + JSON.stringify(fuelLit));
   await p.pg.click('#busesBody [data-go="bus/YS70%20PWE"]');
@@ -1033,9 +1033,13 @@ if (want("C29g")) {
   await p.pg.click('#busBody [data-do="vlog"]');
   await p.wait(250);
   await p.tapText("Fuel", "#vlWhat");
-  const shown = await p.pg.$$eval("#vlFuel button.lit", (e) => e.length);
-  await p.pg.click('#vlFuel button[aria-label="1/2 tank"]');
-  const half = await p.pg.$$eval("#vlFuel button.lit", (e) => e.length);
+  const knobAt = () => p.pg.$eval("#vlFuel .fg-knob", (x) => x.style.left).catch(() => "");
+  const shown = await knobAt();
+  const tr = p.pg.locator("#vlFuel .fg-track");
+  await tr.scrollIntoViewIfNeeded();
+  const bb = await tr.boundingBox();
+  await tr.click({ position: { x: bb.width * 8 / 16, y: bb.height / 2 } });
+  const half = await knobAt() + " " + await p.text("#vlFuel .fg-read");
   await p.shot("C29g-record-fuel");
   await p.go();
   await p.settle();
@@ -1045,11 +1049,11 @@ if (want("C29g")) {
   await p.pg.evaluate(() => { location.hash = "home"; });
   await p.wait(400);
   const legs = await p.pg.$$eval("#homeBody .sun .leg", (e, r) => e.filter((x) => x.querySelector(".plate") && x.querySelector(".plate").textContent === r)
-                                                        .map((x) => x.querySelectorAll(".fuelbar i.lit").length), reg);
+                                                        .map((x) => (x.querySelector(".fuelbar .fg-knob") || { style: {} }).style.left), reg);
   await p.shot("C29g-home-after");
-  check("C29g", "Fuel bought: Full unless tapped; 1/2 tank recorded shows on the bus and under its Sunday line",
-        shown === 8 && half === 4 && acts.length === 1 && acts[0].fuel === "1/2 tank" &&
-        /Fuel 1\/2 tank/.test(busCard) && /Bought/.test(busCard) && legs.length > 0 && legs.every((n) => n === 4) && !p.errs.length,
+  check("C29g", "Fuel bought: Full unless slid; 1/2 tank recorded shows on the bus and under its Sunday line",
+        shown === "100%" && half === "50% 1/2" && acts.length === 1 && acts[0].fuel === "1/2 tank" &&
+        /Fuel 1\/2 tank/.test(busCard) && /Bought/.test(busCard) && legs.length > 0 && legs.every((n) => n === "50%") && !p.errs.length,
         "shown " + shown + ", half " + half + ", acts " + JSON.stringify(acts).slice(0, 200) + ", card '" + busCard.slice(0, 160) +
         "', legs " + JSON.stringify(legs) + ", errors " + JSON.stringify(p.errs));
   await p.ctx.close();
@@ -1106,7 +1110,7 @@ if (want("C29h")) {
   await p.pg.click('#homeBody [data-do="fuelbuy"][data-reg="NH56 FWP"]');
   await p.wait(300);
   const chosen = await p.text("#vlWhat .on");
-  const lit = await p.pg.$$eval("#vlFuel button.lit", (e) => e.length);
+  const lit = await p.text("#vlFuel .fg-read");
   const station = await p.text("#vlGarageL");
   await p.pg.fill("#vlGarage", "Shell, Church Road");
   await p.pg.fill("#vlCost", "92.40");
@@ -1121,7 +1125,7 @@ if (want("C29h")) {
   await p.wait(400);
   const left = await p.pg.$$eval("#homeBody .need.beacon", (e) => e.length);
   check("C29h", "Needs fuel: a beacon; Fuel bought records Fuel, Full, at a filling station, and the beacon goes",
-        /NH56 FWP needs fuel\./.test(beacon) && /beacon/.test(beacon) && chosen === "Fuel" && lit === 8 && station === "Filling station" &&
+        /NH56 FWP needs fuel\./.test(beacon) && /beacon/.test(beacon) && chosen === "Fuel" && lit === "Full" && station === "Filling station" &&
         fuel && fuel[1].fuel === "Full" && fuel[1].garage === "Shell, Church Road" && fuel[1].cost === 92.4 &&
         job && job[1].job === "Needs fuel" && left === 0 && !p.errs.length,
         "beacon '" + beacon + "', chosen '" + chosen + "', lit " + lit + ", station '" + station + "', acts " +
@@ -1165,7 +1169,8 @@ if (want("C29i")) {
 }
 
 /* C29k — parked fuel (v1.160.0): newer than the walkaround, it is the one
-   shown; at 3/8 or less the bus needs fuel. */
+   shown. From v1.169.0 (Asim, 15 Nov 2026) 1/4 or less needs fuel, not 3/8,
+   and a sixteenth shows as it was slid. */
 if (want("C29k")) {
   const p = await page(env);
   await p.signIn(PIN);
@@ -1174,14 +1179,22 @@ if (want("C29k")) {
     const now = Date.now(), d = new Date(now);
     const key = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
     D.parked = D.parked || {};
-    D.parked[r] = { miles: 40100, fuel: "3/8 tank", driver: "Bro Test", at: now + 60000, date: key, time: "16:05" };
-    paintHome();
-    const f = fuelOf(r);
-    const beacon = Array.prototype.some.call(document.querySelectorAll("#homeBody .need.beacon"), (n) => n.textContent.indexOf(r + " needs fuel.") !== -1);
-    return { r, fuel: f && f.fuel, parked: !!(f && f.parked), beacon };
+    const at = (fuel) => {
+      D.parked[r] = { miles: 40100, fuel: fuel, driver: "Bro Test", at: now + 60000, date: key, time: "16:05" };
+      paintHome();
+      const f = fuelOf(r);
+      const beacon = Array.prototype.some.call(document.querySelectorAll("#homeBody .need.beacon"), (n) => n.textContent.indexOf(r + " needs fuel.") !== -1);
+      const leg = Array.prototype.filter.call(document.querySelectorAll("#homeBody .sun .leg"), (x) => x.querySelector(".plate") && x.querySelector(".plate").textContent === r)[0];
+      const knob = leg && leg.querySelector(".fuelbar .fg-knob");
+      return { fuel: f && f.fuel, parked: !!(f && f.parked), beacon, knob: knob ? knob.style.left : "" };
+    };
+    return { r, eighth: at("3/8 tank"), sixteenth: at("7/16 tank"), quarter: at("1/4 tank") };
   });
-  check("C29k", "Parked fuel is shown when newer than the walkaround; 3/8 makes the bus need fuel",
-        out.fuel === "3/8 tank" && out.parked && out.beacon && !p.errs.length, JSON.stringify(out) + " " + JSON.stringify(p.errs));
+  await p.shot("C29k-quarter");
+  check("C29k", "Parked fuel is shown when newer than the walkaround; 3/8 and 7/16 do not need fuel, 1/4 does",
+        out.eighth.fuel === "3/8 tank" && out.eighth.parked && !out.eighth.beacon &&
+        out.sixteenth.fuel === "7/16 tank" && !out.sixteenth.beacon &&
+        out.quarter.fuel === "1/4 tank" && out.quarter.beacon && !p.errs.length, JSON.stringify(out) + " " + JSON.stringify(p.errs));
   await p.ctx.close();
 }
 
