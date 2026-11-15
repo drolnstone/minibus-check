@@ -954,7 +954,9 @@ if (want("T29")) {
   await me.pg.evaluate(() => { try { tripPaint(); } catch (e) {} }); await me.wait(800);
   const y = await me.pg.evaluate(() => window.scrollY);
   check("T29", "the next booked stop is brought into view when the list opens and when it moves on, and a repaint leaves the scroll alone",
-        atOpen.inView && !away.inView && afterTap.inView && /Grace Road/.test(afterTap.name) && y === 0 && !me.errs.length,
+        /* From v1.163.0 the line holds booked stops only, short enough that
+           scrolling to the foot may leave the top stop in view. */
+        atOpen.inView && afterTap.inView && /Grace Road/.test(afterTap.name) && y === 0 && !me.errs.length,
         JSON.stringify({ atOpen, away, afterTap, y, errs: me.errs }));
   await me.ctx.close();
 }
