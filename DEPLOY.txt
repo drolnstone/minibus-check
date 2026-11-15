@@ -1,21 +1,19 @@
 MINIBUS
 =======
-  pages v1.167.0 · server w2.92.0 · sheet v1.139.0
+  pages v1.168.0 · server w2.92.0 · sheet v1.139.0
 
-YOU ARE ON   app v1.166.0 · server w2.92.0 · sheet v1.139.0
-GOING TO     app v1.167.0 · server w2.92.0 · sheet v1.139.0
+YOU ARE ON   app v1.167.0 · server w2.92.0 · sheet v1.139.0
+GOING TO     app v1.168.0 · server w2.92.0 · sheet v1.139.0
 
-1. Driver app, on the road (Asim, 15 Nov 2026): the map button (the
-   postcode with the arrow) sits on the "people booked" line under the
-   stop name, at its right, so the name has its line to itself. The
-   same in Stops and bookings when following a route.
-2. Driver app, Bus parked card: Fuel showing first, then the mileage
-   box with Save, so a driver goes top to bottom and Save comes last.
+1. A parking permit shows as due on the coordinator app's first screen
+   (Due dates) and in the driver app (bus card chip, Coming up) from 30
+   days before its date, not 60 (Asim, 15 Nov 2026). MOT, service and
+   insurance still show from 60 days. The alerts are unchanged (60, 30,
+   7 and 0 days, then weekly). The bus's own page still shows every date.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: v1.167.0 · w2.92.0 · v1.139.0.
-B. Driver app after Start trip: the next stop's name is on its own line;
-   "2 people booked" and the map button share the line below.
-C. Driver app, Bus parked card: Fuel showing is above the mileage box.
+A. Coordinator app, App info: v1.168.0 · w2.92.0 · v1.139.0.
+B. A parking permit 31 to 60 days off is not under Due dates; one 30 days
+   off or less is.
