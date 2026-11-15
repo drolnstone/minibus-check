@@ -55,7 +55,8 @@ if (want("T1")) {
   await moveFor(me, 6);
   const banner = await me.text("#tripMoving");
   const disabled = await me.pg.$$eval("[data-triptap]", bs => bs.filter(b => b.offsetParent).every(b => b.disabled));
-  check("T1", "moving lock and speed watch come back with Stops and bookings", live === 1 && /moving/.test(banner) && disabled,
+  /* No moving line on the live line from v1.164.0 (Asim): it has no stop buttons. */
+  check("T1", "moving lock and speed watch come back with Stops and bookings", live === 1 && banner === "" && disabled,
         "watches " + live + ", banner '" + banner + "', all stop buttons disabled " + disabled);
   await me.ctx.close();
 }
@@ -262,8 +263,8 @@ if (want("T7")) {
   await me.wait(1500);
   const after = me.posted.filter(p => p.action === "trip" && (p.trip.events || []).some(e => e.event === "undo")).length;
   const stillMarked = /picked up 10:1/i.test(await me.text("#stopsBody"));
-  check("T7", "after a repaint while moving the banner and the grey stay, and Undo is refused",
-        /moving/.test(banner) && undoBtn && undoBtn.disabled && after === before && stillMarked,
+  check("T7", "after a repaint while moving the grey stays, with no moving line, and Undo is refused",
+        banner === "" && undoBtn && undoBtn.disabled && after === before && stillMarked,
         "banner '" + banner + "', undo disabled " + (undoBtn && undoBtn.disabled) + ", undo sent " + (after - before) + ", still marked " + stillMarked);
   await me.ctx.close();
 }
@@ -284,8 +285,9 @@ if (want("T8")) {
   await me.jump(1); await me.emit(CHURCH); await me.wait(500);
   await me.jump(4); await me.emit(CHURCH); await me.wait(1500);
   const ended = /Trip finished/.test(await me.text("#stopsBody"));
-  const back = !(await footGone(me)) && (await me.foot()).includes("Done");
-  check("T8", "from Start trip there is no bar and no End trip, past the time at church too; it comes back once the run ends",
+  /* No Done on Stops at all from v1.164.0 (Asim): Back is the way out. */
+  const back = (await footGone(me)) && !!(await me.pg.$("#stopsBack"));
+  check("T8", "from Start trip there is no bar and no End trip, past the time at church too; once the run ends Back is the way out, no Done",
         gone1 && gone2 && none && ended && back,
         "gone at start " + gone1 + ", gone at 11:01 " + gone2 + ", no End trip anywhere " + none + ", ended " + ended + ", bar back " + back);
   await me.ctx.close();
@@ -531,7 +533,7 @@ if (want("T19")) {
   await me.pickBus("NH56 FWP");
   const chosen = await bar();
   check("T19", "the first screen opens on the logo with no bar; signed in, DRIVER over the driver; the plate and lights come with a bus",
-        !first.bar && first.brand && first.icon === "Driver" &&
+        !first.bar && first.brand && first.icon === "Driver app" &&
         hub.bar && hub.title === "Driver" && hub.sub === SAMPLE && !hub.plate && !hub.lamps && hub.hubLine === "" &&
         choosing.title === "Vehicle check" && choosing.sub === "Choose a vehicle to begin" && !choosing.plate && !choosing.lamps &&
         chosen.plate === "NH56 FWP" && chosen.lamps && chosen.title === "Vehicle check" && /Transit/.test(chosen.sub),
@@ -1394,11 +1396,12 @@ if (want("T48")) {
   await me.jump(11);
   await me.click("Start trip · NH56 FWP", "#s-stops"); await me.wait(1500); await me.close();
   await me.pg.evaluate(() => tripAutoEnd()); await me.wait(800);
-  await me.click("Done", "#footbar"); await me.wait(500);
+  const noDone = await footGone(me);
+  await me.clickId("stopsBack"); await me.wait(500);
   const where = await me.where();
   const cleared = await me.pg.evaluate(() => st.veh === null);
-  check("T48", "after the run ends, Done on Stops goes home, not to the sent check",
-        where === "s-hub" && cleared && !me.errs.length, JSON.stringify({ where, cleared, errs: me.errs }));
+  check("T48", "after the run ends, no Done on Stops; Back goes home, not to the sent check",
+        noDone && where === "s-hub" && cleared && !me.errs.length, JSON.stringify({ noDone, where, cleared, errs: me.errs }));
   await me.ctx.close();
 }
 

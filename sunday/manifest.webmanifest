@@ -1,6 +1,6 @@
 {
   "name": "RCCG Dominion Assembly Liverpool — Sunday Bus",
-  "short_name": "Sunday Bus",
+  "short_name": "Sunday Bus app",
   "description": "Book a seat on the RCCG Dominion Assembly Liverpool Sunday minibus.",
   "start_url": "./index.html",
   "scope": "./",

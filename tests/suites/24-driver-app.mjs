@@ -136,9 +136,10 @@ export default function (root) {
     /* 11 October: North ended four minutes after Start, in the churchyard. */
     const f = body(code, "paintFoot");
     const stops = f.slice(f.indexOf('if(st.screen==="stops")'));
-    const from = stops.indexOf("if(trip.started && !trip.ended && tripMayTap(trip.route)){");
+    /* From v1.164.0 (Asim) the bar is gone on Stops whatever the run. */
+    const from = stops.indexOf('$("footbar").classList.add("is-gone");');
     const live = stops.slice(from, stops.indexOf("return;", from));
-    a.ok(from > 0, "the live-run branch of the bar is not where it was");
+    a.ok(from > 0, "the bar is still drawn on Stops");
     a.has(live, 'classList.add("is-gone")', "the bar is still there while his run is live");
     a.hasnt(live, "btn(", "a button is still drawn in the bar while his run is live");
     a.has(f, 'classList.remove("is-gone")', "the bar never comes back after the run");
