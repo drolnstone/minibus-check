@@ -1,18 +1,25 @@
 MINIBUS
 =======
-  pages v1.165.0 · server w2.92.0 · sheet v1.139.0
+  pages v1.166.0 · server w2.92.0 · sheet v1.139.0
 
-YOU ARE ON   app v1.164.0 · server w2.92.0 · sheet v1.139.0
-GOING TO     app v1.165.0 · server w2.92.0 · sheet v1.139.0
+YOU ARE ON   app v1.165.0 · server w2.92.0 · sheet v1.139.0
+GOING TO     app v1.166.0 · server w2.92.0 · sheet v1.139.0
 
-1. Sunday Bus app (Asim, 15 Nov 2026): the bell that checks alerts shows
-   on every phone with alerts on, booked or not, signed in or not, and
-   also after today's run. It still buzzes only the phone that taps it,
-   and still says "This phone received it." or that it did not.
+1. Driver app, vehicle check (Asim, 15 Nov 2026): when the check cannot
+   go on, a red box with bold white text names the item, e.g. "Photo
+   needed: Tyres.", "Note needed: Tyres.", "Answer needed: Tyres.". OK
+   goes straight to that item. The same box on the mileage and fuel
+   screen ("Mileage needed.", "Fuel reading needed.") and at signing
+   ("Answer needed: Anything to arrange.", "Signature needed.").
+2. Advisory and Defect move on to the next item by themselves, as Fine
+   does, once the item has all it needs (the words, and the photo for a
+   Defect): Done on the keyboard, a tap outside the box, or the Defect's
+   first photo coming in.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: v1.165.0 · w2.92.0 · v1.139.0.
-B. Sunday Bus app on a phone with alerts on and no seat booked: the bell
-   is at the top; tap it and it says "This phone received it."
+A. Coordinator app, App info: v1.166.0 · w2.92.0 · v1.139.0.
+B. Driver app, Vehicle check: choose Defect on an item, type a few words,
+   tap Next stage: the red box says "Photo needed: (item)."; OK goes to
+   the item. Add the photo: the next item comes to the top.

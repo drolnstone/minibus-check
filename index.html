@@ -1046,6 +1046,8 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
 .pick-row{cursor:pointer}
 /* Undo's confirm (v1.103.0), centred like the pickup pop-up and above it. */
 .undo-modal{z-index:135}
+.check-modal .pick-sheet{text-align:center}
+.check-modal h2{margin:0 0 16px}
 .church-modal .pick-sheet{text-align:center}
 .church-modal h2{margin:0 0 16px}
 .church-keep{margin:0 0 10px;font-weight:700;color:var(--stop)}
@@ -1513,6 +1515,13 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
   <div class="rota-sheet pick-sheet" role="dialog" aria-modal="true" aria-labelledby="undoTitle" id="undoBody"></div>
 </div>
 
+<!-- The vehicle check's refusal, from v1.166.0 (Asim, 15 Nov 2026): the red
+     box naming what is missing ("Photo needed: Tyres."). OK goes to it.
+     Filled by checkRefuse. -->
+<div class="rota-modal pick-modal check-modal" id="checkModal" aria-hidden="true">
+  <div class="rota-sheet pick-sheet" role="alertdialog" aria-modal="true" aria-labelledby="checkTitle" id="checkBody"></div>
+</div>
+
 <!-- Authorising a stopped bus. Behind a PIN because it is the one action in
      this app that lets a bus out with a fault on it, and the name that goes on
      the record has to be a name somebody can be asked about on Monday. -->
@@ -1799,7 +1808,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.165.0";
+var APP_VERSION = "v1.166.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -3474,11 +3483,14 @@ function goOnFocus(){
   catch(e){ try{ b.focus(); }catch(e2){} }
 }
 
-function btn(label,cls,fn,dis,why){
+function btn(label,cls,fn,dis,why,line){
     var b=document.createElement("button");
     b.type="button"; b.className="btn "+cls+(dis?" is-off":""); b.textContent=label;
     b.addEventListener("click",function(){
       if(!dis) return fn();
+      /* In the check, from v1.166.0 (Asim, 15 Nov): the red box naming the
+         item, and closing it goes to that item. */
+      if(line){ checkRefuse(line, why); return; }
       /* The caption under the footer already says what is missing. Say it out
          loud too, and point at the thing, rather than sitting there dead. */
       toast(c.textContent || "Something is still needed.", true);
@@ -3619,7 +3631,8 @@ function btn(label,cls,fn,dis,why){
         function(){
           if(!entered || (prob && !st.mileOk)) { flash("mileCard"); $("miles").focus(); }
           else flash("fuelCard");
-        });
+        },
+        !entered ? "Mileage needed." : (prob && !st.mileOk) ? "Check the mileage." : "Fuel reading needed.");
     if(!entered) c.textContent="Enter the mileage";
     else if(prob && !st.mileOk) c.textContent="Check the mileage";
     else if(st.fuel===null) c.textContent="Tap the fuel gauge reading";
@@ -3646,10 +3659,12 @@ function btn(label,cls,fn,dis,why){
       if(st.stage===0) show("prep"); else { st.stage--; renderStage(); show("stage"); }
     });
     var last = st.stage===stages.length-1;
+    var bad = stageFirstBad(s);
     btn(last?"Review":"Next stage","btn-main",function(){
       if(last){ renderReview(); show("review"); }
       else { st.stage++; renderStage(); show("stage"); }
-    }, left>0 || blank.length>0 || nopic.length>0);
+    }, left>0 || blank.length>0 || nopic.length>0,
+    function(){ if(bad) checkGoTo(bad); }, bad ? bad.line : "");
     return;
   }
   if(st.screen==="review"){
@@ -3662,7 +3677,7 @@ function btn(label,cls,fn,dis,why){
         submit, !ok, function(){
           if(!jobsOk) flash("jobsCard");
           else { flash("signCard"); $("sign").focus(); }
-        });
+        }, !jobsOk ? "Answer needed: Anything to arrange." : "Signature needed.");
     /* Name the first thing missing, in the order they meet it. */
     if(!jobsOk) c.textContent="Anything to arrange?";
     else if(!signed) c.textContent="Type your name to sign";
@@ -4243,6 +4258,7 @@ function renderStage(){
     var oc=(st.veh && it.crit) ? openCritFor(st.veh.reg, it.name) : null;
     var el=document.createElement("article");
     el.className=itemClass(it,r);
+    el.id="item-"+it.id;
     var tags="";
     if(it.crit) tags+='<span class="tag t-crit">Stops the bus</span>';
     if(it.history) tags+='<span class="tag t-watch">Known history</span>';
@@ -4274,7 +4290,7 @@ function renderStage(){
       '</div>'+
       '<div class="note'+(r&&needsNote(r)?" is-on":"")+(r&&r.v==="adv"?" is-adv":"")+'">'+
         '<div class="lbl">What did you find?</div>'+
-        '<textarea placeholder="e.g. Nearside rear tyre worn on the edge"></textarea>'+
+        '<textarea enterkeyhint="done" placeholder="e.g. Nearside rear tyre worn on the edge"></textarea>'+
         (it.nophoto ? '' :
           '<div class="pics"><button type="button" class="addpic">Add photo</button>'+
           '<input type="file" accept="image/*" hidden></div>')+
@@ -4285,7 +4301,15 @@ function renderStage(){
     var note=el.querySelector(".note"), ta=el.querySelector("textarea");
     if(r&&r.note) ta.value=r.note;
     var pics=el.querySelector(".pics");
-    if(pics) paintPics(it, pics);
+    if(pics){
+      /* The photo that completes a Defect moves him on, like Fine. */
+      pics._added = function(){
+        var rr=st.res[it.id];
+        if(rr && rr.v==="def" && rr.photos.length===1 && itemComplete(it, rr) &&
+           document.activeElement!==ta) advance();
+      };
+      paintPics(it, pics);
+    }
 
     function pick(v){
       /* An advisory carries a note for the same reason a defect does: without
@@ -4344,6 +4368,22 @@ function renderStage(){
       pick("adv");
       setTimeout(function(){ ta.focus(); },120);
     });
+    /* From v1.166.0 (Asim, 15 Nov): an Advisory or Defect with all it
+       needs moves on as Fine does, once he leaves the box (Done on the
+       keyboard, or a tap outside it). A tap on a button or box anywhere
+       leaves the page where it is: that tap is its own way on. */
+    ta.addEventListener("keydown",function(e){
+      if((e.key==="Enter" || e.keyCode===13) && !e.shiftKey){ e.preventDefault(); ta.blur(); }
+    });
+    var inAt=0;
+    ta.addEventListener("focus",function(){ inAt=Date.now(); });
+    ta.addEventListener("blur",function(){
+      var tapped = checkTapAt > inAt;
+      setTimeout(function(){
+        if(document.activeElement===ta || tapped || checkTapAt > inAt) return;
+        if(itemComplete(it, st.res[it.id])) advance();
+      }, 250);
+    });
     ta.addEventListener("input",function(){
       if(st.res[it.id]&&needsNote(st.res[it.id])){
         st.res[it.id].note=ta.value;
@@ -4373,6 +4413,53 @@ function checkCounts(state){ return state==="ok" || state==="authorised"; }
 /* The two answers that are worth nothing without words. One place, because
    the renderer, the footer and the sheet all have to agree about it. */
 function needsNote(r){ return !!r && (r.v==="def" || r.v==="adv"); }
+function noteShort(r){ return needsNote(r) && (!r.note || r.note.trim().length < 3); }
+/* An Advisory or Defect with everything it needs. */
+function itemComplete(it, r){ return needsNote(r) && !noteShort(r) && !needsPhoto(it, r); }
+
+/* The first item on a stage that stops it going on, in screen order. */
+function stageFirstBad(s){
+  var out=null;
+  s.items.some(function(it){
+    var r=st.res[it.id];
+    var k = !r ? "answer" : noteShort(r) ? "note" : needsPhoto(it, r) ? "photo" : "";
+    if(k) out={ it:it, kind:k,
+      line:(k==="answer" ? "Answer needed: " : k==="note" ? "Note needed: " : "Photo needed: ") + it.name + "." };
+    return !!out;
+  });
+  return out;
+}
+function checkGoTo(bad){
+  flash("item-"+bad.it.id);
+  if(bad.kind==="note"){
+    var ta=$("item-"+bad.it.id) && $("item-"+bad.it.id).querySelector("textarea");
+    if(ta) setTimeout(function(){ try{ ta.focus({preventScroll:true}); }catch(e){ ta.focus(); } }, 350);
+  }
+}
+
+/* A tap on anything that acts, anywhere: the moving-on above leaves the
+   page alone when a tap is already taking him somewhere. */
+var checkTapAt = 0;
+document.addEventListener("pointerdown", function(e){
+  if(e.target && e.target !== document.activeElement && e.target.closest &&
+     e.target.closest("button,input,textarea,select,a,label")) checkTapAt = Date.now();
+}, true);
+
+/* The red box for a check that cannot go on (v1.166.0, Asim). OK closes it
+   and goes to the thing named. */
+function checkRefuse(line, after){
+  var box=$("checkModal");
+  $("checkBody").innerHTML='<h2 id="checkTitle"></h2>'+
+    '<div class="pick-btns"><button class="btn btn-tap" type="button" data-checkok="1">OK</button></div>';
+  $("checkTitle").textContent=line;
+  box.classList.add("is-on","is-alert");
+  box.setAttribute("aria-hidden","false");
+  box.querySelector("[data-checkok]").onclick=function(){
+    box.classList.remove("is-on");
+    box.setAttribute("aria-hidden","true");
+    if(typeof after==="function") after();
+  };
+}
 
 /* ---------------- photos on a report, from v1.104.0 ----------------
 
@@ -4459,6 +4546,7 @@ function paintPics(it, box){
       if(rr.photos.length >= PHOTO_MAX) return;
       rr.photos.push(ph);
       paintPics(it, box); paintFoot();
+      if(typeof box._added==="function") box._added();
     }, function(){
       add.classList.remove("busy");
       toast("That photo could not be used. Take another.", true);
