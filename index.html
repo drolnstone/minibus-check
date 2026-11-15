@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#1B222C">
 <!-- The name under the Home Screen tile on an iPhone. Without it Safari
      takes the title below and cuts it off. -->
-<meta name="apple-mobile-web-app-title" content="Driver app">
+<meta name="apple-mobile-web-app-title" content="Driver App">
 <title>Driver · RCCG Dominion Assembly Liverpool</title>
 <link rel="manifest" href="manifest.webmanifest">
 <!-- The home screen tile, and — because the two tags below declare this page
@@ -1825,7 +1825,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.169.0";
+var APP_VERSION = "v1.170.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -3272,9 +3272,9 @@ function paintLinks(){
    once, in the page. */
 function appName(){
   var m=document.querySelector('meta[name="apple-mobile-web-app-title"]');
-  /* "Driver app" on the icon and alerts from v1.164.0 (Asim); the bar
+  /* "Driver App" on the icon and alerts (v1.164.0, capital A from v1.170.0, Asim); the bar
      still says Driver. */
-  return ((m && m.getAttribute("content")) || "Transport").replace(/ app$/,"");
+  return ((m && m.getAttribute("content")) || "Transport").replace(/ app$/i,"");
 }
 function churchName(){
   var b=document.querySelector(".footer-brand span");
