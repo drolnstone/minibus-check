@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.93.0";
+const SCRIPT_VERSION = "w2.94.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -4652,6 +4652,7 @@ async function handleCheck(env, check, sure) {
     "INSERT OR IGNORE INTO checks_in (check_id, reg, day, level, driver, received, body) " +
     "VALUES (?,?,?,?,?,?,?)"
   ).bind(String(check.id), reg, day, level, who, made, JSON.stringify(check)).run();
+  try { await parkedFromCheck(env, check, made); } catch (e) {}
 
   /* The board, straight away. This used to be pushed by Apps Script AFTER it
      had written the tab, which meant a stopped bus was invisible to every
@@ -4716,10 +4717,15 @@ async function ensureParked(env) {
     "  got       INTEGER NOT NULL DEFAULT 0," +
     "  confirmed INTEGER NOT NULL DEFAULT 0," +
     "  synced    INTEGER NOT NULL DEFAULT 0," +
-    "  fuel      TEXT NOT NULL DEFAULT '')").run();
+    "  fuel      TEXT NOT NULL DEFAULT ''," +
+    "  src       TEXT NOT NULL DEFAULT '')").run();
   await env.DB.prepare("CREATE INDEX IF NOT EXISTS parked_sync ON parked(synced)").run();
   /* From w2.91.0: the fuel gauge as the bus was put away ("1/2 tank"). */
   try { await env.DB.prepare("ALTER TABLE parked ADD COLUMN fuel TEXT NOT NULL DEFAULT ''").run(); } catch (e) {}
+  /* From w2.94.0: who it came from when not the driver. "coord", keyed by a
+     coordinator (driver then holds the coordinator's name); "check", taken
+     from the bus's next walkaround because nobody keyed it. */
+  try { await env.DB.prepare("ALTER TABLE parked ADD COLUMN src TEXT NOT NULL DEFAULT ''").run(); } catch (e) {}
   parkedReady = true;
 }
 
@@ -4751,37 +4757,43 @@ async function runsByBus(env, day) {
    walkaround was made today, a Sunday, once its morning run has ended (from
    noon when no run was recorded for it), to the end of the day. With the
    walkaround's reading, the one person it is for, and any parked reading
-   already keyed after it. */
-async function parkedOpen(env, now) {
+   already keyed after it.
+   wide, from w2.94.0, for a coordinator keying it later: also a bus whose
+   newest walkaround was made on an earlier Sunday this past week, while it
+   is still the newest. */
+async function parkedOpen(env, now, wide) {
   const at = Number(now) || Date.now();
   const today = new Date(at);
-  if (londonParts(today).dow !== 0) return [];
+  if (!wide && londonParts(today).dow !== 0) return [];
   const day = londonKey(today);
   await ensureChecksIn(env);
   await ensureParked(env);
   const q = await env.DB.prepare(
     "SELECT check_id, reg, driver, received, body FROM checks_in WHERE received > ? ORDER BY received, id")
-    .bind(at - 2 * 86400000).all();
+    .bind(at - (wide ? 8 : 2) * 86400000).all();
   const newest = {};
   for (const r of (q.results || [])) {
     const reg = String(r.reg || "").trim().toUpperCase();
     if (reg) newest[reg] = r;
   }
-  const regs = Object.keys(newest).filter((reg) => londonKey(new Date(Number(newest[reg].received))) === day).sort();
+  const dayOf = (reg) => londonKey(new Date(Number(newest[reg].received)));
+  const regs = Object.keys(newest).filter((reg) => dayOf(reg) === day ||
+    (wide && at - Number(newest[reg].received) < 7 * 86400000 && londonParts(new Date(Number(newest[reg].received))).dow === 0)).sort();
   if (!regs.length) return [];
-  const runs = await runsByBus(env, day);
+  const runs = londonParts(today).dow === 0 ? await runsByBus(env, day) : {};
   const noon = londonMoment(day, PARKED_FROM);
   const out = [];
   for (const reg of regs) {
-    const r = newest[reg], run = runs[reg];
-    if (run ? !run.ended : (!noon || at < noon.getTime())) continue;
+    const r = newest[reg], run = dayOf(reg) === day ? runs[reg] : null;
+    if (dayOf(reg) === day && (run ? !run.ended : (!noon || at < noon.getTime()))) continue;
     let miles = 0;
     try { miles = Math.round(Number(JSON.parse(r.body).miles)) || 0; } catch (e) {}
     const p = await env.DB.prepare(
-      "SELECT miles, fuel, driver, made FROM parked WHERE check_id=?").bind(String(r.check_id)).first();
-    out.push({ reg, checkId: String(r.check_id), day, miles, ended: run ? run.ended : 0,
+      "SELECT miles, fuel, driver, made, src FROM parked WHERE check_id=?").bind(String(r.check_id)).first();
+    out.push({ reg, checkId: String(r.check_id), day: dayOf(reg), miles, ended: run ? run.ended : 0,
                driver: run && run.driver ? run.driver : String(r.driver || ""),
-               parked: p ? { miles: Number(p.miles), fuel: String(p.fuel || ""), driver: String(p.driver || ""), at: Number(p.made) } : null });
+               parked: p ? { miles: Number(p.miles), fuel: String(p.fuel || ""), driver: String(p.driver || ""), at: Number(p.made),
+                             src: String(p.src || "") } : null });
   }
   return out;
 }
@@ -4847,6 +4859,61 @@ async function handleParked(env, p, sure) {
   return { ok: true, parked: { reg, checkId, miles, fuel, driver: who, at: made, got: now } };
 }
 
+/* KEYED BY A COORDINATOR, from w2.94.0 (Asim, 16 Nov 2026, after the South
+   bus's parked reading never came on 15 Nov). For a bus whose newest
+   walkaround was on a Sunday this past week, while it is still the newest:
+   the same checks as the driver's, under the coordinator's own name. It
+   replaces one the driver keyed. Nobody is told. */
+async function actParked(env, me, act) {
+  const reg = String((act && act.reg) || "").trim().toUpperCase();
+  const checkId = String((act && act.checkId) || "").trim();
+  const raw = String((act && act.miles) === undefined || act.miles === null ? "" : act.miles).replace(/[,\s]/g, "");
+  if (!/^\d{1,7}$/.test(raw)) return { ok: false, error: "Mileage needed." };
+  const miles = Number(raw);
+  const fuel = FUEL_WORDS.indexOf(String((act && act.fuel) || "")) !== -1 ? String(act.fuel) : "";
+  if (!fuel) return { ok: false, error: "Fuel needed." };
+  const open = (await parkedOpen(env, Date.now(), true)).filter((o) => o.reg === reg && (!checkId || o.checkId === checkId))[0];
+  if (!open) return { ok: false, error: reg + ": no walkaround to key it for." };
+  if (open.miles && miles < open.miles) return { ok: false, error: "Lower than the walkaround's " + milesSaid(open.miles) + "." };
+  if (open.miles && miles - open.miles > PARKED_MAX_MILES)
+    return { ok: false, error: milesSaid(miles - open.miles) + " more than the walkaround's " + milesSaid(open.miles) + "." };
+  const now = Date.now();
+  return { ok: true, local: "applied", sunday: open.day,
+           body: { reg, checkId: open.checkId, miles, fuel },
+           words: reg + ": parked " + milesSaid(miles) + ", fuel " + fuel + ".",
+           stmts: [env.DB.prepare(
+             "INSERT INTO parked (check_id, reg, miles, fuel, driver, made, got, confirmed, synced, src) VALUES (?,?,?,?,?,?,?,1,0,'coord') " +
+             "ON CONFLICT(check_id) DO UPDATE SET miles=excluded.miles, fuel=excluded.fuel, driver=excluded.driver, " +
+             "made=excluded.made, got=excluded.got, confirmed=1, synced=0, src='coord'")
+             .bind(open.checkId, reg, miles, fuel, me.name, now, now)] };
+}
+
+/* THE NEXT WALKAROUND STANDS IN, from w2.94.0 (Asim, 16 Nov 2026). A bus
+   whose Sunday walkaround had no parked reading by the time its next one
+   comes gets that one's mileage and fuel, marked as taken from the check.
+   The sheet still says Not reported in Since parked: the week's miles are
+   in it. */
+async function parkedFromCheck(env, check, made) {
+  const reg = String((check && check.reg) || "").trim().toUpperCase();
+  const miles = Math.round(Number(String((check && check.miles) || "").replace(/[,\s]/g, ""))) || 0;
+  if (!reg || !miles) return;
+  await ensureParked(env);
+  const prev = await env.DB.prepare(
+    "SELECT check_id, received, body FROM checks_in WHERE upper(reg)=? AND received < ? AND check_id<>? ORDER BY received DESC, id DESC LIMIT 1")
+    .bind(reg, made, String(check.id)).first();
+  if (!prev) return;
+  const was = new Date(Number(prev.received));
+  if (londonParts(was).dow !== 0 || londonKey(was) === londonKey(new Date(made))) return;
+  if (made - Number(prev.received) > 14 * 86400000) return;
+  let pm = 0;
+  try { pm = Math.round(Number(JSON.parse(prev.body).miles)) || 0; } catch (e) {}
+  if (pm && (miles < pm || miles - pm > PARKED_MAX_MILES)) return;
+  const fuel = FUEL_WORDS.indexOf(String(check.fuel || "")) !== -1 ? String(check.fuel) : "";
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO parked (check_id, reg, miles, fuel, driver, made, got, confirmed, synced, src) VALUES (?,?,?,?,'',?,?,0,0,'check')")
+    .bind(String(prev.check_id), reg, miles, fuel, made, Date.now()).run();
+}
+
 /* A PARKED READING CORRECTED ON THE SHEET, from w2.66.0 (wrap up audit).
    { edits: [{ checkId, reg, miles }] }: miles a number puts it right here
    too, so the driver app measures the next walkaround from it; "" takes it
@@ -4897,33 +4964,44 @@ async function tellParked(env, pk) {
 }
 
 /* THE 2PM REMINDER, from w2.65.0. Asim, 16 Oct: "From my experience, 2
-   p.m. will be a good time", as the afternoon run sets off. Once for each
-   walkaround, only while its parked reading is still to be keyed, and only
-   up to three: later, a Worker that was down would find him at home. Not in
-   the half hour after his Trip ended, which said the same. */
-const PARKED_ASK_AT = "14:00";
-const PARKED_ASK_TILL = "15:00";
+   p.m. will be a good time", as the afternoon run sets off. Not in the half
+   hour after his Trip ended, which said the same.
+   From w2.94.0 (Asim, 16 Nov 2026, after the South bus's parked reading
+   never came on 15 Nov): again every quarter of an hour, 14:00, 14:15,
+   14:30, 14:45 and 15:00, while the reading is still to be keyed, and
+   nothing after 15:00: "after 3 o'clock, the alert should stop". Each one
+   only in the ten minutes after its time, so a Worker that was down does
+   not send a late one. The coordinators' Alerts list has the first. */
+const PARKED_ASK_TIMES = ["14:00", "14:15", "14:30", "14:45", "15:00"];
+const PARKED_ASK_LATE_MS = 10 * 60000;
 async function wakeParkAsk(env) {
   const now = new Date();
   if (londonParts(now).dow !== 0) return 0;
   const day = londonKey(now);
-  const from = londonMoment(day, PARKED_ASK_AT), till = londonMoment(day, PARKED_ASK_TILL);
-  if (!from || !till || now < from || now >= till) return 0;
+  let slot = "";
+  for (const t of PARKED_ASK_TIMES) {
+    const m = londonMoment(day, t);
+    if (m && now >= m && now.getTime() - m.getTime() < PARKED_ASK_LATE_MS) slot = t;
+  }
+  if (!slot) return 0;
   /* One reminder for each driver, naming every bus still owed by him. */
   const due = {};
   for (const o of await parkedOpen(env, now.getTime())) {
     if (o.parked || !o.driver) continue;
     if (o.ended && now.getTime() - Number(o.ended) < RUN_ENDED_TELL_MS) continue;
     const once = await env.DB.prepare("INSERT OR IGNORE INTO settings (k, v) VALUES (?, ?)")
-      .bind("parkask:" + o.checkId, JSON.stringify({ at: now.getTime(), driver: o.driver })).run();
+      .bind("parkask:" + o.checkId + "@" + slot, JSON.stringify({ at: now.getTime(), driver: o.driver })).run();
     if (once && once.meta && typeof once.meta.changes === "number" && once.meta.changes === 0) continue;
+    /* The mark parkedWordsFor reads: asked at least once. */
+    await env.DB.prepare("INSERT OR IGNORE INTO settings (k, v) VALUES (?, ?)")
+      .bind("parkask:" + o.checkId, JSON.stringify({ at: now.getTime(), driver: o.driver })).run();
     const who = String(o.driver).trim().toLowerCase();
     (due[who] = due[who] || { driver: o.driver, regs: [] }).regs.push(o.reg);
   }
   let n = 0;
   for (const who of Object.keys(due)) {
     const d = due[who], buses = andList(d.regs);
-    const r = await wake(env, await driverWakeSubs(env, d.driver), "parkask|" + day + "|" + buses);
+    const r = await wake(env, await driverWakeSubs(env, d.driver), "parkask|" + day + "|" + buses + "|" + slot);
     n += r;
     await trail(env, { once: "d|parkask|" + day + "|" + buses, title: buses + ": Parked mileage not received",
                        body: "To " + d.driver + ": " + trailPhones(r) + ".", not: [d.driver] });
@@ -5024,7 +5102,7 @@ async function handleDrain(env, body) {
     const q = await env.DB.prepare("SELECT * FROM parked WHERE synced=? ORDER BY id").bind(claim).all();
     for (const r of (q.results || [])) {
       parked.push({ id: r.id, checkId: r.check_id, reg: r.reg, miles: Number(r.miles), fuel: String(r.fuel || ""),
-                    driver: r.driver || "", at: Number(r.made), confirmed: !!r.confirmed });
+                    driver: r.driver || "", at: Number(r.made), confirmed: !!r.confirmed, src: String(r.src || "") });
     }
   } catch (e) {}
 
@@ -10956,6 +11034,8 @@ async function coordLoad(env, me) {
   } catch (e) { out.lastMiles = {}; }
   /* From w2.65.0: each bus's parked reading since its last walkaround. */
   try { out.parked = await parkedLatest(env); } catch (e) { out.parked = null; }
+  /* From w2.94.0: the buses a coordinator may key a parked reading for now. */
+  try { out.parkKey = await parkedOpen(env, Date.now(), true); } catch (e) { out.parkKey = []; }
   /* From w2.77.0: drivers' hand overs waiting for a coordinator. */
   out.handAsks = [];
   try {
@@ -12088,6 +12168,7 @@ async function coordAct(env, me, act) {
   else if (kind === "contact") r = await actContact(env, me, act);
   else if (kind === "message") r = await actMessage(env, me, act, id);
   else if (kind === "handno") r = await actHandNo(env, me, act);
+  else if (kind === "parked") r = await actParked(env, me, act);
   else return { ok: false, error: "unknown kind" };
   if (!r || !r.ok) return r || { ok: false, error: "refused" };
 

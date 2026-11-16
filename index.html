@@ -1064,6 +1064,8 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
 /* Undo's confirm (v1.103.0), centred like the pickup pop-up and above it. */
 .undo-modal{z-index:135}
 .check-modal .pick-sheet{text-align:center}
+/* Bus parked, by itself (v1.171.0). */
+.park-modal .dw{margin:0 0 12px}
 .check-modal h2{margin:0 0 16px}
 .church-modal .pick-sheet{text-align:center}
 .church-modal h2{margin:0 0 16px}
@@ -1525,6 +1527,18 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
   <div class="rota-sheet pick-sheet" role="dialog" aria-modal="true" aria-labelledby="churchTitle" id="churchBody"></div>
 </div>
 
+<!-- Bus parked, by itself, from v1.171.0 (Asim, 16 Nov 2026, after the
+     South bus's parked reading never came on 15 Nov). The hub's Bus parked
+     card, over the hub, from the 2pm reminder on a Sunday while his
+     reading is still to key: each time the app is opened, until Close.
+     Filled by parkPaint. -->
+<div class="rota-modal pick-modal park-modal" id="parkModal" aria-hidden="true">
+  <div class="rota-sheet pick-sheet" role="dialog" aria-modal="true" aria-label="Bus parked">
+    <div id="parkPopBody"></div>
+    <button class="btn btn-ghost btn-wide" type="button" id="parkPopClose">Close</button>
+  </div>
+</div>
+
 <!-- Undo, asked first, from v1.103.0 (Asim). One tap on Undo used to take a
      stop back on the spot, next to the row's own buttons. Filled by
      tripUndoAsk. -->
@@ -1825,7 +1839,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.170.0";
+var APP_VERSION = "v1.171.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -6878,12 +6892,36 @@ function parkOverdue(){
   var d = new Date(tripNow());
   return d.getDay() === 0 && d.getHours() >= 14;
 }
+/* THE CARD COMES UP BY ITSELF (v1.171.0). From 14:00 on a Sunday, while a
+   bus of his is still to key, over the hub each time the app is opened;
+   Close puts it away until the next time. Once it is in, the pop-up stays
+   with the ✓ until Close. */
+var parkPopShut = false, parkPopUp = false;
+function parkOwedHere(){
+  return (PARKOPEN || []).some(function(o){
+    return o && o.reg && st.driver && sameName(o.driver, st.driver) && (!o.day || o.day === rotaKey(new Date())) &&
+           !(o.parked && Number(o.parked.miles)) && !PARKQ[o.checkId];
+  });
+}
+function parkPopSync(){
+  var m = $("parkModal");
+  if(!m) return false;
+  var want = st.screen === "hub" && !parkPopShut && parkOverdue() && !parkLocked() &&
+             (parkPopUp || parkOwedHere());
+  parkPopUp = want;
+  m.classList.toggle("is-on", want);
+  m.setAttribute("aria-hidden", want ? "false" : "true");
+  return want;
+}
 function parkPaint(){
-  var box = $("hubParked");
-  if(!box) return;
+  var hub = $("hubParked");
+  if(!hub) return;
+  var pop = parkPopSync();
+  var box = pop ? $("parkPopBody") : hub;
   /* Not while he is typing in it: a repaint would take the number away. */
   var a = document.activeElement;
   if(a && a.id && a.id.indexOf("parkMiles") === 0 && box.contains(a)) return;
+  if(pop) hub.innerHTML = ""; else { var pb = $("parkPopBody"); if(pb) pb.innerHTML = ""; }
   box.innerHTML = (st.screen === "hub") ? parkHtml() : "";
   Array.prototype.forEach.call(box.querySelectorAll("[data-park-save]"), function(b){
     b.onclick = function(){
@@ -7026,7 +7064,11 @@ function parkKeyed(name){
   parkSave();
   setTimeout(parkFlush, 0);
 }
-function parkStop(){ if(parkTimer){ clearInterval(parkTimer); parkTimer = null; } }
+function parkStop(){ if(parkTimer){ clearInterval(parkTimer); parkTimer = null; } parkPopSync(); }
+(function(){
+  var c = $("parkPopClose");
+  if(c) c.onclick = function(){ parkPopShut = true; parkPopUp = false; parkPaint(); };
+})();
 /* Asked again on the hub on a Sunday from ten, once a minute while it is
    open; any other day the phone's copy is emptied. */
 function parkWanted(){
@@ -7997,6 +8039,8 @@ function rotaCountsStart(){
 document.addEventListener("visibilitychange",function(){
   if(document.hidden){ rotaCountsStop(); dwHubStop(); dutyStop(); return; }
   safely(pushAppAgain);
+  /* Opened again: Bus parked may come up again (v1.171.0). */
+  parkPopShut = false;
   /* The watched stop's card on the hub, from v1.113.0, and his duty card. */
   if(st.screen==="hub"){ dwHubStart(); dutyStart(); parkStart(); }
 

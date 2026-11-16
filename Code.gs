@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.139.0";
+var SCRIPT_VERSION = "v1.140.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -2816,6 +2816,9 @@ function handleCheckLocked(c) {
    the cell's note, and the coordinators are told only when it is more than
    half as much again as a usual Sunday for that bus. */
 var PARKED_NO_READING = "Not reported";
+/* Parked at, from v1.140.0, when nobody keyed it and the bus's next
+   walkaround's mileage and fuel stand in (Asim, 16 Nov 2026). */
+var PARKED_FROM_CHECK = "From check";
 /* More than this many usual Sundays since the last walkaround, with no
    parked reading, is told. */
 var PARKED_USUAL_TIMES = 1.5;
@@ -2850,6 +2853,9 @@ function parkedHistory(sh, c, reg) {
     if (!t) return;
     var pk = at1(r, c.parked);
     var parked = (pk === "" || pk === null || isNaN(Number(pk)) || !Number(pk)) ? null : Number(pk);
+    /* From v1.140.0: one taken from the next walkaround is not a parked
+       reading: the week's miles are in it. */
+    if (c.parkedAt && String(at1(r, c.parkedAt) || "") === PARKED_FROM_CHECK) parked = null;
     out.push({ t: t, key: dateToKey(new Date(t)), miles: miles, parked: parked, row: first + i,
                id: String(at1(r, c.id) || ""),
                date: dayWords(at1(r, c.date)), time: timeWords(at1(r, c.time)) });
@@ -2969,7 +2975,9 @@ function parkedLate(sh, c, prow, miles) {
 function parkedNote(pk) {
   var when = new Date(Number(pk.at) || Date.now());
   var tz = Session.getScriptTimeZone();
-  return "Keyed by " + safeText(pk.driver || "a driver") + " on " +
+  if (pk.src === "check") return "Mileage and fuel from the walkaround on " +
+    Utilities.formatDate(when, tz, "dd/MM/yyyy") + " at " + Utilities.formatDate(when, tz, "HH:mm") + ".";
+  return "Keyed by " + safeText(pk.driver || "a driver") + (pk.src === "coord" ? ", coordinator," : "") + " on " +
          Utilities.formatDate(when, tz, "dd/MM/yyyy") + " at " + Utilities.formatDate(when, tz, "HH:mm") +
          (pk.confirmed === false ? ". Not confirmed by PIN." : ".");
 }
@@ -5420,13 +5428,20 @@ function drainFromWorker() {
           if (!first && Date.now() - (Number(pk.at) || 0) > 14 * 86400000) doneP.push(pk.id);
           return;
         }
+        var fromCheck = pk.src === "check";
+        /* One the driver or a coordinator keyed is never put back by the
+           check's stand in, which can come round on a later drain. */
+        if (fromCheck && Number(psh.getRange(prow, pcc.parked).getValue()) &&
+            (!pcc.parkedAt || String(psh.getRange(prow, pcc.parkedAt).getValue()) !== PARKED_FROM_CHECK)) {
+          doneP.push(pk.id); return;
+        }
         psh.getRange(prow, pcc.parked).setValue(Number(pk.miles) || "");
         try { psh.getRange(prow, pcc.parked).setNote(parkedNote(pk)); } catch (e) {}
         /* Parked at, from v1.125.0 (Asim, 18 Oct 2026): when the driver keyed
            it, which is when he finished for the day. */
         if (pcc.parkedAt) {
           try {
-            psh.getRange(prow, pcc.parkedAt).setNumberFormat("@").setValue(
+            psh.getRange(prow, pcc.parkedAt).setNumberFormat("@").setValue(fromCheck ? PARKED_FROM_CHECK :
               Utilities.formatDate(new Date(Number(pk.at) || Date.now()), Session.getScriptTimeZone(), "HH:mm"));
           } catch (e) {}
         }
@@ -5434,7 +5449,7 @@ function drainFromWorker() {
         if (pcc.parkedFuel && pk.fuel) {
           try { psh.getRange(prow, pcc.parkedFuel).setNumberFormat("@").setValue(String(pk.fuel)); } catch (e) {}
         }
-        pretty("Parked mileage, the walkaround after", function () { parkedLate(psh, pcc, prow, pk.miles); });
+        if (!fromCheck) pretty("Parked mileage, the walkaround after", function () { parkedLate(psh, pcc, prow, pk.miles); });
         doneP.push(pk.id);
       });
     } catch (err) {
