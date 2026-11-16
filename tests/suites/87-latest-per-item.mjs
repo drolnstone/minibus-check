@@ -6,11 +6,14 @@
    - A Defects row closed by hand closes the earlier open rows of the same
      bus and item, and leaves later ones and other items alone.
    - The Coordinator App bus page opens on Jobs to arrange.
+   - From pages v1.174.0 · server w2.96.0 · sheet v1.143.0: Fixed and Not a
+     defect together, "Fixed, not a defect", closes like either.
 
    Everything here fails on v1.172.0 / v1.141.0. */
 
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
+import vm from "node:vm";
 import { Suite } from "../lib/t.mjs";
 import { loadCodeGs, call } from "../lib/codegs.mjs";
 import { tab } from "../lib/tabs.mjs";
@@ -103,6 +106,39 @@ export default async function (root) {
     const jobs = body.indexOf("<h3>Jobs to arrange</h3>"), defs = body.indexOf("defects are open on this bus");
     const due = body.indexOf("dueRows(b)"), rec = body.indexOf("Record something");
     a.ok(jobs > 0 && jobs < defs && defs < due && due < rec, "Jobs to arrange and the defects line are not first");
+  });
+
+  s.test("Fixed and Not a defect can both be on; the others stay one at a time", (a) => {
+    const html = readFileSync(join(root, "coord", "index.html"), "utf8");
+    const at = html.indexOf("var DEF_BOTH");
+    const src = html.slice(at, html.indexOf("\n}\n", html.indexOf("function stateTap", at)) + 3);
+    const c = {}; vm.createContext(c); vm.runInContext(src + "\nthis.stateTap = stateTap; this.stateOn = stateOn;", c);
+    a.eq(c.stateTap("Fixed", "Not a defect"), "Fixed, not a defect");
+    a.eq(c.stateTap("Not a defect", "Fixed"), "Fixed, not a defect");
+    a.eq(c.stateTap("Fixed, not a defect", "Fixed"), "Not a defect");
+    a.eq(c.stateTap("Fixed, not a defect", "Open"), "Open");
+    a.eq(c.stateTap("Open", "Fixed"), "Fixed");
+    a.eq(c.stateTap("Fixed", "Fixed"), "Fixed");
+    a.ok(c.stateOn("Fixed", "Fixed, not a defect") && c.stateOn("Not a defect", "Fixed, not a defect"));
+    a.ok(!c.stateOn("Open", "Fixed, not a defect"));
+  });
+
+  s.test("\"Fixed, not a defect\" closes on the sheet and on the live server", async (a) => {
+    await atTime(SUN, () => {
+      const L = sheet();
+      const sh = L.gas.ss.getSheetByName("Defects");
+      const head = sh.getDataRange().getValues()[0];
+      const cell = sh.getRange(4, head.indexOf("Status") + 1);
+      cell.setValue("Fixed, not a defect");
+      call(L, "onEdit", { range: cell, oldValue: "Open", value: "Fixed, not a defect" });
+      const rows = objs(L, "Defects");
+      a.eq(rows.slice(0, 3).map((r) => r.Status).join(","), "Fixed, not a defect,Fixed, not a defect,Fixed, not a defect");
+      a.ok(rows[3]["Closed on"] === "" || rows[3]["Closed on"] == null);
+      const open = call(L, "openDefectsByReg", L.gas.ss);
+      a.eq((open["YS70 PWE"] || []).map((d) => d.item).join(","), "Horn,Horn", "a closed row is still open");
+    });
+    const w = readFileSync(join(root, "server", "worker.js"), "utf8");
+    a.has(w, 'const DEFECT_CLOSED = ["Fixed", "Not a defect", "Fixed, not a defect"];');
   });
 
   return s;

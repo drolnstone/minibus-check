@@ -1,26 +1,20 @@
 MINIBUS
 =======
-  pages v1.173.0 · server w2.95.0 · sheet v1.142.0
+  pages v1.174.0 · server w2.96.0 · sheet v1.143.0
 
-YOU ARE ON   app v1.172.0 · server w2.95.0 · sheet v1.141.0
-GOING TO     app v1.173.0 · server w2.95.0 · sheet v1.142.0
+YOU ARE ON   app v1.173.0 · server w2.95.0 · sheet v1.142.0
+GOING TO     app v1.174.0 · server w2.96.0 · sheet v1.143.0
 
-Latest report per item (Asim, 16 Nov 2026).
-1. Coordinator App, bus page: Jobs to arrange and the open defects
-   line come first, above the due dates.
-2. One line per bus and item, carrying the newest report: its words,
-   Critical and kind. A Defect replaces an earlier Advisory on the
-   item, and an Advisory an earlier Defect. Coordinator App, Driver
-   App and the weekly summary email (which listed every report, and
-   jobs once per check). Counts are items, not reports.
-3. Defects tab: closing a row by hand (Fixed or Not a defect) closes
-   every open row of the same bus and item reported on or before it,
-   with the same Status and a History row each. The apps already
-   close every report of an item.
-The sheet keeps every report.
+Fixed and Not a defect together (Asim, 16 Nov 2026).
+1. Coordinator App, a defect's Update: Fixed and Not a defect can both
+   be on. The status is then "Fixed, not a defect", and it closes the
+   defect like either one. The other statuses stay one at a time.
+2. The Defects tab's Status list offers "Fixed, not a defect" (green),
+   and choosing it there closes the row and the earlier reports of the
+   same bus and item, as Fixed does.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: v1.173.0 · w2.95.0 · v1.142.0.
-B. A bus page opens on Jobs to arrange.
+A. Coordinator app, App info: v1.174.0 · w2.96.0 · v1.143.0.
+B. A defect's Update: tap Fixed, then Not a defect; both stay on.

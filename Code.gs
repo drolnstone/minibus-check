@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.142.0";
+var SCRIPT_VERSION = "v1.143.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -2266,7 +2266,11 @@ function ensureRotaBusColumns(sh) {
   return did;
 }
 
-var STATUS_OPTIONS = ["Open", "Booked in", "Parts on order", "Fixed", "Monitoring", "Not a defect"];
+/* "Fixed, not a defect", from v1.143.0 (Asim, 16 Nov 2026): put right, and
+   it was not a defect. Closed like the other two. */
+var STATUS_OPTIONS = ["Open", "Booked in", "Parts on order", "Fixed", "Monitoring", "Not a defect", "Fixed, not a defect"];
+var DEFECT_SHUT = ["Fixed", "Not a defect", "Fixed, not a defect"];
+function defectShut(s) { return DEFECT_SHUT.indexOf(String(s || "").trim()) !== -1; }
 /* Cancelled/declined has always meant the whole Sunday is off. The two route
    entries are narrower and are the ones that actually get used: two buses, one
    per route, and when one of them cannot go that route stops while the other
@@ -3646,7 +3650,7 @@ function archivePlan() {
     { tab: DEFECTS_SHEET, keep: 26, dateField: "date",
       hold: function (r, c) {
         var s = String(at1(r, c.status) || "").trim();
-        return s !== "Fixed" && s !== "Not a defect";
+        return !defectShut(s);
       } }
   ];
 }
@@ -4883,7 +4887,7 @@ function coordDefectsList(ss) {
   } catch (err) { trails = {}; }
   vals.forEach(function (r) {
     var status = String(at1(r, dc.status) || "").trim() || "Open";
-    if (status === "Fixed" || status === "Not a defect") return;
+    if (defectShut(status)) return;
     var reg = String(at1(r, dc.reg) || "").trim();
     if (!reg) return;
     var rec = at1(r, dc.received);
@@ -5094,8 +5098,8 @@ function defectSetStatus(ss, key, status, action, by, where, a, re) {
   var r = vals[row - 2];
   var cell = sh.getRange(row, dc.status);
   var was = String(cell.getValue() || "").trim();
-  var closedAlready = was === "Fixed" || was === "Not a defect";
-  var closing = status === "Fixed" || status === "Not a defect";
+  var closedAlready = defectShut(was);
+  var closing = defectShut(status);
   if (closedAlready && closing) return { ok: true, result: "Already closed on the sheet." };
   if (action && dc.action) {
     var ac = sh.getRange(row, dc.action);
@@ -11012,7 +11016,7 @@ function openDefectsByReg(ss) {
   var c = colsSoft(sh, DEFECTS_SHEET);
   vals.forEach(function (r) {
     var status = String(at1(r, c.status) || "");
-    if (status === "Fixed" || status === "Not a defect") return;
+    if (defectShut(status)) return;
     var reg = String(at1(r, c.reg) || "").trim();
     if (!reg) return;
     if (!out[reg]) out[reg] = [];
@@ -14076,7 +14080,7 @@ function onEditDefects(e, sh) {
   var touchesClosed = topCol <= dc.closed && lastCol >= dc.closed;
   if (!touchesStatus && !touchesClosed) return;
 
-  var CLOSED_STATES = ["Fixed", "Not a defect"];
+  var CLOSED_STATES = DEFECT_SHUT;
   var changed = false;
   var closedNow = [];
 
@@ -14151,7 +14155,7 @@ function closeEarlierReports(sh, dc, rows, hss, who, where) {
   var last = sh.getLastRow();
   if (last < 2) return 0;
   var vals = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
-  var shut = ["Fixed", "Not a defect"], n = 0, now = new Date();
+  var shut = DEFECT_SHUT, n = 0, now = new Date();
   var keyOf = function (r) {
     return String(at1(r, dc.reg) || "").trim().toUpperCase() + "|" + String(at1(r, dc.item) || "").trim().toLowerCase();
   };
@@ -15158,6 +15162,7 @@ function setUpDefectsSheet(sh) {
   rules.push(colourRule("Monitoring", "#FDF3E2", "#8A5300"));
   rules.push(colourRule("Fixed", "#E6F2EB", "#146B41"));
   rules.push(colourRule("Not a defect", "#F1F1F1", "#666666"));
+  rules.push(colourRule("Fixed, not a defect", "#E6F2EB", "#146B41"));
   sh.setConditionalFormatRules(rules);
 
   sh.setColumnWidth(8, 320);
@@ -15282,7 +15287,7 @@ function pdfDefects(ss) {
              kind: pdfStr(d["Kind"]) || "Defect" };
   }).filter(function (d) { return d.reg || d.item; });
 }
-function pdfDefectOpen(d) { return ["Fixed", "Not a defect"].indexOf(d.status) === -1; }
+function pdfDefectOpen(d) { return !defectShut(d.status); }
 function pdfChecks(ss) {
   return pdfTab(ss, CHECKS_SHEET).map(function (c) {
     return { date: anyToKey(c["Date"]) || pdfWhenKey(c["Received"]), time: pdfTime(c["Time"]),
