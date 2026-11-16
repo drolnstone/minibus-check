@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.95.0";
+const SCRIPT_VERSION = "w2.96.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -9015,8 +9015,9 @@ const FIX_WINDOW_WEEKS = 5;
 const COORD_OVERLAY_DAYS = 3;
 /* A report asked of the spreadsheet: the health check reads every tab. */
 const SHEET_REPORT_MS = 25000;
-const DEFECT_STATES = ["Open", "Booked in", "Parts on order", "Monitoring", "Fixed", "Not a defect"];
-const DEFECT_CLOSED = ["Fixed", "Not a defect"];
+/* "Fixed, not a defect" from w2.96.0 (Asim, 16 Nov 2026): both at once. */
+const DEFECT_STATES = ["Open", "Booked in", "Parts on order", "Monitoring", "Fixed", "Not a defect", "Fixed, not a defect"];
+const DEFECT_CLOSED = ["Fixed", "Not a defect", "Fixed, not a defect"];
 const DEFECT_CRIT = ["YES", "NO"];
 const DEFECT_KINDS = ["Defect", "Advisory"];
 

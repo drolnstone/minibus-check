@@ -43,7 +43,7 @@ export default function (root) {
     const want = [
       ["Defects", "Critical", ["YES", "NO"]],
       ["Defects", "Kind", ["Defect", "Advisory"]],
-      ["Defects", "Status", ["Open", "Booked in", "Parts on order", "Fixed", "Monitoring", "Not a defect"]],
+      ["Defects", "Status", ["Open", "Booked in", "Parts on order", "Fixed", "Monitoring", "Not a defect", "Fixed, not a defect"]],
       ["Drivers", "Active", ["YES", "NO"]],
       ["Drivers", "Route", ["North", "South"]],
       ["Buses", "Active", ["YES", "NO"]],

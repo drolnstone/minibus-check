@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.173.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.174.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -786,7 +786,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.173.0";
+var PAGE_VERSION = "v1.174.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -2236,6 +2236,18 @@ function bookFor(key){
 /* ---- defects ------------------------------------------------------------------ */
 
 var DEF_STATES = ["Open", "Booked in", "Parts on order", "Monitoring", "Fixed", "Not a defect"];
+/* FIXED AND NOT A DEFECT TOGETHER, from v1.174.0 (Asim, 16 Nov 2026): the
+   two closing chips can both be on, and the status is then "Fixed, not a
+   defect". The others stay one at a time. */
+var DEF_BOTH = "Fixed, not a defect", DEF_SHUT = ["Fixed", "Not a defect", DEF_BOTH];
+function stateOn(s, chosen){ return s === chosen || (chosen === DEF_BOTH && (s === "Fixed" || s === "Not a defect")); }
+function stateTap(chosen, s){
+  var pair = function(x){ return x === "Fixed" || x === "Not a defect"; };
+  if(!pair(s)) return s;
+  if(chosen === DEF_BOTH) return s === "Fixed" ? "Not a defect" : "Fixed";
+  if(pair(chosen) && chosen !== s) return DEF_BOTH;
+  return s;
+}
 
 /* THE ITEMS ON DVSA'S DAILY WALKAROUND CHECK, by the name a defect carries.
    The driver app holds the same list by item (DVSA_DAILY in index.html) and
@@ -2399,7 +2411,7 @@ function updateDefect(gk){
             return '<button type="button" data-kind="'+k+'" class="'+(k === kind ? 'on' : '')+'">'+k+'</button>';
           }).join("") + '</div>' +
           '<div class="chips" id="defStates">' + DEF_STATES.map(function(s){
-            return '<button type="button" data-state="'+esc(s)+'" class="'+(s === chosen ? 'on' : '')+'">'+esc(s)+'</button>';
+            return '<button type="button" data-state="'+esc(s)+'" class="'+(stateOn(s, chosen) ? 'on' : '')+'">'+esc(s)+'</button>';
           }).join("") + '</div>' +
           '<div class="field"><label for="defDid">What was done</label><textarea id="defDid" maxlength="500" placeholder="e.g. Tyre replaced at the garage"></textarea></div>',
     go: "Save",
@@ -2408,7 +2420,7 @@ function updateDefect(gk){
       var reps = many ? Array.prototype.map.call(document.querySelectorAll("#defReps input[data-rep]:checked"), function(x){
         return g.reports[Number(x.getAttribute("data-rep"))]; }) : [g.reports[0]];
       if(!reps.length){ sheetSay("Tick at least one report.", true); return; }
-      if((chosen === "Fixed" || chosen === "Not a defect") && !did){ sheetSay("Say what was done.", true); return; }
+      if(DEF_SHUT.indexOf(chosen) !== -1 && !did){ sheetSay("Say what was done.", true); return; }
       var critTo = crit !== wasCrit ? crit : "", kindTo = kind !== wasKind ? kind : "";
       if(reps.every(function(d){ return chosen === (d.status || "Open"); }) && !did && !critTo && !kindTo){ sheetSay("Nothing has changed.", true); return; }
       var keys = reps.map(function(d){ return d.key; });
@@ -2419,13 +2431,13 @@ function updateDefect(gk){
     } });
   var label = function(){
     var n = many ? document.querySelectorAll("#defReps input[data-rep]:checked").length : 1;
-    var closing = chosen === "Fixed" || chosen === "Not a defect";
+    var closing = DEF_SHUT.indexOf(chosen) !== -1;
     $("sheetGo").textContent = closing ? (n > 1 ? "Close all " + n : "Close it") : "Save";
   };
   Array.prototype.forEach.call(document.querySelectorAll("#defStates button"), function(b){
     b.onclick = function(){
-      chosen = b.getAttribute("data-state");
-      Array.prototype.forEach.call(document.querySelectorAll("#defStates button"), function(x){ x.classList.toggle("on", x === b); });
+      chosen = stateTap(chosen, b.getAttribute("data-state"));
+      Array.prototype.forEach.call(document.querySelectorAll("#defStates button"), function(x){ x.classList.toggle("on", stateOn(x.getAttribute("data-state"), chosen)); });
       if(!busy) sheetSay("");
       label();
     };
