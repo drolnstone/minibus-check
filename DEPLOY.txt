@@ -1,20 +1,28 @@
 MINIBUS
 =======
-  pages v1.170.0 · server w2.93.0 · sheet v1.139.0
+  pages v1.171.0 · server w2.94.0 · sheet v1.140.0
 
-YOU ARE ON   app v1.169.0 · server w2.93.0 · sheet v1.139.0
-GOING TO     app v1.170.0 · server w2.93.0 · sheet v1.139.0
+YOU ARE ON   app v1.170.0 · server w2.93.0 · sheet v1.139.0
+GOING TO     app v1.171.0 · server w2.94.0 · sheet v1.140.0
 
-1. App names (Asim, 15 Nov 2026): "Driver App" and "Coordinator App",
-   with a capital A, on the home screen icon and on alerts. The
-   passenger app is "Sunday Bus" again, with no "app". The bar at the
-   top of the driver app still says Driver.
-2. An iPhone shows a new name only after its icon is removed and added
-   again.
+Parked fuel and mileage (Asim, 16 Nov 2026).
+1. "Parked mileage not received" goes to that bus's driver at 14:00,
+   14:15, 14:30, 14:45 and 15:00 on a Sunday, until it is keyed. Nothing
+   after 15:00. Coordinators get one "Sent:" copy, the first.
+2. Driver app: from 14:00 on a Sunday, while his bus is still to key,
+   the Bus parked card comes up by itself over the first screen each
+   time the app is opened. Close puts it away until the next opening.
+3. Coordinator app: "(bus): parked mileage not received." with Record on
+   the first screen from 14:00, and on the bus's page, until the bus's
+   next walkaround. Record takes Fuel showing and the mileage; the sheet
+   notes "Keyed by (name), coordinator".
+4. Not keyed by the next walkaround: that walkaround's mileage and fuel
+   go in Parked mileage and Parked fuel, Parked at says "From check",
+   and Since parked still says Not reported.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: v1.170.0 · w2.93.0 · v1.139.0.
-B. Each app added to a home screen afresh: Driver App, Coordinator App,
-   Sunday Bus.
+A. Coordinator app, App info: v1.171.0 · w2.94.0 · v1.140.0.
+B. Next Sunday from 14:00 with a bus's parked reading not keyed: the
+   driver's alerts each quarter, and Record on the coordinator app.
