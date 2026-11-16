@@ -58,7 +58,7 @@ export default async function (root) {
   installGlobals();
   const { mod: W } = await loadWorker(root);
   const J = async (r) => JSON.parse(await r.text());
-  const C = fromCoord(root, ["DVSA_ITEMS", "DEF_RANK"], ["isDvsa", "defectGroups"]);
+  const C = fromCoord(root, ["DVSA_ITEMS"], ["isDvsa", "defectGroups"]);
 
   /* ---- the live server ---------------------------------------------------- */
 
@@ -110,7 +110,7 @@ export default async function (root) {
     a.ok(C.isDvsa(" first aid KIT ") && !C.isDvsa("Radio and dash display"));
   });
 
-  s.test("repeated reports of one fault are one card: the newest report stands (words, Critical, kind), the least settled status", (a) => {
+  s.test("repeated reports of one fault are one card: the newest report stands (words, Critical, kind, status)", (a) => {
     const d = TYRES().map((x) => Object.assign(x, { key: W.defectKeyOf(x) }));
     d.push({ checkId: "chk-2", reg: "NH56 FWP", date: LAST, item: "tyres ", crit: false, found: "Other bus", status: "Open",
              kind: "Defect", key: "other" });
@@ -120,10 +120,24 @@ export default async function (root) {
     a.eq(t.reports.length, 2);
     a.eq(t.keys.length, 2);
     a.ok(!t.crit, "the newest report says not critical, and it stands (Asim, 16 Nov 2026)");
-    a.eq(t.status, "Open", "Monitoring and Open together must read as Open");
+    a.eq(t.status, "Open", "not the newest report's status (Asim, 16 Nov 2026)");
     a.eq(t.found, "Nearside front tread low", "not the newest words");
     a.eq(t.oldest, EARLIER);
     a.ok(t.dvsa, "Tyres is on DVSA's daily walkaround");
+  });
+
+  s.test("the newest report's status stands, earlier reports sit under it, and a step on seven reports is one line (v1.175.0)", (a) => {
+    const at = Date.now();
+    const step = (who) => ({ when: at, who, where: "Coordinator's app", from: "Open", to: "Monitoring", what: "Defect: Horn", why: "" });
+    const d = [0, 1, 2, 3, 4, 5, 6].map((i) => ({ checkId: "c" + i, key: "k" + i, reg: "YS70 PWE", item: "Horn", kind: "Defect", crit: false,
+      date: "2026-11-0" + (i + 1), found: "Quiet " + i, status: i === 6 ? "Monitoring" : "Open", trail: [step("Bro Asim")] }));
+    const g = C.defectGroups(d);
+    a.eq(g.length, 1);
+    a.eq(g[0].status, "Monitoring", "the newest report says Monitoring");
+    a.eq(g[0].found, "Quiet 6");
+    a.eq(g[0].earlier.length, 6);
+    a.eq(g[0].keys.length, 7, "Update goes to every open report of the item");
+    a.eq(g[0].trail.length, 1, "one Update on seven reports is one step");
   });
 
   s.test("one Close on the live server closes every report named, and every phone loses them at once", async (a) => {
