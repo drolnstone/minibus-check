@@ -775,8 +775,8 @@ async function sweepLinks(env) {
 
 /* ---- WHEN A PASSENGER IS TOLD SOMETHING --------------------------------
 
-   Pushed from config.js on every sync, same as the authorise rules and the
-   estimate's. The four that matter:
+   Pushed from Code.gs (PASSENGER_RULES) on every sync, same as the
+   authorise rules and the estimate's. The four that matter:
 
      resendMinutes    the estimate has to have moved by more than this before
                       a passenger is told again. The stop just before his and
@@ -882,7 +882,7 @@ function quietNow(rules, when) {
   return from < to ? (p.hh >= from && p.hh < to) : (p.hh >= from || p.hh < to);
 }
 
-/* Pushed from config.js on every sync, exactly as the authorise rules are, so
+/* Pushed from Code.gs (ETA_RULES) on every sync, exactly as the authorise rules are, so
    the number a passenger is shown and the number a driver is shown come from
    one place and cannot drift apart. */
 async function etaSettings(env) {
@@ -3912,9 +3912,9 @@ async function handleSync(env, body) {
   }
 
   /* How the estimate treats a stop the bus is passing. Kept on the
-     spreadsheet for the same reason as the rules above: config.js is the file
-     a person edits, and a number the passenger sees must not be able to
-     differ from the number the driver sees. */
+     spreadsheet for the same reason as the rules above: a number the
+     passenger sees must not be able to differ from the number the driver
+     sees. */
   if (body.passengerRules) {
     stmts.push(cachePut(env, "passenger_rules", {
       resendMinutes:  Number(body.passengerRules.resendMinutes),

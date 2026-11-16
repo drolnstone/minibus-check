@@ -110,7 +110,7 @@ way round.
 
 ## Settings
 
-All in `config.js` under `eta`, all with defaults that work with no
+All in `ETA_RULES` in `Code.gs`, which pushes them to the live server, all with defaults that work with no
 coordinates at all.
 
 | Setting | Default | What it is |

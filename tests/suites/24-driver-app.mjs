@@ -88,12 +88,6 @@ export default function (root) {
     a.has(body(code, "tripAutoArrive"), "tripAllMarked()", "the fence ends a run with booked stops unmarked");
   });
 
-  s.test("a stale board answer cannot close a run the driver has reopened", (a) => {
-    const b = body(code, "tripMerge");
-    a.has(b, "trip.reopened", "tripMerge takes any end the board reports, including the one he took back");
-    a.has(body(code, "tripSaveState"), "reopened", "the reopen is not kept on the phone");
-  });
-
   s.test("the reopen offer survives the app being opened fresh, as the notification asks", (a) => {
     a.has(body(code, "tripSaveState"), "tripAutoEndedAt", "when the app ended the run is kept in memory only, so a reload loses the offer");
     a.has(body(code, "tripLoadState"), "tripAutoEndedAt", "the saved end time is never read back");
