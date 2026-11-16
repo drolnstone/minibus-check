@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.140.0";
+var SCRIPT_VERSION = "v1.141.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -565,7 +565,7 @@ var TELL_COORDINATOR = "now";
 
    Pushed to the live server on every sync, which is the only way it can get
    there: the Worker cannot see this file. This is the only copy (the one in
-   config.js went in v1.171.0, unread): the driver's list and the passenger's
+   config.js went in v1.172.0, unread): the driver's list and the passenger's
    alert both come from the live server, so they cannot differ.
 
      dwellSeconds     how long the bus stands at a stop it calls at

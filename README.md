@@ -1333,7 +1333,7 @@ Sunday open. Everything drains onto the spreadsheet.
 ### The estimate
 
 **Two settings from v1.75.0**, in `ETA_RULES` in Code.gs (the only copy
-from v1.171.0; the unread one in config.js went):
+from v1.172.0; the unread one in config.js went):
 
 | | |
 |---|---|
