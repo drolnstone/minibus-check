@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.170.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.171.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -786,7 +786,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.170.0";
+var PAGE_VERSION = "v1.171.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1460,6 +1460,12 @@ function needs(){
     var reg = lowFuel[k];
     out.unshift({ tone:"stop", beacon:true, text: reg + " needs fuel.", btn:"Fuel bought",
                   data:'data-do="fuelbuy" data-reg="'+esc(reg)+'"' });
+  });
+  /* Parked mileage not received (v1.171.0, Asim, 16 Nov 2026): from 14:00
+     on its Sunday, with Record for the coordinator to key it. */
+  if(typeof parkOwed === "function") parkOwed().forEach(function(o){
+    out.push({ tone:"warn", text: o.reg + ": parked mileage not received.", btn:"Record",
+               data:'data-do="parkkey" data-reg="'+esc(o.reg)+'"' });
   });
   /* The other jobs a walkaround asks for (v1.159.0, Asim, 13 Nov 2026):
      tyres in red, a wash or a clean in amber, each with Done. */
@@ -3154,6 +3160,9 @@ function paintBus(reg){
          '<button class="mini" type="button" data-do="editbus" data-reg="' + esc(b.reg) + '">Edit</button></div>' +
          (b.notes ? '<p class="did">' + esc(b.notes) + '</p>' : '') + '</div>';
   }
+  if(parkOwed().some(function(o){ return same(o.reg, b.reg); }))
+    h += '<div class="card"><div class="row"><span class="v">Parked mileage not received</span><span class="acts">' +
+         '<button class="mini" type="button" data-do="parkkey" data-reg="' + esc(b.reg) + '">Record</button></span></div></div>';
   h += '<button class="btn btn-main btn-wide" type="button" data-do="vlog" data-reg="' + esc(b.reg) + '" style="margin-top:12px">Record something</button>';
   var j = jobsOf(b.reg);
   if(j && j.jobs && j.jobs.length){
@@ -3419,6 +3428,37 @@ function recordShow(b){
            (was ? "It was due " + ukDay(was) + (late !== null ? ": " + lateWords(late) + ". " : ". ") : "") +
            "Next due " + ukDay(nd.next) + ".";
   }).join("\n");
+}
+
+/* PARKED FUEL AND MILEAGE KEYED BY A COORDINATOR (v1.171.0, Asim, 16 Nov
+   2026). The buses the live server says may still have one, after a
+   Sunday walkaround, from 14:00 that Sunday until the next walkaround. */
+function parkOwed(){
+  var now = hhmm(Date.now());
+  return ((D && D.parkKey) || []).filter(function(o){
+    return o && o.reg && !(o.parked && Number(o.parked.miles)) &&
+           (o.day !== calToday() || now >= "14:00");
+  });
+}
+function parkKey(reg){
+  var o = parkOwed().filter(function(x){ return same(x.reg, reg); })[0];
+  if(!o){ toast("Parked mileage for " + reg + " is in.", false); refresh(); return; }
+  var fuel = 0;
+  openSheet({ eyebrow: o.reg + " · " + shortDay(o.day), title: "Bus parked",
+    body: '<div class="field"><label>Fuel showing</label>' + fuelGaugeHtml(0, 'id="pkFuel"') + '</div>' +
+          '<div class="field"><label for="pkMiles">Mileage after the afternoon run</label>' +
+          '<input id="pkMiles" type="number" inputmode="numeric" autocomplete="off" placeholder="e.g. ' +
+          esc(String((Number(o.miles) || 57363) + 12)) + '"></div>' +
+          (o.miles ? '<p class="tiny">Walkaround ' + Number(o.miles).toLocaleString("en-GB") + '.</p>' : ''),
+    go: "Save",
+    onGo: function(){
+      if(!fuel){ sheetSay("Fuel needed.", true); return; }
+      var miles = numIn($("pkMiles").value);
+      if(miles !== miles || !miles){ sheetSay("Mileage needed.", true); return; }
+      if(o.miles && miles < Number(o.miles)){ sheetSay("Lower than the walkaround's " + Number(o.miles).toLocaleString("en-GB") + ".", true); return; }
+      act({ kind: "parked", reg: o.reg, checkId: o.checkId, miles: miles, fuel: fuelText(fuel) });
+    } });
+  fuelGaugeBind($("pkFuel"), function(){ return fuel; }, function(n){ fuel = n; sheetSay(""); });
 }
 
 function recordSend(b){
@@ -4231,6 +4271,7 @@ document.addEventListener("click", function(e){
   else if(d === "addstop") editStop("");
   else if(d === "addbus") editBus("");
   else if(d === "vlog") recordFor(t.getAttribute("data-reg"));
+  else if(d === "parkkey") parkKey(t.getAttribute("data-reg"));
   else if(d === "fuelbuy") recordFor(t.getAttribute("data-reg"), { what: "Fuel" });
   else if(d === "vlogdone") recordFor(t.getAttribute("data-reg"), entryById(t.getAttribute("data-reg"), t.getAttribute("data-id")));
   else if(d === "vfix") correctEntry(t.getAttribute("data-reg"), t.getAttribute("data-id"));

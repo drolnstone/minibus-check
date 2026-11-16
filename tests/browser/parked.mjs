@@ -13,7 +13,7 @@ function check(id, name, ok, detail) {
 }
 const REG = "YS70 PWE";
 
-async function hub(forWho, answer, clock) {
+async function hub(forWho, answer, clock, keepPop) {
   const me = await phone({ clock: clock || "2026-09-27T14:40:00+01:00", timezoneId: "Europe/London" });
   const got = [];
   const open = [{ reg: REG, checkId: "c1", day: "2026-09-27", miles: 31544, driver: forWho, parked: null }];
@@ -42,6 +42,13 @@ async function hub(forWho, answer, clock) {
   await me.signIn();
   await me.wait(1500);
   me.got = got;
+  /* From v1.171.0 the card comes up by itself from 14:00: put away, so
+     the checks below read it on the hub. */
+  me.popWas = await me.pg.evaluate(() => {
+    const m = document.getElementById("parkModal");
+    return !!m && m.classList.contains("is-on") ? document.getElementById("parkPopBody").innerText : "";
+  });
+  if (!keepPop && me.popWas) { await me.pg.click("#parkPopClose"); await me.wait(300); }
   return me;
 }
 
@@ -209,6 +216,36 @@ async function hub(forWho, answer, clock) {
   }
   check("P16", "from 12:00 it opens by itself and takes the reading", open && me.got.length === 1 && me.got[0].parked.miles === 31560,
         open + " " + JSON.stringify(me.got));
+  await me.ctx.close();
+}
+
+/* P17-P20, v1.171.0 (Asim, 16 Nov 2026): from 14:00 the Bus parked card
+   comes up by itself, takes the reading there, and Close puts it away. */
+{
+  const me = await hub(SAMPLE, null, "2026-09-27T14:05:00+01:00", true);
+  const inPop = await me.pg.evaluate(() => !!document.querySelector("#parkPopBody #parkMiles0") &&
+                                           !!document.querySelector("#parkPopBody [data-park-fuel]") &&
+                                           document.getElementById("hubParked").innerHTML === "");
+  check("P17", "from 14:00 the card comes up by itself, with Fuel showing and the mileage",
+        /Bus parked/i.test(me.popWas) && inPop, me.popWas);
+  await me.shot("parked-5-popup");
+  await me.slideFuel("#parkPopBody [data-park-fuel]", 8);
+  await me.pg.fill("#parkMiles0", "31560");
+  await me.click("Save", "#parkPopBody");
+  await me.wait(800);
+  const after = await me.text("#parkPopBody");
+  check("P18", "Save in it sends the reading and shows it kept", me.got.length === 1 && me.got[0].parked.miles === 31560 &&
+        /31,560 ✓/.test(after), JSON.stringify(me.got) + " " + after);
+  await me.pg.click("#parkPopClose");
+  await me.wait(300);
+  const gone = await me.pg.evaluate(() => !document.getElementById("parkModal").classList.contains("is-on"));
+  check("P19", "Close puts it away and the hub has the card", gone && /31,560 ✓/.test(await me.text("#hubParked")), "");
+  check("P20", "no page errors", me.errs.length === 0, me.errs.join(" | "));
+  await me.ctx.close();
+}
+{
+  const me = await hub(SAMPLE, null, "2026-09-27T13:50:00+01:00", true);
+  check("P21", "before 14:00 it does not come up", me.popWas === "", me.popWas);
   await me.ctx.close();
 }
 

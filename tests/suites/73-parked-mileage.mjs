@@ -336,7 +336,7 @@ export default async function (root) {
     });
   });
 
-  s.test("at 2pm, once, the morning's driver is reminded while it is still to be keyed", async (a) => {
+  s.test("from 2pm to 3pm, every quarter of an hour, the morning's driver is reminded while it is still to be keyed", async (a) => {
     const subOf = async (db) => db.prepare("INSERT INTO push_subs (endpoint, role, driver, route, made) VALUES (?, 'driver', 'Bro Trevor', 'North', ?)")
       .bind("https://push.example/trevor", Date.now()).run();
     const lastOf = (db) => db._one("SELECT last FROM push_subs WHERE endpoint='https://push.example/trevor'").last;
@@ -347,13 +347,43 @@ export default async function (root) {
       await atTime("2026-10-18T13:59:00+01:00", () => W.wakeParkAsk(env));
       a.eq(lastOf(db), "", "reminded before two");
       await atTime("2026-10-18T14:00:00+01:00", () => W.wakeParkAsk(env));
-      a.eq(lastOf(db), "parkask|" + KEY + "|" + REG, "not reminded at two");
+      a.eq(lastOf(db), "parkask|" + KEY + "|" + REG + "|14:00", "not reminded at two");
       const said = await atTime("2026-10-18T14:00:00+01:00", () => W.pushWhat(env, "https://push.example/trevor"));
       a.eq(said.title, "\uD83D\uDD34 Parked mileage not received");
       a.eq(said.body, REG + ".");
       await db.prepare("UPDATE push_subs SET last=''").run();
       await atTime("2026-10-18T14:05:00+01:00", () => W.wakeParkAsk(env));
-      a.eq(lastOf(db), "", "reminded twice");
+      a.eq(lastOf(db), "", "reminded twice at two");
+      /* From w2.94.0 (Asim, 16 Nov 2026): again at each quarter, to 3pm. */
+      for (const t of ["14:15", "14:30", "14:45", "15:00"]) {
+        await atTime("2026-10-18T" + t + ":00+01:00", () => W.wakeParkAsk(env));
+        a.eq(lastOf(db), "parkask|" + KEY + "|" + REG + "|" + t, "not reminded at " + t);
+      }
+      await db.prepare("UPDATE push_subs SET last=''").run();
+      for (const t of ["15:05", "15:15", "16:00"]) await atTime("2026-10-18T" + t + ":00+01:00", () => W.wakeParkAsk(env));
+      a.eq(lastOf(db), "", "reminded after 3pm");
+      const trail = JSON.parse(db._one("SELECT v FROM settings WHERE k='trail_once'").v);
+      a.eq(trail.filter((t) => t.indexOf("d|parkask|") === 0).length, 1, "the coordinators were sent more than one copy");
+    }
+    {
+      /* Keyed between two reminders: no more. */
+      const { db, env } = await fresh();
+      const key = await atTime(SUN_0800, async () => { await walk(env, "c1", 57363); return keyOf(env); });
+      await subOf(db);
+      await atTime("2026-10-18T14:00:00+01:00", () => W.wakeParkAsk(env));
+      a.eq(lastOf(db), "parkask|" + KEY + "|" + REG + "|14:00");
+      await atTime("2026-10-18T14:07:00+01:00", () => park(env, key, {}));
+      await db.prepare("UPDATE push_subs SET last=''").run();
+      for (const t of ["14:15", "14:30", "14:45", "15:00"]) await atTime("2026-10-18T" + t + ":00+01:00", () => W.wakeParkAsk(env));
+      a.eq(lastOf(db), "", "reminded once it was keyed");
+    }
+    {
+      /* A Worker that was down sends no late one. */
+      const { db, env } = await fresh();
+      await atTime(SUN_0800, () => walk(env, "c1", 57363));
+      await subOf(db);
+      await atTime("2026-10-18T14:27:00+01:00", () => W.wakeParkAsk(env));
+      a.eq(lastOf(db), "", "a quarter's reminder went seventeen minutes late");
     }
     {
       const { db, env } = await fresh();
@@ -370,7 +400,7 @@ export default async function (root) {
       const { db, env } = await fresh();
       await atTime(SUN_0800, () => walk(env, "c1", 57363));
       await subOf(db);
-      await atTime("2026-10-18T15:00:00+01:00", () => W.wakeParkAsk(env));
+      await atTime("2026-10-18T15:10:00+01:00", () => W.wakeParkAsk(env));
       a.eq(lastOf(db), "", "reminded after three");
     }
     {
@@ -381,7 +411,7 @@ export default async function (root) {
       await atTime("2026-10-18T14:00:00+01:00", () => W.wakeParkAsk(env));
       a.eq(lastOf(db), "", "reminded a quarter of an hour after Trip ended said it");
       await atTime("2026-10-18T14:16:00+01:00", () => W.wakeParkAsk(env));
-      a.eq(lastOf(db), "parkask|" + KEY + "|" + REG, "not reminded once the half hour had passed");
+      a.eq(lastOf(db), "parkask|" + KEY + "|" + REG + "|14:15", "not reminded once the half hour had passed");
     }
     {
       const { db, env } = await fresh();
@@ -399,7 +429,7 @@ export default async function (root) {
       await subOf(db);
       await atTime("2026-10-18T14:00:00+01:00", async () => {
         a.eq(await W.wakeParkAsk(env) >= 0, true);
-        a.eq(lastOf(db), "parkask|" + KEY + "|NH56 FWP and " + REG, "not one reminder naming both buses");
+        a.eq(lastOf(db), "parkask|" + KEY + "|NH56 FWP and " + REG + "|14:00", "not one reminder naming both buses");
         const said = await W.pushWhat(env, "https://push.example/trevor");
         a.eq(said.body, "NH56 FWP and " + REG + ".");
       });
@@ -411,6 +441,105 @@ export default async function (root) {
     a.ok(/out\.parked = await parkedLatest\(env\)/.test(src), "coordLoad does not carry it");
     const page = readFileSync(join(root, "coord", "index.html"), "utf8");
     a.ok(page.indexOf("Parked mileage not reported since the last walkaround") > -1, "the bus screen does not say it");
+  });
+
+  /* ------------------------- keyed later, or from the next check (w2.94.0) */
+
+  async function withCoord(env, db) {
+    await db.prepare("INSERT INTO drivers (name, role, route, ord, active, pin_hash) VALUES (?,?,?,2,1,?)")
+      .bind("Bro Arthur", "Coordinator", "North", await W.pinHashOf(env, "Bro Arthur", "1234")).run();
+    await W.handleSync(env, { authRules: { roles: ["Coordinator"], sameHandBothWays: true } });
+  }
+  let actN = 0;
+  const coordPark = async (env, over) => J(await post(env, { action: "coord", who: "Bro Arthur", pin: "1234", op: "act",
+    act: Object.assign({ id: "park-act-" + (++actN), kind: "parked", reg: REG, checkId: "c1", miles: 57410, fuel: "3/4 tank" }, over || {}) }));
+
+  s.test("a coordinator keys it later under his own name, and nobody is told", async (a) => {
+    const { db, env } = await fresh();
+    await withCoord(env, db);
+    await atTime(SUN_0800, () => walk(env, "c1", 57363));
+    const load = await atTime("2026-10-18T16:00:00+01:00", async () =>
+      J(await post(env, { action: "coord", who: "Bro Arthur", pin: "1234", op: "load" })));
+    a.ok((load.parkKey || []).some((o) => o.reg === REG && o.checkId === "c1" && !o.parked), "not offered to the coordinator");
+    await atTime("2026-10-19T19:00:00+01:00", async () => {
+      a.eq((await coordPark(env, { fuel: "" })).error, "Fuel needed.");
+      a.eq((await coordPark(env, { miles: "" })).error, "Mileage needed.");
+      a.eq((await coordPark(env, { miles: 57300 })).error, "Lower than the walkaround's 57,363.");
+      const ok = await coordPark(env, {});
+      a.ok(ok.ok, JSON.stringify(ok));
+      a.eq(ok.action.words, REG + ": parked 57,410, fuel 3/4 tank.");
+      const row = db._one("SELECT * FROM parked WHERE check_id='c1'");
+      a.eq(row.driver, "Bro Arthur");
+      a.eq(row.src, "coord");
+      a.eq(row.fuel, "3/4 tank");
+      const d = await J(await W.handleDrain(env, { limit: 300 }));
+      a.eq(d.parked[0].src, "coord", "the sheet is not told a coordinator keyed it");
+      a.eq(db._one("SELECT COUNT(*) AS n FROM coord_actions WHERE kind='parked' AND synced=1").n, 1, "offered to the sheet as an action");
+    });
+    await atTime("2026-10-25T08:00:00+00:00", () => walk(env, "c2", 57410));
+    const later = await atTime("2026-10-25T09:00:00+00:00", async () => coordPark(env, { checkId: "" }));
+    a.not(later.ok, "keyed for a walkaround that is no longer the bus's newest");
+  });
+
+  s.test("not keyed, the next walkaround's mileage and fuel stand in, marked as from the check", async (a) => {
+    {
+      const { db, env } = await fresh();
+      await atTime(SUN_0800, () => walk(env, "c1", 57363));
+      await atTime(WED_1000, () => post(env, { action: "check",
+        check: { id: "c2", reg: REG, level: "ok", driver: "Bro Trevor", miles: "57450", fuel: "1/4 tank" } }));
+      const row = db._one("SELECT * FROM parked WHERE check_id='c1'");
+      a.ok(row, "nothing stood in");
+      a.eq(Number(row.miles), 57450);
+      a.eq(row.fuel, "1/4 tank");
+      a.eq(row.src, "check");
+      a.eq(row.driver, "");
+      a.eq(db._one("SELECT COUNT(*) AS n FROM parked WHERE check_id='c2'").n, 0, "the new walkaround was given one");
+    }
+    {
+      const { db, env } = await fresh();
+      const key = await atTime(SUN_0800, async () => { await walk(env, "c1", 57363); return keyOf(env); });
+      await atTime(SUN_1500, () => park(env, key, {}));
+      await atTime(WED_1000, () => walk(env, "c2", 57450));
+      const row = db._one("SELECT * FROM parked WHERE check_id='c1'");
+      a.eq(Number(row.miles), 57410, "the check replaced the driver's reading");
+      a.eq(row.src, "");
+    }
+    {
+      const { db, env } = await fresh();
+      await atTime(SUN_0800, () => walk(env, "c1", 57363));
+      await atTime(SUN_1100, () => walk(env, "c2", 57370));
+      a.eq(db._one("SELECT COUNT(*) AS n FROM parked").n, 0, "a second walkaround the same Sunday stood in");
+    }
+  });
+
+  s.test("the sheet files a stand in as From check, and Since parked still says Not reported", async (a) => {
+    await atTime(NEXT, () => {
+      const L = sheet([walkRow("c1", "2026-10-18T08:00:00+01:00", 57363)]);
+      const sent = worker(L, { drain: { ok: true, claim: -7, bookings: [], trips: [], checks: [], auths: [],
+        decisions: [], requests: [],
+        parked: [{ id: 4, checkId: "c1", reg: REG, miles: 57450, fuel: "1/4 tank", driver: "", at: Date.now(), confirmed: false, src: "check" }] } });
+      call(L, "handleCheck", chk(57450));
+      call(L, "drainFromWorker");
+      a.eq(cell(L, 2, "Parked mileage"), 57450);
+      a.eq(cell(L, 2, "Parked at"), "From check");
+      const note = L.gas.ss.getSheetByName("Checks").getRange(2, col("Parked mileage")).getNote();
+      a.ok(/^Mileage and fuel from the walkaround on 25\/10\/2026 at 08:00\.$/.test(note), note);
+      a.eq(cell(L, lastRow(L), "Since parked"), "Not reported", "the week's miles were hidden");
+      a.eq(alerts(sent).filter((x) => /since it was parked/.test(x.title)).length, 0);
+    });
+  });
+
+  s.test("a coordinator's reading is noted as his", async (a) => {
+    await atTime(MON_2000, () => {
+      const L = sheet([walkRow("c1", "2026-10-18T08:00:00+01:00", 57363)]);
+      worker(L, { drain: { ok: true, claim: -7, bookings: [], trips: [], checks: [], auths: [],
+        decisions: [], requests: [],
+        parked: [{ id: 5, checkId: "c1", reg: REG, miles: 57410, fuel: "3/4 tank", driver: "Bro Arthur", at: Date.now(), confirmed: true, src: "coord" }] } });
+      call(L, "drainFromWorker");
+      const note = L.gas.ss.getSheetByName("Checks").getRange(2, col("Parked mileage")).getNote();
+      a.ok(/^Keyed by Bro Arthur, coordinator, on 19\/10\/2026 at 20:00\.$/.test(note), note);
+      a.eq(cell(L, 2, "Parked at"), "20:00");
+    });
   });
 
   /* ------------------------------------------------------- the sheet */
@@ -646,6 +775,9 @@ export default async function (root) {
     a.ok(/var pk = parkedBase\(st\.veh\.reg\);/.test(src), "the walkaround's check is not measured from it");
     a.ok(/parkSeen\(out\)/.test(src), "the live server's answer is not read for it");
     a.ok(/delete PARKED\[/.test(src), "a walkaround leaves the old parked reading in place");
+    a.ok(src.indexOf('id="parkModal"') > -1 && /function parkPopSync\(\)/.test(src), "the card does not come up by itself");
+    const coord = readFileSync(join(root, "coord", "index.html"), "utf8");
+    a.ok(/kind: "parked", reg: o\.reg/.test(coord), "a coordinator cannot key it");
   });
 
   return s;
