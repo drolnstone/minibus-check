@@ -1,20 +1,17 @@
 MINIBUS
 =======
-  pages v1.174.0 · server w2.96.0 · sheet v1.143.0
+  pages v1.174.1 · server w2.96.0 · sheet v1.143.0
 
-YOU ARE ON   app v1.173.0 · server w2.95.0 · sheet v1.142.0
-GOING TO     app v1.174.0 · server w2.96.0 · sheet v1.143.0
+YOU ARE ON   app v1.174.0 · server w2.96.0 · sheet v1.143.0
+GOING TO     app v1.174.1 · server w2.96.0 · sheet v1.143.0
 
-Fixed and Not a defect together (Asim, 16 Nov 2026).
-1. Coordinator App, a defect's Update: Fixed and Not a defect can both
-   be on. The status is then "Fixed, not a defect", and it closes the
-   defect like either one. The other statuses stay one at a time.
-2. The Defects tab's Status list offers "Fixed, not a defect" (green),
-   and choosing it there closes the row and the earlier reports of the
-   same bus and item, as Fixed does.
+Browser checks put right after #160 (Asim, 16 Nov 2026). Nothing on any
+screen, alert or email changes.
+1. The coordinator browser checks read the bus page's dates card by name,
+   now that Jobs to arrange comes first (C29, C29g, C30).
+2. C39 expects the newest report's Critical, as #160 made it.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: v1.174.0 · w2.96.0 · v1.143.0.
-B. A defect's Update: tap Fixed, then Not a defect; both stay on.
+A. Coordinator app, App info: v1.174.1 · w2.96.0 · v1.143.0.

@@ -993,7 +993,7 @@ if (want("C29")) {
         "list '" + list.slice(0, 300) + "', lit " + JSON.stringify(fuelLit));
   await p.pg.click('#busesBody [data-go="bus/YS70%20PWE"]');
   await p.wait(300);
-  const before = await p.text("#busBody .card");
+  const before = await p.text("#busBody .bus-dates");
   await p.pg.click('#busBody [data-do="vlog"]');
   await p.wait(250);
   await p.tapText("MOT", "#vlWhat");
@@ -1007,7 +1007,7 @@ if (want("C29")) {
   await p.go();
   await p.settle();
   await p.wait(400);
-  const after = await p.text("#busBody .card");
+  const after = await p.text("#busBody .bus-dates");
   const acts = db._rows("SELECT kind, body FROM coord_actions WHERE kind='vlog'");
   const body = acts.length ? JSON.parse(acts[0].body) : {};
   const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth);
@@ -1045,7 +1045,7 @@ if (want("C29g")) {
   await p.settle();
   await p.wait(400);
   const acts = db._rows("SELECT body FROM coord_actions WHERE kind='vlog'").map((r) => JSON.parse(r.body)).filter((b) => b.what === "Fuel");
-  const busCard = await p.text("#busBody .card");
+  const busCard = await p.text("#busBody .bus-dates");
   await p.pg.evaluate(() => { location.hash = "home"; });
   await p.wait(400);
   const legs = await p.pg.$$eval("#homeBody .sun .leg", (e, r) => e.filter((x) => x.querySelector(".plate") && x.querySelector(".plate").textContent === r)
@@ -1219,7 +1219,7 @@ if (want("C30")) {
   const body = acts.length ? JSON.parse(acts[0].body) : {};
   const next = W.rnAddMonths(day, 12);
   const uk = (k) => k.slice(8, 10) + "/" + k.slice(5, 7) + "/" + k.slice(0, 4);
-  const card = await p.text("#busBody .card");
+  const card = await p.text("#busBody .bus-dates");
   const struck = await p.pg.$$eval("#busBody .vlog.gone", (els) => els.length);
   await p.shot("C30b-corrected");
   check("C30", "Correct: the new day gives a new next due date, the old entry stays struck through",
@@ -1465,7 +1465,7 @@ if (want("C39")) {
     const sent = JSON.parse(db._one("SELECT body FROM coord_actions WHERE kind='defect' ORDER BY seq DESC LIMIT 1").body);
     const left = await p.pg.$$eval("#defectsBody .def", (ds) => ds.filter((d) => /^Tyres/.test(d.textContent.trim())).length);
     check("C39", "one fault reported twice is one card, with the DVSA tag and how long it has been open; Close closes both",
-          tyres.length === 1 && /2 reports since/.test(tyres[0]) && /DVSA daily check/.test(tyres[0]) && /Critical/.test(tyres[0]) &&
+          tyres.length === 1 && /2 reports since/.test(tyres[0]) && /DVSA daily check/.test(tyres[0]) && !/Critical/.test(tyres[0]) &&
           /open \d+ days/.test(tyres[0]) && /tread low/.test(tyres[0]) &&
           ticks.length === 2 && ticks.every(Boolean) && all === "Close all 2" && one === "Close it" &&
           sent.keys && sent.keys.length === 2 && left === 0 && !p.errs.length,
