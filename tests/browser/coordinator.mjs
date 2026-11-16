@@ -1448,28 +1448,27 @@ if (want("C39")) {
     await p.wait(600);
     const cards = await p.pg.$$eval("#defectsBody .def", (ds) => ds.map((d) => d.textContent.replace(/\s+/g, " ").trim()));
     const tyres = cards.filter((t) => /^Tyres/.test(t));
+    await p.pg.click("#defectsBody details.earlier summary", { timeout: 3000 }).catch(() => {});
+    await p.pg.click("#defectsBody details.trail summary", { timeout: 3000 }).catch(() => {});
     await p.shot("C39a-defects-grouped");
     const card = p.pg.locator("#defectsBody .def", { hasText: "Nearside front tread low" }).first();
     await card.locator('[data-do="defect"]').click();
     await p.wait(300);
-    const ticks = await p.pg.$$eval("#defReps input[data-rep]", (xs) => xs.map((x) => x.checked));
+    const ticks = await p.pg.$$eval("#defReps input[data-rep]", (xs) => xs.length);
     await p.pg.click('#defStates [data-state="Fixed"]');
     const all = await p.text("#sheetGo");
-    await p.pg.click("#defReps input[data-rep]");
-    const one = await p.text("#sheetGo");
-    await p.pg.click("#defReps input[data-rep]");
     await p.pg.fill("#defDid", "Both front tyres replaced at Walton Tyres");
     await p.shot("C39b-close-all");
     await p.go();
     await p.wait(600);
     const sent = JSON.parse(db._one("SELECT body FROM coord_actions WHERE kind='defect' ORDER BY seq DESC LIMIT 1").body);
     const left = await p.pg.$$eval("#defectsBody .def", (ds) => ds.filter((d) => /^Tyres/.test(d.textContent.trim())).length);
-    check("C39", "one fault reported twice is one card, with the DVSA tag and how long it has been open; Close closes both",
-          tyres.length === 1 && /2 reports since/.test(tyres[0]) && /DVSA daily check/.test(tyres[0]) && !/Critical/.test(tyres[0]) &&
+    check("C39", "one fault reported twice is one card with the earlier report under it, the DVSA tag and how long it has been open; Close closes both",
+          tyres.length === 1 && /2 reports since/.test(tyres[0]) && /DVSA daily check/.test(tyres[0]) && !/Critical/.test(tyres[0].split("Earlier reports")[0]) &&
           /open \d+ days/.test(tyres[0]) && /tread low/.test(tyres[0]) &&
-          ticks.length === 2 && ticks.every(Boolean) && all === "Close all 2" && one === "Close it" &&
+          /Earlier reports \(1\)/.test(tyres[0]) && ticks === 0 && all === "Close it" &&
           sent.keys && sent.keys.length === 2 && left === 0 && !p.errs.length,
-          JSON.stringify({ tyres, ticks, all, one, keys: sent.keys, left, errors: p.errs }));
+          JSON.stringify({ tyres, ticks, all, keys: sent.keys, left, errors: p.errs }));
   } catch (e) { stopped("C39", e); }
   await p.ctx.close();
 }

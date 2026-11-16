@@ -1,17 +1,24 @@
 MINIBUS
 =======
-  pages v1.174.1 · server w2.96.0 · sheet v1.143.0
+  pages v1.175.0 · server w2.96.0 · sheet v1.143.0
 
-YOU ARE ON   app v1.174.0 · server w2.96.0 · sheet v1.143.0
-GOING TO     app v1.174.1 · server w2.96.0 · sheet v1.143.0
+YOU ARE ON   app v1.174.1 · server w2.96.0 · sheet v1.143.0
+GOING TO     app v1.175.0 · server w2.96.0 · sheet v1.143.0
 
-Browser checks put right after #160 (Asim, 16 Nov 2026). Nothing on any
-screen, alert or email changes.
-1. The coordinator browser checks read the bus page's dates card by name,
-   now that Jobs to arrange comes first (C29, C29g, C30).
-2. C39 expects the newest report's Critical, as #160 made it.
+Defects in the Coordinator App: one card per bus and item, the newest
+report's (Asim, 16 Nov 2026).
+1. The card's status is the newest report's (it was the least settled of
+   all the reports, so Monitoring could still read Open).
+2. Update is on the card only and goes to every open report of the item at
+   once: the list of reports to tick is gone, and the button says Close it.
+3. Earlier reports sit under the card as "Earlier reports (n)", read-only:
+   words, photos, date, driver, status. No buttons.
+4. "What has happened to it" shows a step once, not once per report.
+The sheet keeps every report as before. The Driver App already shows one
+line per item.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: v1.174.1 · w2.96.0 · v1.143.0.
+A. Coordinator App, App info: v1.175.0 · w2.96.0 · v1.143.0.
+B. Defects: one card per item; tap Earlier reports to see the older ones.

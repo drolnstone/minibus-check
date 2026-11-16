@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.174.1 · THE COORDINATOR'S APP.
+<!-- BUILD v1.175.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -458,10 +458,11 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 .def .def-dvsa{margin:4px 0 0}
 .tag.dvsa{background:var(--card);color:var(--ink-2);border-color:var(--hair)}
 #defReps .check small{display:block;margin-top:1px}
-.trail{margin-top:6px}
-.trail summary{font-size:13px;font-weight:600;color:var(--muted);padding:4px 0;cursor:pointer}
-.trail li{font-size:14px}
-.trail li small{display:block;color:var(--muted);font-size:12px}
+.trail,.earlier{margin-top:6px}
+.trail summary,.earlier summary{font-size:13px;font-weight:600;color:var(--muted);padding:4px 0;cursor:pointer}
+.trail li,.earlier li{font-size:14px}
+.trail li small,.earlier li small{display:block;color:var(--muted);font-size:12px}
+.earlier .def-pics{margin-top:4px}
 .trail .why{display:block;color:var(--ink-2);white-space:pre-line}
 
 /* ---- buses, from v1.89.0 ---- */
@@ -786,7 +787,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.174.1";
+var PAGE_VERSION = "v1.175.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -2273,11 +2274,14 @@ function isDvsa(item){
    Grouped by bus and item. From v1.173.0 the newest report stands (Asim,
    16 Nov): its words, its Critical and its kind, so a Defect replaces an
    earlier Advisory and an Advisory an earlier Defect. The count and the
-   first date say how long it has been reported, and the status is the least
-   settled of them. Update and
-   Close are for every report on the card, each listed and ticked, so one
-   that is a different fault under the same heading can be left out. */
-var DEF_RANK = { "Open": 0, "Parts on order": 1, "Booked in": 2, "Monitoring": 3 };
+   first date say how long it has been reported.
+
+   From v1.175.0 (Asim, 16 Nov: "only the latest update of each specific
+   item") the status is the newest report's too, and Update is on the card
+   alone and goes to every open report of the item at once: no list of
+   reports to tick. The earlier reports sit under the card as Earlier
+   reports, read-only, and the trail shows a step once, however many reports
+   it was written on. */
 function defectGroups(list){
   var by = {}, out = [];
   (list || []).forEach(function(d){
@@ -2286,10 +2290,9 @@ function defectGroups(list){
     if(!g){ g = by[k] = { gk: k, reg: d.reg, item: d.item, reports: [], crit: false, kind: "Advisory", status: "",
                           found: "", newest: "", oldest: "", driver: "", waiting: false }; out.push(g); }
     g.reports.push(d);
-    var st = d.status || "Open", r = DEF_RANK[st] === undefined ? 9 : DEF_RANK[st];
-    if(!g.status || r < (DEF_RANK[g.status] === undefined ? 9 : DEF_RANK[g.status])) g.status = st;
     var dt = String(d.date || "");
     if(!g.newest || dt >= g.newest){ g.newest = dt; g.found = d.found || ""; g.driver = d.driver || ""; if(d.item) g.item = d.item;
+                                     g.status = d.status || "Open"; g.latest = d;
                                      g.crit = !!d.crit; g.kind = d.kind === "Advisory" ? "Advisory" : "Defect"; }
     if(dt && (!g.oldest || dt < g.oldest)) g.oldest = dt;
     if(d.waiting) g.waiting = true;
@@ -2300,10 +2303,19 @@ function defectGroups(list){
     var did = [];
     g.reports.forEach(function(d){ String(d.action || "").split("\n").forEach(function(x){ x = x.trim(); if(x && did.indexOf(x) === -1) did.push(x); }); });
     g.action = did.join("\n");
+    /* One Update on seven reports writes seven History rows: one step here. */
+    var seen = {};
     g.trail = [].concat.apply([], g.reports.map(function(d){ return d.trail || []; }))
-      .sort(function(a, b){ return (Number(a.when) || 0) - (Number(b.when) || 0); });
+      .sort(function(a, b){ return (Number(a.when) || 0) - (Number(b.when) || 0); })
+      .filter(function(t){
+        var k = [String(t.what || "").split(" \u2014 ")[1] || "", t.to, t.why, t.who, Math.floor((Number(t.when) || 0) / 60000)].join("|");
+        if(seen[k]) return false;
+        seen[k] = 1; return true;
+      });
     g.dvsa = isDvsa(g.item);
-    g.photos = [].concat.apply([], g.reports.map(function(d){ return d.photos || []; }));
+    g.latest = g.reports[0];
+    g.earlier = g.reports.slice(1);
+    g.photos = (g.latest && g.latest.photos) || [];
   });
   /* Critical first, then a defect before an advisory, then the oldest. */
   return out.sort(function(a, b){
@@ -2315,6 +2327,20 @@ function defectGroupByKey(gk){
   var g = defectGroups((D && D.defects) || []);
   for(var i = 0; i < g.length; i++) if(g[i].gk === gk) return g[i];
   return null;
+}
+/* The earlier reports of an item, from v1.175.0: read-only, no buttons. */
+function earlierHTML(list){
+  if(!list || !list.length) return '';
+  return '<details class="earlier"><summary>Earlier reports (' + list.length + ')</summary><ul class="notes">' +
+    list.map(function(d){
+      return '<li>' + esc(d.found ? "“" + d.found + "”" : "No note") +
+             ((d.photos || []).length ? '<span class="def-pics">' + d.photos.map(function(id){
+               return '<button class="def-pic" type="button" data-do="photo" data-key="'+esc(id)+'" aria-label="Photo">' +
+                      '<img alt="" data-pid="'+esc(id)+'"'+(THUMBS[id] ? ' src="'+THUMBS[id]+'"' : '')+'></button>';
+             }).join("") + '</span>' : '') +
+             '<small>' + esc([d.date ? shortDay(d.date) : "", d.driver, d.kind === "Advisory" ? "Advisory" : d.crit ? "Critical" : "",
+                              d.status || "Open"].filter(Boolean).join(", ")) + '</small></li>';
+    }).join("") + '</ul></details>';
 }
 function openFor(g){
   var n = g.oldest ? rnDays(g.oldest, calToday()) : null;
@@ -2344,7 +2370,7 @@ function paintDefects(){
            }).join("") + '</div>' : '') +
            '<p class="def-age">'+esc([n > 1 ? n + " reports since " + shortDay(g.oldest) : "", openFor(g)].filter(Boolean).join(", "))+'</p>' +
            (g.action ? '<p class="did">'+esc(g.action)+'</p>' : '') +
-           trailHTML(g.trail) +
+           trailHTML(g.trail) + earlierHTML(g.earlier) +
            '<div class="def-foot"><p class="tiny">'+esc([g.newest ? (n > 1 ? "Last " : "") + shortDay(g.newest) : "", g.driver].filter(Boolean).join(", "))+'</p>' +
            (g.waiting ? '<span class="tag info">To the sheet</span>' : '') +
            '<button class="mini" type="button" data-do="defect" data-key="'+esc(g.gk)+'">Update</button></div></div>';
@@ -2396,15 +2422,8 @@ function updateDefect(gk){
      driver's. Sent only when changed. */
   var wasCrit = g.crit ? "YES" : "NO", crit = wasCrit;
   var wasKind = g.kind === "Advisory" ? "Advisory" : "Defect", kind = wasKind;
-  var many = g.reports.length > 1;
   openSheet({ eyebrow: g.reg, title: g.item,
-    body: (many ? '<div id="defReps"><p class="tiny" style="margin:0 0 2px">Reports</p>' +
-            g.reports.map(function(d, i){
-              return '<label class="check"><input type="checkbox" data-rep="'+i+'" checked><span>' +
-                     esc([d.date ? shortDay(d.date) : "", d.driver].filter(Boolean).join(", ")) +
-                     '<small>'+esc((d.found ? "“" + d.found + "”, " : "") + (d.status || "Open"))+'</small></span></label>';
-            }).join("") + '</div>' : '') +
-          '<div class="chips" id="defCrit">' + [["YES", "Critical"], ["NO", "Not critical"]].map(function(c){
+    body: '<div class="chips" id="defCrit">' + [["YES", "Critical"], ["NO", "Not critical"]].map(function(c){
             return '<button type="button" data-crit="'+c[0]+'" class="'+(c[0] === crit ? 'on' : '')+'">'+c[1]+'</button>';
           }).join("") + '</div>' +
           '<div class="chips" id="defKind">' + ["Defect", "Advisory"].map(function(k){
@@ -2417,9 +2436,7 @@ function updateDefect(gk){
     go: "Save",
     onGo: function(){
       var did = String($("defDid").value || "").trim();
-      var reps = many ? Array.prototype.map.call(document.querySelectorAll("#defReps input[data-rep]:checked"), function(x){
-        return g.reports[Number(x.getAttribute("data-rep"))]; }) : [g.reports[0]];
-      if(!reps.length){ sheetSay("Tick at least one report.", true); return; }
+      var reps = g.reports;
       if(DEF_SHUT.indexOf(chosen) !== -1 && !did){ sheetSay("Say what was done.", true); return; }
       var critTo = crit !== wasCrit ? crit : "", kindTo = kind !== wasKind ? kind : "";
       if(reps.every(function(d){ return chosen === (d.status || "Open"); }) && !did && !critTo && !kindTo){ sheetSay("Nothing has changed.", true); return; }
@@ -2430,9 +2447,7 @@ function updateDefect(gk){
       act(a);
     } });
   var label = function(){
-    var n = many ? document.querySelectorAll("#defReps input[data-rep]:checked").length : 1;
-    var closing = DEF_SHUT.indexOf(chosen) !== -1;
-    $("sheetGo").textContent = closing ? (n > 1 ? "Close all " + n : "Close it") : "Save";
+    $("sheetGo").textContent = DEF_SHUT.indexOf(chosen) !== -1 ? "Close it" : "Save";
   };
   Array.prototype.forEach.call(document.querySelectorAll("#defStates button"), function(b){
     b.onclick = function(){
@@ -2442,7 +2457,6 @@ function updateDefect(gk){
       label();
     };
   });
-  Array.prototype.forEach.call(document.querySelectorAll("#defReps input[data-rep]"), function(x){ x.onchange = label; });
   [["#defCrit button", "data-crit", function(v){ crit = v; }], ["#defKind button", "data-kind", function(v){ kind = v; }]].forEach(function(f){
     Array.prototype.forEach.call(document.querySelectorAll(f[0]), function(b){
       b.onclick = function(){
