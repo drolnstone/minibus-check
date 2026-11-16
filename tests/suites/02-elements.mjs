@@ -324,17 +324,23 @@ export default function (root) {
     a.eq(out[0].n, 2);
   });
 
-  s.test("A CRITICAL IS NEVER LOST BEHIND A NEWER ADVISORY", (a) => {
-    /* The one that matters. Grouping must not be able to soften anything:
-       if any report of an item is critical the line is critical, whatever
-       the newest row happens to say. */
-    const out = group([
+  s.test("the newest report of an item stands, whichever way it goes", (a) => {
+    /* Asim, 16 Nov 2026: an Advisory later reported as a Defect shows as a
+       Defect, and a Defect later reported as an Advisory as an Advisory. */
+    const down = group([
       { item: "Tyres", note: "Near side front worn through", crit: true, kind: "Defect", date: "2026-09-01" },
-      { item: "Tyres", note: "Looks fine to me", crit: false, kind: "Advisory", date: "2026-09-21" }
+      { item: "Tyres", note: "Tread low", crit: false, kind: "Advisory", date: "2026-09-21" }
     ]);
-    a.eq(out.length, 1);
-    a.eq(out[0].crit, true, "a critical was downgraded by a later advisory");
-    a.eq(out[0].kind, "Defect", "and a defect was downgraded to an advisory");
+    a.eq(down.length, 1);
+    a.eq(down[0].crit, false, "the newest report's Critical did not stand");
+    a.eq(down[0].kind, "Advisory", "the newest report's kind did not stand");
+    const up = group([
+      { item: "Tyres", note: "Tread low", crit: false, kind: "Advisory", date: "2026-09-01" },
+      { item: "Tyres", note: "Worn through", crit: true, kind: "Defect", date: "2026-09-21" }
+    ]);
+    a.eq(up[0].crit, true);
+    a.eq(up[0].kind, "Defect", "a Defect did not replace the earlier Advisory");
+    a.eq(up[0].note, "Worn through");
   });
 
   s.test("items that differ only in spacing or case are the same item", (a) => {

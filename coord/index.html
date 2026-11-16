@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.172.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.173.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -786,7 +786,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.172.0";
+var PAGE_VERSION = "v1.173.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -2258,10 +2258,11 @@ function isDvsa(item){
    closing one left the others open: the driver app went on listing it as
    "Still open on this bus" from the rows nobody had closed.
 
-   Grouped by bus and item. The weight never comes down: one critical report
-   makes the card critical, and a defect outranks an advisory. The words are
-   the newest report's, the count and the first date say how long it has been
-   saying them, and the status is the least settled of them. Update and
+   Grouped by bus and item. From v1.173.0 the newest report stands (Asim,
+   16 Nov): its words, its Critical and its kind, so a Defect replaces an
+   earlier Advisory and an Advisory an earlier Defect. The count and the
+   first date say how long it has been reported, and the status is the least
+   settled of them. Update and
    Close are for every report on the card, each listed and ticked, so one
    that is a different fault under the same heading can be left out. */
 var DEF_RANK = { "Open": 0, "Parts on order": 1, "Booked in": 2, "Monitoring": 3 };
@@ -2273,12 +2274,11 @@ function defectGroups(list){
     if(!g){ g = by[k] = { gk: k, reg: d.reg, item: d.item, reports: [], crit: false, kind: "Advisory", status: "",
                           found: "", newest: "", oldest: "", driver: "", waiting: false }; out.push(g); }
     g.reports.push(d);
-    if(d.crit) g.crit = true;
-    if(d.kind !== "Advisory") g.kind = "Defect";
     var st = d.status || "Open", r = DEF_RANK[st] === undefined ? 9 : DEF_RANK[st];
     if(!g.status || r < (DEF_RANK[g.status] === undefined ? 9 : DEF_RANK[g.status])) g.status = st;
     var dt = String(d.date || "");
-    if(!g.newest || dt >= g.newest){ g.newest = dt; g.found = d.found || ""; g.driver = d.driver || ""; if(d.item) g.item = d.item; }
+    if(!g.newest || dt >= g.newest){ g.newest = dt; g.found = d.found || ""; g.driver = d.driver || ""; if(d.item) g.item = d.item;
+                                     g.crit = !!d.crit; g.kind = d.kind === "Advisory" ? "Advisory" : "Defect"; }
     if(dt && (!g.oldest || dt < g.oldest)) g.oldest = dt;
     if(d.waiting) g.waiting = true;
   });
@@ -3137,6 +3137,20 @@ function paintBus(reg){
   var b = busByReg(reg);
   if(!b){ $("busBody").innerHTML = '<h1>' + esc(reg || "Bus") + '</h1><div class="card"><p class="tiny" style="margin:0">That bus is not on the live server’s list.</p></div>'; return; }
   var h = '<h1><span class="plate plate-big">' + esc(b.reg) + '</span></h1>';
+  /* From v1.173.0: jobs to arrange and the open defects lead the page
+     (Asim, 16 Nov). */
+  var j = jobsOf(b.reg);
+  if(j && j.jobs && j.jobs.length){
+    h += '<h3>Jobs to arrange</h3><div class="card"><p class="tiny" style="margin:0 0 4px">From the walkaround ' +
+         esc([j.date ? shortDay(j.date) : "", j.driver].filter(Boolean).join(", ")) + '.</p>' +
+         j.jobs.map(function(x){
+           return '<div class="row"><span class="v">' + esc(x) + '</span><span class="acts">' +
+                  (x === "Needs fuel" ? '<button class="mini" type="button" data-do="fuelbuy" data-reg="' + esc(b.reg) + '">Fuel bought</button>'
+                   : '<button class="mini" type="button" data-do="job" data-reg="' + esc(b.reg) + '" data-job="' + esc(x) + '">Done</button>') + '</span></div>';
+         }).join("") + '</div>';
+  }
+  var dn = defectGroups(defectsOf(b.reg)).length;
+  if(dn) h += '<button class="need" type="button" data-go="defects"><p>' + esc(dn === 1 ? "A defect is open on this bus." : dn + " defects are open on this bus.") + '</p><span class="go">›</span></button>';
   h += '<div class="card">' + fuelRow(b.reg) + dueRows(b) + '</div>';
   /* From v1.124.0: the last walkaround's mileage and the parked reading
      after it. */
@@ -3163,18 +3177,6 @@ function paintBus(reg){
     h += '<div class="card"><div class="row"><span class="v">Parked mileage not received</span><span class="acts">' +
          '<button class="mini" type="button" data-do="parkkey" data-reg="' + esc(b.reg) + '">Record</button></span></div></div>';
   h += '<button class="btn btn-main btn-wide" type="button" data-do="vlog" data-reg="' + esc(b.reg) + '" style="margin-top:12px">Record something</button>';
-  var j = jobsOf(b.reg);
-  if(j && j.jobs && j.jobs.length){
-    h += '<h3>Jobs to arrange</h3><div class="card"><p class="tiny" style="margin:0 0 4px">From the walkaround ' +
-         esc([j.date ? shortDay(j.date) : "", j.driver].filter(Boolean).join(", ")) + '.</p>' +
-         j.jobs.map(function(x){
-           return '<div class="row"><span class="v">' + esc(x) + '</span><span class="acts">' +
-                  (x === "Needs fuel" ? '<button class="mini" type="button" data-do="fuelbuy" data-reg="' + esc(b.reg) + '">Fuel bought</button>'
-                   : '<button class="mini" type="button" data-do="job" data-reg="' + esc(b.reg) + '" data-job="' + esc(x) + '">Done</button>') + '</span></div>';
-         }).join("") + '</div>';
-  }
-  var dn = defectGroups(defectsOf(b.reg)).length;
-  if(dn) h += '<button class="need" type="button" data-go="defects"><p>' + esc(dn === 1 ? "A defect is open on this bus." : dn + " defects are open on this bus.") + '</p><span class="go">›</span></button>';
   var log = logOf(b.reg);
   h += '<h3>Log</h3>';
   if(!log.length) h += '<div class="card"><p class="tiny" style="margin:0">Nothing recorded yet.</p></div>';

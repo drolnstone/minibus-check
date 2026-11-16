@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.141.0";
+var SCRIPT_VERSION = "v1.142.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -11632,6 +11632,31 @@ function overbookingCheckNow() {
 }
 
 
+/* ONE LINE PER BUS AND ITEM, from v1.142.0 (Asim, 16 Nov 2026).
+   Every walkaround that finds the same fault writes another Defects row, and
+   the weekly summary listed each one, so an item reported three times was
+   three lines, and an Advisory later reported as a Defect sat in both lists.
+   The rows stay as they are; only the summary is collapsed, as the
+   Coordinator App and Driver App do: the newest report stands, its words,
+   its Critical and its kind, so a Defect replaces an earlier Advisory on
+   the item and an Advisory an earlier Defect. */
+function openItemsByReg(open) {
+  var out = {};
+  Object.keys(open || {}).forEach(function (reg) {
+    var by = {}, list = [];
+    (open[reg] || []).forEach(function (d) {
+      var k = String(d.item || "").trim().toLowerCase();
+      var g = by[k];
+      if (!g) { g = by[k] = { reg: d.reg, item: d.item, crit: false, kind: "Advisory", note: "", date: "" }; list.push(g); }
+      var dt = String(d.date || "");
+      if (!g.date || dt >= g.date) { g.date = dt; g.note = d.note || ""; if (d.item) g.item = d.item;
+                                     g.crit = !!d.crit; g.kind = d.kind === "Advisory" ? "Advisory" : "Defect"; }
+    });
+    out[reg] = list;
+  });
+  return out;
+}
+
 function weeklyDigest() {
   if (!COORDINATOR_EMAIL) return "COORDINATOR_EMAIL is blank, so nothing was sent.";
 
@@ -11642,7 +11667,7 @@ function weeklyDigest() {
 
   var regs = knownRegs(ss);
   var done = checksOn(ss, key);
-  var open = openDefectsByReg(ss);
+  var open = openItemsByReg(openDefectsByReg(ss));
 
   var byReg = {};
   done.forEach(function (c) { if (!byReg[c.reg]) byReg[c.reg] = c; });
@@ -11682,7 +11707,8 @@ function weeklyDigest() {
     if (!c.jobs) return;
     c.jobs.split(",").forEach(function (j) {
       j = j.trim();
-      if (j) jobs.push(c.reg + ": " + j);
+      /* Once per bus, however many checks asked for it. */
+      if (j && jobs.indexOf(c.reg + ": " + j) === -1) jobs.push(c.reg + ": " + j);
     });
   });
   if (jobs.length) {
@@ -14052,6 +14078,7 @@ function onEditDefects(e, sh) {
 
   var CLOSED_STATES = ["Fixed", "Not a defect"];
   var changed = false;
+  var closedNow = [];
 
   for (var row = firstRow; row <= lastRow; row++) {
     if (touchesStatus) {
@@ -14060,6 +14087,7 @@ function onEditDefects(e, sh) {
       var isClosed = CLOSED_STATES.indexOf(status) !== -1;
       if (isClosed && !closedCell.getValue()) {
         closedCell.setValue(new Date());
+        if (!e.fromScript) closedNow.push(row);
       } else if (!isClosed && closedCell.getValue()) {
         /* Reopened. The date it was closed goes onto History before the cell
            is cleared, so the first closure is never lost. */
@@ -14106,8 +14134,52 @@ function onEditDefects(e, sh) {
       changed = true;
     }
   }
+  /* EARLIER REPORTS CLOSE WITH IT, from v1.142.0 (Asim, 16 Nov 2026). A row
+     closed by hand here closes every open row of the same bus and item
+     reported on or before its day, with the same Status, so nobody traces
+     the old reports one by one. The apps close every report of an item
+     already. Each row closed this way gets its own History row. */
+  if (closedNow.length) {
+    try { closeEarlierReports(sh, dc, closedNow, hss, hWho, hWhere); } catch (err) {}
+  }
   /* The open-defect list rides on the rota payload, which is cached. */
   if (changed) bumpRotaVersion();
+}
+
+function closeEarlierReports(sh, dc, rows, hss, who, where) {
+  if (!dc.reg || !dc.item || !dc.status || !dc.closed) return 0;
+  var last = sh.getLastRow();
+  if (last < 2) return 0;
+  var vals = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
+  var shut = ["Fixed", "Not a defect"], n = 0, now = new Date();
+  var keyOf = function (r) {
+    return String(at1(r, dc.reg) || "").trim().toUpperCase() + "|" + String(at1(r, dc.item) || "").trim().toLowerCase();
+  };
+  rows.forEach(function (row) {
+    var me = vals[row - 2];
+    if (!me) return;
+    var k = keyOf(me), day = dc.date ? anyToKey(at1(me, dc.date)) : "";
+    var status = String(at1(me, dc.status) || "").trim();
+    if (!String(at1(me, dc.item) || "").trim() || shut.indexOf(status) === -1) return;
+    vals.forEach(function (r, i) {
+      var at = i + 2;
+      if (at === row || keyOf(r) !== k) return;
+      if (shut.indexOf(String(at1(r, dc.status) || "").trim()) !== -1) return;
+      var d = dc.date ? anyToKey(at1(r, dc.date)) : "";
+      if (day && d && d > day) return;
+      var was = String(at1(r, dc.status) || "").trim() || "Open";
+      sh.getRange(at, dc.status).setValue(status);
+      sh.getRange(at, dc.closed).setValue(now);
+      historyAdd(hss, [{ who: who, where: where, reg: String(at1(r, dc.reg) || "").trim().toUpperCase(),
+                         what: "Defect: " + String(at1(r, dc.item) || "").trim() + " \u2014 Status",
+                         from: was, to: status,
+                         why: "Closed with the report of " + (day ? ukDay(day) : "a later day"),
+                         ref: defectKey(r, dc) }]);
+      r[dc.status - 1] = status;
+      n++;
+    });
+  });
+  return n;
 }
 
 /* ---- emails ------------------------------------------------------------ */
