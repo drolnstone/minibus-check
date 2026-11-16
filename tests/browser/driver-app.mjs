@@ -533,7 +533,7 @@ if (want("T19")) {
   await me.pickBus("NH56 FWP");
   const chosen = await bar();
   check("T19", "the first screen opens on the logo with no bar; signed in, DRIVER over the driver; the plate and lights come with a bus",
-        !first.bar && first.brand && first.icon === "Driver app" &&
+        !first.bar && first.brand && first.icon === "Driver App" &&
         hub.bar && hub.title === "Driver" && hub.sub === SAMPLE && !hub.plate && !hub.lamps && hub.hubLine === "" &&
         choosing.title === "Vehicle check" && choosing.sub === "Choose a vehicle to begin" && !choosing.plate && !choosing.lamps &&
         chosen.plate === "NH56 FWP" && chosen.lamps && chosen.title === "Vehicle check" && /Transit/.test(chosen.sub),
