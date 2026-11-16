@@ -1302,46 +1302,38 @@ He picks his bus,
 starts the trip, and taps each stop as he pulls away. Every tap reaches the
 passenger page in about five seconds.
 
-**The pickup pop-up, from v1.101.0.** When the next booked stop reads **Be at
-your stop** on the passenger page (its estimate a minute or less away), a
-pop-up comes up in the middle of the driver's screen, over everything: the
-stop, how many are booked, a **Call passenger** button for each booking with a
-number, then **Picked up** and **Nobody here**. Call passenger leaves it up;
-Picked up or Nobody here takes it down, and nothing else does. Several
-families booked separately at one stop get a button each; one Picked up
-covers the stop. While the bus moves its buttons are grey under a red *Not
-while the bus is moving.* A bus ahead of its estimate: tap the next stop in
-the list and it comes up there and then. A next stop with no estimate (no
-signal) keeps the two buttons on its own row instead. Only the phone driving
+**The live line, from v1.163.0.** From Start trip the driving phone lists
+booked stops only: the next one on top, then Church, then the stops already
+marked. A seat booked mid-run at a stop still ahead brings it back. The rows
+carry no Picked up or Nobody here buttons (a phone without today's counts
+keeps them).
+
+**The pickup pop-up, from v1.101.0.** It comes up in the middle of the
+driver's screen, over everything, once the estimate for the next stop is a
+minute or less and the bus is nearer that stop than the one just marked (150
+metres or half the gap from it). With no estimate it comes up when the bus
+stops at the pin, or on a tap on the top stop. It shows the stop, how many
+are booked, a **Call** button for each booking with a number, then **Picked
+up** and **Nobody here**, grey while the bus moves. Only the phone driving
 that run gets it, and the numbers come from the live server to that driver's
 PIN only (`stoppeople`, w2.46.0); the board every phone reads carries none.
-The two buttons that used to be fixed at the foot of the list are gone.
 
-**Undo stays on every marked stop** (Asim, 4 October 2026), not just the
-last one. A driver who goes back for somebody left at a stop he marked
-Nobody here undoes that stop, and its Picked up button comes back so the
-record can be put right. Undo is refused while the bus moves and needs the
-PIN, like every stop tap.
-
-If he moves on without marking a booked stop, the app **asks him about it** —
-the earliest one behind him, once, with the same two buttons the row carries.
-The earliest rather than the nearest, because the person still standing there
-has been standing the longest. **Not now** silences that stop for the rest of
-the run and leaves it amber in the list. While the question is up, that stop's
-own row buttons are suppressed: one stop, one place to answer it.
+**Picked up is final.** Undo is offered only on the last marked stop, one step
+back, and asks first (Asim, 18 October 2026). A stop he moves past without
+marking is not asked about (from v1.128.0).
 
 **The passenger page** carries one stamp for the whole page, beside the date,
 from v1.72.0. It used to sit under the live panel, which made it read as a fact
 about the bus; it is a fact about everything on the page, the stop list and the
 counts included.
 
-**After.** He ends the trip — or it ends itself. See below. Bookings for next
+**After.** The run ends itself. See below. Bookings for next
 Sunday open. Everything drains onto the spreadsheet.
 
 ### The estimate
 
-**Two settings from v1.75.0**, in `eta` in config.js and `ETA_RULES` in
-Code.gs, which must be kept equal:
+**Two settings from v1.75.0**, in `ETA_RULES` in Code.gs (the only copy
+from v1.172.0; the unread one in config.js went):
 
 | | |
 |---|---|
@@ -1370,8 +1362,8 @@ answers about one bus.
 went while somebody was still walking, and the next one is next week. Too
 early means a wait at a stop they were standing at anyway. Those costs are not
 equal, so where the arithmetic is unsure it leans towards predicting the bus
-early — and anything added to it should too. `eta` in `config.js` and
-`ETA_RULES` in `Code.gs` hold the four settings and **must be kept equal**.
+early — and anything added to it should too. `ETA_RULES` in `Code.gs` holds
+the settings.
 
 `Lat` and `Lng` on the Bus Stops tab make it better and are not required by
 it. With no coordinates the time the bus would have spent standing still comes
@@ -1582,8 +1574,8 @@ change it or give the seat back. It goes once in its window, on a tag of its
 own, so a nudge he had earlier in the week does not stop it. Take `booked` off
 every window and a man with a seat hears nothing until the morning, as before.
 
-**Adding or removing one is a line.** `windows` in `BOOKING_RULES` (Code.gs) and
-`booking` (config.js), which must match. All three point at the Sunday the
+**Adding or removing one is a line.** `windows` in `BOOKING_RULES` (Code.gs).
+All the windows point at the Sunday the
 **booking page itself** would accept, asked of the same cutoff, so a reminder
 can never point at a Sunday nobody can book.
 

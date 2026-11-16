@@ -389,10 +389,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .veh-txt span{display:block;font-size:13px;color:var(--muted)}
 
 /* ---------- gate ---------- */
-.gatebox{border:1.5px solid var(--stop);background:var(--stop-bg);border-radius:var(--r);padding:14px;margin-bottom:14px}
-.gatebox h3{margin:0 0 6px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;
-  letter-spacing:.03em;text-transform:uppercase;color:var(--stop)}
-.gatebox p{margin:0 0 12px;font-size:14px}
 .confirm{display:flex;align-items:center;gap:12px;width:100%;min-height:var(--tap);padding:10px 12px;
   background:var(--card);border:1.5px solid var(--hair);border-radius:8px;text-align:left;font-size:15px;font-weight:500}
 .confirm .box{width:26px;height:26px;border:2px solid var(--muted);border-radius:5px;flex:none;
@@ -579,7 +575,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   background:var(--card) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9'><path d='M1 1l6 6 6-6' stroke='%235C6672' stroke-width='2' fill='none' stroke-linecap='round'/></svg>") no-repeat right 14px center;
   font-size:17px;appearance:none;-webkit-appearance:none}
 .field select:focus{outline:3px solid var(--info-ring);outline-offset:1px;border-color:var(--steel-2)}
-.linkbtn{background:none;text-decoration:underline;font-size:14px;color:var(--muted);padding:6px 0}
 
 /* ---------- due dates ---------- */
 .due{border-radius:var(--r);padding:13px;margin-bottom:14px;border:1.5px solid}
@@ -719,9 +714,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-date{font-family:"IBM Plex Mono",monospace;font-size:13px;font-weight:600;color:var(--muted);padding-top:2px}
 .rota-date b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);margin-bottom:2px}
 .rota-main{min-width:0}
-.rota-main-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.rota-driver{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:700;line-height:1.1}
-.rota-label{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--info-deep);background:var(--info-bg);border:1px solid var(--info-line);border-radius:4px;padding:2px 6px;white-space:nowrap}
 .rota-actions{display:flex;gap:7px;margin-top:9px}
 .rota-edit{min-height:40px;padding:0 11px;border:1.5px solid var(--hair);border-radius:7px;background:var(--card);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:14px;letter-spacing:.04em;text-transform:uppercase}
 .rota-current{font-family:"Barlow Condensed",sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--on-accent);background:var(--steel);border-radius:4px;padding:3px 7px;white-space:nowrap}
@@ -760,7 +752,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
 .rota-viewing{font-size:13px;color:var(--muted);margin:-4px 0 12px}
 .rota-viewing b{color:var(--ink)}
 .rota-card.past{opacity:.55;background:var(--rail)}
-.rota-card.past .rota-driver{font-weight:600}
 .rota-card.past .rota-leg-name{font-weight:600}
 .rota-card.unfilled{border-color:var(--stop);border-left:4px solid var(--stop)}
 /* Under the route chip, in the same column, so the eye reads "North, NH56"
@@ -788,8 +779,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   border:1px solid var(--hair);background:var(--paper);color:var(--ink);
   font-family:"Barlow Condensed",sans-serif;font-size:15px;font-weight:700;
   letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
-.stop-route{font-family:"Barlow Condensed",sans-serif;font-size:13px;font-weight:700;
-  letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
 .stop-row{display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--hair);font-size:14px;line-height:1.4}
 .stop-row:first-of-type{border-top:0}
 /* ---- movement tracking ------------------------------------------------
@@ -833,8 +822,6 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
    been, amber when it has gone past or gone quiet, red for be at your stop. */
 .dw-row{cursor:pointer}
 .dw-on{box-shadow:inset 0 0 0 2px var(--accent-ink)}
-.dw-hint{font-size:14px;line-height:1.5;color:var(--ink);margin:0 0 8px}
-.dw-hint b{font-weight:600}
 .dw{border:1px solid var(--hair);border-radius:var(--r);padding:13px 14px;margin:0 0 8px;background:var(--card)}
 .dw-eyebrow{font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;
   letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
@@ -924,14 +911,6 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
 /* Covering a route he is not rostered on. Amber, because it is a departure
    from the rota and the record will say so, not because anything is wrong. */
 .trip-cover{color:var(--warn)}
-/* The one stop being asked about. Amber like the row it stands for, so the
-   eye joins them, and wide enough that a thumb on a dashboard cannot miss. */
-.trip-ask{background:var(--warn-bg);border:1px solid var(--warn-line);
-  border-radius:10px;padding:10px;margin:0 0 10px}
-.trip-ask-q{margin:0 0 8px;font-size:14px;line-height:1.45;color:var(--warn)}
-.trip-ask-btns{display:flex;gap:6px;flex-wrap:wrap}
-.trip-ask-btns .trip-mini{flex:1 1 auto;min-height:40px}
-.trip-ask-no{opacity:.75}
 .trip-buses{display:grid;gap:8px;margin-top:2px}
 .trip-buses .btn{width:100%}
 .trip-row-btns{display:flex;gap:6px;padding:0 0 8px 62px}
@@ -1839,7 +1818,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.171.0";
+var APP_VERSION = "v1.172.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2663,7 +2642,6 @@ function papersOf(reg){
 }
 /* Today's MOT runs, by registration, off the board. */
 var tripMotRuns={};
-function motRunOf(reg){ return tripMotRuns[String(reg||"").toUpperCase()] || null; }
 /* An MOT run this driver has under way, if any. */
 function myMotRun(){
   var me=(st.driver||"").trim().toLowerCase(), got=null;
@@ -4135,7 +4113,6 @@ var FUEL_COLOURS = FUEL_WORDS.map(function(w, i){
   return "hsl(" + Math.round(4 + i * 141 / 15) + ",64%,28%)";
 });
 function fuelText(n){ return (n >= 1 && n <= FUEL_STEPS) ? FUEL_WORDS[n-1] : ""; }
-function fuelStep(words){ return FUEL_WORDS.indexOf(String(words || "")) + 1; }
 /* What shows above the bar: "7/16", "1/2", "Full". */
 function fuelShort(n){ return fuelText(n).replace(/ tank$/, ""); }
 /* n 0 is nothing chosen yet: no knob, and nothing lit. */
@@ -5197,9 +5174,7 @@ var rotaCountsTimer = null;
 var rotaStopsOpen = false;
 
 var rotaViewMode = "all";
-var rotaModalMode = "";
 var rotaEditDate = null;
-var rotaLoadedFrom = null;
 var rotaLoadedWeeks = 104;
 var rotaPastWeeks = 0;      /* history stays hidden until asked for */
 var rotaAnchorKey = null;   /* Sunday to hold in place across a re-render */
@@ -5554,7 +5529,6 @@ var tripCoverArmed="";
 /* Stops he has been asked about and waved off. Per run, in memory: the
    question is worth asking once, and a driver who has said "not now" to a
    stop two miles back has answered it. */
-var tripSkipAsked={};
 /* The stops the driving phone may tap, and the one stop that may be undone,
    as of the last paint of Stops and bookings (v1.128.0). */
 var tripLiveKnown=false, tripLiveIds={}, tripUndoId="";
@@ -5845,7 +5819,7 @@ var TSKEY = "fleet.trip.state.v1";
 var TRIP_MOVING_MS = 2.2;
 
 var trip = { id:"", route:"", reg:"", started:0, ended:0, served:{}, undone:{},
-             lastAt:0, lastStop:"", offset:null, reopened:0, driver:"" };
+             lastAt:0, lastStop:"", offset:null, driver:"" };
 
 /* Every route the board has answered about, exactly as it answered, kept
    apart from the run this phone is driving.
@@ -5897,7 +5871,6 @@ var tripCheckAsked = false;
 var tripSpeed = null;      /* metres per second, null when unknown */
 var tripSpeedAt = 0;
 var tripWatch = null;
-var tripTimer = null;
 var tripBusy = false;
 var tripSkew = 0;          /* server time minus phone time, in ms */
 
@@ -5945,7 +5918,7 @@ function tripSaveState(){
   store.set(TSKEY, JSON.stringify({ id:trip.id, route:trip.route, reg:trip.reg,
                                     started:trip.started,
                                     ended:trip.ended, served:trip.served,
-                                    undone:trip.undone, reopened:trip.reopened||0,
+                                    undone:trip.undone,
                                     autoEnded:tripAutoEndedAt||0,
                                     away:tripAwayEver?1:0,
                                     driver:trip.driver||"" }));
@@ -5979,7 +5952,6 @@ function tripLoadState(){
     trip.started=began;
     trip.ended=s.ended||0; trip.served=s.served||{};
     trip.undone=s.undone||{};
-    trip.reopened=Number(s.reopened)||0;
     trip.driver=String(s.driver||"");
     /* The way back after an automatic end, kept like the end itself. Held in
        memory only, it went with any reload: the notification says "Open the
@@ -6261,21 +6233,18 @@ function tripAutoEnd(){
      one alert (Asim, 18 Oct 2026). */
 }
 
-/* The way back. Offered only after an end this app made by itself, and only
-   for a while: an undo at four in the afternoon is somebody reopening a run
-   that finished hours ago, and nothing good comes of that. */
+/* Half an hour after an end this app made by itself (the Church fence). The
+   names are from the reopen button, which went in v1.163.0 (Asim, 15 Nov
+   2026); they now say only when "Ended automatically" is shown. */
 var AUTO_UNDO_FOR = 30*60000;
 function tripAutoUndoOpen(){
   return !!(trip.ended && tripAutoEndedAt &&
             (tripNow()-tripAutoEndedAt) < AUTO_UNDO_FOR);
 }
-/* Whether the reopen may be offered on this route: this phone's own run,
-   ended by this phone in the last half hour, and the man signed in is the one
-   who drove it. By the rota, or by his own name on the run: a driver covering
-   at short notice is not on the rota, and once the run has ended nothing else
-   says it was his. Without the second half, a covering driver who opened the
-   app fresh from the notification saw his own morning as somebody else's,
-   with no way back into it. */
+/* Whether "Ended automatically, back at Church." shows on this route: this
+   phone's own run, ended by this phone in the last half hour, and the man
+   signed in is the one who drove it. By the rota, or by his own name on the
+   run: a driver covering at short notice is not on the rota. */
 function tripMayReopen(route){
   if(trip.route!==route || !tripAutoUndoOpen()) return false;
   return tripMayTap(route) || tripIsMine(route);
@@ -7350,13 +7319,11 @@ function tripStart(route, reg, anyway){
   trip.ended = 0;
   trip.served = {};
   trip.undone = {};
-  trip.reopened = 0;
   /* Whose run this is, on the run itself. The rota cannot say when he is
      covering at short notice, and the claim that let him start is not kept
      through a reload (tripCoverClaimed), so this is the one place the phone
      still knows it is his once the run has ended. See tripMayReopen. */
   trip.driver = (st.driver||"").trim();
-  tripSkipAsked={};              /* last run's "not now" answers are not this run's */
   tripAwayEver=false; tripHomeSince=0; tripAutoEndedAt=0;
   tripUncheckedAsked="";
   tripSaveState();
@@ -7778,8 +7745,8 @@ function rotaCountsFetch(route,cb){
 function tripClearRun(){
   trip.id=""; trip.route=""; trip.reg=""; trip.started=0; trip.ended=0;
   trip.served={}; trip.undone={}; trip.lastAt=0; trip.lastStop=""; trip.offset=null;
-  trip.reopened=0; trip.driver="";
-  tripAutoEndedAt=0; tripSkipAsked={}; tripAwayEver=false; tripHomeSince=0;
+  trip.driver="";
+  tripAutoEndedAt=0; tripAwayEver=false; tripHomeSince=0;
   tripUncheckedAsked="";
   /* Not a thumb on the list: the list has to be drawn again at once, and the
      guard that waits for three seconds after a tap would hold it back. */
@@ -7878,7 +7845,6 @@ function tripMerge(route, tp){
     trip.ended  = tp.ended||0;
     trip.served = tp.served||{};
     trip.undone = {};
-    trip.reopened = 0;
     trip.driver = theirs;         /* checked above to be the man signed in */
     tripAutoEndedAt = 0;          /* another run's end is not this one's */
     trip.lastAt = tp.lastAt||0;
@@ -7895,13 +7861,7 @@ function tripMerge(route, tp){
   /* A run started before the name was kept on it learns it from the board. */
   if(!trip.driver && tp.driver) trip.driver = String(tp.driver).trim();
   trip.started = trip.started || tp.started || 0;
-  /* An end he has taken back is not an end. The board is built from a cache
-     a few seconds old, so straight after "It has not finished, reopen it" the
-     answer still carries the end the app made, and taking it here closed the
-     run again on this phone within one poll, and kept it closed. Only an end
-     made after the reopen counts. */
   var boardEnd = Number(tp.ended)||0;
-  if(boardEnd && trip.reopened && boardEnd <= trip.reopened) boardEnd = 0;
   trip.ended   = trip.ended   || boardEnd || 0;
 
   var merged={};
@@ -8794,38 +8754,7 @@ function rotaPaintStops(){
   list.forEach(function(s,i){ if(liveAt(i)) tripLiveIds[s.id] = 1; });
   tripUndoId = undoId;
 
-  /* THE STOP HE HAS GONE PAST WITHOUT MARKING.
-
-     Amber on the row was the whole of this until now, and amber waits to be
-     noticed. A driver watching the road does not notice it, and the two
-     mornings this app has lost stops to were both a man moving on without
-     looking down. So the oldest unmarked stop behind him gets asked about
-     directly, once.
-
-     The earliest one, not the nearest, because the person still standing
-     there has been standing the longest.
-
-     ONE PLACE TO ANSWER IT. While this is up, that stop's own row buttons are
-     suppressed below. The same stop asking to be dealt with in two places is
-     the fault that got the old warning cards removed, and it would be the
-     same fault again. */
-  /* Not asked any more, from v1.128.0: a stop behind him is shut. */
-  var askStop=null;
-  if(churchSig && !askStop){ churchFor=arr[0]; churchKey=trip.id+"|"+churchSig; }
-  if(askStop){
-    var askN=rotaStopCounts[askStop.id]||0;
-    html+='<div class="trip-ask">'+
-            '<p class="trip-ask-q"><b>'+esc(askStop.stop)+'</b> at '+esc(askStop.time)+
-              ' is not marked.'+
-              (askN? ' '+askN+(askN===1?' person':' people')+' booked there.' : '')+
-            '</p>'+
-            '<div class="trip-ask-btns">'+
-              '<button class="trip-mini" data-triptap="'+esc(askStop.id)+'" data-tripkind="empty">Nobody here</button>'+
-              '<button class="trip-mini" data-triptap="'+esc(askStop.id)+'" data-tripkind="pickup">Picked up</button>'+
-              '<button class="trip-mini trip-ask-no" data-tripskip="'+esc(askStop.id)+'">Not now</button>'+
-            '</div>'+
-          '</div>';
-  }
+  if(churchSig){ churchFor=arr[0]; churchKey=trip.id+"|"+churchSig; }
 
   /* THE LIVE LINE, from v1.163.0 (Asim, 15 Nov 2026). On the phone driving
      the run, from Start trip: only booked stops, the next one first, then
@@ -8912,8 +8841,7 @@ function rotaPaintStops(){
              driver never needs and which put a pair of buttons on most rows.
              The big button covers the stop in front of him. */
           ((onThis&&mayTap&&!done&&!s.arrival&&
-            !showCounts&&liveAt(i)&&
-            !(askStop&&askStop.id===s.id))
+            !showCounts&&liveAt(i))
             ? '<div class="trip-row-btns">'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="empty">Nobody here</button>'+
                 '<button class="trip-mini" data-triptap="'+esc(s.id)+'" data-tripkind="pickup">Picked up</button>'+
@@ -8976,16 +8904,6 @@ function rotaPaintStops(){
       /* The other bus has its own run. Ask for it, or a coordinator would be
          reading North's progress under South's heading. */
       tripFetch(rotaStopsRoute,function(){ if(rotaStopsOpen) tripPaint(); });
-    });
-  });
-  /* "Not now." Not an answer about the stop, and nothing is recorded: it says
-     only that he does not want to be asked again this run. The stop stays
-     amber in the list with its own buttons back, so it is still there to be
-     dealt with when he has stopped driving. */
-  Array.prototype.forEach.call(document.querySelectorAll("[data-tripskip]"),function(b){
-    b.addEventListener("click",function(){
-      tripSkipAsked[this.getAttribute("data-tripskip")]=1;
-      tripPaint();
     });
   });
   Array.prototype.forEach.call(document.querySelectorAll("[data-triptap]"),function(b){
@@ -9225,15 +9143,10 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
     h+='<p class="trip-note">'+(mine?'<b>Trip finished.</b> ':
          '<b>'+esc(tripWhoDrives(route)||route)+' has finished.</b> ')+
        tripClock(t.started)+' to '+tripClock(t.ended)+', '+mins+' minutes.</p>';
-    /* The way back out of an end this app made by itself. Only on his own
-       phone, only for half an hour, and it says which end it is offering to
-       take back so it is never mistaken for undoing his own tap. */
-    /* trip.route, not onThis. onThis means a run that has NOT ended, and
-       this is the branch for one that has, so with onThis here the button
-       could never be drawn — while the notification that sent him here said
-       "Open the app to undo if that is wrong". */
-    /* No way back from v1.163.0 (Asim, 15 Nov 2026): the fence waits for
-       every booked stop instead. */
+    /* An end this app made by itself, on his own phone, for half an hour.
+       No way back from v1.163.0 (Asim, 15 Nov 2026): the fence waits for
+       every booked stop instead. trip.route, not onThis: onThis means a run
+       that has NOT ended. */
     if(tripMayReopen(route)){
       h+='<p class="trip-note trip-cover">Ended automatically, back at Church.</p>';
     }
@@ -9666,7 +9579,6 @@ function pickEta(s){
   var at = s && rotaStopEtas ? Number(rotaStopEtas[s.id]) : 0;
   return at > 0 ? at : 0;
 }
-function pickTimed(s){ return !!pickEta(s); }
 
 /* HAS THE BUS LEFT THE LAST STOP, from v1.128.0 (Asim, 18 Oct 2026: Wilburn
    Street came up while he was still standing at Bedford Road). The next
@@ -9703,7 +9615,6 @@ function pickDueWhy(s){
   var m = pickFar(s);
   return (m === null || m <= PICK_FAR_M) ? "eta" : "";
 }
-function pickDue(s){ return !!pickDueWhy(s); }
 
 /* STOPPED AT THE NEXT STOP, SO IT LEFT THE LAST ONE, from v1.142.0 (Asim,
    2 Nov 2026: a driver went to a new stop in Maps, came back to the app

@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.140.0";
+var SCRIPT_VERSION = "v1.141.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -564,10 +564,9 @@ var TELL_COORDINATOR = "now";
 /* ---- THE ESTIMATE -------------------------------------------------------
 
    Pushed to the live server on every sync, which is the only way it can get
-   there: the Worker cannot see this file. Keep it equal to `eta` in
-   config.js — the app draws the driver's list from that copy and the Worker
-   answers the passenger from this one, and the two showing different numbers
-   for the same bus is the one thing this must never do.
+   there: the Worker cannot see this file. This is the only copy (the one in
+   config.js went in v1.172.0, unread): the driver's list and the passenger's
+   alert both come from the live server, so they cannot differ.
 
      dwellSeconds     how long the bus stands at a stop it calls at
      skipSaves        of a gap, the fraction a skip removes when there are no
@@ -583,7 +582,7 @@ var TELL_COORDINATOR = "now";
 /* ---- WHEN A PASSENGER IS TOLD SOMETHING --------------------------------
 
    Pushed to the live server on every sync, which is the only way it gets
-   there. Keep equal to `passenger` in config.js.
+   there. This is the only copy.
 
      resendMinutes    the estimate has to have moved by more than this before
                       somebody is told again. The stop just before his and his
@@ -824,7 +823,7 @@ var CHURCH_PIN = { at: [53.424169, -2.936799], postcode: "L6 4DY" };
                        Fifteen matches the quiet rule, so the estimate stays
                        until the bus is marked there or later, or goes quiet.
 
-   Keep all six equal to `eta` in config.js. */
+   */
 var ETA_RULES = {
   dwellSeconds: 75,
   skipSaves: 0.8,

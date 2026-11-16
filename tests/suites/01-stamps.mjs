@@ -209,42 +209,6 @@ export default function (root) {
     a.same(norm(c), norm(g));
   });
 
-  s.test("the estimate settings in config.js match ETA_RULES in Code.gs", (a) => {
-    /* The driver's list is drawn from the live server's copy of these and the
-       passenger's alert is worded from it; Code.gs is what puts it there and
-       config.js is what the app falls back on. Two different numbers for one
-       bus is the one thing the estimate must not do. */
-    const c = grab(config, /eta:\s*\{([^}]*)\}/, "eta in config.js");
-    const g = grab(code, /ETA_RULES\s*=\s*\{([^}]*)\}/, "ETA_RULES in Code.gs");
-    const fields = (src) => {
-      const out = {};
-      for (const m of src.matchAll(/(\w+)\s*:\s*([\d.]+)/g)) out[m[1]] = Number(m[2]);
-      return out;
-    };
-    a.same(fields(c), fields(g));
-  });
-
-  s.test("the passenger settings in config.js match PASSENGER_RULES in Code.gs", (a) => {
-    const c = grab(config, /passenger:\s*\{([^}]*)\}/, "passenger in config.js");
-    const g = grab(code, /PASSENGER_RULES\s*=\s*\{([^}]*)\}/, "PASSENGER_RULES in Code.gs");
-    const fields = (src) => {
-      const out = {};
-      for (const m of src.matchAll(/(\w+)\s*:\s*([\d.]+|true|false)/g)) out[m[1]] = m[2];
-      return out;
-    };
-    a.same(fields(c), fields(g));
-  });
-
-  s.test("the booking nudges in config.js match BOOKING_RULES in Code.gs", (a) => {
-    /* Two nested windows, so the whole block is compared with its whitespace
-       taken out rather than field by field. A day or an hour drifting between
-       these two would send the nudge at one time and record it at another. */
-    const c = grab(config, /booking:\s*\{([\s\S]*?)\n  \}/, "booking in config.js");
-    const g = grab(code, /BOOKING_RULES\s*=\s*\{([\s\S]*?)\n\}/, "BOOKING_RULES in Code.gs");
-    const flat = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\s+/g, "");
-    a.eq(flat(c), flat(g));
-  });
-
   s.test("a passenger is never woken in the middle of the night by a booking nudge", (a) => {
     const g = grab(code, /PASSENGER_RULES\s*=\s*\{([^}]*)\}/, "PASSENGER_RULES in Code.gs");
     const n = (k) => Number((new RegExp(k + "\\s*:\\s*(\\d+)").exec(g) || [])[1]);
