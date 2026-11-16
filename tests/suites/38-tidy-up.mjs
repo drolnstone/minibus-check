@@ -110,7 +110,7 @@ export default async function (root) {
     a.ok(C.isDvsa(" first aid KIT ") && !C.isDvsa("Radio and dash display"));
   });
 
-  s.test("repeated reports of one fault are one card: the heaviest weight, the newest words, the least settled status", (a) => {
+  s.test("repeated reports of one fault are one card: the newest report stands (words, Critical, kind), the least settled status", (a) => {
     const d = TYRES().map((x) => Object.assign(x, { key: W.defectKeyOf(x) }));
     d.push({ checkId: "chk-2", reg: "NH56 FWP", date: LAST, item: "tyres ", crit: false, found: "Other bus", status: "Open",
              kind: "Defect", key: "other" });
@@ -119,7 +119,7 @@ export default async function (root) {
     const t = g.find((x) => x.reg === "YS70 PWE" && x.item === "Tyres");
     a.eq(t.reports.length, 2);
     a.eq(t.keys.length, 2);
-    a.ok(t.crit, "a critical report two weeks old was hidden behind this week's");
+    a.ok(!t.crit, "the newest report says not critical, and it stands (Asim, 16 Nov 2026)");
     a.eq(t.status, "Open", "Monitoring and Open together must read as Open");
     a.eq(t.found, "Nearside front tread low", "not the newest words");
     a.eq(t.oldest, EARLIER);

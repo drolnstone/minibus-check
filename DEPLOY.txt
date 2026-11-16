@@ -1,18 +1,26 @@
 MINIBUS
 =======
-  pages v1.172.0 · server w2.95.0 · sheet v1.141.0
+  pages v1.173.0 · server w2.95.0 · sheet v1.142.0
 
-YOU ARE ON   app v1.171.0 · server w2.94.0 · sheet v1.140.0
-GOING TO     app v1.172.0 · server w2.95.0 · sheet v1.141.0
+YOU ARE ON   app v1.172.0 · server w2.95.0 · sheet v1.141.0
+GOING TO     app v1.173.0 · server w2.95.0 · sheet v1.142.0
 
-Cleanup (Asim, 16 Nov 2026). Nothing on any screen, alert or email
-changes.
-1. Unused functions, settings and styles taken out of the three apps
-   and config.js.
-2. Out-of-date comments, README lines and tests taken out or put right.
+Latest report per item (Asim, 16 Nov 2026).
+1. Coordinator App, bus page: Jobs to arrange and the open defects
+   line come first, above the due dates.
+2. One line per bus and item, carrying the newest report: its words,
+   Critical and kind. A Defect replaces an earlier Advisory on the
+   item, and an Advisory an earlier Defect. Coordinator App, Driver
+   App and the weekly summary email (which listed every report, and
+   jobs once per check). Counts are items, not reports.
+3. Defects tab: closing a row by hand (Fixed or Not a defect) closes
+   every open row of the same bus and item reported on or before it,
+   with the same Status and a History row each. The apps already
+   close every report of an item.
+The sheet keeps every report.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator app, App info: v1.172.0 · w2.95.0 · v1.141.0.
-B. Driver app opens, signs in and shows the rota and Stops as before.
+A. Coordinator app, App info: v1.173.0 · w2.95.0 · v1.142.0.
+B. A bus page opens on Jobs to arrange.

@@ -1818,7 +1818,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.172.0";
+var APP_VERSION = "v1.173.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -4017,10 +4017,9 @@ function groupOpenDefects(raw){
      he sets off was seeing the same thing twice and something else not at
      all.
 
-     THE WEIGHT NEVER COMES DOWN. If any report of an item is critical the
-     row is critical, and a defect outranks an advisory, whatever the newest
-     row happens to say. A critical from a fortnight ago must not be hidden
-     behind an advisory raised this morning on the same item.
+     THE NEWEST REPORT STANDS, from v1.173.0 (Asim, 16 Nov): its Critical
+     and its kind as well as its words, so a Defect replaces an earlier
+     Advisory on the item and an Advisory an earlier Defect.
 
      THE WORDS COME FROM THE NEWEST. That is the description of the fault as
      it stands today, and the count says how long it has been saying it. */
@@ -4034,8 +4033,6 @@ function groupOpenDefects(raw){
     }
     var g = byItem[key];
     g.n++;
-    if(d.crit) g.crit = true;
-    if(d.kind !== "Advisory") g.kind = "Defect";
     var dt = String(d.date || "");
     /* >= so that rows with no date at all still yield a note rather than an
        empty line: the last one seen wins when nothing can be compared. */
@@ -4043,6 +4040,8 @@ function groupOpenDefects(raw){
       g.date = dt;
       g.note = d.note || "";
       if(d.item) g.item = d.item;
+      g.crit = !!d.crit;
+      g.kind = d.kind === "Advisory" ? "Advisory" : "Defect";
     }
   });
   return order.map(function(k){ return byItem[k]; });
