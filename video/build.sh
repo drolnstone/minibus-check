@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# THE DOODLE VIDEOS, from the repo to MP4s: the three for passengers and the driver's.
+# THE DOODLE VIDEOS, from the repo to MP4s: the three for passengers, the driver's and the overview.
 #
 #   video/build.sh                 word check, photographs, a still of every scene, all four videos
 #   video/build.sh preview         the same but stills only: a couple of minutes, to look before the long part
 #   video/build.sh 3               only the third video (or 1,3)
 #   video/build.sh driver          only the driver video (preview-driver for its stills only)
-#   video/build.sh overview        only the overview, for showing someone new (preview-overview for its stills only)
+#   video/build.sh overview        only the overview of the whole system, for showing someone new
+#                                  (preview-overview for its stills only; it photographs all three apps,
+#                                  the coordinator's through its browser checks, about 15 minutes)
 #   NOSHOTS=1 video/build.sh ...   keep last time's photographs (only captions or timing changed)
 #
 # Leaves video/build/out/*.mp4 and video/build/preview/. See README.md.
@@ -53,11 +55,29 @@ if [ -z "${FFMPEG:-}" ]; then
 fi
 export FFMPEG
 
-python3 "$HERE/check_words.py"
+# The word check holds the passenger and driver videos to the pages; the
+# overview has no star words for it to hold.
+case ",$CLIPS," in *,1,*|*,2,*|*,3,*|*,driver,*) python3 "$HERE/check_words.py" ;; esac
+# Every photograph through mask.mjs: made-up registrations, and made-up stops
+# on the coordinator's pictures too.
+MASK=(--import "$HERE/mask.mjs")
 if [ -z "${NOSHOTS:-}" ]; then
   [ "$CLIPS" != "1,2,3,driver" ] || rm -f "$B/shots/marks.json"
-  [ "$CLIPS" = driver ] || SHOTS="$B/shots" MINIBUS_PORT="${MINIBUS_PORT:-8133}" node "$HERE/shots.mjs"
-  case ",$CLIPS," in *,driver,*|*,overview,*) SHOTS="$B/shots" MINIBUS_PORT="${MINIBUS_PORT:-8133}" node "$HERE/shots-driver.mjs" ;; esac
+  [ "$CLIPS" = driver ] || SHOTS="$B/shots" MINIBUS_PORT="${MINIBUS_PORT:-8133}" node "${MASK[@]}" "$HERE/shots.mjs"
+  case ",$CLIPS," in *,driver,*|*,overview,*) SHOTS="$B/shots" MINIBUS_PORT="${MINIBUS_PORT:-8133}" node "${MASK[@]}" "$HERE/shots-driver.mjs" ;; esac
+  # The coordinator app, for the overview: its browser checks run on the real
+  # timetable (they look for its stop names), so MINIBUS_REAL is emptied for
+  # them and mask.mjs swaps the names in each picture. The screens the
+  # overview shows are copied in as c-*.png.
+  case ",$CLIPS," in *,overview,*)
+    rm -rf "$B/coord-shots"; mkdir -p "$B/coord-shots"
+    (cd "$HERE/.." && MINIBUS_REAL= SHOTS="$B/coord-shots" MINIBUS_PORT="${MINIBUS_PORT:-8133}" node "${MASK[@]}" tests/browser/coordinator.mjs)
+    for p in C1-home:home C37-rota:rota C2a-sunday:cover C1a-wrong-pin:wrong-pin C42-drivers:drivers C7a-bookings:bookings \
+             C13a-stopped:stopped C37-runs:runs C8a-defects:defects C37-bus:bus C29h-fuel-bought:fuel C56a-message:message \
+             C52-pick:calls C10a-look:look; do
+      cp "$B/coord-shots/${p%%:*}.png" "$B/shots/c-${p##*:}.png"
+    done ;;
+  esac
 fi
 node "$HERE/render.mjs" preview "$CLIPS"
 case "$WHAT" in preview*) ;; *) node "$HERE/render.mjs" video "$CLIPS" ;; esac
