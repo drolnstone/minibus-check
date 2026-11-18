@@ -2279,15 +2279,21 @@ if (want("C59")) {
     /* The bus step (v1.147.0): the same bus. */
     await p.pg.evaluate(() => document.querySelector('#sheetBody [data-pick="="]').click());
     const go = await p.pg.textContent("#sheetGo");
+    await p.pg.evaluate(() => document.getElementById("sheetGo").click());
+    await p.wait(300);
+    /* The confirm (v1.176.0). */
+    const ask = await p.pg.evaluate(() => [document.getElementById("sheetTitle").textContent, document.getElementById("sheetNot").textContent,
+      document.getElementById("sheetGo").textContent, window.__sent.length]);
     await p.shot("C59-hand-over");
     await p.pg.evaluate(() => document.getElementById("sheetGo").click());
     await p.wait(300);
     const sent = await p.pg.evaluate(() => window.__sent.filter((x) => x.op === "act").map((x) => x.extra.act));
     const a = sent[0] || {};
     const ok = row.indexOf(holder) !== -1 && /on the road/.test(row) && !greyed && next === "Next: bus" && go === "Hand North to " + taker &&
+               ask[0] === "Hand North to " + taker + "?" && ask[1] === "Not now" && ask[2] === "Hand over" && ask[3] === 0 &&
                a.kind === "rota" && a.handover === "North" && a.set && a.set.northCover === taker && a.sunday === key && !a.bus;
     check("C59", "Hand over: today's run on the Sunday screen goes to the driver picked, as a cover change with the route",
-          ok && !p.errs.length, JSON.stringify({ row, greyed, go, sent, errs: p.errs }).slice(0, 900));
+          ok && !p.errs.length, JSON.stringify({ row, greyed, go, ask, sent, errs: p.errs }).slice(0, 900));
   } catch (e) { stopped("C59", e); }
   await p.ctx.close();
 }
@@ -2311,11 +2317,13 @@ if (want("C60")) {
     const go = await p.pg.textContent("#sheetGo");
     await p.shot("C60-hand-over-asked");
     await p.pg.evaluate(() => document.getElementById("sheetGo").click()); await p.wait(300);
+    const ask = await p.pg.textContent("#sheetTitle");
+    await p.pg.evaluate(() => document.getElementById("sheetGo").click()); await p.wait(300);
     const a = (await p.pg.evaluate(() => window.__sent.filter((x) => x.op === "act").map((x) => x.extra.act)))[0] || {};
-    const ok = /Bro Moses asks to hand the North run to Bro Adesina\./.test(notice) && go === "Hand North to Bro Adesina" &&
+    const ok = /Bro Moses asks to hand the North run to Bro Adesina\./.test(notice) && go === "Hand North to Bro Adesina" && ask === "Hand North to Bro Adesina?" &&
                a.kind === "rota" && a.handover === "North" && a.ask === "h1" && a.set && a.set.northCover === "Bro Adesina";
     check("C60", "a driver's hand over shows on the first screen; Approve hands the run over",
-          ok && !p.errs.length, JSON.stringify({ notice, go, a, errs: p.errs }).slice(0, 900));
+          ok && !p.errs.length, JSON.stringify({ notice, go, ask, a, errs: p.errs }).slice(0, 900));
   } catch (e) { stopped("C60", e); }
   await p.ctx.close();
 }
@@ -2354,13 +2362,17 @@ if (want("C61")) {
     await p.shot("C61-hired-bus");
     await p.pg.evaluate(() => document.getElementById("sheetGo").click());
     await p.wait(300);
+    const ask = await p.pg.evaluate(() => [document.getElementById("sheetTitle").textContent, document.getElementById("sheetGo").textContent]);
+    await p.pg.evaluate(() => document.getElementById("sheetGo").click());
+    await p.wait(300);
     const a = (await p.pg.evaluate(() => window.__sent.filter((x) => x.op === "act").map((x) => x.extra.act)))[0] || {};
     const ok = next === "Change the bus" && noSame && shown && samples[0] === "e.g. AB12 CDE" && samples[1] === "e.g. 16" &&
                /Type the reg\./.test(refused) && go === "Put the hired bus on North" &&
+               ask[0] === "Put the hired bus on North?" && ask[1] === "Change the bus" &&
                a.handover === "North" && a.set && a.set.northCover === holder &&
                a.bus && a.bus.hired === true && a.bus.reg === "AB12 CDE" && a.bus.seats === 14;
     check("C61", "breakdown: a hired bus, reg and seats, sent with the hand over",
-          ok && !p.errs.length, JSON.stringify({ next, noSame, shown, samples, refused, go, a, errs: p.errs }).slice(0, 900));
+          ok && !p.errs.length, JSON.stringify({ next, noSame, shown, samples, refused, go, ask, a, errs: p.errs }).slice(0, 900));
   } catch (e) { stopped("C61", e); }
   await p.ctx.close();
 }
@@ -2381,6 +2393,32 @@ if (want("C62")) {
     check("C62", "first screen Due dates: an MOT 48 days off and a parking permit 30 days off show; a permit 31 days off does not",
           ok && !p.errs.length, JSON.stringify({ r, errs: p.errs }).slice(0, 900));
   } catch (e) { stopped("C62", e); }
+  await p.ctx.close();
+}
+
+/* C63 — Hand over asks once more (v1.176.0): Not now sends nothing and
+   closes; the bus picked shows on a line. */
+if (want("C63")) {
+  const p = await page(env);
+  try {
+    await p.signIn(PIN);
+    const key = await p.pg.evaluate(() => { const r = rows().filter((x) => x.date >= D.today)[0]; D.today = r.date; return r.date; });
+    const r = await p.pg.evaluate((k) => {
+      const holder = activeDrivers()[0].name, taker = activeDrivers()[1].name;
+      D.runs = { North: { trip: "t-hand", driver: holder, reg: "X", started: Date.now() - 600000, ended: 0 } };
+      window.__sent = [];
+      api = function(op, extra){ window.__sent.push({ op: op, extra: extra }); return Promise.resolve({ ok: true, action: { words: "Done." } }); };
+      handoverGo(k, "North", taker, { reg: "CD34 EFG" }, null);
+      const shown = { title: document.getElementById("sheetTitle").textContent, line: document.getElementById("sheetBody").textContent,
+        not: document.getElementById("sheetNot").textContent, go: document.getElementById("sheetGo").textContent };
+      document.getElementById("sheetNot").click();
+      return { taker, shown, open: document.getElementById("sheet").classList.contains("is-on"), sent: window.__sent.length };
+    }, key);
+    const ok = r.shown.title === "Hand North to " + r.taker + "?" && r.shown.line === "Bus: CD34 EFG." &&
+               r.shown.not === "Not now" && r.shown.go === "Hand over" && !r.open && r.sent === 0;
+    check("C63", "Hand over asks first: \"Hand North to (name)?\", the bus on a line; Not now sends nothing",
+          ok && !p.errs.length, JSON.stringify({ r, errs: p.errs }).slice(0, 900));
+  } catch (e) { stopped("C63", e); }
   await p.ctx.close();
 }
 
