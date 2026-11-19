@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.175.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.177.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -787,7 +787,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.175.0";
+var PAGE_VERSION = "v1.177.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1463,8 +1463,10 @@ function needs(){
                   data:'data-do="fuelbuy" data-reg="'+esc(reg)+'"' });
   });
   /* Parked mileage not received (v1.171.0, Asim, 16 Nov 2026): from 14:00
-     on its Sunday, with Record for the coordinator to key it. */
-  if(typeof parkOwed === "function") parkOwed().forEach(function(o){
+     on its Sunday, with Record for the coordinator to key it. From v1.177.0
+     (Asim, 19 Nov 2026) the line goes at midnight London time at the end of
+     that Sunday; Record stays on the bus page. */
+  if(typeof parkOwed === "function") parkOwed().filter(function(o){ return o.day === calToday(); }).forEach(function(o){
     out.push({ tone:"warn", text: o.reg + ": parked mileage not received.", btn:"Record",
                data:'data-do="parkkey" data-reg="'+esc(o.reg)+'"' });
   });
@@ -1800,7 +1802,19 @@ function pickHandover(key, rt){
   });
 }
 
+/* One more step before the hand over is sent (v1.176.0): the question, Not
+   now and Hand over, as the driver app's own ask. */
 function handoverGo(key, rt, name, bus, ask){
+  var keeps = same(name, ((D.runs || {})[rt] || {}).driver) && bus;
+  openSheet({
+    eyebrow: rt + " run",
+    title: keeps ? "Put " + (bus.hired ? "the hired bus" : bus.reg) + " on " + rt + "?" : "Hand " + rt + " to " + name + "?",
+    line: bus && !keeps ? "Bus: " + (bus.hired ? bus.reg + ", hired" : bus.reg) + "." : "",
+    go: keeps ? "Change the bus" : "Hand over",
+    onGo: function(){ handoverSend(key, rt, name, bus, ask); }
+  });
+}
+function handoverSend(key, rt, name, bus, ask){
   var set = {}; set[rt === "South" ? "southCover" : "northCover"] = name;
   var a = { kind:"rota", sunday:key, set:set, handover: rt };
   if(bus) a.bus = bus;

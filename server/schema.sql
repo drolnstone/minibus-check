@@ -468,3 +468,22 @@ CREATE TABLE IF NOT EXISTS run_live (
   legs          TEXT,                 -- JSON { "A>B": { sec, traffic, at } }
   err           TEXT                  -- why the last ask failed, if it did
 );
+
+-- HOW LONG THE BUS STOOD AT EACH STOP, from w2.98.0 (19 Nov 2026). One row
+-- per run and stop, from the driving phone's fixes on the server's clock:
+-- the first fix within 80 m of the pin, and the first one after beyond it.
+-- The live estimate uses each stop's middle stand of its last 8 sure ones at
+-- stops marked Picked up, once it has 3; 75 s until then. Kept 180 days.
+-- Added to a live database by the Worker on first use.
+CREATE TABLE IF NOT EXISTS stop_dwell (
+  trip      TEXT NOT NULL,
+  stop_id   TEXT NOT NULL,
+  route     TEXT NOT NULL DEFAULT '',
+  name      TEXT NOT NULL DEFAULT '',   -- matched by route and name, as ids get renumbered
+  arrived   INTEGER NOT NULL,           -- ms, first fix at the pin
+  sure_in   INTEGER NOT NULL DEFAULT 0, -- 1 when a fix came at most 45 s before it
+  last_in   INTEGER NOT NULL,           -- ms, latest fix at the pin
+  left_at   INTEGER,                    -- ms, first fix away from it
+  sure_out  INTEGER NOT NULL DEFAULT 0, -- 1 when that came at most 45 s after last_in
+  PRIMARY KEY (trip, stop_id)
+);
