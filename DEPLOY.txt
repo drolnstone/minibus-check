@@ -1,16 +1,20 @@
 MINIBUS
 =======
-  pages v1.178.0 · server w2.98.0 · sheet v1.144.0
+  pages v1.178.0 · server w2.98.0 · sheet v1.145.0
 
-YOU ARE ON   app v1.177.0 · server w2.98.0 · sheet v1.144.0
-GOING TO     app v1.178.0 · server w2.98.0 · sheet v1.144.0
+YOU ARE ON   app v1.178.0 · server w2.98.0 · sheet v1.144.0
+GOING TO     app v1.178.0 · server w2.98.0 · sheet v1.145.0
 
-Driver App, Driving rota: the button on your own Sunday now reads
-"Request cover" (was "Request change"), and so does the sheet it opens.
+Coordinator App alerts that were email only, or late:
+- Rota request: now alerts at once, also between 21:00 and 08:00
+  (it used to wait until 08:00; the email always went at once).
+- Sunday "07:30 message not sent" (from 07:40): now alerts as well.
+- Sunday run report (from 16:00): one line per route, "North run report,
+  Sun 22 Nov", "Sent by email."
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.178.0 · w2.98.0 · v1.144.0.
-B. Driver App, Driving rota, All routes: your own Sunday shows
-   "Request cover".
+A. Coordinator App, App info: v1.178.0 · w2.98.0 · v1.145.0.
+B. Sunday after 16:00: a "North run report" and a "South run report" line
+   in the Coordinator App Alerts, beside the two emails.

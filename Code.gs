@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.144.0";
+var SCRIPT_VERSION = "v1.145.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -6047,6 +6047,9 @@ function runReport(nowMs) {
   runReports(SpreadsheetApp.getActiveSpreadsheet(), key).forEach(function (r) {
     if (!r.ended || done.routes.indexOf(r.route) !== -1) return;
     sendMail({ to: to, subject: r.route + " run, " + ukDay(key), body: runReportText(r, key) });
+    /* A line in the Coordinator App too, from v1.145.0. */
+    tellCoordinatorPhones({ id: "runreport|" + key + "|" + r.route, kind: "report",
+      title: r.route + " run report, " + ukDay(key), body: "Sent by email." });
     done.routes.push(r.route);
     props.setProperty("runReportSent", JSON.stringify(done));
     sent.push(r.route);
@@ -6174,6 +6177,10 @@ function morningWatch() {
     : "\u201cYour bus today\u201d not confirmed: the live server last answered at " +
       Utilities.formatDate(new Date(Number(w.seen || 0)), tz, "HH:mm") + ", " + day + ".";
   sendMail({ to: to, subject: "07:30 message not sent", body: body });
+  /* And the Coordinator App, from v1.145.0. Urgent: 07:40 is inside the
+     quiet hours, which end at 08:00. */
+  tellCoordinatorPhones({ id: "morning|" + key, kind: "morning", urgent: true,
+    title: "07:30 message not sent", body: body });
   props.setProperty("morningAlarm", key);
 }
 
@@ -7194,7 +7201,10 @@ function handleRotaRequest(rq) {
   }
 
   bumpRotaVersion();
+  /* Urgent from v1.145.0 (Asim, 19 Nov 2026): a request made after 21:00
+     reached the inbox at once but the Coordinator App only at 08:00. */
   tellCoordinatorPhones({ id: "req|" + (rq.id || (rq.driver + "|" + rq.date)), kind: "request",
+    urgent: true,
     title: "Rota request from " + rq.driver,
     body: (rq.type || "A change") + " for " +
           Utilities.formatDate(sunday, Session.getScriptTimeZone(), "EEEE d MMMM") +
@@ -14611,7 +14621,8 @@ function tellCoordinatorPhones(alert) {
    compared whole, so with all three coordinators listed nobody matched and
    a listed coordinator with alerts off got both emails. Each one counts. */
 function emailUnalerted(alert, names) {
-  if (!alert || alert.kind === "test") return 0;
+  /* Not the run report's line either (v1.145.0): its email is the report. */
+  if (!alert || alert.kind === "test" || alert.kind === "report") return 0;
   var want = {};
   (names || []).forEach(function (n) { want[String(n || "").trim().toLowerCase()] = true; });
   var skip = {};
