@@ -276,7 +276,7 @@ function paintRota(out){
   if (s.bothAgreed) rows += '<li><b>Both agreed</b><span>' + esc(s.bothAgreed) + '</span></li>';
   if (s.reason) rows += '<li><b>Reason</b><span>' + esc(s.reason) + '</span></li>';
 
-  show("A driver has asked for a change",
+  show("A driver has asked for cover",
     '<div class="card">' +
       '<h2>' + esc(s.driver || "A driver") + '</h2>' +
       (rows ? '<ul class="rows">' + rows + '</ul>' : '') +
@@ -447,6 +447,7 @@ function send(choice){
       say("The person who did the walkaround cannot authorise it.", true);
       return;
     }
+    if (out && out.error === "refused" && out.message) { say(out.message + " Nothing has been changed.", true); return; }
     say("The live server would not do that. Nothing has been changed.", true);
   }).catch(function(){
     BUSY = false;
