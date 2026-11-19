@@ -74,9 +74,14 @@ function patch(page) {
   };
 }
 
+/* A British phone: a date box reads 19/11/2026, not 11/19/2026. Chromium
+   takes that from its language settings, not from a page's locale. */
+const GB = { LANG: "en_GB.UTF-8", LANGUAGE: "en_GB:en", LC_ALL: "en_GB.UTF-8" };
 const launch = pw.chromium.launch.bind(pw.chromium);
-pw.chromium.launch = async (...a) => {
-  const b = await launch(...a);
+pw.chromium.launch = async (o, ...a) => {
+  o = Object.assign({}, o || {});
+  o.env = Object.assign({}, process.env, o.env || {}, GB);
+  const b = await launch(o, ...a);
   const bp = b.newPage.bind(b), bc = b.newContext.bind(b);
   b.newPage = async (...x) => { const p = await bp(...x); patch(p); return p; };
   b.newContext = async (...x) => {

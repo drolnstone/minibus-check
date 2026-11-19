@@ -350,9 +350,10 @@
       title = "By itself";
       head();
       cap(["Without anyone asking:"]);
-      const rows = ["duty reminders, 7 and 2", "days before a driver's Sunday", "a summary every Sunday", "evening", "a tidy-up at 3am", "", "an email if the live server", "stops answering"];
+      const rows = ["duty reminders, 7 and 2", "days before a driver's Sunday", "a run report for each route", "to the coordinators at 16:00",
+                    "a summary every Sunday", "evening", "a tidy-up at 3am", "", "an email if the live server", "stops answering"];
       for (let i = 0; i < rows.length; i += 2) {
-        const y = 196 + (i / 2) * 116;
+        const y = 196 + (i / 2) * 100;
         a.draw(D.tick(30, y - 30, 0.8), 0.3, { pen: false });
         a.write(rows[i + 1] ? [rows[i], rows[i + 1]] : [rows[i]], 90, y, { size: 31, lh: 38 });
       }

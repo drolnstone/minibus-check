@@ -34,8 +34,9 @@ And for showing someone new:
    coordinator bookings), one Sunday from the 07:30 alerts and the vehicle
    check through the run to Church and the parked fuel and mileage, the
    coordinator's week (run record, defects, bus dates, Vehicle Log, messages,
-   emergency calls, Have a look), the jobs that run by themselves, and what it
-   achieves. `video/build.sh overview`, `clips-overview.js`. Its coordinator
+   emergency calls, Have a look), the jobs that run by themselves (duty
+   reminders, the Sunday run report, the weekly summary, the 3am tidy-up), and
+   what it achieves. `video/build.sh overview`, `clips-overview.js`. Its coordinator
    screens are photographed by the coordinator browser checks.
 
 Captions only, no voice. Portrait, 1080 x 1920, each under 6 MB, so they send
