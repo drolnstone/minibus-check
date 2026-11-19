@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.145.0";
+var SCRIPT_VERSION = "v1.146.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -4926,6 +4926,7 @@ function applyCoordAction(ss, a, ctx) {
   }
   var kind = String((a && a.kind) || "");
   if (kind === "rota") return coordRota(ss, a, b, by);
+  if (kind === "rotaplan") return coordRotaPlan(ss, a, b, by);
   if (kind === "decide") return coordDecide(ss, a, b, by, ctx || {});
   if (kind === "defect") return coordDefect(ss, a, b, by);
   if (kind === "vlog") return coordVlog(ss, a, b, by);
@@ -6824,10 +6825,14 @@ function primaryPattern(drivers, route) {
   var p = drivers.filter(function (d) { return d.active && d.order && d.route === route; })
                  .sort(function (a, b) { return a.order - b.order; })
                  .map(function (d) { return d.name; });
-  if (p.length) return p;
-  return SEED_DRIVERS.filter(function (d) { return d.order && (d.route || "North") === route; })
-                     .sort(function (a, b) { return a.order - b.order; })
-                     .map(function (d) { return d.name; });
+  if (!p.length) {
+    p = SEED_DRIVERS.filter(function (d) { return d.order && (d.route || "North") === route; })
+                    .sort(function (a, b) { return a.order - b.order; })
+                    .map(function (d) { return d.name; });
+  }
+  /* Which route, so patternDriver can hand the Sunday to the rota plan. */
+  p.route = route;
+  return p;
 }
 
 /**
@@ -6837,7 +6842,7 @@ function primaryPattern(drivers, route) {
  * as a missed duty to anyone looking back through the rota later.
  */
 function southDriver(d, pattern) {
-  if (!pattern || !pattern.length) return "";
+  if (!pattern) return "";
   if (d < keyToDate(PATTERN_ANCHOR_SOUTH)) return "";
   return patternDriver(d, pattern, PATTERN_ANCHOR_SOUTH);
 }
@@ -6978,6 +6983,92 @@ function notesText(t) {
   return safeText(t);
 }
 
+/* ---- THE ROTA PLAN, from v1.146.0 (Asim, 19 Nov 2026) -----------------
+
+   Set in the Coordinator App: a list of names for each route, repeated
+   Sunday after Sunday from its start, and any Sunday changed by hand there.
+   From its start it decides every Sunday the rota adds or rebuilds, in place
+   of the Drivers tab's Primary order. Kept in the script's properties. */
+var ROTA_PLAN_KEY = "ROTA_PLAN";
+
+function rotaPlan() {
+  return memo("rotaPlan", function () {
+    try {
+      var p = JSON.parse(PropertiesService.getScriptProperties().getProperty(ROTA_PLAN_KEY) || "null");
+      if (p && p.start && p.north && p.north.length && p.south && p.south.length) return p;
+    } catch (err) {}
+    return null;
+  });
+}
+
+/* The plan's name for a Sunday and route, or null when the plan does not
+   decide it (no plan, or before its start). */
+function planDriver(d, route) {
+  if (route !== "North" && route !== "South") return null;
+  var p = rotaPlan();
+  if (!p) return null;
+  var key = dateToKey(d);
+  if (key < p.start) return null;
+  var o = p.over && p.over[key];
+  if (o && o[route]) return o[route];
+  var list = route === "South" ? p.south : p.north;
+  var w = Math.round((keyToDate(key).getTime() - keyToDate(p.start).getTime()) / 604800000);
+  return list[((w % list.length) + list.length) % list.length];
+}
+
+/* A rota plan from the Coordinator App: kept, then each Sunday it changes
+   written, unless that Sunday has since been covered, asked about, called
+   off or PROTECTED. Duty emails as a typed change would send. */
+function coordRotaPlan(ss, a, b, by) {
+  var plan = b.plan || {};
+  if (!plan.start || !plan.north || !plan.north.length || !plan.south || !plan.south.length) {
+    return { done: true, ok: false, push: true, result: "The plan was not complete." };
+  }
+  var keep = { start: plan.start, north: plan.north, south: plan.south, over: plan.over || {},
+               at: Number(a.made) || Date.now(), by: by };
+  PropertiesService.getScriptProperties().setProperty(ROTA_PLAN_KEY, JSON.stringify(keep));
+  memoDrop("rotaPlan");
+
+  var sh = ss.getSheetByName(ROTA_SHEET);
+  if (!sh) return { done: true, ok: false, push: true, result: "There is no Rota tab." };
+  var rc = rotaCols(sh);
+  var today = sundayOf(new Date());
+  var did = 0, kept = 0, tell = [];
+  (b.changes || []).forEach(function (c) {
+    var key = anyToKey(c.sunday);
+    if (!key || keyToDate(key) < today) return;
+    var row = findRotaRow(sh, key) || appendRotaRow(ss, sh, keyToDate(key));
+    var width = sh.getLastColumn();
+    var v = sh.getRange(row, 1, 1, width).getValues()[0];
+    var at = function (col) { return String(v[col - 1] == null ? "" : v[col - 1]).trim(); };
+    var status = at(rc.status);
+    var protectedNote = at(rc.notes).split("\n").some(function (l) { return /^'?protected\b/i.test(l.trim()); });
+    if (at(rc.northCover) || at(rc.southCover) || protectedNote ||
+        ["", "Confirmed", "No driver assigned"].indexOf(status) === -1) { kept++; return; }
+    var set = c.set || {};
+    var n = at(rc.north), s = at(rc.south);
+    if (Object.prototype.hasOwnProperty.call(set, "north")) {
+      var nn = String(set.north || "").trim();
+      if (nn !== n) { sh.getRange(row, rc.north).setValue(safeText(nn)); tell.push([key, n, nn, "North Liverpool"]); n = nn; }
+    }
+    if (Object.prototype.hasOwnProperty.call(set, "south")) {
+      var ns = String(set.south || "").trim();
+      if (ns !== s) { sh.getRange(row, rc.south).setValue(safeText(ns)); tell.push([key, s, ns, "South Liverpool"]); s = ns; }
+    }
+    var next = !n ? "No driver assigned" : (status === "No driver assigned" || !status ? "Confirmed" : status);
+    if (next !== status) sh.getRange(row, rc.status).setValue(next);
+    stamp(sh, row, by + " (rota plan)");
+    did++;
+  });
+  memoDrop("rota");
+  tell.forEach(function (t) {
+    try { notifyDutyChange(ss, t[0], t[1], t[2], t[3]); } catch (err) {}
+  });
+  bumpRotaVersion();
+  return { done: true, ok: true, push: true,
+           result: "On the Rota tab: " + did + " Sunday" + (did === 1 ? "" : "s") + (kept ? ", " + kept + " left as they were" : "") + "." };
+}
+
 /* Both routes at once, since almost every caller wants the pair. */
 function bothPatterns(ss) {
   var drivers = readDrivers(ss);
@@ -6987,6 +7078,8 @@ function bothPatterns(ss) {
 
 /** Which driver the repeating pattern puts on a given Sunday. */
 function patternDriver(d, pattern, anchorKey) {
+  var planned = planDriver(d, pattern && pattern.route);
+  if (planned !== null) return planned;
   if (!pattern.length) return "";
   var anchor = keyToDate(anchorKey || PATTERN_ANCHOR);
   var weeks = Math.round((d.getTime() - anchor.getTime()) / 604800000);
@@ -7430,7 +7523,8 @@ function rebuildFutureRota() {
   ensureDrivers(ss);                       // make sure Route is filled first
   var pattern = bothPatterns(ss);
 
-  if (pattern.north.length !== 4 || !pattern.south.length) {
+  var plan = rotaPlan();
+  if (!plan && (pattern.north.length !== 4 || !pattern.south.length)) {
     ui.alert("Check the Drivers tab first.\n\n" +
              "North pattern: " + (pattern.north.join(", ") || "(empty)") + "\n" +
              "South pattern: " + (pattern.south.join(", ") || "(empty)") + "\n\n" +
@@ -7459,6 +7553,12 @@ function rebuildFutureRota() {
     var hasCover = String(vals[i][rbc.northCover - 1] || "").trim() ||
                    String(vals[i][rbc.southCover - 1] || "").trim();
     if (hasCover || (status && status !== "Confirmed")) { skipped++; continue; }
+    /* From v1.146.0: a Sunday changed by hand after the rota plan was saved
+       stays as it was changed. */
+    if (plan && d >= keyToDate(plan.start)) {
+      var upd = vals[i][rbc.updated - 1], who = String(vals[i][rbc.updatedBy - 1] || "");
+      if (upd instanceof Date && upd.getTime() > Number(plan.at || 0) && !/\(rota plan\)$/.test(who)) { skipped++; continue; }
+    }
 
     var wantN = patternDriver(d, pattern.north);
     var wantS = southDriver(d, pattern.south);

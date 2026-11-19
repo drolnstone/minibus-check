@@ -1,25 +1,33 @@
 MINIBUS
 =======
-  pages v1.178.0 · server w2.99.0 · sheet v1.145.0
+  pages v1.179.0 · server w2.100.0 · sheet v1.146.0
 
-YOU ARE ON   app v1.178.0 · server w2.98.0 · sheet v1.144.0
-GOING TO     app v1.178.0 · server w2.99.0 · sheet v1.145.0
+YOU ARE ON   app v1.178.0 · server w2.99.0 · sheet v1.145.0
+GOING TO     app v1.179.0 · server w2.100.0 · sheet v1.146.0
 
-Coordinator App alerts that were email only, or late:
-- Rota request: now alerts at once, also between 21:00 and 08:00
-  (it used to wait until 08:00; the email always went at once).
-- Sunday "07:30 message not sent" (from 07:40): now alerts as well.
-- Sunday run report (from 16:00): one line per route, "North run report,
-  Sun 22 Nov", "Sent by email."
-
-Approve / Turn it down from the email: decided on the live server at once,
-the same as Decide in the Coordinator App. No wait on the sheet. The page,
-the email and the alert say "asked for cover", not "a change".
+Plan the rota (Coordinator App, Rota, "Plan the rota"):
+- From: the first Sunday the plan decides.
+- North and South: a list of names each, repeated Sunday after Sunday.
+  Up, down, take off, Add a name. A name may be in a list more than once,
+  and on both lists. Not active names are marked and refused on Save.
+- Preview: each Sunday's two names; new ones say "was ...". Tap one name,
+  then another, and they swap ("changed"). Undo swaps puts them back.
+- Kept as they are: a Sunday with a cover, a request, a route called off,
+  or PROTECTED. Shown faded.
+- The same driver on both routes on one Sunday is refused in bold red.
+- Save writes every Sunday that changes in one go. Coordinators get one
+  "Change by" line; drivers whose Sunday changes in the next 7 days get it
+  too, and the sheet's usual duty email.
+- The sheet keeps the plan. Sundays the rota adds later, and "Rebuild
+  future Sundays from the pattern", follow it from its first Sunday. Rebuild
+  leaves any Sunday changed by hand after the plan was saved. Primary
+  order on the Drivers tab is not used from that Sunday on.
+- Active / Not active stays on the Drivers screen (Edit).
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.178.0 · w2.99.0 · v1.145.0.
-B. The next request email: Approve answers in a second or two.
-C. Sunday after 16:00: a "North run report" and a "South run report" line
-   in the Coordinator App Alerts, beside the two emails.
+A. Coordinator App, App info: v1.179.0 · w2.100.0 · v1.146.0.
+B. Rota > Plan the rota: the lists show the names now on the rota.
+C. Save: the Rota screen shows the new names at once; within a minute the
+   Rota tab has them, Updated by "(your name) (rota plan)".

@@ -2447,6 +2447,60 @@ if (want("C64")) {
   await p.ctx.close();
 }
 
+/* C65 — Plan the rota (v1.179.0, Asim, 19 Nov 2026): lists per route, a
+   name taken off and another added, two Sundays swapped by tapping, a clash
+   refused in bold red, and Save writes the Sundays; the Sunday with a
+   request is kept. */
+if (want("C65")) {
+  /* A world of its own: earlier checks take drivers off and add covers. */
+  const w65 = await world();
+  await w65.db.prepare("UPDATE drivers SET active=0 WHERE name='Bro Alfred'").run();
+  const p = await page(w65.env, { name: "Bro Arthur" });
+  try {
+    await p.signIn(PIN);
+    await p.pg.evaluate(() => go("rota"));
+    await p.wait(300);
+    const entry = await p.text("#rotaBody");
+    await p.tapText("Plan the rota", "#rotaBody");
+    await p.shot("C65a-plan");
+    const south0 = await p.pg.evaluate(() => PLAN.South.join(","));
+    const offTag = /Bro Alfred Not active/.test(await p.text('#planBody'));
+    await p.tapText("Save", "#planBody");
+    const offSaid = await p.pg.$eval("#plSay", (e) => ({ t: e.textContent, bad: e.classList.contains("bad") }));
+    const alfred = await p.pg.evaluate(() => PLAN.South.indexOf("Bro Alfred"));
+    await p.pg.click('#planBody [data-do="pldel"][data-rt="South"][data-i="' + alfred + '"]'); await p.wait(150);
+    await p.pg.selectOption('#planBody .pl-add[data-rt="South"]', "Bro Cedric"); await p.wait(150);
+    /* The North name of the fourth Sunday, fourth on South too. */
+    await p.pg.selectOption('#planBody .pl-add[data-rt="South"]', await p.pg.evaluate(() => PLAN.North[3])); await p.wait(150);
+    const clash = await p.pg.$eval("#plSay", (e) => ({ t: e.textContent, bad: e.classList.contains("bad") }));
+    await p.shot("C65b-clash");
+    await p.pg.click('#planBody [data-do="pldel"][data-rt="South"][data-i="3"]'); await p.wait(150);
+    const cells = await p.pg.$$('#planBody .pl-cell[data-rt="South"]:not([disabled])');
+    const k3 = await cells[1].getAttribute("data-key"), k4 = await cells[2].getAttribute("data-key");
+    const before = await p.pg.evaluate(([a, b]) => [planName(a, "South"), planName(b, "South")], [k3, k4]);
+    await cells[1].click(); await p.wait(150);
+    await p.pg.click('#planBody .pl-cell[data-rt="South"][data-key="' + k4 + '"]'); await p.wait(150);
+    const after = await p.pg.evaluate(([a, b]) => [planName(a, "South"), planName(b, "South")], [k3, k4]);
+    const kept = await p.text('#planBody .pl-sun.kept');
+    await p.shot("C65c-swapped");
+    await p.tapText("Save", "#planBody");
+    const line = await p.text("#sheetBody");
+    await p.shot("C65d-save");
+    await p.go();
+    await p.wait(400);
+    const said = await p.text("#sheetSay");
+    const row4 = await W.currentRota(w65.env, k4), rowN = await W.currentRota(w65.env, NEXT);
+    const ok = offTag && offSaid.bad && offSaid.t === "Bro Alfred is not active." && /Plan the rota/.test(entry) && south0.split(",").sort().join(",") === SP.slice().sort().join(",") &&
+               /on both routes on/.test(clash.t) && clash.bad &&
+               after[0] === before[1] && after[1] === before[0] &&
+               /Request/.test(kept) && /Sundays? change/.test(line) &&
+               row4 && row4.south === before[0] && rowN && rowN.south === southOf(NEXT) && await p.on("rota");
+    check("C65", "Plan the rota: names off and on, a clash in bold red, two Sundays swapped by tapping, Save writes them; a Sunday with a request kept",
+          ok && !p.errs.length, JSON.stringify({ offTag, offSaid, said, entry: entry.slice(0, 40), south0, clash, before, after, kept, line, row4, rowN, errs: p.errs }).slice(0, 1200));
+  } catch (e) { stopped("C65", e); }
+  await p.ctx.close();
+}
+
 await done();
 cleanup(ROOT);
 const bad = results.filter((r) => !r.ok);

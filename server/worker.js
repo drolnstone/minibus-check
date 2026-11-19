@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.99.0";
+const SCRIPT_VERSION = "w2.100.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -9792,12 +9792,12 @@ async function reapplyDrivers(env) {
    choice has its own (contactTell). */
 /* "booking" from w2.84.0 (Asim, 8 Nov 2026): a coordinator's Book, Edit and
    Cancel reach the other coordinators too. */
-const CHANGE_TOLD = ["driver", "pin", "rota", "bus", "stop", "decide", "defect", "vlog", "vfix", "motrun", "handno", "booking"];
+const CHANGE_TOLD = ["driver", "pin", "rota", "rotaplan", "bus", "stop", "decide", "defect", "vlog", "vfix", "motrun", "handno", "booking"];
 
 async function changeDriverNames(env, kind, r) {
   let names = [];
   if (kind === "driver" || kind === "pin") names = [r.body && r.body.name];
-  else if (kind === "rota") names = r.tell || [];
+  else if (kind === "rota" || kind === "rotaplan") names = r.tell || [];
   else if (kind === "bus" || kind === "stop") {
     let key = runSunday();
     try { key = (await busCurrentSunday(env, pickupsAndArrivals(await getStops(env)))) || key; } catch (e) {}
@@ -10536,16 +10536,34 @@ function coordParse(r) {
            by: r.by_name || "", made: Number(r.made) || 0, body: b };
 }
 
+/* A rota plan (w2.100.0) as the rota changes it makes, one per Sunday, in
+   its place in the order. Only when rota changes were asked for. */
+function rotaPlanExpand(list, kinds) {
+  if (kinds.indexOf("rota") === -1 || kinds.indexOf("rotaplan") !== -1) return list;
+  const out = [];
+  for (const a of list) {
+    if (a.kind !== "rotaplan") { out.push(a); continue; }
+    for (const c of (a.body && a.body.changes) || []) {
+      out.push({ id: a.id, seq: a.seq, kind: "rota", sunday: c.sunday, by: a.by, made: a.made,
+                 body: { sunday: c.sunday, set: c.set || {} }, plan: true });
+    }
+  }
+  return out;
+}
+
 /* Not refused, not yet named in a push as applied, and not so old that
    something must have gone wrong with it. */
 async function coordPending(env, kinds, sundays) {
   try {
     await ensureCoord(env);
     const since = Date.now() - COORD_OVERLAY_DAYS * 86400000;
+    /* A rota plan is one action that changes many Sundays: it is read as one
+       rota change per Sunday by everything that lays changes over the rota. */
+    const want = kinds.indexOf("rota") !== -1 && kinds.indexOf("rotaplan") === -1 ? kinds.concat(["rotaplan"]) : kinds;
     const q = await env.DB.prepare(
       "SELECT * FROM coord_actions WHERE seen=0 AND (ok IS NULL OR ok=1) AND made>? " +
-      "AND kind IN (" + kinds.map(() => "?").join(",") + ") ORDER BY seq").bind(since, ...kinds).all();
-    let list = (q.results || []).map(coordParse);
+      "AND kind IN (" + want.map(() => "?").join(",") + ") ORDER BY seq").bind(since, ...want).all();
+    let list = rotaPlanExpand((q.results || []).map(coordParse), kinds);
     if (sundays) list = list.filter((a) => sundays.indexOf(a.sunday) !== -1);
     return list;
   } catch (e) { return []; }
@@ -11183,6 +11201,9 @@ async function coordLoad(env, me) {
     ? { rows: rota.rows || [], builtAt: rota.builtAt || 0 }
     : { rows: [], error: (rota && rota.cache) || "none" };
 
+  /* From w2.100.0: the rota plan last saved, for the Plan screen. */
+  try { out.rotaPlan = (await cacheGet(env, "rota_plan")) || null; } catch (e) { out.rotaPlan = null; }
+  out.planEdits = true;
   try {
     const d = await env.DB.prepare(
       "SELECT name, role, route, ord, active FROM drivers ORDER BY ord, name").all();
@@ -11878,6 +11899,116 @@ async function actRota(env, me, act) {
            after: () => reapplyRawRota(env, [key]) };
 }
 
+/* ---- THE ROTA PLAN, from w2.100.0 (Asim, 19 Nov 2026) -------------------
+
+   A list of names for each route, repeated Sunday after Sunday from a start
+   Sunday, with any Sunday changed by hand on top (over). A name may be in a
+   list more than once, and on both lists. One action writes every Sunday it
+   changes. A Sunday with a cover, a request, a status other than Confirmed
+   or No driver assigned, or a PROTECTED note is left as it is. The plan is
+   kept here for the app, and on the sheet for the Sundays it adds later. */
+const PLAN_MAX = 16;
+
+function planName(plan, key, route) {
+  const o = plan.over && plan.over[key];
+  if (o && o[route]) return o[route];
+  const list = route === "South" ? plan.south : plan.north;
+  if (!list || !list.length) return "";
+  const p = keyParts(key), q = keyParts(plan.start);
+  const w = Math.round((Date.UTC(p.y, p.mo - 1, p.d) - Date.UTC(q.y, q.mo - 1, q.d)) / 604800000);
+  return list[((w % list.length) + list.length) % list.length];
+}
+
+function planKept(n, pendingSundays, key) {
+  if (n.northCover || n.southCover) return true;
+  if (["", "Confirmed", "No driver assigned"].indexOf(n.status) === -1) return true;
+  if (pendingSundays[key]) return true;
+  return String(n.notes || "").split("\n").some((l) => /^protected\b/i.test(noteLine(l)));
+}
+
+async function actRotaPlan(env, me, act) {
+  const start = anyToKey(act.start);
+  if (!start || !isSundayKey(start)) return { ok: false, error: "Pick the first Sunday." };
+  if (start < runSunday()) return { ok: false, error: "That Sunday has been and gone." };
+  const d = await env.DB.prepare("SELECT name FROM drivers WHERE active=1").all();
+  const names = {};
+  for (const x of (d.results || [])) names[String(x.name || "").trim().toLowerCase()] = String(x.name).trim();
+  const one = (v) => {
+    const t = String(v == null ? "" : v).trim();
+    return t && names[t.toLowerCase()] ? names[t.toLowerCase()] : null;
+  };
+  const plan = { start: start, north: [], south: [], over: {} };
+  for (const [rt, f] of [["North", "north"], ["South", "south"]]) {
+    const list = Array.isArray(act[f]) ? act[f] : [];
+    if (!list.length) return { ok: false, error: "Add a driver to " + rt + "." };
+    if (list.length > PLAN_MAX) return { ok: false, error: rt + " takes " + PLAN_MAX + " names at most." };
+    for (const v of list) {
+      const n = one(v);
+      if (!n) return { ok: false, error: String(v || "") + " is not an active driver on the Drivers tab." };
+      plan[f].push(n);
+    }
+  }
+  const over = (act.over && typeof act.over === "object") ? act.over : {};
+  for (const k of Object.keys(over)) {
+    const key = anyToKey(k);
+    if (!key || !isSundayKey(key) || key < start) continue;
+    for (const rt of ["North", "South"]) {
+      const v = over[k] && over[k][rt];
+      if (!v) continue;
+      const n = one(v);
+      if (!n) return { ok: false, error: String(v) + " is not an active driver on the Drivers tab." };
+      (plan.over[key] = plan.over[key] || {})[rt] = n;
+    }
+  }
+
+  /* The window the app reads, so the plan sees what the screen showed. */
+  const rota = await cachedRota(env, keyAddWeeks(runSunday(), -12), 64);
+  if (!rota || !rota.ok) return { ok: false, error: "The rota has not reached the live server." };
+  const reqs = await coordRequestsView(env, { noCandidates: true });
+  const pend = {};
+  for (const q of reqs) if (q.status === "Pending") pend[q.sunday] = true;
+  const changes = [];
+  for (const row of (rota.rows || [])) {
+    if (!row || row.date < start) continue;
+    const n = rotaNorm(row, true);
+    if (planKept(n, pend, row.date)) continue;
+    const N = planName(plan, row.date, "North"), S = planName(plan, row.date, "South");
+    if (N && S && sameName(N, S)) return { ok: false, error: N + " is on both routes on " + shortDay(row.date) + "." };
+    const set = {};
+    if (N !== n.north) set.north = N;
+    if (S !== n.south) set.south = S;
+    if (Object.keys(set).length) changes.push({ sunday: row.date, set: set, was: { north: n.north, south: n.south } });
+  }
+  const had = await cacheGet(env, "rota_plan");
+  const same = had && JSON.stringify([had.start, had.north, had.south, had.over || {}]) ===
+                      JSON.stringify([plan.start, plan.north, plan.south, plan.over]);
+  if (!changes.length && same) return { ok: false, error: "Nothing to change." };
+
+  /* Told: the drivers whose Sunday changes in the next seven days, as the
+     sheet's duty email is. */
+  const soon = keyAddWeeks(londonKey(new Date()), 1);
+  const near = changes.filter((c) => c.sunday <= soon);
+  const tell = [];
+  const lines = [];
+  for (const c of near) {
+    for (const [f, rt] of [["north", "North"], ["south", "South"]]) {
+      if (!(f in c.set)) continue;
+      lines.push(shortDay(c.sunday) + " " + rt + ": " + (c.set[f] || "nobody") + (c.was[f] ? " (was " + c.was[f] + ")" : "") + ".");
+      if (c.set[f]) tell.push(c.set[f]);
+      if (c.was[f]) tell.push(c.was[f]);
+    }
+  }
+  const words = "Rota from " + shortDay(start) + ": " +
+    (changes.length ? changes.length + " Sunday" + (changes.length === 1 ? "" : "s") + " changed." : "pattern saved.") +
+    (lines.length ? " " + lines.join(" ") : "");
+  const keep = Object.assign({}, plan, { at: Date.now(), by: me.name });
+  return { ok: true, sunday: start, tell: tell, words: words,
+           body: { sunday: start, plan: plan, changes: changes.map((c) => ({ sunday: c.sunday, set: c.set })) },
+           stmts: [cachePut(env, "rota_plan", keep)],
+           reply: { changed: changes.length },
+           after: () => reapplyRawRota(env, changes.map((c) => c.sunday)) };
+}
+
 /* What a hand over needs, checked before anything is written: today's run on
    the route, started, and still open or with its parked mileage still to key;
    an active driver who is not holding it already and is not out on the other
@@ -12347,6 +12478,7 @@ async function coordAct(env, me, act) {
   const kind = String(act.kind || "");
   let r = null;
   if (kind === "rota") r = await actRota(env, me, act);
+  else if (kind === "rotaplan") r = await actRotaPlan(env, me, act);
   else if (kind === "decide") r = await actDecide(env, me, act);
   else if (kind === "booking") r = await actBooking(env, me, act, id);
   else if (kind === "defect") r = await actDefect(env, me, act);
