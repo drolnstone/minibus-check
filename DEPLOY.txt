@@ -1,21 +1,21 @@
 MINIBUS
 =======
-  pages v1.177.0 · server w2.96.0 · sheet v1.144.0
+  pages v1.177.0 · server w2.98.0 · sheet v1.144.0
 
-YOU ARE ON   app v1.177.0 · server w2.96.0 · sheet v1.143.0
-GOING TO     app v1.177.0 · server w2.96.0 · sheet v1.144.0
+YOU ARE ON   app v1.177.0 · server w2.98.0 · sheet v1.143.0
+GOING TO     app v1.177.0 · server w2.98.0 · sheet v1.144.0
 
-Sunday run report: from 15:10 London time each Sunday, one email per route
+Sunday run report: from 16:00 London time each Sunday, one email per route
 to the coordinators (COORDINATOR_EMAIL): bus and driver, time left Church
 and minutes late, each marked or booked stop with its time, minutes late
 and Picked up, Nobody there or not marked (with seats booked), time back
 at Church or how the run ended, and the parked mileage and fuel, or
 "Parked mileage not received." Once per route; a route with no run sends
-nothing.
+nothing. The driver reminders still end at 15:00.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.177.0 · w2.96.0 · v1.144.0.
-B. Sunday after 15:10: one "North run, dd/mm/yyyy" and one "South run,
+A. Coordinator App, App info: v1.177.0 · w2.98.0 · v1.144.0.
+B. Sunday after 16:00: one "North run, dd/mm/yyyy" and one "South run,
    dd/mm/yyyy" email in the coordinator inbox.

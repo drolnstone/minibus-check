@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.96.0";
+const SCRIPT_VERSION = "w2.98.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -895,7 +895,9 @@ async function etaSettings(env) {
     speedMph:       Math.max(4, num(r && r.speedMph, ETA_FALLBACK.speedMph)),
     maxSkipMinutes: num(r && r.maxSkipMinutes, ETA_FALLBACK.maxSkipMinutes),
     maxBehindMinutes: num(r && r.maxBehindMinutes, ETA_FALLBACK.maxBehindMinutes),
-    keepMinutes:    num(r && r.keepMinutes, ETA_FALLBACK.keepMinutes)
+    keepMinutes:    num(r && r.keepMinutes, ETA_FALLBACK.keepMinutes),
+    /* From w2.98.0: each stop's own stand, where it has enough history. */
+    dwellLearned:   await learnedDwell(env, Date.now())
   };
 }
 
@@ -1062,7 +1064,7 @@ async function bookedStopIds(env, key, route) {
    does not stop on the way, which is why it is asked one leg at a time.
 
        next called stop   when the bus was there + the drive in traffic
-       each one after it  the one before + dwellSeconds + that leg
+       each one after it  the one before + its stand (learned, else dwellSeconds) + that leg
 
    A leg not asked for yet takes the timetable's own gap, less what skipped
    stops save, the same increment the tap estimate uses. A stop nobody booked
@@ -1138,6 +1140,154 @@ async function liveFix(env, trip, fix, now) {
   return await liveGet(env, trip);
 }
 
+/* ==========================================================================
+   HOW LONG THE BUS STANDS AT EACH STOP, LEARNED FROM REAL RUNS, from w2.98.0
+   (Asim, 19 Nov 2026)
+
+   The live estimate adds a stand at every stop the bus calls at before the
+   passenger's own. Until now that was dwellSeconds, 75 s, at every kerb. A
+   stop where three people climb on with a pram is not a stop where one man
+   steps up, and the estimate should know which is which.
+
+   Measured from the driving phone's own fixes, on this server's clock, so a
+   phone whose clock is minutes out cannot bend it:
+
+       arrived   the first fix within DWELL_NEAR_M of the stop's pin
+       left      the first fix after that beyond it
+
+   A stand is only kept when both ends are sure: a fix no more than
+   DWELL_GAP_MS before the arrival and after the last one inside, so a phone
+   that was locked on the way in or out does not turn into a ten minute stand.
+   And only at a stop the run marked Picked up: a stop driven past stands for
+   nothing, and a Nobody here wait is longer than a pickup, so counting it
+   would put the bus later than it is, the side this file never leans to.
+
+   Each stop's figure is the middle of its last DWELL_KEEP sure stands, by
+   route and stop name (ids are renumbered, names are not), once it has
+   DWELL_NEED of them. Until then, and for anything that goes wrong here, the
+   75 s setting stands. Only the live estimate uses it. The Bus Stops
+   timetable is never touched. No screen and no setting.
+   ========================================================================== */
+const DWELL_NEAR_M = 80;               /* at the stop: this close to its pin, on a fix this sure */
+const DWELL_GAP_MS = 45000;            /* a fix this close before arriving and after leaving */
+const DWELL_MIN_S = 10;                /* a stand shorter or longer than these is not a stand */
+const DWELL_MAX_S = 600;
+const DWELL_KEEP = 8;                  /* the last this many sure stands per stop */
+const DWELL_NEED = 3;                  /* and at least this many before it is used */
+const DWELL_MEMO_MS = 5 * 60000;
+const DWELL_KEEP_DAYS = 180;
+
+let stopDwellReady = false;
+async function ensureStopDwell(env) {
+  if (stopDwellReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS stop_dwell (" +
+    "  trip TEXT NOT NULL, stop_id TEXT NOT NULL," +
+    "  route TEXT NOT NULL DEFAULT '', name TEXT NOT NULL DEFAULT ''," +
+    "  arrived INTEGER NOT NULL, sure_in INTEGER NOT NULL DEFAULT 0," +
+    "  last_in INTEGER NOT NULL, left_at INTEGER, sure_out INTEGER NOT NULL DEFAULT 0," +
+    "  PRIMARY KEY (trip, stop_id))").run();
+  stopDwellReady = true;
+}
+
+/* One stop across renumbering: its route and its name, as typed. */
+const dwellKey = (route, name) =>
+  String(route || "").trim().toLowerCase() + "|" +
+  String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
+
+/* One fix from the driving phone. `prevAt` is when the fix before it came,
+   0 when none did. Called before liveFix writes this one. */
+async function dwellFix(env, trip, ordered, fix, prevAt, now) {
+  const lat = Number(fix && fix.lat), lng = Number(fix && fix.lng);
+  const acc = Number(fix && fix.acc) || 0;
+  const at = (fix && fix.at) ? Number(fix.at) : now - Math.max(0, Number(fix && fix.age) || 0);
+  if (!trip || !isFinite(lat) || !isFinite(lng) || (lat === 0 && lng === 0)) return;
+  if (acc > DWELL_NEAR_M || at > now + 60000 || now - at > LIVE_FRESH_MS) return;
+  await ensureStopDwell(env);
+  const here = { lat, lng };
+  const pins = ordered.filter((s) => String(s.kind || "pickup") === "pickup" && hasPin(s));
+  const byId = {};
+  for (const s of pins) byId[String(s.id)] = s;
+
+  const open = (await env.DB.prepare(
+    "SELECT stop_id, last_in FROM stop_dwell WHERE trip=? AND left_at IS NULL").bind(String(trip)).all()).results || [];
+  let inside = null;
+  for (const r of open) {
+    if (at <= Number(r.last_in)) { inside = r.stop_id; continue; }
+    const s = byId[String(r.stop_id)];
+    if (s && metresBetween(here, s) <= DWELL_NEAR_M) {
+      inside = r.stop_id;
+      await env.DB.prepare("UPDATE stop_dwell SET last_in=? WHERE trip=? AND stop_id=? AND last_in<?")
+        .bind(at, String(trip), String(r.stop_id), at).run();
+    } else {
+      const sure = at - Number(r.last_in) <= DWELL_GAP_MS ? 1 : 0;
+      await env.DB.prepare("UPDATE stop_dwell SET left_at=?, sure_out=? WHERE trip=? AND stop_id=? AND left_at IS NULL")
+        .bind(at, sure, String(trip), String(r.stop_id)).run();
+    }
+  }
+  if (inside !== null) return;
+
+  let near = null, best = Infinity;
+  for (const s of pins) {
+    const m = metresBetween(here, s);
+    if (m <= DWELL_NEAR_M && m < best) { near = s; best = m; }
+  }
+  if (!near) return;
+  const sureIn = prevAt > 0 && at - prevAt <= DWELL_GAP_MS && at > prevAt ? 1 : 0;
+  const put = await env.DB.prepare(
+    "INSERT OR IGNORE INTO stop_dwell (trip, stop_id, route, name, arrived, sure_in, last_in) VALUES (?,?,?,?,?,?,?)")
+    .bind(String(trip), String(near.id), String(near.route || ""), String(near.stop || ""), at, sureIn, at).run();
+  if (put && put.meta && put.meta.changes) {
+    try {
+      await env.DB.prepare("DELETE FROM stop_dwell WHERE arrived < ?").bind(now - DWELL_KEEP_DAYS * 86400000).run();
+    } catch (e) {}
+  }
+}
+
+/* The middle of a list of seconds. */
+function middleOf(list) {
+  const v = list.slice().sort((a, b) => a - b);
+  const n = v.length;
+  return n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;
+}
+
+/* Every stop with enough history: dwellKey to seconds. Read at most every
+   five minutes per database. {} when there is nothing or anything fails. */
+const dwellMemo = new WeakMap();
+async function learnedDwell(env, now) {
+  const db = env && env.DB;
+  if (!db) return {};
+  const had = dwellMemo.get(db);
+  if (had && now - had.at < DWELL_MEMO_MS && now >= had.at) return had.map;
+  const map = {};
+  try {
+    await ensureStopDwell(env);
+    const rows = (await db.prepare(
+      "SELECT d.route, d.name, d.arrived, d.left_at FROM stop_dwell d " +
+      "WHERE d.sure_in=1 AND d.sure_out=1 AND d.left_at IS NOT NULL AND EXISTS (" +
+      "  SELECT 1 FROM trip_events e WHERE e.trip=d.trip AND e.stop_id=d.stop_id" +
+      "  AND e.event IN ('" + TAP_PICKED.join("','") + "') AND e.status<>'Undone') " +
+      "ORDER BY d.arrived DESC").all()).results || [];
+    const by = {};
+    for (const r of rows) {
+      const s = (Number(r.left_at) - Number(r.arrived)) / 1000;
+      if (!(s >= DWELL_MIN_S && s <= DWELL_MAX_S)) continue;
+      const k = dwellKey(r.route, r.name);
+      const l = (by[k] = by[k] || []);
+      if (l.length < DWELL_KEEP) l.push(s);
+    }
+    for (const k of Object.keys(by)) if (by[k].length >= DWELL_NEED) map[k] = Math.round(middleOf(by[k]));
+  } catch (e) { return {}; }
+  dwellMemo.set(db, { at: now, map });
+  return map;
+}
+
+/* The stand at one stop, in seconds: its own when it has one. */
+function dwellAt(set, stop) {
+  const own = set && set.dwellLearned && stop ? set.dwellLearned[dwellKey(stop.route, stop.stop)] : undefined;
+  return typeof own === "number" && isFinite(own) && own > 0 ? own : set.dwellSeconds;
+}
+
 /* The stops the bus will pull into after `from`, in run order: every
    pickup somebody booked, and the church. */
 function liveCalled(ordered, from, booked) {
@@ -1176,7 +1326,6 @@ function liveEtaMapFrom(key, ordered, lastStopId, booked, set, live, now) {
   if (!called.length || String(ordered[called[0]].id) !== String(live.next_id)) return null;
 
   const tap = (i) => tapEtaNoOffset(key, ordered, lastStopId, i, booked, set);
-  const dwell = set.dwellSeconds * 1000;
   const legs = live.legs || {};
   const out = {};
   let prev = called[0], at = Number(live.next_ms);
@@ -1185,7 +1334,7 @@ function liveEtaMapFrom(key, ordered, lastStopId, booked, set, live, now) {
     const i = called[k];
     const leg = legs[liveLegKey(ordered[prev], ordered[i])];
     let step = null;
-    if (leg && Number(leg.sec) >= 0) step = dwell + Number(leg.sec) * 1000;
+    if (leg && Number(leg.sec) >= 0) step = dwellAt(set, ordered[prev]) * 1000 + Number(leg.sec) * 1000;
     else {
       const a = tap(prev), b = tap(i);
       if (a !== null && b !== null) step = Math.max(0, b - a);
@@ -2907,6 +3056,12 @@ async function boardPayload(env, route, phone, driver, fix, ctx, keyIn) {
     const driving = t && t.trip && t.started && !t.ended && t.phone && t.phone.here;
     if (driving && fix && fix.lat !== undefined && fix.lat !== null && fix.lat !== "") {
       const now = Date.now();
+      /* How long it stands at each stop, from w2.98.0. Before liveFix, so the
+         fix before this one is still on record. */
+      try {
+        const prev = await liveGet(env, t.trip);
+        await dwellFix(env, t.trip, stopsOnRoute(all, r), fix, prev ? Number(prev.fix_at) || 0 : 0, now);
+      } catch (e) {}
       if (await liveFix(env, t.trip, fix, now)) {
         const go = (async () => {
           try {
@@ -6088,6 +6243,11 @@ function notLeftDue(all, key, route, now) {
   return (late >= NOT_LEFT_AFTER_MS && late <= NOT_LEFT_UNTIL_MS) ? d.time : null;
 }
 
+function lateBody(due, driver, phones) {
+  return "Due " + due + "." + (driver ? " Driver: " + driver + "." : "") +
+         " Passengers told: " + trailPhones(phones) + ".";
+}
+
 async function wakeNotLeft(env) {
   const key = runSunday();
   const all = await getStops(env);
@@ -6112,11 +6272,19 @@ async function wakeNotLeft(env) {
       }
     }
     n += r;
-    /* Critical, so on the coordinators' trail (Asim): someone may need to
-       ring the driver. */
-    await trail(env, { once: "p|late|" + key + "|" + route,
-                       title: route + ": No word yet that the bus has left Church",
-                       body: "To " + trailPhones(r, "passenger") + "." });
+    /* THE COORDINATORS ARE TOLD THE BUS HAS NOT STARTED, from w2.97.0
+       (Asim, 19 Nov 2026: "you are told, not only the passengers"). Before
+       this they had only the "Sent:" line for the passengers' alert. Now it
+       is a coordinator alert of its own, in place of that line, so it is one
+       push, not two: on the Alerts list as new, and through the same chain
+       as the trail (Coordinator App, else Driver App, else email). Once per
+       route, plain facts, never urgent-red. The driver, if a coordinator, is
+       left out: their own "Time to set off" and "has not gone out" stand. */
+    const driver = (state && state.driver) || rotaDriverFor(rotaRow, route);
+    await trail(env, { once: "p|late|" + key + "|" + route, plain: true, kind: "late",
+                       title: route + ": Not started yet",
+                       body: lateBody(notLeftDue(all, key, route, now), driver, r),
+                       not: driver ? [driver] : [] });
   }
   return n;
 }
@@ -7324,10 +7492,12 @@ async function trail(env, t) {
     if (t.once && !(await trailClaim(env, String(t.once)))) return 0;
     const msg = coordAlertOf({
       id: "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      kind: "trail", title: "Sent: " + t.title, body: t.body || "",
+      kind: t.kind || "trail", title: (t.plain ? "" : "Sent: ") + t.title, body: t.body || "",
       not: Array.isArray(t.not) ? t.not : []
     });
     if (!msg) return 0;
+    /* A coordinator alert in its own words (plain) is on the Alerts list too. */
+    if (t.plain) { try { await coordLogAdd(env, msg); } catch (e) {} }
     const r = await deliverTrail(env, msg);
     if (r.missed.length) {
       await trailKeep(env, TRAIL_RETRY_KEY, { msg, names: r.missed, line: t.line || "", at: Date.now() });

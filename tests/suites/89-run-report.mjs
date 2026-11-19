@@ -2,8 +2,8 @@
 
    Asim: after the morning run, coordinators get one email per route: time
    left Church, minutes late at each stop, picked up or nobody there, time
-   back, parked figures. Sent from 15:10 London, after the last parked
-   mileage reminder, once per route. The clock is fixed in every check. */
+   back, parked figures. Sent from 16:00 London (Asim, 19 Nov: first
+   Sundays run late), once per route. The clock is fixed in every check. */
 
 import { Suite } from "../lib/t.mjs";
 import { loadCodeGs, call } from "../lib/codegs.mjs";
@@ -57,8 +57,8 @@ export default async function (root) {
     return L;
   });
 
-  s.test("15:10 Sunday: one email for the route, facts only", async (a) => {
-    const L = await run("15:12");
+  s.test("16:00 Sunday: one email for the route, facts only", async (a) => {
+    const L = await run("16:02");
     a.eq(L.gas.mail.length, 1);
     const m = L.gas.mail[0];
     a.eq(m.to, "coord@b.c");
@@ -78,23 +78,23 @@ export default async function (root) {
   });
 
   s.test("once per route per Sunday", async (a) => {
-    const L = await run("15:12");
-    await run("15:17", null, L);
+    const L = await run("16:02");
+    await run("16:07", null, L);
     a.eq(L.gas.mail.length, 1);
   });
 
-  s.test("not before 15:10, not on other days, not without a run", async (a) => {
-    a.eq((await run("15:05")).gas.mail.length, 0);
+  s.test("not before 16:00, not on other days, not without a run", async (a) => {
+    a.eq((await run("15:59")).gas.mail.length, 0);
     const L = load();
-    await atTime("2026-11-23T15:30:00Z", () => call(L, "runReport"));
+    await atTime("2026-11-23T16:30:00Z", () => call(L, "runReport"));
     a.eq(L.gas.mail.length, 0);
-    a.eq((await run("15:30", { trips: () => [ev({ Event: "pickup", "Stop ID": "N01", Happened: at("10:09") })] })).gas.mail.length, 0);
+    a.eq((await run("16:30", { trips: () => [ev({ Event: "pickup", "Stop ID": "N01", Happened: at("10:09") })] })).gas.mail.length, 0);
   });
 
   s.test("a run not ended waits; parked not keyed says so", async (a) => {
     const open = () => [ev({ Event: "start", Happened: at("09:55") })];
-    a.eq((await run("15:30", { trips: open })).gas.mail.length, 0);
-    const L = await run("15:30", { checks: [{ Date: KEY, Registration: "AB12 CDE", Mileage: 45180 }],
+    a.eq((await run("16:30", { trips: open })).gas.mail.length, 0);
+    const L = await run("16:30", { checks: [{ Date: KEY, Registration: "AB12 CDE", Mileage: 45180 }],
       trips: () => open().concat([ev({ Event: "end", Happened: at("11:38"), Status: "Logged (server)" })]) });
     const b = L.gas.mail[0].body;
     a.ok(b.indexOf("Left Church 09:55.") !== -1, b);
@@ -103,7 +103,7 @@ export default async function (root) {
   });
 
   s.test("ended in the Coordinator App names who ended it", async (a) => {
-    const L = await run("15:30", { trips: () => [ev({ Event: "start", Happened: at("09:55") }),
+    const L = await run("16:30", { trips: () => [ev({ Event: "start", Happened: at("09:55") }),
       ev({ Event: "end", Happened: at("11:05"), "Ended by": "Bro Asim" })] });
     a.ok(L.gas.mail[0].body.indexOf("Run ended 11:05 by Bro Asim.") !== -1, L.gas.mail[0].body);
   });

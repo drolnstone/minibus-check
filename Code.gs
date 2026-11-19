@@ -5894,11 +5894,12 @@ function jobsReminder(nowMs) {
    morning run, one email per route to the coordinators (safetyTo, so
    COORDINATOR_EMAIL): time left Church, each marked or booked stop with
    its time, minutes late and Picked up or Nobody there, time back, and the
-   parked figures. Sent from 15:10 London on the Sunday, after the last
-   parked mileage reminder at 15:00, so the figures keyed by then are in it;
-   one not keyed reads "not received". Once per route per Sunday; a route
+   parked figures. Sent from 16:00 London on the Sunday (Asim, 19 Nov 2026:
+   on first Sundays a bus can be back after 15:00, when the driver
+   reminders have stopped), so a figure keyed by then is in it; one not
+   keyed reads "not received". Once per route per Sunday; a route
    with no run that day sends nothing; a run not yet ended waits. */
-var RUN_REPORT_FROM = "15:10";
+var RUN_REPORT_FROM = "16:00";
 
 /* Minutes off the timetable, in words. Positive is behind. */
 function runLateWords(off) {
