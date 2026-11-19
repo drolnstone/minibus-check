@@ -1,9 +1,9 @@
 MINIBUS
 =======
-  pages v1.177.0 · server w2.97.0 · sheet v1.143.0
+  pages v1.177.0 · server w2.98.0 · sheet v1.143.0
 
-YOU ARE ON   app v1.177.0 · server w2.96.0 · sheet v1.143.0
-GOING TO     app v1.177.0 · server w2.97.0 · sheet v1.143.0
+YOU ARE ON   app v1.177.0 · server w2.97.0 · sheet v1.143.0
+GOING TO     app v1.177.0 · server w2.98.0 · sheet v1.143.0
 
 Stop waiting time learned from real runs. The live estimate used to add
 75 seconds at every stop the bus calls at. From now on the server measures
@@ -18,4 +18,4 @@ merge only collect; estimates change from about the third Sunday.
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.177.0 · w2.97.0 · v1.143.0.
+A. Coordinator App, App info: v1.177.0 · w2.98.0 · v1.143.0.

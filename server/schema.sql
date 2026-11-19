@@ -469,7 +469,7 @@ CREATE TABLE IF NOT EXISTS run_live (
   err           TEXT                  -- why the last ask failed, if it did
 );
 
--- HOW LONG THE BUS STOOD AT EACH STOP, from w2.97.0 (19 Nov 2026). One row
+-- HOW LONG THE BUS STOOD AT EACH STOP, from w2.98.0 (19 Nov 2026). One row
 -- per run and stop, from the driving phone's fixes on the server's clock:
 -- the first fix within 80 m of the pin, and the first one after beyond it.
 -- The live estimate uses each stop's middle stand of its last 8 sure ones at

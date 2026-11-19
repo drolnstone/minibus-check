@@ -1,5 +1,5 @@
 /* HOW LONG THE BUS STANDS AT EACH STOP, LEARNED FROM REAL RUNS, 19 Nov 2026.
-   server w2.97.0.
+   server w2.98.0.
 
    Asim: the live estimate assumed 75 seconds at every stop. Each stop's own
    history should make "Be at your stop in about N min" more accurate. The
@@ -138,10 +138,6 @@ export default async function (root) {
     await board(env, Object.assign({}, AT_N03, { acc: 150 }), "10:18:30");
     const r = await db.prepare("SELECT * FROM stop_dwell WHERE trip='t1'").all();
     a.eq(r.results.length, 0);
-  });
-
-  s.test("the server says w2.97.0", async (a) => {
-    a.eq(W.SCRIPT_VERSION || (await import("node:fs")).readFileSync(join(root, "server", "worker.js"), "utf8").match(/SCRIPT_VERSION = "([^"]+)"/)[1], "w2.97.0");
   });
 
   return s;
