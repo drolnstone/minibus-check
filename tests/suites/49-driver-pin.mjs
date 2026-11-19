@@ -113,7 +113,10 @@ export default async function (root) {
       const r = db._one("SELECT * FROM driver_pins WHERE name='bro trevor'");
       a.ok(/^[0-9a-f]{64}$/.test(r.pin_hash), "not a hash");
       a.ok(/^[0-9a-f]{32}$/.test(r.pin_salt), "no salt of its own");
-      a.eq(JSON.stringify(r).indexOf("2580"), -1, "the PIN is stored");
+      /* The random hex of the hash and salt can hold "2580" by chance (it did
+         on CI, 19 Nov 2026), so they are checked by shape above, not here. */
+      const plain = Object.assign({}, r); delete plain.pin_hash; delete plain.pin_salt;
+      a.eq(JSON.stringify(plain).indexOf("2580"), -1, "the PIN is stored");
       a.eq((await change(env, "Bro Trevor", "2580", TREVOR)).error, "same pin", "back onto the default by hand");
       const rows = pinRows(db);
       a.eq(JSON.parse(rows[rows.length - 1].body).what, "changed");
