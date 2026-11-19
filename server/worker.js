@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.98.0";
+const SCRIPT_VERSION = "w2.99.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -664,6 +664,29 @@ async function handleLinkDo(env, body) {
 
   if (row.kind === "rota") {
     if (choice !== "Approved" && choice !== "Rejected") return json({ ok: false, error: "choice" });
+
+    /* THE SAME ACT AS THE COORDINATOR APP'S DECIDE, from w2.99.0 (Asim,
+       19 Nov 2026: Approve from the email waited on the sheet). Written on
+       this server, laid over the rota here at once, and the sheet knocked
+       after the answer. It also spends this link. Only a request this
+       server has never heard of falls through to the old way below. */
+    const viaApp = await coordAct(env, { name: driver.name, role: driver.role || "" }, {
+      id: "link-" + token.slice(0, 24), kind: "decide", requestId: String(subject.id || ""),
+      choice: choice, cover: choice === "Approved" ? String((body && body.cover) || "").trim() : ""
+    });
+    if (viaApp && viaApp.ok) {
+      let given = "";
+      try {
+        const a = await env.DB.prepare("SELECT body FROM coord_actions WHERE id=?")
+          .bind("link-" + token.slice(0, 24)).first();
+        given = String((JSON.parse((a && a.body) || "{}") || {}).cover || "");
+      } catch (e) {}
+      return json({ ok: true, kind: "rota", by: driver.name, choice: choice,
+                    cover: given, applied: true, request: subject.id || "" });
+    }
+    if (viaApp && viaApp.error && !/not on the live server/.test(String(viaApp.error))) {
+      return json({ ok: false, error: "refused", message: String(viaApp.error) });
+    }
 
     /* THE NAME IS CHECKED AGAINST THE REGISTER, not taken on trust from the
        request. A page can send anything; only somebody the spreadsheet knows

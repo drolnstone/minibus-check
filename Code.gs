@@ -7206,7 +7206,7 @@ function handleRotaRequest(rq) {
   tellCoordinatorPhones({ id: "req|" + (rq.id || (rq.driver + "|" + rq.date)), kind: "request",
     urgent: true,
     title: "Rota request from " + rq.driver,
-    body: (rq.type || "A change") + " for " +
+    body: (rq.type || "Cover") + " for " +
           Utilities.formatDate(sunday, Session.getScriptTimeZone(), "EEEE d MMMM") +
           ". Decide it in the coordinator's app.",
     not: [rq.driver] });
@@ -14865,7 +14865,7 @@ function notifyRotaRequest(rq, sunday) {
   var when = Utilities.formatDate(sunday, Session.getScriptTimeZone(), "EEEE d MMMM yyyy");
 
   var lines = [
-    "<b>" + esc(rq.driver) + "</b> has asked for a change to the driving rota.",
+    "<b>" + esc(rq.driver) + "</b> has asked for cover on the driving rota.",
     "&nbsp;",
     "<b>Sunday:</b> " + esc(when),
     "<b>Request:</b> " + esc(rq.type || ""),
@@ -14925,7 +14925,7 @@ function notifyRotaRequest(rq, sunday) {
      blank line behind it, and two skipped fields left two. Blank lines are a
      plain text email's only punctuation. A request with no swap on it was
      showing three in a row. */
-  var prows = [rq.driver + " has asked for a change to the driving rota.", "",
+  var prows = [rq.driver + " has asked for cover on the driving rota.", "",
                "Sunday:  " + when,
                "Request: " + (rq.type || ""),
                "Reason:  " + (rq.reason || "")];

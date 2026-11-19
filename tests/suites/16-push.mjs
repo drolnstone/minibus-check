@@ -251,5 +251,27 @@ export default async function (root) {
     a.eq(G.calls.filter((c) => c.url === EXEC).length, 0);
   });
 
-  return s;
+    /* w2.99.0 (Asim, 19 Nov 2026): a request the live server already holds is
+     decided from the email exactly as from the Coordinator App, on this
+     server at once, with no wait on the sheet. */
+  s.test("a request the live server holds is decided here, without waiting on the sheet", async (a) => {
+    const { db, env } = await fresh();
+    const key = W.runSunday();
+    await W.handleRotaRequest(env, { id: "REQ-LIVE", date: key, driver: "Bro Trevor",
+      type: "Holiday / planned leave", reason: "Work", swapWith: "", swapDate: "", agreed: false });
+    G.reset();
+    const { token, out } = await decide(env, { subject: { id: "REQ-LIVE", sunday: key } });
+    a.eq(out.ok, true, JSON.stringify(out));
+    a.eq(out.applied, true);
+    a.eq(out.cover, "Bro Keith");
+    a.eq(G.calls.filter((c) => c.url === EXEC).length, 0, "it waited on the sheet");
+    const act = db._rows("SELECT kind, by_name FROM coord_actions WHERE id=?", "link-" + token.slice(0, 24))[0] || {};
+    a.eq(act.kind, "decide", "not the Coordinator App's decide");
+    a.eq(act.by_name, "Bro Arthur");
+    a.eq(syncedOf(db, token), 1, "the drain would carry it a second time");
+    const again = await body(await W.handleLinkDo(env, { token, pin: "1234", choice: "Approved" }));
+    a.eq(again.error, "used");
+  });
+
+return s;
 }
