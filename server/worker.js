@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.96.0";
+const SCRIPT_VERSION = "w2.97.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -6088,6 +6088,11 @@ function notLeftDue(all, key, route, now) {
   return (late >= NOT_LEFT_AFTER_MS && late <= NOT_LEFT_UNTIL_MS) ? d.time : null;
 }
 
+function lateBody(due, driver, phones) {
+  return "Due " + due + "." + (driver ? " Driver: " + driver + "." : "") +
+         " Passengers told: " + trailPhones(phones) + ".";
+}
+
 async function wakeNotLeft(env) {
   const key = runSunday();
   const all = await getStops(env);
@@ -6112,11 +6117,19 @@ async function wakeNotLeft(env) {
       }
     }
     n += r;
-    /* Critical, so on the coordinators' trail (Asim): someone may need to
-       ring the driver. */
-    await trail(env, { once: "p|late|" + key + "|" + route,
-                       title: route + ": No word yet that the bus has left Church",
-                       body: "To " + trailPhones(r, "passenger") + "." });
+    /* THE COORDINATORS ARE TOLD THE BUS HAS NOT STARTED, from w2.97.0
+       (Asim, 19 Nov 2026: "you are told, not only the passengers"). Before
+       this they had only the "Sent:" line for the passengers' alert. Now it
+       is a coordinator alert of its own, in place of that line, so it is one
+       push, not two: on the Alerts list as new, and through the same chain
+       as the trail (Coordinator App, else Driver App, else email). Once per
+       route, plain facts, never urgent-red. The driver, if a coordinator, is
+       left out: their own "Time to set off" and "has not gone out" stand. */
+    const driver = (state && state.driver) || rotaDriverFor(rotaRow, route);
+    await trail(env, { once: "p|late|" + key + "|" + route, plain: true, kind: "late",
+                       title: route + ": Not started yet",
+                       body: lateBody(notLeftDue(all, key, route, now), driver, r),
+                       not: driver ? [driver] : [] });
   }
   return n;
 }
@@ -7324,10 +7337,12 @@ async function trail(env, t) {
     if (t.once && !(await trailClaim(env, String(t.once)))) return 0;
     const msg = coordAlertOf({
       id: "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      kind: "trail", title: "Sent: " + t.title, body: t.body || "",
+      kind: t.kind || "trail", title: (t.plain ? "" : "Sent: ") + t.title, body: t.body || "",
       not: Array.isArray(t.not) ? t.not : []
     });
     if (!msg) return 0;
+    /* A coordinator alert in its own words (plain) is on the Alerts list too. */
+    if (t.plain) { try { await coordLogAdd(env, msg); } catch (e) {} }
     const r = await deliverTrail(env, msg);
     if (r.missed.length) {
       await trailKeep(env, TRAIL_RETRY_KEY, { msg, names: r.missed, line: t.line || "", at: Date.now() });
