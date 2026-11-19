@@ -791,7 +791,7 @@ add(figure("rota", "Driving rota", [
     "**Earlier Sundays** adds past Sundays above, twelve at a time (**Earlier still**).",
     "**This Sunday** marks the coming Sunday, or today on a Sunday.",
     "**You** marks a route you are down for: driving, covering, or scheduled with somebody covering you.",
-    "**Request change**, on your own Sundays (section 6.2)."]))
+    "**Request cover**, on your own Sundays (section 6.2)."]))
 p("Each Sunday is a card: the date on the left, then one line per route with the driver’s name, **North** or "
   "**South**, and the bus for that route that day.")
 add(figures([("rota-cards", "Covering, and a protected Sunday"), ("rota-swap", "A swap")]))
@@ -809,9 +809,9 @@ add(figure("rota-mine", "My duties", [
     P("**Done** at the bottom, or **Back** at the top, returns to the home screen. On a long list a round **↑** button at "
       "the bottom right takes you back to the top.")]))
 sec("6.2", "Asking for a change")
-p("Tap **Request change** on one of your own Sundays. It is there on every Sunday you are down for, as driver or cover, "
+p("Tap **Request cover** on one of your own Sundays. It is there on every Sunday you are down for, as driver or cover, "
   "from this Sunday on, until you have asked about it.")
-add(figure("rota-request", "Request a change", [
+add(figure("rota-request", "Request cover", [
     P("The sheet opens with the date and your part in it: **Sunday 27 September 2026 · You are scheduled on North "
       "Liverpool this Sunday.** or … **You are covering South Liverpool this Sunday for {SOUTH3}.**"),
     P("**Request type**: **Holiday / planned leave**, **Unavailable**, **Request a swap** or **Other**."),
@@ -851,7 +851,7 @@ p("If your PIN is not keyed, the sheet shows **Confirm it is you.** **This reque
 sec("6.3", "After you have asked")
 add(figure("rota-after-ask", "The request on the card", [
     "**Holiday / planned leave** **Pending** · **Asked by Bro Sample**",
-    P("The request appears on the card straight away, and **Request change** goes: you get one request per Sunday, "
+    P("The request appears on the card straight away, and **Request cover** goes: you get one request per Sunday, "
       "whatever the answer."),
     P("Nothing on the rota changes until the coordinator decides. You are still down for that Sunday until then.")]))
 p("When he decides, the card shows **Approved** or **Rejected**. If the Drivers tab has your email address you are emailed "

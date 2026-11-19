@@ -1667,7 +1667,7 @@ full email already.
 |---|---|---|---|
 | A walkaround came in — stopped / defect but driveable / advisory only / nothing wrong but something to arrange / already authorised | the second a driver signs and sends | it is the record that a bus went out, and the stopped one needs a decision in minutes | yes |
 | Authorised to run | a bus is released, from the app or the email link | says who released it and that the defect is still open | yes |
-| Rota change request | a driver taps Request change | a request is a question and needs an answer before that Sunday | yes |
+| Rota change request | a driver taps Request cover | a request is a question and needs an answer before that Sunday | yes |
 | Went out unchecked | Sunday 10:45, once, only buses with no check | both routes are already out — a prompt to inspect on return, not to catch a bus | yes |
 | Overbooked | the 5-minute sync when a booking lands; hourly regardless | a bus can only be moved while there is still time | yes |
 | Weekly summary | Sunday 19:00 | the week in one place, unasked | yes |

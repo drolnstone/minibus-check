@@ -1440,7 +1440,7 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
          eyebrow used to be fixed text, so the Stops and bookings screen was
          headed "Rota request" no matter what the title underneath said. -->
     <p class="eyebrow" id="rotaModalEyebrow">Rota request</p>
-    <h2 id="rotaModalTitle">Request a change</h2>
+    <h2 id="rotaModalTitle">Request cover</h2>
     <div id="rotaModalBody"></div>
   </div>
 </div>
@@ -1818,7 +1818,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.177.0";
+var APP_VERSION = "v1.178.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -5341,7 +5341,7 @@ var rotaFetchedPast = 0;
 /* fresh skips the live server and asks the spreadsheet directly.
 
    Used at the one moment the shelf is knowingly behind: straight after this
-   phone has written something to the rota. A driver who taps Request change
+   phone has written something to the rota. A driver who taps Request cover
    and does not see "change requested" appear will tap it again, and the
    second request is a row somebody has to read on Monday. Everyone else picks
    the change up on the next push, within five minutes. */
@@ -8148,7 +8148,7 @@ function rotaPaint(keepPosition){
       var actual=row.actual||primary;
 
       /* Worked out here rather than further down, because My duties and the
-         Request change button both need it. A South driver's Sunday used to
+         Request cover button both need it. A South driver's Sunday used to
          count for neither: filtering to My duties showed them an empty list,
          and no request button ever appeared on the Sunday they were actually
          driving, so the whole holiday and swap route was shut to them. */
@@ -8194,7 +8194,7 @@ function rotaPaint(keepPosition){
          button entirely, on a duty that is nothing to do with them. */
       var alreadyAsked=!!rotaRequestFor(key,my);
       var action=(!past && mine && !alreadyAsked)
-        ? '<button class="rota-edit" type="button" data-rota-request="'+key+'">Request change</button>' : '';
+        ? '<button class="rota-edit" type="button" data-rota-request="'+key+'">Request cover</button>' : '';
 
       /* One row per route, drawn identically. The only thing that varies is
          the chip and, when it applies, a plain line under the name.
@@ -10058,7 +10058,7 @@ function rotaOpenRequest(key){
      the first. */
   rotaReqId = "rq" + Date.now() + "-" + Math.random().toString(36).slice(2,7);
   $("rotaModalEyebrow").textContent="Rota request";
-  $("rotaModalTitle").textContent="Request a change";
+  $("rotaModalTitle").textContent="Request cover";
 
   /* The button also appears when somebody is covering a Sunday that was
      never theirs, and telling them they are scheduled as primary is simply
