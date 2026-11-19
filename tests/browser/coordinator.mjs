@@ -2422,6 +2422,31 @@ if (want("C63")) {
   await p.ctx.close();
 }
 
+/* C64 — Parked mileage not received (v1.177.0, Asim, 19 Nov 2026): the
+   first-screen line shows on its Sunday and is gone after midnight; the bus
+   page keeps Record. */
+if (want("C64")) {
+  const p = await page(env);
+  try {
+    await p.signIn(PIN);
+    const r = await p.pg.evaluate(() => {
+      const t = calToday(), reg = (D.buses || [])[0] ? D.buses[0].reg : "AB12 CDE";
+      const line = () => needs().some((x) => /parked mileage not received/.test(x.text || ""));
+      D.parkKey = [{ reg: reg, day: t, checkId: "c-park", miles: 57000 }];
+      const realHhmm = hhmm; hhmm = function(){ return "15:00"; };
+      const sameDay = line();
+      D.parkKey = [{ reg: reg, day: rnAddDays(t, -1), checkId: "c-park", miles: 57000 }];
+      const nextDay = line(), stillOwed = parkOwed().length;
+      hhmm = realHhmm;
+      return { sameDay, nextDay, stillOwed };
+    });
+    const ok = r.sameDay && !r.nextDay && r.stillOwed === 1;
+    check("C64", "parked mileage line: on its Sunday after 14:00; gone the next day; Record still owed for the bus page",
+          ok && !p.errs.length, JSON.stringify({ r, errs: p.errs }).slice(0, 900));
+  } catch (e) { stopped("C64", e); }
+  await p.ctx.close();
+}
+
 await done();
 cleanup(ROOT);
 const bad = results.filter((r) => !r.ok);
