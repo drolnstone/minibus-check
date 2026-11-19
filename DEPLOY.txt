@@ -1,18 +1,20 @@
 MINIBUS
 =======
-  pages v1.177.0 · server w2.96.0 · sheet v1.143.0
+  pages v1.177.0 · server w2.97.0 · sheet v1.143.0
 
-YOU ARE ON   app v1.176.0 · server w2.96.0 · sheet v1.143.0
-GOING TO     app v1.177.0 · server w2.96.0 · sheet v1.143.0
+YOU ARE ON   app v1.177.0 · server w2.96.0 · sheet v1.143.0
+GOING TO     app v1.177.0 · server w2.97.0 · sheet v1.143.0
 
-Coordinator App first screen: "(reg): parked mileage not received." with
-Record now goes at midnight London time at the end of the Sunday it was
-missed. Record stays on the bus page until the figure is keyed or the next
-vehicle check stands in. The 14:00 to 15:00 driver reminders are unchanged.
+A bus not started 5 minutes after its leaving time (Bus Stops tab): the
+coordinators get one alert per route, "North: Not started yet." with
+"Due 09:55. Driver: (name). Passengers told: N phones." It replaces the
+"Sent: North: No word yet that the bus has left Church" line, so it is
+one push, not two, and shows as New on the Alerts list. Coordinator App,
+else Driver App, else email. A coordinator driving that route is left out.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.177.0 · w2.96.0 · v1.143.0.
-B. Monday morning after a missed parked mileage: the first screen has no
-   "parked mileage not received" line; the bus page still shows Record.
+A. Coordinator App, App info: v1.177.0 · w2.97.0 · v1.143.0.
+B. A Sunday where Start is tapped more than 5 minutes late: one
+   "Not started yet" alert per route, nothing red.
