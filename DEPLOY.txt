@@ -1,20 +1,21 @@
 MINIBUS
 =======
-  pages v1.177.0 · server w2.97.0 · sheet v1.143.0
+  pages v1.177.0 · server w2.98.0 · sheet v1.143.0
 
-YOU ARE ON   app v1.177.0 · server w2.96.0 · sheet v1.143.0
-GOING TO     app v1.177.0 · server w2.97.0 · sheet v1.143.0
+YOU ARE ON   app v1.177.0 · server w2.97.0 · sheet v1.143.0
+GOING TO     app v1.177.0 · server w2.98.0 · sheet v1.143.0
 
-A bus not started 5 minutes after its leaving time (Bus Stops tab): the
-coordinators get one alert per route, "North: Not started yet." with
-"Due 09:55. Driver: (name). Passengers told: N phones." It replaces the
-"Sent: North: No word yet that the bus has left Church" line, so it is
-one push, not two, and shows as New on the Alerts list. Coordinator App,
-else Driver App, else email. A coordinator driving that route is left out.
+Stop waiting time learned from real runs. The live estimate used to add
+75 seconds at every stop the bus calls at. From now on the server measures
+how long the bus stands at each stop, from the driving phone's location
+(first fix within 80 m of the stop's pin, first fix after that beyond it),
+at stops marked Picked up. Once a stop has 3 such stands, the estimate uses
+the middle of its last 8; until then, 75 seconds as before. Nobody here
+waits are not counted. Nothing on any screen changes, no setting is added,
+and the Bus Stops timetable is not touched. The first Sundays after the
+merge only collect; estimates change from about the third Sunday.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.177.0 · w2.97.0 · v1.143.0.
-B. A Sunday where Start is tapped more than 5 minutes late: one
-   "Not started yet" alert per route, nothing red.
+A. Coordinator App, App info: v1.177.0 · w2.98.0 · v1.143.0.
