@@ -1,9 +1,9 @@
 # The doodle videos
 
-The scripts that make the three Sunday Bus doodle videos for passengers and
-the one for drivers: photographs of the real pages, the animation, and a
-check that holds the words to the code. One command turns this folder into
-four MP4s.
+The scripts that make the three Sunday Bus doodle videos for passengers, the
+one for drivers and the overview of the whole system: photographs of the real
+pages, the animation, and a check that holds the words to the code. One
+command turns this folder into the MP4s.
 
 1. **Put it on your phone** (about 1:30): the WhatsApp link, Add to your
    phone on Android and iPhone, opening it from the home screen, turning
@@ -27,10 +27,17 @@ And for drivers:
 
 And for showing someone new:
 
-5. **Sunday Bus overview** (about 2:50): the job, the three apps, the server
-   and the Google Sheet, one Sunday from booking through the run to Church,
-   and what it achieves. `video/build.sh overview`. It reuses the passenger
-   and driver photographs; the coordinator app is drawn. `clips-overview.js`.
+5. **RCCG Dominion Assembly Liverpool Transportation Management System**
+   (about 4:00), the overview of the whole system from A to Z: the job, the
+   three apps, the live server and the sheet and its tabs, drivers and the
+   rota (cover, hand over, PINs), a passenger's week (booking, reminders,
+   coordinator bookings), one Sunday from the 07:30 alerts and the vehicle
+   check through the run to Church and the parked fuel and mileage, the
+   coordinator's week (run record, defects, bus dates, Vehicle Log, messages,
+   emergency calls, Have a look), the jobs that run by themselves (duty
+   reminders, the Sunday run report, the weekly summary, the 3am tidy-up), and
+   what it achieves. `video/build.sh overview`, `clips-overview.js`. Its coordinator
+   screens are photographed by the coordinator browser checks.
 
 Captions only, no voice. Portrait, 1080 x 1920, each under 6 MB, so they send
 on WhatsApp as they are.
@@ -38,7 +45,10 @@ on WhatsApp as they are.
 **Nothing from the spreadsheet is needed or kept here.** The stops are made up:
 `video/fake-stops.json` is the timetable of `tests/browser/real.json` (same
 routes, ids and times) with invented stop names and ZZ postcodes, so no real
-address appears on screen; the other
+address appears on screen. The buses' registrations are made up too:
+`mask.mjs` swaps them (and, on the coordinator's pictures, the real stop names
+the coordinator checks run on) in every photograph, and prints REAL WORDS LEFT
+if any word of a real stop name is still showing. The people are invented, the other
 passengers' seat counts are invented, and the phone number typed in is
 07700 900123, from the range Ofcom keeps for examples. The photographs, the
 fetched fonts and the videos go in `video/build/`, which git ignores. The
@@ -71,9 +81,12 @@ driver video (`video/build.sh preview-driver` for its stills only). If only capt
 | `build.sh` | Runs everything below, in order, after fetching rough.js, the fonts and ffmpeg once. |
 | `check_words.py` | Holds every blue phrase to the page it shows (`sunday/index.html`, or `index.html` for the driver video) and every notification to `server/worker.js`. Must end `unexplained after the hand-read list: 0`. |
 | `shots.mjs` | The passenger page at each stage, one scene each, on the real page with a stand-in for the live server. Records where every ringed button is (`build/shots/marks.json`). |
-| `shots-driver.mjs` | The same for the driver app (`index.html`), with the stand-in servers of `tests/browser/lib.mjs`: Bro Sample on North in NH56 FWP, from signing in to the parked mileage. |
+| `shots-driver.mjs` | The same for the driver app (`index.html`), with the stand-in servers of `tests/browser/lib.mjs`: Bro Sample on North (in the pictures AB12 CDE), from signing in to the parked mileage. |
 | `clips.js` | The three passenger videos, scene by scene: every caption, every notification, every ring and close-up. **This is the file to edit.** |
 | `clips-driver.js` | The driver video, the same way. |
+| `clips-overview.js` | The overview, the same way, from the passenger, driver and coordinator photographs (`c-*.png`, copied in by `build.sh` from the coordinator browser checks). |
+| `fake-stops.json` | The made-up stops the passenger and driver photographs run on (`MINIBUS_REAL`). |
+| `mask.mjs` | Loaded before every photograph script (`node --import`): made-up registrations and stop names in each picture, the page put back straight after. |
 | `engine.js` | The drawing: rough.js shapes drawn stroke by stroke, handwriting that writes itself, the pencil, phones, rings, close-ups and notification cards. |
 | `stage.html` | The 540 x 960 page the videos are drawn on. |
 | `render.mjs` | Photographs the stage frame by frame and hands the frames to ffmpeg. Stops on a page error or a caption line running off the edge. |
