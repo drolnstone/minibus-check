@@ -1,21 +1,21 @@
 MINIBUS
 =======
-  pages v1.177.0 · server w2.98.0 · sheet v1.143.0
+  pages v1.177.0 · server w2.98.0 · sheet v1.144.0
 
-YOU ARE ON   app v1.177.0 · server w2.97.0 · sheet v1.143.0
-GOING TO     app v1.177.0 · server w2.98.0 · sheet v1.143.0
+YOU ARE ON   app v1.177.0 · server w2.98.0 · sheet v1.143.0
+GOING TO     app v1.177.0 · server w2.98.0 · sheet v1.144.0
 
-Stop waiting time learned from real runs. The live estimate used to add
-75 seconds at every stop the bus calls at. From now on the server measures
-how long the bus stands at each stop, from the driving phone's location
-(first fix within 80 m of the stop's pin, first fix after that beyond it),
-at stops marked Picked up. Once a stop has 3 such stands, the estimate uses
-the middle of its last 8; until then, 75 seconds as before. Nobody here
-waits are not counted. Nothing on any screen changes, no setting is added,
-and the Bus Stops timetable is not touched. The first Sundays after the
-merge only collect; estimates change from about the third Sunday.
+Sunday run report: from 16:00 London time each Sunday, one email per route
+to the coordinators (COORDINATOR_EMAIL): bus and driver, time left Church
+and minutes late, each marked or booked stop with its time, minutes late
+and Picked up, Nobody there or not marked (with seats booked), time back
+at Church or how the run ended, and the parked mileage and fuel, or
+"Parked mileage not received." Once per route; a route with no run sends
+nothing. The driver reminders still end at 15:00.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.177.0 · w2.98.0 · v1.143.0.
+A. Coordinator App, App info: v1.177.0 · w2.98.0 · v1.144.0.
+B. Sunday after 16:00: one "North run, dd/mm/yyyy" and one "South run,
+   dd/mm/yyyy" email in the coordinator inbox.

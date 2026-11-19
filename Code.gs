@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.143.0";
+var SCRIPT_VERSION = "v1.144.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -5858,6 +5858,7 @@ function liveSync() {
   try { watchServer(); } catch (err) {}
   try { alertsNudge(); } catch (err) {}
   try { jobsReminder(); } catch (err) {}
+  try { runReport(); } catch (err) {}
 }
 
 /* JOBS STILL TO ARRANGE, from v1.138.0 (Asim, 14 Nov 2026). What the last
@@ -5887,6 +5888,170 @@ function jobsReminder(nowMs) {
             title: "Still to arrange", body: body };
   safetyAlert(a);
   return a;
+}
+
+/* THE SUNDAY RUN REPORT, from v1.144.0 (Asim, 19 Nov 2026). After the
+   morning run, one email per route to the coordinators (safetyTo, so
+   COORDINATOR_EMAIL): time left Church, each marked or booked stop with
+   its time, minutes late and Picked up or Nobody there, time back, and the
+   parked figures. Sent from 16:00 London on the Sunday (Asim, 19 Nov 2026:
+   on first Sundays a bus can be back after 15:00, when the driver
+   reminders have stopped), so a figure keyed by then is in it; one not
+   keyed reads "not received". Once per route per Sunday; a route
+   with no run that day sends nothing; a run not yet ended waits. */
+var RUN_REPORT_FROM = "16:00";
+
+/* Minutes off the timetable, in words. Positive is behind. */
+function runLateWords(off) {
+  if (off === null || off === undefined || off === "" || isNaN(Number(off))) return "";
+  var n = Math.round(Number(off));
+  if (n === 0) return "on time";
+  return Math.abs(n) + " min " + (n > 0 ? "late" : "early");
+}
+
+/* Each route's run on that Sunday, from Trip Events, with its stops, bus
+   and parked figures. Only runs that have a start; the latest trip wins. */
+function runReports(ss, key) {
+  var sh = ss.getSheetByName(TRIP_SHEET);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var c = tripColsSoft(sh);
+  var tz = "Europe/London";
+  var hhmm = function (ms) { return Utilities.formatDate(new Date(ms), tz, "HH:mm"); };
+  var last = sh.getLastRow(), first = Math.max(2, last - TRIP_SCAN_ROWS + 1);
+  var trips = {};
+  sh.getRange(first, 1, last - first + 1, sh.getLastColumn()).getValues().forEach(function (r) {
+    if (anyToKey(at1(r, c.sunday)) !== key) return;
+    if (/undone/i.test(String(at1(r, c.status) || ""))) return;
+    var hap = at1(r, c.happened);
+    var at = hap instanceof Date ? hap.getTime() : 0;
+    if (!at) return;
+    var route = String(at1(r, c.route) || "").trim();
+    var id = String(at1(r, c.trip) || "").trim() || route;
+    var t = trips[id] = trips[id] || { route: route, start: null, end: null, stops: {}, drivers: [], reg: "" };
+    var drv = String(at1(r, c.driver) || "").trim();
+    if (drv && t.drivers.indexOf(drv) === -1) t.drivers.push(drv);
+    t.reg = String(at1(r, c.reg) || "").trim() || t.reg;
+    var ev = String(at1(r, c.event) || "").trim().toLowerCase();
+    var raw = at1(r, c.offset);
+    var off = (raw === "" || raw === null || raw === undefined || isNaN(Number(raw))) ? null : Number(raw);
+    if (ev === "start") { t.start = { at: at, off: off }; return; }
+    if (ev === "end") {
+      t.end = { at: at, status: String(at1(r, c.status) || "").toLowerCase(),
+                by: String(at1(r, c.endedBy) || "").trim() };
+      return;
+    }
+    if (["pickup", "picked", "empty", "none"].indexOf(ev) === -1) return;
+    var sid = String(at1(r, c.stopId) || "").trim();
+    if (!sid) return;
+    if (off === null) {
+      var sch = at1(r, c.scheduled);
+      if (sch instanceof Date) off = Math.round((at - sch.getTime()) / 60000);
+    }
+    t.stops[sid] = { at: at, off: off, empty: ev === "empty" || ev === "none",
+                     name: String(at1(r, c.stop) || "").trim() };
+  });
+
+  /* The latest started trip of each route. */
+  var byRoute = {};
+  Object.keys(trips).forEach(function (id) {
+    var t = trips[id];
+    if (!t.start || !t.route) return;
+    if (!byRoute[t.route] || byRoute[t.route].start.at < t.start.at) byRoute[t.route] = t;
+  });
+
+  var stops = readBusStops(ss);
+  var booked = {};
+  readBookings(ss, key).forEach(function (b) {
+    booked[b.stopId] = (booked[b.stopId] || 0) + (Number(b.seats) || 0);
+  });
+
+  return Object.keys(byRoute).sort().map(function (route) {
+    var t = byRoute[route];
+    var list = [];
+    var seen = {};
+    stops.forEach(function (s) {
+      if (s.route !== route || s.arrival) return;
+      var got = t.stops[s.id], n = booked[s.id] || 0;
+      if (!got && !n) return;
+      seen[s.id] = true;
+      list.push({ name: (got && got.name) || s.stop, booked: n, got: got || null });
+    });
+    Object.keys(t.stops).forEach(function (sid) {
+      if (seen[sid]) return;
+      list.push({ name: t.stops[sid].name || sid, booked: booked[sid] || 0, got: t.stops[sid] });
+    });
+    var back = "";
+    if (t.end) {
+      if (t.end.status.indexOf("(auto)") !== -1) back = "Back at Church " + hhmm(t.end.at) + ".";
+      else if (t.end.status.indexOf("(server)") !== -1) back = "Arrival at Church not recorded. Run ended " + hhmm(t.end.at) + " by the server.";
+      else back = "Arrival at Church not recorded. Run ended " + hhmm(t.end.at) +
+                  (t.end.by ? " by " + t.end.by : "") + ".";
+    }
+    return { route: route, reg: t.reg, drivers: t.drivers, ended: !!t.end,
+             left: "Left Church " + hhmm(t.start.at) +
+                   (runLateWords(t.start.off) ? ", " + runLateWords(t.start.off) : "") + ".",
+             stops: list.map(function (x) {
+               var b = x.booked ? " (" + x.booked + " booked)" : "";
+               if (!x.got) return x.name + ": not marked" + b + ".";
+               var lw = runLateWords(x.got.off);
+               return x.name + ": " + hhmm(x.got.at) + (lw ? ", " + lw : "") + ". " +
+                      (x.got.empty ? "Nobody there" : "Picked up") + b + ".";
+             }),
+             back: back, parked: runParked(ss, t.reg, key) };
+  });
+}
+
+/* The parked figures off that Sunday's walkaround of the bus. */
+function runParked(ss, reg, key) {
+  var none = "Parked mileage not received.";
+  var sh = ss.getSheetByName(CHECKS_SHEET);
+  if (!reg || !sh || sh.getLastRow() < 2) return none;
+  var c = colsSoft(sh, CHECKS_SHEET);
+  if (!c.reg || !c.parked) return none;
+  var want = String(reg).trim().toUpperCase(), hit = null;
+  var last = sh.getLastRow(), first = Math.max(2, last - MILEAGE_SCAN_ROWS + 1);
+  sh.getRange(first, 1, last - first + 1, sh.getLastColumn()).getValues().forEach(function (r) {
+    if (String(at1(r, c.reg) || "").trim().toUpperCase() !== want) return;
+    if (anyToKey(at1(r, c.date)) !== key) return;
+    if (Number(at1(r, c.parked))) hit = r;
+  });
+  if (!hit) return none;
+  var at = String(at1(hit, c.parkedAt) || "").trim();
+  var fuel = String(at1(hit, c.parkedFuel) || "").trim();
+  return "Parked mileage " + String(Math.round(Number(at1(hit, c.parked)))).replace(/\B(?=(\d{3})+(?!\d))/g, ",") +
+         (at && at !== PARKED_FROM_CHECK ? ", keyed " + at : "") + "." +
+         (fuel ? " Parked fuel " + fuel + "." : "");
+}
+
+function runReportText(r, key) {
+  return [r.route + ", " + ukDay(key) + ".",
+          (r.reg ? "Bus " + r.reg + ". " : "") +
+          (r.drivers.length ? (r.drivers.length > 1 ? "Drivers " : "Driver ") + r.drivers.join(", ") + "." : ""),
+          r.left, ""]
+    .concat(r.stops.length ? r.stops : ["No stops marked or booked."])
+    .concat(["", r.back, r.parked]).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function runReport(nowMs) {
+  var now = new Date(nowMs || Date.now()), tz = "Europe/London";
+  if (Utilities.formatDate(now, tz, "EEE d MMM").indexOf("Sun") !== 0) return null;
+  if (Utilities.formatDate(now, tz, "HH:mm") < RUN_REPORT_FROM) return null;
+  var key = Utilities.formatDate(now, tz, "yyyy-MM-dd");
+  var props = PropertiesService.getScriptProperties();
+  var done = {};
+  try { done = JSON.parse(props.getProperty("runReportSent") || "{}"); } catch (e) { done = {}; }
+  if (done.key !== key) done = { key: key, routes: [] };
+  var to = safetyTo();
+  if (!to) return null;
+  var sent = [];
+  runReports(SpreadsheetApp.getActiveSpreadsheet(), key).forEach(function (r) {
+    if (!r.ended || done.routes.indexOf(r.route) !== -1) return;
+    sendMail({ to: to, subject: r.route + " run, " + ukDay(key), body: runReportText(r, key) });
+    done.routes.push(r.route);
+    props.setProperty("runReportSent", JSON.stringify(done));
+    sent.push(r.route);
+  });
+  return sent;
 }
 
 /* DRIVERS WITH ALERTS ON NO PHONE, emailed once a week, from v1.135.0
