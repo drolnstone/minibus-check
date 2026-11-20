@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.100.0";
+const SCRIPT_VERSION = "w2.101.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -11984,29 +11984,63 @@ async function actRotaPlan(env, me, act) {
                       JSON.stringify([plan.start, plan.north, plan.south, plan.over]);
   if (!changes.length && same) return { ok: false, error: "Nothing to change." };
 
-  /* Told: the drivers whose Sunday changes in the next seven days, as the
-     sheet's duty email is. */
+  /* The coordinators' line names the Sundays in the next seven days. */
   const soon = keyAddWeeks(londonKey(new Date()), 1);
-  const near = changes.filter((c) => c.sunday <= soon);
-  const tell = [];
   const lines = [];
-  for (const c of near) {
+  const affected = [];
+  for (const c of changes) {
     for (const [f, rt] of [["north", "North"], ["south", "South"]]) {
       if (!(f in c.set)) continue;
-      lines.push(shortDay(c.sunday) + " " + rt + ": " + (c.set[f] || "nobody") + (c.was[f] ? " (was " + c.was[f] + ")" : "") + ".");
-      if (c.set[f]) tell.push(c.set[f]);
-      if (c.was[f]) tell.push(c.was[f]);
+      if (c.sunday <= soon) lines.push(shortDay(c.sunday) + " " + rt + ": " + (c.set[f] || "nobody") + (c.was[f] ? " (was " + c.was[f] + ")" : "") + ".");
+      if (c.set[f]) affected.push(c.set[f]);
+      if (c.was[f]) affected.push(c.was[f]);
     }
   }
   const words = "Rota from " + shortDay(start) + ": " +
     (changes.length ? changes.length + " Sunday" + (changes.length === 1 ? "" : "s") + " changed." : "pattern saved.") +
     (lines.length ? " " + lines.join(" ") : "");
   const keep = Object.assign({}, plan, { at: Date.now(), by: me.name });
-  return { ok: true, sunday: start, tell: tell, words: words,
+  /* Every driver whose Sundays change, on any date, is told once on his own
+     (w2.101.0, Asim, 20 Nov 2026), not with the coordinators' line. */
+  return { ok: true, sunday: start, tell: [], words: words,
            body: { sunday: start, plan: plan, changes: changes.map((c) => ({ sunday: c.sunday, set: c.set })) },
            stmts: [cachePut(env, "rota_plan", keep)],
            reply: { changed: changes.length },
-           after: () => reapplyRawRota(env, changes.map((c) => c.sunday)) };
+           after: async () => {
+             await reapplyRawRota(env, changes.map((c) => c.sunday));
+             try { await planTellDrivers(env, me, affected); } catch (e) {}
+           } };
+}
+
+/* "Rota updated" to each driver named before or after on a Sunday the plan
+   changed: his Driver App, and an email from the sheet when no phone of his
+   took it. Coordinators have the Change by line already. */
+const PLAN_TELL = { title: "Rota updated", body: "Check your Sundays in Driving rota." };
+async function planTellDrivers(env, me, names) {
+  const q = await env.DB.prepare("SELECT name FROM drivers WHERE active=1").all();
+  const on = (q.results || []).map((d) => String(d.name || "").trim().toLowerCase());
+  const who = (await changeDriverNames(env, "rotaplan", { tell: names }))
+    .filter((n) => !sameName(n, me.name) && on.indexOf(n.toLowerCase()) !== -1);
+  if (!who.length) return { pushed: [], mailed: [] };
+  const msg = coordAlertOf({ id: "plan-" + Date.now().toString(36), kind: "change",
+                             title: PLAN_TELL.title, body: PLAN_TELL.body });
+  const one = Object.assign({}, msg, { url: "./" });
+  const keys = await vapidKeys(env);
+  const heard = [];
+  for (const n of who) {
+    for (const sub of await driverWakeSubs(env, n)) {
+      const box = ((await cacheGet(env, coordBoxKey(sub.endpoint))) || [])
+        .filter((m) => m && Date.now() - (Number(m.at) || 0) < COORD_ALERT_MAX_AGE_MS);
+      box.push(one);
+      while (box.length > COORD_BOX_MAX) box.shift();
+      await cachePut(env, coordBoxKey(sub.endpoint), box).run();
+      if (await pushOne(env, sub, keys)) { if (heard.indexOf(n) === -1) heard.push(n); }
+    }
+  }
+  const missed = who.filter((n) => heard.indexOf(n) === -1);
+  if (missed.length) await contactMail(env, me, msg, missed);
+  if (heard.length) { try { await sentNote(env, { g: "plan|" + msg.id, title: msg.title, who: heard }); } catch (e) {} }
+  return { pushed: heard, mailed: missed };
 }
 
 /* What a hand over needs, checked before anything is written: today's run on

@@ -74,8 +74,18 @@ export default async function (root) {
       const plan = await W.cacheGet(env, "rota_plan");
       a.eq(plan.start, "2026-11-29");
       a.eq(plan.south.length, 8);
-      const body = JSON.parse(db._one("SELECT body FROM coord_actions ORDER BY seq DESC LIMIT 1").body);
+      const body = JSON.parse(db._one("SELECT body FROM coord_actions WHERE kind='rotaplan'").body);
       a.ok(body.changes.every((c) => c.sunday >= "2026-11-29"), JSON.stringify(body.changes));
+      /* w2.101.0: every driver whose Sundays changed is told once; no phone
+         took it here, so the sheet is asked to email them. Not a driver who is not
+         active, and not a North driver whose Sundays stay. */
+      const mail = db._one("SELECT body FROM coord_actions WHERE kind='mail'");
+      a.ok(mail, "no email asked for");
+      const m = JSON.parse(mail.body);
+      a.eq(m.title, "Rota updated");
+      a.eq(m.body, "Check your Sundays in Driving rota.");
+      a.eq(m.names.slice().sort().join(","), "Bro Adebola,Bro Tunde,Pst Obamakinwa");
+      a.eq(new Set(m.names).size, m.names.length);
     });
   });
 
