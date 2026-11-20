@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.180.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.180.1 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -813,7 +813,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.180.0";
+var PAGE_VERSION = "v1.180.1";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1557,9 +1557,9 @@ function paintHome(){
     return '<li><button type="button" data-go="'+go+'"><span class="t">'+t+'</span>' +
            (n ? '<span class="n '+(tone||'')+'">'+esc(n)+'</span>' : '') + '<span class="go">›</span></button></li>';
   };
-  var nxt = rows().filter(function(r){ return r.date > D.today; })[0];
+  /* No words beside Rota (Asim, 20 Nov 2026): "next Sun" read as this Sunday. */
   h += '<ul class="menu">' +
-       item("rota", "Rota", nxt ? "next " + shortDay(nxt.date) : "", "") +
+       item("rota", "Rota", "") +
        item("bookings/" + bk, "Bookings", booked + " booked" + (bk !== D.today ? " for " + shortDay(bk) : ""), "") +
        item("runs", "Run record", "") +
        (D && D.message ? '<li><button type="button" data-do="message"><span class="t">Send a message</span><span class="go">›</span></button></li>' : '') +
