@@ -1283,7 +1283,7 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
     <!-- No heading of its own from v1.90.0: the bar says Driving rota. -->
     <div class="rota-top">
       <div></div>
-      <button class="rota-back" id="rotaBack" type="button">Back</button>
+      <button class="rota-back" id="rotaBack" type="button">&#8249; Home</button>
     </div>
     <div class="rota-controls">
       <button class="btn btn-main" id="rotaToday" type="button">All routes</button>
@@ -1306,7 +1306,7 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
     <!-- The bar says Stops and bookings. -->
     <div class="rota-top">
       <div></div>
-      <button class="rota-back" id="stopsBack" type="button">Back</button>
+      <button class="rota-back" id="stopsBack" type="button">&#8249; Back</button>
     </div>
     <div id="stopsBody"></div>
   </section>
@@ -1818,7 +1818,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.179.0";
+var APP_VERSION = "v1.180.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -3724,7 +3724,7 @@ function btn(label,cls,fn,dis,why,line){
     return;
   }
   if(st.screen==="pending"){
-    btn("Back","btn-main",function(){ goHome(); });
+    btn("Home","btn-main",function(){ goHome(); });
     return;
   }
   /* Stops and bookings, and the rota, had no case here at all, so the bar sat
@@ -8389,6 +8389,7 @@ var rotaStopsAsked=false;  /* stops fetch already attempted this session */
 function rotaOpenStops(){
   rotaStopsOpen=true;
   stopsFrom = (st.screen==="stops") ? stopsFrom : st.screen;
+  stopsBackSay();
 
   /* Opening always starts on your own bus. Looking at the other route is a
      thing you do, not a setting you leave behind for the next person. */
@@ -8434,6 +8435,13 @@ function rotaOpenStops(){
 var stopsFrom="driver";     /* where Back should return to */
 var stopsAutoNext="";      /* the next stop last brought into view */
 
+/* The back button says where it goes (v1.180.0, Asim, 20 Nov 2026). */
+function stopsBackSay(){
+  var to = (stopsFrom==="sent" && trip.started) ? "hub" : stopsFrom;
+  var word = to==="rota" ? "Driving rota" : to==="vehicle" ? "Vehicle check" : to==="sent" ? "Check"
+           : to==="pending" ? "Waiting to send" : "Home";
+  $("stopsBack").textContent = "\u2039 " + word;
+}
 function stopsClose(){
   rotaStopsOpen=false;
   rotaCountsStop();
@@ -8458,6 +8466,7 @@ function stopsClose(){
 }
 
 function rotaPaintStops(){
+  stopsBackSay();
   var stops=(rotaStops||[]).slice();
   pickNext=null;
 

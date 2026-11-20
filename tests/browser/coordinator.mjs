@@ -1361,8 +1361,9 @@ if (want("C35")) {
   await p.ctx.close();
 }
 
-/* C36 — the Sunday card is the way into the Rota: Back goes to the list of
-   Sundays, then home; and no Rota button of its own on the first screen */
+/* C36 — the Sunday card opens the Sunday: Back goes to the list of Sundays,
+   then home. From v1.180.0 (Asim, 20 Nov 2026) the first screen's list has a
+   Rota line too, and Back says where it goes ("Rota", then "Home"). */
 if (want("C36")) {
   const p = await page(env);
   await p.signIn(PIN);
@@ -1372,16 +1373,17 @@ if (want("C36")) {
     const cue = await p.text("#homeBody .sun .sun-cue");
     await p.pg.click("#homeBody .sun");
     await p.wait(500);
-    const first = await screenIs(p), firstTitle = await p.text("#barTitle");
+    const first = await screenIs(p), firstTitle = await p.text("#barTitle"), backSays1 = await p.text("#barBackT");
     await back(p);
+    const backSays2 = await p.text("#barBackT");
     const second = await screenIs(p), list = await p.pg.$$eval("#rotaBody .sun", (x) => x.length);
     await back(p);
     const third = await screenIs(p);
     await p.shot("C36-rota-way");
-    check("C36", "the Sunday card opens the Sunday; Back is the Rota list, then home; no Rota button, and What has been done",
-          rotaItem === 0 && /Rota/i.test(cue) && first === "s-sunday" && firstTitle === "Rota" && second === "s-rota" &&
+    check("C36", "the Sunday card opens the Sunday; Back (\"Rota\") is the Rota list, then (\"Home\") home; a Rota line, and What has been done",
+          rotaItem === 1 && backSays1 === "Rota" && backSays2 === "Home" && /Rota next /.test(menu) && /Rota/i.test(cue) && first === "s-sunday" && firstTitle === "Rota" && second === "s-rota" &&
           list > 2 && third === "s-home" && /What has been done/.test(menu) && !/What I have done/.test(menu) && !p.errs.length,
-          JSON.stringify({ rotaItem, cue, first, firstTitle, second, list, third, menu, errors: p.errs }));
+          JSON.stringify({ rotaItem, backSays1, backSays2, cue, first, firstTitle, second, list, third, menu, errors: p.errs }));
   } catch (e) { stopped("C36", e); }
   await p.ctx.close();
 }
