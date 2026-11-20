@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.178.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.179.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -354,6 +354,28 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .leg-who.off{color:var(--stop)}
 .leg-end{display:flex;align-items:center;gap:6px}
 .seats{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted)}
+/* Plan the rota (v1.179.0) */
+.pl-tiles{list-style:none;margin:0 0 8px;padding:0}
+.pl-tile{display:grid;grid-template-columns:26px minmax(0,1fr) auto;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--hair)}
+.pl-tile:first-child{border-top:0}
+.pl-tile .n{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted)}
+.pl-tile .acts{display:flex;gap:6px}
+.pl-tile .mini{min-width:42px;padding:0 8px;font-size:16px}
+.pl-sun{background:var(--card);border:1px solid var(--hair);border-radius:var(--r);padding:8px 10px}
+.pl-sun+.pl-sun{margin-top:8px}
+.pl-sun.kept{opacity:.62}
+.pl-sun.clash{border-color:var(--stop-line);background:var(--stop-bg)}
+.pl-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-weight:600;margin-bottom:4px}
+.pl-cells{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pl-cell{display:block;width:100%;text-align:left;min-height:50px;padding:6px 9px;border:1.5px solid var(--hair);border-radius:8px;
+  background:var(--paper);color:var(--ink);font:inherit}
+.pl-cell small{display:block;font-size:12px;color:var(--muted)}
+.pl-cell b{display:block;font-weight:600}
+.pl-cell.new b{color:var(--accent-ink)}
+.pl-cell.on{border-color:var(--steel);box-shadow:0 0 0 2px var(--steel)}
+.pl-cell[disabled]{cursor:default}
+.pl-count{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.pl-count span{font-size:13px;padding:3px 9px;border:1px solid var(--hair);border-radius:14px;background:var(--card)}
 .seats.over{color:var(--stop);font-weight:600}
 
 /* ---- editing a Sunday ---- */
@@ -735,6 +757,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
   <section class="screen" id="s-home"><div id="homeBody"></div></section>
   <section class="screen" id="s-rota"><div id="rotaBody"></div></section>
+  <section class="screen" id="s-plan"><div id="planBody"></div></section>
   <section class="screen" id="s-sunday"><div id="sundayBody"></div></section>
   <section class="screen" id="s-requests"><div id="requestsBody"></div></section>
   <section class="screen" id="s-bookings"><div id="bookingsBody"></div></section>
@@ -787,7 +810,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.178.0";
+var PAGE_VERSION = "v1.179.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1166,7 +1189,7 @@ function say(id, t, bad){
 
 /* ---- screens ------------------------------------------------------------- */
 
-var TITLES = { home:"Coordinator", rota:"Rota", sunday:"Rota", requests:"Rota requests", bookings:"Bookings",
+var TITLES = { home:"Coordinator", rota:"Rota", plan:"Plan the rota", sunday:"Rota", requests:"Rota requests", bookings:"Bookings",
                defects:"Defects", buses:"Buses", bus:"Bus", drivers:"Drivers", stops:"Bus stops", runs:"Run record", look:"Have a look", report:"Have a look", pdf:"PDF reports",
                activity:"What has been done", alerts:"Alerts", sign:"Coordinator" };
 
@@ -1259,6 +1282,7 @@ function paint(name, arg){
   if(name === "sign"){ signNames(); $("signVersion").innerHTML = versionHTML(); focusPin(); return; }
   if(name === "home") return paintHome();
   if(name === "rota") return paintRota();
+  if(name === "plan") return paintPlan();
   if(name === "sunday") return paintSunday(arg || D.today);
   if(name === "requests") return paintRequests();
   if(name === "bookings") return paintBookings(arg || D.today);
@@ -1671,6 +1695,7 @@ function sendMessage(){
 function paintRota(){
   var h = '';
   if(D.rota && D.rota.error) h += '<div class="need stop"><p>The rota has not reached the live server.</p></div>';
+  if(D.planEdits) h += '<button class="btn btn-ghost btn-wide" type="button" data-go="plan" style="margin-bottom:12px">Plan the rota</button>';
   var ahead = rows().filter(function(r){ return r.date >= D.today; });
   ahead.slice(0, ROTA_SHOW).forEach(function(r){ h += sunCard(r.date, r.date === D.today); });
   if(ahead.length > ROTA_SHOW) h += '<button class="btn btn-ghost btn-wide" type="button" data-do="more" style="margin-top:12px">More Sundays</button>';
@@ -1725,6 +1750,197 @@ function paintSunday(key){
   }).join("")+'</ul></div>';
   if(!past) h += '<button class="btn btn-ghost btn-wide" type="button" data-do="note" data-key="'+esc(key)+'" style="margin-top:10px;min-height:46px;font-size:16px">Add a note</button>';
   $("sundayBody").innerHTML = h;
+}
+
+/* ---- PLAN THE ROTA (v1.179.0, Asim, 19 Nov 2026) --------------------------
+   A list of names for each route, repeated from a first Sunday; any two names
+   in the preview swapped by tapping one then the other. One Save writes every
+   Sunday that changes. Sundays with a cover, a request, a called-off route or
+   a PROTECTED note stay as they are. */
+var PLAN = null;
+var PLAN_MAX = 16;
+
+function keyWeeks(a, b){
+  var p = parts(a), q = parts(b);
+  return Math.round((Date.UTC(q.y,q.mo-1,q.d) - Date.UTC(p.y,p.mo-1,p.d)) / 604800000);
+}
+function keyAddW(key, n){
+  var p = parts(key), d = new Date(Date.UTC(p.y,p.mo-1,p.d) + n*604800000);
+  return d.getUTCFullYear()+"-"+("0"+(d.getUTCMonth()+1)).slice(-2)+"-"+("0"+d.getUTCDate()).slice(-2);
+}
+function planRot(list, n){
+  if(!list.length) return list.slice();
+  var k = ((n % list.length) + list.length) % list.length;
+  return list.slice(k).concat(list.slice(0, k));
+}
+function planInit(){
+  var P = D.rotaPlan;
+  var start = D.today;
+  if(P && P.start && P.north && P.north.length && P.south && P.south.length){
+    /* A saved plan that began before this Sunday, turned on to this Sunday. */
+    var w = P.start < start ? keyWeeks(P.start, start) : 0;
+    if(!w) start = P.start;
+    var over = {};
+    Object.keys(P.over || {}).forEach(function(k){ if(k >= start) over[k] = { North:(P.over[k]||{}).North || "", South:(P.over[k]||{}).South || "" }; });
+    PLAN = { start:start, North:planRot(P.north, w), South:planRot(P.south, w), over:over, sel:null, show:12, saved:true };
+    return;
+  }
+  /* No plan yet: the Sundays already on the rota, for as long as they take
+     to come round again. */
+  var out = { North:[], South:[] };
+  ["North","South"].forEach(function(rt){
+    var seq = [];
+    for(var j=0;j<24;j++){ var rr = rowFor(keyAddW(start, j)); seq.push(rr ? legs(rr)[rt].sched : ""); }
+    var n = rt === "North" ? 4 : 3;
+    for(var p=1;p<=12;p++){
+      var fits = true, seen = 0;
+      for(var x=0;x+p<seq.length;x++){
+        if(!seq[x] || !seq[x+p]) continue;
+        seen++;
+        if(seq[x] !== seq[x+p]){ fits = false; break; }
+      }
+      if(fits && seen >= p){ n = p; break; }
+    }
+    for(var i=0;i<n;i++){
+      var r = rowFor(keyAddW(start, i)), nm = r ? legs(r)[rt].sched : "";
+      out[rt].push(nm);
+    }
+  });
+  PLAN = { start:start, North:out.North, South:out.South, over:{}, sel:null, show:12, saved:false };
+}
+function planBase(key, rt){
+  var list = PLAN[rt];
+  if(!list.length) return "";
+  var w = keyWeeks(PLAN.start, key);
+  return list[((w % list.length) + list.length) % list.length] || "";
+}
+function planName(key, rt){
+  var o = PLAN.over[key];
+  return (o && o[rt]) || planBase(key, rt);
+}
+function planKept(r){
+  var l = legs(r), st = String(r.status || "").trim();
+  if(l.North.cover || l.South.cover) return "Covered";
+  if(pendingFor(r.date).length || st === "Change requested") return "Request";
+  if(isOff(st, "North") || isOff(st, "South")) return "Called off";
+  if(st && st !== "Confirmed" && st !== "No driver assigned") return st;
+  if(noteLines(r).some(function(n){ return /^protected\b/i.test(n); })) return "Protected";
+  return "";
+}
+function planRows(){ return rows().filter(function(r){ return r.date >= PLAN.start; }); }
+function planWork(){
+  var out = { list:[], changes:0, clash:"" };
+  planRows().forEach(function(r){
+    var l = legs(r), kept = planKept(r);
+    var one = { key:r.date, kept:kept, cells:{} };
+    ["North","South"].forEach(function(rt){
+      var now = l[rt].sched;
+      one.cells[rt] = kept ? { name: l[rt].cover || now, now: now, kept:true }
+                           : { name: planName(r.date, rt), now: now, hand: !!(PLAN.over[r.date] && PLAN.over[r.date][rt]) };
+    });
+    if(!kept){
+      if(same(one.cells.North.name, one.cells.South.name)){ one.clash = true; if(!out.clash) out.clash = one.cells.North.name + " is on both routes on " + shortDay(r.date) + "."; }
+      if(one.cells.North.name !== one.cells.North.now || one.cells.South.name !== one.cells.South.now) out.changes++;
+    }
+    out.list.push(one);
+  });
+  return out;
+}
+function paintPlan(){
+  if(!PLAN) planInit();
+  var W = planWork();
+  var names = activeDrivers().map(function(d){ return d.name; }).sort();
+  var h = '<h1>Plan the rota</h1>';
+  var opts = '';
+  for(var i=0;i<12;i++){ var k = keyAddW(D.today, i); opts += '<option value="'+k+'"'+(k === PLAN.start ? ' selected' : '')+'>'+esc(shortDay(k))+'</option>'; }
+  if(keyWeeks(D.today, PLAN.start) >= 12) opts += '<option value="'+PLAN.start+'" selected>'+esc(shortDay(PLAN.start))+'</option>';
+  h += '<div class="field"><label for="plStart">From</label><select id="plStart">'+opts+'</select></div>';
+  ["North","South"].forEach(function(rt){
+    var list = PLAN[rt];
+    h += '<div class="card"><h3 style="margin-top:0">'+rt+'</h3><ol class="pl-tiles">' + list.map(function(n, i){
+      var gone = n && !activeDrivers().some(function(d){ return d.name === n; });
+      return '<li class="pl-tile"><span class="n">'+(i+1)+'</span><b>'+esc(n || 'Nobody')+(gone ? ' <span class="tag stop">Not active</span>' : '')+'</b><span class="acts">' +
+        '<button class="mini" type="button" data-do="plmove" data-rt="'+rt+'" data-i="'+i+'" data-dir="-1" aria-label="Up"'+(i ? '' : ' disabled')+'>↑</button>' +
+        '<button class="mini" type="button" data-do="plmove" data-rt="'+rt+'" data-i="'+i+'" data-dir="1" aria-label="Down"'+(i < list.length-1 ? '' : ' disabled')+'>↓</button>' +
+        '<button class="mini" type="button" data-do="pldel" data-rt="'+rt+'" data-i="'+i+'" aria-label="Take off">✕</button></span></li>';
+    }).join("") + '</ol>' +
+    (list.length < PLAN_MAX ? '<div class="field" style="margin:0"><select class="pl-add" data-rt="'+rt+'" aria-label="Add to '+rt+'"><option value="">Add a name</option>' +
+      names.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join("") + '</select></div>' : '') + '</div>';
+  });
+  var shown = W.list.slice(0, PLAN.show), count = {};
+  shown.forEach(function(o){ ["North","South"].forEach(function(rt){ var n = o.cells[rt].name; if(n && !(o.kept && isOff((rowFor(o.key)||{}).status, rt))) count[n] = (count[n]||0) + 1; }); });
+  h += '<h3>Next '+shown.length+' Sundays</h3><div class="pl-count">' + Object.keys(count).sort().map(function(n){
+    return '<span>'+esc(n)+' '+count[n]+'</span>'; }).join("") + '</div>';
+  shown.forEach(function(o){
+    h += '<div class="pl-sun'+(o.kept ? ' kept' : '')+(o.clash ? ' clash' : '')+'"><div class="pl-head">'+esc(shortDay(o.key)) +
+         (o.kept ? ' <span class="tag">'+esc(o.kept)+'</span>' : '') +
+         (o.clash ? ' <span class="tag stop">On both routes</span>' : '') + '</div><div class="pl-cells">';
+    ["North","South"].forEach(function(rt){
+      var c = o.cells[rt], on = PLAN.sel && PLAN.sel.key === o.key && PLAN.sel.rt === rt;
+      var moved = !c.kept && c.name !== c.now;
+      h += '<button class="pl-cell'+(moved ? ' new' : '')+(on ? ' on' : '')+'" type="button" data-do="plcell" data-key="'+o.key+'" data-rt="'+rt+'"'+(c.kept ? ' disabled' : '')+'>' +
+           '<small>'+rt+(c.hand ? ' · changed' : '')+'</small><b>'+esc(c.name || 'Nobody')+'</b>' +
+           (moved ? '<small>was '+esc(c.now || 'nobody')+'</small>' : '') + '</button>';
+    });
+    h += '</div></div>';
+  });
+  if(W.list.length > PLAN.show) h += '<button class="btn btn-ghost btn-wide" type="button" data-do="plmore" style="margin-top:12px">More Sundays</button>';
+  if(Object.keys(PLAN.over).length) h += '<button class="btn btn-ghost btn-wide" type="button" data-do="plundo" style="margin-top:12px">Undo swaps</button>';
+  h += '<p class="say'+(W.clash ? ' bad' : '')+'" id="plSay">'+esc(W.clash || (W.changes ? W.changes + ' Sunday' + (W.changes === 1 ? '' : 's') + ' change.' : 'No Sunday changes.'))+'</p>';
+  h += '<button class="btn btn-main btn-wide" type="button" data-do="plsave" style="margin-top:8px">Save</button>';
+  $("planBody").innerHTML = h;
+  $("plStart").onchange = function(){ planStart(this.value); };
+  Array.prototype.forEach.call(document.querySelectorAll("#planBody .pl-add"), function(sel){
+    sel.onchange = function(){ if(sel.value){ PLAN[sel.getAttribute("data-rt")].push(sel.value); PLAN.sel = null; paintPlan(); } };
+  });
+}
+/* A new first Sunday keeps each route's turns where they were. */
+function planStart(key){
+  var w = keyWeeks(PLAN.start, key);
+  PLAN.North = planRot(PLAN.North, w); PLAN.South = planRot(PLAN.South, w);
+  PLAN.start = key; PLAN.sel = null;
+  Object.keys(PLAN.over).forEach(function(k){ if(k < key) delete PLAN.over[k]; });
+  paintPlan();
+}
+function planMove(rt, i, dir){
+  var l = PLAN[rt], j = i + dir;
+  if(j < 0 || j >= l.length) return;
+  var t = l[i]; l[i] = l[j]; l[j] = t; PLAN.sel = null; paintPlan();
+}
+function planDel(rt, i){ PLAN[rt].splice(i, 1); PLAN.sel = null; paintPlan(); }
+function planSet(key, rt, name){
+  var o = PLAN.over[key] = PLAN.over[key] || { North:"", South:"" };
+  o[rt] = name === planBase(key, rt) ? "" : name;
+  if(!o.North && !o.South) delete PLAN.over[key];
+}
+function planCell(key, rt){
+  var s = PLAN.sel;
+  if(!s){ PLAN.sel = { key:key, rt:rt }; paintPlan(); return; }
+  PLAN.sel = null;
+  if(s.key === key && s.rt === rt){ paintPlan(); return; }
+  var a = planName(s.key, s.rt), b = planName(key, rt);
+  planSet(s.key, s.rt, b); planSet(key, rt, a);
+  paintPlan();
+}
+function planSave(){
+  var W = planWork(), say = $("plSay");
+  var bad = function(t){ say.textContent = t; say.className = "say bad"; };
+  if(!PLAN.North.length) return bad("Add a driver to North.");
+  if(!PLAN.South.length) return bad("Add a driver to South.");
+  if(PLAN.North.concat(PLAN.South).some(function(n){ return !n; })) return bad("Take off Nobody.");
+  var off = PLAN.North.concat(PLAN.South).filter(function(n){ return !activeDrivers().some(function(d){ return d.name === n; }); })[0];
+  if(off) return bad(off + " is not active.");
+  if(W.clash) return bad(W.clash);
+  var over = {};
+  Object.keys(PLAN.over).forEach(function(k){ var o = PLAN.over[k], x = {}; if(o.North) x.North = o.North; if(o.South) x.South = o.South; over[k] = x; });
+  openSheet({ eyebrow: "Rota", title: "Save the plan",
+    line: "From " + shortDay(PLAN.start) + ". " + (W.changes ? W.changes + " Sunday" + (W.changes === 1 ? "" : "s") + " change." : "No Sunday changes."),
+    go: "Save",
+    onGo: function(){
+      act({ kind:"rotaplan", start:PLAN.start, north:PLAN.North.slice(), south:PLAN.South.slice(), over:over }, function(){
+        PLAN = null; go("rota");
+      });
+    } });
 }
 
 /* Who could go in a slot, and what the eye needs to choose: already out that
@@ -4290,6 +4506,12 @@ document.addEventListener("click", function(e){
   else if(d === "endrun") endRun(t.getAttribute("data-route"));
   else if(d === "handask") answerHandAsk(t.getAttribute("data-ask"));
   else if(d === "more"){ ROTA_SHOW += 12; paintRota(); }
+  else if(d === "plmove") planMove(t.getAttribute("data-rt"), Number(t.getAttribute("data-i")), Number(t.getAttribute("data-dir")));
+  else if(d === "pldel") planDel(t.getAttribute("data-rt"), Number(t.getAttribute("data-i")));
+  else if(d === "plcell") planCell(key, t.getAttribute("data-rt"));
+  else if(d === "plmore"){ PLAN.show += 12; paintPlan(); }
+  else if(d === "plundo"){ PLAN.over = {}; PLAN.sel = null; paintPlan(); }
+  else if(d === "plsave") planSave();
   else if(d === "status") setStatus(key, t.getAttribute("data-mode"));
   else if(d === "driver") pickDriver(key, t.getAttribute("data-slot"));
   else if(d === "bus") pickBus(key, t.getAttribute("data-route"));
