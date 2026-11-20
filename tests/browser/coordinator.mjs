@@ -1381,7 +1381,7 @@ if (want("C36")) {
     const third = await screenIs(p);
     await p.shot("C36-rota-way");
     check("C36", "the Sunday card opens the Sunday; Back (\"Rota\") is the Rota list, then (\"Home\") home; a Rota line, and What has been done",
-          rotaItem === 1 && backSays1 === "Rota" && backSays2 === "Home" && /Rota next /.test(menu) && /Rota/i.test(cue) && first === "s-sunday" && firstTitle === "Rota" && second === "s-rota" &&
+          rotaItem === 1 && backSays1 === "Rota" && backSays2 === "Home" && /^Rota › Bookings/.test(menu) && /Rota/i.test(cue) && first === "s-sunday" && firstTitle === "Rota" && second === "s-rota" &&
           list > 2 && third === "s-home" && /What has been done/.test(menu) && !/What I have done/.test(menu) && !p.errs.length,
           JSON.stringify({ rotaItem, backSays1, backSays2, cue, first, firstTitle, second, list, third, menu, errors: p.errs }));
   } catch (e) { stopped("C36", e); }

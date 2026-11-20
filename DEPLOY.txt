@@ -1,30 +1,17 @@
 MINIBUS
 =======
-  pages v1.180.0 · server w2.100.0 · sheet v1.146.0
+  pages v1.180.1 · server w2.100.0 · sheet v1.146.0
 
-YOU ARE ON   app v1.179.0 · server w2.100.0 · sheet v1.146.0
-GOING TO     app v1.180.0 · server w2.100.0 · sheet v1.146.0
+YOU ARE ON   app v1.180.0 · server w2.100.0 · sheet v1.146.0
+GOING TO     app v1.180.1 · server w2.100.0 · sheet v1.146.0
 
 Pages only.
 
-Coordinator App:
-- First screen: a "Rota" line at the top of the list ("next Sun 29 Nov"),
-  opening the Rota with Plan the rota at the top. The Sunday card still
-  opens that Sunday.
-- Back, top left, says where it goes: "< Rota", "< Home", and so on.
-- Plan the rota: "Next 12 Sundays" and the counts at the top; the lists
-  are "North order" and "South order"; From sits just above the Sundays.
-
-Driver App:
-- Back on Driving rota says "< Home"; on Stops and bookings it names the
-  screen it returns to ("< Home", "< Driving rota", "< Vehicle check").
-- Waiting to send: the button says "Home".
-
-Sunday Bus: one page, no back button; unchanged apart from the number.
+Coordinator App, first screen: the Rota line has no words beside it
+(it said "next Sun 29 Nov", which read as this Sunday).
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.180.0 · w2.100.0 · v1.146.0.
-B. First screen: Rota line above Bookings.
-C. Open a Sunday from its card: Back says "Rota"; on the Rota, "Home".
+A. Coordinator App, App info: v1.180.1 · w2.100.0 · v1.146.0.
+B. First screen: "Rota" with only the arrow beside it.
