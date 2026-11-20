@@ -1,17 +1,21 @@
 MINIBUS
 =======
-  pages v1.180.1 · server w2.100.0 · sheet v1.146.0
+  pages v1.180.1 · server w2.101.0 · sheet v1.146.0
 
-YOU ARE ON   app v1.180.0 · server w2.100.0 · sheet v1.146.0
-GOING TO     app v1.180.1 · server w2.100.0 · sheet v1.146.0
+YOU ARE ON   app v1.180.1 · server w2.100.0 · sheet v1.146.0
+GOING TO     app v1.180.1 · server w2.101.0 · sheet v1.146.0
 
-Pages only.
+Server only.
 
-Coordinator App, first screen: the Rota line has no words beside it
-(it said "next Sun 29 Nov", which read as this Sunday).
+Plan the rota, Save: every active driver whose Sundays change, on any
+date, is told once: "Rota updated. Check your Sundays in Driving rota."
+in the Driver App; a driver no phone of his took it for is emailed it.
+Coordinators keep their one "Change by" line, as before, and are not told
+twice. A driver whose Sundays stay the same hears nothing.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.180.1 · w2.100.0 · v1.146.0.
-B. First screen: "Rota" with only the arrow beside it.
+A. Coordinator App, App info: v1.180.1 · w2.101.0 · v1.146.0.
+B. After you Save the plan: the drivers on the changed Sundays have
+   "Rota updated" in the Driver App, or by email.
