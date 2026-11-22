@@ -43,5 +43,14 @@ export default async function (root) {
     a.eq((await at(T("18", "18:30"), {})).length, 0);
     a.eq((await at(T("18", "18:30"), { "NH56 FWP": { jobs: ["Something else"] } })).length, 0);
   });
+  s.test("a job set aside (v1.148.0) is left out; a bus with only that sends nothing", async (a) => {
+    const aside = { "NH56 FWP": { checkId: "c1", jobs: ["Tyres need air", "Needs a wash"], aside: ["Needs a wash"] },
+                    "YS70 PWE": { checkId: "c2", jobs: ["Inside needs a clean"], aside: ["Inside needs a clean"] } };
+    const sent = await at(T("18", "18:05"), aside);
+    a.eq(sent.length, 1);
+    a.eq(sent[0].body, "NH56 FWP: Tyres need air.");
+    delete aside["NH56 FWP"];
+    a.eq((await at(T("18", "18:05"), aside)).length, 0);
+  });
   return s;
 }
