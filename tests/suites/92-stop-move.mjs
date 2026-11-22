@@ -192,5 +192,23 @@ export default async function (root) {
     });
   });
 
+  s.test("the Driver App's timetable (?rota=1) has the moved stop on South, in its place", async (a) => {
+    await atTime(THU, async () => {
+      const { env } = await fresh();
+      const { STOPS } = await import("../lib/seed.mjs");
+      const sheetStops = STOPS.filter((x) => x.kind !== "depart").map((x) => ({ route: x.route, id: x.id, time: x.time, stop: x.stop,
+        arrival: x.kind === "arrival", depart: false }));
+      await W.cachePut(env, "cache_rota", { builtAt: Date.now(), from: "2026-11-01", to: "2027-06-01",
+        payload: { ok: true, rows: [], stops: sheetStops } }).run();
+      a.ok((await act(env, { op: "move", stopId: "N05", after: "S02", time: "10:35" })).ok);
+      const out = await J(await W.default.fetch(new Request("https://worker.test/?rota=1&from=2026-11-22&weeks=4"), env, {}));
+      a.ok(out.ok, JSON.stringify(out).slice(0, 200));
+      const south = out.stops.filter((x) => x.route === "South" && !x.arrival).map((x) => x.id).join(",");
+      a.eq(south, "S01,S02,N05,S03,S04,S05,S06,S07");
+      a.eq(out.stops.find((x) => x.id === "N05").time, "10:35");
+      a.hasnt(out.stops.filter((x) => x.route === "North").map((x) => x.id).join(","), "N05");
+    });
+  });
+
   return s;
 }

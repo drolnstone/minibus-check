@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.103.0";
+const SCRIPT_VERSION = "w2.103.1";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -4338,6 +4338,14 @@ async function cachedRota(env, from, weeks) {
 
   const out = Object.assign({}, c.payload);
   out.rows = (c.payload.rows || []).filter((r) => r.date >= want && r.date <= wantTo);
+
+  /* The Driver App's timetable is this one, the sheet's. A stop moved to
+     the other route for the run Sunday (w2.103.0) is laid over it here too,
+     from w2.103.1, so the driver's list has it where the server does. */
+  try {
+    const mv = await stopMovesOn(env, runSunday());
+    if (mv.length && Array.isArray(out.stops)) out.stops = applyStopMoves(out.stops, mv);
+  } catch (e) { /* the shelf as it stands */ }
   out.from = want;
   out.weeks = n;
 

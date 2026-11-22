@@ -1,11 +1,16 @@
 MINIBUS
 =======
-  pages v1.183.0 · server w2.103.0 · sheet v1.147.0
+  pages v1.183.0 · server w2.103.1 · sheet v1.147.0
 
 YOU ARE ON   app v1.182.0 · server w2.103.0 · sheet v1.147.0
-GOING TO     app v1.183.0 · server w2.103.0 · sheet v1.147.0
+GOING TO     app v1.183.0 · server w2.103.1 · sheet v1.147.0
 
-Pages only.
+Pages and server.
+
+Driver App fix (w2.103.1): a stop moved to the other route now shows
+on the driver's list for that route, in its place and at its time for
+the day. Before this, only the server, Coordinator App and Sunday Bus had
+it. The driver reopens Stops and times (or the app) to see it.
 
 Coordinator App, this Sunday's card (Rota): a "Move a stop" button under
 Swap buses. Pick the stop, the stop it goes after on the other route and
@@ -15,6 +20,7 @@ moved" card lists each one moved for that Sunday, with Put back.
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.183.0 · w2.103.0 · v1.147.0.
+A. Coordinator App, App info: v1.183.0 · w2.103.1 · v1.147.0.
+C. Driver App, Stops and times: the moved stop is on the other route.
 B. Open this Sunday from the first screen: "Move a stop" at the foot,
    and "Stops moved" with the stop you moved this morning.
