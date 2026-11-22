@@ -469,6 +469,22 @@ CREATE TABLE IF NOT EXISTS run_live (
   err           TEXT                  -- why the last ask failed, if it did
 );
 
+-- LIVE LOCATION PER RUN, from w2.105.0 (22 Nov 2026), for the Sunday run
+-- report: counts and times only, no positions. Row '_since' holds when this
+-- started being kept. Kept 60 days. The Worker also creates this itself.
+CREATE TABLE IF NOT EXISTS run_loc (
+  trip       TEXT PRIMARY KEY,
+  made       INTEGER NOT NULL DEFAULT 0,  -- ms, row made
+  got        INTEGER NOT NULL DEFAULT 0,  -- usable fixes from the phone driving the run
+  first_at   INTEGER,                     -- ms, server clock, first of them
+  last_at    INTEGER,                     -- ms, last of them
+  vague      INTEGER NOT NULL DEFAULT 0,  -- fixes too vague or old to use
+  other      INTEGER NOT NULL DEFAULT 0,  -- fixes from another phone signed in as its driver
+  route_ok   INTEGER NOT NULL DEFAULT 0,  -- Google drive times that came back
+  route_fail INTEGER NOT NULL DEFAULT 0,  -- and that failed
+  route_err  TEXT                         -- the last reason
+);
+
 -- HOW LONG THE BUS STOOD AT EACH STOP, from w2.98.0 (19 Nov 2026). One row
 -- per run and stop, from the driving phone's fixes on the server's clock:
 -- the first fix within 80 m of the pin, and the first one after beyond it.

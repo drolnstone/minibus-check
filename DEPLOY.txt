@@ -1,29 +1,26 @@
 MINIBUS
 =======
-  pages v1.185.0 · server w2.104.1 · sheet v1.148.0
+  pages v1.185.0 · server w2.105.0 · sheet v1.149.0
 
-YOU ARE ON   app v1.184.0 · server w2.104.0 · sheet v1.148.0
-GOING TO     app v1.185.0 · server w2.104.1 · sheet v1.148.0
+YOU ARE ON   app v1.185.0 · server w2.104.1 · sheet v1.148.0
+GOING TO     app v1.185.0 · server w2.105.0 · sheet v1.149.0
 
-Pages and server.
+Server and sheet. The apps do not change.
 
-All three apps take a new version without being closed and reopened.
-While open they look for one every minute and each time they come back
-to the screen. When one is ready the app reloads once, at a quiet
-moment: not while something is being typed, a pop-up is open, or taps
-are waiting to send. The Driver App also waits during a vehicle check;
-the Sunday Bus page waits while live times show.
-
-A stop moved to the other route for the day: a Picked up or Nobody here
-for it from the run it left is not recorded, so that run does not count
-it as served and its passengers get no "Nobody there". Taps from the run
-it joined are recorded as usual. 22 Nov: the North Driver App, opened
-before the fixes, still listed the Nursery; North marked it Nobody here
-at 10:43 after South picked it up at 10:32.
+The Sunday run report has one more line at the end, the live location of
+that run:
+  "Live location: 09:58 to 10:57."  the phone driving the run sent it
+  "Live location: none received."   it sent nothing
+  "... Google drive times failed: (reason)."  location came, Google's
+                                    drive times did not
+Others say the location was too vague to use, or came from another phone
+signed in as the driver. Runs before this merge read "not recorded for
+this run". The live server keeps counts and times only, no positions, for
+60 days. 22 Nov: neither bus's times came from location, and nothing on
+record could say whether the phone or Google was the cause.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.185.0 · w2.104.1 · v1.148.0.
-B. Leave the Driver App open on its first screen after the merge; within
-   about two minutes App info shows v1.185.0 with no restart.
+A. Coordinator App, App info: v1.185.0 · w2.105.0 · v1.149.0.
+B. Next Sunday's run report emails end with the Live location line.

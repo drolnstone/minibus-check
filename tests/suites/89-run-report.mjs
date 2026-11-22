@@ -53,6 +53,7 @@ export default async function (root) {
   }
   const run = (when, over, L) => atTime(KEY + "T" + when + ":00Z", () => {
     L = L || load(over);
+    if (over && over.fetch) L.gas.setFetchReply(over.fetch);
     call(L, "runReport");
     return L;
   });
@@ -106,6 +107,38 @@ export default async function (root) {
     const L = await run("16:30", { trips: () => [ev({ Event: "start", Happened: at("09:55") }),
       ev({ Event: "end", Happened: at("11:05"), "Ended by": "Bro Asim" })] });
     a.ok(L.gas.mail[0].body.indexOf("Run ended 11:05 by Bro Asim.") !== -1, L.gas.mail[0].body);
+  });
+
+  /* THE LIVE LOCATION LINE, v1.149.0 (Asim, 22 Nov 2026). */
+  const withLog = (log, since) => ({ fetch: (url, opts) => {
+    const q = JSON.parse(opts.payload || "{}");
+    if (q.action !== "livelog") return null;
+    return { code: 200, body: JSON.stringify({ ok: true, since: since || at("08:00").getTime(), trips: { t1: log } }) };
+  } });
+  const body = async (log, since) => (await run("16:05", withLog(log, since))).gas.mail[0].body;
+  const blank = { got: 0, first: null, last: null, vague: 0, other: 0, ok: 0, fail: 0, err: "" };
+
+  s.test("live location: from when to when, last line", async (a) => {
+    const b = await body(Object.assign({}, blank, { got: 120, first: at("09:58").getTime(), last: at("10:57").getTime(), ok: 40 }));
+    a.eq(b.split("\n").pop(), "Live location: 09:58 to 10:57.", b);
+  });
+
+  s.test("live location: none, Google failing, another phone, before it was kept", async (a) => {
+    a.ok((await body(blank)).endsWith("Live location: none received."));
+    a.ok((await body(Object.assign({}, blank, { got: 5, first: at("10:00").getTime(), last: at("10:20").getTime(),
+      fail: 3, err: "Service invoked too many times" })))
+      .endsWith("Live location: 10:00 to 10:20. Google drive times failed: Service invoked too many times."));
+    a.ok((await body(Object.assign({}, blank, { got: 5, first: at("10:00").getTime(), last: at("10:20").getTime(), ok: 9, fail: 2 })))
+      .endsWith("Google drive times failed 2 times."));
+    a.ok((await body(Object.assign({}, blank, { other: 4 })))
+      .endsWith("Live location: none from the phone driving the run; another phone signed in as the driver sent it."));
+    a.ok((await body(Object.assign({}, blank, { vague: 4 }))).endsWith("Live location: received, never clear enough to use."));
+    a.ok((await body(blank, at("12:00").getTime())).endsWith("Live location: not recorded for this run."));
+  });
+
+  s.test("live location: no answer from the live server, the report goes without the line", async (a) => {
+    const b = (await run("16:05")).gas.mail[0].body;
+    a.ok(b.indexOf("Live location") === -1, b);
   });
 
   return s;

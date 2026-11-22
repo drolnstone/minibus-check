@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.104.1";
+const SCRIPT_VERSION = "w2.105.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -201,7 +201,7 @@ const tokenOf = (env) => (env && env.TOKEN) || TOKEN_FALLBACK;
 const sheetTokenOf = (env) => String((env && env.SHEET_TOKEN) || "");
 const SHEET_ONLY_ACTIONS = ["ping", "mint", "outcome", "cleartrips", "sync",
                             "coordAlert", "drain", "drained", "sheetbookings", "sentMail",
-                            "trail", "sheettrips", "keyok", "sheetparked", "unalerted"];
+                            "trail", "sheettrips", "keyok", "sheetparked", "unalerted", "livelog"];
 function sheetTokenOk(env, body) {
   const want = sheetTokenOf(env);
   return !want || String((body && body.sheetToken) || "") === want;
@@ -1468,6 +1468,7 @@ async function liveRoute(env, key, route, all, state, booked, set, now) {
     const why = String((got && (got.error || got.message)) || "no answer").slice(0, 200);
     try { await env.DB.prepare("UPDATE run_live SET err=? WHERE trip=?").bind(why, String(state.trip)).run(); }
     catch (e) {}
+    await runLocNote(env, state.trip, "fail", now, why);
     return false;
   }
   const merged = Object.assign({}, live.legs);
@@ -1480,7 +1481,83 @@ async function liveRoute(env, key, route, all, state, booked, set, now) {
     "UPDATE run_live SET next_id=?, next_ms=?, next_traffic=?, routed_fix_at=?, legs=?, err=NULL WHERE trip=?")
     .bind(String(N.id), fixAt + Number(got.next.sec) * 1000, got.next.traffic ? 1 : 0,
           fixAt, JSON.stringify(merged), String(state.trip)).run();
+  await runLocNote(env, state.trip, "ok", now);
   return true;
+}
+
+/* LIVE LOCATION, PER RUN, from w2.105.0 (Asim, 22 Nov 2026). On 22 Nov
+   neither bus's times came from location and nothing on record said why:
+   the phone sending nothing and Google not answering looked the same. So
+   each run keeps a count: fixes from the phone driving it (and when the
+   first and last came), fixes too vague to use, fixes from another phone
+   signed in as its driver, and the sheet's Google drive times that came
+   back or failed, with the last reason. The Sunday run report reads it
+   (sheet v1.149.0, action livelog). Counts and times only, no positions.
+   The row "_since" says from when this was kept, so a run before it reads
+   "not recorded" rather than "none". Kept 60 days. */
+const RUN_LOC_KEEP_MS = 60 * 86400000;
+let runLocReady = false;
+async function ensureRunLoc(env) {
+  if (runLocReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS run_loc (" +
+    "  trip TEXT PRIMARY KEY," +
+    "  made INTEGER NOT NULL DEFAULT 0," +
+    "  got INTEGER NOT NULL DEFAULT 0, first_at INTEGER, last_at INTEGER," +
+    "  vague INTEGER NOT NULL DEFAULT 0, other INTEGER NOT NULL DEFAULT 0," +
+    "  route_ok INTEGER NOT NULL DEFAULT 0, route_fail INTEGER NOT NULL DEFAULT 0," +
+    "  route_err TEXT)").run();
+  await env.DB.prepare("INSERT OR IGNORE INTO run_loc (trip, made) VALUES ('_since', ?)").bind(Date.now()).run();
+  runLocReady = true;
+}
+
+/* what: "got" (a usable fix from the driving phone), "vague", "other",
+   "ok" or "fail" (a Google drive-time ask). Never throws. */
+async function runLocNote(env, trip, what, now, why) {
+  if (!trip || !env || !env.DB) return;
+  try {
+    await ensureRunLoc(env);
+    const ins = await env.DB.prepare("INSERT OR IGNORE INTO run_loc (trip, made) VALUES (?,?)")
+      .bind(String(trip), now).run();
+    if (ins && ins.meta && ins.meta.changes) {
+      try {
+        await env.DB.prepare("DELETE FROM run_loc WHERE trip<>'_since' AND made < ?")
+          .bind(now - RUN_LOC_KEEP_MS).run();
+      } catch (e) {}
+    }
+    let sql = null, args = [];
+    if (what === "got") {
+      sql = "UPDATE run_loc SET got=got+1, first_at=COALESCE(first_at, ?), last_at=? WHERE trip=?";
+      args = [now, now];
+    } else if (what === "vague") sql = "UPDATE run_loc SET vague=vague+1 WHERE trip=?";
+    else if (what === "other") sql = "UPDATE run_loc SET other=other+1 WHERE trip=?";
+    else if (what === "ok") sql = "UPDATE run_loc SET route_ok=route_ok+1 WHERE trip=?";
+    else if (what === "fail") {
+      sql = "UPDATE run_loc SET route_fail=route_fail+1, route_err=? WHERE trip=?";
+      args = [String(why || "no answer").slice(0, 200)];
+    }
+    if (!sql) return;
+    await env.DB.prepare(sql).bind(...args, String(trip)).run();
+  } catch (e) {}
+}
+
+/* For the run report: each asked-for run's counts, and from when they
+   were kept. */
+async function runLocFor(env, trips) {
+  await ensureRunLoc(env);
+  const since = await env.DB.prepare("SELECT made FROM run_loc WHERE trip='_since'").first();
+  const out = {};
+  for (const id of (Array.isArray(trips) ? trips : []).slice(0, 20)) {
+    const t = String(id || "").trim();
+    if (!t || t === "_since") continue;
+    const r = await env.DB.prepare("SELECT * FROM run_loc WHERE trip=?").bind(t).first();
+    out[t] = r ? { got: Number(r.got) || 0, first: r.first_at ? Number(r.first_at) : null,
+                   last: r.last_at ? Number(r.last_at) : null, vague: Number(r.vague) || 0,
+                   other: Number(r.other) || 0, ok: Number(r.route_ok) || 0,
+                   fail: Number(r.route_fail) || 0, err: r.route_err || "" }
+               : { got: 0, first: null, last: null, vague: 0, other: 0, ok: 0, fail: 0, err: "" };
+  }
+  return { ok: true, since: since ? Number(since.made) : Date.now(), trips: out };
 }
 
 /* ==========================================================================
@@ -3100,8 +3177,15 @@ async function boardPayload(env, route, phone, driver, fix, ctx, keyIn) {
   try {
     const t = out.trip;
     const driving = t && t.trip && t.started && !t.ended && t.phone && t.phone.here;
-    if (driving && fix && fix.lat !== undefined && fix.lat !== null && fix.lat !== "") {
+    const hasFix = !!(fix && fix.lat !== undefined && fix.lat !== null && fix.lat !== "");
+    /* Counted for the run report (w2.105.0). */
+    if (hasFix && t && t.trip && t.started && !t.ended && t.phone && !t.phone.here) {
+      await runLocNote(env, t.trip, "other", Date.now());
+    }
+    if (driving && hasFix) {
       const now = Date.now();
+      await runLocNote(env, t.trip,
+        (Number(fix.acc) || 0) > LIVE_MAX_ACC_M || Number(fix.age) > LIVE_FRESH_MS ? "vague" : "got", now);
       /* How long it stands at each stop, from w2.98.0. Before liveFix, so the
          fix before this one is still on record. */
       try {
@@ -13072,6 +13156,8 @@ export default {
         if (action === "drain") return await handleDrain(env, body);
         /* Who has alerts on no phone, for the sheet's weekly email. */
         if (action === "unalerted") return json({ ok: true, names: await driversUnalerted(env) });
+        /* Live location per run, for the Sunday run report (w2.105.0). */
+        if (action === "livelog") return json(await runLocFor(env, body.trips));
         if (action === "drained") return await handleDrained(env, body);
         /* A booking edited by hand on the Bus Bookings tab. Token checked. */
         if (action === "sheetbookings") return await handleSheetBookings(env, body);

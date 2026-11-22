@@ -142,6 +142,47 @@ export default async function (root) {
     a.eq(sheetCalls().length, 0);
   });
 
+  /* ----------------------------------- counted for the run report (w2.105.0) */
+  const livelog = async (env, trips) => JSON.parse(await (await W.default.fetch(new Request("https://worker.test/", {
+    method: "POST", body: JSON.stringify({ token: "minibusapp", sheetToken: env.SHEET_TOKEN || "", action: "livelog", trips }) }),
+    env, {})).text());
+
+  s.test("live location counted per run: fixes, first and last, Google answers", async (a) => {
+    const { env } = await fresh();
+    sheetSays(600, {});
+    await atTime(at("10:10"), () => board(env, "phoneA", FIX));
+    G.reset();
+    G.reply(new Response(JSON.stringify({ ok: false, error: "Service invoked too many times" }), { status: 200 }));
+    await atTime(at("10:12"), () => board(env, "phoneA", FIX));
+    await atTime(at("10:13"), () => board(env, "phoneA", { lat: 53.449, lng: -2.9363, acc: 900, age: 0 }));
+    await atTime(at("10:14"), () => board(env, "phoneA", null));
+    const out = await atTime(at("16:00"), () => livelog(env, ["t1", "t9"]));
+    a.eq(out.ok, true, JSON.stringify(out));
+    const t = out.trips.t1;
+    a.eq(t.got, 2); a.eq(t.vague, 1); a.eq(t.other, 0);
+    a.eq(t.first, T("10:10")); a.eq(t.last, T("10:12"));
+    a.eq(t.ok, 1); a.eq(t.fail, 1); a.has(t.err, "too many times");
+    a.eq(out.trips.t9.got, 0, "a run with nothing reads none");
+    a.ok(out.since > 0);
+  });
+
+  s.test("live location from another phone of the driver's is counted as such", async (a) => {
+    const { env } = await fresh();
+    await atTime(at("10:09"), () => board(env, "phoneA", null));
+    sheetSays(600, {});
+    await atTime(at("10:10"), () => board(env, "phoneB", FIX));
+    const t = (await atTime(at("16:00"), () => livelog(env, ["t1"]))).trips.t1;
+    a.eq(t.got, 0); a.eq(t.other, 1);
+  });
+
+  s.test("livelog wants the sheet's own password", async (a) => {
+    const { env } = await fresh();
+    env.SHEET_TOKEN = "sheet-secret";
+    const r = JSON.parse(await (await W.default.fetch(new Request("https://worker.test/", {
+      method: "POST", body: JSON.stringify({ token: "minibusapp", action: "livelog", trips: ["t1"] }) }), env, {})).text());
+    a.eq(r.ok, false);
+  });
+
   /* ------------------------------------------------------------ the sheet */
   function sheet(reply) {
     const L = loadCodeGs(root, {});

@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.148.0";
+var SCRIPT_VERSION = "v1.149.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -5940,7 +5940,7 @@ function runReports(ss, key) {
     if (!at) return;
     var route = String(at1(r, c.route) || "").trim();
     var id = String(at1(r, c.trip) || "").trim() || route;
-    var t = trips[id] = trips[id] || { route: route, start: null, end: null, stops: {}, drivers: [], reg: "" };
+    var t = trips[id] = trips[id] || { id: id, route: route, start: null, end: null, stops: {}, drivers: [], reg: "" };
     var drv = String(at1(r, c.driver) || "").trim();
     if (drv && t.drivers.indexOf(drv) === -1) t.drivers.push(drv);
     t.reg = String(at1(r, c.reg) || "").trim() || t.reg;
@@ -6003,7 +6003,7 @@ function runReports(ss, key) {
       else back = "Arrival at Church not recorded. Run ended " + hhmm(t.end.at) +
                   (t.end.by ? " by " + t.end.by : "") + ".";
     }
-    return { route: route, reg: t.reg, drivers: t.drivers, ended: !!t.end,
+    return { route: route, trip: t.id, startAt: t.start.at, reg: t.reg, drivers: t.drivers, ended: !!t.end,
              left: "Left Church " + hhmm(t.start.at) +
                    (runLateWords(t.start.off) ? ", " + runLateWords(t.start.off) : "") + ".",
              stops: list.map(function (x) {
@@ -6045,7 +6045,46 @@ function runReportText(r, key) {
           (r.drivers.length ? (r.drivers.length > 1 ? "Drivers " : "Driver ") + r.drivers.join(", ") + "." : ""),
           r.left, ""]
     .concat(r.stops.length ? r.stops : ["No stops marked or booked."])
-    .concat(["", r.back, r.parked]).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    .concat(["", r.back, r.parked, r.loc || ""]).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/* THE LIVE LOCATION LINE, from v1.149.0 (Asim, 22 Nov 2026): whether the
+   phone driving the run sent its location to the live server (server
+   w2.105.0 counts it), and whether Google's drive times came back for it.
+   "" when the live server cannot say, so the report goes as before. */
+function runLocWords(info, since, startAt) {
+  var tz = "Europe/London";
+  var hhmm = function (ms) { return Utilities.formatDate(new Date(ms), tz, "HH:mm"); };
+  if (since && startAt && startAt < since) return "Live location: not recorded for this run.";
+  if (!info) return "";
+  var line;
+  if (info.got > 0 && info.first && info.last) {
+    line = "Live location: " + hhmm(info.first) + " to " + hhmm(info.last) + ".";
+  } else if (info.vague > 0) {
+    line = "Live location: received, never clear enough to use.";
+  } else if (info.other > 0) {
+    line = "Live location: none from the phone driving the run; another phone signed in as the driver sent it.";
+  } else {
+    return "Live location: none received.";
+  }
+  if (info.fail > 0) {
+    line += info.ok > 0
+      ? " Google drive times failed " + info.fail + " time" + (info.fail === 1 ? "" : "s") + "."
+      : " Google drive times failed: " + String(info.err || "no answer").slice(0, 120) + ".";
+  }
+  return line;
+}
+
+/* Each report's live location line, from one ask of the live server. */
+function runLocLines(reports) {
+  var ids = reports.map(function (r) { return r.trip; }).filter(function (x) { return !!x; });
+  if (!ids.length) return;
+  var got = null;
+  try { got = workerCall("livelog", { trips: ids }); } catch (err) { got = null; }
+  if (!got || got.ok !== true || !got.trips) return;
+  reports.forEach(function (r) {
+    r.loc = runLocWords(got.trips[r.trip] || null, Number(got.since) || 0, r.startAt);
+  });
 }
 
 function runReport(nowMs) {
@@ -6060,8 +6099,11 @@ function runReport(nowMs) {
   var to = safetyTo();
   if (!to) return null;
   var sent = [];
-  runReports(SpreadsheetApp.getActiveSpreadsheet(), key).forEach(function (r) {
-    if (!r.ended || done.routes.indexOf(r.route) !== -1) return;
+  var due = runReports(SpreadsheetApp.getActiveSpreadsheet(), key).filter(function (r) {
+    return r.ended && done.routes.indexOf(r.route) === -1;
+  });
+  if (due.length) runLocLines(due);
+  due.forEach(function (r) {
     sendMail({ to: to, subject: r.route + " run, " + ukDay(key), body: runReportText(r, key) });
     /* A line in the Coordinator App too, from v1.145.0. */
     tellCoordinatorPhones({ id: "runreport|" + key + "|" + r.route, kind: "report",
