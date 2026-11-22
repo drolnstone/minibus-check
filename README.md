@@ -1827,13 +1827,15 @@ the old file and the word does not appear once below the line that sets it.
 
 #### What is deliberately NOT alerted
 
-Three real gaps, all of them omissions rather than faults, and worth knowing
+Two real gaps (a third closed in w2.102.0), all of them omissions rather than faults, and worth knowing
 before somebody reports them as bugs:
 
-- **A bus swap with the same driver tells nobody.** Change the registration on
-  the Rota and nothing goes out. The duty email covers for it in words —
-  *"buses can change during the week, check the app on the day"* — which is a
-  sentence standing in for an alert.
+- **A bus swap with the same driver** was told to nobody until w2.102.0
+  (Asim, 22 Nov 2026). Now a bus change or swap saved on the Rota sends one
+  "Bus changed" alert to the driver of each running route whose bus is now a
+  different one, his own line (*Sun 29 Nov North bus: NH56 FWP (was YS70
+  PWE).*), Driver App or else email from the sheet. No other driver hears of
+  it; coordinators keep their Change by line. Tests: suite 91-bus-change.
 - **A passenger cancelling a seat tells nobody.** The booking flips to
   Cancelled and the count drops. Fine when a full bus empties by one; less
   fine when twelve drop out on the Saturday night.
