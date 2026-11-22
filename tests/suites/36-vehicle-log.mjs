@@ -244,7 +244,8 @@ export default async function (root) {
       a.eq(e.id, "L-a1", "the sheet's own row did not reach the app");
       a.eq(e.next, "2027-10-20");
       a.eq(JSON.stringify(load.vehicles.jobs["YS70 PWE"] && load.vehicles.jobs["YS70 PWE"].jobs),
-           JSON.stringify(["Screenwash", "Tyre pressures"]), "the jobs did not reach the app");
+           JSON.stringify(["Oil", "Screenwash", "Tyre pressures"]), "the jobs did not reach the app");
+      a.eq(load.vehicles.jobs["YS70 PWE"].from.Oil.checkId, "chk-8", "each job's own report did not reach the app");
       await W.handleSync(env, { coordShelf: { readAt: Date.now(), requests: [], defects: [],
                                               vehicles: { log: { "YS70 PWE": "nonsense" }, jobs: [1, 2] } } });
       const junk = await coord(env, { op: "load" });
@@ -397,6 +398,22 @@ export default async function (root) {
     });
   });
 
+  s.test("each job carries its own walkaround (w2.108.0): Done names that one, not the bus's newest", async (a) => {
+    await atTime(THU, async () => {
+      const { env } = await fresh();
+      const shelf = await W.cacheGet(env, "coord_shelf");
+      shelf.vehicles.jobs["YS70 PWE"] = { checkId: "chk-9", date: LAST, driver: "Bro Trevor", jobs: ["Oil", "Screenwash"],
+        from: { Oil: { checkId: "chk-8", date: LAST, driver: "Bro Adrian" }, Screenwash: { checkId: "chk-9", date: LAST, driver: "Bro Trevor" } } };
+      await W.cachePut(env, "coord_shelf", shelf).run();
+      const wrong = await act(env, { kind: "job", reg: "YS70 PWE", job: "Oil", checkId: "chk-9" });
+      a.not(wrong.ok, "Done on Oil named the bus's newest walkaround, not Oil's own");
+      const out = await act(env, { kind: "job", reg: "YS70 PWE", job: "Oil", checkId: "chk-8" });
+      a.ok(out.ok, JSON.stringify(out));
+      const j = (await coord(env, { op: "load" })).vehicles.jobs["YS70 PWE"];
+      a.eq(JSON.stringify(j.jobs), JSON.stringify(["Screenwash"]));
+    });
+  });
+
   /* ---- the sheet -------------------------------------------------------- */
 
   const day = (y, m, d) => new Date(y, m - 1, d);
@@ -519,15 +536,42 @@ export default async function (root) {
     });
   });
 
-  s.test("jobs to arrange come from the last walkaround, less those marked done", async (a) => {
+  s.test("jobs stay open from their newest report until Done (v1.151.0): a later walkaround leaving one out does not clear it", async (a) => {
     await atTime(THU, async () => {
       const L = sheet();
       const before = call(L, "jobsOutstanding", ss(L));
-      a.eq(JSON.stringify(Array.from(before["YS70 PWE"].jobs)), JSON.stringify(["Screenwash", "Tyre pressures"]),
-           "the older walkaround's Oil is still asked for, or the last one's jobs are missing");
+      a.eq(JSON.stringify(Array.from(before["YS70 PWE"].jobs)), JSON.stringify(["Oil", "Screenwash", "Tyre pressures"]),
+           "the older walkaround's Oil dropped when the next one left it out");
+      a.eq(before["YS70 PWE"].from.Oil.checkId, "chk-8");
+      a.eq(before["YS70 PWE"].checkId, "chk-9", "the bus's line does not name the newest report");
       call(L, "applyCoordAction", ss(L), A("a6", "job", { reg: "YS70 PWE", job: "Screenwash", checkId: "chk-9", note: "" }), {});
+      call(L, "applyCoordAction", ss(L), A("a7", "job", { reg: "YS70 PWE", job: "Oil", checkId: "chk-8", note: "" }), {});
       const after = call(L, "jobsOutstanding", ss(L));
       a.eq(JSON.stringify(Array.from(after["YS70 PWE"].jobs)), JSON.stringify(["Tyre pressures"]));
+    });
+  });
+
+  s.test("Done closes every earlier report of the job; a walkaround after it asks again; Needs fuel follows the latest walkaround", async (a) => {
+    await atTime(THU, async () => {
+      const L = sheet();
+      const ck = ss(L).getSheetByName("Checks");
+      const row = (rec, id, jobs) => {
+        const h = ck.getDataRange().getValues()[0], r = h.map(() => "");
+        r[h.indexOf("Received")] = rec; r[h.indexOf("Check ID")] = id; r[h.indexOf("Date")] = rec;
+        r[h.indexOf("Registration")] = "NH56 FWP"; r[h.indexOf("Driver")] = "Bro Adrian"; r[h.indexOf("To arrange")] = jobs;
+        ck.appendRow(r);
+      };
+      row(new Date(2026, 8, 13, 9, 0), "n1", "Needs a wash, Needs fuel");
+      row(new Date(2026, 8, 20, 9, 0), "n2", "Needs a wash");
+      row(new Date(2026, 8, 27, 9, 0), "n3", "");
+      let j = call(L, "jobsOutstanding", ss(L))["NH56 FWP"];
+      a.eq(JSON.stringify(Array.from(j.jobs)), JSON.stringify(["Needs a wash"]), "fuel stayed after a later walkaround left it out, or the wash dropped");
+      a.eq(j.from["Needs a wash"].checkId, "n2", "the wash does not name its newest report");
+      call(L, "applyCoordAction", ss(L), A("d1", "job", { reg: "NH56 FWP", job: "Needs a wash", checkId: "n2", note: "" }), {});
+      a.eq(call(L, "jobsOutstanding", ss(L))["NH56 FWP"], undefined, "Done on the newest report left an earlier one open");
+      row(new Date(Date.now() + 60000), "n4", "Needs a wash");
+      j = call(L, "jobsOutstanding", ss(L))["NH56 FWP"];
+      a.eq(JSON.stringify(Array.from(j.jobs)), JSON.stringify(["Needs a wash"]), "a walkaround after the Done did not ask again");
     });
   });
 
@@ -547,7 +591,7 @@ export default async function (root) {
       J("b3", "aside");
       J("b4", "");
       const after = call(L, "jobsOutstanding", ss(L))["YS70 PWE"];
-      a.eq(JSON.stringify(Array.from(after.jobs)), JSON.stringify(["Tyre pressures"]));
+      a.eq(JSON.stringify(Array.from(after.jobs)), JSON.stringify(["Oil", "Tyre pressures"]));
       a.eq(JSON.stringify(Array.from(after.aside)), "[]");
     });
   });

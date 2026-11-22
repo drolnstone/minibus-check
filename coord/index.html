@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.187.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.188.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -397,6 +397,7 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .row .v{flex:1;min-width:0;font-weight:600;overflow-wrap:anywhere}
 .row .v small{display:block;font-weight:400;color:var(--muted);font-size:13px}
 .row .v.none{font-weight:400;color:var(--muted)}
+.card > .row:first-child{border-top:0}
 .row .acts{display:flex;gap:6px}
 .notes{margin:0;padding:0;list-style:none}
 .notes li{padding:6px 0;border-top:1px dashed var(--hair);font-size:15px;white-space:pre-line}
@@ -813,7 +814,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.187.0";
+var PAGE_VERSION = "v1.188.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -3328,6 +3329,11 @@ function jobsOf(reg){
    off the first screen and out of the counts, until Bring back or Done. */
 var JOBS_ASIDE = ["Needs a wash", "Inside needs a clean"];
 function jobAside(j, job){ return !!(j && (j.aside || []).indexOf(job) !== -1); }
+/* The walkaround a job's newest report came from (v1.188.0), else the bus's. */
+function jobFrom(j, job){
+  var f = j && j.from && j.from[job];
+  return f ? f : { checkId: (j && j.checkId) || "", date: (j && j.date) || "", driver: (j && j.driver) || "" };
+}
 function jobsOpen(j){ return ((j && j.jobs) || []).filter(function(x){ return !jobAside(j, x); }); }
 function defectsOf(reg){ return ((D && D.defects) || []).filter(function(d){ return same(d.reg, reg); }); }
 function milesOf(reg){
@@ -3612,11 +3618,16 @@ function paintBus(reg){
      (Asim, 16 Nov). */
   var j = jobsOf(b.reg);
   if(j && j.jobs && j.jobs.length){
-    h += '<h3>Jobs to arrange</h3><div class="card"><p class="tiny" style="margin:0 0 4px">From the walkaround ' +
-         esc([j.date ? shortDay(j.date) : "", j.driver].filter(Boolean).join(", ")) + '.</p>' +
+    /* From v1.188.0 a job stays open from its own newest report, so jobs on
+       one bus can come from different walkarounds: then each row says which. */
+    var who = function(f){ return [f.date ? shortDay(f.date) : "", f.driver].filter(Boolean).join(", "); };
+    var one = j.jobs.every(function(x){ return jobFrom(j, x).checkId === jobFrom(j, j.jobs[0]).checkId; });
+    h += '<h3>Jobs to arrange</h3><div class="card">' +
+         (one ? '<p class="tiny" style="margin:0 0 4px">From the walkaround ' + esc(who(jobFrom(j, j.jobs[0]))) + '.</p>' : '') +
          j.jobs.map(function(x){
            var jd = 'data-reg="' + esc(b.reg) + '" data-job="' + esc(x) + '"', off = jobAside(j, x);
-           return '<div class="row"><span class="v">' + esc(x) + (off ? ' <span class="tag info">Set aside</span>' : '') + '</span><span class="acts">' +
+           return '<div class="row"><span class="v">' + esc(x) + (off ? ' <span class="tag info">Set aside</span>' : '') +
+                  (one ? '' : '<br><span class="tiny">' + esc(who(jobFrom(j, x))) + '</span>') + '</span><span class="acts">' +
                   (x === "Needs fuel" ? '<button class="mini" type="button" data-do="fuelbuy" data-reg="' + esc(b.reg) + '">Fuel bought</button>'
                    : (JOBS_ASIDE.indexOf(x) !== -1 ? '<button class="mini" type="button" data-do="' + (off ? 'jobback' : 'jobaside') + '" ' + jd + '>' + (off ? 'Bring back' : 'Set aside') + '</button>' : '') +
                      '<button class="mini" type="button" data-do="job" ' + jd + '>Done</button>') + '</span></div>';
@@ -3981,7 +3992,7 @@ function recordSend(b){
   /* Fuel bought closes the walkaround's Needs fuel (v1.158.0). */
   var jf = jobsOf(b.reg);
   if(done && ws.indexOf("Fuel") !== -1 && jf && (jf.jobs || []).indexOf("Needs fuel") !== -1) {
-    list.push({ kind: "job", reg: b.reg, job: "Needs fuel", checkId: jf.checkId, note: "Fuel bought" });
+    list.push({ kind: "job", reg: b.reg, job: "Needs fuel", checkId: jobFrom(jf, "Needs fuel").checkId, note: "Fuel bought" });
   }
   if(list.length === 1){ act(list[0]); return; }
   actMany(list);
@@ -4097,24 +4108,26 @@ var JOB_SAMPLE = {
 };
 function jobDone(reg, job){
   var j = jobsOf(reg); if(!j) return;
-  openSheet({ eyebrow: reg, title: job, line: "Asked for at the walkaround " + (j.date ? shortDay(j.date) : "") + ". Mark it done?",
+  var f = jobFrom(j, job);
+  openSheet({ eyebrow: reg, title: job, line: "Asked for at the walkaround " + (f.date ? shortDay(f.date) : "") + ". Mark it done?",
     body: '<div class="field"><label for="jobNote">' + (job === "Tyres need air" ? "Pressure or where" : "Note") + '</label><input id="jobNote" maxlength="200" autocomplete="off" placeholder="' + esc(JOB_SAMPLE[job] || "e.g. Booked in after the service") + '"></div>',
     go: "Done",
     onGo: function(){
       var note = ($("jobNote").value || "").trim();
       /* Tyres are a safety item (v1.159.0): the pressure or where, always. */
       if(job === "Tyres need air" && !note){ sheetSay("Say the pressure or where.", true); return; }
-      act({ kind: "job", reg: reg, job: job, checkId: j.checkId, note: note });
+      act({ kind: "job", reg: reg, job: job, checkId: f.checkId, note: note });
     } });
 }
 
 /* Set aside or bring back a wash or a clean (v1.184.0). */
 function jobAsideAsk(reg, job, back){
   var j = jobsOf(reg); if(!j) return;
+  var f = jobFrom(j, job);
   openSheet({ eyebrow: reg, title: job,
-    line: "Asked for at the walkaround " + (j.date ? shortDay(j.date) : "") + ".",
+    line: "Asked for at the walkaround " + (f.date ? shortDay(f.date) : "") + ".",
     go: back ? "Bring back" : "Set aside",
-    onGo: function(){ act({ kind: "job", how: back ? "back" : "aside", reg: reg, job: job, checkId: j.checkId }); } });
+    onGo: function(){ act({ kind: "job", how: back ? "back" : "aside", reg: reg, job: job, checkId: f.checkId }); } });
 }
 
 /* ---- the run record -------------------------------------------------------------- */

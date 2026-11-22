@@ -1,30 +1,26 @@
 MINIBUS
 =======
-  pages v1.187.0 · server w2.107.0 · sheet v1.150.0
+  pages v1.188.0 · server w2.108.0 · sheet v1.151.0
 
-YOU ARE ON   app v1.186.0 · server w2.106.0 · sheet v1.150.0
-GOING TO     app v1.187.0 · server w2.107.0 · sheet v1.150.0
+YOU ARE ON   app v1.187.0 · server w2.107.0 · sheet v1.150.0
+GOING TO     app v1.188.0 · server w2.108.0 · sheet v1.151.0
 
-The Coordinator App and the server. The sheet does not change.
+Pages, server and sheet.
 
-MOVE A STOP ONTO A ROUTE WITH 2 TRIPS
-Move a stop (or Put back) onto a route split into Trip 1 and Trip 2 asks:
-  Trip 1   as now: after a Trip 1 stop, at a time you type.
-  Trip 2   after a Trip 2 stop, or first on Trip 2. No time to type: it
-           is worked out with the rest of Trip 2's times.
-Any time of the morning, until that trip is over, and not behind a stop
-the bus has already been past.
-Passengers at that stop:
-  Trip 1        told at once, as now, with the time typed.
-  Trip 2        "Sun 22 Nov: the North bus picks you up on its second
-                trip, about 11:25. After service, the South bus home."
-                Before 09:45 they hear it at 09:45 with Trip 2's other
-                passengers; after 09:45, at once. Once only.
-The 2 trips card shows the moved stop in its trip, without To trip 1/2.
-To change its trip: Put back, then Move a stop again. Stops moved shows
-"North, Trip 2".
+Jobs to arrange (wash, inside clean, tyres) stay open from their newest
+report until someone taps Done. A later walkaround that leaves a job out,
+or ticks Nothing needed, no longer clears it. Done closes that report and
+every earlier one of the same job on that bus; a walkaround after the Done
+asks again. Needs fuel still follows the latest walkaround.
+
+Coordinator App, bus page: when a bus's jobs come from different
+walkarounds, each job shows its own date and driver.
+
+Once merged, jobs from recent walkarounds never marked Done come back
+once.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.187.0 · w2.107.0 · v1.150.0.
+A. Coordinator App, App info: v1.188.0 · w2.108.0 · v1.151.0.
+B. Buses: the wash that went today is back on its bus.

@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.150.0";
+var SCRIPT_VERSION = "v1.151.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1850,7 +1850,7 @@ function coordVfix(ss, a, b, by) {
 
 /* A job from a walkaround, done. The walkaround row is not touched: the job
    is marked on History, and the list of what is left is worked out from the
-   two (jobsOutstanding). */
+   two (jobsOutstanding). Done closes earlier reports too (v1.151.0). */
 function coordJob(ss, a, b, by) {
   /* Set aside and Brought back, from v1.148.0 (Asim, 22 Nov 2026). */
   var to = b.how === "aside" ? "Set aside" : b.how === "back" ? "Brought back" : "Done";
@@ -1923,9 +1923,15 @@ function coordMail(ss, a, b, by) {
 }
 
 /* ---- jobs to arrange ----------------------------------------------------
-   What the last walkaround on each bus asked for, less anything since marked
-   done. The last walkaround is the truth about the bus: one that ticked
-   Nothing needed leaves nothing, and one that asks again asks again. */
+   From v1.151.0 (Asim, 22 Nov 2026): a job stays open from its newest
+   report until it is marked Done. A later walkaround that leaves it out, or
+   ticks Nothing needed, does not clear it. Done closes that report and every
+   earlier one of the same job on that bus; a walkaround after the Done asks
+   again. Needs fuel is the exception: it follows the bus's latest walkaround,
+   as a higher reading is the fuel bought (and Fuel bought marks it Done).
+   Before v1.151.0 every job followed the latest walkaround only. */
+var JOB_LATEST_ONLY = ["Needs fuel"];
+
 function jobsOutstanding(ss) {
   var out = {};
   var ck = ss.getSheetByName(CHECKS_SHEET);
@@ -1934,33 +1940,52 @@ function jobsOutstanding(ss) {
   if (!c.reg || !c.arrange) return out;
   var n = Math.min(ck.getLastRow() - 1, 500);
   var vals = ck.getRange(ck.getLastRow() - n + 1, 1, n, ck.getLastColumn()).getValues();
-  var latest = {};
+  var latest = {}, newest = {}, order = {};
   vals.forEach(function (r) {
     var reg = String(at1(r, c.reg) || "").trim().toUpperCase();
     if (!reg) return;
     var rec = at1(r, c.received);
-    var t = isDateLike(rec) ? rec.getTime() : 0;
-    if (latest[reg] && t < latest[reg].t) return;
-    latest[reg] = { t: t, checkId: String(at1(r, c.id) || "").trim(), date: anyToKey(at1(r, c.date)),
-                    driver: String(at1(r, c.driver) || "").trim(),
-                    jobs: String(at1(r, c.arrange) || "").split(",").map(function (j) { return j.trim(); })
-                            .filter(function (j) { return j; }) };
+    var rep = { t: isDateLike(rec) ? rec.getTime() : 0, checkId: String(at1(r, c.id) || "").trim(),
+                date: anyToKey(at1(r, c.date)), driver: String(at1(r, c.driver) || "").trim() };
+    var jobs = String(at1(r, c.arrange) || "").split(",").map(function (j) { return j.trim(); })
+                 .filter(function (j) { return j; });
+    if (!latest[reg] || rep.t >= latest[reg].t) latest[reg] = { t: rep.t, jobs: jobs };
+    jobs.forEach(function (j) {
+      var k = reg + "|" + j;
+      if (!newest[k] || rep.t >= newest[k].t) newest[k] = rep;
+      order[reg] = order[reg] || [];
+      if (order[reg].indexOf(j) === -1) order[reg].push(j);
+    });
   });
-  /* Set aside (v1.148.0) is by bus and job, not by walkaround: a later
-     walkaround asking for the same wash keeps it aside. The latest of Set
+  /* Done closes a report it names and any report that reached the sheet
+     before it. Set aside (v1.148.0) is by bus and job: the latest of Set
      aside, Brought back and Done stands. */
-  var done = {}, aside = {};
+  var doneAt = {}, doneRef = {}, aside = {};
   historyRead(ss, 3000).forEach(function (h) {
     if (h.what !== "Job to arrange") return;
-    if (h.to === "Done") done[h.reg + "|" + h.ref + "|" + h.from] = true;
-    if (h.to === "Done" || h.to === "Brought back") delete aside[h.reg + "|" + h.from];
-    if (h.to === "Set aside") aside[h.reg + "|" + h.from] = true;
+    var k = h.reg + "|" + h.from;
+    if (h.to === "Done") {
+      doneAt[k] = Math.max(doneAt[k] || 0, h.when || 0);
+      doneRef[k + "|" + h.ref] = true;
+    }
+    if (h.to === "Done" || h.to === "Brought back") delete aside[k];
+    if (h.to === "Set aside") aside[k] = true;
   });
-  Object.keys(latest).forEach(function (reg) {
-    var L = latest[reg];
-    var left = L.jobs.filter(function (j) { return !done[reg + "|" + L.checkId + "|" + j]; });
-    if (left.length) out[reg] = { checkId: L.checkId, date: L.date, driver: L.driver, jobs: left,
-                                  aside: left.filter(function (j) { return aside[reg + "|" + j]; }) };
+  Object.keys(order).forEach(function (reg) {
+    var from = {};
+    var left = order[reg].filter(function (j) {
+      var k = reg + "|" + j, R = newest[k];
+      if (JOB_LATEST_ONLY.indexOf(j) !== -1 && latest[reg].jobs.indexOf(j) === -1) return false;
+      if (doneRef[k + "|" + R.checkId] || (doneAt[k] && R.t <= doneAt[k])) return false;
+      from[j] = { checkId: R.checkId, date: R.date, driver: R.driver };
+      return true;
+    });
+    if (!left.length) return;
+    /* The bus's line names the newest report among its open jobs. */
+    var top = left.map(function (j) { return newest[reg + "|" + j]; })
+                  .sort(function (p, q) { return q.t - p.t; })[0];
+    out[reg] = { checkId: top.checkId, date: top.date, driver: top.driver, jobs: left, from: from,
+                 aside: left.filter(function (j) { return aside[reg + "|" + j]; }) };
   });
   return out;
 }

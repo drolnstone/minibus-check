@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.107.0";
+const SCRIPT_VERSION = "w2.108.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -9585,7 +9585,7 @@ async function coordVehiclesView(env) {
     const b = a.body || {};
     if (a.kind === "job") {
       const j = jobs[b.reg];
-      if (j && j.checkId === b.checkId) {
+      if (j && jobCheckId(j, b.job) === b.checkId) {
         /* Set aside and Bring back (w2.104.0) move the job on or off the
            aside list; Done takes it off both. */
         const aside = (j.aside || []).filter((x) => x !== b.job);
@@ -9633,8 +9633,16 @@ function vehiclesShelfOf(v) {
     const jobs = j.jobs.map((x) => vlogText(x, 80)).filter(Boolean).slice(0, 20);
     /* Set aside (sheet v1.148.0): jobs still open but off the first screen. */
     const aside = (Array.isArray(j.aside) ? j.aside : []).map((x) => vlogText(x, 80)).filter((x) => jobs.indexOf(x) !== -1);
+    /* Each job's own newest report (sheet v1.151.0): a job stays open from
+       it until Done, so jobs on one bus can come from different walkarounds. */
+    const from = {};
+    const src = (j.from && typeof j.from === "object" && !Array.isArray(j.from)) ? j.from : {};
+    for (const x of jobs) {
+      const f = src[x];
+      if (f && typeof f === "object") from[x] = { checkId: vlogText(f.checkId, 80), date: vlogDay(f.date), driver: vlogText(f.driver, 60) };
+    }
     if (jobs.length) out.jobs[String(reg).toUpperCase()] = { checkId: vlogText(j.checkId, 80), date: vlogDay(j.date),
-                                                             driver: vlogText(j.driver, 60), jobs, aside };
+                                                             driver: vlogText(j.driver, 60), jobs, aside, from };
   }
   return out;
 }
@@ -9778,7 +9786,7 @@ async function actJob(env, me, act) {
   const view = await coordVehiclesView(env);
   const j = view.jobs[reg];
   const job = String(act.job || "");
-  if (!j || j.checkId !== String(act.checkId || "") || (j.jobs || []).indexOf(job) === -1) {
+  if (!j || (j.jobs || []).indexOf(job) === -1 || jobCheckId(j, job) !== String(act.checkId || "")) {
     return { ok: false, error: "That job is not waiting any more." };
   }
   /* Set aside, from w2.104.0 (Asim, 22 Nov 2026): a wash or a clean off the
@@ -9789,12 +9797,15 @@ async function actJob(env, me, act) {
   if (how !== "done" && JOBS_ASIDE.indexOf(job) === -1) return { ok: false, error: job + " cannot be set aside." };
   if (how === "aside" && aside) return { ok: false, error: "Already set aside." };
   if (how === "back" && !aside) return { ok: false, error: "Not set aside." };
-  const body = { reg: reg, job: job, checkId: j.checkId, note: vlogText(act.note, 200) };
+  const body = { reg: reg, job: job, checkId: jobCheckId(j, job), note: vlogText(act.note, 200) };
   if (how !== "done") body.how = how;
   return { ok: true, sunday: "", body: body,
            words: reg + ": " + job + (how === "aside" ? ", set aside." : how === "back" ? ", brought back." : ", done.") };
 }
 const JOBS_ASIDE = ["Needs a wash", "Inside needs a clean"];
+/* The walkaround a job's newest report came from (sheet v1.151.0), else the
+   bus's, from an older sheet. */
+function jobCheckId(j, job) { return String((j && j.from && j.from[job] && j.from[job].checkId) || (j && j.checkId) || ""); }
 
 /* ---- an expired MOT or insurance stops the bus, from w2.36.0 ------------
 
