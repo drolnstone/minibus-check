@@ -2521,6 +2521,48 @@ if (want("C65")) {
   await p.ctx.close();
 }
 
+/* C66 — a stop on the other route for one Sunday (v1.182.0, Asim, 22 Nov
+   2026): Move to South on Bus stops, after a South stop, at a time between
+   it and the next; the live server has it at once; Put back undoes it. */
+if (want("C66")) {
+  const w66 = await world();
+  const p = await page(w66.env, { name: "Bro Arthur" });
+  try {
+    await p.signIn(PIN);
+    await p.pg.evaluate(() => { location.hash = "stops"; });
+    await p.wait(600);
+    const btn = await p.text('#stopsBody [data-do="stopmove"][data-id="N06"]');
+    await p.pg.click('#stopsBody [data-do="stopmove"][data-id="N06"]');
+    await p.wait(300);
+    await p.pg.selectOption("#mvAfter", "S03");
+    await p.wait(100);
+    const range = await p.text("#mvRange");
+    await p.pg.fill("#mvTime", "10:40");
+    await p.pg.click("#sheetGo");
+    await p.wait(300);
+    const refused = await p.pg.$eval("#sheetSay", (e) => ({ t: e.textContent, bad: e.classList.contains("bad") }));
+    await p.pg.fill("#mvTime", "10:34");
+    await p.shot("C66a-move-stop");
+    await p.go();
+    await p.wait(900);
+    const south = W.pickupsAndArrivals(await W.getStops(w66.env)).filter((x) => x.route === "South").map((x) => x.id);
+    const tag = await p.text('#stopsBody');
+    await p.shot("C66b-moved");
+    await p.pg.click('#stopsBody [data-do="stopback"][data-id="N06"]');
+    await p.wait(300);
+    await p.go();
+    await p.wait(900);
+    const north = W.pickupsAndArrivals(await W.getStops(w66.env)).filter((x) => x.route === "North").map((x) => x.id);
+    const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth > 392);
+    check("C66", "Bus stops: Move to South after a South stop at a fitting time, Put back undoes it",
+          btn === "Move to South" && range === "From 10:32 to 10:36." && refused.bad && refused.t === "Pick a time from 10:32 to 10:36." &&
+          south.indexOf("N06") === south.indexOf("S03") + 1 && /South bus, /.test(tag) && /Put back/.test(tag) &&
+          north.indexOf("N06") !== -1 && !wide && !p.errs.length,
+          JSON.stringify({ btn, range, refused, south, north, wide, errs: p.errs }));
+  } catch (e) { stopped("C66", e); }
+  await p.ctx.close();
+}
+
 await done();
 cleanup(ROOT);
 const bad = results.filter((r) => !r.ok);

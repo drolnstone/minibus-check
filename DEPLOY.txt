@@ -1,20 +1,28 @@
 MINIBUS
 =======
-  pages v1.181.0 · server w2.102.0 · sheet v1.146.0
+  pages v1.182.0 · server w2.103.0 · sheet v1.147.0
 
-YOU ARE ON   app v1.180.1 · server w2.102.0 · sheet v1.146.0
-GOING TO     app v1.181.0 · server w2.102.0 · sheet v1.146.0
+YOU ARE ON   app v1.181.0 · server w2.102.0 · sheet v1.146.0
+GOING TO     app v1.182.0 · server w2.103.0 · sheet v1.147.0
 
-Pages only.
+Pages, server and sheet.
 
-Coordinator App, a Sunday on the Rota: a "Swap buses" button under the
-North and South cards. One confirm swaps the two buses for that Sunday;
-each driver whose bus changed gets one "Bus changed" alert (w2.102.0).
-Change on each Bus line stays as it is. Not shown once a replacement bus
-is on today's run, or when a bus is not known.
+Coordinator App, Bus stops: "Move to South" (or North) on each active
+pickup. Pick the stop it goes after on the other route and its time on
+that run (between the stop before and the stop after). For the coming
+Sunday only: the stop and its bookings go to the other bus, then it is
+back on its own route by itself. "Put back" undoes it before then.
+
+Told once each: the stop's passengers ("South bus at Bedford Road. Sun
+22 Nov: the South bus picks you up at 10:34. After service, the North bus
+home."), the driver it goes to ("Stop added"), the driver it leaves
+("Stop moved"), other coordinators (Change by). The Bus Stops tab is not
+changed. Live ETA treats it as any stop on the new route.
+
+Sheet: the run report lists a moved stop on the route that picked it up.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.181.0 · w2.102.0 · v1.146.0.
-B. Open a coming Sunday from the Rota: "Swap buses" under the two cards.
+A. Coordinator App, App info: v1.182.0 · w2.103.0 · v1.147.0.
+B. Bus stops: "Move to South" beside Edit on each North pickup.
