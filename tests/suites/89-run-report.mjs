@@ -87,7 +87,9 @@ export default async function (root) {
   s.test("not before 16:00, not on other days, not without a run", async (a) => {
     a.eq((await run("15:59")).gas.mail.length, 0);
     const L = load();
-    await atTime("2026-11-23T16:30:00Z", () => call(L, "runReport"));
+    /* The time passed in: L was loaded outside the fixed clock, so its Date
+       is the real one, and on a real Sunday after 16:00 it sent. */
+    await atTime("2026-11-23T16:30:00Z", () => call(L, "runReport", new Date("2026-11-23T16:30:00Z").getTime()));
     a.eq(L.gas.mail.length, 0);
     a.eq((await run("16:30", { trips: () => [ev({ Event: "pickup", "Stop ID": "N01", Happened: at("10:09") })] })).gas.mail.length, 0);
   });

@@ -1818,7 +1818,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.185.0";
+var APP_VERSION = "v1.186.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -7619,6 +7619,12 @@ var rotaCountsAgain=null;
 var boardMyRun={ route:"", day:"", who:"" };
 /* Also learned here, because a driver can spend a whole morning on the stops
    screen without the rota ever being fetched. */
+var tripSplit = {};
+/* Trip 2 is ready to start on this route: Trip 1 has ended at Church. */
+function tripTwoReady(route){
+  var sp=tripSplit[route];
+  return !!(sp && sp.ready && new Date().toDateString()===new Date(sp.t1Ended||0).toDateString());
+}
 function rotaCountsFetch(route,cb){
   if(typeof route==="function"){ cb=route; route=null; }
   route = route || rotaStopsRoute || rotaHomeRoute() || "North";
@@ -7650,6 +7656,8 @@ function rotaCountsFetch(route,cb){
          off so a fault in one does not cost the screen. Keep what arrived
          and leave the rest as it was, rather than blanking good numbers
          because a different part failed. */
+      /* A second trip for overflow on this route today (v1.186.0). */
+      tripSplit[route] = (out.split && out.split.on) ? out.split : null;
       if(out.counts){ rotaStopCounts = out.counts; rotaStopCountsFor = out.date||""; }
       /* The day's timetable from the live server (w2.103.2), so a stop moved
          to the other route for the day shows on this list (v1.183.1). */
@@ -9162,6 +9170,16 @@ function tripHeaderHtml(route,mayTap,onThis,queued,view){
     if(tripMayReopen(route)){
       h+='<p class="trip-note trip-cover">Ended automatically, back at Church.</p>';
     }
+    /* TRIP 2 (v1.186.0, Asim, 22 Nov 2026): Trip 1 has ended at Church and
+       the same bus goes back out for the rest. Started by the driver, when
+       the passengers are off. */
+    if(tripTwoReady(route) && (mayTap || mine) && tripClosed){
+      var sp2=tripSplit[route];
+      h+='<p class="trip-note"><b>Trip 2:</b> '+esc((sp2.trip2||[]).filter(function(x){ return x.booked>0; })
+           .map(function(x){ return x.stop; }).join(", "))+'.</p>';
+      if(pinGateNeeded()) pinWhy="This run is recorded in your name.";
+      h+=tripBusButtonsHtml();
+    }
     return tripStripEnd(h);
   }
 
@@ -9380,9 +9398,10 @@ function tripBusButtonsHtml(){
   }
   order.forEach(function(v){
     shown++;
+    var startWord = tripTwoReady(route) ? "Start trip 2" : "Start trip";
     h+='<button class="btn '+(shown===1?"btn-main":"btn-ghost")+(off?" is-off":"")+'" '+
        'data-tripstart="'+esc(v.reg)+'">'+
-       (one? "Start trip" : "Start trip \u00B7 "+esc(v.reg))+'</button>';
+       (one? startWord : startWord+" \u00B7 "+esc(v.reg))+'</button>';
     /* Said under the button it belongs to, before he presses it. Never a
        block and never a confirm: the check gate already stops a bus that
        should not run, so a driver reaching for the other one has a reason,
