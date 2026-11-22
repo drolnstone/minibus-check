@@ -169,5 +169,88 @@ export default async function (root) {
     a.eq(rota[0].set.northCover, "");
   });
 
+  /* w2.107.0: a stop moved onto a split route goes into the trip picked. */
+  const southPid = async (env) => {
+    const pid = await W.passengerId(env, PH);
+    return [
+      { route: "North", stopId: "N01", seats: 7 }, { route: "North", stopId: "N02", seats: 5 },
+      { route: "North", stopId: "N03", seats: 3 }, { route: "North", stopId: "N05", seats: 4 },
+      { route: "North", stopId: "N06", seats: 3 }, { route: "South", stopId: "S02", seats: 2, pid, device: "dev" }];
+  };
+  const freshSouth = async () => {
+    const f = await fresh();
+    await f.db.prepare("DELETE FROM bookings").run();
+    await seedBookings(f.db, KEY, await southPid(f.env));
+    return f;
+  };
+  const move = async (env, a) => J(await post(env, { action: "coord", who: "Bro Asim", pin: PIN, op: "act",
+    act: Object.assign({ id: "mv-act-" + (++n), kind: "stopmove", op: "move" }, a) }));
+
+  s.test("moved onto a split route after 09:45: Trip 2 picked, its passengers told with a time", async (a) => {
+    const { env } = await freshSouth();
+    await atTime(T("09:31"), () => W.sweepTripSplit(env));
+    await atTime(T("09:45"), () => W.sweepTripSplit(env));
+    const none = await atTime(T("10:00"), () => move(env, { stopId: "S02", after: "N06", time: "10:43" }));
+    a.ok(!none.ok); a.eq(none.error, "Pick Trip 1 or Trip 2.");
+    const r = await atTime(T("10:00"), () => move(env, { stopId: "S02", after: "N06", trip: 2 }));
+    a.ok(r.ok, JSON.stringify(r));
+    const rec = (await W.splitDay(env, KEY)).North;
+    a.eq(rec.t2.join(","), "N05,N06,S02,N07,N08");
+    a.ok(/^\d\d:\d\d$/.test(rec.times.S02) && rec.times.S02 >= rec.times.N06, JSON.stringify(rec.times));
+    const m = await box(env);
+    a.eq(m.length, 1, JSON.stringify(m));
+    a.eq(m[0].title, "North bus at Vicar Rd");
+    a.has(m[0].body, "the North bus picks you up on its second trip, about " + rec.times.S02 + ". After service, the South bus home.");
+    const list = await atTime(T("10:01"), () => W.getStops(env));
+    a.eq(ids(list, "North~2"), "N05,N06,S02,N07,N08");
+    const p = await atTime(T("10:01"), async () => W.tripPayload(env, "dev", "", "", await W.passengerId(env, PH)));
+    a.eq(p.trip, 2); a.eq(p.route, "North"); a.eq(p.scheduled, rec.times.S02);
+  });
+
+  s.test("moved onto Trip 2 before 09:45: told once, at 09:45; the card cannot swap it", async (a) => {
+    const { env } = await freshSouth();
+    await atTime(T("09:31"), () => W.sweepTripSplit(env));
+    const r = await atTime(T("09:35"), () => move(env, { stopId: "S02", after: "", trip: 2 }));
+    a.ok(r.ok, JSON.stringify(r));
+    a.eq((await box(env)).length, 0, "not before 09:45");
+    const sw = await atTime(T("09:36"), () => act(env, { route: "North", op: "move", stopId: "S02" }));
+    a.ok(!sw.ok); a.has(sw.error, "Put it back");
+    await atTime(T("09:45"), () => W.sweepTripSplit(env));
+    const m = await box(env);
+    a.eq(m.length, 1, JSON.stringify(m));
+    a.eq(m[0].title, "North bus at Vicar Rd");
+    a.has(m[0].body, "on its second trip, about ");
+    await atTime(T("09:46"), () => W.sweepTripSplit(env));
+    a.eq((await box(env)).length, 1, "once");
+  });
+
+  s.test("moved onto Trip 1 of a split route: typed time, told at once; Put back takes it off", async (a) => {
+    const { env } = await freshSouth();
+    await atTime(T("09:31"), () => W.sweepTripSplit(env));
+    const bad = await atTime(T("09:40"), () => move(env, { stopId: "S02", after: "N05", trip: 1, time: "10:40" }));
+    a.ok(!bad.ok); a.eq(bad.error, "Pick a stop on Trip 1.");
+    const r = await atTime(T("09:40"), () => move(env, { stopId: "S02", after: "N03", trip: 1, time: "10:28" }));
+    a.ok(r.ok, JSON.stringify(r));
+    const rec = (await W.splitDay(env, KEY)).North;
+    a.eq(rec.t1.join(","), "N01,N02,N03,S02,N04"); a.eq(rec.b1, 17);
+    const m = await box(env);
+    a.eq(m.length, 1); a.has(m[0].body, "picks you up at 10:28");
+    const back = await atTime(T("09:50"), async () => J(await post(env, { action: "coord", who: "Bro Asim", pin: PIN, op: "act",
+      act: { id: "mv-back-1", kind: "stopmove", op: "back", stopId: "S02" } })));
+    a.ok(back.ok, JSON.stringify(back));
+    a.eq((await W.splitDay(env, KEY)).North.t1.join(","), "N01,N02,N03,N04");
+  });
+
+  s.test("not onto a trip that is over", async (a) => {
+    const { env } = await freshSouth();
+    await atTime(T("09:31"), () => W.sweepTripSplit(env));
+    await atTime(T("09:52"), () => tap(env, [{ event: "start", at: at("09:52") }]));
+    await atTime(T("10:40"), () => tap(env, [{ event: "end", at: at("10:40"), auto: 1 }]));
+    const r = await atTime(T("10:41"), () => move(env, { stopId: "S02", after: "N03", trip: 1, time: "10:28" }));
+    a.ok(!r.ok); a.eq(r.error, "Trip 1 on North is over.");
+    const ok2 = await atTime(T("10:41"), () => move(env, { stopId: "S02", after: "", trip: 2 }));
+    a.ok(ok2.ok, JSON.stringify(ok2));
+  });
+
   return s;
 }

@@ -1,52 +1,30 @@
 MINIBUS
 =======
-  pages v1.186.0 · server w2.106.0 · sheet v1.150.0
+  pages v1.187.0 · server w2.107.0 · sheet v1.150.0
 
-YOU ARE ON   app v1.185.0 · server w2.105.0 · sheet v1.149.0
-GOING TO     app v1.186.0 · server w2.106.0 · sheet v1.150.0
+YOU ARE ON   app v1.186.0 · server w2.106.0 · sheet v1.150.0
+GOING TO     app v1.187.0 · server w2.107.0 · sheet v1.150.0
 
-All three apps, the server and the sheet.
+The Coordinator App and the server. The sheet does not change.
 
-SECOND TRIP FOR OVERFLOW
-At 09:31 on a Sunday, a route booked over its bus's seats (after any bus
-swap) is split into Trip 1 and Trip 2 on the same bus.
-  Trip 1   whole stops from the farthest out, until the next would not
-           fit; then Church, as now.
-  Trip 2   the rest, farthest to closest, once Trip 1 has ended at Church.
-09:31    coordinators and the route's driver get one alert: each trip's
-         stops and seats, and Trip 2's times.
-09:31 to 09:45, before Trip 1 starts: on the Coordinator App's Sunday
-         screen a coordinator can move a stop to the other trip, or press
-         One trip. Drivers cannot. Nothing done, it stands.
-09:45    Trip 2's passengers: "Second trip. You are on the second trip.
-         Your bus is due about 11:25." Their screen keeps the time up to
-         date. Nobody hears about trips at 07:30.
-Church   Trip 1 ends as now. The Driver App offers Start trip 2. Not
-         started 10 minutes after Trip 1 ended: one "Time for Trip 2" to
-         the driver.
-Trip 2   works as Trip 1: left Church, Be at your stop, Nobody there,
-         No word yet (from its estimated departure). No coordinator late
-         start alert for Trip 2. No third trip.
-Trip 2's times: Trip 1 at Church plus 5 minutes, then Google's drive
-times stop to stop plus each stop's learned wait; without Google, the
-straight-line drive from Church and the timetable's gaps.
-The run report lists Trip 1 and Trip 2 in one email.
-
-HAND OVER: MORNING ONLY OR FULL DAY
-The last step of a hand over (and of approving a driver's request) asks:
-  Morning only   back to the driver it came from once the morning's last
-                 trip has ended (Trip 2 on a split day): the Rota cover
-                 goes back, and the parked mileage, fuel and return are
-                 theirs again.
-  Full day       as before: the new driver's to the end.
-
-ALSO
-A stop moved to the other route for one Sunday no longer gives the next
-Sunday's bookings at that stop a "New time" alert.
+MOVE A STOP ONTO A ROUTE WITH 2 TRIPS
+Move a stop (or Put back) onto a route split into Trip 1 and Trip 2 asks:
+  Trip 1   as now: after a Trip 1 stop, at a time you type.
+  Trip 2   after a Trip 2 stop, or first on Trip 2. No time to type: it
+           is worked out with the rest of Trip 2's times.
+Any time of the morning, until that trip is over, and not behind a stop
+the bus has already been past.
+Passengers at that stop:
+  Trip 1        told at once, as now, with the time typed.
+  Trip 2        "Sun 22 Nov: the North bus picks you up on its second
+                trip, about 11:25. After service, the South bus home."
+                Before 09:45 they hear it at 09:45 with Trip 2's other
+                passengers; after 09:45, at once. Once only.
+The 2 trips card shows the moved stop in its trip, without To trip 1/2.
+To change its trip: Put back, then Move a stop again. Stops moved shows
+"North, Trip 2".
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.186.0 · w2.106.0 · v1.150.0.
-B. On a Sunday with more booked than seats, the 09:31 alert arrives and
-   the Sunday screen shows "North: 2 trips".
+A. Coordinator App, App info: v1.187.0 · w2.107.0 · v1.150.0.

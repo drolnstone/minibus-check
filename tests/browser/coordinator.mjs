@@ -2645,6 +2645,44 @@ if (want("C67")) {
   await p.ctx.close();
 }
 
+/* C68 — Move a stop onto a split route (v1.187.0, Asim, 22 Nov 2026): the
+   sheet asks Trip 1 or Trip 2; Trip 2 lists only Trip 2's stops and has no
+   time to type; the stop goes into Trip 2. */
+if (want("C68")) {
+  const w68 = await world();
+  await W.splitPatch(w68.env, TODAY, "North", () => ({ at: Date.now(), seats: 16, booked: 20, reg: "YS70 PWE",
+    t1: ["N01", "N02", "N03", "N04"], t2: ["N05", "N06", "N07", "N08"], b1: 14, b2: 6, stopped: null, moves: [],
+    told: 0, reminded: 0, frozen: 0, times: { N05: "11:12", N06: "11:16", N07: "11:19", N08: "11:22" },
+    dep: "11:05", arr: "11:30", legs: {}, legsAt: Date.now() }));
+  const p = await page(w68.env, { name: "Bro Arthur" });
+  try {
+    await p.signIn(PIN);
+    await p.pg.evaluate((k) => { location.hash = "sunday/" + k; }, TODAY);
+    await p.wait(700);
+    await p.pg.click('#sundayBody [data-do="stopmove"]');
+    await p.wait(300);
+    await p.pg.selectOption("#mvStop", "S02");
+    await p.wait(150);
+    const trips = await p.pg.$eval("#mvTripF", (e) => ({ hidden: e.hidden, opts: [...e.querySelectorAll("option")].map((o) => o.textContent) }));
+    await p.pg.selectOption("#mvTrip", "2");
+    await p.wait(150);
+    const after = await p.pg.$$eval("#mvAfter option", (l) => l.map((o) => o.value || o.textContent));
+    const timeHidden = await p.pg.$eval("#mvTimeF", (e) => e.hidden);
+    await p.pg.selectOption("#mvAfter", "N06");
+    await p.shot("C68a-move-to-trip-2");
+    await p.go();
+    await p.wait(1200);
+    const rec = (await W.splitDay(w68.env, TODAY)).North;
+    const card = await p.text("#sundayBody");
+    const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth > 392);
+    check("C68", "Move a stop onto a split route: Trip 1 or Trip 2; Trip 2 lists its own stops, no time; the stop joins Trip 2",
+          !trips.hidden && trips.opts.join(",") === "Trip 1,Trip 2" && after.join(",") === "First on Trip 2,N05,N06,N07,N08" && timeHidden &&
+          rec.t2.join(",") === "N05,N06,S02,N07,N08" && /North, Trip 2/.test(card) && !wide && !p.errs.length,
+          JSON.stringify({ trips, after, timeHidden, t2: rec.t2, card: card.slice(-300), wide, errs: p.errs }));
+  } catch (e) { stopped("C68", e); }
+  await p.ctx.close();
+}
+
 await done();
 cleanup(ROOT);
 const bad = results.filter((r) => !r.ok);
