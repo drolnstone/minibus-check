@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.103.1";
+const SCRIPT_VERSION = "w2.103.2";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -3033,6 +3033,15 @@ async function boardPayload(env, route, phone, driver, fix, ctx, keyIn) {
 
   try { out.date = key; out.counts = bookingCounts(rows); }
   catch (e) { out.countsError = String(e); }
+
+  /* The timetable as the server runs it today, a stop moved for the day
+     included (w2.103.2): the Driver App polls this while its list is open
+     and during a run, so a move reaches the driver within the poll. */
+  try {
+    out.stops = all.filter((s) => !s.depart).map((s) => ({
+      route: s.route, id: s.id, time: s.time, stop: s.stop, postcode: s.postcode, where: s.where,
+      arrival: !!s.arrival, depart: false, lat: s.lat, lng: s.lng }));
+  } catch (e) {}
 
   try { out.checks = await checksToday(env); }
   catch (e) { out.checksError = String(e); }

@@ -1818,7 +1818,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.183.0";
+var APP_VERSION = "v1.183.1";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -5843,6 +5843,7 @@ var tripSeen = {};
    while the bus went round the route. */
 function tripSig(){
   return JSON.stringify(rotaStopCounts)+"|"+rotaStopCountsFor+"|"+
+         (rotaStops||[]).map(function(x){ return x.route+x.id+x.time; }).join(",")+"|"+
          JSON.stringify(trip.served)+"|"+trip.started+"|"+trip.ended+"|"+
          JSON.stringify(tripSeen);
 }
@@ -7650,6 +7651,9 @@ function rotaCountsFetch(route,cb){
          and leave the rest as it was, rather than blanking good numbers
          because a different part failed. */
       if(out.counts){ rotaStopCounts = out.counts; rotaStopCountsFor = out.date||""; }
+      /* The day's timetable from the live server (w2.103.2), so a stop moved
+         to the other route for the day shows on this list (v1.183.1). */
+      if(out.stops && out.stops.length) rotaStops = out.stops;
       /* Replaced whole or cleared whole, never merged. A stale estimate for
          one stop mixed in with fresh ones for the rest is the worst of both:
          it looks current and it is not, and there is no way to see which is
