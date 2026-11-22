@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.103.2";
+const SCRIPT_VERSION = "w2.103.3";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -3632,7 +3632,7 @@ async function handleTrip(env, payload) {
   const promised = await bookedTimes(env, key, route);
 
   const stmts = [];
-  let written = 0, undone = 0;
+  let written = 0, undone = 0, offRoute = 0;
 
   for (const ev of events) {
     const kind = String(ev.event || "").trim().toLowerCase();
@@ -3666,6 +3666,13 @@ async function handleTrip(env, payload) {
     }
 
     let stop = byId[stopId] || null;
+    /* A stop tap from a run whose route the stop is not on today is not
+       recorded (w2.103.3, Asim, 22 Nov 2026): a stop moved to the other
+       route for the day, tapped from a Driver App still holding the old
+       list, marked the North run and told its passengers "Nobody there"
+       after South had picked them up. Answered as taken, so the phone's
+       queue still empties. */
+    if (isStopTap(kind) && stop && stop.route !== route) { offRoute++; continue; }
     /* Leaving church is a timing point like any other. Filled in here rather
        than asked of the phone, so a handset on an older build still lands a
        proper departure row and the times come from the tab the coordinator
@@ -3846,7 +3853,7 @@ async function handleTrip(env, payload) {
     if (fixes.length) await wakeAfterUndo(env, key, route, fixes, undoAt);
   } catch (e) { /* the record is written; this was only the courtesy */ }
 
-  return json({ ok: true, written, undone, endIgnored });
+  return json({ ok: true, written, undone, endIgnored, offRoute: offRoute || undefined });
 }
 
 /* ==========================================================================

@@ -1,26 +1,20 @@
 MINIBUS
 =======
-  pages v1.183.0 · server w2.103.1 · sheet v1.147.0
+  pages v1.183.1 · server w2.103.3 · sheet v1.147.0
 
-YOU ARE ON   app v1.182.0 · server w2.103.0 · sheet v1.147.0
-GOING TO     app v1.183.0 · server w2.103.1 · sheet v1.147.0
+YOU ARE ON   app v1.183.1 · server w2.103.2 · sheet v1.147.0
+GOING TO     app v1.183.1 · server w2.103.3 · sheet v1.147.0
 
-Pages and server.
+Server only.
 
-Driver App fix (w2.103.1): a stop moved to the other route now shows
-on the driver's list for that route, in its place and at its time for
-the day. Before this, only the server, Coordinator App and Sunday Bus had
-it. The driver reopens Stops and times (or the app) to see it.
-
-Coordinator App, this Sunday's card (Rota): a "Move a stop" button under
-Swap buses. Pick the stop, the stop it goes after on the other route and
-its time on that run; the same move as Bus stops (v1.182.0). A "Stops
-moved" card lists each one moved for that Sunday, with Put back.
+A stop moved to the other route for the day: a Picked up or Nobody here
+for it from the run it left is not recorded, so that run does not count
+it as served and its passengers get no "Nobody there". Taps from the run
+it joined are recorded as usual. 22 Nov: the North Driver App, opened
+before the fixes, still listed the Nursery; North marked it Nobody here
+at 10:43 after South picked it up at 10:32.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.183.0 · w2.103.1 · v1.147.0.
-C. Driver App, Stops and times: the moved stop is on the other route.
-B. Open this Sunday from the first screen: "Move a stop" at the foot,
-   and "Stops moved" with the stop you moved this morning.
+A. Coordinator App, App info: v1.183.1 · w2.103.3 · v1.147.0.
