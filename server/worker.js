@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.101.0";
+const SCRIPT_VERSION = "w2.102.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -11890,13 +11890,44 @@ async function actRota(env, me, act) {
   const body = { sunday: key, set: set, note: note };
   if (noteEdit) body.noteEdit = noteEdit;
   /* Everybody down to drive that Sunday, before the change and after it. */
-  const tell = [];
+  let tell = [];
   for (const x of [cur, next]) {
     for (const f of ROTA_DRIVER_FIELDS) if (x && x[f]) tell.push(String(x[f]));
   }
+  /* A BUS CHANGE OR SWAP IS TOLD, from w2.102.0 (Asim, 22 Nov 2026): the
+     driver of each route whose bus is now a different one is told once, his
+     own route's line, Driver App or else email. A change of buses alone
+     tells no other driver. */
+  const busTold = busChangeTold(key, cur, next, set, nBus, sBus, buses);
+  const busOnly = Object.keys(set).every((f) => f === "northBus" || f === "southBus") && !note && !noteEdit;
+  if (busTold.length && busOnly) tell = [];
   return { ok: true, sunday: key, body: body, tell: tell,
            words: rotaWords(key, cur, set, note, noteEdit),
-           after: () => reapplyRawRota(env, [key]) };
+           after: async () => {
+             await reapplyRawRota(env, [key]);
+             if (busTold.length) { try { await tellDriversEach(env, me, busTold); } catch (e) {} }
+           } };
+}
+
+/* Each route running that Sunday whose bus is now a different one, with
+   the driver down for it: [{ name, title, body }]. */
+const BUS_TELL_TITLE = "Bus changed";
+function busChangeTold(key, cur, next, set, nBus, sBus, buses) {
+  if (!("northBus" in set) && !("southBus" in set)) return [];
+  const was = { North: busResolve(key, "North", cur.northBus, buses),
+                South: busResolve(key, "South", cur.southBus, buses) };
+  const now = { North: nBus, South: sBus };
+  const st = String(next.status || "");
+  const out = [];
+  for (const rt of ["North", "South"]) {
+    if (!now[rt] || now[rt] === was[rt]) continue;
+    if (st === "Cancelled/declined" || st === rt + " cancelled") continue;
+    const drv = String((rt === "North" ? (next.northCover || next.north) : (next.southCover || next.south)) || "").trim();
+    if (!drv) continue;
+    out.push({ name: drv, title: BUS_TELL_TITLE,
+               body: shortDay(key) + " " + rt + " bus: " + now[rt] + (was[rt] ? " (was " + was[rt] + ")." : ".") });
+  }
+  return out;
 }
 
 /* ---- THE ROTA PLAN, from w2.100.0 (Asim, 19 Nov 2026) -------------------
@@ -12017,30 +12048,52 @@ async function actRotaPlan(env, me, act) {
    took it. Coordinators have the Change by line already. */
 const PLAN_TELL = { title: "Rota updated", body: "Check your Sundays in Driving rota." };
 async function planTellDrivers(env, me, names) {
+  return tellDriversEach(env, me, names.map((n) => ({ name: n, title: PLAN_TELL.title, body: PLAN_TELL.body })), "plan");
+}
+
+/* One alert to each driver named, [{ name, title, body }], the first line
+   for a name standing: his Driver App, and an email from the sheet when no
+   phone of his took it. Not the maker, not a coordinator (the Change by line
+   reaches them), not a driver who is not active. From w2.102.0, the plan's
+   own sender made general for the bus change. */
+async function tellDriversEach(env, me, list, tag) {
   const q = await env.DB.prepare("SELECT name FROM drivers WHERE active=1").all();
   const on = (q.results || []).map((d) => String(d.name || "").trim().toLowerCase());
-  const who = (await changeDriverNames(env, "rotaplan", { tell: names }))
+  const who = (await changeDriverNames(env, "rota", { tell: list.map((x) => x.name) }))
     .filter((n) => !sameName(n, me.name) && on.indexOf(n.toLowerCase()) !== -1);
-  if (!who.length) return { pushed: [], mailed: [] };
-  const msg = coordAlertOf({ id: "plan-" + Date.now().toString(36), kind: "change",
-                             title: PLAN_TELL.title, body: PLAN_TELL.body });
-  const one = Object.assign({}, msg, { url: "./" });
+  const pushed = [], mailed = [];
+  if (!who.length) return { pushed, mailed };
   const keys = await vapidKeys(env);
-  const heard = [];
+  const stamp = (tag || "bus") + "-" + Date.now().toString(36);
+  const groups = {};
   for (const n of who) {
-    for (const sub of await driverWakeSubs(env, n)) {
-      const box = ((await cacheGet(env, coordBoxKey(sub.endpoint))) || [])
-        .filter((m) => m && Date.now() - (Number(m.at) || 0) < COORD_ALERT_MAX_AGE_MS);
-      box.push(one);
-      while (box.length > COORD_BOX_MAX) box.shift();
-      await cachePut(env, coordBoxKey(sub.endpoint), box).run();
-      if (await pushOne(env, sub, keys)) { if (heard.indexOf(n) === -1) heard.push(n); }
+    const x = list.find((y) => sameName(y.name, n));
+    const g = x.title + "\n" + x.body;
+    if (!groups[g]) {
+      groups[g] = { names: [], heard: [],
+                    msg: coordAlertOf({ id: stamp + (Object.keys(groups).length ? "-" + Object.keys(groups).length : ""),
+                                        kind: "change", title: x.title, body: x.body }) };
     }
+    groups[g].names.push(n);
   }
-  const missed = who.filter((n) => heard.indexOf(n) === -1);
-  if (missed.length) await contactMail(env, me, msg, missed);
-  if (heard.length) { try { await sentNote(env, { g: "plan|" + msg.id, title: msg.title, who: heard }); } catch (e) {} }
-  return { pushed: heard, mailed: missed };
+  for (const g of Object.values(groups)) {
+    const one = Object.assign({}, g.msg, { url: "./" });
+    for (const n of g.names) {
+      for (const sub of await driverWakeSubs(env, n)) {
+        const box = ((await cacheGet(env, coordBoxKey(sub.endpoint))) || [])
+          .filter((m) => m && Date.now() - (Number(m.at) || 0) < COORD_ALERT_MAX_AGE_MS);
+        box.push(one);
+        while (box.length > COORD_BOX_MAX) box.shift();
+        await cachePut(env, coordBoxKey(sub.endpoint), box).run();
+        if (await pushOne(env, sub, keys)) { if (g.heard.indexOf(n) === -1) g.heard.push(n); }
+      }
+    }
+    const missed = g.names.filter((n) => g.heard.indexOf(n) === -1);
+    if (missed.length) await contactMail(env, me, g.msg, missed);
+    if (g.heard.length) { try { await sentNote(env, { g: (tag || "bus") + "|" + g.msg.id, title: g.msg.title, who: g.heard }); } catch (e) {} }
+    pushed.push(...g.heard); mailed.push(...missed);
+  }
+  return { pushed, mailed };
 }
 
 /* What a hand over needs, checked before anything is written: today's run on
