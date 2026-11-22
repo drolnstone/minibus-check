@@ -2563,6 +2563,42 @@ if (want("C66")) {
   await p.ctx.close();
 }
 
+/* C67 — Move a stop from the Sunday card (v1.183.0): pick the stop there,
+   the After list follows its other route; the move shows on the card with
+   Put back. */
+if (want("C67")) {
+  const w67 = await world();
+  const p = await page(w67.env, { name: "Bro Arthur" });
+  try {
+    await p.signIn(PIN);
+    await p.pg.evaluate((k) => { location.hash = "sunday/" + k; }, TODAY);
+    await p.wait(700);
+    await p.pg.click('#sundayBody [data-do="stopmove"]');
+    await p.wait(300);
+    const title = await p.text("#sheetTitle");
+    await p.pg.selectOption("#mvStop", "S05");
+    await p.wait(150);
+    const goWord = await p.text("#sheetGo");
+    const afterL = await p.text("#mvAfterL");
+    await p.pg.selectOption("#mvAfter", "N05");
+    await p.wait(100);
+    const range = await p.text("#mvRange");
+    await p.pg.fill("#mvTime", "10:42");
+    await p.shot("C67a-sunday-move");
+    await p.go();
+    await p.wait(1200);
+    const north = W.pickupsAndArrivals(await W.getStops(w67.env)).filter((x) => x.route === "North").map((x) => x.id);
+    const card = await p.text("#sundayBody");
+    await p.shot("C67b-sunday-moved");
+    const wide = await p.pg.evaluate(() => document.documentElement.scrollWidth > 392);
+    check("C67", "Sunday card: Move a stop picks the stop, After follows the other route, the move shows with Put back",
+          title === "Move a stop" && goWord === "Move to North" && afterL === "After, on North" && range === "From 10:40 to 10:45." &&
+          north.indexOf("S05") === north.indexOf("N05") + 1 && /Stops moved/.test(card) && /Put back/.test(card) && !wide && !p.errs.length,
+          JSON.stringify({ title, goWord, afterL, range, north, card: card.slice(-200), wide, errs: p.errs }));
+  } catch (e) { stopped("C67", e); }
+  await p.ctx.close();
+}
+
 await done();
 cleanup(ROOT);
 const bad = results.filter((r) => !r.ok);

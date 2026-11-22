@@ -1,28 +1,26 @@
 MINIBUS
 =======
-  pages v1.182.0 · server w2.103.0 · sheet v1.147.0
+  pages v1.183.0 · server w2.103.1 · sheet v1.147.0
 
-YOU ARE ON   app v1.181.0 · server w2.102.0 · sheet v1.146.0
-GOING TO     app v1.182.0 · server w2.103.0 · sheet v1.147.0
+YOU ARE ON   app v1.182.0 · server w2.103.0 · sheet v1.147.0
+GOING TO     app v1.183.0 · server w2.103.1 · sheet v1.147.0
 
-Pages, server and sheet.
+Pages and server.
 
-Coordinator App, Bus stops: "Move to South" (or North) on each active
-pickup. Pick the stop it goes after on the other route and its time on
-that run (between the stop before and the stop after). For the coming
-Sunday only: the stop and its bookings go to the other bus, then it is
-back on its own route by itself. "Put back" undoes it before then.
+Driver App fix (w2.103.1): a stop moved to the other route now shows
+on the driver's list for that route, in its place and at its time for
+the day. Before this, only the server, Coordinator App and Sunday Bus had
+it. The driver reopens Stops and times (or the app) to see it.
 
-Told once each: the stop's passengers ("South bus at Bedford Road. Sun
-22 Nov: the South bus picks you up at 10:34. After service, the North bus
-home."), the driver it goes to ("Stop added"), the driver it leaves
-("Stop moved"), other coordinators (Change by). The Bus Stops tab is not
-changed. Live ETA treats it as any stop on the new route.
-
-Sheet: the run report lists a moved stop on the route that picked it up.
+Coordinator App, this Sunday's card (Rota): a "Move a stop" button under
+Swap buses. Pick the stop, the stop it goes after on the other route and
+its time on that run; the same move as Bus stops (v1.182.0). A "Stops
+moved" card lists each one moved for that Sunday, with Put back.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.182.0 · w2.103.0 · v1.147.0.
-B. Bus stops: "Move to South" beside Edit on each North pickup.
+A. Coordinator App, App info: v1.183.0 · w2.103.1 · v1.147.0.
+C. Driver App, Stops and times: the moved stop is on the other route.
+B. Open this Sunday from the first screen: "Move a stop" at the foot,
+   and "Stops moved" with the stop you moved this morning.
