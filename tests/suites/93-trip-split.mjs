@@ -252,5 +252,69 @@ export default async function (root) {
     a.ok(ok2.ok, JSON.stringify(ok2));
   });
 
+  /* w2.109.0, the 22 Nov audit. */
+  s.test("split day: Run record per trip, late Trip 1 tap kept, Fix on Trip 1, reports count both trips", async (a) => {
+    const { env } = await fresh();
+    await atTime(T("09:31"), () => W.sweepTripSplit(env));
+    const rb = await atTime(T("09:32"), () => W.reportBookings(env));
+    a.eq(rb.lead, "24 people booked.");
+    a.eq(rb.sections[0].head, "North Liverpool, 22 booked, two trips");
+    const rs = await atTime(T("09:32"), () => W.reportSeats(env));
+    a.has(rs.sections[0].lines[0], "22 booked");
+    a.has(rs.sections[0].lines[0], "Two trips: Trip 1 15, Trip 2 7.");
+    a.eq(rs.lead, "Nobody is over.");
+    await atTime(T("09:52"), () => tap(env, [{ event: "start", at: at("09:52") }]));
+    await atTime(T("10:05"), () => tap(env, [{ event: "pickup", stopId: "N01", at: at("10:05") }]));
+    await atTime(T("10:40"), () => tap(env, [{ event: "end", at: at("10:40"), auto: 1 }]));
+    const late = await J(await atTime(T("10:41"), () => tap(env, [{ event: "pickup", stopId: "N02", at: at("10:15") }])));
+    a.eq(late.written, 1, JSON.stringify(late));
+    await atTime(T("10:46"), () => tap(env, [{ event: "start", at: at("10:46") }], "t2"));
+    const runs = await atTime(T("10:50"), () => W.coordRuns(env, { name: "Bro Asim" }, KEY));
+    const north = runs.routes.find((r) => r.route === "North").runs;
+    a.eq(north[0].stops.map((x) => x.id).join(","), "N01,N02,N03,N04");
+    a.ok(north[0].stops[0].ev && north[0].stops[1].ev, "Trip 1's taps show");
+    a.eq(north[1].stops.map((x) => x.id).join(","), "N05,N06,N07,N08");
+    const fx = await atTime(T("10:51"), () => W.actFix(env, { name: "Bro Asim" }, { sunday: KEY, trip: "t1", stopId: "N03", time: "10:20" }));
+    a.ok(fx.ok, JSON.stringify(fx));
+  });
+
+  s.test("after 09:31 a second trip is made, and ended, until Trip 1 starts", async (a) => {
+    const { db, env } = await fresh([{ route: "North", stopId: "N01", seats: 7 }, { route: "North", stopId: "N02", seats: 5 },
+                                     { route: "North", stopId: "N03", seats: 3 }]);
+    await atTime(T("09:31"), () => W.sweepTripSplit(env));
+    a.eq((await W.splitDay(env, KEY)).North.none, "fits");
+    await seedBookings(db, KEY, [{ route: "North", stopId: "N05", seats: 4 }]);
+    await atTime(T("09:35"), () => W.sweepTripSplit(env));
+    const rec = (await W.splitDay(env, KEY)).North;
+    a.ok(W.splitOn(rec), JSON.stringify(rec));
+    a.eq(rec.t2.join(","), "N05,N06,N07,N08");
+    await db.prepare("DELETE FROM bookings WHERE stop_id='N05'").run();
+    await atTime(T("09:38"), () => W.sweepTripSplit(env));
+    a.eq((await W.splitDay(env, KEY)).North.none, "fits", "one trip again");
+    await seedBookings(db, KEY, [{ route: "North", stopId: "N05", seats: 4 }]);
+    await atTime(T("09:52"), () => tap(env, [{ event: "start", at: at("09:52") }]));
+    await atTime(T("09:53"), () => W.sweepTripSplit(env));
+    a.eq((await W.splitDay(env, KEY)).North.none, "fits", "not once Trip 1 has started");
+  });
+
+  s.test("hand back told to its two drivers; a cover between the trips can be morning only", async (a) => {
+    const { env } = await fresh();
+    const hb = await atTime(T("11:21"), () => W.actRota(env, { name: "Bro Asim" }, { sunday: KEY, set: { northCover: "" },
+      note: "North handed back to Bro Adrian at 11:21 (morning only).", handBack: { route: "North", back: "Bro Adrian", from: "Bro Moses" } }));
+    a.ok(hb.ok, JSON.stringify(hb));
+    a.eq(hb.tell.join(","), "Bro Adrian,Bro Moses");
+    a.eq(hb.title, "North handed back");
+    await atTime(T("09:31"), () => W.sweepTripSplit(env));
+    await atTime(T("09:52"), () => tap(env, [{ event: "start", at: at("09:52") }]));
+    await atTime(T("10:40"), () => tap(env, [{ event: "end", at: at("10:40"), auto: 1 }]));
+    const cv = await atTime(T("10:41"), () => W.actRota(env, { name: "Bro Asim" }, { sunday: KEY, set: { northCover: "Bro Moses" }, span: "morning" }));
+    a.ok(cv.ok, JSON.stringify(cv));
+    a.has(cv.words, "morning only");
+    await atTime(T("10:41"), () => cv.after());
+    const list = await W.handBackAll(env);
+    a.eq(list.length, 1, JSON.stringify(list));
+    a.eq(list[0].back, "Bro Adrian"); a.eq(list[0].to, "Bro Moses");
+  });
+
   return s;
 }
