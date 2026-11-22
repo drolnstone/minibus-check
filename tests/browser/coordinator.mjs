@@ -151,7 +151,11 @@ async function world() {
         { id: "S-YS70PWE-service", what: "Service", status: "Estimated", done: W.rnAddMonths(DAY(-30), -12), was: "",
           next: DAY(-30), how: "estimated: a year back from the due date on the Buses tab", by: "", source: "Started from the Buses tab",
           recorded: Date.now() - 86400000, correctedBy: "" }] },
-      jobs: { "YS70 PWE": { checkId: "chk-a", date: LAST, driver: southOf(LAST), jobs: ["Screenwash", "Tyre pressures"] },
+      /* From v1.188.0 a job stays open from its own newest report: Tyre
+         pressures here is from the walkaround a week before (C29n). */
+      jobs: { "YS70 PWE": { checkId: "chk-a", date: LAST, driver: southOf(LAST), jobs: ["Screenwash", "Tyre pressures"],
+                            from: { Screenwash: { checkId: "chk-a", date: LAST, driver: southOf(LAST) },
+                                    "Tyre pressures": { checkId: "chk-0", date: W.rnAddDays(LAST, -7), driver: "Bro Older" } } },
               /* Needs fuel (v1.158.0): the beacon and Fuel bought, C29h. */
               "NH56 FWP": { checkId: "chk-f", date: LAST, driver: northOf(LAST), jobs: ["Needs fuel", "Tyres need air", "Needs a wash"] } }
     },
@@ -1307,6 +1311,29 @@ if (want("C31")) {
         "title '" + title + "', left " + JSON.stringify(left) + ", acts " + acts.length);
   await p.ctx.close();
 }
+
+/* C29n — jobs from two walkarounds (v1.188.0): each row names its own, and
+   Done names that walkaround. After C31, which marks Screenwash done. */
+if (want("C29n")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  await p.pg.evaluate(() => { location.hash = "bus/YS70%20PWE"; });
+  await p.wait(400);
+  const rows = await p.pg.$$eval("#busBody .row", (e) => e.map((x) => x.textContent).filter((t) => /Screenwash|Tyre pressures/.test(t)));
+  const header = await p.pg.$$eval("#busBody .card p.tiny", (e) => e.filter((x) => /From the walkaround/.test(x.textContent)).map((x) => x.textContent).join(""));
+  await p.shot("C29n-two-walkarounds");
+  await p.pg.click('#busBody [data-do="job"][data-job="Tyre pressures"]');
+  await p.wait(250);
+  await p.go();
+  await p.settle();
+  await p.wait(400);
+  const sent = db._rows("SELECT body FROM coord_actions WHERE kind='job'").map((r) => JSON.parse(r.body)).filter((b) => b.job === "Tyre pressures");
+  check("C29n", "Jobs from two walkarounds: each row names its own; Done sends that walkaround",
+        (rows.length === 1 ? /Bro Older/.test(header) : (/Bro Older/.test(rows.find((t) => /Tyre/.test(t)) || "") && !/Bro Older/.test(rows.find((t) => /Screenwash/.test(t)) || "") && !header)) && sent.length === 1 && sent[0].checkId === "chk-0" && !p.errs.length,
+        "rows " + JSON.stringify(rows) + ", header " + header + ", sent " + JSON.stringify(sent) + ", errors " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
 
 /* C32 — a defect's trail: every status it has had, a reopening included */
 if (want("C32")) {
