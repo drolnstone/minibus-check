@@ -359,6 +359,24 @@ if (want("C4")) {
         "label '" + label + "', was " + JSON.stringify(was) + ", now " + JSON.stringify(now));
 }
 
+/* C4b — the Swap buses button (v1.181.0): one confirm swaps them back */
+if (want("C4b")) {
+  const was = db._one("SELECT north_bus, south_bus FROM rota WHERE sunday=?", NEXT);
+  await me.pg.click('[data-do="busswap"]');
+  await me.wait(300);
+  const title = await me.text("#sheetTitle");
+  const line = await me.text("#sheetBody .line");
+  const label = await me.text("#sheetGo");
+  await me.shot("C4b-swap-buses");
+  await me.go();
+  const now = db._one("SELECT north_bus, south_bus FROM rota WHERE sunday=?", NEXT);
+  check("C4b", "Swap buses: one confirm swaps the two buses",
+        label === "Swap buses" && /Swap the buses/.test(title) &&
+        line === "North: " + was.south_bus + " (was " + was.north_bus + "). South: " + was.north_bus + " (was " + was.south_bus + ")." &&
+        now.north_bus === was.south_bus && now.south_bus === was.north_bus,
+        "title '" + title + "', line '" + line + "', label '" + label + "', was " + JSON.stringify(was) + ", now " + JSON.stringify(now));
+}
+
 /* C5 — a note on the Sunday */
 if (want("C5")) {
   await me.pg.click('[data-do="note"]');

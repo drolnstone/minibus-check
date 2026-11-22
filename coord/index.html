@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.180.1 · THE COORDINATOR'S APP.
+<!-- BUILD v1.181.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -813,7 +813,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.180.1";
+var PAGE_VERSION = "v1.181.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1749,6 +1749,11 @@ function paintSunday(key){
            '<span class="acts"><button class="mini" type="button" data-go="bookings/'+esc(key)+'">Bookings</button></span></div>';
     h += '</div>';
   });
+  /* SWAP BUSES (v1.181.0, Asim, 22 Nov 2026): one button, one confirm. Not
+     once a replacement bus is on today's run. */
+  var repl = key === D.today && ["North","South"].some(function(rt){ var x = (D.runs || {})[rt]; return x && x.started && x.reg && x.reg0 && x.reg !== x.reg0; });
+  if(!past && !repl && l.North.bus && l.South.bus && l.North.bus !== l.South.bus)
+    h += '<button class="btn btn-ghost btn-wide" type="button" data-do="busswap" data-key="'+esc(key)+'" style="margin-top:10px;min-height:46px;font-size:16px">Swap buses</button>';
   var notes = noteLines(r);
   /* From v1.93.0 each note can be changed or taken off, except the sheet's own
      Swapped and PROTECTED lines. */
@@ -2144,6 +2149,16 @@ function pickBus(key, rt){
       else { set[rt === "North" ? "northBus" : "southBus"] = reg; }
       act({ kind:"rota", sunday:key, set:set });
     } });
+}
+
+function swapBuses(key){
+  var r = rowFor(key); if(!r) return;
+  var l = legs(r), n = l.North.bus, so = l.South.bus;
+  if(!n || !so || n === so) return;
+  openSheet({ eyebrow: shortDay(key), title: "Swap the buses?",
+              line: "North: " + so + " (was " + n + "). South: " + n + " (was " + so + ").",
+              go: "Swap buses",
+              onGo: function(){ act({ kind:"rota", sunday:key, set:{ northBus: so, southBus: n } }); } });
 }
 
 function setStatus(key, mode){
@@ -4527,6 +4542,7 @@ document.addEventListener("click", function(e){
   else if(d === "status") setStatus(key, t.getAttribute("data-mode"));
   else if(d === "driver") pickDriver(key, t.getAttribute("data-slot"));
   else if(d === "bus") pickBus(key, t.getAttribute("data-route"));
+  else if(d === "busswap") swapBuses(key);
   else if(d === "handover") pickHandover(key, t.getAttribute("data-route"));
   else if(d === "note") addNote(key);
   else if(d === "noteedit") editNote(key, t.getAttribute("data-i"), false);
