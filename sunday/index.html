@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sunday Bus">
-<!-- BUILD v1.183.1 · keep in step with CACHE in sw.js and APP_VERSION in the
+<!-- BUILD v1.184.0 · keep in step with CACHE in sw.js and APP_VERSION in the
      driver app. Up here so a raw fetch of this file answers "which copy is
      live?" without running a line of it. -->
 <title>Sunday Bus · RCCG Dominion Assembly Liverpool</title>
@@ -756,7 +756,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;font-weight:700;
    Bump alongside CACHE in sw.js and APP_VERSION in the driver app. All three
    are one number. It is also in a comment in the head of this file, so it can
    be read from the raw source without running anything. */
-var PAGE_VERSION = "v1.183.1";
+var PAGE_VERSION = "v1.184.0";
 
 /* THE OTHER TWO NUMBERS, so all three read at one glance and nobody has to
    open the spreadsheet to find the third.
@@ -3603,6 +3603,16 @@ if("serviceWorker" in navigator){
          that surfaces as an unhandled error on every single open — in
          precisely the situation this cache exists to cover. */
       try{ reg.update().catch(function(){}); }catch(e){}
+      /* UPDATES WITHOUT A RESTART (v1.184.0, Asim, 22 Nov 2026): asked
+         again every minute while the app is on screen and whenever it comes
+         back to the front, so a phone left open all morning still takes a
+         fix merged mid-run. */
+      setInterval(function(){
+        if(document.visibilityState === "visible"){ try{ reg.update().catch(function(){}); }catch(e){} }
+      }, 60000);
+      document.addEventListener("visibilitychange", function(){
+        if(document.visibilityState === "visible"){ try{ reg.update().catch(function(){}); }catch(e){} }
+      });
       /* After the worker is registered, because a subscription belongs to one
          and there is nothing to ask before it exists. */
       try{ pushLook(); }catch(e){}
@@ -3617,11 +3627,20 @@ if("serviceWorker" in navigator){
      the rain is worse than reading a page five minutes out of date. It will
      be picked up the next time the page is opened. */
   var swReloaded = false;
-  navigator.serviceWorker.addEventListener("controllerchange", function(){
-    if(!swHadController || swReloaded) return;
-    if(liveTimer) return;
+  /* From v1.184.0 asked again every five seconds until nobody is watching
+     a bus and nothing is being typed, rather than left to the next open. */
+  var swReloadQuiet = function(){
+    if(swReloaded) return;
+    var a = document.activeElement;
+    if(liveTimer || (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))){
+      setTimeout(swReloadQuiet, 5000); return;
+    }
     swReloaded = true;
     location.reload();
+  };
+  navigator.serviceWorker.addEventListener("controllerchange", function(){
+    if(!swHadController || swReloaded) return;
+    swReloadQuiet();
   });
 }
 </script>
