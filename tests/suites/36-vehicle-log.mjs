@@ -180,7 +180,7 @@ export default async function (root) {
       vehicles: {
         log: { "YS70 PWE": [{ id: "S-YS70PWE-mot", what: "MOT", status: "Estimated", done: "2025-10-21", next: "2026-10-20",
                               how: "estimated", was: "", recorded: Date.now() - 86400000, correctedBy: "" }] },
-        jobs: { "YS70 PWE": { checkId: "chk-9", date: LAST, driver: "Bro Trevor", jobs: ["Screenwash", "Tyre pressures"] } }
+        jobs: { "YS70 PWE": { checkId: "chk-9", date: LAST, driver: "Bro Trevor", jobs: ["Screenwash", "Tyre pressures", "Needs a wash"] } }
       }
     }).run();
     await W.cachePut(env, "cache_last", { builtAt: Date.now(), payload: { ok: true,
@@ -363,11 +363,37 @@ export default async function (root) {
       const out = await act(env, { kind: "job", reg: "YS70 PWE", job: "Screenwash", checkId: "chk-9" });
       a.ok(out.ok, JSON.stringify(out));
       const jobs = (await coord(env, { op: "load" })).vehicles.jobs["YS70 PWE"];
-      a.eq(JSON.stringify(jobs.jobs), JSON.stringify(["Tyre pressures"]));
+      a.eq(JSON.stringify(jobs.jobs), JSON.stringify(["Tyre pressures", "Needs a wash"]));
       const again = await act(env, { kind: "job", reg: "YS70 PWE", job: "Screenwash", checkId: "chk-9" });
       a.not(again.ok, "marked done twice");
       const stale = await act(env, { kind: "job", reg: "YS70 PWE", job: "Tyre pressures", checkId: "chk-8" });
       a.not(stale.ok, "a job from an older walkaround was taken");
+    });
+  });
+
+  s.test("set aside (w2.104.0): a wash stays open, marked aside; brought back; Done clears it; tyres cannot", async (a) => {
+    await atTime(THU, async () => {
+      const { env } = await fresh();
+      const job = (x) => act(env, Object.assign({ kind: "job", reg: "YS70 PWE", job: "Needs a wash", checkId: "chk-9" }, x));
+      const jobs = async () => (await coord(env, { op: "load" })).vehicles.jobs["YS70 PWE"];
+      const out = await job({ how: "aside" });
+      a.ok(out.ok, JSON.stringify(out));
+      a.eq(out.action.words, "YS70 PWE: Needs a wash, set aside.");
+      let j = await jobs();
+      a.eq(JSON.stringify(j.jobs), JSON.stringify(["Screenwash", "Tyre pressures", "Needs a wash"]), "set aside took the job off");
+      a.eq(JSON.stringify(j.aside), JSON.stringify(["Needs a wash"]));
+      a.not((await job({ how: "aside" })).ok, "set aside twice");
+      const tyres = await act(env, { kind: "job", how: "aside", reg: "YS70 PWE", job: "Tyre pressures", checkId: "chk-9" });
+      a.not(tyres.ok, "a job that is not a wash or a clean was set aside");
+      a.ok((await job({ how: "back" })).ok);
+      j = await jobs();
+      a.eq(JSON.stringify(j.aside), "[]");
+      a.not((await job({ how: "back" })).ok, "brought back twice");
+      a.ok((await job({ how: "aside" })).ok);
+      a.ok((await job({})).ok, "Done on a job set aside");
+      j = await jobs();
+      a.eq(JSON.stringify(j.jobs), JSON.stringify(["Screenwash", "Tyre pressures"]));
+      a.eq(JSON.stringify(j.aside), "[]");
     });
   });
 
@@ -502,6 +528,27 @@ export default async function (root) {
       call(L, "applyCoordAction", ss(L), A("a6", "job", { reg: "YS70 PWE", job: "Screenwash", checkId: "chk-9", note: "" }), {});
       const after = call(L, "jobsOutstanding", ss(L));
       a.eq(JSON.stringify(Array.from(after["YS70 PWE"].jobs)), JSON.stringify(["Tyre pressures"]));
+    });
+  });
+
+  s.test("set aside on the sheet (v1.148.0): on History, kept by bus and job, the latest stands, Done clears it", async (a) => {
+    await atTime(THU, async () => {
+      const L = sheet();
+      const J = (id, how) => call(L, "applyCoordAction", ss(L), A(id, "job", Object.assign({ reg: "YS70 PWE", job: "Screenwash", checkId: "chk-9", note: "" }, how ? { how: how } : {})), {});
+      const aside = () => JSON.stringify(Array.from(call(L, "jobsOutstanding", ss(L))["YS70 PWE"].aside));
+      a.eq(aside(), "[]");
+      J("b1", "aside");
+      a.eq(aside(), JSON.stringify(["Screenwash"]));
+      a.ok(objs(L, "History").some((x) => x.From === "Screenwash" && x.To === "Set aside"));
+      a.eq(call(L, "jobsReminderText", call(L, "jobsOutstanding", ss(L))), "", "a job set aside is in the reminder");
+      J("b2", "back");
+      a.eq(aside(), "[]");
+      a.ok(objs(L, "History").some((x) => x.From === "Screenwash" && x.To === "Brought back"));
+      J("b3", "aside");
+      J("b4", "");
+      const after = call(L, "jobsOutstanding", ss(L))["YS70 PWE"];
+      a.eq(JSON.stringify(Array.from(after.jobs)), JSON.stringify(["Tyre pressures"]));
+      a.eq(JSON.stringify(Array.from(after.aside)), "[]");
     });
   });
 

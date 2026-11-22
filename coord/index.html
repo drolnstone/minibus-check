@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.184.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.185.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -813,7 +813,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.184.0";
+var PAGE_VERSION = "v1.185.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1507,11 +1507,14 @@ function needs(){
   var JOB_NEEDS = [["Tyres need air", "stop", " tyres need air."],
                    ["Needs a wash", "warn", " needs a wash."],
                    ["Inside needs a clean", "warn", " inside needs a clean."]];
+  /* From v1.184.0 (Asim, 22 Nov 2026) a wash or a clean has Set aside
+     too, and one set aside is not on the first screen. Tyres cannot be. */
   JOB_NEEDS.forEach(function(k){
     Object.keys(jv).forEach(function(reg){
-      if(jv[reg] && (jv[reg].jobs || []).indexOf(k[0]) !== -1) {
-        out.push({ tone:k[1], text: reg + k[2], btn:"Done",
-                   data:'data-do="job" data-reg="'+esc(reg)+'" data-job="'+esc(k[0])+'"' });
+      if(jv[reg] && (jv[reg].jobs || []).indexOf(k[0]) !== -1 && !jobAside(jv[reg], k[0])) {
+        var jd = 'data-reg="'+esc(reg)+'" data-job="'+esc(k[0])+'"';
+        out.push({ tone:k[1], text: reg + k[2], btn:"Done", data:'data-do="job" ' + jd,
+                   btn2: JOBS_ASIDE.indexOf(k[0]) !== -1 ? "Set aside" : "", data2:'data-do="jobaside" ' + jd });
       }
     });
   });
@@ -1532,7 +1535,9 @@ function paintHome(){
   var h = '<div class="home-top" id="homeTop">';
   needs().forEach(function(n){
     if(n.go) h += '<button class="need '+n.tone+'" type="button" data-go="'+esc(n.go)+'"><p>'+esc(n.text)+'</p><span class="go">\u203A</span></button>';
-    else h += '<div class="need '+n.tone+(n.beacon?' beacon':'')+'">'+(n.beacon?'<span class="dot" aria-hidden="true"></span>':'')+'<p>'+esc(n.text)+'</p><button class="mini" type="button" '+n.data+'>'+esc(n.btn)+'</button></div>';
+    else h += '<div class="need '+n.tone+(n.beacon?' beacon':'')+'">'+(n.beacon?'<span class="dot" aria-hidden="true"></span>':'')+'<p>'+esc(n.text)+'</p>' +
+              (n.btn2 ? '<button class="mini" type="button" '+n.data2+'>'+esc(n.btn2)+'</button>' : '') +
+              '<button class="mini" type="button" '+n.data+'>'+esc(n.btn)+'</button></div>';
   });
   if(D.rota && D.rota.error){
     h += '<div class="need stop"><p>The rota has not reached the live server.</p></div>';
@@ -1551,7 +1556,7 @@ function paintHome(){
   Object.keys(sk).forEach(function(rt){ booked += Number(sk[rt].booked) || 0; });
   var defs = defectGroups(D.defects || []).length;
   var jobs = 0, jv = (D.vehicles && D.vehicles.jobs) || {};
-  Object.keys(jv).forEach(function(r){ jobs += ((jv[r] && jv[r].jobs) || []).length; });
+  Object.keys(jv).forEach(function(r){ jobs += jobsOpen(jv[r]).length; });
   var waiting = Number(D.waiting) || 0;
   var item = function(go, t, n, tone){
     return '<li><button type="button" data-go="'+go+'"><span class="t">'+t+'</span>' +
@@ -3238,6 +3243,11 @@ function jobsOf(reg){
   for(var k in v) if(Object.prototype.hasOwnProperty.call(v, k) && same(k, reg)) return v[k];
   return null;
 }
+/* Set aside (v1.184.0, Asim, 22 Nov 2026): a wash or a clean still open but
+   off the first screen and out of the counts, until Bring back or Done. */
+var JOBS_ASIDE = ["Needs a wash", "Inside needs a clean"];
+function jobAside(j, job){ return !!(j && (j.aside || []).indexOf(job) !== -1); }
+function jobsOpen(j){ return ((j && j.jobs) || []).filter(function(x){ return !jobAside(j, x); }); }
 function defectsOf(reg){ return ((D && D.defects) || []).filter(function(d){ return same(d.reg, reg); }); }
 function milesOf(reg){
   var v = (D && D.lastMiles) || {};
@@ -3470,7 +3480,7 @@ function paintBuses(){
   var list = busList().slice().sort(function(a, b){ return (b.active ? 1 : 0) - (a.active ? 1 : 0) || String(a.reg).localeCompare(String(b.reg)); });
   if(!list.length){ $("busesBody").innerHTML = h + '<div class="card"><p class="tiny" style="margin:0">No buses have reached the live server.</p></div>'; return; }
   list.forEach(function(b){
-    var j = jobsOf(b.reg), jn = j && j.jobs ? j.jobs.length : 0, dn = defectGroups(defectsOf(b.reg)).length;
+    var j = jobsOf(b.reg), jn = jobsOpen(j).length, dn = defectGroups(defectsOf(b.reg)).length;
     h += '<button type="button" class="card bus-card" data-go="bus/' + esc(encodeURIComponent(b.reg)) + '">' +
          '<span class="bus-head"><span class="plate">' + esc(b.reg) + '</span>' +
          (b.active ? '' : '<span class="tag">Not in use</span>') +
@@ -3524,9 +3534,11 @@ function paintBus(reg){
     h += '<h3>Jobs to arrange</h3><div class="card"><p class="tiny" style="margin:0 0 4px">From the walkaround ' +
          esc([j.date ? shortDay(j.date) : "", j.driver].filter(Boolean).join(", ")) + '.</p>' +
          j.jobs.map(function(x){
-           return '<div class="row"><span class="v">' + esc(x) + '</span><span class="acts">' +
+           var jd = 'data-reg="' + esc(b.reg) + '" data-job="' + esc(x) + '"', off = jobAside(j, x);
+           return '<div class="row"><span class="v">' + esc(x) + (off ? ' <span class="tag info">Set aside</span>' : '') + '</span><span class="acts">' +
                   (x === "Needs fuel" ? '<button class="mini" type="button" data-do="fuelbuy" data-reg="' + esc(b.reg) + '">Fuel bought</button>'
-                   : '<button class="mini" type="button" data-do="job" data-reg="' + esc(b.reg) + '" data-job="' + esc(x) + '">Done</button>') + '</span></div>';
+                   : (JOBS_ASIDE.indexOf(x) !== -1 ? '<button class="mini" type="button" data-do="' + (off ? 'jobback' : 'jobaside') + '" ' + jd + '>' + (off ? 'Bring back' : 'Set aside') + '</button>' : '') +
+                     '<button class="mini" type="button" data-do="job" ' + jd + '>Done</button>') + '</span></div>';
          }).join("") + '</div>';
   }
   var dn = defectGroups(defectsOf(b.reg)).length;
@@ -4013,6 +4025,15 @@ function jobDone(reg, job){
       if(job === "Tyres need air" && !note){ sheetSay("Say the pressure or where.", true); return; }
       act({ kind: "job", reg: reg, job: job, checkId: j.checkId, note: note });
     } });
+}
+
+/* Set aside or bring back a wash or a clean (v1.184.0). */
+function jobAsideAsk(reg, job, back){
+  var j = jobsOf(reg); if(!j) return;
+  openSheet({ eyebrow: reg, title: job,
+    line: "Asked for at the walkaround " + (j.date ? shortDay(j.date) : "") + ".",
+    go: back ? "Bring back" : "Set aside",
+    onGo: function(){ act({ kind: "job", how: back ? "back" : "aside", reg: reg, job: job, checkId: j.checkId }); } });
 }
 
 /* ---- the run record -------------------------------------------------------------- */
@@ -4666,6 +4687,7 @@ document.addEventListener("click", function(e){
   else if(d === "vlogdone") recordFor(t.getAttribute("data-reg"), entryById(t.getAttribute("data-reg"), t.getAttribute("data-id")));
   else if(d === "vfix") correctEntry(t.getAttribute("data-reg"), t.getAttribute("data-id"));
   else if(d === "job") jobDone(t.getAttribute("data-reg"), t.getAttribute("data-job"));
+  else if(d === "jobaside" || d === "jobback") jobAsideAsk(t.getAttribute("data-reg"), t.getAttribute("data-job"), d === "jobback");
   else if(d === "fix") fixTime(t);
   else if(d === "again"){ REP = { name:"", data:null }; paintReport(t.getAttribute("data-name")); }
   else if(d === "remind") remindAsk();
@@ -5186,7 +5208,7 @@ if("serviceWorker" in navigator){
       /* Ask for a new version on every open. With no signal update() rejects,
          and that is not worth an error on every open. */
       try{ reg.update().catch(function(){}); }catch(e){}
-      /* UPDATES WITHOUT A RESTART (v1.184.0, Asim, 22 Nov 2026): asked
+      /* UPDATES WITHOUT A RESTART (v1.185.0, Asim, 22 Nov 2026): asked
          again every minute while the app is on screen and whenever it comes
          back to the front, so a phone left open all morning still takes a
          fix merged mid-run. */

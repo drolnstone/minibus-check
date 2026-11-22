@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.103.3";
+const SCRIPT_VERSION = "w2.104.1";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -9433,7 +9433,12 @@ async function coordVehiclesView(env) {
     if (a.kind === "job") {
       const j = jobs[b.reg];
       if (j && j.checkId === b.checkId) {
-        j.jobs = (j.jobs || []).filter((x) => x !== b.job);
+        /* Set aside and Bring back (w2.104.0) move the job on or off the
+           aside list; Done takes it off both. */
+        const aside = (j.aside || []).filter((x) => x !== b.job);
+        if (b.how === "aside") aside.push(b.job);
+        if (b.how !== "aside" && b.how !== "back") j.jobs = (j.jobs || []).filter((x) => x !== b.job);
+        j.aside = aside;
         if (!j.jobs.length) delete jobs[b.reg];
       }
       continue;
@@ -9473,8 +9478,10 @@ function vehiclesShelfOf(v) {
     const j = v.jobs[reg];
     if (!j || typeof j !== "object" || !Array.isArray(j.jobs)) continue;
     const jobs = j.jobs.map((x) => vlogText(x, 80)).filter(Boolean).slice(0, 20);
+    /* Set aside (sheet v1.148.0): jobs still open but off the first screen. */
+    const aside = (Array.isArray(j.aside) ? j.aside : []).map((x) => vlogText(x, 80)).filter((x) => jobs.indexOf(x) !== -1);
     if (jobs.length) out.jobs[String(reg).toUpperCase()] = { checkId: vlogText(j.checkId, 80), date: vlogDay(j.date),
-                                                             driver: vlogText(j.driver, 60), jobs };
+                                                             driver: vlogText(j.driver, 60), jobs, aside };
   }
   return out;
 }
@@ -9621,9 +9628,20 @@ async function actJob(env, me, act) {
   if (!j || j.checkId !== String(act.checkId || "") || (j.jobs || []).indexOf(job) === -1) {
     return { ok: false, error: "That job is not waiting any more." };
   }
-  return { ok: true, sunday: "", body: { reg: reg, job: job, checkId: j.checkId, note: vlogText(act.note, 200) },
-           words: reg + ": " + job + ", done." };
+  /* Set aside, from w2.104.0 (Asim, 22 Nov 2026): a wash or a clean off the
+     first screen and out of the Wednesday and Friday reminder, still open,
+     until Bring back or Done. Fuel and tyres cannot be set aside. */
+  const how = act.how === "aside" || act.how === "back" ? act.how : "done";
+  const aside = (j.aside || []).indexOf(job) !== -1;
+  if (how !== "done" && JOBS_ASIDE.indexOf(job) === -1) return { ok: false, error: job + " cannot be set aside." };
+  if (how === "aside" && aside) return { ok: false, error: "Already set aside." };
+  if (how === "back" && !aside) return { ok: false, error: "Not set aside." };
+  const body = { reg: reg, job: job, checkId: j.checkId, note: vlogText(act.note, 200) };
+  if (how !== "done") body.how = how;
+  return { ok: true, sunday: "", body: body,
+           words: reg + ": " + job + (how === "aside" ? ", set aside." : how === "back" ? ", brought back." : ", done.") };
 }
+const JOBS_ASIDE = ["Needs a wash", "Inside needs a clean"];
 
 /* ---- an expired MOT or insurance stops the bus, from w2.36.0 ------------
 

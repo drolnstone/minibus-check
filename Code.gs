@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.147.0";
+var SCRIPT_VERSION = "v1.148.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1852,8 +1852,10 @@ function coordVfix(ss, a, b, by) {
    is marked on History, and the list of what is left is worked out from the
    two (jobsOutstanding). */
 function coordJob(ss, a, b, by) {
+  /* Set aside and Brought back, from v1.148.0 (Asim, 22 Nov 2026). */
+  var to = b.how === "aside" ? "Set aside" : b.how === "back" ? "Brought back" : "Done";
   historyAdd(ss, [{ who: by, where: "Coordinator's app", reg: String(b.reg || "").trim().toUpperCase(),
-                    what: "Job to arrange", from: String(b.job || ""), to: "Done",
+                    what: "Job to arrange", from: String(b.job || ""), to: to,
                     why: String(b.note || ""), ref: String(b.checkId || "") }]);
   bumpRotaVersion();
   return { done: true, ok: true, push: true, result: "On the History tab." };
@@ -1944,14 +1946,21 @@ function jobsOutstanding(ss) {
                     jobs: String(at1(r, c.arrange) || "").split(",").map(function (j) { return j.trim(); })
                             .filter(function (j) { return j; }) };
   });
-  var done = {};
+  /* Set aside (v1.148.0) is by bus and job, not by walkaround: a later
+     walkaround asking for the same wash keeps it aside. The latest of Set
+     aside, Brought back and Done stands. */
+  var done = {}, aside = {};
   historyRead(ss, 3000).forEach(function (h) {
-    if (h.what === "Job to arrange" && h.to === "Done") done[h.reg + "|" + h.ref + "|" + h.from] = true;
+    if (h.what !== "Job to arrange") return;
+    if (h.to === "Done") done[h.reg + "|" + h.ref + "|" + h.from] = true;
+    if (h.to === "Done" || h.to === "Brought back") delete aside[h.reg + "|" + h.from];
+    if (h.to === "Set aside") aside[h.reg + "|" + h.from] = true;
   });
   Object.keys(latest).forEach(function (reg) {
     var L = latest[reg];
     var left = L.jobs.filter(function (j) { return !done[reg + "|" + L.checkId + "|" + j]; });
-    if (left.length) out[reg] = { checkId: L.checkId, date: L.date, driver: L.driver, jobs: left };
+    if (left.length) out[reg] = { checkId: L.checkId, date: L.date, driver: L.driver, jobs: left,
+                                  aside: left.filter(function (j) { return aside[reg + "|" + j]; }) };
   });
   return out;
 }
@@ -5873,7 +5882,10 @@ var JOBS_REMIND_WHAT = ["Needs fuel", "Tyres need air", "Needs a wash", "Inside 
 function jobsReminderText(open) {
   var lines = [];
   Object.keys(open || {}).sort().forEach(function (reg) {
-    var jobs = ((open[reg] && open[reg].jobs) || []).filter(function (j) { return JOBS_REMIND_WHAT.indexOf(j) !== -1; });
+    var aside = (open[reg] && open[reg].aside) || [];
+    var jobs = ((open[reg] && open[reg].jobs) || []).filter(function (j) {
+      return JOBS_REMIND_WHAT.indexOf(j) !== -1 && aside.indexOf(j) === -1;   /* set aside, v1.148.0 */
+    });
     if (jobs.length) lines.push(reg + ": " + jobs.join(", ") + ".");
   });
   return lines.join("\n");

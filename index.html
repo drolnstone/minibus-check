@@ -1818,7 +1818,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.184.0";
+var APP_VERSION = "v1.185.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -11708,7 +11708,7 @@ if("serviceWorker" in navigator){
          update() hands back a promise, so a try/catch around it never sees
          the failure: with no signal it rejected unhandled on every launch. */
       try{ reg.update().catch(function(){}); }catch(e){}
-      /* UPDATES WITHOUT A RESTART (v1.184.0, Asim, 22 Nov 2026): asked
+      /* UPDATES WITHOUT A RESTART (v1.185.0, Asim, 22 Nov 2026): asked
          again every minute while the app is on screen and whenever it comes
          back to the front, so a phone left open all morning still takes a
          fix merged mid-run. */
@@ -11722,7 +11722,7 @@ if("serviceWorker" in navigator){
   });
 
   /* A new worker has taken control, so the page is running the old copy.
-     Reload once, guarded so it cannot loop. From v1.184.0 only at a quiet
+     Reload once, guarded so it cannot loop. From v1.185.0 only at a quiet
      moment: no pop-up open, nothing being typed, not in the middle of a
      vehicle check or PIN, and no tap or check still waiting to send.
      Otherwise asked again every five seconds. A run in progress is kept on

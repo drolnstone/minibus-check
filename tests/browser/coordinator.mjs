@@ -1186,6 +1186,46 @@ if (want("C29i")) {
   await p.ctx.close();
 }
 
+/* C29m — Set aside (v1.184.0, Asim, 22 Nov 2026): a wash leaves the first
+   screen and the Buses count, stays on the bus page with Bring back; tyres
+   have no Set aside. */
+if (want("C29m")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  const washLine = '#homeBody .need:has([data-do="jobaside"][data-job="Needs a wash"])';
+  const hasSetAside = await p.pg.$$eval(washLine, (e) => e.length);
+  const tyresAside = await p.pg.$$eval('#homeBody [data-do="jobaside"][data-job="Tyres need air"]', (e) => e.length);
+  const countBefore = await p.text('#homeBody [data-go="buses"]').catch(() => "");
+  await p.pg.click('#homeBody [data-do="jobaside"][data-job="Needs a wash"]');
+  await p.wait(250);
+  const go = await p.text("#sheetGo");
+  await p.go();
+  await p.settle();
+  await p.wait(400);
+  const sent = db._rows("SELECT body FROM coord_actions WHERE kind='job'").map((r) => JSON.parse(r.body)).filter((b) => b.job === "Needs a wash");
+  const washLeft = await p.pg.$$eval("#homeBody .need", (e) => e.filter((x) => /needs a wash/.test(x.textContent)).length);
+  const countAfter = await p.text('#homeBody [data-go="buses"]').catch(() => "");
+  await p.shot("C29m-home-after");
+  await p.pg.evaluate(() => { location.hash = "bus/NH56%20FWP"; });
+  await p.wait(400);
+  const row = await p.pg.$$eval("#busBody .row", (e) => (e.find((x) => /Needs a wash/.test(x.textContent)) || {}).textContent || "");
+  await p.shot("C29m-bus-page");
+  await p.pg.click('#busBody [data-do="jobback"][data-job="Needs a wash"]');
+  await p.wait(250);
+  await p.go();
+  await p.settle();
+  await p.wait(400);
+  await p.pg.evaluate(() => { location.hash = ""; });
+  await p.wait(400);
+  const back = await p.pg.$$eval("#homeBody .need", (e) => e.filter((x) => /needs a wash/.test(x.textContent)).length);
+  check("C29m", "Set aside takes a wash off the first screen and the Buses count; the bus page tags it with Bring back; tyres cannot",
+        hasSetAside === 1 && tyresAside === 0 && go === "Set aside" && sent.length === 1 && sent[0].how === "aside" && washLeft === 0 &&
+        /Set aside/.test(row) && /Bring back/.test(row) && /Done/.test(row) && countBefore !== countAfter && back === 1 && !p.errs.length,
+        "aside " + hasSetAside + ", tyres " + tyresAside + ", go '" + go + "', sent " + JSON.stringify(sent) + ", left " + washLeft +
+        ", count '" + countBefore + "' -> '" + countAfter + "', row '" + row + "', back " + back + ", errors " + JSON.stringify(p.errs));
+  await p.ctx.close();
+}
+
 /* C29k — parked fuel (v1.160.0): newer than the walkaround, it is the one
    shown. From v1.169.0 (Asim, 15 Nov 2026) 1/4 or less needs fuel, not 3/8,
    and a sixteenth shows as it was slid. */
