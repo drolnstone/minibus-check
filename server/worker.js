@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.102.0";
+const SCRIPT_VERSION = "w2.103.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -1560,7 +1560,18 @@ function json(obj, status) {
    READING WHAT THE SHEET OWNS
    ========================================================================== */
 
-async function getStops(env) {
+/* getStops(env, key): the timetable as it stands for that Sunday (the run
+   Sunday when no key is given), with any stop moved to the other route for
+   that Sunday alone laid over it (stopMovesOn). getStopsRaw is the Bus
+   Stops tab with nothing laid over. */
+async function getStops(env, key) {
+  const list = await getStopsRaw(env);
+  let moves = [];
+  try { moves = await stopMovesOn(env, key || runSunday()); } catch (e) { moves = []; }
+  return moves.length ? applyStopMoves(list, moves) : list;
+}
+
+async function getStopsRaw(env) {
   /* SELECT * rather than naming lat and lng: a database this Worker has not
      yet added those columns to must still answer the board, and a stop with
      no pin is the ordinary case until the six coordinates are typed in. */
@@ -2301,8 +2312,8 @@ function busDateAllowed(key) {
    ========================================================================== */
 
 async function busPayload(env, keyIn, ref, pid) {
-  const all = await getStops(env);
-  const stops = pickupsAndArrivals(all);
+  let all = await getStops(env);
+  let stops = pickupsAndArrivals(all);
 
   let key = keyIn, rolled = false;
   if (!key) {
@@ -2310,6 +2321,9 @@ async function busPayload(env, keyIn, ref, pid) {
     key = await busCurrentSunday(env, stops);
     rolled = key !== today;
   }
+  /* That Sunday's own timetable: a stop moved for one Sunday is moved on
+     that Sunday's page alone. */
+  if (key !== runSunday()) { all = await getStops(env, key); stops = pickupsAndArrivals(all); }
   if (!busDateAllowed(key)) {
     return { ok: false, error: "That link is out of date." };
   }
@@ -3158,12 +3172,13 @@ async function boardPayload(env, route, phone, driver, fix, ctx, keyIn) {
 async function handleBooking(env, b) {
   if (!b) return json({ ok: false, error: "empty booking" });
 
-  const all = await getStops(env);
-  const stops = pickupsAndArrivals(all);
+  let all = await getStops(env);
+  let stops = pickupsAndArrivals(all);
   const key = String(b.date || "") || (await busCurrentSunday(env, stops));
   if (!busDateAllowed(key)) {
     return json({ ok: false, error: "That link is out of date." });
   }
+  if (key !== runSunday()) { all = await getStops(env, key); stops = pickupsAndArrivals(all); }
 
   const ref = String(b.ref || "").replace(/[^A-Za-z0-9]/g, "").substring(0, 32);
   const phone = normalisePhone(b.phone);
@@ -7087,7 +7102,7 @@ async function seatFor(env, sub) {
   if (!mine) return null;
   let stop = null;
   try {
-    stop = (await getStops(env)).find((x) => String(x.id) === String(mine.stopId)) || null;
+    stop = (await getStops(env, target)).find((x) => String(x.id) === String(mine.stopId)) || null;
   } catch (e) {}
   return { stop: (stop && stop.stop) || mine.stopId, time: (stop && stop.time) || "",
            seats: Number(mine.seats) || 0, key: target, route: (stop && stop.route) || "" };
@@ -9792,7 +9807,7 @@ async function reapplyDrivers(env) {
    choice has its own (contactTell). */
 /* "booking" from w2.84.0 (Asim, 8 Nov 2026): a coordinator's Book, Edit and
    Cancel reach the other coordinators too. */
-const CHANGE_TOLD = ["driver", "pin", "rota", "rotaplan", "bus", "stop", "decide", "defect", "vlog", "vfix", "motrun", "handno", "booking"];
+const CHANGE_TOLD = ["driver", "pin", "rota", "rotaplan", "bus", "stop", "stopmove", "decide", "defect", "vlog", "vfix", "motrun", "handno", "booking"];
 
 async function changeDriverNames(env, kind, r) {
   let names = [];
@@ -10110,7 +10125,170 @@ async function coordStopsView(env) {
   if (!shelf || !Array.isArray(shelf.stops)) return null;
   const list = shelf.stops.map(stopNorm);
   for (const a of await coordPending(env, ["stop"])) stopEditApply(list, a.body || {});
-  return { stops: list };
+  /* From w2.103.0: the stops moved to the other route for the run Sunday. */
+  let moves = [];
+  try { moves = await stopMovesOn(env, runSunday()); } catch (e) {}
+  return { stops: list, sunday: runSunday(), moves: moves };
+}
+
+/* ---- A STOP ON THE OTHER ROUTE FOR ONE SUNDAY, from w2.103.0 ----------------
+
+   Asim, 22 Nov 2026: one route overbooked and the other with room, a whole
+   stop and its bookings go to the other route's bus for the coming Sunday,
+   then come back by themselves. Nothing on the Bus Stops tab changes: the
+   move is laid over the timetable (getStops) for that Sunday alone, so the
+   Monday after it is simply not there. Kept in settings "stop_moves" as
+   [{ sunday, id, to, after, by, at }]; after is the pickup on the other
+   route it goes after, "" for first. Every booking keeps its stop number,
+   so its seats go with it. Told once each: the stop's passengers, the
+   driver it goes to, the driver it leaves, and the coordinators (Change by). */
+const STOP_MOVES_KEY = "stop_moves";
+const STOP_MOVES_KEEP_WEEKS = 8;
+
+async function stopMovesAll(env) {
+  const v = await cacheGet(env, STOP_MOVES_KEY);
+  return Array.isArray(v) ? v.filter((m) => m && m.id && m.sunday && (m.to === "North" || m.to === "South")) : [];
+}
+
+async function stopMovesOn(env, key) {
+  return (await stopMovesAll(env)).filter((m) => m.sunday === key);
+}
+
+/* The list as getStops orders it (route, then the tab's order), with each
+   moved stop taken out of its own route and put after its chosen pickup on
+   the other (after that route's Depart row when it goes first). */
+function applyStopMoves(list, moves) {
+  let out = list.slice();
+  for (const m of moves) {
+    const i = out.findIndex((s) => s.id === m.id && !s.depart && !s.arrival);
+    if (i === -1 || out[i].route === m.to) continue;
+    const x = Object.assign({}, out[i], { route: m.to, movedFrom: out[i].route, homeTime: out[i].time },
+                            m.time ? { time: m.time } : {});
+    out.splice(i, 1);
+    let at = -1;
+    if (m.after) at = out.findIndex((s) => s.id === m.after && s.route === m.to && !s.depart && !s.arrival);
+    if (at === -1) {
+      const dep = out.findIndex((s) => s.route === m.to && s.depart);
+      at = dep !== -1 ? dep : out.findIndex((s) => s.route === m.to) - 1;
+      if (at < -1) at = out.length - 1;
+    }
+    out.splice(at + 1, 0, x);
+  }
+  return out;
+}
+
+const otherRoute = (r) => r === "South" ? "North" : "South";
+
+async function actStopMove(env, me, act) {
+  const key = runSunday();
+  const back = act.op === "back";
+  const id = String(act.stopId || "").toUpperCase().trim();
+  const raw = await getStopsRaw(env);
+  const x = raw.find((s) => s.id.toUpperCase() === id && !s.depart && !s.arrival) || null;
+  if (!x) return { ok: false, error: (id || "That stop") + " is not a pickup on the live server." };
+  const all = await stopMovesAll(env);
+  const had = all.find((m) => m.sunday === key && m.id === x.id) || null;
+  const home = x.route, away = otherRoute(home);
+  if (back && !had) return { ok: false, error: x.stop + " is on the " + home + " bus already." };
+  if (!back && had) return { ok: false, error: x.stop + " is on the " + away + " bus for " + shortDay(key) + " already." };
+
+  const rotaRow = await getRotaRow(env, key);
+  const to = back ? home : away, from = back ? away : home;
+  if (routeCancelled(rotaRow, to)) return { ok: false, error: "The " + to + " bus is not running " + shortDay(key) + "." };
+  let tTo = null, tFrom = null;
+  try { tTo = await tripState(env, key, to); } catch (e) {}
+  try { tFrom = await tripState(env, key, from); } catch (e) {}
+  if (tTo && tTo.ended) return { ok: false, error: "The " + to + " run is over." };
+  if (tFrom && tFrom.ended) return { ok: false, error: "The " + from + " run is over." };
+  if ((tTo && tTo.served && tTo.served[x.id]) || (tFrom && tFrom.served && tFrom.served[x.id])) {
+    return { ok: false, error: "The bus has already been to " + x.stop + "." };
+  }
+
+  /* Where it goes, and its time on that run for the day, which the
+     coordinator types (Asim's times), between the stop before it and the
+     stop after it. The time is what every estimate falls back on when the
+     driving phone's location is not there, so it has to fit the run. */
+  let after = "", afterStop = null, time = x.time;
+  if (!back) {
+    after = String(act.after || "").toUpperCase().trim();
+    const line = raw.filter((s) => s.route === away);
+    let at = -1;
+    if (after) {
+      at = line.findIndex((s) => s.id.toUpperCase() === after && !s.depart && !s.arrival);
+      if (at === -1) return { ok: false, error: "Pick where on the " + away + " route it goes." };
+      afterStop = line[at];
+      after = afterStop.id;
+    } else {
+      at = line.findIndex((s) => s.depart);
+    }
+    const before = at >= 0 ? line[at] : null;
+    const behind = line.slice(at + 1).find((s) => !s.depart) || null;
+    const m = STOP_TIME.exec(String(act.time || "").trim());
+    if (!m) return { ok: false, error: "Type the time as 10:35." };
+    time = m[1].padStart(2, "0") + ":" + m[2];
+    const lo = before && before.time ? before.time : "", hi = behind && behind.time ? behind.time : "";
+    if ((lo && time < lo) || (hi && time > hi)) {
+      return { ok: false, error: "Pick a time" + (lo ? " from " + lo : "") + (hi ? (lo ? " to " : " up to ") + hi : "") + "." };
+    }
+  }
+
+  const keep = keyAddWeeks(key, -STOP_MOVES_KEEP_WEEKS);
+  const next = all.filter((m) => m.sunday >= keep && !(m.sunday === key && m.id === x.id));
+  if (!back) next.push({ sunday: key, id: x.id, to: away, after: after, time: time, by: me.name, at: Date.now() });
+
+  let seats = 0;
+  const pids = [];
+  for (const b of await liveBookings(env, key)) {
+    if (b.stopId !== x.id) continue;
+    seats += b.seats;
+    if (b.pid && pids.indexOf(b.pid) === -1) pids.push(b.pid);
+  }
+  const day = shortDay(key);
+  const seatTail = seats ? ", " + seatWord(seats) + " booked" : "";
+  const words = back
+    ? day + ". " + x.stop + " back on the " + home + " bus" + seatTail + "."
+    : day + ". " + x.stop + " moved to the " + away + " bus at " + time +
+      (afterStop ? ", after " + afterStop.stop : ", first pickup") + seatTail + ". " + home + " again after that Sunday.";
+
+  /* Passengers: what to do, no reason (Asim, 22 Nov 2026: "prompt
+     instructions and no prose"). No stop codes. */
+  const pTitle = back ? home + " bus at " + x.stop : away + " bus at " + x.stop;
+  const pBody = back
+    ? day + ": the " + home + " bus picks you up at " + x.time + ", as usual."
+    : day + ": the " + away + " bus picks you up at " + time + ". After service, the " + home + " bus home.";
+  const dTell = [];
+  const toDrv = String(rotaDriverFor(rotaRow, to) || "").trim();
+  const fromDrv = String(rotaDriverFor(rotaRow, from) || "").trim();
+  const stopLine = x.stop + " at " + time + (afterStop ? ", after " + afterStop.stop : back ? "" : ", first pickup") + (seats ? ", " + seatWord(seats) : "");
+  if (toDrv && !routeCancelled(rotaRow, to)) {
+    dTell.push({ name: toDrv, title: back ? "Stop back" : "Stop added",
+                 body: day + " " + to + ": " + (back ? x.stop + " at " + x.time + " back on your route" + (seats ? ", " + seatWord(seats) : "") : stopLine) + "." +
+                       (back ? "" : " This Sunday only.") });
+  }
+  if (fromDrv && !sameName(fromDrv, toDrv) && !routeCancelled(rotaRow, from)) {
+    dTell.push({ name: fromDrv, title: back ? "Stop taken off" : "Stop moved",
+                 body: day + " " + from + ": " + x.stop + " is on the " + to + " bus" + (back ? "." : ". This Sunday only.") });
+  }
+
+  /* The time each booking was given moves with it, so no "New time" alert
+     follows this one (fitBookingsToStops), and lateness there is measured
+     from the time the passenger was told. */
+  const stmts = [cachePut(env, STOP_MOVES_KEY, next)];
+  if (await ensureBookSched(env)) {
+    stmts.push(env.DB.prepare("UPDATE bookings SET sched=? WHERE sunday=? AND stop_id=? AND lower(status)<>'cancelled'")
+      .bind(back ? x.time : time, key, x.id));
+  }
+  return { ok: true, sunday: key, local: back ? "moved back" : "moved",
+           stmts: stmts,
+           body: { stopId: x.id, to: to, after: after, back: back },
+           tell: [], words: words,
+           after: async () => {
+             for (const pid of pids) {
+               try { await tellBookingPhones(env, pid, (back ? "moveback-" : "move-") + key + "-" + x.id, pTitle, pBody, ""); } catch (e) {}
+             }
+             if (dTell.length) { try { await tellDriversEach(env, me, dTell, back ? "moveback" : "move"); } catch (e) {} }
+             return 0;
+           } };
 }
 
 const stopKind = (t) => t === "Depart" ? "depart" : t === "Arrival" ? "arrival" : "pickup";
@@ -11329,7 +11507,7 @@ async function coordBookings(env, me, sundayIn) {
   if (key > keyAddWeeks(today, 1) || key < keyAddWeeks(today, -FIX_WINDOW_WEEKS)) {
     return { ok: false, error: "Only the last few Sundays and the next one are kept here." };
   }
-  const all = await getStops(env);
+  const all = await getStops(env, key);
   const stops = pickupsAndArrivals(all);
   const q = await env.DB.prepare(
     "SELECT id, route, stop_id, stop, seats, device, pid, phone, status, received, note " +
@@ -11388,7 +11566,7 @@ async function coordRuns(env, me, sundayIn) {
   if (key < earliest || key > londonKey(new Date())) return out;
 
   await ensureFixCol(env);
-  const all = await getStops(env);
+  const all = await getStops(env, key);
   const q = await env.DB.prepare(
     "SELECT * FROM trip_events WHERE sunday=? ORDER BY happened, id").bind(key).all();
   const rows = (q.results || []).filter((r) => String(r.status || "") !== "Undone");
@@ -12576,6 +12754,7 @@ async function coordAct(env, me, act) {
   else if (kind === "driver") r = await actDriver(env, me, act);
   else if (kind === "bus") r = await actBus(env, me, act);
   else if (kind === "stop") r = await actStop(env, me, act);
+  else if (kind === "stopmove") r = await actStopMove(env, me, act);
   else if (kind === "motrun") r = await actMotrun(env, me, act);
   else if (kind === "pin") r = await actPinReset(env, me, act);
   else if (kind === "contact") r = await actContact(env, me, act);

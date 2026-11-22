@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.146.0";
+var SCRIPT_VERSION = "v1.147.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -5974,6 +5974,9 @@ function runReports(ss, key) {
       if (s.route !== route || s.arrival) return;
       var got = t.stops[s.id], n = booked[s.id] || 0;
       if (!got && !n) return;
+      /* From v1.147.0: a stop moved to the other route for the day (server
+         w2.103.0) is reported where it was picked up, not "not marked" here. */
+      if (!got && Object.keys(byRoute).some(function (r2) { return r2 !== route && byRoute[r2].stops[s.id]; })) return;
       seen[s.id] = true;
       list.push({ name: (got && got.name) || s.stop, booked: n, got: got || null });
     });
