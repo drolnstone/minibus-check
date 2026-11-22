@@ -2345,13 +2345,17 @@ if (want("C59")) {
     const ask = await p.pg.evaluate(() => [document.getElementById("sheetTitle").textContent, document.getElementById("sheetNot").textContent,
       document.getElementById("sheetGo").textContent, window.__sent.length]);
     await p.shot("C59-hand-over");
+    /* Morning only or Full day (v1.186.0). */
+    await p.pg.evaluate(() => document.querySelector('#sheetBody [data-pick="morning"]').click());
+    const go2 = await p.pg.textContent("#sheetGo");
     await p.pg.evaluate(() => document.getElementById("sheetGo").click());
     await p.wait(300);
     const sent = await p.pg.evaluate(() => window.__sent.filter((x) => x.op === "act").map((x) => x.extra.act));
     const a = sent[0] || {};
     const ok = row.indexOf(holder) !== -1 && /on the road/.test(row) && !greyed && next === "Next: bus" && go === "Hand North to " + taker &&
-               ask[0] === "Hand North to " + taker + "?" && ask[1] === "Not now" && ask[2] === "Hand over" && ask[3] === 0 &&
-               a.kind === "rota" && a.handover === "North" && a.set && a.set.northCover === taker && a.sunday === key && !a.bus;
+               ask[0] === "Hand North to " + taker + "?" && ask[1] === "Not now" && ask[2] === "Choose" && ask[3] === 0 && go2 === "Hand over" &&
+               a.kind === "rota" && a.handover === "North" && a.set && a.set.northCover === taker && a.sunday === key && !a.bus &&
+               a.span === "morning";
     check("C59", "Hand over: today's run on the Sunday screen goes to the driver picked, as a cover change with the route",
           ok && !p.errs.length, JSON.stringify({ row, greyed, go, ask, sent, errs: p.errs }).slice(0, 900));
   } catch (e) { stopped("C59", e); }
@@ -2378,10 +2382,11 @@ if (want("C60")) {
     await p.shot("C60-hand-over-asked");
     await p.pg.evaluate(() => document.getElementById("sheetGo").click()); await p.wait(300);
     const ask = await p.pg.textContent("#sheetTitle");
+    await p.pg.evaluate(() => document.querySelector('#sheetBody [data-pick="day"]').click());
     await p.pg.evaluate(() => document.getElementById("sheetGo").click()); await p.wait(300);
     const a = (await p.pg.evaluate(() => window.__sent.filter((x) => x.op === "act").map((x) => x.extra.act)))[0] || {};
     const ok = /Bro Moses asks to hand the North run to Bro Adesina\./.test(notice) && go === "Hand North to Bro Adesina" && ask === "Hand North to Bro Adesina?" &&
-               a.kind === "rota" && a.handover === "North" && a.ask === "h1" && a.set && a.set.northCover === "Bro Adesina";
+               a.kind === "rota" && a.handover === "North" && a.ask === "h1" && a.set && a.set.northCover === "Bro Adesina" && a.span === "day";
     check("C60", "a driver's hand over shows on the first screen; Approve hands the run over",
           ok && !p.errs.length, JSON.stringify({ notice, go, ask, a, errs: p.errs }).slice(0, 900));
   } catch (e) { stopped("C60", e); }
@@ -2474,8 +2479,9 @@ if (want("C63")) {
       document.getElementById("sheetNot").click();
       return { taker, shown, open: document.getElementById("sheet").classList.contains("is-on"), sent: window.__sent.length };
     }, key);
-    const ok = r.shown.title === "Hand North to " + r.taker + "?" && r.shown.line === "Bus: CD34 EFG." &&
-               r.shown.not === "Not now" && r.shown.go === "Hand over" && !r.open && r.sent === 0;
+    const ok = r.shown.title === "Hand North to " + r.taker + "?" && r.shown.line.indexOf("Bus: CD34 EFG.") === 0 &&
+               /Morning only/.test(r.shown.line) && /Full day/.test(r.shown.line) &&
+               r.shown.not === "Not now" && r.shown.go === "Choose" && !r.open && r.sent === 0;
     check("C63", "Hand over asks first: \"Hand North to (name)?\", the bus on a line; Not now sends nothing",
           ok && !p.errs.length, JSON.stringify({ r, errs: p.errs }).slice(0, 900));
   } catch (e) { stopped("C63", e); }

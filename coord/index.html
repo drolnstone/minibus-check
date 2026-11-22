@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.185.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.186.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -813,7 +813,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.185.0";
+var PAGE_VERSION = "v1.186.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1403,6 +1403,7 @@ function sunCard(key, now, cue){
            (!off && g.cover ? '<small>covering '+esc(g.sched)+'</small>' : '')+'</span>' +
          '<span class="leg-end">' +
            (s && !off && s.seats ? '<span class="seats'+(s.booked > s.seats ? ' over' : '')+'">'+s.booked+'/'+s.seats+'</span>' : '') +
+           (key === D.today && D.splits && D.splits[rt] && D.splits[rt].on ? '<span class="tag info">2 trips</span>' : '') +
            (g.bus && !off ? '<span class="plate">'+esc(g.bus)+'</span>' : '') +
          '</span>' +
          /* From v1.157.0: the bus's last fuel reading, under its line. On the
@@ -1759,6 +1760,26 @@ function paintSunday(key){
   var repl = key === D.today && ["North","South"].some(function(rt){ var x = (D.runs || {})[rt]; return x && x.started && x.reg && x.reg0 && x.reg !== x.reg0; });
   if(!past && !repl && l.North.bus && l.South.bus && l.North.bus !== l.South.bus)
     h += '<button class="btn btn-ghost btn-wide" type="button" data-do="busswap" data-key="'+esc(key)+'" style="margin-top:10px;min-height:46px;font-size:16px">Swap buses</button>';
+  /* A SECOND TRIP FOR OVERFLOW (v1.186.0, Asim, 22 Nov 2026): each trip's
+     stops; until passengers are told, One trip and a stop to the other trip. */
+  if(key === D.today) ["North","South"].forEach(function(rt){
+    var sp = (D.splits || {})[rt];
+    if(!sp || (!sp.on && !sp.stopped)) return;
+    var row = function(x, n){
+      return '<div class="row"><span class="v">' + esc(x.stop) + ' · ' + x.booked + (n === 2 && x.at ? ', about ' + esc(x.at) : '') + '</span>' +
+             (sp.mayChange && sp.on ? '<span class="acts"><button class="mini" type="button" data-do="splitmove" data-route="' + rt + '" data-id="' + esc(x.id) + '">To trip ' + (n === 1 ? 2 : 1) + '</button></span>' : '') + '</div>';
+    };
+    var booked = function(l){ return (l || []).filter(function(x){ return x.booked > 0; }); };
+    h += '<div class="card" style="margin-top:10px"><h3 style="margin-top:0">' + rt + (sp.on ? ': 2 trips' : ': one trip') + '</h3>';
+    if(sp.on){
+      h += '<p class="k" style="margin:6px 0 2px">Trip 1 · ' + sp.b1 + '/' + sp.seats + '</p>' + booked(sp.trip1).map(function(x){ return row(x, 1); }).join("") +
+           '<p class="k" style="margin:10px 0 2px">Trip 2 · ' + sp.b2 + '/' + sp.seats + (sp.dep && sp.arr ? ' · about ' + esc(sp.dep) + ' to ' + esc(sp.arr) : '') + '</p>' +
+           booked(sp.trip2).map(function(x){ return row(x, 2); }).join("") +
+           (sp.told ? '' : '<p class="k" style="margin-top:8px">Passengers told at ' + esc(sp.tellAt) + '.</p>');
+    }
+    if(sp.mayChange) h += '<button class="btn btn-ghost btn-wide" type="button" data-do="' + (sp.on ? 'splitstop' : 'splitgo') + '" data-route="' + rt + '" style="margin-top:10px;min-height:46px;font-size:16px">' + (sp.on ? 'One trip' : '2 trips') + '</button>';
+    h += '</div>';
+  });
   /* MOVE A STOP from the Sunday card (v1.183.0, Asim, 22 Nov 2026): the
      coming Sunday only, as on Bus stops; the stops moved, each with Put back. */
   var SR = D.stopsReg || {};
@@ -2052,23 +2073,50 @@ function pickHandover(key, rt){
   });
 }
 
-/* One more step before the hand over is sent (v1.176.0): the question, Not
-   now and Hand over, as the driver app's own ask. */
-function handoverGo(key, rt, name, bus, ask){
-  var keeps = same(name, ((D.runs || {})[rt] || {}).driver) && bus;
+/* A second trip called off, or back on (v1.186.0): one confirm. */
+function splitAsk(rt, stop){
   openSheet({
-    eyebrow: rt + " run",
-    title: keeps ? "Put " + (bus.hired ? "the hired bus" : bus.reg) + " on " + rt + "?" : "Hand " + rt + " to " + name + "?",
-    line: bus && !keeps ? "Bus: " + (bus.hired ? bus.reg + ", hired" : bus.reg) + "." : "",
-    go: keeps ? "Change the bus" : "Hand over",
-    onGo: function(){ handoverSend(key, rt, name, bus, ask); }
+    eyebrow: shortDay(D.today),
+    title: stop ? rt + ": one trip?" : rt + ": 2 trips?",
+    go: stop ? "One trip" : "2 trips",
+    onGo: function(){ act({ kind:"tripsplit", route: rt, op: stop ? "stop" : "split" }); }
   });
 }
-function handoverSend(key, rt, name, bus, ask){
+
+/* One more step before the hand over is sent (v1.176.0): the question, Not
+   now and Hand over, as the driver app's own ask. From v1.186.0 (Asim, 22
+   Nov 2026) Morning only or Full day: morning only goes back after the
+   morning's last trip. */
+function handoverGo(key, rt, name, bus, ask){
+  var keeps = same(name, ((D.runs || {})[rt] || {}).driver) && bus;
+  if(keeps){
+    openSheet({
+      eyebrow: rt + " run",
+      title: "Put " + (bus.hired ? "the hired bus" : bus.reg) + " on " + rt + "?",
+      go: "Change the bus",
+      onGo: function(){ handoverSend(key, rt, name, bus, ask, ""); }
+    });
+    return;
+  }
+  var from = ((D.runs || {})[rt] || {}).driver || "";
+  openSheet({
+    eyebrow: rt + " run",
+    title: "Hand " + rt + " to " + name + "?",
+    line: bus ? "Bus: " + (bus.hired ? bus.reg + ", hired" : bus.reg) + "." : "",
+    body: '<ul class="pick">' +
+      '<li><button type="button" data-pick="morning"><b>Morning only</b><small>' + esc(from ? "back to " + from + " after the morning" : "back after the morning") + '</small></button></li>' +
+      '<li><button type="button" data-pick="day"><b>Full day</b><small>' + esc(name) + ' to the end</small></button></li></ul>',
+    go: "Choose",
+    onPick: function(){ return "Hand over"; },
+    onGo: function(v){ handoverSend(key, rt, name, bus, ask, v); }
+  });
+}
+function handoverSend(key, rt, name, bus, ask, span){
   var set = {}; set[rt === "South" ? "southCover" : "northCover"] = name;
   var a = { kind:"rota", sunday:key, set:set, handover: rt };
   if(bus) a.bus = bus;
   if(ask) a.ask = ask;
+  if(span) a.span = span;
   act(a);
 }
 
@@ -4677,6 +4725,8 @@ document.addEventListener("click", function(e){
   else if(d === "adddriver") editDriver("");
   else if(d === "editbus") editBus(t.getAttribute("data-reg"));
   else if(d === "editstop") editStop(t.getAttribute("data-id"));
+  else if(d === "splitmove") act({ kind:"tripsplit", route: t.getAttribute("data-route"), op:"move", stopId: t.getAttribute("data-id") });
+  else if(d === "splitstop" || d === "splitgo") splitAsk(t.getAttribute("data-route"), d === "splitstop");
   else if(d === "stopmove") moveStop(t.getAttribute("data-id"));
   else if(d === "stopback") moveStopBack(t.getAttribute("data-id"));
   else if(d === "addstop") editStop("");

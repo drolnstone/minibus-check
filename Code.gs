@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.149.0";
+var SCRIPT_VERSION = "v1.150.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -5964,13 +5964,18 @@ function runReports(ss, key) {
                      name: String(at1(r, c.stop) || "").trim() };
   });
 
-  /* The latest started trip of each route. */
+  /* Each route's started trips, in the order they left. Two on a day the
+     route was split into a second trip (v1.150.0, server w2.106.0). */
   var byRoute = {};
   Object.keys(trips).forEach(function (id) {
     var t = trips[id];
     if (!t.start || !t.route) return;
-    if (!byRoute[t.route] || byRoute[t.route].start.at < t.start.at) byRoute[t.route] = t;
+    (byRoute[t.route] = byRoute[t.route] || []).push(t);
   });
+  Object.keys(byRoute).forEach(function (rt) { byRoute[rt].sort(function (a, b) { return a.start.at - b.start.at; }); });
+  var markedOn = function (route, sid) {
+    return (byRoute[route] || []).some(function (t) { return !!t.stops[sid]; });
+  };
 
   var stops = readBusStops(ss);
   var booked = {};
@@ -5978,17 +5983,19 @@ function runReports(ss, key) {
     booked[b.stopId] = (booked[b.stopId] || 0) + (Number(b.seats) || 0);
   });
 
-  return Object.keys(byRoute).sort().map(function (route) {
-    var t = byRoute[route];
+  var section = function (route, t, last) {
     var list = [];
     var seen = {};
     stops.forEach(function (s) {
       if (s.route !== route || s.arrival) return;
       var got = t.stops[s.id], n = booked[s.id] || 0;
       if (!got && !n) return;
+      /* Marked on another trip of this route: reported there. Unmarked on
+         every trip: on the last. */
+      if (!got && (!last || markedOn(route, s.id))) return;
       /* From v1.147.0: a stop moved to the other route for the day (server
          w2.103.0) is reported where it was picked up, not "not marked" here. */
-      if (!got && Object.keys(byRoute).some(function (r2) { return r2 !== route && byRoute[r2].stops[s.id]; })) return;
+      if (!got && Object.keys(byRoute).some(function (r2) { return r2 !== route && markedOn(r2, s.id); })) return;
       seen[s.id] = true;
       list.push({ name: (got && got.name) || s.stop, booked: n, got: got || null });
     });
@@ -6003,7 +6010,7 @@ function runReports(ss, key) {
       else back = "Arrival at Church not recorded. Run ended " + hhmm(t.end.at) +
                   (t.end.by ? " by " + t.end.by : "") + ".";
     }
-    return { route: route, trip: t.id, startAt: t.start.at, reg: t.reg, drivers: t.drivers, ended: !!t.end,
+    return { trip: t.id, startAt: t.start.at, ended: !!t.end,
              left: "Left Church " + hhmm(t.start.at) +
                    (runLateWords(t.start.off) ? ", " + runLateWords(t.start.off) : "") + ".",
              stops: list.map(function (x) {
@@ -6013,7 +6020,22 @@ function runReports(ss, key) {
                return x.name + ": " + hhmm(x.got.at) + (lw ? ", " + lw : "") + ". " +
                       (x.got.empty ? "Nobody there" : "Picked up") + b + ".";
              }),
-             back: back, parked: runParked(ss, t.reg, key) };
+             back: back };
+  };
+
+  return Object.keys(byRoute).sort().map(function (route) {
+    var ts = byRoute[route], t = ts[ts.length - 1];
+    var drivers = [], reg = "";
+    ts.forEach(function (x) {
+      x.drivers.forEach(function (d) { if (drivers.indexOf(d) === -1) drivers.push(d); });
+      reg = x.reg || reg;
+    });
+    var parts = ts.map(function (x, i) { return section(route, x, i === ts.length - 1); });
+    var one = parts[parts.length - 1];
+    return { route: route, trip: one.trip, startAt: one.startAt, reg: reg, drivers: drivers, ended: one.ended,
+             left: one.left, stops: one.stops, back: one.back,
+             trips: parts.length > 1 ? parts : null,
+             parked: runParked(ss, reg, key) };
   });
 }
 
@@ -6040,10 +6062,20 @@ function runParked(ss, reg, key) {
 }
 
 function runReportText(r, key) {
-  return [r.route + ", " + ukDay(key) + ".",
-          (r.reg ? "Bus " + r.reg + ". " : "") +
-          (r.drivers.length ? (r.drivers.length > 1 ? "Drivers " : "Driver ") + r.drivers.join(", ") + "." : ""),
-          r.left, ""]
+  var head = [r.route + ", " + ukDay(key) + ".",
+              (r.reg ? "Bus " + r.reg + ". " : "") +
+              (r.drivers.length ? (r.drivers.length > 1 ? "Drivers " : "Driver ") + r.drivers.join(", ") + "." : "")];
+  /* Two trips (v1.150.0): each with its own lines. */
+  if (r.trips && r.trips.length > 1) {
+    var body = head.concat([""]);
+    r.trips.forEach(function (x, i) {
+      body = body.concat(["Trip " + (i + 1) + ". " + x.left, ""])
+                 .concat(x.stops.length ? x.stops : ["No stops marked or booked."])
+                 .concat(["", x.back, x.loc || "", ""]);
+    });
+    return body.concat([r.parked]).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+  return head.concat([r.left, ""])
     .concat(r.stops.length ? r.stops : ["No stops marked or booked."])
     .concat(["", r.back, r.parked, r.loc || ""]).join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
@@ -6077,13 +6109,19 @@ function runLocWords(info, since, startAt) {
 
 /* Each report's live location line, from one ask of the live server. */
 function runLocLines(reports) {
-  var ids = reports.map(function (r) { return r.trip; }).filter(function (x) { return !!x; });
+  var ids = [];
+  reports.forEach(function (r) {
+    (r.trips || [r]).forEach(function (x) { if (x.trip && ids.indexOf(x.trip) === -1) ids.push(x.trip); });
+  });
   if (!ids.length) return;
   var got = null;
   try { got = workerCall("livelog", { trips: ids }); } catch (err) { got = null; }
   if (!got || got.ok !== true || !got.trips) return;
   reports.forEach(function (r) {
     r.loc = runLocWords(got.trips[r.trip] || null, Number(got.since) || 0, r.startAt);
+    (r.trips || []).forEach(function (x) {
+      x.loc = runLocWords(got.trips[x.trip] || null, Number(got.since) || 0, x.startAt);
+    });
   });
 }
 

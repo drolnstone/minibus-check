@@ -1,26 +1,52 @@
 MINIBUS
 =======
-  pages v1.185.0 · server w2.105.0 · sheet v1.149.0
+  pages v1.186.0 · server w2.106.0 · sheet v1.150.0
 
-YOU ARE ON   app v1.185.0 · server w2.104.1 · sheet v1.148.0
-GOING TO     app v1.185.0 · server w2.105.0 · sheet v1.149.0
+YOU ARE ON   app v1.185.0 · server w2.105.0 · sheet v1.149.0
+GOING TO     app v1.186.0 · server w2.106.0 · sheet v1.150.0
 
-Server and sheet. The apps do not change.
+All three apps, the server and the sheet.
 
-The Sunday run report has one more line at the end, the live location of
-that run:
-  "Live location: 09:58 to 10:57."  the phone driving the run sent it
-  "Live location: none received."   it sent nothing
-  "... Google drive times failed: (reason)."  location came, Google's
-                                    drive times did not
-Others say the location was too vague to use, or came from another phone
-signed in as the driver. Runs before this merge read "not recorded for
-this run". The live server keeps counts and times only, no positions, for
-60 days. 22 Nov: neither bus's times came from location, and nothing on
-record could say whether the phone or Google was the cause.
+SECOND TRIP FOR OVERFLOW
+At 09:31 on a Sunday, a route booked over its bus's seats (after any bus
+swap) is split into Trip 1 and Trip 2 on the same bus.
+  Trip 1   whole stops from the farthest out, until the next would not
+           fit; then Church, as now.
+  Trip 2   the rest, farthest to closest, once Trip 1 has ended at Church.
+09:31    coordinators and the route's driver get one alert: each trip's
+         stops and seats, and Trip 2's times.
+09:31 to 09:45, before Trip 1 starts: on the Coordinator App's Sunday
+         screen a coordinator can move a stop to the other trip, or press
+         One trip. Drivers cannot. Nothing done, it stands.
+09:45    Trip 2's passengers: "Second trip. You are on the second trip.
+         Your bus is due about 11:25." Their screen keeps the time up to
+         date. Nobody hears about trips at 07:30.
+Church   Trip 1 ends as now. The Driver App offers Start trip 2. Not
+         started 10 minutes after Trip 1 ended: one "Time for Trip 2" to
+         the driver.
+Trip 2   works as Trip 1: left Church, Be at your stop, Nobody there,
+         No word yet (from its estimated departure). No coordinator late
+         start alert for Trip 2. No third trip.
+Trip 2's times: Trip 1 at Church plus 5 minutes, then Google's drive
+times stop to stop plus each stop's learned wait; without Google, the
+straight-line drive from Church and the timetable's gaps.
+The run report lists Trip 1 and Trip 2 in one email.
+
+HAND OVER: MORNING ONLY OR FULL DAY
+The last step of a hand over (and of approving a driver's request) asks:
+  Morning only   back to the driver it came from once the morning's last
+                 trip has ended (Trip 2 on a split day): the Rota cover
+                 goes back, and the parked mileage, fuel and return are
+                 theirs again.
+  Full day       as before: the new driver's to the end.
+
+ALSO
+A stop moved to the other route for one Sunday no longer gives the next
+Sunday's bookings at that stop a "New time" alert.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.185.0 · w2.105.0 · v1.149.0.
-B. Next Sunday's run report emails end with the Live location line.
+A. Coordinator App, App info: v1.186.0 · w2.106.0 · v1.150.0.
+B. On a Sunday with more booked than seats, the 09:31 alert arrives and
+   the Sunday screen shows "North: 2 trips".
