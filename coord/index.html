@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.188.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.189.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -814,7 +814,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.188.0";
+var PAGE_VERSION = "v1.189.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -2035,7 +2035,27 @@ function pickDriver(key, slot){
       return cover ? name + " covers " + rt : "Put " + name + " on " + rt;
     },
     line: soon ? "The drivers are emailed." : "",
-    onGo: function(name){ var set = {}; set[slot] = name === "-" ? "" : name; act({ kind:"rota", sunday:key, set:set }); }
+    onGo: function(name){
+      var set = {}; set[slot] = name === "-" ? "" : name;
+      /* Between Trip 1 and Trip 2 today (v1.189.0, audit 22 Nov 2026): there
+         is no run to hand over, so the cover is Morning only or Full day. */
+      var sp = (D.splits || {})[rt];
+      if(cover && name !== "-" && key === D.today && sp && sp.on && sp.t1Ended && !sp.t2Started){
+        var from = l[rt].cover || l[rt].sched || "";
+        openSheet({
+          eyebrow: rt + " run",
+          title: name + " covers " + rt + "?",
+          body: '<ul class="pick">' +
+            '<li><button type="button" data-pick="morning"><b>Morning only</b><small>' + esc(from ? "back to " + from + " after the morning" : "back after the morning") + '</small></button></li>' +
+            '<li><button type="button" data-pick="day"><b>Full day</b><small>' + esc(name) + ' to the end</small></button></li></ul>',
+          go: "Choose",
+          onPick: function(){ return name + " covers " + rt; },
+          onGo: function(v){ var a = { kind:"rota", sunday:key, set:set }; if(v) a.span = v; act(a); }
+        });
+        return;
+      }
+      act({ kind:"rota", sunday:key, set:set });
+    }
   });
 }
 
@@ -3329,7 +3349,7 @@ function jobsOf(reg){
    off the first screen and out of the counts, until Bring back or Done. */
 var JOBS_ASIDE = ["Needs a wash", "Inside needs a clean"];
 function jobAside(j, job){ return !!(j && (j.aside || []).indexOf(job) !== -1); }
-/* The walkaround a job's newest report came from (v1.188.0), else the bus's. */
+/* The walkaround a job's newest report came from (v1.189.0), else the bus's. */
 function jobFrom(j, job){
   var f = j && j.from && j.from[job];
   return f ? f : { checkId: (j && j.checkId) || "", date: (j && j.date) || "", driver: (j && j.driver) || "" };
@@ -3618,7 +3638,7 @@ function paintBus(reg){
      (Asim, 16 Nov). */
   var j = jobsOf(b.reg);
   if(j && j.jobs && j.jobs.length){
-    /* From v1.188.0 a job stays open from its own newest report, so jobs on
+    /* From v1.189.0 a job stays open from its own newest report, so jobs on
        one bus can come from different walkarounds: then each row says which. */
     var who = function(f){ return [f.date ? shortDay(f.date) : "", f.driver].filter(Boolean).join(", "); };
     var one = j.jobs.every(function(x){ return jobFrom(j, x).checkId === jobFrom(j, j.jobs[0]).checkId; });

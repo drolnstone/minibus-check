@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.151.0";
+var SCRIPT_VERSION = "v1.152.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -5949,7 +5949,14 @@ function runLateWords(off) {
 
 /* Each route's run on that Sunday, from Trip Events, with its stops, bus
    and parked figures. Only runs that have a start; the latest trip wins. */
-function runReports(ss, key) {
+function runReports(ss, key, plan) {
+  /* plan (v1.152.0, server w2.109.0): that day's stops moved to the other
+     route { id: route } and second trips { route: [Trip 2 stop ids] }, from
+     the live server, so a stop nobody marked is reported on the bus and the
+     trip it was on that day. */
+  plan = plan || {};
+  var moved = plan.moves || {}, split2 = plan.splits || {};
+  var dayRoute = function (s) { return moved[s.id] || s.route; };
   var sh = ss.getSheetByName(TRIP_SHEET);
   if (!sh || sh.getLastRow() < 2) return [];
   var c = tripColsSoft(sh);
@@ -6008,16 +6015,22 @@ function runReports(ss, key) {
     booked[b.stopId] = (booked[b.stopId] || 0) + (Number(b.seats) || 0);
   });
 
-  var section = function (route, t, last) {
+  var section = function (route, t, last, i) {
     var list = [];
     var seen = {};
     stops.forEach(function (s) {
-      if (s.route !== route || s.arrival) return;
+      if (s.arrival) return;
       var got = t.stops[s.id], n = booked[s.id] || 0;
       if (!got && !n) return;
+      /* Unmarked: on the route it was on that day (v1.152.0). */
+      if (!got && dayRoute(s) !== route) return;
+      if (got && s.route !== route) return;
       /* Marked on another trip of this route: reported there. Unmarked on
-         every trip: on the last. */
-      if (!got && (!last || markedOn(route, s.id))) return;
+         every trip: on its own trip on a split day (v1.152.0), else on the
+         last. */
+      var two = split2[route] || null, nt = (byRoute[route] || []).length;
+      var mine = two && nt > 1 ? i === Math.min(two.indexOf(s.id) !== -1 ? 1 : 0, nt - 1) : last;
+      if (!got && (!mine || markedOn(route, s.id))) return;
       /* From v1.147.0: a stop moved to the other route for the day (server
          w2.103.0) is reported where it was picked up, not "not marked" here. */
       if (!got && Object.keys(byRoute).some(function (r2) { return r2 !== route && markedOn(r2, s.id); })) return;
@@ -6055,7 +6068,7 @@ function runReports(ss, key) {
       x.drivers.forEach(function (d) { if (drivers.indexOf(d) === -1) drivers.push(d); });
       reg = x.reg || reg;
     });
-    var parts = ts.map(function (x, i) { return section(route, x, i === ts.length - 1); });
+    var parts = ts.map(function (x, i) { return section(route, x, i === ts.length - 1, i); });
     var one = parts[parts.length - 1];
     return { route: route, trip: one.trip, startAt: one.startAt, reg: reg, drivers: drivers, ended: one.ended,
              left: one.left, stops: one.stops, back: one.back,
@@ -6162,7 +6175,10 @@ function runReport(nowMs) {
   var to = safetyTo();
   if (!to) return null;
   var sent = [];
-  var due = runReports(SpreadsheetApp.getActiveSpreadsheet(), key).filter(function (r) {
+  /* The day's moves and second trips (v1.152.0); without them as before. */
+  var plan = null;
+  try { plan = workerCall("dayplan", { sunday: key }); } catch (err) { plan = null; }
+  var due = runReports(SpreadsheetApp.getActiveSpreadsheet(), key, plan && plan.ok ? plan : null).filter(function (r) {
     return r.ended && done.routes.indexOf(r.route) === -1;
   });
   if (due.length) runLocLines(due);

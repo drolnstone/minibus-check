@@ -1,26 +1,31 @@
 MINIBUS
 =======
-  pages v1.188.0 · server w2.108.0 · sheet v1.151.0
+  pages v1.189.0 · server w2.109.0 · sheet v1.152.0
 
-YOU ARE ON   app v1.187.0 · server w2.107.0 · sheet v1.150.0
-GOING TO     app v1.188.0 · server w2.108.0 · sheet v1.151.0
+YOU ARE ON   app v1.188.0 · server w2.108.0 · sheet v1.151.0
+GOING TO     app v1.189.0 · server w2.109.0 · sheet v1.152.0
 
-Pages, server and sheet.
+Pages, server and sheet. The 22 Nov audit points.
 
-Jobs to arrange (wash, inside clean, tyres) stay open from their newest
-report until someone taps Done. A later walkaround that leaves a job out,
-or ticks Nothing needed, no longer clears it. Done closes that report and
-every earlier one of the same job on that bus; a walkaround after the Done
-asks again. Needs fuel still follows the latest walkaround.
+On a day with a second trip:
+- Run record: each trip shows its own stops and taps. Fix can add a missed
+  Trip 1 tap after Trip 1 has ended.
+- A Trip 1 tap that reaches the server after Trip 1 ended is recorded.
+- Bookings and Seats reports count both trips and say "two trips".
+- The Sunday run report puts a stop nobody marked under its own trip, and a
+  moved stop nobody marked under the route it was on that day.
 
-Coordinator App, bus page: when a bus's jobs come from different
-walkarounds, each job shows its own date and driver.
+Second trip: worked out again every minute until Trip 1 starts, so a stop
+moved on, a late coordinator booking or another bus can make one, or end
+one. A split a coordinator has changed, or one passengers have been told
+of, stays as it is. Coordinators and the driver told each time.
 
-Once merged, jobs from recent walkarounds never marked Done come back
-once.
+Morning only hand back: told only to the driver it goes back to and the
+one who drove it, titled "(route) handed back".
+
+Rota Cover between Trip 1 and Trip 2 today asks Morning only or Full day.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.188.0 · w2.108.0 · v1.151.0.
-B. Buses: the wash that went today is back on its bus.
+A. Coordinator App, App info: v1.189.0 · w2.109.0 · v1.152.0.

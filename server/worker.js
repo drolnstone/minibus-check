@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.108.0";
+const SCRIPT_VERSION = "w2.109.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -201,7 +201,7 @@ const tokenOf = (env) => (env && env.TOKEN) || TOKEN_FALLBACK;
 const sheetTokenOf = (env) => String((env && env.SHEET_TOKEN) || "");
 const SHEET_ONLY_ACTIONS = ["ping", "mint", "outcome", "cleartrips", "sync",
                             "coordAlert", "drain", "drained", "sheetbookings", "sentMail",
-                            "trail", "sheettrips", "keyok", "sheetparked", "unalerted", "livelog"];
+                            "trail", "sheettrips", "keyok", "sheetparked", "unalerted", "livelog", "dayplan"];
 function sheetTokenOk(env, body) {
   const want = sheetTokenOf(env);
   return !want || String((body && body.sheetToken) || "") === want;
@@ -1541,6 +1541,18 @@ async function runLocNote(env, trip, what, now, why) {
   } catch (e) {}
 }
 
+/* For the run report (w2.109.0): that Sunday's stops moved to the other
+   route, { id: route }, and each split route's Trip 2 stops. */
+async function dayPlanFor(env, sundayIn) {
+  const key = anyToKey(sundayIn) || runSunday();
+  const moves = {};
+  for (const m of await stopMovesOn(env, key)) moves[m.id] = m.to;
+  const splits = {};
+  const day = (await splitDay(env, key)) || {};
+  for (const rt of Object.keys(day)) if (splitOn(day[rt])) splits[rt] = (day[rt].t2 || []).slice();
+  return { ok: true, sunday: key, moves, splits };
+}
+
 /* For the run report: each asked-for run's counts, and from when they
    were kept. */
 async function runLocFor(env, trips) {
@@ -1964,7 +1976,8 @@ async function seatsFor(env, key, route, stops, buses, rotaRow, rows) {
   let booked = 0;
   for (const b of rows) {
     const s = byStop[b.stopId];
-    if (!s || s.route !== want) continue;
+    /* Both trips of a split route (w2.109.0). */
+    if (!s || baseRoute(s.route) !== want) continue;
     booked += b.seats;
   }
   const seats = bus.seats || 0;
@@ -3807,7 +3820,10 @@ async function handleTrip(env, payload) {
        list, marked the North run and told its passengers "Nobody there"
        after South had picked them up. Answered as taken, so the phone's
        queue still empties. */
-    if (isStopTap(kind) && stop && stop.route !== route) { offRoute++; continue; }
+    /* On a split day the stop's route is "North~1" or "North~2" (w2.109.0,
+       audit 22 Nov 2026): a Trip 1 tap that reaches here after Trip 1 has
+       ended, from a phone that had no signal, is still recorded. */
+    if (isStopTap(kind) && stop && baseRoute(stop.route) !== route) { offRoute++; continue; }
     /* Leaving church is a timing point like any other. Filled in here rather
        than asked of the phone, so a handset on an older build still lands a
        proper departure row and the times come from the tab the coordinator
@@ -10044,7 +10060,9 @@ async function changeDriverNames(env, kind, r) {
 async function changeTell(env, me, kind, id, r) {
   if (CHANGE_TOLD.indexOf(kind) === -1 || !r || !r.words) return;
   try {
-    const msg = coordAlertOf({ id: "change-" + id, kind: "change", title: "Change by " + me.name,
+    /* r.title: a change the server made itself on a coordinator's earlier
+       say-so (the morning only hand back, w2.109.0), not "Change by". */
+    const msg = coordAlertOf({ id: "change-" + id, kind: "change", title: r.title || ("Change by " + me.name),
                                body: r.words, not: [me.name] });
     if (!msg) return;
     await coordLogAdd(env, msg);
@@ -10427,9 +10445,10 @@ async function sweepHandBack(env) {
     /* Marked first, so a slow sheet never hands back twice. */
     const all = (await handBackAll(env)).map((x) => (x.sunday === h.sunday && x.route === h.route && x.at === h.at) ? Object.assign({}, x, { done: at }) : x);
     await cachePut(env, HAND_BACK_KEY, all).run();
+    let t0 = null;
     try {
       await ensureHandovers(env);
-      const t = await tripState(env, key, h.route, "latest");
+      const t = t0 = await tripState(env, key, h.route, "latest");
       if (t && String(t.trip) === trip && t.driver && !sameName(t.driver, h.back)) {
         await env.DB.prepare("INSERT INTO handovers (trip, sunday, route, from_driver, to_driver, by_name, at, reg, seats, hired) VALUES (?,?,?,?,?,?,?,?,?,?)")
           .bind(trip, key, h.route, t.driver, h.back, h.by || "", at, "", 0, 0).run();
@@ -10440,6 +10459,7 @@ async function sweepHandBack(env) {
       set[h.field] = h.cover || "";
       await coordAct(env, { name: h.by || "" }, {
         id: "handback-" + key + "-" + h.route + "-" + Number(h.at), kind: "rota", sunday: key, set: set,
+        handBack: { route: h.route, back: h.back, from: (t0 && t0.driver) || h.to || "" },
         note: h.route + " handed back to " + h.back + " at " + hhmm + " (morning only)." });
     } catch (e) {}
     n++;
@@ -10713,12 +10733,34 @@ async function splitNotice(env, key, route, rec, raw, rotaRow) {
   const counts = bookingCounts(await liveBookings(env, key));
   const words = splitWords(raw, route, rec, counts);
   const driver = await splitDriver(env, key, route, rotaRow);
-  await trail(env, { once: "p|split|" + key + "|" + route, plain: true, kind: "split",
+  await trail(env, { once: "p|split|" + key + "|" + route + (rec.again ? "|" + rec.again : ""), plain: true, kind: "split",
                      title: route + ": Second trip",
                      body: words + " Passengers told at " + hhmmOf(cutoffMs(key) + SPLIT_TELL_MIN * 60000) + ".",
                      not: driver ? [driver] : [] });
   if (driver) {
     try { await tellDriversEach(env, { name: "" }, [{ name: driver, title: route + ": Second trip", body: words }], "split"); } catch (e) {}
+  }
+}
+
+/* Whether the clock should work a route's split out again: before Trip 1
+   starts, while no coordinator has changed it and no passenger has been
+   told, and (for a route found to fit) until 10:00. */
+async function splitReplanDue(env, key, route, rec) {
+  if (!rec || rec.stopped || rec.told || (rec.moves || []).length || Object.keys(rec.movedIn || {}).length) return false;
+  if (rec.none && rec.none !== "fits") return false;
+  if (rec.none && Date.now() > cutoffMs(key) + SPLIT_LATEST_MIN * 60000) return false;
+  const phase = await splitPhase(env, key, route);
+  return !phase.t1;
+}
+
+/* A second trip no longer needed: the coordinators and the driver told once. */
+async function splitOffNotice(env, key, route, rec, rotaRow) {
+  const driver = await splitDriver(env, key, route, rotaRow);
+  const words = route + ": one trip. " + (rec.booked || 0) + " booked, " + (rec.seats || 0) + " seats.";
+  await trail(env, { once: "p|splitoff|" + key + "|" + route + "|" + (rec.again || 0), plain: true, kind: "split",
+                     title: route + ": One trip", body: words, not: driver ? [driver] : [] });
+  if (driver) {
+    try { await tellDriversEach(env, { name: "" }, [{ name: driver, title: route + ": One trip", body: words }], "split"); } catch (e) {}
   }
 }
 
@@ -10773,6 +10815,20 @@ async function sweepTripSplit(env) {
       rec = await splitPlan(env, key, route, raw, rotaRow);
       await splitPatch(env, key, route, () => rec);
       fresh = true;
+    } else if (await splitReplanDue(env, key, route, rec)) {
+      /* LOOKED AT AGAIN UNTIL TRIP 1 STARTS (w2.109.0, audit 22 Nov 2026): a
+         stop moved onto the route, a booking made by a coordinator after
+         bookings closed, or a different bus can make a second trip needed,
+         or no longer needed, after 09:31. A split a coordinator has changed
+         by hand, or one passengers have been told of, stays as it is. */
+      const next = await splitPlan(env, key, route, raw, rotaRow);
+      const was = splitOn(rec), now2 = splitOn(next);
+      const same = was && now2 && (rec.t2 || []).join(",") === (next.t2 || []).join(",") && rec.seats === next.seats;
+      if (!same && (was || now2)) {
+        rec = await splitPatch(env, key, route, () => Object.assign(next, { again: (Number(rec.again) || 0) + 1 }));
+        if (now2) fresh = true;
+        else await splitOffNotice(env, key, route, rec, rotaRow);
+      }
     }
     if (!splitOn(rec)) continue;
     const phase = await splitPhase(env, key, route);
@@ -12366,7 +12422,9 @@ async function coordRuns(env, me, sundayIn) {
   if (key < earliest || key > londonKey(new Date())) return out;
 
   await ensureFixCol(env);
-  const all = await getStops(env, key);
+  /* The day's timetable without the second trip laid over it (w2.109.0):
+     on a split day each run lists its own trip's stops, below. */
+  const all = await getStops(env, key, { noSplit: true });
   const q = await env.DB.prepare(
     "SELECT * FROM trip_events WHERE sunday=? ORDER BY happened, id").bind(key).all();
   const rows = (q.results || []).filter((r) => String(r.status || "") !== "Undone");
@@ -12392,8 +12450,16 @@ async function coordRuns(env, me, sundayIn) {
     const mine = rows.filter((r) => r.route === rt);
     const trips = [];
     for (const r of mine) if (trips.indexOf(r.trip) === -1) trips.push(r.trip);
+    /* A SPLIT DAY (w2.109.0, audit 22 Nov 2026): Trip 1's run shows Trip 1's
+       stops and Trip 2's run Trip 2's, with Trip 2's own times. */
+    let split = null, legs = { t1: "", t2: "" };
+    try { split = await splitActive(env, key, rt); } catch (e) {}
+    if (split) legs = splitRuns(mine);
+    const legOf = (trip) => !split ? 0 : trip === legs.t1 ? 1 : trip === legs.t2 ? 2 : 0;
+    const onLeg = (s, leg) => !leg || (leg === 2) === ((split.t2 || []).indexOf(s.id) !== -1);
     const runs = trips.map((trip) => {
       const tr = mine.filter((r) => r.trip === trip);
+      const leg = legOf(trip);
       const start = tr.find((r) => r.event === "start") || null;
       const end = tr.find((r) => r.event === "end") || null;
       const first = start || tr[0];
@@ -12401,7 +12467,8 @@ async function coordRuns(env, me, sundayIn) {
         trip: trip, driver: (first && first.driver) || "", reg: (first && first.reg) || "",
         endedBy: (end && end.ended_by) || "",
         start: ev(start), end: ev(end),
-        stops: stopsOnRoute(all, rt).filter((s) => !s.depart && !s.arrival).map((s) => {
+        leg: leg || undefined,
+        stops: stopsOnRoute(all, rt).filter((s) => !s.depart && !s.arrival && onLeg(s, leg)).map((s) => {
           const tap = tr.find((r) => isStopTap(r.event) && r.stop_id === s.id) || null;
           const bk = booked[s.id] || null;
           /* The name this number had that morning, from the tap or the seat,
@@ -12410,7 +12477,7 @@ async function coordRuns(env, me, sundayIn) {
           /* The time early or late is measured from: the one on the tap, or
              the one the passenger was given, before today's timetable. */
           const time = (tap && /^\d{1,2}:\d{2}$/.test(String(tap.scheduled || "")) && tap.scheduled) ||
-                       promised[s.id] || s.time;
+                       (leg === 2 ? (split.times || {})[s.id] : promised[s.id]) || s.time;
           return { id: s.id, stop: s.stop, time: time, ev: ev(tap),
                    booked: bk ? bk.seats : 0,
                    then: then && !sameStopName(then, s.stop) ? then : "" };
@@ -12500,20 +12567,24 @@ async function sheetAsk(env, payload, capMs) {
 
 async function reportBookings(env) {
   const key = runSunday();
-  const all = await getStops(env);
+  /* Every stop of the route, Trip 2's too on a split day (w2.109.0). */
+  const all = await getStops(env, key, { noSplit: true });
   const stops = pickupsAndArrivals(all).filter((s) => !s.arrival);
   const counts = bookingCounts(await liveBookings(env, key));
   const sections = [];
   let grand = 0;
   for (const rt of routeNames(stops)) {
-    let sum = 0;
+    let sum = 0, split = null;
+    try { split = await splitActive(env, key, rt); } catch (e) {}
+    const t2 = new Set((split && split.t2) || []);
     const lines = stops.filter((s) => s.route === rt).map((s) => {
       const n = Number(counts[s.id]) || 0;
       sum += n;
-      return s.time + "  " + s.stop + "  " + (n ? n + (n === 1 ? " person" : " people") : "nobody");
+      return s.time + "  " + s.stop + "  " + (n ? n + (n === 1 ? " person" : " people") : "nobody") +
+             (split ? (t2.has(s.id) ? ", Trip 2" : ", Trip 1") : "");
     });
     grand += sum;
-    sections.push({ head: rt + " Liverpool, " + sum + " booked", lines: lines });
+    sections.push({ head: rt + " Liverpool, " + sum + " booked" + (split ? ", two trips" : ""), lines: lines });
   }
   return { ok: true, name: "bookings", title: "Bookings for " + longDay(key),
            lead: grand ? grand + (grand === 1 ? " person" : " people") + " booked." : "Nobody booked yet.",
@@ -12521,7 +12592,8 @@ async function reportBookings(env) {
 }
 
 async function reportSeats(env) {
-  const all = await getStops(env);
+  /* Every stop of the route, Trip 2's too on a split day (w2.109.0). */
+  const all = await getStops(env, runSunday(), { noSplit: true });
   const stops = pickupsAndArrivals(all);
   const buses = await getBuses(env);
   const today = runSunday();
@@ -12539,9 +12611,12 @@ async function reportSeats(env) {
       const tail = !f.seats ? ", seats unknown"
                  : f.booked > f.seats ? ", over by " + (f.booked - f.seats)
                  : f.booked === f.seats ? ", full" : ", " + (f.seats - f.booked) + " left";
-      if (f.seats && f.booked > f.seats) over++;
+      let split = null;
+      try { split = await splitActive(env, key, rt); } catch (e) {}
+      if (f.seats && f.booked > f.seats && !split) over++;
       lines.push(rt + ": " + (f.reg || "no bus set") + (f.seats ? ", " + f.seats + " seats" : "") +
-                 ", " + f.booked + " booked" + tail + ".");
+                 ", " + f.booked + " booked" + tail + "." +
+                 (split ? " Two trips: Trip 1 " + (split.b1 || 0) + ", Trip 2 " + (split.b2 || 0) + "." : ""));
     }
     sections.push({ head: longDay(key), lines: lines });
   }
@@ -12892,10 +12967,33 @@ async function actRota(env, me, act) {
   const busTold = busChangeTold(key, cur, next, set, nBus, sBus, buses);
   const busOnly = Object.keys(set).every((f) => f === "northBus" || f === "southBus") && !note && !noteEdit;
   if (busTold.length && busOnly) tell = [];
+  /* THE MORNING ONLY HAND BACK (w2.109.0, audit 22 Nov 2026): told to the
+     driver it goes back to and the one who drove it, not every driver down
+     that Sunday, and not as a coordinator's change. */
+  const hb = act.handBack && typeof act.handBack === "object" ? act.handBack : null;
+  if (hb) tell = [String(hb.back || ""), String(hb.from || "")].filter(Boolean);
+  /* MORNING ONLY ON A COVER, today, from w2.109.0 (audit 22 Nov 2026):
+     between Trip 1 and Trip 2 there is no run to hand over, so the cover
+     takes Morning only too, and goes back the same way once Trip 2 ends. */
+  let coverMorning = null;
+  if (!hb && act.span === "morning" && key === londonKey(new Date())) {
+    const f = ["northCover", "southCover"].find((x) => x in set && set[x]);
+    if (f) {
+      const rt = f === "southCover" ? "South" : "North";
+      const back = String((rt === "South" ? (cur.southCover || cur.south) : (cur.northCover || cur.north)) || "").trim();
+      if (back && !sameName(back, set[f])) coverMorning = { sunday: key, route: rt, trip: "", to: set[f], back: back,
+                                                          cover: String(cur[f] || ""), field: f, by: me.name, at: Date.now() };
+    }
+  }
+  let words = hb ? note : rotaWords(key, cur, set, note, noteEdit);
+  if (coverMorning) words = words.replace(/\.$/, ", morning only.");
+  if (coverMorning) body.span = "morning";
   return { ok: true, sunday: key, body: body, tell: tell,
-           words: rotaWords(key, cur, set, note, noteEdit),
+           title: hb ? String(hb.route || "") + " handed back" : undefined,
+           words: words,
            after: async () => {
              await reapplyRawRota(env, [key]);
+             if (coverMorning) { try { await handBackAdd(env, coverMorning); } catch (e) {} }
              if (busTold.length) { try { await tellDriversEach(env, me, busTold); } catch (e) {} }
            } };
 }
@@ -13510,7 +13608,9 @@ async function actFix(env, me, act) {
     "SELECT * FROM trip_events WHERE trip=? AND sunday=? AND status<>'Undone' ORDER BY id LIMIT 1")
     .bind(trip, key).first() : null;
   if (!any) return { ok: false, error: "That run is not on the live server." };
-  const all = await getStops(env);
+  /* That Sunday's stops without the second trip laid over it (w2.109.0): a
+     Trip 1 stop is still on its route once Trip 1 has ended. */
+  const all = await getStops(env, key, { noSplit: true });
   const stop = all.find((s) => s.id === String(act.stopId || "").trim() &&
                                s.route === any.route && !s.depart && !s.arrival) || null;
   if (!stop) return { ok: false, error: "That stop is not on the " + any.route + " route." };
@@ -13846,6 +13946,9 @@ export default {
         if (action === "unalerted") return json({ ok: true, names: await driversUnalerted(env) });
         /* Live location per run, for the Sunday run report (w2.105.0). */
         if (action === "livelog") return json(await runLocFor(env, body.trips));
+        /* That Sunday's moved stops and second trips, for the run report
+           (w2.109.0, sheet v1.152.0). */
+        if (action === "dayplan") return json(await dayPlanFor(env, body.sunday));
         if (action === "drained") return await handleDrained(env, body);
         /* A booking edited by hand on the Bus Bookings tab. Token checked. */
         if (action === "sheetbookings") return await handleSheetBookings(env, body);

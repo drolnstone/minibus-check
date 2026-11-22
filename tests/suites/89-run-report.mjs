@@ -143,5 +143,25 @@ export default async function (root) {
     a.ok(b.indexOf("Live location") === -1, b);
   });
 
+  /* v1.152.0, the 22 Nov audit: the day's second trip and moved stops
+     from the live server (dayplan). */
+  s.test("split day: a stop nobody marked goes under its own trip; a moved one under the route it was on", async (a) => {
+    const plan = { fetch: (url, opts) => {
+      const q = JSON.parse(opts.payload || "{}");
+      if (q.action !== "dayplan") return null;
+      return { code: 200, body: JSON.stringify({ ok: true, sunday: KEY, moves: { N04: "South" }, splits: { North: ["N03", "N04"] } }) };
+    } };
+    const L = await run("16:30", Object.assign(plan, { trips: () => [
+      ev({ Event: "start", Happened: at("09:55") }),
+      ev({ Event: "end", Happened: at("10:30"), Status: "Logged (auto)" }),
+      ev({ Event: "start", Trip: "t2", Happened: at("10:35") }),
+      ev({ Event: "end", Trip: "t2", Happened: at("11:00"), Status: "Logged (auto)" })] }));
+    const b = L.gas.mail[0].body;
+    const one = b.slice(b.indexOf("Trip 1."), b.indexOf("Trip 2.")), two = b.slice(b.indexOf("Trip 2."));
+    a.has(one, "Westbrook", b);
+    a.ok(two.indexOf("Westbrook") === -1, b);
+    a.has(two, "Oak Lane", b);
+  });
+
   return s;
 }
