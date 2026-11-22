@@ -1,23 +1,29 @@
 MINIBUS
 =======
-  pages v1.184.0 · server w2.104.0 · sheet v1.148.0
+  pages v1.185.0 · server w2.104.1 · sheet v1.148.0
 
-YOU ARE ON   app v1.183.1 · server w2.103.2 · sheet v1.147.0
-GOING TO     app v1.184.0 · server w2.104.0 · sheet v1.148.0
+YOU ARE ON   app v1.184.0 · server w2.104.0 · sheet v1.148.0
+GOING TO     app v1.185.0 · server w2.104.1 · sheet v1.148.0
 
-Pages, server and sheet.
+Pages and server.
 
-Coordinator App: "Set aside" beside Done on a "needs a wash" or
-"inside needs a clean" line. The job stays open, leaves the first
-screen and the job counts, and is left out of the Wednesday and Friday
-"Still to arrange" alert. On the bus page it is tagged Set aside, with
-Bring back and Done. Done clears it for good. Tyres and fuel have no
-Set aside. Each set aside or bring back is a line on the History tab.
+All three apps take a new version without being closed and reopened.
+While open they look for one every minute and each time they come back
+to the screen. When one is ready the app reloads once, at a quiet
+moment: not while something is being typed, a pop-up is open, or taps
+are waiting to send. The Driver App also waits during a vehicle check;
+the Sunday Bus page waits while live times show.
+
+A stop moved to the other route for the day: a Picked up or Nobody here
+for it from the run it left is not recorded, so that run does not count
+it as served and its passengers get no "Nobody there". Taps from the run
+it joined are recorded as usual. 22 Nov: the North Driver App, opened
+before the fixes, still listed the Nursery; North marked it Nobody here
+at 10:43 after South picked it up at 10:32.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.184.0 · w2.104.0 · v1.148.0.
-B. First screen: tap Set aside on "needs a wash"; the line goes.
-C. Buses, that bus: Needs a wash tagged Set aside; Bring back puts the
-   line back on the first screen.
+A. Coordinator App, App info: v1.185.0 · w2.104.1 · v1.148.0.
+B. Leave the Driver App open on its first screen after the merge; within
+   about two minutes App info shows v1.185.0 with no restart.

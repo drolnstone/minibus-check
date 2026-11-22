@@ -210,5 +210,25 @@ export default async function (root) {
     });
   });
 
+  s.test("a tap on the moved stop from the run it left is not recorded; from the run it joined it is", async (a) => {
+    await atTime("2026-11-22T10:20:00Z", async () => {
+      const { db, env } = await fresh();
+      a.ok((await act(env, { op: "move", stopId: "N05", after: "S02", time: "10:35" })).ok);
+      const now = Date.now();
+      const south = await J(await W.handleTrip(env, { trip: "ts", route: "South", driver: "Bro Trevor", reg: "NH56 FWP", sunday: KEY,
+        events: [{ event: "start", at: now - 900000 }, { event: "pickup", stopId: "N05", at: now - 120000 }] }));
+      a.ok(south.ok);
+      const north = await J(await W.handleTrip(env, { trip: "tn", route: "North", driver: "Bro Adrian", reg: "YS70 PWE", sunday: KEY,
+        events: [{ event: "start", at: now - 600000 }, { event: "empty", stopId: "N05", at: now }] }));
+      a.ok(north.ok, JSON.stringify(north));
+      a.eq(north.offRoute, 1);
+      const rows = db._rows("SELECT trip, event FROM trip_events WHERE stop_id='N05'");
+      a.eq(rows.length, 1, JSON.stringify(rows));
+      a.eq(rows[0].trip, "ts");
+      const t = await W.tripState(env, KEY, "North");
+      a.not(t.served && t.served.N05, "North shows the moved stop served");
+    });
+  });
+
   return s;
 }
