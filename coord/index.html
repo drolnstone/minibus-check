@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.182.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.183.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -813,7 +813,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.182.0";
+var PAGE_VERSION = "v1.183.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1754,6 +1754,18 @@ function paintSunday(key){
   var repl = key === D.today && ["North","South"].some(function(rt){ var x = (D.runs || {})[rt]; return x && x.started && x.reg && x.reg0 && x.reg !== x.reg0; });
   if(!past && !repl && l.North.bus && l.South.bus && l.North.bus !== l.South.bus)
     h += '<button class="btn btn-ghost btn-wide" type="button" data-do="busswap" data-key="'+esc(key)+'" style="margin-top:10px;min-height:46px;font-size:16px">Swap buses</button>';
+  /* MOVE A STOP from the Sunday card (v1.183.0, Asim, 22 Nov 2026): the
+     coming Sunday only, as on Bus stops; the stops moved, each with Put back. */
+  var SR = D.stopsReg || {};
+  if(!past && SR.sunday === key && SR.stops && SR.stops.length){
+    var mv = SR.moves || [];
+    if(mv.length) h += '<div class="card" style="margin-top:10px"><h3 style="margin-top:0">Stops moved</h3>' + mv.map(function(m){
+      var x = regStop(m.id) || { stop: m.id };
+      return '<div class="row"><span class="v">' + esc(x.stop) + ' · ' + esc(m.to) + (m.time ? ', ' + esc(m.time) : '') + '</span>' +
+             '<span class="acts"><button class="mini" type="button" data-do="stopback" data-id="' + esc(m.id) + '">Put back</button></span></div>';
+    }).join("") + '</div>';
+    h += '<button class="btn btn-ghost btn-wide" type="button" data-do="stopmove" data-id="" style="margin-top:10px;min-height:46px;font-size:16px">Move a stop</button>';
+  }
   var notes = noteLines(r);
   /* From v1.93.0 each note can be changed or taken off, except the sheet's own
      Swapped and PROTECTED lines. */
@@ -2954,17 +2966,24 @@ function stopMoveTag(x, R){
   return m ? '<p style="margin:2px 0 6px"><span class="tag info">' + esc(m.to + " bus, " + shortDay(R.sunday) + (m.time ? ", " + m.time : "")) + '</span></p>' : '';
 }
 function moveStop(id){
-  var R = D.stopsReg || { stops: [] }, x = regStop(id); if(!x || !R.sunday) return;
-  var to = x.route === "South" ? "North" : "South";
-  var l = R.stops.filter(function(s){ return s.route === to && s.active && s.type === "Pickup" && !stopMoveOf(s.id, R); });
-  var def = "";
-  l.forEach(function(s){ if(s.time && x.time && s.time <= x.time) def = s.id; });
-  var opts = '<option value=""' + (def ? '' : ' selected') + '>First pickup</option>' + l.map(function(s){
-    return '<option value="' + esc(s.id) + '"' + (s.id === def ? ' selected' : '') + '>' + esc(s.time + "  " + s.stop) + '</option>';
-  }).join("");
+  var R = D.stopsReg || { stops: [] }; if(!R.sunday) return;
+  /* From v1.183.0 also from the Sunday card, with the stop picked here. */
+  var pick = !id;
+  var can = R.stops.filter(function(s){ return s.active && s.type === "Pickup" && !s.waiting && !stopMoveOf(s.id, R); });
+  if(pick){ if(!can.length) return; id = can[0].id; }
+  var x = regStop(id); if(!x) return;
+  var to, line;
+  var afterOpts = function(){
+    to = x.route === "South" ? "North" : "South";
+    line = R.stops.filter(function(s){ return s.route === to && s.active && !stopMoveOf(s.id, R); });
+    var l = line.filter(function(s){ return s.type === "Pickup"; }), def = "";
+    l.forEach(function(s){ if(s.time && x.time && s.time <= x.time) def = s.id; });
+    return '<option value=""' + (def ? '' : ' selected') + '>First pickup</option>' + l.map(function(s){
+      return '<option value="' + esc(s.id) + '"' + (s.id === def ? ' selected' : '') + '>' + esc(s.time + "  " + s.stop) + '</option>';
+    }).join("");
+  };
   /* The time on that run for the day goes between the stop before and the
      stop after (the server refuses anything else). */
-  var line = R.stops.filter(function(s){ return s.route === to && s.active && !stopMoveOf(s.id, R); });
   var range = function(){
     var a = $("mvAfter").value, i = -1;
     line.forEach(function(s, j){ if(a ? s.id === a : (s.type === "Depart" && i === -1)) i = j; });
@@ -2972,10 +2991,16 @@ function moveStop(id){
     for(var j = i + 1; j < line.length; j++) if(line[j].type !== "Depart"){ hi = line[j].time; break; }
     return [lo, hi];
   };
-  openSheet({ eyebrow: shortDay(R.sunday), title: "Move " + x.stop + " to " + to + "?",
-    line: shortDay(R.sunday) + " only. Back on " + x.route + " after.",
-    body: '<div class="field"><label for="mvAfter">After</label><select id="mvAfter">' + opts + '</select></div>' +
-          '<div class="field"><label for="mvTime">Time on the ' + esc(to) + ' run</label><input id="mvTime" type="time" step="60" value="">' +
+  var stopSel = pick ? '<div class="field"><label for="mvStop">Stop</label><select id="mvStop">' + ["North", "South"].map(function(rt){
+    return '<optgroup label="' + rt + '">' + can.filter(function(s){ return s.route === rt; }).map(function(s){
+      return '<option value="' + esc(s.id) + '">' + esc(s.time + "  " + s.stop) + '</option>';
+    }).join("") + '</optgroup>';
+  }).join("") + '</select></div>' : '';
+  var opts = afterOpts();
+  openSheet({ eyebrow: shortDay(R.sunday), title: pick ? "Move a stop" : "Move " + x.stop + " to " + to + "?",
+    line: pick ? "" : shortDay(R.sunday) + " only. Back on " + x.route + " after.",
+    body: stopSel + '<div class="field"><label for="mvAfter" id="mvAfterL">After, on ' + esc(to) + '</label><select id="mvAfter">' + opts + '</select></div>' +
+          '<div class="field"><label for="mvTime" id="mvTimeL">Time on the ' + esc(to) + ' run</label><input id="mvTime" type="time" step="60" value="">' +
           '<p class="tiny" id="mvRange" style="margin:4px 0 0"></p></div>',
     go: "Move to " + to,
     onGo: function(){
@@ -2987,6 +3012,15 @@ function moveStop(id){
     } });
   var showRange = function(){ var r = range(); $("mvRange").textContent = (r[0] ? "From " + r[0] : "") + (r[1] ? (r[0] ? " to " : "Up to ") + r[1] : "") + "."; };
   $("mvAfter").onchange = showRange;
+  if(pick) $("mvStop").onchange = function(){
+    x = regStop($("mvStop").value) || x;
+    $("mvAfter").innerHTML = afterOpts();
+    $("mvAfterL").textContent = "After, on " + to;
+    $("mvTimeL").textContent = "Time on the " + to + " run";
+    $("sheetGo").textContent = "Move to " + to;
+    sheetSay("");
+    showRange();
+  };
   showRange();
 }
 function moveStopBack(id){
