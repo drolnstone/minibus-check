@@ -1,21 +1,20 @@
 MINIBUS
 =======
-  pages v1.180.1 · server w2.101.0 · sheet v1.146.0
+  pages v1.181.0 · server w2.102.0 · sheet v1.146.0
 
-YOU ARE ON   app v1.180.1 · server w2.100.0 · sheet v1.146.0
-GOING TO     app v1.180.1 · server w2.101.0 · sheet v1.146.0
+YOU ARE ON   app v1.180.1 · server w2.102.0 · sheet v1.146.0
+GOING TO     app v1.181.0 · server w2.102.0 · sheet v1.146.0
 
-Server only.
+Pages only.
 
-Plan the rota, Save: every active driver whose Sundays change, on any
-date, is told once: "Rota updated. Check your Sundays in Driving rota."
-in the Driver App; a driver no phone of his took it for is emailed it.
-Coordinators keep their one "Change by" line, as before, and are not told
-twice. A driver whose Sundays stay the same hears nothing.
+Coordinator App, a Sunday on the Rota: a "Swap buses" button under the
+North and South cards. One confirm swaps the two buses for that Sunday;
+each driver whose bus changed gets one "Bus changed" alert (w2.102.0).
+Change on each Bus line stays as it is. Not shown once a replacement bus
+is on today's run, or when a bus is not known.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.180.1 · w2.101.0 · v1.146.0.
-B. After you Save the plan: the drivers on the changed Sundays have
-   "Rota updated" in the Driver App, or by email.
+A. Coordinator App, App info: v1.181.0 · w2.102.0 · v1.146.0.
+B. Open a coming Sunday from the Rota: "Swap buses" under the two cards.
