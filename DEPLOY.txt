@@ -1,20 +1,32 @@
 MINIBUS
 =======
-  pages v1.194.0 · server w2.113.0 · sheet v1.154.0
+  pages v1.194.0 · server w2.114.0 · sheet v1.155.0
 
-YOU ARE ON   app v1.193.0 · server w2.112.0 · sheet v1.154.0
-GOING TO     app v1.194.0 · server w2.113.0 · sheet v1.154.0
+YOU ARE ON   app v1.194.0 · server w2.113.0 · sheet v1.154.0
+GOING TO     app v1.194.0 · server w2.114.0 · sheet v1.155.0
 
-Pages and server. Sheet unchanged.
+Server and sheet. Pages unchanged.
 
-Every Vehicle Log correction asks its own entry's questions. Fuel's
-Correct now has the fuel level, Bought by, Paid by (Church or Gift) and
-Litres, as Record does; a box cleared stays blank. Bus used has had its
-own form since v1.193.0. MOT, Service, Insurance, Parking permit, Repair,
-Tyres and Other already matched Record (day, the date on the paperwork
-for the dated four, mileage, cost, garage).
+Who is told what (Asim, 25 Nov 2026): told only when it changes what
+somebody does, or is a safeguard; once, by one road.
+- Quiet: Vehicle Log entries and their corrections, a coordinator's
+  Book/Edit/Cancel, a defect update that does not change whether the bus
+  runs, booked stops left unmarked after a run.
+- "Sent:" receipts no longer wake coordinator phones (What went out keeps
+  them), the bus gone past a stop included.
+- A check, due date, 07:30 not sent, went out unchecked, overbooked,
+  authorised and rota request reach each coordinator once: the phone, or
+  the full email when alerts are on no phone. An address in
+  COORDINATOR_EMAIL that is nobody's on the Drivers tab still has the email.
+- Overbooked only when a bigger bus would carry them all, or two trips
+  are not enough.
+- MOT run authorised once (the second, sheet copy is gone).
+- Driver: "The bus has not gone out" once, not twice. A rota request's
+  answer and a duty changed on the Rota tab go to the Driver App first,
+  the email when no phone took it; a saved rota plan's duty email only to
+  a driver with alerts on no phone (Rota updated already told him).
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.194.0 · w2.113.0 · v1.154.0.
+A. Coordinator App, App info: v1.194.0 · w2.114.0 · v1.155.0.
