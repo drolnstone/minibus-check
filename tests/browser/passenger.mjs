@@ -60,7 +60,7 @@ async function passenger(o) {
       body = Object.assign(body, { date: KEY, closed: !!o.closed, rolled: false,
         cutoff: "Sunday 09:30", stops: STOPS, arrivals: ARRIVALS, off: [], counts: { S03: 3, N02: 2 },
         driver: o.driver || null, phone: o.booked ? "07700900123" : "", stopGone: "",
-        mine: o.booked ? { stopId: "S03", seats: 2 } : null, seats: {} });
+        mine: o.booked ? { stopId: "S03", seats: 2 } : null, seats: o.seats || {} });
       if (o.coordinator) body.coordinator = o.coordinator;
     } else if (p.get("trip")) {
       body = Object.assign(body, o.trip || { live: false, why: "open", date: KEY });
@@ -293,6 +293,30 @@ if (want("P10")) {
         note.href === "tel:07399671575" && /Call Bro Calvin/.test(note.text) && !/group/i.test(note.text) &&
         seatNote && !seatNote.call,
         JSON.stringify({ note, seatNote }));
+}
+
+/* P12: a full route says "You may be on a second trip." in red under the
+   line that ends "Bus full", in place of "Every seat is booked." (v1.190.0),
+   and nothing about a second trip above Confirm. */
+if (want("P12")) {
+  const me = await passenger({ pid: true, seats: { North: { reg: "MB01", seats: 2, booked: 2 } } });
+  await me.pg.evaluate(() => { const b = document.getElementById("alertAskNot"); if (b) b.click(); });
+  await me.pg.waitForTimeout(300);
+  const line = await me.pg.evaluate(() => {
+    const n = document.querySelector(".summary-full"), b = n && n.querySelector("b.room-full");
+    return n ? { text: n.textContent.trim(), bold: b ? b.textContent : "", red: b ? getComputedStyle(b).color : "",
+                 want: (() => { const t = document.createElement("span"); t.style.color = "var(--stop)"; document.body.appendChild(t);
+                                const c = getComputedStyle(t).color; t.remove(); return c; })() } : null;
+  });
+  await me.shot("P12-full-second-trip");
+  await me.pg.click('[data-stop="N05"]'); await me.pg.waitForTimeout(300);
+  await me.pg.click("#seatsUp"); await me.pg.waitForTimeout(300);
+  const box = await me.text("#seatsBox");
+  check("P12", "a full route says 'You may be on a second trip.' in red, no 'Every seat is booked', nothing above Confirm",
+        line && line.bold === "You may be on a second trip." && !/Every seat/.test(line.text) &&
+        /Call /.test(line.text) && line.red === line.want && !/second trip/i.test(box),
+        JSON.stringify({ line, box }));
+  await me.ctx.close();
 }
 
 const bad = results.filter((r) => !r.ok);
