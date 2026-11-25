@@ -1,17 +1,22 @@
 MINIBUS
 =======
-  pages v1.192.0 · server w2.110.0 · sheet v1.153.0
+  pages v1.192.0 · server w2.111.0 · sheet v1.154.0
 
 YOU ARE ON   app v1.191.0 · server w2.110.0 · sheet v1.153.0
-GOING TO     app v1.192.0 · server w2.110.0 · sheet v1.153.0
+GOING TO     app v1.192.0 · server w2.111.0 · sheet v1.154.0
 
-Pages only. Server and sheet unchanged.
+Pages, server and sheet.
 
 Bus used: the day is a drop-down of dates ("Wed 25 Nov"), today first,
 then each day back to the Monday after the last Sunday run, in the Driver App and in the Coordinator
 App's Record (it was Today or Yesterday, and a date picker).
 
+Bus used: one mileage is enough, taken or left (or both). With only the
+mileage when taken, the next walkaround is still measured from the last
+reading. Fuel: slide to it, or tap "Fuel not noted"; then the last fuel
+reading stands. Neither: "Slide to the fuel showing, or tap Fuel not noted."
+
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.192.0 · w2.110.0 · v1.153.0.
+A. Coordinator App, App info: v1.192.0 · w2.111.0 · v1.154.0.

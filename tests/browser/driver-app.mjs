@@ -1757,6 +1757,34 @@ if (want("T60")) {
   await me.ctx.close();
 }
 
+/* T61 — Bus used with one reading and Fuel not noted (v1.192.0, Asim,
+   25 Nov 2026): the mileage when taken alone; fuel left blank. */
+if (want("T61")) {
+  const me = await phone({ clock: "2026-09-29T19:00:00+01:00" });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn(); await me.close();
+  await me.clickId("toUsed"); await me.wait(400);
+  await me.pg.click('#usedBus button[data-reg="NH56 FWP"]');
+  const save = () => me.pg.evaluate(() => { const b = [...document.querySelectorAll("#footbar button")].find(x => x.textContent === "Save"); b.click(); });
+  await save(); await me.wait(300);
+  const noMiles = await me.text("#usedSay");
+  await me.pg.fill("#usedTaken", "48262");
+  await save(); await me.wait(300);
+  const noFuel = await me.text("#usedSay");
+  await me.clickId("usedNoFuel"); await me.wait(200);
+  const taken = await me.pg.$eval("#usedTaken", (i) => i.value);
+  await me.pg.screenshot({ path: (process.env.SHOTS || "/tmp") + "/T61-fuel-not-noted.png" });
+  await save(); await me.wait(1200);
+  const u = (me.posted.filter(p => p.action === "busused").pop() || {}).used || {};
+  const card = await me.text("#hubUsed");
+  await me.pg.screenshot({ path: (process.env.SHOTS || "/tmp") + "/T61-saved.png" });
+  check("T61", "Bus used: one reading is enough; Fuel not noted sends blank fuel",
+        /taken or when left/.test(noMiles) && /Fuel not noted/.test(noFuel) && taken === "48262" && u.taken === 48262 && u.miles === null &&
+        u.fuel === "" && u.fuelNotNoted === true && /48,262 ✓/.test(card) && /Fuel not noted/.test(card) && !me.errs.length,
+        JSON.stringify({ noMiles, noFuel, taken, u, card, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

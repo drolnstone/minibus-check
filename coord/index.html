@@ -3946,13 +3946,22 @@ function busUsedFor(reg){
           '<div class="field"><label for="buTaken">Mileage when taken <span class="lc">· if noted</span></label>' +
             '<input id="buTaken" type="number" inputmode="numeric" autocomplete="off" placeholder="e.g. ' + esc(String(last || 57363)) + '">' +
           (last ? '<p class="tiny" style="margin:5px 0 0">Last recorded: ' + Number(last).toLocaleString("en-GB") + (m.date ? ' on ' + esc(m.date) : '') + '</p>' : '') + '</div>' +
-          '<div class="field"><label for="buMiles">Mileage when left</label>' +
+          '<div class="field"><label for="buMiles">Mileage when left <span class="lc">· if noted</span></label>' +
             '<input id="buMiles" type="number" inputmode="numeric" autocomplete="off" placeholder="e.g. ' + esc(String((last || 57363) + 34)) + '"></div>' +
-          '<div class="field"><label>Fuel showing</label><div id="buFuel">' + fuelGaugeHtml(0) + '</div></div>' +
+          '<div class="field"><label>Fuel showing</label><div id="buFuel">' + fuelGaugeHtml(0) + '</div>' +
+            '<div class="chips" style="margin-top:8px"><button type="button" id="buNoFuel" aria-pressed="false">Fuel not noted</button></div></div>' +
           '<div class="field"><label for="buNotes">Notes</label><textarea id="buNotes" maxlength="500" placeholder="' + esc(VLOG_SAMPLE["Bus used"]) + '"></textarea></div>',
     go: "Record it",
     onGo: function(){ busUsedSend(b); } });
-  fuelGaugeBind($("buFuel").firstChild, function(){ return VL.fuel; }, function(n){ VL.fuel = n; sheetSay(""); });
+  var noFuel = function(on){ VL.noFuel = on; var x = $("buNoFuel"); x.classList.toggle("on", on); x.setAttribute("aria-pressed", on ? "true" : "false"); };
+  VL.noFuel = false;
+  fuelGaugeBind($("buFuel").firstChild, function(){ return VL.fuel; }, function(n){ VL.fuel = n; noFuel(false); sheetSay(""); });
+  /* Fuel not noted (v1.192.0): sent blank, the last reading stands. */
+  $("buNoFuel").onclick = function(){
+    if(busy) return; noFuel(!VL.noFuel); sheetSay("");
+    if(VL.noFuel){ VL.fuel = 0; $("buFuel").innerHTML = fuelGaugeHtml(0);
+      fuelGaugeBind($("buFuel").firstChild, function(){ return VL.fuel; }, function(n){ VL.fuel = n; noFuel(false); sheetSay(""); }); }
+  };
   $("buWho").onchange = function(){ $("buOtherF").hidden = $("buWho").value !== "*"; };
   Array.prototype.forEach.call(document.querySelectorAll("#vlWhat button"), function(x){
     x.onclick = function(){ if(busy) return; var w = x.getAttribute("data-w"); if(w !== "Bus used") recordFor(b.reg, null, w); };
@@ -3979,11 +3988,12 @@ function busUsedSend(b){
   if(!drove){ sheetSay("Say who drove.", true); return; }
   var taken = numIn($("buTaken").value), miles = numIn($("buMiles").value);
   if(taken !== taken){ sheetSay("Mileage when taken is not a number of miles.", true); return; }
-  if(miles !== miles || miles === "" || !miles){ sheetSay("Mileage when left needed.", true); return; }
-  if(taken !== "" && taken > miles){ sheetSay("Mileage when left is lower than mileage when taken.", true); return; }
-  if(!VL.fuel){ sheetSay("Slide to the fuel showing.", true); return; }
+  if(miles !== miles){ sheetSay("Mileage when left is not a number of miles.", true); return; }
+  if(!taken && !miles){ sheetSay("Mileage when taken or when left needed.", true); return; }
+  if(taken && miles && taken > miles){ sheetSay("Mileage when left is lower than mileage when taken.", true); return; }
+  if(!VL.fuel && !VL.noFuel){ sheetSay("Slide to the fuel showing, or tap Fuel not noted.", true); return; }
   act({ kind: "vlog", reg: b.reg, what: "Bus used", status: "Done", done: day, drove: drove,
-        taken: taken === "" ? null : taken, miles: miles, fuel: fuelText(VL.fuel), notes: $("buNotes").value || "" });
+        taken: taken || null, miles: miles || null, fuel: VL.fuel ? fuelText(VL.fuel) : "", fuelNotNoted: !VL.fuel, notes: $("buNotes").value || "" });
 }
 
 /* Who bought fuel: coordinators, then active drivers, each once. */

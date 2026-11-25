@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.153.0";
+var SCRIPT_VERSION = "v1.154.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -2971,8 +2971,12 @@ function parkedCompare(sh, c, chk) {
        when this walkaround's mileage is not the one the bus was left at. */
     var used = busUsedSince(sh, reg, prev.t, now);
     if (used) {
-      var du = miles - used.miles;
-      var uw = "Bus used " + ukDay(used.done) + (used.drove ? " by " + used.drove : "") + ", left at " + milesWords(used.miles) + ".";
+      var left = Number(used.miles) || 0;
+      var du = left ? miles - left : 0;
+      /* Only the mileage when taken noted (v1.154.0): said, never told. */
+      var uw = "Bus used " + ukDay(used.done) + (used.drove ? " by " + used.drove : "") +
+               (Number(used.taken) ? ", taken at " + milesWords(used.taken) : "") +
+               (left ? ", left at " + milesWords(left) : ", mileage left not noted") + ".";
       var base = prev.parked !== null ? miles - prev.parked : PARKED_NO_READING;
       return { cell: base, note: uw,
                alert: du === 0 ? null : { id: "parked|" + chk.id, kind: "mileage", reg: reg,
@@ -3011,7 +3015,7 @@ function busUsedSince(sh, reg, from, to) {
   var best = null;
   try {
     vlogStanding(vlogRows(sh.getParent())).forEach(function (x) {
-      if (x.reg !== reg || x.what !== "Bus used" || !Number(x.miles) || !x.done) return;
+      if (x.reg !== reg || x.what !== "Bus used" || !(Number(x.miles) || Number(x.taken)) || !x.done) return;
       var t = x.recorded || keyToDate(x.done).getTime();
       if (t <= from || t >= to) return;
       if (!best || x.done > best.done || (x.done === best.done && x.recorded > best.recorded)) best = x;
