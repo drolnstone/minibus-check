@@ -1751,7 +1751,7 @@ if (want("T60")) {
   await me.pg.screenshot({ path: (process.env.SHOTS || "/tmp") + "/T60-bus-used-saved.png" });
   const u = sent.used || {};
   check("T60", "Bus used: the screen, a refusal without fuel, sent with his name, a ✓ on the first screen",
-        /^bus used$/i.test(title) && days.length === 7 && days[0] === "Tue 29 Sep" && days[1] === "Mon 28 Sep" && /fuel/i.test(refused) && u.reg === "NH56 FWP" && u.day === "2026-09-28" && u.taken === 48262 &&
+        /^bus used$/i.test(title) && days.length === 2 && days[0] === "Tue 29 Sep" && days[1] === "Mon 28 Sep" && /fuel/i.test(refused) && u.reg === "NH56 FWP" && u.day === "2026-09-28" && u.taken === 48262 &&
         u.miles === 48296 && u.fuel === "3/8 tank" && u.driver && /48,296 ✓/.test(card) && !me.errs.length,
         JSON.stringify({ title, days, refused, u, card, errs: me.errs }));
   await me.ctx.close();

@@ -3960,12 +3960,14 @@ function busUsedFor(reg){
   vlBusBind(function(r){ busUsedFor(r); });
 }
 /* The day, from a drop-down (v1.192.0, Asim, 25 Nov 2026): today first,
-   then the six days before it, as the Driver App's. */
+   then each day before it back to the Monday after the last Sunday run,
+   as the Driver App's. On a Sunday or a Monday, today alone. */
 function buDays(today){
   var p = parts(today), out = [];
   if(!p) return out;
   for(var i = 0; i < 7; i++){
     var t = new Date(Date.UTC(p.y, p.mo - 1, p.d - i));
+    if(i > 0 && t.getUTCDay() === 0) break;
     out.push(t.getUTCFullYear() + "-" + ("0" + (t.getUTCMonth() + 1)).slice(-2) + "-" + ("0" + t.getUTCDate()).slice(-2));
   }
   return out;

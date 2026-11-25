@@ -7080,12 +7080,13 @@ function usedOpen(){
   show("used");
 }
 /* The day, from a drop-down (v1.192.0, Asim, 25 Nov 2026): today first,
-   then the six days before it, "Wed 25 Nov". */
-var USED_DAYS = 7;
+   then each day before it back to the Monday after the last Sunday run,
+   "Wed 25 Nov". On a Sunday or a Monday, today alone. */
 function usedDayList(){
   var out = [], now = new Date(tripNow());
-  for(var i = 0; i < USED_DAYS; i++){
+  for(var i = 0; i < 7; i++){
     var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i, 12);
+    if(i > 0 && d.getDay() === 0) break;
     out.push({ key: rotaKey(d), label: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()] + " " + d.getDate() + " " +
       ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()] });
   }

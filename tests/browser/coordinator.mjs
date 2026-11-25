@@ -531,7 +531,7 @@ if (want("C7u")) {
   const row = db._rows("SELECT body FROM coord_actions WHERE kind='vlog'").map((r) => JSON.parse(r.body)).filter((b) => b.what === "Bus used")[0] || {};
   check("C7u", "Record something sits under Bookings; Bus used asks who drove and files the trip",
         order[1] === "Bookings" && order[2] === "Record something" && buses.length === 2 && /who drove/.test(refused) &&
-        dayKeys.length === 7 && dayKeys[0] === CAL && dayKeys[1] === DAY(-1) && row.done === CAL &&
+        dayKeys[0] === CAL && dayKeys.length === (new Date(CAL + "T12:00:00Z").getUTCDay() || 7) && row.done === CAL &&
         row.reg === "YS70 PWE" && row.miles === 45164 && row.taken === 45130 && row.fuel === "3/8 tank" && !!row.drove,
         JSON.stringify({ order: order.slice(0, 4), buses, dayKeys, refused, row }));
   /* Taken back, so the checks after this one see the buses as they were. */

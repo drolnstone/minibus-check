@@ -8,7 +8,7 @@ GOING TO     app v1.192.0 · server w2.110.0 · sheet v1.153.0
 Pages only. Server and sheet unchanged.
 
 Bus used: the day is a drop-down of dates ("Wed 25 Nov"), today first,
-then the six days before it, in the Driver App and in the Coordinator
+then each day back to the Monday after the last Sunday run, in the Driver App and in the Coordinator
 App's Record (it was Today or Yesterday, and a date picker).
 
 Merging is the whole deploy.
