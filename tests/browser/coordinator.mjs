@@ -1396,6 +1396,40 @@ if (want("C30u")) {
   await p.ctx.close();
 }
 
+/* C30f — a Fuel entry put right asks Fuel's own questions (v1.194.0) */
+if (want("C30f")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  const shelf = (await W.cacheGet(env, "coord_shelf")) || {};
+  shelf.vehicles = shelf.vehicles || { log: {}, jobs: {} }; shelf.vehicles.log = shelf.vehicles.log || {};
+  const keep = JSON.stringify(shelf);
+  (shelf.vehicles.log["NH56 FWP"] = shelf.vehicles.log["NH56 FWP"] || []).unshift({ id: "L-fu-c30f-0001", what: "Fuel", status: "Done",
+    done: CAL, miles: null, cost: 90, garage: "Shell", fuel: "Full", boughtBy: "Bro Asim", paidBy: "Church", litres: 62,
+    by: "Bro Asim", source: "Coordinator's app", recorded: Date.now() - 60000, correctedBy: "" });
+  await W.cachePut(env, "coord_shelf", shelf).run();
+  await p.pg.evaluate(() => { refresh(); location.hash = "bus/NH56%20FWP"; });
+  await p.wait(800);
+  await p.pg.click('#busBody [data-do="vfix"][data-id="L-fu-c30f-0001"]');
+  await p.wait(250);
+  const form = await p.pg.evaluate(() => ({ buyer: $("vfBuyer").value, paid: (document.querySelector('input[name="vfPaid"]:checked') || {}).value,
+    litres: $("vfLitres").value, garageLabel: document.querySelector('label[for="vfGarage"]').textContent, gauge: !!document.querySelector("#vfFuel .fg-track"),
+    taken: !!$("buTaken") }));
+  await p.pg.fill("#vfLitres", "");
+  await p.pg.check('input[name="vfPaid"][value="Gift"]');
+  await p.pg.fill("#vfWhy", "Paid as a gift");
+  await p.shot("C30f-fuel-correct");
+  await p.go();
+  await p.wait(700);
+  const row = db._rows("SELECT body FROM coord_actions WHERE kind='vfix'").map((r) => JSON.parse(r.body)).filter((b) => b.corrects === "L-fu-c30f-0001")[0] || {};
+  check("C30f", "Fuel put right: the tank, who bought it, Church or Gift, the litres; a cleared box stays blank",
+        form.buyer === "Bro Asim" && form.paid === "Church" && form.litres === "62" && form.garageLabel === "Filling station" && form.gauge && !form.taken &&
+        row.fuel === "Full" && row.paidBy === "Gift" && row.litres === null && row.boughtBy === "Bro Asim" && row.cost === 90 && !p.errs.length,
+        JSON.stringify({ form, row, errs: p.errs }));
+  await W.cachePut(env, "coord_shelf", JSON.parse(keep)).run();
+  await db.prepare("DELETE FROM coord_actions WHERE kind='vfix' AND body LIKE '%L-fu-c30f-0001%'").run();
+  await p.ctx.close();
+}
+
 /* C31 — a job from the walkaround, marked done */
 if (want("C31")) {
   const p = await page(env);

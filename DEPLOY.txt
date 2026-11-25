@@ -1,25 +1,20 @@
 MINIBUS
 =======
-  pages v1.193.0 · server w2.111.0→w2.112.0 · sheet v1.154.0
+  pages v1.194.0 · server w2.113.0 · sheet v1.154.0
 
-YOU ARE ON   app v1.192.0 · server w2.111.0 · sheet v1.154.0
-GOING TO     app v1.193.0 · server w2.112.0 · sheet v1.154.0
+YOU ARE ON   app v1.193.0 · server w2.112.0 · sheet v1.154.0
+GOING TO     app v1.194.0 · server w2.113.0 · sheet v1.154.0
 
 Pages and server. Sheet unchanged.
 
-Correct on a Bus used entry opens the Bus used form itself: day, who
-drove, mileage when taken, mileage when left, fuel (or Fuel not noted),
-and Why. No garage or cost. A box left blank stays blank. Fuel and other
-entries keep their form; a Fuel entry's box says Filling station.
-
-Once, on its own, the live server puts right Asim's NH56 FWP Bus used
-correction of 24 Nov (filed as Taken 53,914 · Left 53,914): corrected
-again with the mileage left blank, by "Minibus app", Why "Mileage when
-left was not given." It tells nobody. The next walkaround is then
-measured from the last reading, not 53,914.
+Every Vehicle Log correction asks its own entry's questions. Fuel's
+Correct now has the fuel level, Bought by, Paid by (Church or Gift) and
+Litres, as Record does; a box cleared stays blank. Bus used has had its
+own form since v1.193.0. MOT, Service, Insurance, Parking permit, Repair,
+Tyres and Other already matched Record (day, the date on the paperwork
+for the dated four, mileage, cost, garage).
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.193.0 · w2.112.0 · v1.154.0.
-B. NH56 FWP's log: the 24 Nov Bus used shows Taken 53,914, no Left.
+A. Coordinator App, App info: v1.194.0 · w2.113.0 · v1.154.0.
