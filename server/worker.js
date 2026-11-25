@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.111.0";
+const SCRIPT_VERSION = "w2.112.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -9847,8 +9847,8 @@ async function actVfix(env, me, act, id) {
     const was = orig.was || "";
     const given = item && !booking ? vlogDay(act.given) : "";
     const nd = item && !booking ? rnNextDue(item, done, was, given) : { next: "", how: "" };
-    const miles = act.miles === undefined ? orig.miles : vlogNum(act.miles, 2000000, true);
-    const cost = act.cost === undefined ? orig.cost : vlogNum(act.cost, 1000000, false);
+    const miles = act.miles === undefined ? (orig.miles == null ? null : orig.miles) : vlogNum(act.miles, 2000000, true);
+    const cost = act.cost === undefined ? (orig.cost == null ? null : orig.cost) : vlogNum(act.cost, 1000000, false);
     if (miles === undefined) return { ok: false, error: "The mileage is not a number of miles." };
     if (cost === undefined) return { ok: false, error: "The cost is not an amount in pounds." };
     body = { logId: "C-" + id, corrects: orig.id, reg: origReg, what: what, withdraw: false, why: why,
@@ -9857,12 +9857,23 @@ async function actVfix(env, me, act, id) {
              miles: miles, cost: cost,
              garage: act.garage === undefined ? orig.garage : vlogText(act.garage, 80),
              notes: act.notes === undefined ? orig.notes : vlogText(act.notes, 500),
-             fuel: (what === "Fuel" || what === "Bus used") && !booking ? (FUEL_WORDS.indexOf(String(act.fuel || "")) !== -1 ? String(act.fuel) : (orig.fuel || "")) : "",
+             fuel: (what === "Fuel" || what === "Bus used") && !booking ? (FUEL_WORDS.indexOf(String(act.fuel || "")) !== -1 ? String(act.fuel) :
+                   what === "Bus used" && act.fuelNotNoted ? "" : (orig.fuel || "")) : "",
              boughtBy: what === "Fuel" && !booking ? (orig.boughtBy || "") : "", paidBy: what === "Fuel" && !booking ? (orig.paidBy || "") : "",
              litres: what === "Fuel" && !booking && orig.litres != null ? orig.litres : null,
              drove: what === "Bus used" ? (act.drove === undefined ? (orig.drove || "") : vlogText(act.drove, 60)) : "",
              taken: what === "Bus used" ? (act.taken === undefined ? (orig.taken == null ? null : orig.taken) : vlogNum(act.taken, 2000000, true)) : null };
     if (body.taken === undefined) return { ok: false, error: "The mileage when taken is not a number of miles." };
+    /* A Bus used put right keeps its own rules, from w2.112.0 (Asim, 25 Nov
+       2026): a blank mileage when left stays blank, and one reading is enough. */
+    if (what === "Bus used") {
+      if (!body.drove) return { ok: false, error: "Say who drove." };
+      if (!body.miles && !body.taken) return { ok: false, error: "Mileage when taken or when left needed." };
+      if (body.miles && body.taken && body.taken > body.miles) return { ok: false, error: "Mileage when left is lower than mileage when taken." };
+      if (body.miles && body.taken && body.miles - body.taken > PARKED_MAX_MILES)
+        return { ok: false, error: milesSaid(body.miles - body.taken) + " miles between taken and left." };
+      body.cost = null; body.garage = "";
+    }
   }
   /* The bus's dates once this is written: the latest standing entry for each
      renewal it touches, or the date it had before the entry if none is left. */
@@ -9879,7 +9890,29 @@ async function actVfix(env, me, act, id) {
   body.targets = targets;
   const words = origReg + ": " + orig.what + (withdraw ? " entry withdrawn" : " entry corrected") +
                 (!withdraw && body.next ? ". Next due " + rnUk(body.next) : "") + (why ? ". " + why : "") + ".";
-  return { ok: true, sunday: "", body: body, words: words };
+  /* Bus used is quiet, put right or not. */
+  return { ok: true, sunday: "", body: body, words: words, quiet: orig.what === "Bus used" };
+}
+
+/* ONE ENTRY PUT RIGHT, once, from w2.112.0 (Asim, 25 Nov 2026). His Bus used
+   correction for NH56 FWP on 24 Nov was filed with the mileage when taken in
+   the old form's Mileage box, so it read as the mileage left and became the
+   next walkaround's base. Corrected again with the mileage left blank. */
+const USED_FIX_KEY = "fix_w2112_used";
+async function usedLeftFix(env) {
+  try {
+    if (await cacheGet(env, USED_FIX_KEY)) return;
+    await ensureCoord(env);
+    const view = await coordVehiclesView(env);
+    const x = (view.log["NH56 FWP"] || []).filter((e) => e.what === "Bus used" && e.status === "Correction" &&
+      !e.correctedBy && e.done === "2026-11-24" && Number(e.miles) === 53914 && Number(e.taken) === 53914)[0];
+    if (x) {
+      const out = await coordAct(env, { name: "Minibus app" }, { id: "fix-w2112-used", kind: "vfix", corrects: x.id, miles: "",
+        why: "Mileage when left was not given." });
+      if (!out || !out.ok) return;
+    }
+    await cachePut(env, USED_FIX_KEY, Date.now()).run();
+  } catch (e) {}
 }
 
 async function actJob(env, me, act) {
@@ -14087,6 +14120,7 @@ export default {
   /* The Cron Trigger. See THE CLOCK. */
   async scheduled(event, env, ctx) {
     await sheetVersionLoad(env);
+    await usedLeftFix(env);
     await clockTick(env);
   }
 };

@@ -1360,6 +1360,42 @@ if (want("C30")) {
   await p.ctx.close();
 }
 
+/* C30u — a Bus used put right with its own form (v1.193.0) */
+if (want("C30u")) {
+  const p = await page(env);
+  await p.signIn(PIN);
+  /* Filed on the sheet already, as Asim's was, so it can be put right. */
+  const shelf = (await W.cacheGet(env, "coord_shelf")) || {};
+  shelf.vehicles = shelf.vehicles || { log: {}, jobs: {} }; shelf.vehicles.log = shelf.vehicles.log || {};
+  const keep = JSON.stringify(shelf);
+  (shelf.vehicles.log["NH56 FWP"] = shelf.vehicles.log["NH56 FWP"] || []).unshift({ id: "L-bu-c30u-0001", what: "Bus used", status: "Done",
+    done: CAL, miles: null, taken: 53914, fuel: "3/8 tank", drove: "Bro Asim", notes: "Food Bank", by: "Bro Asim",
+    source: "Coordinator's app", recorded: Date.now() - 60000, correctedBy: "" });
+  await W.cachePut(env, "coord_shelf", shelf).run();
+  const made = { ok: true };
+  await p.pg.evaluate(() => { refresh(); location.hash = "bus/NH56%20FWP"; });
+  await p.wait(800);
+  await p.pg.click('#busBody [data-do="vfix"][data-id="L-bu-c30u-0001"]');
+  await p.wait(250);
+  const form = await p.pg.evaluate(() => ({ taken: $("buTaken").value, left: $("buMiles").value, garage: !!$("vfGarage"), cost: !!$("vfCost"),
+    days: [...document.querySelectorAll("#buDay option")].map((o) => o.value), fuelOn: !$("buNoFuel").classList.contains("on") }));
+  const pick = form.days[1] || form.days[0];
+  await p.pg.selectOption("#buDay", pick);
+  await p.pg.fill("#vfWhy", "Wrong date");
+  await p.shot("C30u-bus-used-correct");
+  await p.go();
+  await p.wait(700);
+  const row = db._rows("SELECT body FROM coord_actions WHERE kind='vfix'").map((r) => JSON.parse(r.body)).filter((b) => b.corrects === "L-bu-c30u-0001")[0] || {};
+  const said = await p.text("#sheetSay").catch(() => "");
+  check("C30u", "Bus used put right: its own fields, no garage or cost; a blank mileage left stays blank",
+        made && made.ok && form.taken === "53914" && form.left === "" && !form.garage && !form.cost && form.fuelOn &&
+        row.done === pick && row.miles === null && row.taken === 53914 && row.fuel === "3/8 tank" && !p.errs.length,
+        JSON.stringify({ made, form, row, said, errs: p.errs }));
+  await W.cachePut(env, "coord_shelf", JSON.parse(keep)).run();
+  await db.prepare("DELETE FROM coord_actions WHERE kind='vfix' AND body LIKE '%L-bu-c30u-0001%'").run();
+  await p.ctx.close();
+}
+
 /* C31 — a job from the walkaround, marked done */
 if (want("C31")) {
   const p = await page(env);
