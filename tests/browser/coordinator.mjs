@@ -2240,12 +2240,12 @@ if (want("C55")) {
   const labels = await p.pg.evaluate(() => [...document.querySelectorAll("#vlCosts label, #vlGivens label")].map((l) => l.textContent));
   const preview = await p.text("#vlNext");
   await p.pg.fill("#vlMiles", "53,800");
-  await p.pg.fill("#vlCost_0", "54.85");
-  await p.pg.fill("#vlCost_1", "x");
+  await p.pg.fill("#vlCost_1", "54.85");
+  await p.pg.fill("#vlCost_2", "x");
   await p.pg.click("#sheetGo");
   await p.wait(300);
   const refused = await p.text("#sheetSay");
-  await p.pg.fill("#vlCost_1", "189.00");
+  await p.pg.fill("#vlCost_2", "189.00");
   await p.pg.fill("#vlGarage", "Walton Garage");
   const box = await p.pg.$("#vlDefs input");
   if (box) await box.click();
