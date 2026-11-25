@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.109.0";
+const SCRIPT_VERSION = "w2.110.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -5184,6 +5184,29 @@ async function parkedLatest(env) {
     out[reg] = { miles: Number(r.miles), fuel: String(r.fuel || ""), driver: String(r.driver || ""), checkId: String(r.check_id),
                  at: Number(r.made), date: londonKey(when), time: londonHHMM(when) };
   }
+  /* BUS USED SINCE, from w2.110.0: a weekday trip recorded after the bus's
+     newest walkaround is what the next one is measured from. */
+  try {
+    const nq = await env.DB.prepare(
+      "SELECT upper(reg) AS reg, check_id, max(received) AS received FROM checks_in GROUP BY upper(reg)").all();
+    const newest = {};
+    for (const r of (nq.results || [])) newest[String(r.reg || "").trim()] = { checkId: String(r.check_id), at: Number(r.received) };
+    const { log } = await coordVehiclesView(env);
+    for (const reg0 of Object.keys(log)) {
+      const reg = String(reg0).trim().toUpperCase(), n = newest[reg];
+      if (!n) continue;
+      let best = null;
+      for (const x of log[reg0] || []) {
+        if (x.what !== "Bus used" || x.correctedBy || x.status === "Withdrawn" || !Number(x.miles)) continue;
+        if (!(Number(x.recorded) > n.at)) continue;
+        if (!best || Number(x.recorded) > Number(best.recorded)) best = x;
+      }
+      if (!best || (out[reg] && Number(out[reg].at) > Number(best.recorded))) continue;
+      out[reg] = { miles: Number(best.miles), fuel: String(best.fuel || ""), driver: String(best.drove || best.by || ""),
+                   checkId: n.checkId, at: Number(best.recorded), date: best.done || londonKey(new Date(Number(best.recorded))),
+                   time: "", used: true };
+    }
+  } catch (e) {}
   return out;
 }
 
@@ -9535,7 +9558,10 @@ function rnNextDue(item, done, was, given) {
    for the sheet to write onto the Vehicle Log, the Buses tab and History.
    Until the sheet names it as applied, getBuses and coordVehiclesView lay it
    over the sheet's copy, so every phone has the new date at once. */
-const VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Fuel", "Other"];
+/* "Bus used" from w2.110.0 (Asim, 25 Nov 2026): a weekday trip, the mileage
+   and fuel as the bus was left, who drove, and the mileage when it was taken
+   if noted. From the Driver App (busused) or the Coordinator App's Record. */
+const VLOG_WHAT = ["Bus used", "MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Fuel", "Other"];
 /* From w2.90.0: a Fuel entry carries what the tank read after, as the driver app words it.
    Sixteenths from w2.93.0; the eighths are among them. */
 const FUEL_WORDS = ["1/16 tank", "1/8 tank", "3/16 tank", "1/4 tank", "5/16 tank", "3/8 tank", "7/16 tank", "1/2 tank",
@@ -9594,9 +9620,10 @@ async function coordVehiclesView(env) {
     was: b.was || "", early: b.early == null ? null : b.early, next: b.next || "", how: b.how || "",
     given: b.given || "", miles: b.miles == null ? null : b.miles, garage: b.garage || "",
     cost: b.cost == null ? null : b.cost, defects: (b.defectNames || []).join("; "),
-    notes: b.notes || b.why || "", corrects: b.corrects || "", by: a.by, source: "Coordinator's app",
+    notes: b.notes || b.why || "", corrects: b.corrects || "", by: a.by, source: b.source || "Coordinator's app",
     recorded: a.made, correctedBy: "", waiting: true, fuel: b.fuel || "",
-    boughtBy: b.boughtBy || "", paidBy: b.paidBy || "", litres: b.litres == null ? null : b.litres });
+    boughtBy: b.boughtBy || "", paidBy: b.paidBy || "", litres: b.litres == null ? null : b.litres,
+    drove: b.drove || "", taken: b.taken == null ? null : b.taken });
   for (const a of await coordPending(env, ["vlog", "vfix", "job"])) {
     const b = a.body || {};
     if (a.kind === "job") {
@@ -9680,6 +9707,7 @@ async function actVlog(env, me, act, id) {
   if (!bus) return { ok: false, error: "That bus is not on the Buses tab." };
   const what = String(act.what || "");
   if (VLOG_WHAT.indexOf(what) === -1) return { ok: false, error: "Choose what was done." };
+  if (what === "Bus used") return await actBusUsed(env, me, act, id, reg);
   const booking = act.status === "Booked";
   const today = londonKey(new Date());
   const done = booking ? "" : (vlogDay(act.done) || today);
@@ -9738,6 +9766,53 @@ async function actVlog(env, me, act, id) {
   return { ok: true, sunday: "", body: body, words: words };
 }
 
+/* BUS USED, from w2.110.0 (Asim, 25 Nov 2026, after driving a bus on a
+   Tuesday with nowhere to put it). A weekday trip on the Vehicle Log: the
+   day, who drove, the mileage as the bus was left and the fuel showing, and
+   the mileage when it was taken if noted. Nobody is told (quiet). The next
+   walkaround of the bus is measured from it (parkedLatest). A Sunday
+   walkaround with no parked reading yet takes the mileage when taken as its
+   parked reading, marked as from Bus used, so the Sunday's own miles are
+   not lost in the week's. source: "Driver App" when keyed there. */
+async function actBusUsed(env, me, act, id, reg) {
+  const today = londonKey(new Date());
+  const done = vlogDay(act.done) || today;
+  if (done > today) return { ok: false, error: "That day has not come yet." };
+  if (rnDays(done, today) > 14) return { ok: false, error: "That day is more than two weeks ago." };
+  const drove = vlogText(act.drove, 60);
+  if (!drove) return { ok: false, error: "Say who drove." };
+  const miles = vlogNum(act.miles, 2000000, true), taken = vlogNum(act.taken, 2000000, true);
+  if (miles === undefined || miles === null || !miles) return { ok: false, error: "Mileage when left needed." };
+  if (taken === undefined) return { ok: false, error: "The mileage when taken is not a number of miles." };
+  if (taken !== null && taken > miles) return { ok: false, error: "Mileage when left is lower than mileage when taken." };
+  if (taken !== null && miles - taken > PARKED_MAX_MILES)
+    return { ok: false, error: milesSaid(miles - taken) + " miles between taken and left." };
+  const fuel = String(act.fuel || "");
+  if (FUEL_WORDS.indexOf(fuel) === -1) return { ok: false, error: "Slide to the fuel showing." };
+  const source = act.source === "Driver App" ? "Driver App" : "";
+  const body = {
+    logId: "L-" + id, reg: reg, what: "Bus used", status: "Done", moves: false,
+    done: done, bookedFor: "", was: "", early: null, next: "", how: "", given: "", miles: miles, garage: "",
+    cost: null, defects: [], defectNames: [], notes: vlogText(act.notes, 500), fuel: fuel,
+    boughtBy: "", paidBy: "", litres: null, drove: drove, taken: taken, source: source
+  };
+  const stmts = [];
+  /* The Sunday's parked reading, if still to come, from the mileage taken. */
+  if (taken !== null) {
+    try {
+      const open = (await parkedOpen(env, Date.now(), true)).filter((o) => o.reg === reg && !o.parked)[0];
+      if (open && open.day <= done && (!open.miles || (taken >= open.miles && taken - open.miles <= PARKED_MAX_MILES))) {
+        const now = Date.now();
+        stmts.push(env.DB.prepare(
+          "INSERT OR IGNORE INTO parked (check_id, reg, miles, fuel, driver, made, got, confirmed, synced, src) VALUES (?,?,?,'',?,?,?,0,0,'used')")
+          .bind(open.checkId, reg, taken, drove, now, now));
+      }
+    } catch (e) {}
+  }
+  const words = reg + ": used " + rnUk(done) + " by " + drove + ", left at " + milesSaid(miles) + ", fuel " + fuel + ".";
+  return { ok: true, sunday: "", body: body, words: words, stmts: stmts, quiet: true };
+}
+
 /* A correction or a withdrawal of one entry. The next due date is worked out
    again from the corrected facts and the date the bus had before the entry,
    and the dates the bus will have once it is written go with it (targets),
@@ -9775,9 +9850,12 @@ async function actVfix(env, me, act, id) {
              miles: miles, cost: cost,
              garage: act.garage === undefined ? orig.garage : vlogText(act.garage, 80),
              notes: act.notes === undefined ? orig.notes : vlogText(act.notes, 500),
-             fuel: what === "Fuel" && !booking ? (FUEL_WORDS.indexOf(String(act.fuel || "")) !== -1 ? String(act.fuel) : (orig.fuel || "")) : "",
+             fuel: (what === "Fuel" || what === "Bus used") && !booking ? (FUEL_WORDS.indexOf(String(act.fuel || "")) !== -1 ? String(act.fuel) : (orig.fuel || "")) : "",
              boughtBy: what === "Fuel" && !booking ? (orig.boughtBy || "") : "", paidBy: what === "Fuel" && !booking ? (orig.paidBy || "") : "",
-             litres: what === "Fuel" && !booking && orig.litres != null ? orig.litres : null };
+             litres: what === "Fuel" && !booking && orig.litres != null ? orig.litres : null,
+             drove: what === "Bus used" ? (act.drove === undefined ? (orig.drove || "") : vlogText(act.drove, 60)) : "",
+             taken: what === "Bus used" ? (act.taken === undefined ? (orig.taken == null ? null : orig.taken) : vlogNum(act.taken, 2000000, true)) : null };
+    if (body.taken === undefined) return { ok: false, error: "The mileage when taken is not a number of miles." };
   }
   /* The bus's dates once this is written: the latest standing entry for each
      renewal it touches, or the date it had before the entry if none is left. */
@@ -10058,7 +10136,7 @@ async function changeDriverNames(env, kind, r) {
 }
 
 async function changeTell(env, me, kind, id, r) {
-  if (CHANGE_TOLD.indexOf(kind) === -1 || !r || !r.words) return;
+  if (CHANGE_TOLD.indexOf(kind) === -1 || !r || !r.words || r.quiet) return;
   try {
     /* r.title: a change the server made itself on a coordinator's earlier
        say-so (the morning only hand back, w2.109.0), not "Change by". */
@@ -13910,6 +13988,19 @@ export default {
           try { if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(tellParked(env, out.parked)); }
           catch (e) {}
           return knock(json(out), "parked");
+        }
+        /* BUS USED, from w2.110.0: a weekday trip keyed in the Driver App,
+           under the signed-in driver's own name, with his key. Filed as a
+           Vehicle Log entry like the Coordinator App's, quietly. */
+        if (action === "busused") {
+          const u = body.used || {};
+          const who = String(u.driver || "").trim().slice(0, 60);
+          const sure = await driverSureOf(env, who, body.key, false);
+          if (!sure) return json({ ok: false, error: "pin" });
+          await ensureCoord(env);
+          const out = await coordAct(env, { name: who }, { id: u.id, kind: "vlog", what: "Bus used", status: "Done",
+            reg: u.reg, done: u.day, miles: u.miles, taken: u.taken, fuel: u.fuel, drove: who, source: "Driver App" });
+          return out && out.ok && !out.duplicate ? knock(json(out), "vlog") : json(out || { ok: false });
         }
         /* From w2.60.0: a check's first stage opened, and the hub's duty card. */
         if (action === "checkgo") return await handleCheckGo(env, body);

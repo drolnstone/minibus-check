@@ -500,6 +500,44 @@ if (want("C7e")) {
         JSON.stringify({ edits, cancels, shut, pre, was, now, before: before.length, after: after.length }));
 }
 
+/* C7u — Record something on the first screen, and Bus used (v1.191.0) */
+if (want("C7u")) {
+  await me.pg.evaluate(() => { location.hash = "home"; });
+  await me.wait(500);
+  const order = await me.pg.$$eval("#homeBody .menu .t", (els) => els.map((e) => e.textContent));
+  await me.pg.evaluate(() => { var b = document.querySelector('[data-do="recordpick"]'); b.scrollIntoView({ block: "center" }); });
+  await me.wait(200);
+  await me.shot("C7u-a-first-screen");
+  await me.pg.click('[data-do="recordpick"]');
+  await me.wait(300);
+  const buses = await me.pg.$$eval("#vlBus button", (els) => els.map((e) => e.textContent));
+  await me.pg.click('#vlBus button[data-reg="YS70 PWE"]');
+  await me.wait(300);
+  await me.pg.click('#vlWhat button[data-w="Bus used"]');
+  await me.wait(300);
+  await me.pg.click("#sheetGo");
+  await me.wait(200);
+  const refused = await me.text("#sheetSay");
+  await me.pg.selectOption("#buWho", { index: 1 });
+  await me.pg.fill("#buTaken", "45130");
+  await me.pg.fill("#buMiles", "45164");
+  const box = await me.pg.$eval("#buFuel .fg-track", (t) => { const r = t.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+  await me.pg.mouse.click(box.x + box.w * 6 / 16 - 2, box.y + box.h / 2);
+  await me.wait(200);
+  await me.shot("C7u-b-bus-used");
+  await me.go();
+  await me.wait(700);
+  const row = db._rows("SELECT body FROM coord_actions WHERE kind='vlog'").map((r) => JSON.parse(r.body)).filter((b) => b.what === "Bus used")[0] || {};
+  check("C7u", "Record something sits under Bookings; Bus used asks who drove and files the trip",
+        order[1] === "Bookings" && order[2] === "Record something" && buses.length === 2 && /who drove/.test(refused) &&
+        row.reg === "YS70 PWE" && row.miles === 45164 && row.taken === 45130 && row.fuel === "3/8 tank" && !!row.drove,
+        JSON.stringify({ order: order.slice(0, 4), buses, refused, row }));
+  /* Taken back, so the checks after this one see the buses as they were. */
+  await db.prepare("DELETE FROM coord_actions WHERE id=?").bind(row.logId ? row.logId.slice(2) : "").run();
+  await me.pg.evaluate(() => { location.hash = "home"; refresh(); });
+  await me.wait(300);
+}
+
 /* C8 — a defect closed with what was done */
 if (want("C8")) {
   await me.pg.evaluate(() => { location.hash = "defects"; });
@@ -2202,12 +2240,12 @@ if (want("C55")) {
   const labels = await p.pg.evaluate(() => [...document.querySelectorAll("#vlCosts label, #vlGivens label")].map((l) => l.textContent));
   const preview = await p.text("#vlNext");
   await p.pg.fill("#vlMiles", "53,800");
-  await p.pg.fill("#vlCost_0", "54.85");
-  await p.pg.fill("#vlCost_1", "x");
+  await p.pg.fill("#vlCost_1", "54.85");
+  await p.pg.fill("#vlCost_2", "x");
   await p.pg.click("#sheetGo");
   await p.wait(300);
   const refused = await p.text("#sheetSay");
-  await p.pg.fill("#vlCost_1", "189.00");
+  await p.pg.fill("#vlCost_2", "189.00");
   await p.pg.fill("#vlGarage", "Walton Garage");
   const box = await p.pg.$("#vlDefs input");
   if (box) await box.click();

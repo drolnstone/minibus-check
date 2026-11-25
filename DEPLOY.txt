@@ -1,18 +1,29 @@
 MINIBUS
 =======
-  pages v1.190.0 · server w2.109.0 · sheet v1.152.0
+  pages v1.191.0 · server w2.110.0 · sheet v1.153.0
 
-YOU ARE ON   app v1.189.0 · server w2.109.0 · sheet v1.152.0
-GOING TO     app v1.190.0 · server w2.109.0 · sheet v1.152.0
+YOU ARE ON   app v1.190.0 · server w2.109.0 · sheet v1.152.0
+GOING TO     app v1.191.0 · server w2.110.0 · sheet v1.153.0
 
-Pages only. Server and sheet unchanged.
+Bus used: a weekday trip, recorded with no check.
 
-Sunday Bus: when a route is full, the line under "Bus full" reads
-"You may be on a second trip." in red, then the Call button. It used to
-read "Every seat is booked." Nothing is added above Confirm or after
-booking.
+Driver App: a Bus used button under Vehicle check. The bus, Today or
+Yesterday, mileage when taken (if noted), mileage when left, fuel
+showing. Saved under the signed-in name; a ✓ card on the first screen
+that day.
+
+Coordinator App: Record something on the first screen, under Bookings.
+Choose the bus, then the Record form, with the buses at its top. A Bus
+used chip: day, who drove, mileage taken (if noted), mileage left, fuel.
+
+Both go on the Vehicle Log as What "Bus used" (two new columns, Driven
+by and Mileage when taken). Nobody is told. The bus's next walkaround is
+measured from the mileage left, and the coordinators are told only if
+it differs. A mileage when taken stands in for a Sunday parked reading
+that never came (Parked at: From Bus used). The fuel bars show the Bus
+used fuel when it is the newest.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.190.0 · w2.109.0 · v1.152.0.
+A. Coordinator App, App info: v1.191.0 · w2.110.0 · v1.153.0.

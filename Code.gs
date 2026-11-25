@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.152.0";
+var SCRIPT_VERSION = "v1.153.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1142,12 +1142,16 @@ var VLOG_HEADERS = [
   "Recorded", "Log ID", "Registration", "What", "Status", "Date done", "Booked for",
   "Was due", "Days early (-) or late (+)", "Next due", "How the next date was worked out",
   "Certificate or policy date", "Mileage", "Garage", "Cost (£)", "Defects put right",
-  "Notes", "Corrects", "Recorded by", "Source", "Fuel level", "Bought by", "Paid by", "Litres"
+  "Notes", "Corrects", "Recorded by", "Source", "Fuel level", "Bought by", "Paid by", "Litres",
+  /* From v1.153.0: a Bus used row (weekday use), who drove and the mileage when taken. */
+  "Driven by", "Mileage when taken"
 ];
 var HISTORY_HEADERS = ["When", "Who", "Where", "Registration", "What changed", "From", "To", "Why", "Ref"];
 
 /* What can be recorded, and which of them move a date on the Buses tab. */
-var VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Fuel", "Other"];
+/* "Bus used" from v1.153.0 (Asim, 25 Nov 2026): a weekday trip, keyed from
+   the Driver App or the Coordinator App, with the mileage and fuel as left. */
+var VLOG_WHAT = ["Bus used", "MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Fuel", "Other"];
 var VLOG_ITEM = { "MOT": "mot", "Service": "service", "Insurance": "insurance", "Parking permit": "permit" };
 var RENEW_KEYS = ["mot", "service", "insurance", "permit"];
 /* The two that stop a bus once past, as the live server's PAPERS_STOP. */
@@ -1363,6 +1367,8 @@ function vlogAppend(ss, e) {
   put(vc.boughtBy, safeText(e.boughtBy || ""));
   put(vc.paidBy, safeText(e.paidBy || ""));
   put(vc.litres, num(e.litres));
+  put(vc.drove, safeText(e.drove || ""));
+  put(vc.taken, num(e.taken));
   sh.getRange(sh.getLastRow() + 1, 1, 1, w).setValues([row]);
 }
 
@@ -1390,7 +1396,8 @@ function vlogRows(ss) {
       source: str(r, vc.source), recorded: isDateLike(rec) ? rec.getTime() : 0,
       fuel: vc.fuel && !isDateLike(at1(r, vc.fuel)) ? str(r, vc.fuel) : "",
       boughtBy: vc.boughtBy ? str(r, vc.boughtBy) : "", paidBy: vc.paidBy ? str(r, vc.paidBy) : "",
-      litres: vc.litres ? num(r, vc.litres) : null
+      litres: vc.litres ? num(r, vc.litres) : null,
+      drove: vc.drove ? str(r, vc.drove) : "", taken: vc.taken ? num(r, vc.taken) : null
     });
   });
   return out;
@@ -1735,7 +1742,8 @@ function vlogBoot(ss) {
 
 function vlogSummary(x) {
   var bits = [x.what + (x.status === "Booked" ? " booked for " + ukDay(x.bookedFor) : "")];
-  if (x.done) bits.push("done " + ukDay(x.done));
+  if (x.done) bits.push((x.what === "Bus used" ? "" : "done ") + ukDay(x.done));
+  if (x.drove) bits.push("by " + x.drove);
   if (x.next) bits.push("next due " + ukDay(x.next));
   if (x.garage) bits.push(x.garage);
   return bits.join(", ");
@@ -1769,12 +1777,14 @@ function coordVlog(ss, a, b, by) {
   if (b.logId && rows.some(function (x) { return x.id === b.logId; })) {
     return { done: true, ok: true, push: true, result: "On the Vehicle Log tab." };
   }
-  var where = "Coordinator's app";
+  /* A Bus used row keyed in the Driver App says so (v1.153.0). */
+  var where = b.source === "Driver App" ? "Driver App" : "Coordinator's app";
   vlogAppend(ss, { recorded: Number(a.made) || Date.now(), id: b.logId, reg: reg, what: b.what, status: b.status,
                    done: b.done, bookedFor: b.bookedFor, was: b.was, early: b.early, next: b.next, how: b.how,
                    given: b.given, miles: b.miles, garage: b.garage, cost: b.cost, defectNames: b.defectNames,
                    notes: b.notes, by: by, source: where, fuel: b.fuel,
-                   boughtBy: b.boughtBy, paidBy: b.paidBy, litres: b.litres });
+                   boughtBy: b.boughtBy, paidBy: b.paidBy, litres: b.litres,
+                   drove: b.drove || "", taken: b.taken });
   var item = VLOG_ITEM[b.what];
   var moves = b.status === "Done" && item && rnParts(b.next) && vlogIsLatest(ss, reg, item, b.logId);
   var older = b.status === "Done" && item && rnParts(b.next) && !moves;
@@ -1818,7 +1828,8 @@ function coordVfix(ss, a, b, by) {
     cost: b.withdraw ? "" : b.cost, defectNames: [], notes: b.why || b.notes || "",
     corrects: orig.id, by: by, source: where, fuel: b.withdraw ? "" : (b.fuel || ""),
     boughtBy: b.withdraw ? "" : (b.boughtBy || ""), paidBy: b.withdraw ? "" : (b.paidBy || ""),
-    litres: b.withdraw ? "" : b.litres
+    litres: b.withdraw ? "" : b.litres,
+    drove: b.withdraw ? "" : (b.drove || ""), taken: b.withdraw ? "" : b.taken
   };
   vlogAppend(ss, fixed);
   historyAdd(ss, [{ who: by, where: where, reg: orig.reg,
@@ -2021,7 +2032,8 @@ function vlogShelf(ss) {
       early: x.early, next: x.next, how: x.how, given: x.given, miles: x.miles, garage: x.garage,
       cost: x.cost, defects: x.defects, notes: x.notes, corrects: x.corrects, by: x.by,
       source: x.source, recorded: x.recorded, correctedBy: correctedBy[x.id] || "", fuel: x.fuel || "",
-      boughtBy: x.boughtBy || "", paidBy: x.paidBy || "", litres: x.litres
+      boughtBy: x.boughtBy || "", paidBy: x.paidBy || "", litres: x.litres,
+      drove: x.drove || "", taken: x.taken
     });
   });
   Object.keys(by).forEach(function (reg) {
@@ -2856,6 +2868,9 @@ var PARKED_NO_READING = "Not reported";
 /* Parked at, from v1.140.0, when nobody keyed it and the bus's next
    walkaround's mileage and fuel stand in (Asim, 16 Nov 2026). */
 var PARKED_FROM_CHECK = "From check";
+/* From v1.153.0: nobody keyed it, and a Bus used entry's mileage when taken
+   stands in (Asim, 25 Nov 2026). */
+var PARKED_FROM_USED = "From Bus used";
 /* More than this many usual Sundays since the last walkaround, with no
    parked reading, is told. */
 var PARKED_USUAL_TIMES = 1.5;
@@ -2951,6 +2966,20 @@ function parkedCompare(sh, c, chk) {
     var reg = String(chk.reg || "").trim().toUpperCase();
     var walk = "Walkaround " + milesWords(miles) + " on " + safeText(chk.date || "") +
                (chk.time ? " at " + safeText(chk.time) : "") + ".";
+    /* BUS USED SINCE, from v1.153.0 (Asim, 25 Nov 2026): a weekday trip on
+       the Vehicle Log after that walkaround. The coordinators are told only
+       when this walkaround's mileage is not the one the bus was left at. */
+    var used = busUsedSince(sh, reg, prev.t, now);
+    if (used) {
+      var du = miles - used.miles;
+      var uw = "Bus used " + ukDay(used.done) + (used.drove ? " by " + used.drove : "") + ", left at " + milesWords(used.miles) + ".";
+      var base = prev.parked !== null ? miles - prev.parked : PARKED_NO_READING;
+      return { cell: base, note: uw,
+               alert: du === 0 ? null : { id: "parked|" + chk.id, kind: "mileage", reg: reg,
+                 title: reg + ": " + milesWords(Math.abs(du)) + (Math.abs(du) === 1 ? " mile " : " miles ") +
+                        (du > 0 ? "since it was last used" : "lower than when it was last used"),
+                 body: uw + " " + walk } };
+    }
     if (prev.parked !== null) {
       var d = miles - prev.parked;
       return { cell: d, note: "", alert: d !== 0 ? parkedAlert("parked|" + chk.id, reg, d, prev, walk) : null };
@@ -2974,6 +3003,21 @@ function parkedCompare(sh, c, chk) {
     }
     return res;
   } catch (err) { return none; }
+}
+
+/* The latest standing Bus used row for this bus recorded after from and
+   before to, with a mileage, or null. From v1.153.0. */
+function busUsedSince(sh, reg, from, to) {
+  var best = null;
+  try {
+    vlogStanding(vlogRows(sh.getParent())).forEach(function (x) {
+      if (x.reg !== reg || x.what !== "Bus used" || !Number(x.miles) || !x.done) return;
+      var t = x.recorded || keyToDate(x.done).getTime();
+      if (t <= from || t >= to) return;
+      if (!best || x.done > best.done || (x.done === best.done && x.recorded > best.recorded)) best = x;
+    });
+  } catch (err) { return null; }
+  return best;
 }
 
 /* Told to the coordinators: the bus has moved since it was parked, by d. */
@@ -3012,6 +3056,8 @@ function parkedLate(sh, c, prow, miles) {
 function parkedNote(pk) {
   var when = new Date(Number(pk.at) || Date.now());
   var tz = Session.getScriptTimeZone();
+  if (pk.src === "used") return "Mileage when taken, Bus used, driven by " + safeText(pk.driver || "") + ". Keyed " +
+    Utilities.formatDate(when, tz, "dd/MM/yyyy") + " at " + Utilities.formatDate(when, tz, "HH:mm") + ".";
   if (pk.src === "check") return "Mileage and fuel from the walkaround on " +
     Utilities.formatDate(when, tz, "dd/MM/yyyy") + " at " + Utilities.formatDate(when, tz, "HH:mm") + ".";
   return "Keyed by " + safeText(pk.driver || "a driver") + (pk.src === "coord" ? ", coordinator," : "") + " on " +
@@ -5480,6 +5526,7 @@ function drainFromWorker() {
         if (pcc.parkedAt) {
           try {
             psh.getRange(prow, pcc.parkedAt).setNumberFormat("@").setValue(fromCheck ? PARKED_FROM_CHECK :
+              pk.src === "used" ? PARKED_FROM_USED :
               Utilities.formatDate(new Date(Number(pk.at) || Date.now()), Session.getScriptTimeZone(), "HH:mm"));
           } catch (e) {}
         }
@@ -15349,7 +15396,8 @@ FIELDS[VLOG_SHEET] = {
   next: "Next due", how: "How the next date was worked out", given: "Certificate or policy date",
   miles: "Mileage", garage: "Garage", cost: "Cost (\u00A3)", defects: "Defects put right",
   notes: "Notes", corrects: "Corrects", by: "Recorded by", source: "Source", fuel: "Fuel level",
-  boughtBy: "Bought by", paidBy: "Paid by", litres: "Litres"
+  boughtBy: "Bought by", paidBy: "Paid by", litres: "Litres",
+  drove: "Driven by", taken: "Mileage when taken"
 };
 FIELDS[HISTORY_SHEET] = {
   when: "When", who: "Who", where: "Where", reg: "Registration", what: "What changed",
