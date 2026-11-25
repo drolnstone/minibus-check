@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.112.0";
+const SCRIPT_VERSION = "w2.113.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -9859,11 +9859,14 @@ async function actVfix(env, me, act, id) {
              notes: act.notes === undefined ? orig.notes : vlogText(act.notes, 500),
              fuel: (what === "Fuel" || what === "Bus used") && !booking ? (FUEL_WORDS.indexOf(String(act.fuel || "")) !== -1 ? String(act.fuel) :
                    what === "Bus used" && act.fuelNotNoted ? "" : (orig.fuel || "")) : "",
-             boughtBy: what === "Fuel" && !booking ? (orig.boughtBy || "") : "", paidBy: what === "Fuel" && !booking ? (orig.paidBy || "") : "",
-             litres: what === "Fuel" && !booking && orig.litres != null ? orig.litres : null,
+             /* Who bought fuel, Church or Gift, and the litres, put right too from w2.113.0. */
+             boughtBy: what === "Fuel" && !booking ? (act.boughtBy === undefined ? (orig.boughtBy || "") : vlogText(act.boughtBy, 60)) : "",
+             paidBy: what === "Fuel" && !booking ? (act.paidBy === "Church" || act.paidBy === "Gift" ? act.paidBy : (orig.paidBy || "")) : "",
+             litres: what === "Fuel" && !booking ? (act.litres === undefined ? (orig.litres == null ? null : orig.litres) : vlogNum(act.litres, 10000, false)) : null,
              drove: what === "Bus used" ? (act.drove === undefined ? (orig.drove || "") : vlogText(act.drove, 60)) : "",
              taken: what === "Bus used" ? (act.taken === undefined ? (orig.taken == null ? null : orig.taken) : vlogNum(act.taken, 2000000, true)) : null };
     if (body.taken === undefined) return { ok: false, error: "The mileage when taken is not a number of miles." };
+    if (body.litres === undefined) return { ok: false, error: "The litres are not a number." };
     /* A Bus used put right keeps its own rules, from w2.112.0 (Asim, 25 Nov
        2026): a blank mileage when left stays blank, and one reading is enough. */
     if (what === "Bus used") {

@@ -171,6 +171,23 @@ export default async function (root) {
     });
   });
 
+  s.test("Fuel put right: its own questions, the tank, who bought it, Church or Gift, the litres", async (a) => {
+    const { db, env } = await fresh();
+    await atTime(TUE_1900, async () => {
+      const first = await coordAct(env, { what: "Fuel", done: "2026-11-24", fuel: "Full", boughtBy: "Bro Asim", paidBy: "Church", litres: 62,
+        garage: "Shell", cost: 90 });
+      a.ok(first.ok, JSON.stringify(first));
+      const logId = JSON.parse(db._one("SELECT body FROM coord_actions WHERE id=?", "bu-act-" + n).body).logId;
+      a.eq((await coordAct(env, { kind: "vfix", what: "Fuel", corrects: logId, litres: "lots", why: "x" })).error, "The litres are not a number.");
+      const fix = await coordAct(env, { kind: "vfix", what: "Fuel", corrects: logId, fuel: "3/4 tank", boughtBy: "Pst Kehinde", paidBy: "Gift", litres: "",
+        why: "Wrong buyer" });
+      a.ok(fix.ok, JSON.stringify(fix));
+      const b = JSON.parse(db._one("SELECT body FROM coord_actions WHERE id=?", "bu-act-" + n).body);
+      a.eq(b.fuel, "3/4 tank"); a.eq(b.boughtBy, "Pst Kehinde"); a.eq(b.paidBy, "Gift"); a.eq(b.litres, null, "blank litres filled in");
+      a.eq(b.garage, "Shell"); a.eq(b.cost, 90); a.eq(b.taken, null); a.eq(b.drove, "");
+    });
+  });
+
   s.test("the three lists of what can be recorded agree, Bus used first", (a) => {
     const lists = ["server/worker.js", "Code.gs", "coord/index.html"].map((f) =>
       (/VLOG_WHAT = (\[[^\]]+\])/.exec(readFileSync(join(root, f), "utf8")) || [])[1]);

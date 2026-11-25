@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.193.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.194.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -817,7 +817,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.193.0";
+var PAGE_VERSION = "v1.194.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -4176,6 +4176,13 @@ function correctEntry(reg, id){
   var mode = "fix";
   var booking = x.status === "Booked";
   var item = VLOG_ITEM[x.what] || "";
+  /* Fuel put right asks Fuel's own questions (v1.194.0, Asim, 25 Nov 2026):
+     the tank, and who bought it, Church or Gift, and the litres when the
+     entry has them. */
+  var fuelled = x.what === "Fuel" && !booking, bought = fuelled && !!x.boughtBy;
+  var buyers = bought ? buyerNames() : [];
+  if(bought && !buyers.some(function(n){ return same(n, x.boughtBy); })) buyers.push(x.boughtBy);
+  VL = { reg: b.reg, fuel: fuelled ? fuelStep(x.fuel) : 0 };
   openSheet({ eyebrow: b.reg + " · " + x.what, title: "Put this entry right",
     line: booking ? "Booked for " + ukDay(x.bookedFor) + "." : x.done ? "Done " + ukDay(x.done) + (x.next ? ", next due " + ukDay(x.next) : "") + "." : "",
     body: '<div class="chips" id="vfMode"><button type="button" data-m="fix" class="on">Correct it</button><button type="button" data-m="withdraw">Withdraw it</button></div>' +
@@ -4184,6 +4191,12 @@ function correctEntry(reg, id){
                    : '<div class="field"><label for="vfDay">Day it was done</label><input type="date" id="vfDay" value="' + esc(x.done) + '" max="' + esc(calToday()) + '"></div>' +
                      (item ? '<div class="field"><label for="vfGiven">' + esc(givenLabel(item)) + '</label><input type="date" id="vfGiven" value="' + esc(x.given || "") + '"></div>' : '') +
                      '<p class="preview" id="vfNext" hidden></p>') +
+          (fuelled ? '<div class="field"><label>Fuel level</label><div class="fuelpick" id="vfFuel"></div></div>' : '') +
+          (bought ? '<div class="field"><label for="vfBuyer">Bought by</label><select id="vfBuyer">' +
+              buyers.map(function(n){ return '<option value="' + esc(n) + '"' + (same(n, x.boughtBy) ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join("") + '</select></div>' +
+            '<div class="field"><label>Paid by</label><div class="radios">' + ["Church", "Gift"].map(function(v){
+              return '<label class="check"><input type="radio" name="vfPaid" value="' + v + '"' + ((x.paidBy || "Church") === v ? ' checked' : '') + '><span>' + v + '</span></label>'; }).join("") + '</div></div>' +
+            '<div class="field"><label for="vfLitres">Litres</label><input id="vfLitres" inputmode="decimal" autocomplete="off" placeholder="e.g. 62" value="' + esc(x.litres == null ? "" : x.litres) + '"></div>' : '') +
           '<div class="two"><div class="field"><label for="vfMiles">Mileage</label><input id="vfMiles" inputmode="numeric" autocomplete="off" placeholder="e.g. 57363" value="' + esc(x.miles == null ? "" : x.miles) + '"></div>' +
           '<div class="field"><label for="vfCost">Cost (£)</label><input id="vfCost" inputmode="decimal" autocomplete="off" placeholder="e.g. 245.00" value="' + esc(x.cost == null ? "" : x.cost) + '"></div></div>' +
           (x.what === "Fuel" ? '<div class="field"><label for="vfGarage">Filling station</label><input id="vfGarage" maxlength="80" autocomplete="off" placeholder="e.g. Shell, Church Road" value="' + esc(x.garage || "") + '"></div>'
@@ -4206,6 +4219,16 @@ function correctEntry(reg, id){
       if(cost !== cost){ sheetSay("The cost is not an amount in pounds.", true); return; }
       a.miles = miles; a.cost = cost;
       a.garage = $("vfGarage").value || "";
+      if(fuelled){
+        if(!VL.fuel){ sheetSay("Slide to the fuel level.", true); return; }
+        a.fuel = fuelText(VL.fuel);
+      }
+      if(bought){
+        var lt = numIn($("vfLitres").value);
+        if(lt !== lt){ sheetSay("The litres are not a number.", true); return; }
+        a.boughtBy = $("vfBuyer").value; a.litres = lt;
+        a.paidBy = (document.querySelector('input[name="vfPaid"]:checked') || {}).value || "Church";
+      }
       act(a);
     } });
   var show = function(){
@@ -4228,6 +4251,10 @@ function correctEntry(reg, id){
     };
   });
   ["vfDay", "vfGiven"].forEach(function(id){ var el = $(id); if(el){ el.onchange = show; el.oninput = show; } });
+  if(fuelled){
+    $("vfFuel").innerHTML = fuelGaugeHtml(VL.fuel);
+    fuelGaugeBind($("vfFuel").firstChild, function(){ return VL.fuel; }, function(n){ VL.fuel = n; sheetSay(""); });
+  }
   show();
 }
 
