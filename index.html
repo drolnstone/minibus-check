@@ -1838,7 +1838,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.191.0";
+var APP_VERSION = "v1.192.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -7066,7 +7066,7 @@ function parkKeyed(name){
    as a Vehicle Log entry under his name; the next walkaround is measured
    from the mileage left. No signal: not saved, and he is told. */
 var USED_KEY = "fleet.used.v1";
-var USED = { reg:"", day:"today", taken:"", miles:"", fuel:0, say:"", bad:false, busy:false };
+var USED = { reg:"", day:"", taken:"", miles:"", fuel:0, say:"", bad:false, busy:false };
 function usedOpen(){
   if(!st.driver){ show("driver"); return; }
   if(!driverKey(st.driver) && pinGateNeeded()){
@@ -7076,13 +7076,24 @@ function usedOpen(){
     return;
   }
   var one = VEHICLES.length === 1 ? VEHICLES[0].reg : "";
-  USED = { reg:one, day:"today", taken:"", miles:"", fuel:0, say:"", bad:false, busy:false };
+  USED = { reg:one, day:"", taken:"", miles:"", fuel:0, say:"", bad:false, busy:false };
   show("used");
 }
+/* The day, from a drop-down (v1.192.0, Asim, 25 Nov 2026): today first,
+   then the six days before it, "Wed 25 Nov". */
+var USED_DAYS = 7;
+function usedDayList(){
+  var out = [], now = new Date(tripNow());
+  for(var i = 0; i < USED_DAYS; i++){
+    var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i, 12);
+    out.push({ key: rotaKey(d), label: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()] + " " + d.getDate() + " " +
+      ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()] });
+  }
+  return out;
+}
 function usedDayKey(){
-  var d = new Date(tripNow());
-  if(USED.day === "yesterday") d = new Date(d.getTime() - 86400000);
-  return rotaKey(d);
+  var days = usedDayList();
+  return days.some(function(x){ return x.key === USED.day; }) ? USED.day : days[0].key;
 }
 function usedPaint(){
   var el = $("usedBody"); if(!el) return;
@@ -7100,10 +7111,9 @@ function usedPaint(){
       '<div class="choose used-pick" id="usedBus">' + VEHICLES.map(function(v){
         return '<button type="button" data-reg="' + esc(v.reg) + '" class="' + (sameName(v.reg, USED.reg) ? 'on' : '') + '">' + esc(v.reg) + '</button>';
       }).join("") + '</div>' +
-      '<div class="lbl" style="margin-bottom:8px">Day</div>' +
-      '<div class="choose used-pick" id="usedDay">' +
-        '<button type="button" data-day="today" class="' + (USED.day === "today" ? 'on' : '') + '">Today</button>' +
-        '<button type="button" data-day="yesterday" class="' + (USED.day === "yesterday" ? 'on' : '') + '">Yesterday</button></div></div>' +
+      '<div class="field" style="margin-top:14px"><label for="usedDay">Day</label><select id="usedDay">' +
+        usedDayList().map(function(x){ return '<option value="' + esc(x.key) + '"' + (x.key === usedDayKey() ? ' selected' : '') + '>' + esc(x.label) + '</option>'; }).join("") +
+      '</select></div></div>' +
     '<div class="card">' +
       '<div class="field"><label for="usedTaken">Mileage when taken <span class="lc">· if noted</span></label>' +
         '<input id="usedTaken" type="number" inputmode="numeric" class="mono" autocomplete="off" placeholder="e.g. ' + esc(String(sample + 12)) + '" value="' + esc(USED.taken) + '">' +
@@ -7116,9 +7126,7 @@ function usedPaint(){
   Array.prototype.forEach.call(el.querySelectorAll("#usedBus button"), function(b){
     b.onclick = function(){ if(USED.busy) return; usedKeep(); USED.reg = b.getAttribute("data-reg"); USED.say = ""; usedPaint(); };
   });
-  Array.prototype.forEach.call(el.querySelectorAll("#usedDay button"), function(b){
-    b.onclick = function(){ if(USED.busy) return; usedKeep(); USED.day = b.getAttribute("data-day"); USED.say = ""; usedPaint(); };
-  });
+  $("usedDay").onchange = function(){ USED.day = $("usedDay").value; USED.say = ""; };
   fuelGaugeBind($("usedFuel").firstChild, function(){ return USED.fuel; }, function(n){ USED.fuel = n; });
 }
 function usedKeep(){

@@ -518,6 +518,7 @@ if (want("C7u")) {
   await me.pg.click("#sheetGo");
   await me.wait(200);
   const refused = await me.text("#sheetSay");
+  const dayKeys = await me.pg.$$eval("#buDay option", (o) => o.map((x) => x.value));
   await me.pg.selectOption("#buWho", { index: 1 });
   await me.pg.fill("#buTaken", "45130");
   await me.pg.fill("#buMiles", "45164");
@@ -530,8 +531,9 @@ if (want("C7u")) {
   const row = db._rows("SELECT body FROM coord_actions WHERE kind='vlog'").map((r) => JSON.parse(r.body)).filter((b) => b.what === "Bus used")[0] || {};
   check("C7u", "Record something sits under Bookings; Bus used asks who drove and files the trip",
         order[1] === "Bookings" && order[2] === "Record something" && buses.length === 2 && /who drove/.test(refused) &&
+        dayKeys.length === 7 && dayKeys[0] === CAL && dayKeys[1] === DAY(-1) && row.done === CAL &&
         row.reg === "YS70 PWE" && row.miles === 45164 && row.taken === 45130 && row.fuel === "3/8 tank" && !!row.drove,
-        JSON.stringify({ order: order.slice(0, 4), buses, refused, row }));
+        JSON.stringify({ order: order.slice(0, 4), buses, dayKeys, refused, row }));
   /* Taken back, so the checks after this one see the buses as they were. */
   await db.prepare("DELETE FROM coord_actions WHERE id=?").bind(row.logId ? row.logId.slice(2) : "").run();
   await me.pg.evaluate(() => { location.hash = "home"; refresh(); });

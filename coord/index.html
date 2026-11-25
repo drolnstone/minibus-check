@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.191.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.192.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -817,7 +817,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.191.0";
+var PAGE_VERSION = "v1.192.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -3937,7 +3937,8 @@ function busUsedFor(reg){
     body: vlBusChips(b.reg) + '<div class="chips" id="vlWhat">' + VLOG_WHAT.map(function(w){
             return '<button type="button" data-w="' + esc(w) + '" class="' + (w === "Bus used" ? 'on' : '') + '">' + esc(w) + '</button>';
           }).join("") + '</div>' +
-          '<div class="field"><label for="buDay">Day it was used</label><input type="date" id="buDay" value="' + esc(today) + '" max="' + esc(today) + '"></div>' +
+          '<div class="field"><label for="buDay">Day it was used</label><select id="buDay">' + buDays(today).map(function(k){
+            return '<option value="' + esc(k) + '">' + esc(shortDay(k)) + '</option>'; }).join("") + '</select></div>' +
           '<div class="field"><label for="buWho">Who drove</label><select id="buWho"><option value="">Choose</option>' +
             names.map(function(n){ return '<option value="' + esc(n) + '">' + esc(n) + '</option>'; }).join("") +
             '<option value="*">Someone else</option></select></div>' +
@@ -3957,6 +3958,17 @@ function busUsedFor(reg){
     x.onclick = function(){ if(busy) return; var w = x.getAttribute("data-w"); if(w !== "Bus used") recordFor(b.reg, null, w); };
   });
   vlBusBind(function(r){ busUsedFor(r); });
+}
+/* The day, from a drop-down (v1.192.0, Asim, 25 Nov 2026): today first,
+   then the six days before it, as the Driver App's. */
+function buDays(today){
+  var p = parts(today), out = [];
+  if(!p) return out;
+  for(var i = 0; i < 7; i++){
+    var t = new Date(Date.UTC(p.y, p.mo - 1, p.d - i));
+    out.push(t.getUTCFullYear() + "-" + ("0" + (t.getUTCMonth() + 1)).slice(-2) + "-" + ("0" + t.getUTCDate()).slice(-2));
+  }
+  return out;
 }
 function busUsedSend(b){
   var day = $("buDay").value || calToday();
