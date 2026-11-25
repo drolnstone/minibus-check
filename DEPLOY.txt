@@ -1,22 +1,25 @@
 MINIBUS
 =======
-  pages v1.192.0 · server w2.111.0 · sheet v1.154.0
+  pages v1.193.0 · server w2.111.0→w2.112.0 · sheet v1.154.0
 
-YOU ARE ON   app v1.191.0 · server w2.110.0 · sheet v1.153.0
-GOING TO     app v1.192.0 · server w2.111.0 · sheet v1.154.0
+YOU ARE ON   app v1.192.0 · server w2.111.0 · sheet v1.154.0
+GOING TO     app v1.193.0 · server w2.112.0 · sheet v1.154.0
 
-Pages, server and sheet.
+Pages and server. Sheet unchanged.
 
-Bus used: the day is a drop-down of dates ("Wed 25 Nov"), today first,
-then each day back to the Monday after the last Sunday run, in the Driver App and in the Coordinator
-App's Record (it was Today or Yesterday, and a date picker).
+Correct on a Bus used entry opens the Bus used form itself: day, who
+drove, mileage when taken, mileage when left, fuel (or Fuel not noted),
+and Why. No garage or cost. A box left blank stays blank. Fuel and other
+entries keep their form; a Fuel entry's box says Filling station.
 
-Bus used: one mileage is enough, taken or left (or both). With only the
-mileage when taken, the next walkaround is still measured from the last
-reading. Fuel: slide to it, or tap "Fuel not noted"; then the last fuel
-reading stands. Neither: "Slide to the fuel showing, or tap Fuel not noted."
+Once, on its own, the live server puts right Asim's NH56 FWP Bus used
+correction of 24 Nov (filed as Taken 53,914 · Left 53,914): corrected
+again with the mileage left blank, by "Minibus app", Why "Mileage when
+left was not given." It tells nobody. The next walkaround is then
+measured from the last reading, not 53,914.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.192.0 · w2.111.0 · v1.154.0.
+A. Coordinator App, App info: v1.193.0 · w2.112.0 · v1.154.0.
+B. NH56 FWP's log: the 24 Nov Bus used shows Taken 53,914, no Left.

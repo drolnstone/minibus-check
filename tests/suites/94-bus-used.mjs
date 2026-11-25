@@ -127,6 +127,50 @@ export default async function (root) {
     });
   });
 
+  s.test("Bus used put right: a blank mileage left stays blank, no garage or cost, quiet", async (a) => {
+    const { db, env } = await fresh();
+    await atTime(TUE_1900, async () => {
+      const first = await coordAct(env, { done: "2026-11-24", drove: "Bro Asim", taken: 31556, fuel: "3/8 tank", notes: "Food Bank" });
+      a.ok(first.ok, JSON.stringify(first));
+      const logId = JSON.parse(db._one("SELECT body FROM coord_actions WHERE id=?", "bu-act-" + n).body).logId;
+      const none = await coordAct(env, { kind: "vfix", corrects: logId, taken: "", miles: "", why: "x" });
+      a.eq(none.error, "Mileage when taken or when left needed.");
+      const fix = await coordAct(env, { kind: "vfix", corrects: logId, done: "2026-11-23", drove: "Bro Asim", taken: 31556, miles: "",
+        fuel: "3/8 tank", why: "Wrong date" });
+      a.ok(fix.ok, JSON.stringify(fix));
+      const b = JSON.parse(db._one("SELECT body FROM coord_actions WHERE id=?", "bu-act-" + n).body);
+      a.eq(b.miles, null, "the mileage left was filled in"); a.eq(b.taken, 31556); a.eq(b.done, "2026-11-23");
+      a.eq(b.garage, ""); a.eq(b.cost, null); a.eq(b.fuel, "3/8 tank"); a.eq(b.notes, "Food Bank");
+      a.eq(db._rows("SELECT id FROM coord_actions WHERE kind='mail'").length, 0, "somebody was told");
+      const pk = await W.parkedLatest(env);
+      a.ok(!pk[REG] || !pk[REG].used, "a taken-only correction became the walkaround base");
+      const b2 = JSON.parse(db._one("SELECT body FROM coord_actions WHERE id=?", "bu-act-" + n).body).logId;
+      const nf = await coordAct(env, { kind: "vfix", corrects: b2, fuel: "", fuelNotNoted: true, why: "Not noted" });
+      a.ok(nf.ok, JSON.stringify(nf));
+      a.eq(JSON.parse(db._one("SELECT body FROM coord_actions WHERE id=?", "bu-act-" + n).body).fuel, "");
+    });
+  });
+
+  s.test("the one entry put right once: NH56 FWP 24 Nov, mileage left taken off", async (a) => {
+    const { db, env } = await fresh();
+    await atTime(TUE_1900, async () => {
+      const first = await coordAct(env, { reg: "NH56 FWP", done: "2026-11-24", drove: "Bro Asim", taken: 53914, fuel: "3/8 tank" });
+      a.ok(first.ok, JSON.stringify(first));
+      const logId = JSON.parse(db._one("SELECT body FROM coord_actions WHERE id=?", "bu-act-" + n).body).logId;
+      const bad = await coordAct(env, { kind: "vfix", corrects: logId, done: "2026-11-24", miles: 53914, why: "Wrong date" });
+      a.ok(bad.ok, JSON.stringify(bad));
+      await W.usedLeftFix(env);
+      const row = db._one("SELECT * FROM coord_actions WHERE id='fix-w2112-used'");
+      a.ok(row, "not put right");
+      const b = JSON.parse(row.body);
+      a.eq(b.miles, null); a.eq(b.taken, 53914); a.eq(b.done, "2026-11-24"); a.eq(b.fuel, "3/8 tank");
+      const pk = await W.parkedLatest(env);
+      a.ok(!pk["NH56 FWP"] || !pk["NH56 FWP"].used, "still the walkaround base");
+      await W.usedLeftFix(env);
+      a.eq(db._rows("SELECT id FROM coord_actions WHERE kind='vfix'").length, 2, "put right twice");
+    });
+  });
+
   s.test("the three lists of what can be recorded agree, Bus used first", (a) => {
     const lists = ["server/worker.js", "Code.gs", "coord/index.html"].map((f) =>
       (/VLOG_WHAT = (\[[^\]]+\])/.exec(readFileSync(join(root, f), "utf8")) || [])[1]);

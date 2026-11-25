@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.192.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.193.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -817,7 +817,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.192.0";
+var PAGE_VERSION = "v1.193.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -4172,6 +4172,7 @@ function actMany(list){
 function correctEntry(reg, id){
   var b = busByReg(reg), x = entryById(reg, id);
   if(!b || !x) return;
+  if(x.what === "Bus used"){ correctBusUsed(b, x); return; }
   var mode = "fix";
   var booking = x.status === "Booked";
   var item = VLOG_ITEM[x.what] || "";
@@ -4185,7 +4186,8 @@ function correctEntry(reg, id){
                      '<p class="preview" id="vfNext" hidden></p>') +
           '<div class="two"><div class="field"><label for="vfMiles">Mileage</label><input id="vfMiles" inputmode="numeric" autocomplete="off" placeholder="e.g. 57363" value="' + esc(x.miles == null ? "" : x.miles) + '"></div>' +
           '<div class="field"><label for="vfCost">Cost (£)</label><input id="vfCost" inputmode="decimal" autocomplete="off" placeholder="e.g. 245.00" value="' + esc(x.cost == null ? "" : x.cost) + '"></div></div>' +
-          '<div class="field"><label for="vfGarage">Garage</label><input id="vfGarage" maxlength="80" autocomplete="off" placeholder="e.g. High Street Garage" value="' + esc(x.garage || "") + '"></div>' +
+          (x.what === "Fuel" ? '<div class="field"><label for="vfGarage">Filling station</label><input id="vfGarage" maxlength="80" autocomplete="off" placeholder="e.g. Shell, Church Road" value="' + esc(x.garage || "") + '"></div>'
+                             : '<div class="field"><label for="vfGarage">Garage</label><input id="vfGarage" maxlength="80" autocomplete="off" placeholder="e.g. High Street Garage" value="' + esc(x.garage || "") + '"></div>') +
           '</div>' +
           '<div class="field"><label for="vfWhy">Why</label><textarea id="vfWhy" maxlength="300" placeholder="e.g. The date was typed wrong"></textarea></div>',
     go: "Correct it",
@@ -4227,6 +4229,72 @@ function correctEntry(reg, id){
   });
   ["vfDay", "vfGiven"].forEach(function(id){ var el = $(id); if(el){ el.onchange = show; el.oninput = show; } });
   show();
+}
+
+/* A Bus used put right (v1.193.0, Asim, 25 Nov 2026): the Bus used form
+   itself, filled with the entry, and Why. A box left blank stays blank. */
+function correctBusUsed(b, x){
+  var mode = "fix", today = calToday();
+  var days = buDays(today); if(x.done && days.indexOf(x.done) === -1) days.push(x.done);
+  var names = buyerNames(); if(x.drove && !names.some(function(n){ return same(n, x.drove); })) names.push(x.drove);
+  VL = { reg: b.reg, fuel: fuelStep(x.fuel), noFuel: !x.fuel };
+  var noFuel = function(on){ VL.noFuel = on; var e = $("buNoFuel"); e.classList.toggle("on", on); e.setAttribute("aria-pressed", on ? "true" : "false"); };
+  var gauge = function(){
+    $("buFuel").innerHTML = fuelGaugeHtml(VL.fuel);
+    fuelGaugeBind($("buFuel").firstChild, function(){ return VL.fuel; }, function(n){ VL.fuel = n; noFuel(false); sheetSay(""); });
+  };
+  openSheet({ eyebrow: b.reg + " · Bus used", title: "Put this entry right",
+    line: x.done ? "Used " + ukDay(x.done) + "." : "",
+    body: '<div class="chips" id="vfMode"><button type="button" data-m="fix" class="on">Correct it</button><button type="button" data-m="withdraw">Withdraw it</button></div>' +
+          '<div id="vfFix">' +
+          '<div class="field"><label for="buDay">Day it was used</label><select id="buDay">' + days.map(function(k){
+            return '<option value="' + esc(k) + '"' + (k === x.done ? ' selected' : '') + '>' + esc(shortDay(k)) + '</option>'; }).join("") + '</select></div>' +
+          '<div class="field"><label for="buWho">Who drove</label><select id="buWho">' +
+            names.map(function(n){ return '<option value="' + esc(n) + '"' + (same(n, x.drove) ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join("") +
+            '<option value="*">Someone else</option></select></div>' +
+          '<div class="field" id="buOtherF" hidden><label for="buOther">Name</label><input id="buOther" maxlength="60" autocomplete="off" placeholder="e.g. Bro Solomon"></div>' +
+          '<div class="field"><label for="buTaken">Mileage when taken <span class="lc">· if noted</span></label>' +
+            '<input id="buTaken" type="number" inputmode="numeric" autocomplete="off" placeholder="e.g. 57363" value="' + esc(x.taken == null ? "" : x.taken) + '"></div>' +
+          '<div class="field"><label for="buMiles">Mileage when left <span class="lc">· if noted</span></label>' +
+            '<input id="buMiles" type="number" inputmode="numeric" autocomplete="off" placeholder="e.g. 57397" value="' + esc(x.miles == null ? "" : x.miles) + '"></div>' +
+          '<div class="field"><label>Fuel showing</label><div id="buFuel"></div>' +
+            '<div class="chips" style="margin-top:8px"><button type="button" id="buNoFuel" aria-pressed="false">Fuel not noted</button></div></div>' +
+          '</div>' +
+          '<div class="field"><label for="vfWhy">Why</label><textarea id="vfWhy" maxlength="300" placeholder="e.g. The date was typed wrong"></textarea></div>',
+    go: "Correct it",
+    onGo: function(){
+      var a = { kind: "vfix", corrects: x.id, why: $("vfWhy").value || "" };
+      if(mode === "withdraw"){ a.withdraw = true; act(a); return; }
+      a.done = $("buDay").value || x.done;
+      if(a.done > calToday()){ sheetSay("That day has not come yet.", true); return; }
+      var w = $("buWho").value; a.drove = w === "*" ? $("buOther").value.trim() : w;
+      if(!a.drove){ sheetSay("Say who drove.", true); return; }
+      var taken = numIn($("buTaken").value), miles = numIn($("buMiles").value);
+      if(taken !== taken){ sheetSay("Mileage when taken is not a number of miles.", true); return; }
+      if(miles !== miles){ sheetSay("Mileage when left is not a number of miles.", true); return; }
+      if(!taken && !miles){ sheetSay("Mileage when taken or when left needed.", true); return; }
+      if(taken && miles && taken > miles){ sheetSay("Mileage when left is lower than mileage when taken.", true); return; }
+      if(!VL.fuel && !VL.noFuel){ sheetSay("Slide to the fuel showing, or tap Fuel not noted.", true); return; }
+      a.taken = taken || ""; a.miles = miles || "";
+      a.fuel = VL.fuel ? fuelText(VL.fuel) : ""; a.fuelNotNoted = !VL.fuel;
+      act(a);
+    } });
+  gauge(); noFuel(VL.noFuel);
+  $("buNoFuel").onclick = function(){
+    if(busy) return; noFuel(!VL.noFuel); sheetSay("");
+    if(VL.noFuel){ VL.fuel = 0; gauge(); }
+  };
+  $("buWho").onchange = function(){ $("buOtherF").hidden = $("buWho").value !== "*"; };
+  Array.prototype.forEach.call(document.querySelectorAll("#vfMode button"), function(bt){
+    bt.onclick = function(){
+      mode = bt.getAttribute("data-m");
+      Array.prototype.forEach.call(document.querySelectorAll("#vfMode button"), function(y){ y.classList.toggle("on", y === bt); });
+      if(!busy) sheetSay("");
+      $("vfFix").hidden = mode === "withdraw";
+      $("sheetGo").textContent = mode === "withdraw" ? "Withdraw it" : "Correct it";
+      $("sheetGo").className = "btn " + (mode === "withdraw" ? "btn-stop" : "btn-main");
+    };
+  });
 }
 
 /* A job the last walkaround asked for, arranged. */
