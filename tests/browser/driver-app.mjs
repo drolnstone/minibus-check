@@ -1771,7 +1771,8 @@ if (want("T61")) {
   await me.pg.fill("#usedTaken", "48262");
   await save(); await me.wait(300);
   const noFuel = await me.text("#usedSay");
-  await me.clickId("usedNoFuel"); await me.wait(200);
+  const seen = await me.pg.isVisible("#usedNoFuel");
+  await me.pg.click("#usedNoFuel"); await me.wait(200);
   const taken = await me.pg.$eval("#usedTaken", (i) => i.value);
   await me.pg.screenshot({ path: (process.env.SHOTS || "/tmp") + "/T61-fuel-not-noted.png" });
   await save(); await me.wait(1200);
@@ -1779,9 +1780,9 @@ if (want("T61")) {
   const card = await me.text("#hubUsed");
   await me.pg.screenshot({ path: (process.env.SHOTS || "/tmp") + "/T61-saved.png" });
   check("T61", "Bus used: one reading is enough; Fuel not noted sends blank fuel",
-        /taken or when left/.test(noMiles) && /Fuel not noted/.test(noFuel) && taken === "48262" && u.taken === 48262 && u.miles === null &&
+        /taken or when left/.test(noMiles) && /Fuel not noted/.test(noFuel) && seen && taken === "48262" && u.taken === 48262 && u.miles === null &&
         u.fuel === "" && u.fuelNotNoted === true && /48,262 ✓/.test(card) && /Fuel not noted/.test(card) && !me.errs.length,
-        JSON.stringify({ noMiles, noFuel, taken, u, card, errs: me.errs }));
+        JSON.stringify({ noMiles, noFuel, seen, taken, u, card, errs: me.errs }));
   await me.ctx.close();
 }
 

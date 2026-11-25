@@ -7122,7 +7122,7 @@ function usedPaint(){
       '<div class="field"><label for="usedMiles">Mileage when left <span class="lc">· if noted</span></label>' +
         '<input id="usedMiles" type="number" inputmode="numeric" class="mono" autocomplete="off" placeholder="e.g. ' + esc(String(sample + 46)) + '" value="' + esc(USED.miles) + '"></div>' +
       '<div class="field"><label>Fuel showing</label><div id="usedFuel">' + fuelGaugeHtml(USED.fuel) + '</div>' +
-        '<div class="milecheck"><button class="confirm' + (USED.noFuel ? ' is-on' : '') + '" id="usedNoFuel" type="button" aria-pressed="' + (USED.noFuel ? 'true' : 'false') + '">' +
+        '<div style="margin-top:12px"><button class="confirm' + (USED.noFuel ? ' is-on' : '') + '" id="usedNoFuel" type="button" aria-pressed="' + (USED.noFuel ? 'true' : 'false') + '">' +
           '<span class="box" aria-hidden="true">&#10003;</span><span>Fuel not noted</span></button></div></div>' +
       (USED.say ? '<p class="dw-sub park-say' + (USED.bad ? ' is-bad' : '') + '" id="usedSay">' + esc(USED.say) + '</p>' : '') +
     '</div>';
