@@ -532,7 +532,9 @@ if (want("C7u")) {
         order[1] === "Bookings" && order[2] === "Record something" && buses.length === 2 && /who drove/.test(refused) &&
         row.reg === "YS70 PWE" && row.miles === 45164 && row.taken === 45130 && row.fuel === "3/8 tank" && !!row.drove,
         JSON.stringify({ order: order.slice(0, 4), buses, refused, row }));
-  await me.pg.evaluate(() => { location.hash = "home"; });
+  /* Taken back, so the checks after this one see the buses as they were. */
+  await db.prepare("DELETE FROM coord_actions WHERE id=?").bind(row.logId ? row.logId.slice(2) : "").run();
+  await me.pg.evaluate(() => { location.hash = "home"; refresh(); });
   await me.wait(300);
 }
 
