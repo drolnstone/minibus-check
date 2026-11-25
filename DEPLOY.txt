@@ -1,31 +1,18 @@
 MINIBUS
 =======
-  pages v1.189.0 · server w2.109.0 · sheet v1.152.0
+  pages v1.190.0 · server w2.109.0 · sheet v1.152.0
 
-YOU ARE ON   app v1.188.0 · server w2.108.0 · sheet v1.151.0
-GOING TO     app v1.189.0 · server w2.109.0 · sheet v1.152.0
+YOU ARE ON   app v1.189.0 · server w2.109.0 · sheet v1.152.0
+GOING TO     app v1.190.0 · server w2.109.0 · sheet v1.152.0
 
-Pages, server and sheet. The 22 Nov audit points.
+Pages only. Server and sheet unchanged.
 
-On a day with a second trip:
-- Run record: each trip shows its own stops and taps. Fix can add a missed
-  Trip 1 tap after Trip 1 has ended.
-- A Trip 1 tap that reaches the server after Trip 1 ended is recorded.
-- Bookings and Seats reports count both trips and say "two trips".
-- The Sunday run report puts a stop nobody marked under its own trip, and a
-  moved stop nobody marked under the route it was on that day.
-
-Second trip: worked out again every minute until Trip 1 starts, so a stop
-moved on, a late coordinator booking or another bus can make one, or end
-one. A split a coordinator has changed, or one passengers have been told
-of, stays as it is. Coordinators and the driver told each time.
-
-Morning only hand back: told only to the driver it goes back to and the
-one who drove it, titled "(route) handed back".
-
-Rota Cover between Trip 1 and Trip 2 today asks Morning only or Full day.
+Sunday Bus: when a route is full, the line under "Bus full" reads
+"You may be on a second trip." in red, then the Call button. It used to
+read "Every seat is booked." Nothing is added above Confirm or after
+booking.
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.189.0 · w2.109.0 · v1.152.0.
+A. Coordinator App, App info: v1.190.0 · w2.109.0 · v1.152.0.
