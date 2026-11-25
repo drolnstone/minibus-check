@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.110.0";
+const SCRIPT_VERSION = "w2.111.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -9782,23 +9782,29 @@ async function actBusUsed(env, me, act, id, reg) {
   const drove = vlogText(act.drove, 60);
   if (!drove) return { ok: false, error: "Say who drove." };
   const miles = vlogNum(act.miles, 2000000, true), taken = vlogNum(act.taken, 2000000, true);
-  if (miles === undefined || miles === null || !miles) return { ok: false, error: "Mileage when left needed." };
+  /* One reading is enough, from w2.111.0 (Asim, 25 Nov 2026: he noted the
+     mileage when he took the bus and forgot it on return, and would not
+     guess). Either box, or both. */
+  if (miles === undefined) return { ok: false, error: "The mileage when left is not a number of miles." };
   if (taken === undefined) return { ok: false, error: "The mileage when taken is not a number of miles." };
-  if (taken !== null && taken > miles) return { ok: false, error: "Mileage when left is lower than mileage when taken." };
-  if (taken !== null && miles - taken > PARKED_MAX_MILES)
+  if (!miles && !taken) return { ok: false, error: "Mileage when taken or when left needed." };
+  if (miles && taken && taken > miles) return { ok: false, error: "Mileage when left is lower than mileage when taken." };
+  if (miles && taken && miles - taken > PARKED_MAX_MILES)
     return { ok: false, error: milesSaid(miles - taken) + " miles between taken and left." };
+  /* Fuel not noted, from w2.111.0: kept blank, and the last reading stands. */
   const fuel = String(act.fuel || "");
-  if (FUEL_WORDS.indexOf(fuel) === -1) return { ok: false, error: "Slide to the fuel showing." };
+  if (fuel && FUEL_WORDS.indexOf(fuel) === -1) return { ok: false, error: "Slide to the fuel showing." };
+  if (!fuel && !act.fuelNotNoted) return { ok: false, error: "Slide to the fuel showing, or tap Fuel not noted." };
   const source = act.source === "Driver App" ? "Driver App" : "";
   const body = {
     logId: "L-" + id, reg: reg, what: "Bus used", status: "Done", moves: false,
-    done: done, bookedFor: "", was: "", early: null, next: "", how: "", given: "", miles: miles, garage: "",
+    done: done, bookedFor: "", was: "", early: null, next: "", how: "", given: "", miles: miles || null, garage: "",
     cost: null, defects: [], defectNames: [], notes: vlogText(act.notes, 500), fuel: fuel,
-    boughtBy: "", paidBy: "", litres: null, drove: drove, taken: taken, source: source
+    boughtBy: "", paidBy: "", litres: null, drove: drove, taken: taken || null, source: source
   };
   const stmts = [];
   /* The Sunday's parked reading, if still to come, from the mileage taken. */
-  if (taken !== null) {
+  if (taken) {
     try {
       const open = (await parkedOpen(env, Date.now(), true)).filter((o) => o.reg === reg && !o.parked)[0];
       if (open && open.day <= done && (!open.miles || (taken >= open.miles && taken - open.miles <= PARKED_MAX_MILES))) {
@@ -9809,7 +9815,8 @@ async function actBusUsed(env, me, act, id, reg) {
       }
     } catch (e) {}
   }
-  const words = reg + ": used " + rnUk(done) + " by " + drove + ", left at " + milesSaid(miles) + ", fuel " + fuel + ".";
+  const words = reg + ": used " + rnUk(done) + " by " + drove + (taken ? ", taken at " + milesSaid(taken) : "") +
+                (miles ? ", left at " + milesSaid(miles) : "") + (fuel ? ", fuel " + fuel : ", fuel not noted") + ".";
   return { ok: true, sunday: "", body: body, words: words, stmts: stmts, quiet: true };
 }
 
@@ -13999,7 +14006,8 @@ export default {
           if (!sure) return json({ ok: false, error: "pin" });
           await ensureCoord(env);
           const out = await coordAct(env, { name: who }, { id: u.id, kind: "vlog", what: "Bus used", status: "Done",
-            reg: u.reg, done: u.day, miles: u.miles, taken: u.taken, fuel: u.fuel, drove: who, source: "Driver App" });
+            reg: u.reg, done: u.day, miles: u.miles, taken: u.taken, fuel: u.fuel, fuelNotNoted: !!u.fuelNotNoted,
+            drove: who, source: "Driver App" });
           return out && out.ok && !out.duplicate ? knock(json(out), "vlog") : json(out || { ok: false });
         }
         /* From w2.60.0: a check's first stage opened, and the hub's duty card. */

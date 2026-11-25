@@ -518,6 +518,7 @@ if (want("C7u")) {
   await me.pg.click("#sheetGo");
   await me.wait(200);
   const refused = await me.text("#sheetSay");
+  const dayKeys = await me.pg.$$eval("#buDay option", (o) => o.map((x) => x.value));
   await me.pg.selectOption("#buWho", { index: 1 });
   await me.pg.fill("#buTaken", "45130");
   await me.pg.fill("#buMiles", "45164");
@@ -530,9 +531,39 @@ if (want("C7u")) {
   const row = db._rows("SELECT body FROM coord_actions WHERE kind='vlog'").map((r) => JSON.parse(r.body)).filter((b) => b.what === "Bus used")[0] || {};
   check("C7u", "Record something sits under Bookings; Bus used asks who drove and files the trip",
         order[1] === "Bookings" && order[2] === "Record something" && buses.length === 2 && /who drove/.test(refused) &&
+        dayKeys[0] === CAL && dayKeys.length === (new Date(CAL + "T12:00:00Z").getUTCDay() || 7) && row.done === CAL &&
         row.reg === "YS70 PWE" && row.miles === 45164 && row.taken === 45130 && row.fuel === "3/8 tank" && !!row.drove,
-        JSON.stringify({ order: order.slice(0, 4), buses, refused, row }));
+        JSON.stringify({ order: order.slice(0, 4), buses, dayKeys, refused, row }));
   /* Taken back, so the checks after this one see the buses as they were. */
+  await db.prepare("DELETE FROM coord_actions WHERE id=?").bind(row.logId ? row.logId.slice(2) : "").run();
+  await me.pg.evaluate(() => { location.hash = "home"; refresh(); });
+  await me.wait(300);
+}
+
+/* C7v — Bus used with the mileage when left only and Fuel not noted (v1.192.0) */
+if (want("C7v")) {
+  await me.pg.evaluate(() => { location.hash = "home"; });
+  await me.wait(500);
+  await me.pg.click('[data-do="recordpick"]');
+  await me.wait(300);
+  await me.pg.click('#vlBus button[data-reg="YS70 PWE"]');
+  await me.wait(300);
+  await me.pg.click('#vlWhat button[data-w="Bus used"]');
+  await me.wait(300);
+  await me.pg.selectOption("#buWho", { index: 1 });
+  await me.pg.click("#sheetGo"); await me.wait(200);
+  const noMiles = await me.text("#sheetSay");
+  await me.pg.fill("#buMiles", "45164");
+  await me.pg.click("#sheetGo"); await me.wait(200);
+  const noFuel = await me.text("#sheetSay");
+  await me.pg.click("#buNoFuel"); await me.wait(200);
+  await me.shot("C7v-fuel-not-noted");
+  await me.go();
+  await me.wait(700);
+  const row = db._rows("SELECT body FROM coord_actions WHERE kind='vlog'").map((r) => JSON.parse(r.body)).filter((b) => b.what === "Bus used")[0] || {};
+  check("C7v", "Bus used: one reading is enough; Fuel not noted files blank fuel",
+        /taken or when left/.test(noMiles) && /Fuel not noted/.test(noFuel) && row.miles === 45164 && row.taken === null && row.fuel === "",
+        JSON.stringify({ noMiles, noFuel, row }));
   await db.prepare("DELETE FROM coord_actions WHERE id=?").bind(row.logId ? row.logId.slice(2) : "").run();
   await me.pg.evaluate(() => { location.hash = "home"; refresh(); });
   await me.wait(300);

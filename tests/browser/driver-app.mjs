@@ -1733,7 +1733,8 @@ if (want("T60")) {
   await me.clickId("toUsed"); await me.wait(400);
   const title = await me.text("#dashTitle");
   await me.pg.click('#usedBus button[data-reg="NH56 FWP"]');
-  await me.pg.click('#usedDay button[data-day="yesterday"]');
+  const days = await me.pg.$$eval('#usedDay option', (o) => o.map((x) => x.textContent));
+  await me.pg.selectOption('#usedDay', '2026-09-28');
   await me.pg.fill("#usedTaken", "48262");
   await me.pg.fill("#usedMiles", "48296");
   await me.pg.evaluate(() => { const b = [...document.querySelectorAll("#footbar button")].find(x => x.textContent === "Save"); b.click(); });
@@ -1750,9 +1751,38 @@ if (want("T60")) {
   await me.pg.screenshot({ path: (process.env.SHOTS || "/tmp") + "/T60-bus-used-saved.png" });
   const u = sent.used || {};
   check("T60", "Bus used: the screen, a refusal without fuel, sent with his name, a ✓ on the first screen",
-        /^bus used$/i.test(title) && /fuel/i.test(refused) && u.reg === "NH56 FWP" && u.day === "2026-09-28" && u.taken === 48262 &&
+        /^bus used$/i.test(title) && days.length === 2 && days[0] === "Tue 29 Sep" && days[1] === "Mon 28 Sep" && /fuel/i.test(refused) && u.reg === "NH56 FWP" && u.day === "2026-09-28" && u.taken === 48262 &&
         u.miles === 48296 && u.fuel === "3/8 tank" && u.driver && /48,296 ✓/.test(card) && !me.errs.length,
-        JSON.stringify({ title, refused, u, card, errs: me.errs }));
+        JSON.stringify({ title, days, refused, u, card, errs: me.errs }));
+  await me.ctx.close();
+}
+
+/* T61 — Bus used with one reading and Fuel not noted (v1.192.0, Asim,
+   25 Nov 2026): the mileage when taken alone; fuel left blank. */
+if (want("T61")) {
+  const me = await phone({ clock: "2026-09-29T19:00:00+01:00" });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn(); await me.close();
+  await me.clickId("toUsed"); await me.wait(400);
+  await me.pg.click('#usedBus button[data-reg="NH56 FWP"]');
+  const save = () => me.pg.evaluate(() => { const b = [...document.querySelectorAll("#footbar button")].find(x => x.textContent === "Save"); b.click(); });
+  await save(); await me.wait(300);
+  const noMiles = await me.text("#usedSay");
+  await me.pg.fill("#usedTaken", "48262");
+  await save(); await me.wait(300);
+  const noFuel = await me.text("#usedSay");
+  const seen = await me.pg.isVisible("#usedNoFuel");
+  await me.pg.click("#usedNoFuel"); await me.wait(200);
+  const taken = await me.pg.$eval("#usedTaken", (i) => i.value);
+  await me.pg.screenshot({ path: (process.env.SHOTS || "/tmp") + "/T61-fuel-not-noted.png" });
+  await save(); await me.wait(1200);
+  const u = (me.posted.filter(p => p.action === "busused").pop() || {}).used || {};
+  const card = await me.text("#hubUsed");
+  await me.pg.screenshot({ path: (process.env.SHOTS || "/tmp") + "/T61-saved.png" });
+  check("T61", "Bus used: one reading is enough; Fuel not noted sends blank fuel",
+        /taken or when left/.test(noMiles) && /Fuel not noted/.test(noFuel) && seen && taken === "48262" && u.taken === 48262 && u.miles === null &&
+        u.fuel === "" && u.fuelNotNoted === true && /48,262 ✓/.test(card) && /Fuel not noted/.test(card) && !me.errs.length,
+        JSON.stringify({ noMiles, noFuel, seen, taken, u, card, errs: me.errs }));
   await me.ctx.close();
 }
 

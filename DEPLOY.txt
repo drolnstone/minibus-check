@@ -1,29 +1,22 @@
 MINIBUS
 =======
-  pages v1.191.0 · server w2.110.0 · sheet v1.153.0
+  pages v1.192.0 · server w2.111.0 · sheet v1.154.0
 
-YOU ARE ON   app v1.190.0 · server w2.109.0 · sheet v1.152.0
-GOING TO     app v1.191.0 · server w2.110.0 · sheet v1.153.0
+YOU ARE ON   app v1.191.0 · server w2.110.0 · sheet v1.153.0
+GOING TO     app v1.192.0 · server w2.111.0 · sheet v1.154.0
 
-Bus used: a weekday trip, recorded with no check.
+Pages, server and sheet.
 
-Driver App: a Bus used button under Vehicle check. The bus, Today or
-Yesterday, mileage when taken (if noted), mileage when left, fuel
-showing. Saved under the signed-in name; a ✓ card on the first screen
-that day.
+Bus used: the day is a drop-down of dates ("Wed 25 Nov"), today first,
+then each day back to the Monday after the last Sunday run, in the Driver App and in the Coordinator
+App's Record (it was Today or Yesterday, and a date picker).
 
-Coordinator App: Record something on the first screen, under Bookings.
-Choose the bus, then the Record form, with the buses at its top. A Bus
-used chip: day, who drove, mileage taken (if noted), mileage left, fuel.
-
-Both go on the Vehicle Log as What "Bus used" (two new columns, Driven
-by and Mileage when taken). Nobody is told. The bus's next walkaround is
-measured from the mileage left, and the coordinators are told only if
-it differs. A mileage when taken stands in for a Sunday parked reading
-that never came (Parked at: From Bus used). The fuel bars show the Bus
-used fuel when it is the newest.
+Bus used: one mileage is enough, taken or left (or both). With only the
+mileage when taken, the next walkaround is still measured from the last
+reading. Fuel: slide to it, or tap "Fuel not noted"; then the last fuel
+reading stands. Neither: "Slide to the fuel showing, or tap Fuel not noted."
 
 Merging is the whole deploy.
 
 CHECKS
-A. Coordinator App, App info: v1.191.0 · w2.110.0 · v1.153.0.
+A. Coordinator App, App info: v1.192.0 · w2.111.0 · v1.154.0.

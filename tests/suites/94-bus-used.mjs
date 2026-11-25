@@ -1,4 +1,5 @@
-/* BUS USED, 25 November 2026. pages v1.191.0 · server w2.110.0 · sheet v1.153.0.
+/* BUS USED, 25 November 2026. pages v1.191.0 · server w2.110.0 · sheet v1.153.0;
+   one reading and Fuel not noted from v1.192.0 · w2.111.0 · v1.154.0.
 
    Asim drove a bus on a Tuesday and had nowhere to put it. A weekday trip,
    no check: the Driver App's Bus used, under the signed-in name, or the
@@ -87,7 +88,9 @@ export default async function (root) {
     const { env } = await fresh();
     await atTime(TUE_1900, async () => {
       a.eq((await coordAct(env, { done: "2026-11-24", miles: 31590, fuel: "3/8 tank" })).error, "Say who drove.");
-      a.eq((await coordAct(env, { done: "2026-11-24", drove: "Bro Solomon", miles: 31590 })).error, "Slide to the fuel showing.");
+      a.eq((await coordAct(env, { done: "2026-11-24", drove: "Bro Solomon", miles: 31590 })).error, "Slide to the fuel showing, or tap Fuel not noted.");
+      a.eq((await coordAct(env, { done: "2026-11-24", drove: "Bro Solomon", fuel: "Full" })).error,
+           "Mileage when taken or when left needed.");
       a.eq((await coordAct(env, { done: "2026-11-24", drove: "Bro Solomon", taken: 31600, miles: 31590, fuel: "Full" })).error,
            "Mileage when left is lower than mileage when taken.");
       a.eq((await coordAct(env, { done: "2026-11-26", drove: "Bro Solomon", miles: 31590, fuel: "Full" })).error,
@@ -98,6 +101,29 @@ export default async function (root) {
       const load = await J(await post(env, { action: "coord", who: "Bro Asim", pin: PIN, op: "load" }));
       const e = load.vehicles.log[REG][0];
       a.eq(e.what, "Bus used"); a.eq(e.drove, "Bro Solomon"); a.eq(e.source, "Coordinator's app");
+    });
+  });
+
+  s.test("one reading is enough, and fuel not noted leaves the last reading standing", async (a) => {
+    const { db, env } = await fresh();
+    await atTime(SUN_0800, async () => { const k = await keyOf(env, "Pst Kehinde"); await walk(env, "c1", 31544, k); });
+    await atTime(TUE_1900, async () => {
+      const key = await keyOf(env, "Bro Asim");
+      const out = await J(await post(env, { action: "busused", key, used: { id: "used-0002", reg: REG, day: "2026-11-24",
+        taken: 31556, miles: null, fuel: "", fuelNotNoted: true, driver: "Bro Asim" } }));
+      a.ok(out.ok, JSON.stringify(out));
+      const b = JSON.parse(db._one("SELECT * FROM coord_actions WHERE id='used-0002'").body);
+      a.eq(b.miles, null); a.eq(b.taken, 31556); a.eq(b.fuel, "");
+      const pk = await W.parkedLatest(env);
+      a.ok(!pk[REG] || !pk[REG].used, "a taken-only entry became the walkaround base");
+      a.eq(Number(db._one("SELECT * FROM parked WHERE check_id='c1'").miles), 31556, "taken did not stand in for Sunday's parked");
+      const left = await coordAct(env, { done: "2026-11-24", drove: "Bro Solomon", miles: 31620, fuel: "", fuelNotNoted: true });
+      a.ok(left.ok, JSON.stringify(left));
+      a.eq(left.action.words, "YS70 PWE: used 24/11/2026 by Bro Solomon, left at 31,620, fuel not noted.");
+      a.eq((await W.parkedLatest(env))[REG].miles, 31620);
+      const bad = await J(await post(env, { action: "busused", key, used: { id: "used-0003", reg: REG, day: "2026-11-24",
+        taken: 31556, driver: "Bro Asim" } }));
+      a.eq(bad.error, "Slide to the fuel showing, or tap Fuel not noted.");
     });
   });
 

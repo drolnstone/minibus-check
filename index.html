@@ -1838,7 +1838,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.191.0";
+var APP_VERSION = "v1.192.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -7066,7 +7066,7 @@ function parkKeyed(name){
    as a Vehicle Log entry under his name; the next walkaround is measured
    from the mileage left. No signal: not saved, and he is told. */
 var USED_KEY = "fleet.used.v1";
-var USED = { reg:"", day:"today", taken:"", miles:"", fuel:0, say:"", bad:false, busy:false };
+var USED = { reg:"", day:"", taken:"", miles:"", fuel:0, noFuel:false, say:"", bad:false, busy:false };
 function usedOpen(){
   if(!st.driver){ show("driver"); return; }
   if(!driverKey(st.driver) && pinGateNeeded()){
@@ -7076,13 +7076,25 @@ function usedOpen(){
     return;
   }
   var one = VEHICLES.length === 1 ? VEHICLES[0].reg : "";
-  USED = { reg:one, day:"today", taken:"", miles:"", fuel:0, say:"", bad:false, busy:false };
+  USED = { reg:one, day:"", taken:"", miles:"", fuel:0, noFuel:false, say:"", bad:false, busy:false };
   show("used");
 }
+/* The day, from a drop-down (v1.192.0, Asim, 25 Nov 2026): today first,
+   then each day before it back to the Monday after the last Sunday run,
+   "Wed 25 Nov". On a Sunday or a Monday, today alone. */
+function usedDayList(){
+  var out = [], now = new Date(tripNow());
+  for(var i = 0; i < 7; i++){
+    var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i, 12);
+    if(i > 0 && d.getDay() === 0) break;
+    out.push({ key: rotaKey(d), label: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()] + " " + d.getDate() + " " +
+      ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()] });
+  }
+  return out;
+}
 function usedDayKey(){
-  var d = new Date(tripNow());
-  if(USED.day === "yesterday") d = new Date(d.getTime() - 86400000);
-  return rotaKey(d);
+  var days = usedDayList();
+  return days.some(function(x){ return x.key === USED.day; }) ? USED.day : days[0].key;
 }
 function usedPaint(){
   var el = $("usedBody"); if(!el) return;
@@ -7100,26 +7112,26 @@ function usedPaint(){
       '<div class="choose used-pick" id="usedBus">' + VEHICLES.map(function(v){
         return '<button type="button" data-reg="' + esc(v.reg) + '" class="' + (sameName(v.reg, USED.reg) ? 'on' : '') + '">' + esc(v.reg) + '</button>';
       }).join("") + '</div>' +
-      '<div class="lbl" style="margin-bottom:8px">Day</div>' +
-      '<div class="choose used-pick" id="usedDay">' +
-        '<button type="button" data-day="today" class="' + (USED.day === "today" ? 'on' : '') + '">Today</button>' +
-        '<button type="button" data-day="yesterday" class="' + (USED.day === "yesterday" ? 'on' : '') + '">Yesterday</button></div></div>' +
+      '<div class="field" style="margin-top:14px"><label for="usedDay">Day</label><select id="usedDay">' +
+        usedDayList().map(function(x){ return '<option value="' + esc(x.key) + '"' + (x.key === usedDayKey() ? ' selected' : '') + '>' + esc(x.label) + '</option>'; }).join("") +
+      '</select></div></div>' +
     '<div class="card">' +
       '<div class="field"><label for="usedTaken">Mileage when taken <span class="lc">· if noted</span></label>' +
         '<input id="usedTaken" type="number" inputmode="numeric" class="mono" autocomplete="off" placeholder="e.g. ' + esc(String(sample + 12)) + '" value="' + esc(USED.taken) + '">' +
         (lastLine ? '<div class="hint">' + esc(lastLine) + '</div>' : '') + '</div>' +
-      '<div class="field"><label for="usedMiles">Mileage when left</label>' +
+      '<div class="field"><label for="usedMiles">Mileage when left <span class="lc">· if noted</span></label>' +
         '<input id="usedMiles" type="number" inputmode="numeric" class="mono" autocomplete="off" placeholder="e.g. ' + esc(String(sample + 46)) + '" value="' + esc(USED.miles) + '"></div>' +
-      '<div class="field"><label>Fuel showing</label><div id="usedFuel">' + fuelGaugeHtml(USED.fuel) + '</div></div>' +
+      '<div class="field"><label>Fuel showing</label><div id="usedFuel">' + fuelGaugeHtml(USED.fuel) + '</div>' +
+        '<div style="margin-top:12px"><button class="confirm' + (USED.noFuel ? ' is-on' : '') + '" id="usedNoFuel" type="button" aria-pressed="' + (USED.noFuel ? 'true' : 'false') + '">' +
+          '<span class="box" aria-hidden="true">&#10003;</span><span>Fuel not noted</span></button></div></div>' +
       (USED.say ? '<p class="dw-sub park-say' + (USED.bad ? ' is-bad' : '') + '" id="usedSay">' + esc(USED.say) + '</p>' : '') +
     '</div>';
   Array.prototype.forEach.call(el.querySelectorAll("#usedBus button"), function(b){
     b.onclick = function(){ if(USED.busy) return; usedKeep(); USED.reg = b.getAttribute("data-reg"); USED.say = ""; usedPaint(); };
   });
-  Array.prototype.forEach.call(el.querySelectorAll("#usedDay button"), function(b){
-    b.onclick = function(){ if(USED.busy) return; usedKeep(); USED.day = b.getAttribute("data-day"); USED.say = ""; usedPaint(); };
-  });
-  fuelGaugeBind($("usedFuel").firstChild, function(){ return USED.fuel; }, function(n){ USED.fuel = n; });
+  $("usedDay").onchange = function(){ USED.day = $("usedDay").value; USED.say = ""; };
+  fuelGaugeBind($("usedFuel").firstChild, function(){ return USED.fuel; }, function(n){ USED.fuel = n; if(USED.noFuel){ USED.noFuel = false; var nf = $("usedNoFuel"); nf.classList.remove("is-on"); nf.setAttribute("aria-pressed","false"); } });
+  $("usedNoFuel").onclick = function(){ if(USED.busy) return; usedKeep(); USED.noFuel = !USED.noFuel; if(USED.noFuel) USED.fuel = 0; USED.say = ""; usedPaint(); };
 }
 function usedKeep(){
   var t = $("usedTaken"), m = $("usedMiles");
@@ -7132,12 +7144,14 @@ function usedSend(){
   var taken = String(USED.taken || "").replace(/[,\s]/g, ""), miles = String(USED.miles || "").replace(/[,\s]/g, "");
   if(!USED.reg){ usedSay("Choose the bus.", true); return; }
   if(taken && !/^\d{1,7}$/.test(taken)){ usedSay("Mileage when taken is not a number of miles.", true); return; }
-  if(!/^\d{1,7}$/.test(miles) || !Number(miles)){ usedSay("Mileage when left needed.", true); return; }
-  if(taken && Number(taken) > Number(miles)){ usedSay("Mileage when left is lower than mileage when taken.", true); return; }
-  if(!USED.fuel){ usedSay("Slide to the fuel showing.", true); return; }
+  if(miles && !/^\d{1,7}$/.test(miles)){ usedSay("Mileage when left is not a number of miles.", true); return; }
+  if(!Number(taken) && !Number(miles)){ usedSay("Mileage when taken or when left needed.", true); return; }
+  if(Number(taken) && Number(miles) && Number(taken) > Number(miles)){ usedSay("Mileage when left is lower than mileage when taken.", true); return; }
+  if(!USED.fuel && !USED.noFuel){ usedSay("Slide to the fuel showing, or tap Fuel not noted.", true); return; }
   if(!LIVE_ENDPOINT || !navigator.onLine){ usedSay("No signal. Not saved.", true); return; }
   var q = { id: "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), reg: USED.reg, day: usedDayKey(),
-            taken: taken ? Number(taken) : null, miles: Number(miles), fuel: fuelText(USED.fuel), driver: String(st.driver || "").trim() };
+            taken: Number(taken) || null, miles: Number(miles) || null, fuel: USED.fuel ? fuelText(USED.fuel) : "", fuelNotNoted: !USED.fuel,
+            driver: String(st.driver || "").trim() };
   USED.busy = true; USED.say = ""; usedPaint(); paintFoot();
   var stop = function(t){ USED.busy = false; paintFoot(); usedSay(t, true); };
   keyEnsure(q.driver, function(key){
@@ -7149,11 +7163,13 @@ function usedSend(){
         var out = JSON.parse(t);
         if(out && out.ok){
           USED.busy = false;
-          try{ store.set(USED_KEY, JSON.stringify({ reg:q.reg, miles:q.miles, fuel:q.fuel, day:q.day, driver:q.driver, at:Date.now() })); }catch(e){}
-          /* The next walkaround is measured from it at once on this phone. */
-          var R = String(q.reg).toUpperCase(), L = LASTMILES[q.reg] || LASTMILES[R] || null;
-          PARKED[R] = { miles:q.miles, driver:q.driver, checkId:(L && L.checkId) || "", at:Date.now(), date:q.day, time:"", used:true };
-          parkSave();
+          try{ store.set(USED_KEY, JSON.stringify({ reg:q.reg, miles:q.miles, taken:q.taken, fuel:q.fuel, day:q.day, driver:q.driver, at:Date.now() })); }catch(e){}
+          /* The next walkaround is measured from the mileage left at once on this phone. */
+          if(q.miles){
+            var R = String(q.reg).toUpperCase(), L = LASTMILES[q.reg] || LASTMILES[R] || null;
+            PARKED[R] = { miles:q.miles, driver:q.driver, checkId:(L && L.checkId) || "", at:Date.now(), date:q.day, time:"", used:true };
+            parkSave();
+          }
           show("hub");
           return;
         }
@@ -7176,8 +7192,8 @@ function usedHubPaint(){
   if(!u || !u.at || rotaKey(new Date(Number(u.at))) !== rotaKey(new Date(tripNow())) || !sameName(u.driver, st.driver)){ el.innerHTML = ""; return; }
   var dm = /^(\d{4})-(\d\d)-(\d\d)$/.exec(u.day || "");
   el.innerHTML = '<div class="dw dw-go"><p class="dw-eyebrow">Bus used · ' + esc(u.reg) + '</p>' +
-    '<p class="dw-big">' + Number(u.miles).toLocaleString("en-GB") + ' ✓</p>' +
-    '<p class="dw-sub">Fuel ' + esc(String(u.fuel || "").replace(/ tank$/, "")) + '. ' + (dm ? dm[3] + "/" + dm[2] + ". " : "") +
+    '<p class="dw-big">' + Number(u.miles || u.taken).toLocaleString("en-GB") + ' ✓</p>' +
+    '<p class="dw-sub">' + (u.miles ? '' : 'Mileage when taken. ') + (u.fuel ? 'Fuel ' + esc(String(u.fuel).replace(/ tank$/, "")) : 'Fuel not noted') + '. ' + (dm ? dm[3] + "/" + dm[2] + ". " : "") +
     'Keyed by ' + esc(u.driver) + ' at ' + ukTime(new Date(Number(u.at))) + '.</p></div>';
 }
 
