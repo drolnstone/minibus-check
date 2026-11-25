@@ -24,7 +24,7 @@
    which backend served a page without opening anything.
    ========================================================================== */
 
-const SCRIPT_VERSION = "w2.113.0";
+const SCRIPT_VERSION = "w2.114.0";
 
 /* THE SHEET'S OWN VERSION, so both apps can print all three numbers on one
    line and nobody has to open the spreadsheet to find the third.
@@ -7153,7 +7153,9 @@ async function driverNudgeFor(env, key, route, all, stops, rotaRow, buses) {
          late yet. Ninety, because past that this is the coordinator's problem
          and a third buzz helps nobody. */
       if (late >= 10 * 60000 && late <= 90 * 60000) {
-        return { who, tag: "start" + (late > 25 * 60000 ? "b" : "a") + "|" + key + "|" + route };
+        /* One tag from w2.114.0 (Asim, 25 Nov 2026: send once); it was two,
+           at 10 and again at 25 minutes. */
+        return { who, tag: "starta|" + key + "|" + route };
       }
       /* ON THE MINUTE, from w2.27.0: the departure time has come. Before
          this the first word was ten minutes late. Once, by its tag. */
@@ -7743,6 +7745,10 @@ async function trailClaim(env, once) {
 async function trail(env, t) {
   try {
     if (!t || !t.title) return 0;
+    /* RECEIPTS WAKE NOBODY, from w2.114.0 (Asim, 25 Nov 2026). A "Sent:"
+       line is what What went out already shows; only a coordinator alert in
+       its own words (plain: Not started yet, second trip) is pushed. */
+    if (!t.plain) return 0;
     if (t.once && !(await trailClaim(env, String(t.once)))) return 0;
     const msg = coordAlertOf({
       id: "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -7875,6 +7881,20 @@ async function handleTrail(env, body) {
     not: (Array.isArray(t.not) ? t.not : []).map((n) => String(n || "").slice(0, 60))
   });
   return json({ ok: true, sent });
+}
+
+/* A DRIVER'S ALERT FROM THE SHEET, from w2.114.0 (Asim, 25 Nov 2026): a
+   rota request decided, or a duty changed on the Rota tab, goes to the
+   Driver App, and the sheet emails only a name no phone of his took. */
+async function handleDriverTell(env, body) {
+  const list = (Array.isArray(body && body.list) ? body.list : []).slice(0, 20)
+    .map((x) => ({ name: String((x && x.name) || "").trim().slice(0, 60),
+                   title: String((x && x.title) || "").trim().slice(0, 110),
+                   body: String((x && x.body) || "").trim().slice(0, 300) }))
+    .filter((x) => x.name && x.title);
+  if (!list.length) return json({ ok: true, pushed: [] });
+  const r = await tellDriversEach(env, { name: "" }, list, "sheet", true);
+  return json({ ok: true, pushed: r.pushed });
 }
 
 /* EVERY COORDINATOR WITH ALERTS ON NO PHONE, by name, for the sheet to
@@ -10150,7 +10170,11 @@ async function reapplyDrivers(env) {
    choice has its own (contactTell). */
 /* "booking" from w2.84.0 (Asim, 8 Nov 2026): a coordinator's Book, Edit and
    Cancel reach the other coordinators too. */
-const CHANGE_TOLD = ["driver", "pin", "rota", "rotaplan", "bus", "stop", "stopmove", "decide", "defect", "vlog", "vfix", "motrun", "handno", "booking", "tripsplit"];
+/* Not from w2.114.0 (Asim, 25 Nov 2026): vlog and vfix (a record and its
+   correction are quiet alike) and booking (a seat does not change a run; the
+   second trip carries a full one). A defect is told only when it changes
+   whether the bus can run (actDefect sets quiet otherwise). */
+const CHANGE_TOLD = ["driver", "pin", "rota", "rotaplan", "bus", "stop", "stopmove", "decide", "defect", "motrun", "handno", "tripsplit"];
 
 async function changeDriverNames(env, kind, r) {
   let names = [];
@@ -13266,7 +13290,9 @@ async function planTellDrivers(env, me, names) {
    phone of his took it. Not the maker, not a coordinator (the Change by line
    reaches them), not a driver who is not active. From w2.102.0, the plan's
    own sender made general for the bus change. */
-async function tellDriversEach(env, me, list, tag) {
+/* noMail (w2.114.0): the sheet asked (drivertell) and emails a name no phone
+   took itself, in its own fuller words. */
+async function tellDriversEach(env, me, list, tag, noMail) {
   const q = await env.DB.prepare("SELECT name FROM drivers WHERE active=1").all();
   const on = (q.results || []).map((d) => String(d.name || "").trim().toLowerCase());
   const who = (await changeDriverNames(env, "rota", { tell: list.map((x) => x.name) }))
@@ -13299,7 +13325,7 @@ async function tellDriversEach(env, me, list, tag) {
       }
     }
     const missed = g.names.filter((n) => g.heard.indexOf(n) === -1);
-    if (missed.length) await contactMail(env, me, g.msg, missed);
+    if (missed.length && !noMail) await contactMail(env, me, g.msg, missed);
     if (g.heard.length) { try { await sentNote(env, { g: (tag || "bus") + "|" + g.msg.id, title: g.msg.title, who: g.heard }); } catch (e) {} }
     pushed.push(...g.heard); mailed.push(...missed);
   }
@@ -13668,7 +13694,14 @@ async function actDefect(env, me, act) {
     return { ok: false, error: "Nothing to change." };
   }
   const many = keys.length > 1 ? " (" + keys.length + " reports)" : "";
-  return { ok: true, sunday: "",
+  /* Whether each report stops the bus before and after (w2.114.0): told
+     only when that changes for one of them. */
+  const stopsBefore = (x) => !!x.crit && x.kind !== "Advisory";
+  const stopsAfter = (x) => !closing &&
+    (crit ? crit === "YES" : !!x.crit) &&
+    (kind ? kind !== "Advisory" : x.kind !== "Advisory");
+  const quiet = !ds.some((x) => stopsBefore(x) !== stopsAfter(x));
+  return { ok: true, sunday: "", quiet: quiet,
            /* key and the first report's details stay, for a sheet from
               before v1.93.0, which reads key alone. */
            body: { key: keys[0], keys: keys, checkId: d.checkId || "", reg: d.reg, item: d.item, date: d.date || "",
@@ -14079,6 +14112,9 @@ export default {
         if (action === "drain") return await handleDrain(env, body);
         /* Who has alerts on no phone, for the sheet's weekly email. */
         if (action === "unalerted") return json({ ok: true, names: await driversUnalerted(env) });
+        /* One driver's alert from the sheet (w2.114.0): the Driver App first;
+           the sheet emails a name no phone took. */
+        if (action === "drivertell") return await handleDriverTell(env, body);
         /* Live location per run, for the Sunday run report (w2.105.0). */
         if (action === "livelog") return json(await runLocFor(env, body.trips));
         /* That Sunday's moved stops and second trips, for the run report

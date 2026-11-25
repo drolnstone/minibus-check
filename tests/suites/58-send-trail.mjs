@@ -49,56 +49,30 @@ export default async function (root) {
   const trailOf = async (env) => ((await W.cacheGet(env, "calert:" + COORD_EP)) || [])
     .filter((m) => m.kind === "trail");
 
-  s.test("a booking window is one notification, with the count, once", async (a) => {
+  /* RECEIPTS WAKE NOBODY, from w2.114.0 (Asim, 25 Nov 2026): a "Sent:"
+     line stays on What went out; no coordinator phone is woken for it. */
+  s.test("booking reminders: on What went out, no coordinator notice", async (a) => {
     const WED = "2026-10-07T18:30:00+01:00";
     const { db, env } = await fresh(WED);
     await passenger(db, "N03"); await passenger(db, "S05");
     await atTime(WED, () => W.wakeBookingReminders(env));
-    await atTime("2026-10-07T18:35:00+01:00", () => W.wakeBookingReminders(env));
-    const t = await trailOf(env);
-    a.eq(t.length, 1, JSON.stringify(t));
-    a.eq(t[0].title, "Sent: Booking reminders");
-    a.eq(t[0].body, "Book your seat: 2 passenger phones.");
-    a.eq((await J(await atTime("2026-10-07T18:36:00+01:00",
-                               () => post(env, { action: "pushwhat", endpoint: COORD_EP })))).title,
-         "Sent: Booking reminders", "the coordinator's phone shows it");
+    a.eq((await trailOf(env)).length, 0, "a coordinator phone was woken for a receipt");
+    const line = (await atTime(WED, () => W.sentList(env))).find((m) => m.title === "Book your seat(s) for Sunday");
+    a.ok(line, "the line on What went out is gone");
+    a.eq(line.body, "To 2 passenger phones.");
   });
 
-  s.test("a booking window that reached nobody still says so", async (a) => {
-    const SAT = "2026-10-10T18:30:00+01:00";
-    const { env } = await fresh(SAT);
-    await atTime(SAT, () => W.wakeBookingReminders(env));
-    const t = await trailOf(env);
-    a.eq(t.length, 1);
-    a.has(t[0].body, "Book your seat: 0 passenger phones.");
-  });
-
-  s.test("the Sunday morning reminders: passengers by route, and each driver", async (a) => {
+  s.test("the Sunday morning reminders and each driver's: no coordinator notice", async (a) => {
     const SUN = "2026-10-11T07:35:00+01:00";
     const { db, env, key } = await fresh(SUN);
     await seedBookings(db, key, [{ route: "North", stopId: "N03" }]);
     await passenger(db, "N03");
-    await post(env, { action: "subscribe", endpoint: "https://push.test/adrian",
-                      keys: { p256dh: "p", auth: "a" }, role: "driver", driver: "Bro Adrian",
-                      route: "", app: "driver", key: await W.keyFor(env, "Bro Adrian") });
     await atTime(SUN, () => W.wakeDrivers(env));
     await atTime(SUN, () => W.wakeMorning(env));
-    await atTime("2026-10-11T07:40:00+01:00", () => W.wakeDrivers(env));
-    await atTime("2026-10-11T07:40:00+01:00", () => W.wakeMorning(env));
-    const t = await trailOf(env);
-    const morn = t.filter((m) => m.title === "Sent: Your bus today");
-    a.eq(morn.length, 1, JSON.stringify(t));
-    a.eq(morn[0].body, "North: 1 passenger phone. South: 0 passenger phones.");
-    const north = t.find((m) => m.title === "Sent: North: You are driving today");
-    a.ok(north, JSON.stringify(t));
-    a.eq(north.body, "To Bro Adrian: 1 phone.");
-    const south = t.find((m) => m.title === "Sent: South: You are driving today");
-    a.ok(south, "a driver with no phone is still on the trail");
-    a.eq(south.body, "To Bro Trevor: 0 phones.");
-    a.eq(t.length, 3);
+    a.eq((await trailOf(env)).length, 0, JSON.stringify(await trailOf(env)));
   });
 
-  s.test("of the live updates, only the critical two reach the coordinators", async (a) => {
+  s.test("the bus gone past a booked stop: the passengers only", async (a) => {
     const { db, env, key } = await fresh();
     await seedBookings(db, key, [{ route: "North", stopId: "N05" }, { route: "North", stopId: "N02" },
                                  { route: "North", stopId: "N01" }]);
@@ -106,18 +80,12 @@ export default async function (root) {
     G.reset();
     await W.handleTrip(env, { trip: "t1", route: "North", driver: "Bro Adrian", reg: "YS70 PWE",
                               sunday: key, events: [{ event: "start", at: Date.now() - 900000 }] });
-    a.eq((await trailOf(env)).length, 0, "the bus leaving is the passengers' alone");
     const all = await W.getStops(env);
     const line = W.pickupsAndArrivals(all);
     await W.wakeAfterTap(env, key, "North", all, line, "N03", {});
     await W.wakeAfterTap(env, key, "North", all, line, "N04", { N03: 1 });
-    a.ok(G.calls.length >= 3, "the passengers were told");
-    const t = await trailOf(env);
-    a.eq(t.map((m) => m.title).sort().join(" | "),
-         "Sent: North: The bus has gone past Grace Rd | Sent: North: The bus has gone past Scarisbrick Dr",
-         "each stop passed once, a booking with no app included; on its way is not sent");
-    a.eq(t.find((m) => m.title.indexOf("Grace") !== -1).body, "To 1 passenger phone.");
-    a.eq(t.find((m) => m.title.indexOf("Scarisbrick") !== -1).body, "To 0 passenger phones.");
+    a.ok(G.calls.length >= 1, "the passengers were told");
+    a.eq((await trailOf(env)).length, 0, "the missed-stop coordinator alert was turned down");
   });
 
   /* From w2.97.0 (Asim, 19 Nov 2026): a coordinator alert of its own, in
@@ -168,37 +136,14 @@ export default async function (root) {
     a.eq((await lateBox(env)).filter((m) => m.title === "North: Not started yet").length, 0);
   });
 
-  s.test("a coordinator driving is not told of their own reminder", async (a) => {
-    const SUN = "2026-10-11T07:35:00+01:00";
-    const { db, env, key } = await fresh(SUN);
-    await db.prepare("UPDATE rota SET north='Bro Arthur' WHERE sunday=?").bind(key).run();
-    await atTime(SUN, () => W.wakeDrivers(env));
-    const t = await trailOf(env);
-    a.eq(t.filter((m) => m.title.indexOf("North") !== -1).length, 0, JSON.stringify(t));
-    a.eq(t.filter((m) => m.title === "Sent: South: You are driving today").length, 1);
-  });
-
-  s.test("an email to a driver is on the trail, an email to coordinators is not", async (a) => {
+  s.test("an email to a driver or the duty emails: no coordinator notice", async (a) => {
     const { env } = await fresh();
-    await post(env, { action: "sentMail", mail: { subject: "Defect reported", to: ["Bro Arthur"] } });
-    a.eq((await trailOf(env)).length, 0);
     await post(env, { action: "sentMail",
                       mail: { subject: "Your request was approved", to: ["Bro Trevor"], outward: true } });
-    const t = await trailOf(env);
-    a.eq(t.length, 1);
-    a.eq(t[0].title, "Sent: Your request was approved");
-    a.eq(t[0].body, "Email to Bro Trevor.");
-  });
-
-  s.test("the duty emails come as one batch, and the action needs the sheet", async (a) => {
-    const { env } = await fresh();
     const out = await J(await post(env, { action: "trail", trail: {
       title: "Duty emails", body: "None sent.", once: "mail|duty|x" } }));
     a.ok(out.ok, JSON.stringify(out));
-    await post(env, { action: "trail", trail: { title: "Duty emails", body: "None sent.", once: "mail|duty|x" } });
-    const t = await trailOf(env);
-    a.eq(t.length, 1);
-    a.eq(t[0].title, "Sent: Duty emails");
+    a.eq((await trailOf(env)).length, 0);
     const env2 = Object.assign({}, env, { SHEET_TOKEN: "secret" });
     a.not((await J(await post(env2, { action: "trail", trail: { title: "x" } }))).ok);
   });
@@ -244,25 +189,20 @@ export default async function (root) {
     "INSERT INTO push_subs (endpoint, p256dh, auth, role, driver, made, app) VALUES (?,?,?,?,?,?,?)")
     .bind(DRIVER_EP, "p", "a", "driver", "Bro Arthur", Date.now(), "driver").run();
   const boxOf = async (env, ep) => ((await W.cacheGet(env, "calert:" + ep)) || []).filter((m) => m.kind === "trail");
+  /* A coordinator alert in its own words, the kind that still wakes them. */
+  const notice = (env, at) => atTime(at, () => W.trail(env, { once: "n|1", plain: true, title: "North: Second trip", body: "x" }));
 
   s.test("a notice the coordinator app's push service refuses goes to the driver app", async (a) => {
     const WED = "2026-10-21T18:01:00+01:00";
     const { db, env } = await fresh(WED);
     await driverApp(db);
-    await passenger(db, "N03");
     refuse([COORD_EP]);
-    await atTime(WED, () => W.wakeBookingReminders(env));
+    await notice(env, WED);
     a.eq((await boxOf(env, COORD_EP)).length, 0, "not left waiting in the refused phone's box");
     const d = await boxOf(env, DRIVER_EP);
     a.eq(d.length, 1);
-    a.eq(d[0].title, "Sent: Booking reminders");
+    a.eq(d[0].title, "North: Second trip");
     a.eq(((await W.cacheGet(env, "trail_retry")) || []).length, 0, "nothing to try again");
-    /* Read on the same evening: the list keeps a week, and the real clock
-       is long past it. */
-    const list = await atTime(WED, () => W.sentList(env));
-    const line = list.find((m) => m.title === "Book your seat(s) for Sunday");
-    a.ok(line, JSON.stringify(list));
-    a.eq(line.body, "To 1 passenger phone. Coordinator notice: 1 phone.");
     G.reset();
   });
 
@@ -270,51 +210,41 @@ export default async function (root) {
     const WED = "2026-10-21T18:01:00+01:00";
     const { db, env } = await fresh(WED);
     await driverApp(db);
-    await passenger(db, "N03");
-    await atTime(WED, () => W.wakeBookingReminders(env));
+    await notice(env, WED);
     a.eq((await boxOf(env, COORD_EP)).length, 1);
     a.eq((await boxOf(env, DRIVER_EP)).length, 0);
   });
 
   s.test("no phone took it: once more a minute later, then the sheet emails it", async (a) => {
     const WED = "2026-10-21T18:01:00+01:00";
-    /* The sheet's drain on the same evening, not on the real clock. */
     const LATER = "2026-10-21T18:03:00+01:00";
     const { db, env } = await fresh(WED);
     await driverApp(db);
-    await passenger(db, "N03");
     refuse([COORD_EP, DRIVER_EP]);
-    await atTime(WED, () => W.wakeBookingReminders(env));
+    await notice(env, WED);
     const held = (await W.cacheGet(env, "trail_retry")) || [];
     a.eq(held.length, 1);
     a.eq(JSON.stringify(held[0].names), JSON.stringify(["Bro Arthur"]));
     a.eq(await atTime("2026-10-21T18:01:30+01:00", () => W.retryTrails(env)), 0, "not yet a minute");
-    a.eq(((await W.cacheGet(env, "trail_retry")) || []).length, 1);
     await atTime("2026-10-21T18:02:10+01:00", () => W.retryTrails(env));
     a.eq(((await W.cacheGet(env, "trail_retry")) || []).length, 0, "tried once more only");
     a.eq((await J(await atTime(LATER, () => post(env, { action: "drain", limit: 1 })))).trailMail.length, 0,
          "the health check's drain does not take it");
     const mail = (await J(await atTime(LATER, () => post(env, { action: "drain", limit: 300, mail: true })))).trailMail;
     a.eq(mail.length, 1);
-    a.eq(mail[0].title, "Sent: Booking reminders");
-    a.eq(JSON.stringify(mail[0].names), JSON.stringify(["Bro Arthur"]));
+    a.eq(mail[0].title, "North: Second trip");
     a.eq((await J(await atTime(LATER, () => post(env, { action: "drain", limit: 300, mail: true })))).trailMail.length, 0, "once");
     G.reset();
   });
 
-  s.test("the minute later reaches it, and the line counts it", async (a) => {
+  s.test("the minute later reaches it", async (a) => {
     const WED = "2026-10-21T18:01:00+01:00";
-    const { db, env } = await fresh(WED);
-    await passenger(db, "N03");
+    const { env } = await fresh(WED);
     refuse([COORD_EP]);
-    await atTime(WED, () => W.wakeBookingReminders(env));
+    await notice(env, WED);
     G.reset();
     a.eq(await atTime("2026-10-21T18:02:10+01:00", () => W.retryTrails(env)), 1);
     a.eq((await boxOf(env, COORD_EP)).length, 1);
-    const line = (await atTime("2026-10-21T18:03:00+01:00", () => W.sentList(env)))
-      .find((m) => m.title === "Book your seat(s) for Sunday");
-    a.eq(line.body, "To 1 passenger phone. Coordinator notice: 1 phone.");
-    a.eq((await J(await post(env, { action: "drain", limit: 300, mail: true }))).trailMail.length, 0);
   });
 
   s.test("the duty emails reach the trail as one batch", (a) => {

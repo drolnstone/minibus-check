@@ -318,8 +318,8 @@ export default async function (root) {
       const said = await W.pushWhat(env, "https://push.example/trevor");
       a.eq(said.title, "Parked mileage received");
       a.eq(said.body, REG + ": 57,410, keyed at 15:00.");
-      const trail = JSON.parse(db._one("SELECT v FROM settings WHERE k='trail_once'").v);
-      a.ok(trail.some((t) => t.indexOf("d|parkok|c1|") === 0), "the coordinators were not sent their copy");
+      /* No coordinator notice from w2.114.0: a receipt wakes nobody. */
+      a.eq(db._one("SELECT v FROM settings WHERE k='trail_once'"), null, "a coordinator was woken for a receipt");
     });
     await atTime("2026-10-19T20:03:00+01:00", async () => {
       const waits = [];
@@ -362,8 +362,7 @@ export default async function (root) {
       await db.prepare("UPDATE push_subs SET last=''").run();
       for (const t of ["15:05", "15:15", "16:00"]) await atTime("2026-10-18T" + t + ":00+01:00", () => W.wakeParkAsk(env));
       a.eq(lastOf(db), "", "reminded after 3pm");
-      const trail = JSON.parse(db._one("SELECT v FROM settings WHERE k='trail_once'").v);
-      a.eq(trail.filter((t) => t.indexOf("d|parkask|") === 0).length, 1, "the coordinators were sent more than one copy");
+      a.eq(db._one("SELECT v FROM settings WHERE k='trail_once'"), null, "a coordinator was woken for a receipt");
     }
     {
       /* Keyed between two reminders: no more. */

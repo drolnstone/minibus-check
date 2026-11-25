@@ -47,7 +47,7 @@
    script the copy I last pasted? Both apps print it beside their own.
 
    Reported by "Is everything working?" and stamped on every reply. */
-var SCRIPT_VERSION = "v1.154.0";
+var SCRIPT_VERSION = "v1.155.0";
 
 var TOKEN = "minibusapp";                   // must match config.js
 
@@ -1836,10 +1836,8 @@ function coordVfix(ss, a, b, by) {
                     what: b.withdraw ? "Vehicle Log entry withdrawn" : "Vehicle Log entry corrected",
                     from: vlogSummary(orig), to: b.withdraw ? "(withdrawn)" : vlogSummary(fixed),
                     why: b.why || "", ref: orig.id + " → " + b.logId }]);
-  safetyAlert({ id: "vfix|" + b.logId, kind: "renewal", reg: orig.reg,
-                title: orig.reg + ": Vehicle Log entry " + (b.withdraw ? "withdrawn" : "corrected"),
-                body: orig.what + (b.withdraw ? "" : (b.next ? ". Next due " + ukDay(b.next) : "")) +
-                      ". By " + by + (b.why ? ": " + b.why : "") + ".", tab: VLOG_SHEET });
+  /* No alert from v1.155.0 (Asim, 25 Nov 2026): a correction is a record,
+     quiet like the entry it corrects. History has it. */
   /* The dates the standing rows now give. */
   var after = vlogRows(ss);
   var touched = {};
@@ -1880,10 +1878,8 @@ function coordMotrun(ss, a, b, by) {
                     from: "MOT expired", to: [b.garage, b.time].filter(function (x) { return x; }).join(" at "),
                     why: "MOT booked for " + ukDay(b.day) + ". One trip, no passengers.",
                     ref: String(b.logId || "") }]);
-  safetyAlert({ id: "motrun|" + reg + "|" + b.day, kind: "renewal", reg: reg,
-                title: reg + ": MOT run authorised",
-                body: "By " + by + (b.garage ? ", to " + b.garage : "") + " at " + b.time + ". One trip, no passengers.",
-                tab: HISTORY_SHEET });
+  /* Told once, by the live server's "Change by" (v1.155.0); this second
+     alert by phone and email is gone. */
   return { done: true, ok: true, push: true, result: "On the History tab." };
 }
 
@@ -2835,8 +2831,8 @@ function handleCheckLocked(c) {
   var wantsSomething = (c.jobs || []).length > 0;
   var hasAdvisory = (c.advisories || []).length > 0;
   if (c.level !== "ok" || wantsSomething || hasAdvisory) {
-    tellCoordinatorPhones(checkPhoneAlert(c, outcome, defectText));
-    if (COORDINATOR_EMAIL || safetyTo()) notifyCheck(c, outcome, defectText);
+    tellCoordinatorsOnce(checkPhoneAlert(c, outcome, defectText),
+                         function (to) { notifyCheck(c, outcome, defectText, to); });
   }
   if (pc.alert) tellCoordinatorPhones(pc.alert);
 
@@ -5417,7 +5413,6 @@ function drainFromWorker() {
   /* ---- trip events ---- */
   try {
     var trips = got.trips || [];
-    var tends = [];
     if (trips.length) {
       var tsh = ensureTripEvents(ss);
       var tc = colsHard(tsh, TRIP_SHEET);
@@ -5427,10 +5422,6 @@ function drainFromWorker() {
 
       trips.forEach(function (t) {
         var id = String(t.id);
-        /* From v1.99.0: a run's end, for the missed-tap check below. */
-        if (String(t.event || "").toLowerCase() === "end" && !tseen[id]) {
-          tends.push({ sunday: t.sunday, route: String(t.route || ""), trip: String(t.trip || "") });
-        }
         /* Laid over the row as it stands, for the same reason as bookings:
            a column the coordinator added keeps its value. */
         var row = tseen[id] ? tsh.getRange(tseen[id], 1, 1, twide).getValues()[0] : [];
@@ -5485,7 +5476,8 @@ function drainFromWorker() {
         });
       }
     }
-    tends.forEach(function (x) { try { missedTapAlert(ss, x.sunday, x.route, x.trip); } catch (e) {} });
+    /* Not from v1.155.0 (Asim, 25 Nov 2026): booked stops left unmarked are
+       the missed-stop alert he turned down, and the run report lists them. */
   } catch (err) {
     try { PropertiesService.getScriptProperties()
             .setProperty("liveError", "trips: " + String(err && err.message || err)); } catch (e) {}
@@ -6364,11 +6356,12 @@ function morningWatch() {
     ? "\u201cYour bus today\u201d had not gone to passengers by " + hm + ", " + day + "."
     : "\u201cYour bus today\u201d not confirmed: the live server last answered at " +
       Utilities.formatDate(new Date(Number(w.seen || 0)), tz, "HH:mm") + ", " + day + ".";
-  sendMail({ to: to, subject: "07:30 message not sent", body: body });
-  /* And the Coordinator App, from v1.145.0. Urgent: 07:40 is inside the
+  /* The Coordinator App from v1.145.0, and from v1.155.0 the email only to
+     a coordinator with alerts on no phone. Urgent: 07:40 is inside the
      quiet hours, which end at 08:00. */
-  tellCoordinatorPhones({ id: "morning|" + key, kind: "morning", urgent: true,
-    title: "07:30 message not sent", body: body });
+  tellCoordinatorsOnce({ id: "morning|" + key, kind: "morning", urgent: true,
+    title: "07:30 message not sent", body: body },
+    function (to) { sendMail({ to: to, subject: "07:30 message not sent", body: body }); });
   props.setProperty("morningAlarm", key);
 }
 
@@ -7249,7 +7242,7 @@ function coordRotaPlan(ss, a, b, by) {
   });
   memoDrop("rota");
   tell.forEach(function (t) {
-    try { notifyDutyChange(ss, t[0], t[1], t[2], t[3]); } catch (err) {}
+    try { notifyDutyChange(ss, t[0], t[1], t[2], t[3], true); } catch (err) {}
   });
   bumpRotaVersion();
   return { done: true, ok: true, push: true,
@@ -7483,14 +7476,13 @@ function handleRotaRequest(rq) {
   bumpRotaVersion();
   /* Urgent from v1.145.0 (Asim, 19 Nov 2026): a request made after 21:00
      reached the inbox at once but the Coordinator App only at 08:00. */
-  tellCoordinatorPhones({ id: "req|" + (rq.id || (rq.driver + "|" + rq.date)), kind: "request",
+  tellCoordinatorsOnce({ id: "req|" + (rq.id || (rq.driver + "|" + rq.date)), kind: "request",
     urgent: true,
     title: "Rota request from " + rq.driver,
     body: (rq.type || "Cover") + " for " +
           Utilities.formatDate(sunday, Session.getScriptTimeZone(), "EEEE d MMMM") +
           ". Decide it in the coordinator's app.",
-    not: [rq.driver] });
-  if (COORDINATOR_EMAIL) notifyRotaRequest(rq, sunday);
+    not: [rq.driver] }, function (to) { notifyRotaRequest(rq, sunday, to); });
 
   return reply({ ok: true });
 }
@@ -11582,8 +11574,8 @@ function safetyAlert(a) {
 }
 
 function safetySend(a) {
-  var to = safetyTo();
-  if (to) {
+  tellCoordinatorsOnce({ id: "safety|" + a.id, kind: a.kind || "renewal", urgent: !!a.urgent,
+                         reg: a.reg || "", title: a.title, body: a.body || "" }, function (to) {
     sendMail({
       to: to,
       subject: "Minibus: " + a.title,
@@ -11591,9 +11583,7 @@ function safetySend(a) {
       htmlBody: htmlShell(a.title, a.colour || (a.urgent ? "#A8231B" : "#8A6116"), [esc(a.body || "")],
                           a.tab ? "Open the " + a.tab + " tab" : "Open spreadsheet", a.tab || CHECKS_SHEET)
     });
-  }
-  tellCoordinatorPhones({ id: "safety|" + a.id, kind: a.kind || "renewal", urgent: !!a.urgent,
-                          reg: a.reg || "", title: a.title, body: a.body || "" });
+  });
   var sent = safetyList(SAFETY_SENT);
   sent.push(a.id);
   safetyKeep(SAFETY_SENT, sent.slice(-300));
@@ -11679,35 +11669,6 @@ function renewalAlerts(ss) {
   });
 }
 
-/* A booked stop with no tap on a run that has ended. */
-function missedTapAlert(ss, sunday, route, trip) {
-  if (!sunday || !route || !trip) return;
-  var ids = {};
-  readBusStops(ss).forEach(function (s) { if (s.route === route && !s.arrival) ids[s.id] = s; });
-  var booked = {};
-  readBookings(ss, sunday).forEach(function (b) {
-    if (ids[b.stopId]) booked[b.stopId] = (booked[b.stopId] || 0) + b.seats;
-  });
-  if (!Object.keys(booked).length) return;
-  var sh = ss.getSheetByName(TRIP_SHEET);
-  if (!sh || sh.getLastRow() < 2) return;
-  var tc = colsSoft(sh, TRIP_SHEET);
-  var last = sh.getLastRow(), from = Math.max(2, last - 600);
-  var tapped = {};
-  sh.getRange(from, 1, last - from + 1, sh.getLastColumn()).getValues().forEach(function (r) {
-    if (String(at1(r, tc.trip) || "") !== trip) return;
-    if (/undone/i.test(String(at1(r, tc.status) || ""))) return;
-    var ev = String(at1(r, tc.event) || "").trim().toLowerCase();
-    if (["pickup", "picked", "empty", "none"].indexOf(ev) !== -1) tapped[String(at1(r, tc.stopId) || "").trim()] = true;
-  });
-  var missed = Object.keys(booked).filter(function (id) { return !tapped[id]; });
-  if (!missed.length) return;
-  safetyAlert({ id: "missed|" + trip, kind: "defect",
-                title: route + ", " + ukDay(sunday) + ": " + missed.length + (missed.length === 1 ? " booked stop" : " booked stops") + " not marked",
-                body: missed.map(function (id) { return ids[id].stop + " (" + booked[id] + " booked)"; }).join(", ") +
-                      ".", tab: TRIP_SHEET });
-}
-
 function missingCheckAlert() {
   if (!COORDINATOR_EMAIL && !WORKER_URL) return;
 
@@ -11775,17 +11736,17 @@ function missingCheckAlert() {
   if (north) plain.push("", "North Liverpool: " + north);
   if (south) plain.push("South Liverpool: " + south);
 
-  tellCoordinatorPhones({ id: "unchecked|" + key + "|" + expected.join(","), kind: "unchecked",
+  tellCoordinatorsOnce({ id: "unchecked|" + key + "|" + expected.join(","), kind: "unchecked",
     title: expected.join(", ") + " went out unchecked",
-    body: "No pre-drive check this morning." });
-  if (!COORDINATOR_EMAIL) return;
-  sendMail({
-    to: COORDINATOR_EMAIL,
-    subject: "Minibus: " + expected.join(", ") + " went out unchecked",
-    body: plain.join("\n"),
-    /* Amber, not red. A late check is usually a late check, not a crisis,
-       and the red shell belongs to a bus that has been stopped. */
-    htmlBody: htmlShell("Went out unchecked", "#8A6116", lines, "Open the checks", CHECKS_SHEET)
+    body: "No pre-drive check this morning." }, function (to) {
+    sendMail({
+      to: to,
+      subject: "Minibus: " + expected.join(", ") + " went out unchecked",
+      body: plain.join("\n"),
+      /* Amber, not red. A late check is usually a late check, not a crisis,
+         and the red shell belongs to a bus that has been stopped. */
+      htmlBody: htmlShell("Went out unchecked", "#8A6116", lines, "Open the checks", CHECKS_SHEET)
+    });
   });
 }
 
@@ -11840,6 +11801,40 @@ var OVERBOOK_AGAIN_BY = 2;
    never fire. */
 var OVERBOOK_WITHIN_DAYS = 5;
 
+/* A bigger bus that carries the whole route: the two routes' buses swapped,
+   else a spare. "" when none does. Moved out of overbookingAlert in v1.155.0
+   so the same answer decides whether to say anything at all. */
+function overbookFix(t, other, fleet) {
+  var said = "";
+
+  /* 1. Swapping the two routes' buses. The only move that needs no third
+        vehicle, and on a two bus fleet it is usually the only move there is.
+        Offered ONLY when it fixes both legs: moving the problem from one
+        bus to the other is not a fix, it is a different email next week. */
+  if (other && other.reg && other.seats &&
+      String(other.reg).toUpperCase() !== String(t.reg).toUpperCase() &&
+      other.seats >= t.booked && t.seats >= other.booked) {
+    said = other.route + "'s bus: " + other.reg + ", " + other.seats + " seats, " +
+           other.booked + " booked.";
+  }
+
+  /* 2. A bus that is on neither route that day. Rare on this fleet, but it
+        is the right answer when it exists and costs nothing to look for. */
+  if (!said) {
+    var spare = null;
+    fleet.forEach(function (b) {
+      if (spare) return;
+      var R = String(b.reg).toUpperCase();
+      if (R === String(t.reg).toUpperCase()) return;
+      if (other && other.reg && R === String(other.reg).toUpperCase()) return;
+      if (b.seats >= t.booked) spare = b;
+    });
+    if (spare) said = "Spare bus: " + spare.reg + ", " + spare.seats + " seats.";
+  }
+
+  return said;
+}
+
 function overbookingAlert(force) {
   if (!COORDINATOR_EMAIL && !WORKER_URL) return { ran: false, why: "no coordinator address", sent: 0 };
 
@@ -11877,6 +11872,17 @@ function overbookingAlert(force) {
   var tell = [];
   var stamps = {};                      /* what to write down IF the email goes */
 
+  /* Every bus on the register that could carry anybody. active is honoured:
+     a bus kept on the tab for its service history must not be offered as the
+     answer to a full Sunday. */
+  var fleet = [];
+  try {
+    readBuses(ss).forEach(function (b) {
+      if (b && b.reg && b.active !== false && b.seats) fleet.push({ reg: b.reg, seats: b.seats });
+    });
+  } catch (err) {}
+  fleet.sort(function (a, b) { return b.seats - a.seats; });
+
   ["North", "South"].forEach(function (route) {
     var f = legs[route];
     if (!f) return;
@@ -11887,6 +11893,15 @@ function overbookingAlert(force) {
     if (!f.seats) { if (sent[stamp] != null) stamps[stamp] = null; return; }
 
     var over = f.booked - f.seats;
+    /* ONLY WHEN SOMEBODY HAS SOMETHING TO DO, from v1.155.0 (Asim, 25 Nov
+       2026). The second trip (v1.150.0) carries what one bus cannot, so a
+       route over its seats is told only when a bigger bus would carry them
+       all (a swap or a spare), or when two trips are not enough. */
+    if (over > 0 && !force && f.booked <= 2 * f.seats &&
+        !overbookFix({ route: route, reg: f.reg, seats: f.seats, booked: f.booked },
+                     legs[route === "North" ? "South" : "North"], fleet)) {
+      over = 0;
+    }
     if (over <= 0) {
       /* Back under. Forget it, so a re-crossing is a fresh alert rather than a
          silence caused by a number sent a fortnight ago. */
@@ -11920,17 +11935,6 @@ function overbookingAlert(force) {
   var when = Utilities.formatDate(sunday, tz, "EEEE d MMMM");
   var lead = days === 0 ? "today" : days === 1 ? "tomorrow" : "on " + when;
 
-  /* Every bus on the register that could carry anybody. active is honoured:
-     a bus kept on the tab for its service history must not be offered as the
-     answer to a full Sunday. */
-  var fleet = [];
-  try {
-    readBuses(ss).forEach(function (b) {
-      if (b && b.reg && b.active !== false && b.seats) fleet.push({ reg: b.reg, seats: b.seats });
-    });
-  } catch (err) {}
-  fleet.sort(function (a, b) { return b.seats - a.seats; });
-
   var lines = [], plain = [];
   lines.push("<b>More people are booked than the bus holds</b> for " + esc(lead) + ".",
              "&nbsp;");
@@ -11944,33 +11948,7 @@ function overbookingAlert(force) {
     plain.push("  " + t.route + ": " + t.reg + " seats " + t.seats +
                ", " + t.booked + " booked, " + t.over + " too many.");
 
-    var other = legs[t.route === "North" ? "South" : "North"];
-    var said = "";
-
-    /* 1. Swapping the two routes' buses. The only move that needs no third
-          vehicle, and on a two bus fleet it is usually the only move there is.
-          Offered ONLY when it fixes both legs: moving the problem from one
-          bus to the other is not a fix, it is a different email next week. */
-    if (other && other.reg && other.seats &&
-        String(other.reg).toUpperCase() !== String(t.reg).toUpperCase() &&
-        other.seats >= t.booked && t.seats >= other.booked) {
-      said = other.route + "'s bus: " + other.reg + ", " + other.seats + " seats, " +
-             other.booked + " booked.";
-    }
-
-    /* 2. A bus that is on neither route that day. Rare on this fleet, but it
-          is the right answer when it exists and costs nothing to look for. */
-    if (!said) {
-      var spare = null;
-      fleet.forEach(function (b) {
-        if (spare) return;
-        var R = String(b.reg).toUpperCase();
-        if (R === String(t.reg).toUpperCase()) return;
-        if (other && other.reg && R === String(other.reg).toUpperCase()) return;
-        if (b.seats >= t.booked) spare = b;
-      });
-      if (spare) said = "Spare bus: " + spare.reg + ", " + spare.seats + " seats.";
-    }
+    var said = overbookFix(t, legs[t.route === "North" ? "South" : "North"], fleet);
 
     /* 3. Nothing in the register fits. Said out loud, because silence here
           reads as "no action needed" and the action is a second trip or a
@@ -12016,26 +11994,23 @@ function overbookingAlert(force) {
      throws and the next tick comes round again, the live server has already
      had this one and refuses it rather than buzzing everybody twice. A test
      from the menu gets an id of its own every time. */
-  tellCoordinatorPhones({
+  tellCoordinatorsOnce({
     id: "over|" + key + "|" + (force ? Date.now() + "|" : "") +
         tell.map(function (t) { return t.route + ":" + t.booked; }).join(","),
     kind: "overbooked",
     title: tell.map(function (t) { return t.route + " overbooked, " + t.booked + " of " + t.seats; }).join("; "),
-    body: "For " + when + "." });
-  if (!COORDINATOR_EMAIL) {
-    overbookRemember(props, sent, stamps);
-    return { ran: true, sent: 0, over: tell, phones: true };
-  }
-  sendMail({
-    to: COORDINATOR_EMAIL,
-    subject: "Minibus: " +
-             tell.map(function (t) {
-               return t.route + " overbooked, " + t.booked + " of " + t.seats;
-             }).join("; ") + ", " + when,
-    body: plain.join("\n"),
-    /* Amber. Something to arrange, not a bus that has been stopped. */
-    htmlBody: htmlShell("More booked than seats", "#8A6116", lines,
-                        "Open the rota", ROTA_SHEET)
+    body: "For " + when + "." }, function (to) {
+    sendMail({
+      to: to,
+      subject: "Minibus: " +
+               tell.map(function (t) {
+                 return t.route + " overbooked, " + t.booked + " of " + t.seats;
+               }).join("; ") + ", " + when,
+      body: plain.join("\n"),
+      /* Amber. Something to arrange, not a bus that has been stopped. */
+      htmlBody: htmlShell("More booked than seats", "#8A6116", lines,
+                          "Open the rota", ROTA_SHEET)
+    });
   });
 
   overbookRemember(props, sent, stamps);
@@ -13056,7 +13031,42 @@ function onRotaEditNotify(e) {
   } catch (err) { /* an alert must never block somebody editing the sheet */ }
 }
 
-function notifyDutyChange(ss, key, before, after, route) {
+/* DRIVER APP FIRST, from v1.155.0 (Asim, 25 Nov 2026): an alert to one
+   driver goes to his Driver App, and the email only when no phone of his
+   took it. True when the Driver App took it. A coordinator who drives is
+   left to his email, as the live server leaves him to "Change by". */
+function driverAppFirst(name, title, body) {
+  try {
+    if (!WORKER_URL || !name) return false;
+    var out = workerCall("drivertell", { list: [{ name: name, title: title, body: body }] });
+    return !!(out && out.ok === true && (out.pushed || []).some(function (n) {
+      return String(n || "").trim().toLowerCase() === String(name).trim().toLowerCase();
+    }));
+  } catch (err) { return false; }
+}
+
+/* Whether a driver has alerts on no phone, for a change the live server has
+   already told in the Driver App (a saved rota plan, "Rota updated"). Not
+   knowing is "no phone", so the email goes as before. */
+var driverNoPhoneMemo = null;
+function driverNoPhone(name) {
+  if (driverNoPhoneMemo === null) {
+    driverNoPhoneMemo = false;
+    try {
+      var got = WORKER_URL ? workerCall("unalerted", {}) : null;
+      if (got && got.ok === true) {
+        driverNoPhoneMemo = {};
+        (got.names || []).forEach(function (n) { driverNoPhoneMemo[String(n || "").trim().toLowerCase()] = true; });
+      }
+    } catch (err) { driverNoPhoneMemo = false; }
+  }
+  return driverNoPhoneMemo === false || !!driverNoPhoneMemo[String(name || "").trim().toLowerCase()];
+}
+
+/* appTold, from v1.155.0: the live server has told the drivers already
+   (a saved rota plan), so the email goes only to one with alerts on no
+   phone. Otherwise the Driver App first, the email when it did not take. */
+function notifyDutyChange(ss, key, before, after, route, appTold) {
   before = String(before || "").trim();
   after  = String(after  || "").trim();
   if (before === after) return;
@@ -13094,7 +13104,12 @@ function notifyDutyChange(ss, key, before, after, route) {
   var busNow = "";
   try { busNow = busFor(ss, key, route).reg || ""; } catch (err) { busNow = ""; }
 
-  if (before && emails[before]) {
+  var byApp = function (name, title, body) {
+    return appTold ? !driverNoPhone(name) : driverAppFirst(name, title, body);
+  };
+
+  if (before && emails[before] &&
+      !byApp(before, "Duty changed", "You are no longer driving on " + when + onPlain + ".")) {
     var offLines = [
       "You were down to drive on <b>" + esc(when) + "</b>" + on + ".",
       "&nbsp;",
@@ -13109,7 +13124,9 @@ function notifyDutyChange(ss, key, before, after, route) {
     });
   }
 
-  if (after && emails[after]) {
+  if (after && emails[after] &&
+      !byApp(after, "You are now driving",
+             "On " + when + onPlain + (busNow ? ", bus " + busNow : "") + (before ? ", covering for " + before : "") + ".")) {
     var nowTimes = null;
     try { nowTimes = dutyTimes(ss, route, after); } catch (err) {}
     var onLines = [
@@ -13236,6 +13253,9 @@ function notifyRequestDecided(ss, key, who, sh, row, qc, decision) {
       plain.push("", "Your name is still on that morning until somebody takes it.");
     }
   }
+
+  /* The Driver App first, from v1.155.0. */
+  if (driverAppFirst(who, no ? "Request not approved" : "Request approved", plain.join(" ").replace(/\s+/g, " ").trim())) return;
 
   sendMail({
     to: emails[who],
@@ -14894,6 +14914,54 @@ function tellCoordinatorPhones(alert) {
   } catch (err) {}
 }
 
+/* ONE ROAD, from v1.155.0 (Asim, 25 Nov 2026). An alert that has a full
+   email of its own (a check, a due date, a rota request) used to go to the
+   phones AND to COORDINATOR_EMAIL, so a coordinator with the app had it
+   twice. Now each coordinator has it once: on a phone, or, with alerts on
+   no phone, the full email (its links included) to their Drivers tab
+   address. Without a live server to ask, or when it does not answer, the
+   full email goes to safetyTo() as before, so nothing is lost.
+
+   mail(to) sends the full email to the addresses given. */
+function tellCoordinatorsOnce(alert, mail) {
+  var out = null;
+  try {
+    if (WORKER_URL && alert && alert.id && alert.title) out = workerCall("coordAlert", { alert: alert });
+  } catch (err) { out = null; }
+  if (!out || out.ok !== true) {
+    var to = safetyTo();
+    if (to) mail(to);
+    return;
+  }
+  if (out.duplicate) return;
+  var want = {};
+  (out.unalerted || []).forEach(function (n) { want[String(n || "").trim().toLowerCase()] = true; });
+  var roles = (AUTHORISER_ROLES || []).map(function (r) { return String(r || "").trim().toLowerCase(); });
+  /* A coordinator on the Drivers tab with a phone the server woke has it
+     there. Every other address stays: one with alerts on no phone, and one
+     in COORDINATOR_EMAIL that is nobody's on the Drivers tab. */
+  var phone = {}, seen = {}, list = [];
+  var add = function (e) {
+    e = String(e || "").trim();
+    if (!/^[^@\s]+@[^@\s]+$/.test(e) || seen[e.toLowerCase()]) return;
+    seen[e.toLowerCase()] = true;
+    list.push(e);
+  };
+  var drivers = [];
+  try { drivers = readDrivers(SpreadsheetApp.getActive()); } catch (err) {}
+  drivers.forEach(function (d) {
+    var e = String((d && d.email) || "").trim().toLowerCase();
+    if (!d || !d.active || !e) return;
+    var k = String(d.name || "").trim().toLowerCase();
+    if (want[k]) add(d.email);
+    else if (roles.indexOf(String(d.role || "").trim().toLowerCase()) !== -1) phone[e] = true;
+  });
+  String(COORDINATOR_EMAIL || "").split(/[,;]/).forEach(function (e) {
+    if (!phone[String(e || "").trim().toLowerCase()]) add(e);
+  });
+  if (list.length) mail(list.join(","));
+}
+
 /* NOBODY LEFT UNALERTED. From v1.104.0, after the Ushers app.
 
    A coordinator who has never turned alerts on, on any phone, heard of a
@@ -14965,7 +15033,7 @@ function checkPhoneAlert(c, outcome, defectText) {
   return a;
 }
 
-function notifyCheck(c, outcome, defectText) {
+function notifyCheck(c, outcome, defectText, to) {
   var authorised = outcome === "Authorised to run";
   var stopped = c.level === "stop" && !authorised;
   var defects = defectText ? defectText.split(" | ") : [];
@@ -15081,7 +15149,7 @@ function notifyCheck(c, outcome, defectText) {
    .join("\n");
 
   sendMail({
-    to: safetyTo() || COORDINATOR_EMAIL,
+    to: to || safetyTo() || COORDINATOR_EMAIL,
     subject: subject,
     body: plain,
     htmlBody: htmlShell(stopped ? "Bus stopped, critical defect"
@@ -15105,10 +15173,6 @@ function notifyCheck(c, outcome, defectText) {
 function notifyAuthorised(a) {
   if (TELL_COORDINATOR === "summary" || !a) return;
   var who = String(a.by || "a coordinator");
-  tellCoordinatorPhones({ id: "auth|" + a.reg + "|" + (a.at || ""), kind: "authorised",
-    title: "Authorised to run: " + a.reg, body: "By " + who + ". The defect stays open.",
-    reg: a.reg, not: [a.by] });
-  if (!COORDINATOR_EMAIL) return;
   var when = a.at ? Utilities.formatDate(new Date(Number(a.at)),
                       Session.getScriptTimeZone(), "HH:mm") : "";
   var lines = [
@@ -15125,15 +15189,19 @@ function notifyAuthorised(a) {
     "Authorised:    " + when + (a.via === "sheet" ? " on the spreadsheet" : " in the app"),
     "", tabUrl(DEFECTS_SHEET)
   ].join("\n");
-  try {
-    sendMail({
-      to: COORDINATOR_EMAIL,
-      subject: "Authorised to run: " + a.reg,
-      body: plain,
-      htmlBody: htmlShell("Authorised to run, defect open", "#A8231B",
-                          lines, "Open the defect record", DEFECTS_SHEET)
-    });
-  } catch (err) { /* an email must never undo an authorisation */ }
+  tellCoordinatorsOnce({ id: "auth|" + a.reg + "|" + (a.at || ""), kind: "authorised",
+    title: "Authorised to run: " + a.reg, body: "By " + who + ". The defect stays open.",
+    reg: a.reg, not: [a.by] }, function (to) {
+    try {
+      sendMail({
+        to: to,
+        subject: "Authorised to run: " + a.reg,
+        body: plain,
+        htmlBody: htmlShell("Authorised to run, defect open", "#A8231B",
+                            lines, "Open the defect record", DEFECTS_SHEET)
+      });
+    } catch (err) { /* an email must never undo an authorisation */ }
+  });
 }
 
 /* The protection note for a Sunday, read straight off the Rota tab. */
@@ -15148,7 +15216,7 @@ function protectedNoteFor(key) {
   } catch (err) { return { on: false, reason: "" }; }
 }
 
-function notifyRotaRequest(rq, sunday) {
+function notifyRotaRequest(rq, sunday, to) {
   var when = Utilities.formatDate(sunday, Session.getScriptTimeZone(), "EEEE d MMMM yyyy");
 
   var lines = [
@@ -15225,7 +15293,7 @@ function notifyRotaRequest(rq, sunday) {
   var plain = prows.join("\n");
 
   sendMail({
-    to: COORDINATOR_EMAIL,
+    to: to || COORDINATOR_EMAIL,
     subject: "Rota request: " + rq.driver + " \u2014 " + when,
     body: plain,
     htmlBody: htmlShell("Minibus rota change request", "#B26B00", lines,

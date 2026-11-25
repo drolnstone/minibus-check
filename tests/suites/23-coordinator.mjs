@@ -87,6 +87,7 @@ export default async function (root) {
                WORKER_URL: "https://example.invalid" } });
   }
 
+  const noServer = (L) => { L.gas.setFetchReply({ code: 500, body: "" }); return L; };
   const mine = (L) => L.gas.mail.filter((m) => String(m.to).indexOf("coord@") === 0);
   const words = (h) => String(h || "").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ");
   const both = (m) => words(m.htmlBody) + " " + String(m.body || "");
@@ -153,7 +154,9 @@ export default async function (root) {
        other day — checked here so that a change to the trigger cannot quietly
        make the words wrong. */
     await atTime(WHEN.unchecked, () => {
-      const L = sheet();
+      /* With no live server to answer, the email goes (v1.155.0: with one,
+         only to a coordinator no phone of whose has alerts on). */
+      const L = noServer(sheet());
       call(L, "missingCheckAlert");
       const got = mine(L);
       a.eq(got.length, 1, "two buses went out unchecked and nobody was told");
@@ -222,7 +225,7 @@ export default async function (root) {
       const seen = [];
       for (const iso of [WHEN.saturday, WHEN.walkaround, WHEN.monday]) {
         seen.push(await atTime(iso, () => {
-          const L = sheet();
+          const L = noServer(sheet());
           fire(L);
           return settled(mine(L)[0]);
         }));

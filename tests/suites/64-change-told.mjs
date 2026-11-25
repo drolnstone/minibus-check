@@ -75,7 +75,8 @@ export default async function (root) {
   });
 
   /* w2.84.0 (Asim, 8 Nov 2026): bookings are told too, and to no driver. */
-  s.test("a booking a coordinator makes, edits or cancels is told to the other coordinators", async (a) => {
+  /* Quiet from w2.114.0 (Asim, 25 Nov 2026): a seat does not change a run. */
+  s.test("a booking a coordinator makes, edits or cancels is quiet", async (a) => {
     await atTime(SAT, async () => {
       const { env } = await fresh();
       const made = await act(env, { kind: "booking", op: "add", sunday: KEY, stopId: "N04", seats: 3, phone: "07700 900748" }, "Bro Calvin");
@@ -84,15 +85,35 @@ export default async function (root) {
       a.ok(ed.ok, JSON.stringify(ed));
       const gone = await act(env, { kind: "booking", op: "cancel", bookingId: made.bookingId }, "Bro Calvin");
       a.ok(gone.ok, JSON.stringify(gone));
-      const box = await boxOf(env, "Bro Asim");
-      a.eq(box.length, 3, "Bro Asim was not told of all three: " + JSON.stringify(box));
-      a.eq(box[0].title, "Change by Bro Calvin");
-      a.has(box[1].body, "Changed 3 seats at Fountains Rd to 1 seat, number ending 748.");
-      a.has(box[2].body, "Cancelled 1 seat at Fountains Rd");
-      a.hasnt(JSON.stringify(box), "07700900748");
-      a.eq((await boxOf(env, "Bro Calvin")).length, 0, "the one who made it was told");
+      a.eq((await boxOf(env, "Bro Asim")).length, 0, "a coordinator was told of a booking");
       a.eq((await boxOf(env, "Bro Moses")).length, 0, "a driver was told of a booking");
     });
+  });
+
+  /* w2.114.0 (Asim, 25 Nov 2026): a record and its correction are quiet;
+     a defect only when it changes whether the bus can run. */
+  s.test("a Vehicle Log entry or its correction is quiet", async (a) => {
+    await atTime(SAT, async () => {
+      const { env } = await fresh();
+      await W.changeTell(env, { name: "Bro Calvin" }, "vlog", "q1", { words: "YS70 PWE: fuel." });
+      await W.changeTell(env, { name: "Bro Calvin" }, "vfix", "q2", { words: "YS70 PWE: corrected." });
+      a.eq((await boxOf(env, "Bro Asim")).length, 0);
+    });
+  });
+
+  s.test("a defect is told only when it changes whether the bus runs", async (a) => {
+    await atTime(SAT, async () => {
+      const { env } = await fresh();
+      await W.changeTell(env, { name: "Bro Calvin" }, "defect", "q3", { words: "YS70 PWE, Tyres: in progress.", quiet: true });
+      a.eq((await boxOf(env, "Bro Asim")).length, 0, "a defect that changes nothing was told");
+      await W.changeTell(env, { name: "Bro Calvin" }, "defect", "q4", { words: "YS70 PWE, Tyres: closed, fixed." });
+      a.eq((await boxOf(env, "Bro Asim")).length, 1, "a defect that lets the bus run was not told");
+    });
+  });
+
+  s.test("the bus that has not gone out is one alert to the driver, not two", (a) => {
+    const src = W.driverNudgeFor.toString();
+    a.ok(src.indexOf('"starta|"') !== -1 && src.indexOf('"b" : "a"') === -1);
   });
 
   s.test("a coordinator with alerts off on every phone is emailed it", async (a) => {
