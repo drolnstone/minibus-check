@@ -1724,6 +1724,38 @@ if (want("T59")) {
   await me.ctx.close();
 }
 
+/* T60 — Bus used (v1.191.0, Asim, 25 Nov 2026): a weekday trip from the
+   first screen, no check; sent with his name; a ✓ on the first screen. */
+if (want("T60")) {
+  const me = await phone({ clock: "2026-09-29T19:00:00+01:00" });
+  await me.load(); await me.close(["howDone"]);
+  await me.signIn(); await me.close();
+  await me.clickId("toUsed"); await me.wait(400);
+  const title = await me.text("#dashTitle");
+  await me.pg.click('#usedBus button[data-reg="NH56 FWP"]');
+  await me.pg.click('#usedDay button[data-day="yesterday"]');
+  await me.pg.fill("#usedTaken", "48262");
+  await me.pg.fill("#usedMiles", "48296");
+  await me.pg.evaluate(() => { const b = [...document.querySelectorAll("#footbar button")].find(x => x.textContent === "Save"); b.click(); });
+  await me.wait(300);
+  const refused = await me.text("#usedSay");
+  const box = await me.pg.$eval("#usedFuel .fg-track", (t) => { const r = t.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+  await me.pg.mouse.click(box.x + box.w * 6 / 16 - 2, box.y + box.h / 2);
+  await me.wait(200);
+  await me.pg.screenshot({ path: (process.env.SHOTS || "/tmp") + "/T60-bus-used.png" });
+  await me.pg.evaluate(() => { const b = [...document.querySelectorAll("#footbar button")].find(x => x.textContent === "Save"); b.click(); });
+  await me.wait(1200);
+  const sent = me.posted.filter(p => p.action === "busused").pop() || {};
+  const card = await me.text("#hubUsed");
+  await me.pg.screenshot({ path: (process.env.SHOTS || "/tmp") + "/T60-bus-used-saved.png" });
+  const u = sent.used || {};
+  check("T60", "Bus used: the screen, a refusal without fuel, sent with his name, a ✓ on the first screen",
+        /^bus used$/i.test(title) && /fuel/i.test(refused) && u.reg === "NH56 FWP" && u.day === "2026-09-28" && u.taken === 48262 &&
+        u.miles === 48296 && u.fuel === "3/8 tank" && u.driver && /48,296 ✓/.test(card) && !me.errs.length,
+        JSON.stringify({ title, refused, u, card, errs: me.errs }));
+  await me.ctx.close();
+}
+
 await done();
 const bad = results.filter(r => !r.ok);
 console.log("\n  " + results.length + " checks, " + (results.length - bad.length) + " passed, " + bad.length + " failed");

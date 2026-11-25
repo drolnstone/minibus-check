@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Coordinator App">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- BUILD v1.190.0 · THE COORDINATOR'S APP.
+<!-- BUILD v1.191.0 · THE COORDINATOR'S APP.
 
      What the coordinator used to open the spreadsheet for, on his phone: the
      rota, rota requests, bookings, defects, each bus's dates and records (from
@@ -280,6 +280,9 @@ h3{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;lett
 .chips button{min-height:40px;padding:0 14px;border:1.5px solid var(--hair);border-radius:20px;background:var(--card);
   font-size:14px;font-weight:500}
 .chips button.on{background:var(--steel);border-color:var(--steel);color:var(--on-accent)}
+/* The buses at the top of Record something (v1.191.0), as plates read. */
+.chips.plates button{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:17px;letter-spacing:.05em}
+.field label .lc{text-transform:none;letter-spacing:0;font-family:"IBM Plex Sans",sans-serif;font-weight:400}
 /* THE DATES STAY IN VIEW, from v1.90.0. On Bookings and the Run record the
    row of Sundays is pinned under the bar while the list scrolls, so the one
    lit is always there to say which Sunday this is. --bar-h is the bar's own
@@ -814,7 +817,7 @@ details.more summary{font-size:14px;font-weight:600;color:var(--muted);padding:8
 
 /* Bump with APP_VERSION in index.html, CACHE in sw.js and the passenger
    page's two. One number for every page in the release. */
-var PAGE_VERSION = "v1.190.0";
+var PAGE_VERSION = "v1.191.0";
 
 var CFG = window.CONFIG || {};
 var LIVE = String(CFG.liveEndpoint || "").replace(/\/+$/, "");
@@ -1568,6 +1571,7 @@ function paintHome(){
   h += '<ul class="menu">' +
        item("rota", "Rota", "") +
        item("bookings/" + bk, "Bookings", booked + " booked" + (bk !== D.today ? " for " + shortDay(bk) : ""), "") +
+       (D && D.buses && D.buses.length ? '<li><button type="button" data-do="recordpick"><span class="t">Record something</span><span class="go">›</span></button></li>' : '') +
        item("runs", "Run record", "") +
        (D && D.message ? '<li><button type="button" data-do="message"><span class="t">Send a message</span><span class="go">›</span></button></li>' : '') +
        (ALERTS.known ? item("alerts", "Alerts", ALERTS.unread ? ALERTS.unread + " new" : "", ALERTS.unread ? "stop" : "") : "") +
@@ -3232,9 +3236,12 @@ var RENEWALS = {
   permit:    { label: "Parking permit", column: "Permit due" }
 };
 var RENEW_KEYS = ["mot", "service", "insurance", "permit"];
-var VLOG_WHAT = ["MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Fuel", "Other"];
+/* "Bus used" from v1.191.0 (Asim, 25 Nov 2026): a weekday trip. It has its
+   own form (busUsedFor), reached from its chip. */
+var VLOG_WHAT = ["Bus used", "MOT", "Service", "Insurance", "Parking permit", "Repair", "Tyres", "Fuel", "Other"];
 /* The faded sample in Notes, matched to what it was. */
 var VLOG_SAMPLE = {
+  "Bus used": "e.g. Youth outing to Southport",
   "MOT": "e.g. Passed, one advisory on the rear brakes",
   "Service": "e.g. Full service, oil and filters changed",
   "Insurance": "e.g. Renewed with the same insurer",
@@ -3466,7 +3473,8 @@ function fuelOf(reg){
   }
   var best = null, bt = 0;
   logOf(reg).forEach(function(x){
-    if(x.what !== "Fuel" || !x.fuel || !x.done || x.correctedBy || x.status === "Withdrawn" || x.status === "Booked") return;
+    /* A Bus used entry's fuel too, from v1.191.0. */
+    if((x.what !== "Fuel" && x.what !== "Bus used") || !x.fuel || !x.done || x.correctedBy || x.status === "Withdrawn" || x.status === "Booked") return;
     var p = /^(\d{4})-(\d\d)-(\d\d)$/.exec(x.done); if(!p) return;
     var r = Number(x.recorded) || 0, rd = new Date(r);
     var sameDay = r && rd.getFullYear() === +p[1] && rd.getMonth() === +p[2] - 1 && rd.getDate() === +p[3];
@@ -3478,7 +3486,8 @@ function fuelOf(reg){
     var sameD = bt === Number(best.recorded);
     return { fuel: best.fuel, date: d[2] + "/" + d[1] + "/" + d[0],
              time: sameD ? ("0" + rt.getHours()).slice(-2) + ":" + ("0" + rt.getMinutes()).slice(-2) : "",
-             driver: best.by || "", bought: true };
+             driver: best.what === "Bus used" ? (best.drove || best.by || "") : (best.by || ""),
+             bought: best.what !== "Bus used", used: best.what === "Bus used" };
   }
   return w;
 }
@@ -3497,7 +3506,7 @@ function fuelRow(reg){
   var bar = fuelBar(f);
   var dm = /^(\d\d)\/(\d\d)\/(\d{4})$/.exec(f.date || "");
   var day = dm ? shortDay(dm[3] + "-" + dm[2] + "-" + dm[1]) : (f.date || "");
-  var when = [(f.bought ? "Bought " : f.parked ? "Parked " : "") + (day ? day + (f.time ? " " + f.time : "") : ""), f.driver].filter(Boolean).join(", ");
+  var when = [(f.bought ? "Bought " : f.used ? "Used " : f.parked ? "Parked " : "") + (day ? day + (f.time ? " " + f.time : "") : ""), f.driver].filter(Boolean).join(", ");
   return '<span class="due"><b>Fuel</b><span class="when ' + tone + '">' + esc(f.fuel) + '</span>' + bar +
          (when ? '<small>' + esc(when) + '</small>' : '') + '</span>';
 }
@@ -3607,11 +3616,13 @@ function entryHTML(reg, x){
           : x.status === "Withdrawn" ? '<span class="tag stop">Withdrawn</span>' : '';
   var lines = [];
   if(x.status === "Booked") lines.push("Booked for " + yearDay(x.bookedFor));
+  else if(x.done && x.what === "Bus used") lines.push(yearDay(x.done) + (x.drove ? ", driven by " + x.drove : ""));
   else if(x.done) lines.push("Done " + yearDay(x.done) + (x.was ? ", " + lateWords(x.early) + " (was due " + ukDay(x.was) + ")" : ""));
   if(x.next) lines.push("Next due " + ukDay(x.next));
   var facts = [];
   if(x.garage) facts.push(x.garage);
-  if(x.miles !== null && x.miles !== undefined && x.miles !== "") facts.push(Number(x.miles).toLocaleString("en-GB") + " miles");
+  if(x.what === "Bus used" && x.taken !== null && x.taken !== undefined && x.taken !== "") facts.push("Taken " + Number(x.taken).toLocaleString("en-GB"));
+  if(x.miles !== null && x.miles !== undefined && x.miles !== "") facts.push((x.what === "Bus used" ? "Left " : "") + Number(x.miles).toLocaleString("en-GB") + " miles");
   if(x.cost !== null && x.cost !== undefined && x.cost !== "") facts.push("£" + Number(x.cost).toFixed(2));
   if(facts.length) lines.push(facts.join(" · "));
   if(x.defects) lines.push("Put right: " + x.defects);
@@ -3817,16 +3828,17 @@ function vlBoxes(b){
 
 /* The Record form. from, a Booked entry the form starts from: what it was,
    and its day if that has come. */
-function recordFor(reg, from){
+function recordFor(reg, from, pickW){
   var b = busByReg(reg); if(!b) return;
+  if((from && from.what === "Bus used") || pickW === "Bus used"){ busUsedFor(b.reg); return; }
   var today = calToday();
-  VL = { reg: b.reg, what: from && from.what ? [from.what] : [], status: "Done", typed: {}, fuel: FUEL_STEPS };
+  VL = { reg: b.reg, what: from && from.what ? [from.what] : pickW ? [pickW] : [], status: "Done", typed: {}, fuel: FUEL_STEPS };
   var m = milesOf(b.reg);
   /* One tick per fault, from v1.90.0, closing every report of it. */
   var defs = defectGroups(defectsOf(b.reg));
   var startDay = from && from.bookedFor && from.bookedFor <= today ? from.bookedFor : today;
   openSheet({ eyebrow: b.reg, title: "Record something",
-    body: '<div class="chips" id="vlWhat">' + VLOG_WHAT.map(function(w){
+    body: (from ? '' : vlBusChips(b.reg)) + '<div class="chips" id="vlWhat">' + VLOG_WHAT.map(function(w){
             return '<button type="button" data-w="' + esc(w) + '" class="' + (VL.what.indexOf(w) !== -1 ? 'on' : '') + '">' + esc(w) + '</button>';
           }).join("") + '</div>' +
           '<div class="chips" id="vlStatus"><button type="button" data-s="Done" class="on">Done</button>' +
@@ -3861,6 +3873,7 @@ function recordFor(reg, from){
     x.onclick = function(){
       if(busy) return;
       var w = x.getAttribute("data-w"), i = VL.what.indexOf(w);
+      if(w === "Bus used"){ busUsedFor(b.reg); return; }
       vlKeep();
       if(i === -1) VL.what.push(w); else VL.what.splice(i, 1);
       x.classList.toggle("on", i === -1);
@@ -3881,8 +3894,82 @@ function recordFor(reg, from){
   ["vlDay", "vlFor"].forEach(function(id){
     var el = $(id); if(el){ el.onchange = function(){ recordShow(b); }; el.oninput = el.onchange; }
   });
+  vlBusBind(function(r){ recordFor(r, null, VL.what.length === 1 ? VL.what[0] : ""); });
   vlBoxes(b);
   recordShow(b);
+}
+
+/* RECORD SOMETHING ON THE FIRST SCREEN, from v1.191.0 (Asim, 25 Nov 2026:
+   he looked on every page for it). Choose the bus, then the Record form,
+   which keeps the buses at its top so the bus can be changed there. */
+function vlBusChips(reg){
+  var bs = busList();
+  if(bs.length < 2) return '';
+  return '<div class="field" style="margin-bottom:6px"><label>Bus</label></div><div class="chips plates" id="vlBus">' + bs.map(function(x){
+    return '<button type="button" data-reg="' + esc(x.reg) + '" class="' + (reg && same(x.reg, reg) ? 'on' : '') + '">' + esc(x.reg) + '</button>';
+  }).join("") + '</div>';
+}
+function vlBusBind(go){
+  Array.prototype.forEach.call(document.querySelectorAll("#vlBus button"), function(x){
+    x.onclick = function(){ if(busy) return; var r = x.getAttribute("data-reg"); if(!same(r, (VL || {}).reg)) go(r); };
+  });
+}
+function recordPick(){
+  var bs = busList();
+  if(!bs.length){ toast("No buses on the live server.", true); return; }
+  if(bs.length === 1){ recordFor(bs[0].reg); return; }
+  VL = null;
+  openSheet({ title: "Record something", body: vlBusChips(""), only: "Not now" });
+  vlBusBind(function(r){ recordFor(r); });
+}
+
+/* BUS USED, from v1.191.0 (Asim, 25 Nov 2026): a weekday trip. The day,
+   who drove, the mileage when taken if noted, the mileage left and the fuel
+   showing. Nobody is told. The next walkaround is measured from it. */
+function busUsedFor(reg){
+  var b = busByReg(reg); if(!b) return;
+  var today = calToday();
+  VL = { reg: b.reg, what: ["Bus used"], status: "Done", typed: {}, fuel: 0 };
+  var m = milesOf(b.reg);
+  var last = m && m.miles ? Number(m.miles) : 0;
+  var names = buyerNames();
+  openSheet({ eyebrow: b.reg, title: "Record something",
+    body: vlBusChips(b.reg) + '<div class="chips" id="vlWhat">' + VLOG_WHAT.map(function(w){
+            return '<button type="button" data-w="' + esc(w) + '" class="' + (w === "Bus used" ? 'on' : '') + '">' + esc(w) + '</button>';
+          }).join("") + '</div>' +
+          '<div class="field"><label for="buDay">Day it was used</label><input type="date" id="buDay" value="' + esc(today) + '" max="' + esc(today) + '"></div>' +
+          '<div class="field"><label for="buWho">Who drove</label><select id="buWho"><option value="">Choose</option>' +
+            names.map(function(n){ return '<option value="' + esc(n) + '">' + esc(n) + '</option>'; }).join("") +
+            '<option value="*">Someone else</option></select></div>' +
+          '<div class="field" id="buOtherF" hidden><label for="buOther">Name</label><input id="buOther" maxlength="60" autocomplete="off" placeholder="e.g. Bro Solomon"></div>' +
+          '<div class="field"><label for="buTaken">Mileage when taken <span class="lc">· if noted</span></label>' +
+            '<input id="buTaken" type="number" inputmode="numeric" autocomplete="off" placeholder="e.g. ' + esc(String(last || 57363)) + '">' +
+          (last ? '<p class="tiny" style="margin:5px 0 0">Last recorded: ' + Number(last).toLocaleString("en-GB") + (m.date ? ' on ' + esc(m.date) : '') + '</p>' : '') + '</div>' +
+          '<div class="field"><label for="buMiles">Mileage when left</label>' +
+            '<input id="buMiles" type="number" inputmode="numeric" autocomplete="off" placeholder="e.g. ' + esc(String((last || 57363) + 34)) + '"></div>' +
+          '<div class="field"><label>Fuel showing</label><div id="buFuel">' + fuelGaugeHtml(0) + '</div></div>' +
+          '<div class="field"><label for="buNotes">Notes</label><textarea id="buNotes" maxlength="500" placeholder="' + esc(VLOG_SAMPLE["Bus used"]) + '"></textarea></div>',
+    go: "Record it",
+    onGo: function(){ busUsedSend(b); } });
+  fuelGaugeBind($("buFuel").firstChild, function(){ return VL.fuel; }, function(n){ VL.fuel = n; sheetSay(""); });
+  $("buWho").onchange = function(){ $("buOtherF").hidden = $("buWho").value !== "*"; };
+  Array.prototype.forEach.call(document.querySelectorAll("#vlWhat button"), function(x){
+    x.onclick = function(){ if(busy) return; var w = x.getAttribute("data-w"); if(w !== "Bus used") recordFor(b.reg, null, w); };
+  });
+  vlBusBind(function(r){ busUsedFor(r); });
+}
+function busUsedSend(b){
+  var day = $("buDay").value || calToday();
+  if(day > calToday()){ sheetSay("That day has not come yet.", true); return; }
+  var w = $("buWho").value, drove = w === "*" ? $("buOther").value.trim() : w;
+  if(!drove){ sheetSay("Say who drove.", true); return; }
+  var taken = numIn($("buTaken").value), miles = numIn($("buMiles").value);
+  if(taken !== taken){ sheetSay("Mileage when taken is not a number of miles.", true); return; }
+  if(miles !== miles || miles === "" || !miles){ sheetSay("Mileage when left needed.", true); return; }
+  if(taken !== "" && taken > miles){ sheetSay("Mileage when left is lower than mileage when taken.", true); return; }
+  if(!VL.fuel){ sheetSay("Slide to the fuel showing.", true); return; }
+  act({ kind: "vlog", reg: b.reg, what: "Bus used", status: "Done", done: day, drove: drove,
+        taken: taken === "" ? null : taken, miles: miles, fuel: fuelText(VL.fuel), notes: $("buNotes").value || "" });
 }
 
 /* Who bought fuel: coordinators, then active drivers, each once. */
@@ -4798,6 +4885,7 @@ document.addEventListener("click", function(e){
   else if(d === "addstop") editStop("");
   else if(d === "addbus") editBus("");
   else if(d === "vlog") recordFor(t.getAttribute("data-reg"));
+  else if(d === "recordpick") recordPick();
   else if(d === "parkkey") parkKey(t.getAttribute("data-reg"));
   else if(d === "fuelbuy") recordFor(t.getAttribute("data-reg"), { what: "Fuel" });
   else if(d === "vlogdone") recordFor(t.getAttribute("data-reg"), entryById(t.getAttribute("data-reg"), t.getAttribute("data-id")));

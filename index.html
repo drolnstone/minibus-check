@@ -432,6 +432,11 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
   text-transform:uppercase;display:flex;align-items:center;justify-content:center;transition:transform .08s}
 .choose button:active{transform:scale(.97)}
 .choose .ok.on{background:var(--pass);border-color:var(--pass);color:var(--pass-on)}
+/* Bus used (v1.191.0): the bus and the day, chosen as the Record form's. */
+.used-pick button{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:18px;letter-spacing:.06em;text-transform:uppercase}
+.used-pick button.on{background:var(--steel);border-color:var(--steel);color:var(--on-accent)}
+.used-pick + .lbl{margin-top:14px}
+.field label .lc{text-transform:none;letter-spacing:0;font-family:"IBM Plex Sans",sans-serif;font-weight:400}
 .choose .def.on{background:var(--warn);border-color:var(--warn);color:var(--warn-on)}
 .choose .adv.on{background:var(--info);border-color:var(--info);color:var(--info-on)}
 /* Three across needs the letters to give a little, or ADVISORY wraps on a
@@ -555,6 +560,7 @@ p.lede{color:var(--muted);margin:0 0 18px;font-size:15px}
    the pair a driver reads together and pushed Stops and bookings down beside
    Vehicle check. */
 .linkrow #toCoord{flex-basis:100%}
+.linkrow #toCheck,.linkrow #toUsed{flex-basis:100%}
 .tiny{font-size:12px;color:var(--muted);text-align:center;margin-top:20px;line-height:1.5}
 .toast{position:fixed;left:50%;bottom:calc(84px + var(--safe-b));transform:translateX(-50%) translateY(14px);
   background:var(--steel);color:var(--on-accent);padding:11px 17px;border-radius:8px;font-size:14px;opacity:0;
@@ -1325,6 +1331,15 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
        driver who is not out today. The gate is on Vehicle check, which is the
        thing that files a record, and it is the same gate that was on Continue
        before any of this moved. -->
+  <!-- BUS USED, from v1.191.0 (Asim, 25 Nov 2026, after driving a bus on a
+       Tuesday with nowhere to put it). A weekday trip, anyone signed in:
+       the bus, the day, the mileage when taken if noted, the mileage when
+       left and the fuel showing. Filed on the Vehicle Log under his name.
+       Filled by usedPaint. -->
+  <section class="screen" id="s-used">
+    <div id="usedBody"></div>
+  </section>
+
   <section class="screen" id="s-hub">
     <p class="eyebrow" id="hubWho">Signed in</p>
     <!-- The heading, and the alerts check.
@@ -1354,6 +1369,8 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
     <div id="hubWatch"></div>
     <!-- Parked mileage, from v1.124.0: see parkPaint. -->
     <div id="hubParked"></div>
+    <!-- Bus used today, from v1.191.0: see usedHubPaint. -->
+    <div id="hubUsed"></div>
 
     <!-- DRIVING ROTA AND VEHICLE CHECK CHANGED PLACES. A SWAP, NOT A SHUFFLE.
 
@@ -1384,6 +1401,9 @@ body.no-foot .trip-actions{padding-bottom:calc(10px + var(--safe-b))}
       <button class="btn btn-ghost btn-wide" id="toStops" type="button">Stops and bookings</button>
       <button class="btn btn-ghost btn-wide" id="toPending" type="button" style="display:none">Waiting to send</button>
       <button class="btn btn-main btn-wide" id="toCheck" type="button">Vehicle check</button>
+      <!-- Bus used, from v1.191.0 (Asim, 25 Nov 2026): a weekday trip,
+           mileage and fuel, no check. See usedPaint. -->
+      <button class="btn btn-ghost btn-wide" id="toUsed" type="button">Bus used</button>
     </div>
     <!-- From v1.96.0. Only once his PIN has been checked. -->
     <button class="how-link" id="toPinChange" type="button" style="display:none">Change PIN</button>
@@ -1818,7 +1838,7 @@ var QKEY = "fleet.queue.v1";
    whoever is debugging off after the wrong thing entirely. If these three
    ever disagree again, the highest one is the truth and the others were
    forgotten. */
-var APP_VERSION = "v1.190.0";
+var APP_VERSION = "v1.191.0";
 
 /* THE OTHER TWO NUMBERS, so all three are on one line and nobody has to open
    the spreadsheet to find the third.
@@ -2483,7 +2503,7 @@ function mileProblem(){
   var pk = parkedBase(st.veh.reg);
   if(pk && n < Number(pk.miles)){
     return { kind:"low",
-      msg:"That is LOWER than the parked reading of " + Number(pk.miles).toLocaleString("en-GB") +
+      msg:"That is LOWER than the " + (pk.used ? "Bus used mileage" : "parked reading") + " of " + Number(pk.miles).toLocaleString("en-GB") +
           " " + parkedWords(pk, prev) + ".",
       confirm:"I have read it twice and the dashboard really does say this" };
   }
@@ -2524,7 +2544,7 @@ function paintMilesHint(){
   var pk = prev && st.veh ? parkedBase(st.veh.reg) : null;
   if(pk){
     var since = now !== "" ? Number(now) - Number(pk.miles) : null;
-    hint.textContent = "Parked: " + Number(pk.miles).toLocaleString("en-GB") + " " + parkedWords(pk, prev) +
+    hint.textContent = (pk.used ? "Bus used: " : "Parked: ") + Number(pk.miles).toLocaleString("en-GB") + " " + parkedWords(pk, prev) +
       (since !== null && since >= 0 ? "  \u00B7  " + since.toLocaleString("en-GB") + " since" : "") +
       (lastMilesAt ? "" : "  \u00B7  this phone\u2019s last copy, not just checked");
     hint.classList.remove("is-bad");
@@ -3312,6 +3332,7 @@ function paintDash(){
           : st.screen==="rota"    ? "Driving rota"
           : st.screen==="stops"   ? "Stops and bookings"
           : st.screen==="pending" ? "Waiting to send"
+          : st.screen==="used"    ? "Bus used"
           : appName();
     sub = st.screen==="vehicle" ? "Choose a vehicle to begin" : (who || churchName());
   }
@@ -3341,7 +3362,7 @@ function paintDash(){
 }
 
 /* ---------------- screens ---------------- */
-var SCREENS = ["driver","hub","vehicle","prep","stage","review","sent","rota","stops","pending","pin"];
+var SCREENS = ["driver","hub","vehicle","prep","stage","review","sent","rota","stops","pending","pin","used"];
 var syncToTop=function(){};
 /* How tall the instrument strip is, published to CSS as --dashH.
 
@@ -3398,6 +3419,8 @@ function show(n){
   if(n==="hub" && goStopsWanted && st.driver){ goStopsWanted=false; setTimeout(rotaOpenStops, 0); }
   if(n==="hub") dutyStart(); else dutyStop();
   if(n==="hub") parkStart(); else parkStop();
+  if(n==="hub") usedHubPaint();
+  if(n==="used") usedPaint();
   /* A check open on this phone ends with it, however it ends. */
   if(n==="hub"||n==="sent"||n==="driver"||n==="vehicle"||n==="pending") checkOpenFlag(false);
   /* After paintDash, because that is what can change the strip's height —
@@ -3589,6 +3612,11 @@ function btn(label,cls,fn,dis,why,line){
   }
   if(st.screen==="pin"){
     btn("Back","btn-ghost",function(){ show("hub"); });
+    return;
+  }
+  if(st.screen==="used"){
+    btn("Back","btn-ghost",function(){ if(!USED.busy) show("hub"); });
+    btn(USED.busy ? "Sending…" : "Save","btn-main",usedSend);
     return;
   }
   if(st.screen==="hub"){
@@ -7033,6 +7061,126 @@ function parkKeyed(name){
   parkSave();
   setTimeout(parkFlush, 0);
 }
+/* ---- Bus used, from v1.191.0 (Asim, 25 Nov 2026) ----------------------
+   A weekday trip: anyone signed in, no check. Sent at once, with his key,
+   as a Vehicle Log entry under his name; the next walkaround is measured
+   from the mileage left. No signal: not saved, and he is told. */
+var USED_KEY = "fleet.used.v1";
+var USED = { reg:"", day:"today", taken:"", miles:"", fuel:0, say:"", bad:false, busy:false };
+function usedOpen(){
+  if(!st.driver){ show("driver"); return; }
+  if(!driverKey(st.driver) && pinGateNeeded()){
+    toast("Enter your four digit PIN.", true);
+    show("driver");
+    try{ $("pin").focus(); }catch(e){}
+    return;
+  }
+  var one = VEHICLES.length === 1 ? VEHICLES[0].reg : "";
+  USED = { reg:one, day:"today", taken:"", miles:"", fuel:0, say:"", bad:false, busy:false };
+  show("used");
+}
+function usedDayKey(){
+  var d = new Date(tripNow());
+  if(USED.day === "yesterday") d = new Date(d.getTime() - 86400000);
+  return rotaKey(d);
+}
+function usedPaint(){
+  var el = $("usedBody"); if(!el) return;
+  var last = USED.reg ? lastFor(USED.reg) : null, pk = USED.reg ? parkedBase(USED.reg) : null;
+  var lm = pk && (!last || Number(pk.miles) >= Number(last.miles)) ? pk : last;
+  var lastLine = "";
+  if(lm && Number(lm.miles)){
+    lastLine = "Last recorded: " + Number(lm.miles).toLocaleString("en-GB") +
+               (lm === pk ? " " + parkedWords(pk, last) : (last.date ? " on " + last.date : "") + (last.time ? " at " + last.time : "") +
+                (last.driver ? " by " + last.driver : ""));
+  }
+  var sample = lm && Number(lm.miles) ? Number(lm.miles) : 57363;
+  el.innerHTML =
+    '<div class="card"><div class="lbl" style="margin-bottom:8px">Bus</div>' +
+      '<div class="choose used-pick" id="usedBus">' + VEHICLES.map(function(v){
+        return '<button type="button" data-reg="' + esc(v.reg) + '" class="' + (sameName(v.reg, USED.reg) ? 'on' : '') + '">' + esc(v.reg) + '</button>';
+      }).join("") + '</div>' +
+      '<div class="lbl" style="margin-bottom:8px">Day</div>' +
+      '<div class="choose used-pick" id="usedDay">' +
+        '<button type="button" data-day="today" class="' + (USED.day === "today" ? 'on' : '') + '">Today</button>' +
+        '<button type="button" data-day="yesterday" class="' + (USED.day === "yesterday" ? 'on' : '') + '">Yesterday</button></div></div>' +
+    '<div class="card">' +
+      '<div class="field"><label for="usedTaken">Mileage when taken <span class="lc">· if noted</span></label>' +
+        '<input id="usedTaken" type="number" inputmode="numeric" class="mono" autocomplete="off" placeholder="e.g. ' + esc(String(sample + 12)) + '" value="' + esc(USED.taken) + '">' +
+        (lastLine ? '<div class="hint">' + esc(lastLine) + '</div>' : '') + '</div>' +
+      '<div class="field"><label for="usedMiles">Mileage when left</label>' +
+        '<input id="usedMiles" type="number" inputmode="numeric" class="mono" autocomplete="off" placeholder="e.g. ' + esc(String(sample + 46)) + '" value="' + esc(USED.miles) + '"></div>' +
+      '<div class="field"><label>Fuel showing</label><div id="usedFuel">' + fuelGaugeHtml(USED.fuel) + '</div></div>' +
+      (USED.say ? '<p class="dw-sub park-say' + (USED.bad ? ' is-bad' : '') + '" id="usedSay">' + esc(USED.say) + '</p>' : '') +
+    '</div>';
+  Array.prototype.forEach.call(el.querySelectorAll("#usedBus button"), function(b){
+    b.onclick = function(){ if(USED.busy) return; usedKeep(); USED.reg = b.getAttribute("data-reg"); USED.say = ""; usedPaint(); };
+  });
+  Array.prototype.forEach.call(el.querySelectorAll("#usedDay button"), function(b){
+    b.onclick = function(){ if(USED.busy) return; usedKeep(); USED.day = b.getAttribute("data-day"); USED.say = ""; usedPaint(); };
+  });
+  fuelGaugeBind($("usedFuel").firstChild, function(){ return USED.fuel; }, function(n){ USED.fuel = n; });
+}
+function usedKeep(){
+  var t = $("usedTaken"), m = $("usedMiles");
+  if(t) USED.taken = t.value; if(m) USED.miles = m.value;
+}
+function usedSay(t, bad){ USED.say = t; USED.bad = !!bad; usedPaint(); }
+function usedSend(){
+  if(USED.busy) return;
+  usedKeep();
+  var taken = String(USED.taken || "").replace(/[,\s]/g, ""), miles = String(USED.miles || "").replace(/[,\s]/g, "");
+  if(!USED.reg){ usedSay("Choose the bus.", true); return; }
+  if(taken && !/^\d{1,7}$/.test(taken)){ usedSay("Mileage when taken is not a number of miles.", true); return; }
+  if(!/^\d{1,7}$/.test(miles) || !Number(miles)){ usedSay("Mileage when left needed.", true); return; }
+  if(taken && Number(taken) > Number(miles)){ usedSay("Mileage when left is lower than mileage when taken.", true); return; }
+  if(!USED.fuel){ usedSay("Slide to the fuel showing.", true); return; }
+  if(!LIVE_ENDPOINT || !navigator.onLine){ usedSay("No signal. Not saved.", true); return; }
+  var q = { id: "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), reg: USED.reg, day: usedDayKey(),
+            taken: taken ? Number(taken) : null, miles: Number(miles), fuel: fuelText(USED.fuel), driver: String(st.driver || "").trim() };
+  USED.busy = true; USED.say = ""; usedPaint(); paintFoot();
+  var stop = function(t){ USED.busy = false; paintFoot(); usedSay(t, true); };
+  keyEnsure(q.driver, function(key){
+    callFetch(LIVE_ENDPOINT, { method:"POST", redirect:"follow",
+      headers:{ "Content-Type":"text/plain;charset=utf-8" },
+      body: JSON.stringify({ token: CFG.token||"", action:"busused", key: key, used: q }) }, POLL_TIMEOUT)
+      .then(function(r){ return r.text(); })
+      .then(function(t){
+        var out = JSON.parse(t);
+        if(out && out.ok){
+          USED.busy = false;
+          try{ store.set(USED_KEY, JSON.stringify({ reg:q.reg, miles:q.miles, fuel:q.fuel, day:q.day, driver:q.driver, at:Date.now() })); }catch(e){}
+          /* The next walkaround is measured from it at once on this phone. */
+          var R = String(q.reg).toUpperCase(), L = LASTMILES[q.reg] || LASTMILES[R] || null;
+          PARKED[R] = { miles:q.miles, driver:q.driver, checkId:(L && L.checkId) || "", at:Date.now(), date:q.day, time:"", used:true };
+          parkSave();
+          show("hub");
+          return;
+        }
+        if(out && out.error === "pin"){
+          driverKeyDrop(q.driver);
+          pinTakeBack("");
+          stop("Key your PIN, then Save again.");
+          return;
+        }
+        stop(((out && out.error) || "The live server did not take that.") + " Not saved.");
+      })
+      .catch(function(){ stop("No signal. Not saved."); });
+  });
+}
+/* The ✓ on the hub, the day it was keyed, for the one who keyed it. */
+function usedHubPaint(){
+  var el = $("hubUsed"); if(!el) return;
+  var u = null;
+  try{ u = JSON.parse(store.get(USED_KEY) || "null"); }catch(e){ u = null; }
+  if(!u || !u.at || rotaKey(new Date(Number(u.at))) !== rotaKey(new Date(tripNow())) || !sameName(u.driver, st.driver)){ el.innerHTML = ""; return; }
+  var dm = /^(\d{4})-(\d\d)-(\d\d)$/.exec(u.day || "");
+  el.innerHTML = '<div class="dw dw-go"><p class="dw-eyebrow">Bus used · ' + esc(u.reg) + '</p>' +
+    '<p class="dw-big">' + Number(u.miles).toLocaleString("en-GB") + ' ✓</p>' +
+    '<p class="dw-sub">Fuel ' + esc(String(u.fuel || "").replace(/ tank$/, "")) + '. ' + (dm ? dm[3] + "/" + dm[2] + ". " : "") +
+    'Keyed by ' + esc(u.driver) + ' at ' + ukTime(new Date(Number(u.at))) + '.</p></div>';
+}
+
 function parkStop(){ if(parkTimer){ clearInterval(parkTimer); parkTimer = null; } parkPopSync(); }
 (function(){
   var c = $("parkPopClose");
@@ -10555,6 +10703,7 @@ $("toCoord").addEventListener("click",function(){
 if($("alertIcon")) $("alertIcon").addEventListener("click",pushTest);
 
 $("toStops").addEventListener("click",rotaOpenStops);
+$("toUsed").addEventListener("click",usedOpen);
 
 /* The walkaround. The PIN is asked here rather than at the door, because
    this is the first thing on the hub that writes anything down. Bounced back
